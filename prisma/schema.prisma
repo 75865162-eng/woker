@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FileStorageType {
+  local
+  s3
+  r2
+}
+
+enum FileObjectStatus {
+  uploaded
+  processing
+  done
+  failed
+}
+
+enum ImportJobStatus {
+  queued
+  running
+  done
+  failed
+}
+
+model FileObject {
+  id           String           @id @default(cuid())
+  originalName String
+  mimeType     String?
+  size         Int?
+  storageKey   String
+  storageType  FileStorageType  @default(local)
+  status       FileObjectStatus @default(uploaded)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  jobs         ImportJob[]
+}
+
+model ImportJob {
+  id        String          @id @default(cuid())
+  fileId    String
+  type      String
+  status    ImportJobStatus @default(queued)
+  progress  Int             @default(0)
+  error     String?
+  resultKey String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  file      FileObject      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([status])
+}

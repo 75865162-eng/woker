@@ -1,0 +1,145 @@
+import { NextResponse } from "next/server";
+import { normalizeAiSettings, type AiModelSettings } from "@/lib/ai-settings";
+import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
+import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
+
+export const runtime = "nodejs";
+
+interface TitleGeneratorField {
+  key: string;
+  label: string;
+  weight: number;
+  value: string;
+}
+
+interface TitleGeneratorRequest {
+  fields: TitleGeneratorField[];
+  prompt: string;
+  aiSettings?: Partial<AiModelSettings>;
+}
+
+function buildUserInput(fields: TitleGeneratorField[]) {
+  const weightedFields = fields.filter((field) => field.weight > 0);
+  const identityFields = fields.filter((field) => field.weight <= 0);
+  const weightLines = weightedFields.map((field) => `${field.label}: ${field.weight}%`).join("\n");
+  const identityLines = identityFields
+    .map((field) => `${field.label}:\n${field.value.trim() || "空"}`)
+    .join("\n\n");
+  const materialLines = fields
+    .map((field) => `${field.label}（权重 ${field.weight}%）:\n${field.value.trim() || "空"}`)
+    .join("\n\n");
+
+  return `请严格按照系统提示词和以下页面输入生成标题。
+
+【参考页面输入的权重优先级】
+${weightLines || "无"}
+
+【现有产品信息】
+${identityLines || "空"}
+
+【参考页面输入的资料】
+${materialLines}`;
+}
+
+function parseTitleResults(text: string) {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const numbered = lines
+    .map((line) => line.replace(/^\s*(?:[1-3][.)、：:]|标题[1-3][：:]?|生成结果[1-3][：:]?)\s*/u, "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (numbered.length >= 3) return numbered;
+
+  const inlineMatches = Array.from(text.matchAll(/(?:^|\s)([1-3])[.)、：:]\s*([\s\S]*?)(?=\s[1-3][.)、：:]|$)/gu))
+    .map((match) => match[2]?.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  return inlineMatches.length ? inlineMatches : numbered;
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as TitleGeneratorRequest;
+    const settings = normalizeAiSettings(body.aiSettings);
+    const prompt = body.prompt?.trim();
+    const fields = Array.isArray(body.fields) ? body.fields : [];
+
+    if (!settings.apiKey?.trim()) {
+      return NextResponse.json({ error: "缺少 API Key，请先保存大模型配置。" }, { status: 400 });
+    }
+
+    if (!prompt) {
+      return NextResponse.json({ error: "提示词不能为空。" }, { status: 400 });
+    }
+
+    if (!fields.some((field) => field.value?.trim())) {
+      return NextResponse.json({ error: "请至少填写一项参考资料。" }, { status: 400 });
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), settings.timeoutSeconds * 1000);
+    let response: AiFetchResponse;
+
+    try {
+      const isChatCompletions = settings.wireApi === "chat_completions";
+      response = await fetchAiApi(`${settings.baseUrl}${isChatCompletions ? "/chat/completions" : "/v1/responses"}`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${settings.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          isChatCompletions
+            ? {
+                model: settings.model,
+                messages: [
+                  { role: "system", content: prompt },
+                  { role: "user", content: buildUserInput(fields) },
+                ],
+              }
+            : {
+                model: settings.model,
+                input: [
+                  { role: "system", content: prompt },
+                  { role: "user", content: buildUserInput(fields) },
+                ],
+              },
+        ),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return NextResponse.json({ error: `标题生成请求超时：${settings.timeoutSeconds} 秒内没有返回。` }, { status: 504 });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (errorText.includes("only allows Codex official clients")) {
+        return NextResponse.json({ error: "连接已到达 AIGOCODE，但这个 API Key 只允许 Codex 官方客户端使用，不能被当前本地 Web App 直接调用。请更换可用于 OpenAI 兼容 API 的 Key，或换成可直接调用的 Base URL。" }, { status: 403 });
+      }
+      return NextResponse.json({ error: `标题生成失败：${response.status} ${errorText.slice(0, 500)}` }, { status: response.status });
+    }
+
+    const data = await response.json();
+    const text = settings.wireApi === "chat_completions" ? extractChatCompletionText(data as Parameters<typeof extractChatCompletionText>[0]) : extractOutputText(data as ResponsesApiOutput);
+    const results = parseTitleResults(text);
+
+    if (results.length < 3) {
+      return NextResponse.json({ error: "模型没有按要求返回 3 条标题，请点击提示词修改后强化输出格式。" }, { status: 502 });
+    }
+
+    return NextResponse.json({ results: results.slice(0, 3) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "标题生成失败，请稍后重试。";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
