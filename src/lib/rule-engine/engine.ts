@@ -34,10 +34,17 @@ function normalizeMatchType(value: string) {
   const matchTypeMap: Record<string, string> = {
     exact: "exact",
     精准: "exact",
+    精确: "exact",
+    精准匹配: "exact",
+    精确匹配: "exact",
     phrase: "phrase",
     短语: "phrase",
+    词组: "phrase",
+    短语匹配: "phrase",
+    词组匹配: "phrase",
     broad: "broad",
     广泛: "broad",
+    广泛匹配: "broad",
     "broad match": "broad",
     "phrase match": "phrase",
     "exact match": "exact",
@@ -50,10 +57,6 @@ function buildKeywordMatchKey(keyword: string, matchType: string) {
   return `${normalizeMatchValue(keyword)}::${normalizeMatchType(matchType)}`;
 }
 
-function buildKeywordOnlyMatchKey(keyword: string) {
-  return normalizeMatchValue(keyword);
-}
-
 function getBulkMatchKeys(row: PerformanceRow) {
   return Array.from(
     new Set([
@@ -63,8 +66,13 @@ function getBulkMatchKeys(row: PerformanceRow) {
   );
 }
 
-function getBulkKeywordOnlyMatchKeys(row: PerformanceRow) {
-  return Array.from(new Set([buildKeywordOnlyMatchKey(row.keyword), buildKeywordOnlyMatchKey(row.target)]));
+function getOverallMatchKeys(row: OverallAdDataRow) {
+  return Array.from(
+    new Set([
+      buildKeywordMatchKey(row.keyword, row.matchType),
+      buildKeywordMatchKey(row.target, row.matchType),
+    ]),
+  );
 }
 
 function getOverallMetric(row: OverallAdDataRow | undefined, metric: string): number | undefined {
@@ -96,16 +104,11 @@ function getOverallCpc(row: OverallAdDataRow | undefined): number | undefined {
 
 function findOverallRow(row: PerformanceRow, overallRows: OverallAdDataRow[]) {
   const matchedRows = overallRows.filter(
-    (overallRow) => overallRow.matchStatus === "matched" && overallRow.campaignGroupId === row.campaignGroupId,
+    (overallRow) => overallRow.matchStatus !== "unmatched" && overallRow.campaignGroupId === row.campaignGroupId,
   );
   const rowMatchKeys = getBulkMatchKeys(row);
-  const rowKeywordOnlyMatchKeys = getBulkKeywordOnlyMatchKeys(row);
 
-  return (
-    matchedRows.find((overallRow) => rowMatchKeys.includes(buildKeywordMatchKey(overallRow.keyword, overallRow.matchType))) ??
-    matchedRows.find((overallRow) => rowKeywordOnlyMatchKeys.includes(buildKeywordOnlyMatchKey(overallRow.keyword))) ??
-    matchedRows[0]
-  );
+  return matchedRows.find((overallRow) => getOverallMatchKeys(overallRow).some((key) => rowMatchKeys.includes(key)));
 }
 
 function calcOrderShare(overallRow: OverallAdDataRow | undefined, campaignOverallRows: OverallAdDataRow[]) {
@@ -119,7 +122,7 @@ function calcOrderShare(overallRow: OverallAdDataRow | undefined, campaignOveral
 }
 
 function calcTotalOverallAcos(overallRows: OverallAdDataRow[]) {
-  const matchedRows = overallRows.filter((row) => row.matchStatus === "matched");
+  const matchedRows = overallRows.filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId);
   const totals = matchedRows.reduce(
     (sum, row) => ({
       spend: sum.spend + row.spend,
@@ -218,8 +221,14 @@ function evaluateCondition(context: RuleEvaluationContext, condition: Condition)
     case "gte":
       return actual >= Number(condition.value);
     case "lt":
+      if (condition.metric === "acos" && actual <= 0) {
+        return false;
+      }
       return actual < Number(condition.value);
     case "lte":
+      if (condition.metric === "acos" && actual <= 0) {
+        return false;
+      }
       return actual <= Number(condition.value);
     case "between":
       return actual >= Number(condition.min) && actual <= Number(condition.max);
@@ -265,6 +274,19 @@ function applyBidAction(currentBid: number, action: RuleAction, context?: RuleEv
 
       return overallCpc ? Math.min(increasedBid, overallCpc) : increasedBid;
     }
+    case "increase_bid_percent_with_overall_cpc_bounds": {
+      const overallCpc = getOverallCpc(context?.overallRow);
+      const increasedBid = currentBid * (1 + value / 100);
+
+      if (!overallCpc) {
+        return increasedBid;
+      }
+
+      const minimumBid = overallCpc * (Number(action.min ?? 0) / 100);
+      const maximumBid = overallCpc * (Number(action.max ?? 100) / 100);
+
+      return Math.min(Math.max(increasedBid, minimumBid), maximumBid);
+    }
     default:
       return currentBid;
   }
@@ -283,6 +305,7 @@ function buildReason(rule: Rule, action: RuleAction): string {
     set_bid: `设置固定竞价 $${action.value}`,
     set_bid_to_overall_cpc_ratio: `设置竞价为 Overall CPC 的 ${action.value}%`,
     increase_bid_percent_capped_at_overall_cpc: `竞价提高 ${action.value}%（不超过 Overall CPC）`,
+    increase_bid_percent_with_overall_cpc_bounds: `竞价提高 ${action.value}%（最低 Overall CPC 的 ${action.min}%，不超过 ${action.max}%）`,
     pause_keyword: "暂停关键词",
     enable_keyword: "启用关键词",
     add_negative_keyword: "添加否定关键词",
@@ -361,11 +384,22 @@ function isBidAction(action: RuleAction) {
     "set_bid",
     "set_bid_to_overall_cpc_ratio",
     "increase_bid_percent_capped_at_overall_cpc",
+    "increase_bid_percent_with_overall_cpc_bounds",
   ].includes(action.type);
 }
 
 function shouldBlockFurtherRules(actions: RuleAction[]) {
   return actions.some((action) => action.type === "no_change");
+}
+
+function shouldSkipRule(rule: Rule, context: RuleEvaluationContext) {
+  if (rule.id === "mature-no-order-low-click-bulk-imp") {
+    const overallAcos = getOverallMetric(context.overallRow, "acos");
+
+    return overallAcos === undefined || overallAcos <= 0 || overallAcos >= 40;
+  }
+
+  return false;
 }
 
 export function runRuleEngine(input: OptimizationInput): AdjustmentDraft[] {
@@ -393,7 +427,7 @@ export function runRuleEngine(input: OptimizationInput): AdjustmentDraft[] {
 
       const overallRow = findOverallRow(row, overallAdDataRows);
       const campaignOverallRows = overallAdDataRows.filter(
-        (item) => item.matchStatus === "matched" && item.campaignGroupId === row.campaignGroupId,
+        (item) => item.matchStatus !== "unmatched" && item.campaignGroupId === row.campaignGroupId,
       );
       const context = {
         bulkRow: row,
@@ -404,6 +438,10 @@ export function runRuleEngine(input: OptimizationInput): AdjustmentDraft[] {
         orderShare: calcOrderShare(overallRow, campaignOverallRows),
         isCoreKeyword: isCoreKeywordCandidate(row),
       };
+
+      if (shouldSkipRule(rule, context)) {
+        continue;
+      }
 
       if (evaluateConditionGroup(context, rule.conditionGroup)) {
         const action = rule.actions.find(isBidAction);

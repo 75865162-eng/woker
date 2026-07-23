@@ -18,14 +18,32 @@ interface TitleGeneratorRequest {
   aiSettings?: Partial<AiModelSettings>;
 }
 
+function buildAiHeaders(settings: AiModelSettings) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${settings.apiKey}`,
+    "Content-Type": "application/json",
+  };
+  const isOpenRouter = settings.provider === "openrouter" || settings.baseUrl.includes("openrouter.ai");
+
+  if (isOpenRouter) {
+    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "http://localhost:3000";
+    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "Amazon Bulk Ad Workspace";
+  }
+
+  return headers;
+}
+
 function buildUserInput(fields: TitleGeneratorField[]) {
-  const weightedFields = fields.filter((field) => field.weight > 0);
-  const identityFields = fields.filter((field) => field.weight <= 0);
+  const aiReferenceFields = fields.filter(
+    (field) => field.key !== "productChineseName" && field.key !== "asin",
+  );
+  const weightedFields = aiReferenceFields.filter((field) => field.weight > 0);
+  const identityFields = aiReferenceFields.filter((field) => field.weight <= 0);
   const weightLines = weightedFields.map((field) => `${field.label}: ${field.weight}%`).join("\n");
   const identityLines = identityFields
     .map((field) => `${field.label}:\n${field.value.trim() || "空"}`)
     .join("\n\n");
-  const materialLines = fields
+  const materialLines = aiReferenceFields
     .map((field) => `${field.label}（权重 ${field.weight}%）:\n${field.value.trim() || "空"}`)
     .join("\n\n");
 
@@ -77,7 +95,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "提示词不能为空。" }, { status: 400 });
     }
 
-    if (!fields.some((field) => field.value?.trim())) {
+    const productChineseName = fields.find((field) => field.key === "productChineseName")?.value?.trim();
+    const asin = fields.find((field) => field.key === "asin")?.value?.trim();
+
+    if (!productChineseName || !asin) {
+      return NextResponse.json({ error: "中文名称和 ASIN 为必填项。" }, { status: 400 });
+    }
+
+    if (
+      !fields.some(
+        (field) =>
+          field.key !== "productChineseName" &&
+          field.key !== "asin" &&
+          field.value?.trim(),
+      )
+    ) {
       return NextResponse.json({ error: "请至少填写一项参考资料。" }, { status: 400 });
     }
 
@@ -90,10 +122,7 @@ export async function POST(request: Request) {
       response = await fetchAiApi(`${settings.baseUrl}${isChatCompletions ? "/chat/completions" : "/v1/responses"}`, {
         method: "POST",
         signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${settings.apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: buildAiHeaders(settings),
         body: JSON.stringify(
           isChatCompletions
             ? {

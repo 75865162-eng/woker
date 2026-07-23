@@ -3,9 +3,12 @@
 import { useMemo, useState } from "react";
 import { Download, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { exportBulkDrafts } from "@/lib/bulk/export";
+import { OperationProgress } from "@/components/ui/operation-progress";
+import { exportSelectedDrafts } from "@/lib/excel/bulk-export";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
-import type { PerformanceRow, OverallAdDataRow } from "@/lib/types";
+import type { AdjustmentDraft, PerformanceRow, OverallAdDataRow } from "@/lib/types";
+
+const pageSize = 20;
 
 function downloadArrayBuffer(data: ArrayBuffer, fileName: string) {
   const blob = new Blob([data], {
@@ -20,6 +23,12 @@ function downloadArrayBuffer(data: ArrayBuffer, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+function waitForPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
 function normalizeMatchValue(value: string | undefined) {
   return (value ?? "")
     .trim()
@@ -32,10 +41,17 @@ function normalizeMatchType(value: string | undefined) {
   const matchTypeMap: Record<string, string> = {
     exact: "exact",
     精准: "exact",
+    精确: "exact",
+    精准匹配: "exact",
+    精确匹配: "exact",
     phrase: "phrase",
     短语: "phrase",
+    词组: "phrase",
+    短语匹配: "phrase",
+    词组匹配: "phrase",
     broad: "broad",
     广泛: "broad",
+    广泛匹配: "broad",
     "broad match": "broad",
     "phrase match": "phrase",
     "exact match": "exact",
@@ -48,10 +64,6 @@ function buildMatchKey(campaignGroupId: string, keyword: string | undefined, mat
   return `${campaignGroupId}::${normalizeMatchValue(keyword)}::${normalizeMatchType(matchType)}`;
 }
 
-function buildKeywordOnlyMatchKey(campaignGroupId: string, keyword: string | undefined) {
-  return `${campaignGroupId}::${normalizeMatchValue(keyword)}`;
-}
-
 function getPerformanceMatchKeys(row: PerformanceRow) {
   return Array.from(
     new Set([
@@ -61,11 +73,11 @@ function getPerformanceMatchKeys(row: PerformanceRow) {
   );
 }
 
-function getPerformanceKeywordOnlyMatchKeys(row: PerformanceRow) {
+function getOverallMatchKeys(row: OverallAdDataRow) {
   return Array.from(
     new Set([
-      buildKeywordOnlyMatchKey(row.campaignGroupId, row.keyword),
-      buildKeywordOnlyMatchKey(row.campaignGroupId, row.target),
+      buildMatchKey(row.campaignGroupId ?? "", row.keyword, row.matchType),
+      buildMatchKey(row.campaignGroupId ?? "", row.target, row.matchType),
     ]),
   );
 }
@@ -80,6 +92,15 @@ function calcAcos(row: Pick<PerformanceRow | OverallAdDataRow, "spend" | "sales"
 
 function calcCpc(row: Pick<PerformanceRow | OverallAdDataRow, "spend" | "clicks"> & { cpc?: number }) {
   return row.cpc ?? (row.clicks > 0 ? row.spend / row.clicks : 0);
+}
+
+function toFiniteNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
 }
 
 function MetricCompareCell({
@@ -124,6 +145,14 @@ type SortKey =
   | "deltaPercent";
 type SortDirection = "desc" | "asc";
 type SortDataSource = "bulk" | "overall";
+type TableRow = {
+  id: string;
+  draft?: AdjustmentDraft;
+  performanceRow?: PerformanceRow;
+  overallRow?: OverallAdDataRow;
+  index: number;
+  sortValues: Record<SortKey, number | undefined>;
+};
 
 function SortableHeader({
   label,
@@ -145,7 +174,7 @@ function SortableHeader({
       type="button"
       onClick={() => onSort(sortKey)}
       className="inline-flex w-full items-center justify-end gap-1 text-right font-bold text-muted hover:text-foreground"
-      title="点击排序：倒序 / 正序 / 复原"
+      title={sortKey === "deltaPercent" ? "点击排序：大到小 / 小到大 / 复原" : "点击排序：升序 / 降序 / 复原"}
     >
       {label}
       <span className="w-3 text-[10px]">{active ? (direction === "desc" ? "↓" : "↑") : ""}</span>
@@ -157,6 +186,9 @@ export function AdjustmentTable() {
   const [sortKey, setSortKey] = useState<SortKey | undefined>();
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [sortDataSource, setSortDataSource] = useState<SortDataSource>("bulk");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  const [operationProgress, setOperationProgress] = useState<{ label: string; progress: number } | null>(null);
   const [dragSelectMode, setDragSelectMode] = useState<"select" | "deselect" | null>(null);
   const [lastSelectedDraftId, setLastSelectedDraftId] = useState<string | undefined>();
   const [boxSelection, setBoxSelection] = useState<{
@@ -184,83 +216,140 @@ export function AdjustmentTable() {
     selectAllDrafts,
     invertDraftSelection,
     clearDraftSelection,
+    recordExportHistory,
   } = useWorkspaceStore();
   const performanceRowsById = useMemo(() => new Map(performanceRows.map((row) => [row.id, row])), [performanceRows]);
+  const performanceRowsByMatchKey = useMemo(() => {
+    const map = new Map<string, PerformanceRow[]>();
+
+    for (const row of performanceRows) {
+      for (const key of getPerformanceMatchKeys(row)) {
+        map.set(key, [...(map.get(key) ?? []), row]);
+      }
+    }
+
+    return map;
+  }, [performanceRows]);
   const overallRowsByMatchKey = useMemo(
     () =>
       new Map(
         overallAdDataRows
-          .filter((row) => row.matchStatus === "matched" && row.campaignGroupId)
-          .map((row) => [buildMatchKey(row.campaignGroupId ?? "", row.keyword, row.matchType), row]),
-      ),
-    [overallAdDataRows],
-  );
-  const overallRowsByKeywordOnlyMatchKey = useMemo(
-    () =>
-      new Map(
-        overallAdDataRows
-          .filter((row) => row.matchStatus === "matched" && row.campaignGroupId)
-          .map((row) => [buildKeywordOnlyMatchKey(row.campaignGroupId ?? "", row.keyword), row]),
+          .filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId)
+          .flatMap((row) => getOverallMatchKeys(row).map((key) => [key, row] as const)),
       ),
     [overallAdDataRows],
   );
   const tableRows = useMemo(() => {
-    const enrichedRows = adjustmentDrafts.map((draft, index) => {
+    const draftByRowId = new Map(adjustmentDrafts.map((draft) => [draft.rowId, draft]));
+    const usedDraftIds = new Set<string>();
+    const buildSortValues = (draft: AdjustmentDraft | undefined, performanceRow: PerformanceRow | undefined, overallRow: OverallAdDataRow | undefined) => {
+      const metricSource = sortDataSource === "overall" && overallRow ? overallRow : performanceRow;
+
+      return {
+        impressions: toFiniteNumber(metricSource?.impressions),
+        clicks: toFiniteNumber(metricSource?.clicks),
+        ctr: metricSource ? toFiniteNumber(calcCtr(metricSource)) : undefined,
+        spend: toFiniteNumber(metricSource?.spend),
+        cpc: metricSource ? toFiniteNumber(calcCpc(metricSource)) : undefined,
+        orders: toFiniteNumber(metricSource?.orders),
+        acos: metricSource ? toFiniteNumber(calcAcos(metricSource)) : undefined,
+        oldValue: toFiniteNumber(draft?.oldValue ?? draft?.currentBid ?? performanceRow?.currentBid),
+        newValue: draft ? toFiniteNumber(draft.newValue ?? draft.suggestedBid) : undefined,
+        deltaPercent: toFiniteNumber(draft?.deltaPercent),
+      };
+    };
+    const matchedOverallRows: TableRow[] = overallAdDataRows
+      .filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId)
+      .map((overallRow, index) => {
+        const performanceRow =
+          getOverallMatchKeys(overallRow)
+            .flatMap((key) => performanceRowsByMatchKey.get(key) ?? [])
+            .find((row) => row.campaignGroupId === overallRow.campaignGroupId);
+        const draft = performanceRow ? draftByRowId.get(performanceRow.id) : undefined;
+
+        if (draft) {
+          usedDraftIds.add(draft.id);
+        }
+
+        return {
+          id: `overall-${overallRow.id}`,
+          draft,
+          performanceRow,
+          overallRow,
+          index,
+          sortValues: buildSortValues(draft, performanceRow, overallRow),
+        };
+      });
+    const draftOnlyRows: TableRow[] = adjustmentDrafts
+      .filter((draft) => !usedDraftIds.has(draft.id))
+      .map((draft, index) => {
       const performanceRow = performanceRowsById.get(draft.rowId);
       const overallRow = performanceRow
         ? getPerformanceMatchKeys(performanceRow)
             .map((key) => overallRowsByMatchKey.get(key))
-            .find((row): row is OverallAdDataRow => Boolean(row)) ??
-          getPerformanceKeywordOnlyMatchKeys(performanceRow)
-            .map((key) => overallRowsByKeywordOnlyMatchKey.get(key))
             .find((row): row is OverallAdDataRow => Boolean(row))
         : undefined;
-      const metricSource = sortDataSource === "overall" && overallRow ? overallRow : performanceRow;
-      const sortValues: Record<SortKey, number> = {
-        impressions: metricSource?.impressions ?? 0,
-        clicks: metricSource?.clicks ?? 0,
-        ctr: metricSource ? calcCtr(metricSource) : 0,
-        spend: metricSource?.spend ?? 0,
-        cpc: metricSource ? calcCpc(metricSource) : 0,
-        orders: metricSource?.orders ?? 0,
-        acos: metricSource ? calcAcos(metricSource) : 0,
-        oldValue: Number(draft.oldValue ?? draft.currentBid),
-        newValue: Number(draft.newValue ?? draft.suggestedBid),
-        deltaPercent: draft.deltaPercent,
+      return {
+        id: `draft-${draft.id}`,
+        draft,
+        performanceRow,
+        overallRow,
+        index: matchedOverallRows.length + index,
+        sortValues: buildSortValues(draft, performanceRow, overallRow),
       };
-
-      return { draft, performanceRow, overallRow, index, sortValues };
     });
+    const enrichedRows = matchedOverallRows.length ? [...matchedOverallRows, ...draftOnlyRows] : draftOnlyRows;
 
     if (!sortKey) {
       return enrichedRows;
     }
 
     return [...enrichedRows].sort((left, right) => {
+      const leftValue = left.sortValues[sortKey];
+      const rightValue = right.sortValues[sortKey];
+
+      if (leftValue === undefined || rightValue === undefined) {
+        if (leftValue === undefined && rightValue === undefined) {
+          return left.index - right.index;
+        }
+
+        return leftValue === undefined ? 1 : -1;
+      }
+
       const multiplier = sortDirection === "desc" ? -1 : 1;
-      const valueCompare = (left.sortValues[sortKey] - right.sortValues[sortKey]) * multiplier;
+      const valueCompare = (leftValue - rightValue) * multiplier;
 
       return valueCompare || left.index - right.index;
     });
   }, [
     adjustmentDrafts,
+    overallAdDataRows,
     performanceRowsById,
-    overallRowsByKeywordOnlyMatchKey,
+    performanceRowsByMatchKey,
     overallRowsByMatchKey,
     sortDataSource,
     sortDirection,
     sortKey,
   ]);
+  const totalPages = Math.max(1, Math.ceil(tableRows.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const visibleRows = tableRows.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+  const pageStart = tableRows.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const pageEnd = Math.min(safeCurrentPage * pageSize, tableRows.length);
 
   function handleSort(nextKey: SortKey) {
+    setCurrentPage(1);
+
     if (sortKey !== nextKey) {
       setSortKey(nextKey);
-      setSortDirection("desc");
+      setSortDirection(nextKey === "deltaPercent" ? "desc" : "asc");
       return;
     }
 
-    if (sortDirection === "desc") {
-      setSortDirection("asc");
+    const firstDirection = nextKey === "deltaPercent" ? "desc" : "asc";
+
+    if (sortDirection === firstDirection) {
+      setSortDirection(firstDirection === "desc" ? "asc" : "desc");
       return;
     }
 
@@ -268,9 +357,14 @@ export function AdjustmentTable() {
     setSortDirection("desc");
   }
 
+  function handleSortDataSource(nextSource: SortDataSource) {
+    setSortDataSource(nextSource);
+    setCurrentPage(1);
+  }
+
   function selectDraftRange(fromDraftId: string, toDraftId: string, selected: boolean) {
-    const fromIndex = tableRows.findIndex((row) => row.draft.id === fromDraftId);
-    const toIndex = tableRows.findIndex((row) => row.draft.id === toDraftId);
+    const fromIndex = tableRows.findIndex((row) => row.draft?.id === fromDraftId);
+    const toIndex = tableRows.findIndex((row) => row.draft?.id === toDraftId);
 
     if (fromIndex < 0 || toIndex < 0) {
       return;
@@ -280,7 +374,9 @@ export function AdjustmentTable() {
     const end = Math.max(fromIndex, toIndex);
 
     for (const row of tableRows.slice(start, end + 1)) {
-      setDraftSelected(row.draft.id, selected);
+      if (row.draft) {
+        setDraftSelected(row.draft.id, selected);
+      }
     }
   }
 
@@ -376,38 +472,79 @@ export function AdjustmentTable() {
     setBoxSelection(null);
   }
 
-  function handleRunRules() {
+  async function handleRunRules() {
     if (overallAdDataStatus !== "matched" || overallAdDataMatchSummary.matchedRows === 0) {
-      window.alert("请先上传并匹配 Overall 所有日期广告数据.csv，再执行规则引擎。");
+      window.alert("请先上传并匹配 Overall 所有日期广告数据，再执行规则引擎。");
       return;
     }
+
+    setOperationProgress({ label: "准备规则引擎", progress: 25 });
+    await waitForPaint();
 
     if (workspaceMode === "lifecycle") {
-      runRulesForActiveLifecycleGroup();
+      setOperationProgress({ label: "运行产品周期规则", progress: 70 });
+      await waitForPaint();
+      const result = runRulesForActiveLifecycleGroup();
+      setCurrentPage(1);
+      setOperationProgress({ label: "规则草稿已生成", progress: 100 });
+      window.setTimeout(() => setOperationProgress(null), 1200);
+      if (result.message) {
+        window.alert(result.message);
+      }
       return;
     }
 
-    runRulesForActiveGroup();
+    setOperationProgress({ label: "运行广告组规则", progress: 70 });
+    await waitForPaint();
+    const result = runRulesForActiveGroup();
+    setCurrentPage(1);
+    setOperationProgress({ label: "规则草稿已生成", progress: 100 });
+    window.setTimeout(() => setOperationProgress(null), 1200);
+    if (result.message) {
+      window.alert(result.message);
+    }
   }
 
   async function handleExport() {
+    if (exporting) {
+      return;
+    }
+
     if (!originalWorkbookBuffer) {
       window.alert("请先上传原始 Bulk Operations 文件，再导出修改版。");
       return;
     }
 
-    const result = await exportBulkDrafts({
-      workbookBuffer: originalWorkbookBuffer,
-      drafts: adjustmentDrafts,
-      fileName: `已修改-${uploadedFileName ?? "bulk-operations.xlsx"}`,
-    });
+    setExporting(true);
+    setOperationProgress({ label: "准备导出 Bulk 文件", progress: 20 });
 
-    if (result.writableCount === 0) {
-      window.alert(`没有可写回的草稿。冲突 ${result.conflictCount} 条，阻止 ${result.blockedCount} 条。`);
-      return;
+    try {
+      await waitForPaint();
+      setOperationProgress({ label: "写回勾选草稿", progress: 55 });
+      await waitForPaint();
+      const result = await exportSelectedDrafts({
+        workbookBuffer: originalWorkbookBuffer,
+        drafts: adjustmentDrafts,
+        fileName: `已修改-${uploadedFileName ?? "bulk-operations.xlsx"}`,
+      });
+
+      if (result.writableCount === 0) {
+        setOperationProgress(null);
+        window.alert(`没有可写回的草稿。冲突 ${result.conflictCount} 条，阻止 ${result.blockedCount} 条。`);
+        return;
+      }
+
+      setOperationProgress({ label: "下载导出文件", progress: 90 });
+      downloadArrayBuffer(result.data, result.fileName);
+      recordExportHistory(result.fileName);
+      setOperationProgress({ label: "导出完成", progress: 100 });
+      window.setTimeout(() => setOperationProgress(null), 1200);
+    } catch (error) {
+      setOperationProgress(null);
+      window.alert(error instanceof Error ? error.message : "导出 Bulk 文件失败，请稍后重试。");
+    } finally {
+      setExporting(false);
     }
-
-    downloadArrayBuffer(result.data, result.fileName);
   }
 
   return (
@@ -422,10 +559,11 @@ export function AdjustmentTable() {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {operationProgress ? <OperationProgress label={operationProgress.label} progress={operationProgress.progress} /> : null}
           <div className="inline-flex overflow-hidden rounded-md border border-border bg-white text-xs font-bold">
             <button
               type="button"
-              onClick={() => setSortDataSource("bulk")}
+              onClick={() => handleSortDataSource("bulk")}
               className={`px-3 py-2 transition-colors ${
                 sortDataSource === "bulk" ? "bg-brand text-white" : "text-muted hover:bg-surface-muted"
               }`}
@@ -435,7 +573,7 @@ export function AdjustmentTable() {
             </button>
             <button
               type="button"
-              onClick={() => setSortDataSource("overall")}
+              onClick={() => handleSortDataSource("overall")}
               className={`border-l border-border px-3 py-2 transition-colors ${
                 sortDataSource === "overall" ? "bg-brand text-white" : "text-muted hover:bg-surface-muted"
               }`}
@@ -448,18 +586,9 @@ export function AdjustmentTable() {
             <Play className="h-4 w-4" />
             {workspaceMode === "lifecycle" ? "运行产品周期规则" : "运行规则引擎"}
           </Button>
-          <Button variant="secondary" onClick={selectAllDrafts}>
-            全选
-          </Button>
-          <Button variant="secondary" onClick={invertDraftSelection}>
-            反选
-          </Button>
-          <Button variant="secondary" onClick={clearDraftSelection}>
-            全不选
-          </Button>
-          <Button onClick={handleExport} disabled={selectedDraftIds.length === 0}>
+          <Button onClick={handleExport} disabled={selectedDraftIds.length === 0 || exporting}>
             <Download className="h-4 w-4" />
-            导出 Bulk 文件
+            {exporting ? "导出中..." : "导出 Bulk 文件"}
           </Button>
         </div>
       </div>
@@ -527,59 +656,81 @@ export function AdjustmentTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {adjustmentDrafts.length === 0 ? (
+            {tableRows.length === 0 ? (
               <tr>
                 <td colSpan={20} className="px-4 py-12 text-center text-sm font-medium text-muted">
                   {workspaceMode === "lifecycle"
-                    ? "上传并匹配 Overall 所有日期广告数据后，点击“运行产品周期规则”生成草稿；Launch/Mature 会追加 BV-01/BV-02 Bid 安全校验。"
-                    : "上传并匹配 Overall 所有日期广告数据后，点击上方广告组卡片打开组内数据，再运行规则引擎生成草稿。"}
+                    ? "上传并匹配 Overall 所有日期广告数据后，表格会展示匹配数据；点击“运行产品周期规则”生成可写回草稿。"
+                    : "上传并匹配 Overall 所有日期广告数据后，表格会展示匹配数据；点击运行规则生成可写回草稿。"}
                 </td>
               </tr>
             ) : (
-              tableRows.map(({ draft, performanceRow, overallRow }) => {
+              visibleRows.map(({ draft, performanceRow, overallRow }) => {
+                const rowId = draft?.id;
+                const keyword = draft?.keyword ?? performanceRow?.keyword ?? overallRow?.keyword ?? "-";
+                const target = draft?.target ?? performanceRow?.target ?? overallRow?.target ?? "-";
+                const matchType = performanceRow?.matchType ?? overallRow?.matchType ?? "-";
                 return (
                 <tr
-                  key={draft.id}
-                  data-draft-id={draft.id}
-                  onMouseDown={(event) => startDragSelection(draft.id, selectedDraftIds.includes(draft.id), event)}
-                  onMouseEnter={(event) => continueDragSelection(draft.id, event)}
-                  className="cursor-default hover:bg-surface-muted/70"
+                  key={draft?.id ?? overallRow?.id ?? performanceRow?.id}
+                  data-draft-id={rowId}
+                  onMouseDown={(event) => {
+                    if (draft) {
+                      startDragSelection(draft.id, selectedDraftIds.includes(draft.id), event);
+                    }
+                  }}
+                  onMouseEnter={(event) => {
+                    if (draft) {
+                      continueDragSelection(draft.id, event);
+                    }
+                  }}
+                  className={draft ? "cursor-default hover:bg-surface-muted/70" : "bg-surface-muted/20 text-muted hover:bg-surface-muted/60"}
                 >
                   <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedDraftIds.includes(draft.id)}
-                      onMouseDown={(event) => startDragSelection(draft.id, selectedDraftIds.includes(draft.id), event)}
-                      onChange={() => toggleDraft(draft.id)}
-                      className="h-4 w-4 accent-brand"
-                    />
+                    {draft ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedDraftIds.includes(draft.id)}
+                        onMouseDown={(event) => startDragSelection(draft.id, selectedDraftIds.includes(draft.id), event)}
+                        onChange={() => toggleDraft(draft.id)}
+                        className="h-4 w-4 accent-brand"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-muted">-</span>
+                    )}
                   </td>
                   <td
                     className="max-w-[180px] truncate px-4 py-3 font-semibold text-foreground"
                   >
-                    {draft.sheetName ?? "Mock Sheet"}
+                    {draft?.sheetName ?? performanceRow?.sheetName ?? overallRow?.sheetName ?? "-"}
                   </td>
                   <td
                     className="max-w-[220px] truncate px-4 py-3 text-muted"
                   >
-                    {draft.campaignGroupId}
+                    {draft?.campaignGroupId ?? performanceRow?.campaignGroupId ?? overallRow?.campaignGroupId ?? "-"}
                   </td>
                   <td
                     className="metric-tabular px-4 py-3 text-right"
                   >
-                    {draft.sourceRowNumber ?? "-"}
+                    {draft?.sourceRowNumber ?? performanceRow?.sourceRowNumber ?? "-"}
                   </td>
                   <td className="px-4 py-3">
-                    {draft.headerName ?? "竞价"}
+                    {draft?.headerName ?? "不写回"}
+                  </td>
+                  <td
+                    className="cursor-text select-text px-4 py-3"
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    {keyword}
                   </td>
                   <td className="px-4 py-3">
-                    {draft.keyword}
+                    {matchType}
                   </td>
-                  <td className="px-4 py-3">
-                    {performanceRow?.matchType ?? "-"}
-                  </td>
-                  <td className="max-w-[260px] truncate px-4 py-3 text-muted">
-                    {draft.target}
+                  <td
+                    className="max-w-[260px] cursor-text select-text truncate px-4 py-3 text-muted"
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    {target}
                   </td>
                   <td className="px-4 py-3">
                     <MetricCompareCell current={performanceRow?.impressions ?? 0} recent={overallRow?.impressions} />
@@ -615,16 +766,16 @@ export function AdjustmentTable() {
                     />
                   </td>
                   <td className="metric-tabular px-4 py-3 text-right">
-                    ${Number(draft.oldValue ?? draft.currentBid).toFixed(2)}
+                    {performanceRow || draft ? `$${Number(draft?.oldValue ?? draft?.currentBid ?? performanceRow?.currentBid ?? 0).toFixed(2)}` : "-"}
                   </td>
                   <td className="metric-tabular px-4 py-3 text-right font-bold text-brand">
-                    ${Number(draft.newValue ?? draft.suggestedBid).toFixed(2)}
+                    {draft ? `$${Number(draft.newValue ?? draft.suggestedBid).toFixed(2)}` : "-"}
                   </td>
                   <td className="metric-tabular px-4 py-3 text-right font-bold text-danger">
-                    {draft.deltaPercent}%
+                    {draft ? `${draft.deltaPercent}%` : "-"}
                   </td>
-                  <td className="px-4 py-3">{draft.reason}</td>
-                  <td className="px-4 py-3 text-muted">{draft.matchedRule}</td>
+                  <td className="px-4 py-3">{draft?.reason ?? "已匹配 Overall，未触发改价规则"}</td>
+                  <td className="px-4 py-3 text-muted">{draft?.matchedRule ?? "-"}</td>
                 </tr>
                 );
               })
@@ -632,8 +783,38 @@ export function AdjustmentTable() {
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs font-semibold text-muted">
-        <span>已选择 {selectedDraftIds.length} 条可写回记录</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs font-semibold text-muted">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>已选择 {selectedDraftIds.length} 条可写回记录</span>
+          <Button variant="secondary" size="sm" onClick={selectAllDrafts}>
+            全选
+          </Button>
+          <Button variant="secondary" size="sm" onClick={invertDraftSelection}>
+            反选
+          </Button>
+          <Button variant="secondary" size="sm" onClick={clearDraftSelection}>
+            全不选
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span>
+            {pageStart}-{pageEnd} / {tableRows.length}，每页 20 条
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage <= 1}>
+            上一页
+          </Button>
+          <span className="metric-tabular text-foreground">
+            {safeCurrentPage} / {totalPages}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            disabled={safeCurrentPage >= totalPages}
+          >
+            下一页
+          </Button>
+        </div>
         <span className="inline-flex items-center gap-2">
           <Download className="h-4 w-4" />
           导出会保留原文件全部 Sheet，仅写回已勾选草稿

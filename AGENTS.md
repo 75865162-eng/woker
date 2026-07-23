@@ -126,6 +126,17 @@ npm run lint
 - Listing AI 的输出结构由 `src/lib/listing-ai/types.ts` 定义，改 prompt 或 client 时要保持 UI 消费字段稳定。
 - Logistics 模块依赖实际 Excel/PDF 模板和中文字段名，改解析逻辑前先看 `src/lib/logistics/types.ts`、`excel.ts`、`pdf.ts` 以及 `public/logistics-templates/`。
 
+## 可迁移部署架构
+
+当前阶段采用 Next.js + Prisma + PostgreSQL + local uploads。未来服务器部署目标是 Next.js + Prisma + PostgreSQL + R2/S3-compatible object storage + Queue Worker。
+
+- 数据库存业务数据和文件元数据；原始文件、导入文件、导出文件等二进制对象存储在 storage provider。
+- 业务代码不要直接依赖 `uploads/` 本地路径，应通过 storage adapter 读写文件。
+- 文件在业务层通过 `fileId` / `FileAsset` 引用，不通过磁盘路径引用。
+- 长任务在业务层通过 `jobId` / `ProcessingJob` 引用；API route 负责创建任务和查询状态，处理逻辑应放在 job handler / processor。
+- 当前可以使用 local storage 和 inline processor，但接口边界应兼容未来替换为 R2/S3 和 queue worker。
+- 所有未来需要多人使用的数据模型，应预留 `orgId` / `userId` / ownership 边界。
+
 ## UI 与交互约定
 
 - 整体是工具型 SaaS，不是营销落地页。优先信息密度、可扫描性、稳定布局和明确操作。

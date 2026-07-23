@@ -35,6 +35,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "缺少 API Key，请先保存大模型配置。" }, { status: 400 });
     }
 
+    if (settings.wireApi === "image_generations") {
+      return NextResponse.json(
+        { error: "当前配置是图片生成接口，不能用于聊天测试。请在 Listing AI 的图片生成区验证火山方舟生图。" },
+        { status: 400 },
+      );
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), settings.timeoutSeconds * 1000);
     let response: AiFetchResponse;

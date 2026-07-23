@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Database, Download, RefreshCcw, Trash2 } from "lucide-react";
-import { AppShell } from "@/components/app-shell/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,7 +98,7 @@ export function SaihuSearchMergeHistory() {
   };
 
   return (
-    <AppShell title="历史记录" subtitle="赛狐客搜词合并数据的本地上传和导出记录">
+    <>
       <div className="space-y-5">
         <Card>
           <CardHeader>
@@ -212,6 +211,6 @@ export function SaihuSearchMergeHistory() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }

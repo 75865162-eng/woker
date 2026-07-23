@@ -2,14 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
   BarChart3,
-  Check,
-  Clipboard,
   Download,
-  ExternalLink,
-  GripVertical,
   Highlighter,
   History,
   ImageIcon,
@@ -17,19 +11,31 @@ import {
   Loader2,
   Minus,
   Plus,
-  RefreshCw,
   RotateCcw,
-  Save,
   Search,
-  Settings2,
   Sparkles,
   Upload,
-  Wand2,
-  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlignedPlaceholder,
+  AmazonLinkButton,
+  GalleryCell,
+  ImagePreviewModal,
+  ImageStrip,
+  InfoField,
+} from "@/components/listing-ai/gallery-primitives";
+import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
+import { ListingAiAplusPanel } from "@/components/listing-ai/listing-ai-aplus-panel";
+import { ListingAiInputPanel } from "@/components/listing-ai/listing-ai-input-panel";
+import {
+  AnalysisSection,
+  ImagePlanSection,
+  ListingSection,
+} from "@/components/listing-ai/listing-ai-output-panels";
+import { ReviewHistorySection } from "@/components/listing-ai/review-history-section";
 import {
   aiSettingsStorageKey,
   normalizeAiSettings,
@@ -40,141 +46,50 @@ import {
   readListingAiImageAsset,
   saveListingAiImageAsset,
 } from "@/lib/listing-ai/image-assets";
+import {
+  applyGalleryCellStyleToExcelCell,
+  excelCellStyleToGalleryStyle,
+  excelCellToText,
+  galleryCellKey,
+  imageExtension,
+  mergeGalleryCellStyle,
+  normalizeGalleryRedRanges,
+  setExcelCellText,
+} from "@/lib/listing-ai/gallery-excel";
 import type {
   ListingOptimizationApiRequest,
   ListingOptimizationRequest,
   ListingOptimizationResult,
 } from "@/lib/listing-ai/types";
-
-interface CompetitorDraft {
-  asin: string;
-  sales: string;
-  price: string;
-  variation: string;
-  rating: string;
-  reviewCount: string;
-  mainImage: ImagePreview[];
-  screenshot: ImagePreview[];
-  title: string;
-  bullets: string;
-  targetAudience: string;
-  useScenarios: string;
-  productFeatures: string;
-  buyerConcerns: string;
-  negativeReviews: string;
-  opportunity: string;
-  aplus: string;
-  images: ImagePreview[];
-}
-
-interface OwnImageDraft {
-  structureNotes: string;
-  mainImage: ImagePreview[];
-  images: ImagePreview[];
-  imageNotes: string[];
-  sales: string;
-  price: string;
-  rating: string;
-  reviewCount: string;
-}
-
-interface ImagePreview {
-  name: string;
-  url: string;
-  assetId?: string;
-}
-
-interface GalleryInfoRow {
-  label: string;
-  mineValue: string;
-  updateMine: (value: string) => void;
-  competitorValue: (competitor: CompetitorDraft) => string;
-  updateCompetitor: (columnIndex: number, value: string) => void;
-  asin?: boolean;
-  multiline?: boolean;
-  tall?: boolean;
-}
-
-interface GalleryCellStyle {
-  redText?: boolean;
-  yellowBg?: boolean;
-  redRanges?: Array<{ start: number; end: number }>;
-}
-
-interface GalleryExcelCell {
-  value?: unknown;
-  font?: { bold?: boolean; color?: { argb?: string } };
-  fill?: {
-    type?: string;
-    pattern?: string;
-    fgColor?: { argb?: string };
-    bgColor?: { argb?: string };
-  };
-}
-
-interface SavedRecord {
-  id: string;
-  version: number;
-  createdAt: string;
-  submitter: string;
-  productName: string;
-  input: ListingOptimizationRequest;
-  result: ListingOptimizationResult;
-}
-
-type TitleGeneratorFieldKey =
-  | "productChineseName"
-  | "currentProductTitle"
-  | "asin"
-  | "productFeatures"
-  | "coreAdWords"
-  | "relatedKeywords"
-  | "adData"
-  | "competitorTitle1"
-  | "competitorTitle2"
-  | "competitorTitle3";
-
-interface TitleGeneratorField {
-  key: TitleGeneratorFieldKey;
-  label: string;
-  weight: number;
-  value: string;
-}
-
-interface TitleGeneratorDraft {
-  fields: TitleGeneratorField[];
-  prompt: string;
-  results: string[];
-  history: TitleGeneratorHistoryRecord[];
-}
-
-interface TitleGeneratorHistoryRecord {
-  id: string;
-  createdAt: string;
-  fields: TitleGeneratorField[];
-  prompt: string;
-  results: string[];
-}
-
-type ImageGeneratorViewKey =
-  | "front"
-  | "left"
-  | "right"
-  | "back"
-  | "bottom"
-  | "top";
-
-interface ImageGeneratorDraft {
-  ownViews: Record<ImageGeneratorViewKey, ImagePreview[]>;
-  competitorImages: ImagePreview[];
-  prompt: string;
-  generatedImages: ImagePreview[];
-  lastRunAt: string;
-}
-
-const storageKey = "listing-ai-workspace-records";
-const draftStorageKey = "listing-ai-workspace-draft";
-const galleryCellStylesStorageKey = "listing-ai-gallery-cell-styles";
+import {
+  buildCompetitorInfo,
+  buildImageRequirements,
+  createEmptyCompetitor,
+  createPersistableDraft,
+  defaultImageGeneratorPrompt,
+  draftStorageKey,
+  fieldClass,
+  galleryCellStylesStorageKey,
+  imageGeneratorViews,
+  initialCompetitors,
+  initialImageGenerator,
+  initialInput,
+  initialTitleGenerator,
+  storageKey,
+  type CompetitorDraft,
+  type GalleryCellStyle,
+  type GalleryInfoRow,
+  type ImageGeneratorDraft,
+  type ImagePreview,
+  type OwnImageDraft,
+  type SavedRecord,
+  type TabId,
+  type TitleGeneratorDraft,
+  type TitleGeneratorField,
+  type TitleGeneratorFieldKey,
+  type TitleGeneratorHistoryRecord,
+  type WorkspaceDraft,
+} from "@/lib/listing-ai/workspace-draft";
 
 const tabs = [
   { id: "input", label: "Title", icon: Search },
@@ -184,272 +99,6 @@ const tabs = [
   { id: "imagePlan", label: "Image Plan", icon: Layers3 },
   { id: "review", label: "Review & History", icon: History },
 ] as const;
-
-type TabId = (typeof tabs)[number]["id"];
-
-interface WorkspaceDraft {
-  input: ListingOptimizationRequest;
-  competitors: CompetitorDraft[];
-  ownImages: OwnImageDraft;
-  titleGenerator: TitleGeneratorDraft;
-  imageGenerator: ImageGeneratorDraft;
-  activeTab: TabId;
-}
-
-const initialInput: ListingOptimizationRequest = {
-  marketplace: "US",
-  language: "zh-CN",
-  tone: "professional",
-  submitter: "",
-  productChineseName: "",
-  productEnglishName: "",
-  asin: "",
-  brand: "",
-  productType: "",
-  targetAudience: "",
-  useScenarios: "",
-  variationInfo: "",
-  currentTitle: "",
-  currentBullets: "",
-  currentDescription: "",
-  titleKeywords: "",
-  bulletKeywords: "",
-  adData: "",
-  productFacts: "",
-  mainSellingPoint1: "",
-  mainSellingPoint2: "",
-  mainSellingPoint3: "",
-  otherSellingPoints: "",
-  material: "",
-  dimensions: "",
-  packageList: "",
-  accessories: "",
-  specialStructure: "",
-  detailsToAmplify: "",
-  competitorInfo: "",
-  imageRequirements: "",
-  aplusRequirements: "",
-};
-
-function createEmptyCompetitor(): CompetitorDraft {
-  return {
-    asin: "",
-    sales: "",
-    price: "",
-    variation: "",
-    rating: "",
-    reviewCount: "",
-    mainImage: [],
-    screenshot: [],
-    title: "",
-    bullets: "",
-    targetAudience: "",
-    useScenarios: "",
-    productFeatures: "",
-    buyerConcerns: "",
-    negativeReviews: "",
-    opportunity: "",
-    aplus: "",
-    images: [],
-  };
-}
-
-const initialCompetitors: CompetitorDraft[] = Array.from(
-  { length: 3 },
-  createEmptyCompetitor,
-);
-
-const titleGeneratorPrompt = `你现在是深耕亚马逊跨境电商5年的资深产品经理，精通亚马逊A9算法、付费广告选词、Listing标题写法，严格按照下面的参考材料和权重优先级进行创作，禁止自由发挥、禁止编造不存在的关键词。
-
-【参考资料】
-中文名称、ASIN（仅用于页面记录与历史复盘，不作为标题生成参考）
-现有产品标题
-我的产品特点
-核心广告词
-相关关键词整理
-广告数据
-竞品标题1
-竞品标题2
-竞品标题3
-
-【权重优先级规则（必须严格遵守）】
-参考页面输入的权重优先级。
-执行硬性约束：
-1. 权重数值越高，对应资料的采纳优先级越高；不同信息出现冲突时，直接舍弃低权重内容，以最高权重的信息为准。
-2. 如果广告数据权重最高：优先挑选高点击、高转化的真实搜索词根，只借鉴竞品的句式结构，不照搬竞品的具体词汇。
-3. 如果竞品权重最高：贴合类目标准语序和埋词逻辑，只把广告里表现好的词适当融入，保证符合平台自然收录规则。
-4. 标题严格遵守亚马逊规范：前置核心大词，修饰词后置，不重复堆砌单词，长度适配亚马逊标准标题字符限制。
-
-【输出要求】
-只输出3条不同风格的成品标题，分1、2、3罗列，不要多余解释、不要分析文字，不要任何备注。
-
-【模式判定规则】
-若广告数据权重 ≥ 70%：广告优先模式，选词全部取自广告出词记录，结构轻度参考竞品。
-若竞品标题权重 ≥ 70%：类目模仿模式，句式完全贴合竞品习惯，广告好词少量植入。
-其余权重配比：均衡融合模式，合理分配所有信息来源。
-如果某一项参考资料为空，自动忽略该条内容，使用剩余高权重的材料生成，不得编造内容补齐。
-
-【标题规范】
-• 通用上限：≤200 字符（含空格、标点）
-• 移动端仅展示前 70~80 字符，最强差异化卖点必须放在前 80 位
-• 大小写：Title Case（实词首字母大写，介词 in/for/with、冠词 a/an/the 小写），禁止全大写
-• 标点仅允许英文符号
-• 绝对禁止写入其他产品商标词
-• 全部内容语义通顺，适配亚马逊 A9 搜索与 Rufus AI 问答抓取，无重复关键词堆砌。`;
-
-const initialTitleGenerator: TitleGeneratorDraft = {
-  prompt: titleGeneratorPrompt,
-  results: [],
-  history: [],
-  fields: [
-    { key: "productChineseName", label: "中文名称", weight: 0, value: "" },
-    { key: "asin", label: "ASIN", weight: 0, value: "" },
-    { key: "currentProductTitle", label: "现有产品标题", weight: 0, value: "" },
-    { key: "productFeatures", label: "我的产品特点", weight: 10, value: "" },
-    { key: "coreAdWords", label: "核心广告词", weight: 30, value: "" },
-    { key: "relatedKeywords", label: "相关关键词整理", weight: 20, value: "" },
-    { key: "adData", label: "广告数据", weight: 10, value: "" },
-    { key: "competitorTitle1", label: "竞品标题1", weight: 10, value: "" },
-    { key: "competitorTitle2", label: "竞品标题2", weight: 10, value: "" },
-    { key: "competitorTitle3", label: "竞品标题3", weight: 10, value: "" },
-  ],
-};
-
-const imageGeneratorViews: Array<{ key: ImageGeneratorViewKey; label: string }> =
-  [
-    { key: "front", label: "正视图" },
-    { key: "left", label: "左视图" },
-    { key: "right", label: "右视图" },
-    { key: "back", label: "后视图" },
-    { key: "bottom", label: "底视图" },
-    { key: "top", label: "顶视图" },
-  ];
-
-const defaultImageGeneratorPrompt = `我将上传：
-- 1-6张我的产品多角度实拍图（作为产品主体参考）
-- 1张竞品图片（仅作为场景、构图、拍摄角度和营销表达参考）
-
-任务：
-请生成一张全新的商业产品图片。
-
-要求：
-
-1. 产品替换：
-使用我的产品作为唯一主体，保持我的产品真实外观：
-- 保留我的产品形状、尺寸比例、颜色、纹理、材质、结构特点
-- 不改变产品设计
-- 不添加竞品的品牌标识、文字、Logo、专利结构或独特外观元素
-
-2. 竞品图片参考：
-仅参考竞品图片中的：
-- 拍摄角度
-- 场景氛围
-- 光线方向
-- 使用方式
-- 构图布局
-- 商业摄影风格
-
-不要复制：
-- 竞品产品外形
-- 竞品颜色组合
-- 竞品纹理
-- 竞品包装
-- 竞品Logo
-- 竞品独特设计元素
-
-3. 场景替换：
-如果竞品图片展示了产品使用场景，请创建类似但原创的场景。
-
-例如：
-竞品展示户外钓鱼场景 →
-生成我的产品在真实户外钓鱼环境中的使用场景。
-
-竞品展示厨房操作 →
-生成我的产品在现代厨房鱼类处理场景中的使用场景。
-
-4. 图片质量：
-生成亚马逊高级商业摄影风格：
-- 高清真实摄影
-- 4K细节
-- 自然光
-- 专业产品摄影
-- 清晰材质纹理
-- 真实阴影
-- 高端电商视觉效果
-
-5. 产品真实性：
-我的产品必须看起来像真实存在的商品：
-- 不改变结构
-- 不增加不存在的功能
-- 不夸大尺寸
-- 不产生AI幻觉细节
-
-6. 输出：
-生成适用于Amazon主图/副图的商业图片。`;
-
-const initialImageGenerator: ImageGeneratorDraft = {
-  ownViews: {
-    front: [],
-    left: [],
-    right: [],
-    back: [],
-    bottom: [],
-    top: [],
-  },
-  competitorImages: [],
-  prompt: defaultImageGeneratorPrompt,
-  generatedImages: [],
-  lastRunAt: "",
-};
-
-const fieldClass =
-  "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
-const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
-
-function stripLocalImages(images: ImagePreview[] | undefined) {
-  return Array.isArray(images)
-    ? images
-        .filter(
-          (image) =>
-            image.assetId ||
-            (image.url &&
-              !image.url.startsWith("data:image/") &&
-              !image.url.startsWith("blob:")),
-        )
-        .map((image) =>
-          image.assetId ? { ...image, url: "" } : image,
-        )
-    : [];
-}
-
-function createPersistableDraft(draft: WorkspaceDraft): WorkspaceDraft {
-  return {
-    ...draft,
-    competitors: draft.competitors.map((competitor) => ({
-      ...competitor,
-      mainImage: stripLocalImages(competitor.mainImage),
-      screenshot: stripLocalImages(competitor.screenshot),
-      images: stripLocalImages(competitor.images),
-    })),
-    ownImages: {
-      ...draft.ownImages,
-      mainImage: stripLocalImages(draft.ownImages.mainImage),
-      images: stripLocalImages(draft.ownImages.images),
-    },
-    imageGenerator: {
-      ...draft.imageGenerator,
-      ownViews: imageGeneratorViews.reduce(
-        (views, view) => ({
-          ...views,
-          [view.key]: stripLocalImages(draft.imageGenerator.ownViews[view.key]),
-        }),
-        {} as Record<ImageGeneratorViewKey, ImagePreview[]>,
-      ),
-      competitorImages: stripLocalImages(draft.imageGenerator.competitorImages),
-      generatedImages: stripLocalImages(draft.imageGenerator.generatedImages),
-    },
-  };
-}
 
 async function hydrateImage(image: ImagePreview): Promise<ImagePreview> {
   if (image.url || !image.assetId) {
@@ -1055,7 +704,7 @@ export function ListingAiWorkbench() {
 
       <main>
         {activeTab === "input" ? (
-          <InputCompetitorsSection
+          <ListingAiInputPanel
             productFactsCount={productFactsCount}
             titleGenerator={titleGenerator}
             titleGenerating={titleGenerating}
@@ -1117,385 +766,6 @@ export function ListingAiWorkbench() {
           />
         ) : null}
       </main>
-    </div>
-  );
-}
-
-function InputCompetitorsSection({
-  productFactsCount,
-  titleGenerator,
-  titleGenerating,
-  titleGeneratorError,
-  titlePromptOpen,
-  updateTitleGeneratorField,
-  setTitleGenerator,
-  setTitlePromptOpen,
-  onGenerateTitles,
-  onLoadTitleGeneratorHistory,
-}: {
-  productFactsCount: number;
-  titleGenerator: TitleGeneratorDraft;
-  titleGenerating: boolean;
-  titleGeneratorError: string;
-  titlePromptOpen: boolean;
-  updateTitleGeneratorField: (
-    key: TitleGeneratorFieldKey,
-    patch: Partial<Pick<TitleGeneratorField, "value" | "weight">>,
-  ) => void;
-  setTitleGenerator: React.Dispatch<React.SetStateAction<TitleGeneratorDraft>>;
-  setTitlePromptOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  onGenerateTitles: () => void;
-  onLoadTitleGeneratorHistory: (record: TitleGeneratorHistoryRecord) => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <TitleGeneratorCard
-        generator={titleGenerator}
-        loading={titleGenerating}
-        error={titleGeneratorError}
-        promptOpen={titlePromptOpen}
-        productFactsCount={productFactsCount}
-        onFieldChange={updateTitleGeneratorField}
-        onGeneratorChange={setTitleGenerator}
-        onPromptOpenChange={setTitlePromptOpen}
-        onGenerate={onGenerateTitles}
-        onLoadHistory={onLoadTitleGeneratorHistory}
-      />
-    </div>
-  );
-}
-
-function TitleGeneratorCard({
-  generator,
-  loading,
-  error,
-  promptOpen,
-  productFactsCount,
-  onFieldChange,
-  onGeneratorChange,
-  onPromptOpenChange,
-  onGenerate,
-  onLoadHistory,
-}: {
-  generator: TitleGeneratorDraft;
-  loading: boolean;
-  error: string;
-  promptOpen: boolean;
-  productFactsCount: number;
-  onFieldChange: (
-    key: TitleGeneratorFieldKey,
-    patch: Partial<Pick<TitleGeneratorField, "value" | "weight">>,
-  ) => void;
-  onGeneratorChange: React.Dispatch<React.SetStateAction<TitleGeneratorDraft>>;
-  onPromptOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
-  onGenerate: () => void;
-  onLoadHistory: (record: TitleGeneratorHistoryRecord) => void;
-}) {
-  const [historySearch, setHistorySearch] = useState("");
-  const identityFieldKeys: TitleGeneratorFieldKey[] = [
-    "productChineseName",
-    "asin",
-  ];
-  const identityFields = identityFieldKeys
-    .map((key) => generator.fields.find((field) => field.key === key))
-    .filter((field): field is TitleGeneratorField => Boolean(field));
-  const referenceFields = generator.fields.filter(
-    (field) => !identityFieldKeys.includes(field.key),
-  );
-  const totalWeight = referenceFields.reduce(
-    (total, field) => total + field.weight,
-    0,
-  );
-  const hasRequiredIdentity = identityFields.every((field) =>
-    field.value.trim(),
-  );
-  const canGenerate =
-    hasRequiredIdentity &&
-    referenceFields.some((field) => field.value.trim()) &&
-    !loading;
-  const history = generator.history ?? [];
-  const normalizedHistorySearch = historySearch.trim().toLowerCase();
-  const visibleHistory = normalizedHistorySearch
-    ? history.filter((record) =>
-        [
-          record.createdAt,
-          record.prompt,
-          ...record.results,
-          ...record.fields.flatMap((field) => [
-            field.label,
-            field.value,
-            String(field.weight),
-          ]),
-        ]
-          .join("\n")
-          .toLowerCase()
-          .includes(normalizedHistorySearch),
-      )
-    : history;
-
-  return (
-    <Card>
-      <CardHeader className="border-b border-border">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>标题生成器</CardTitle>
-            <p className="mt-1 text-xs font-semibold text-muted">
-              按参考资料与权重生成 3 条亚马逊标题。
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={totalWeight === 100 ? "green" : "amber"}>
-              权重 {totalWeight}%
-            </Badge>
-            <Badge tone={productFactsCount >= 50 ? "green" : "amber"}>
-              Mine Facts {productFactsCount}/50
-            </Badge>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => onPromptOpenChange(true)}
-            >
-              <Settings2 className="h-4 w-4" />
-              提示词修改
-            </Button>
-            <Button size="sm" disabled={!canGenerate} onClick={onGenerate}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Wand2 className="h-4 w-4" />
-              )}
-              AI 生成
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-md border border-border bg-white p-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <p className={labelClass}>产品信息</p>
-              <Badge tone={hasRequiredIdentity ? "green" : "amber"}>必填</Badge>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {identityFields.map((field) => (
-                <label key={field.key} className="space-y-1">
-                  <span className="text-xs font-bold text-muted">
-                    {field.label}
-                  </span>
-                  <input
-                    className={fieldClass}
-                    value={field.value}
-                    onChange={(event) =>
-                      onFieldChange(field.key, {
-                        value:
-                          field.key === "asin"
-                            ? event.target.value.trim()
-                            : event.target.value,
-                      })
-                    }
-                    placeholder={`${field.label}：必填`}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-          {referenceFields.map((field) => (
-            <div
-              key={field.key}
-              className="rounded-md border border-border bg-white p-3"
-            >
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className={labelClass}>{field.label}</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    aria-label={`${field.label} 权重`}
-                    className="h-8 w-16 rounded-md border border-border bg-white px-2 text-right text-sm font-bold text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
-                    max={100}
-                    min={0}
-                    type="number"
-                    value={field.weight}
-                    onChange={(event) =>
-                      onFieldChange(field.key, {
-                        weight: Math.max(
-                          0,
-                          Math.min(100, Number(event.target.value) || 0),
-                        ),
-                      })
-                    }
-                  />
-                  <span className="text-xs font-bold text-muted">%</span>
-                </div>
-              </div>
-              <textarea
-                className={`${fieldClass} h-24 resize-none`}
-                value={field.value}
-                onChange={(event) =>
-                  onFieldChange(field.key, { value: event.target.value })
-                }
-                placeholder={`${field.label}：输入框`}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="space-y-3">
-          <div className="rounded-md border border-border bg-surface-muted/50 p-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className={labelClass}>生成的内容</p>
-              <Badge tone={generator.results.length === 3 ? "green" : "gray"}>
-                {generator.results.length}/3
-              </Badge>
-            </div>
-            <div className="space-y-3">
-              {[0, 1, 2].map((index) => (
-                <div
-                  key={index}
-                  className="min-h-24 rounded-md border border-border bg-white p-3"
-                >
-                  <p className="text-xs font-black text-brand">
-                    生成结果{index + 1}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
-                    {generator.results[index] || "等待生成"}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {error ? (
-              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-                {error}
-              </div>
-            ) : null}
-          </div>
-          <div className="rounded-md border border-border bg-white p-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className={labelClass}>生成历史</p>
-              <Badge tone={visibleHistory.length ? "blue" : "gray"}>
-                {normalizedHistorySearch
-                  ? `${visibleHistory.length}/${history.length}`
-                  : history.length}
-              </Badge>
-            </div>
-            <div className="relative mb-3">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input
-                className={`${fieldClass} pl-9`}
-                value={historySearch}
-                onChange={(event) => setHistorySearch(event.target.value)}
-                placeholder="搜索历史名称、ASIN、单词、数据"
-              />
-            </div>
-            {history.length ? (
-              visibleHistory.length ? (
-                <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                  {visibleHistory.map((record) => {
-                    const recordChineseName = record.fields
-                      .find((field) => field.key === "productChineseName")
-                      ?.value.trim();
-                    const recordAsin = record.fields
-                      .find((field) => field.key === "asin")
-                      ?.value.trim();
-                    const reviewMeta = [recordChineseName, recordAsin]
-                      .filter(Boolean)
-                      .join(" · ");
-
-                    return (
-                      <div
-                        key={record.id}
-                        className="rounded-md border border-border bg-surface-muted/40 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-bold text-muted">
-                            {record.createdAt}
-                            {reviewMeta ? ` · ${reviewMeta}` : ""}
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => onLoadHistory(record)}
-                          >
-                            复用
-                          </Button>
-                        </div>
-                        <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-foreground">
-                          {record.results[0] || "无结果"}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted">
-                  没有匹配的历史记录
-                </div>
-              )
-            ) : (
-              <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted">
-                暂无历史
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-      {promptOpen ? (
-        <PromptEditorDialog
-          prompt={generator.prompt}
-          onChange={(prompt) =>
-            onGeneratorChange((current) => ({ ...current, prompt }))
-          }
-          onClose={() => onPromptOpenChange(false)}
-          onSave={() => onPromptOpenChange(false)}
-        />
-      ) : null}
-    </Card>
-  );
-}
-
-function PromptEditorDialog({
-  prompt,
-  onChange,
-  onClose,
-  onSave,
-}: {
-  prompt: string;
-  onChange: (prompt: string) => void;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-3xl rounded-lg border border-border bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <h2 className="text-lg font-black text-foreground">提示词修改</h2>
-            <p className="mt-1 text-xs font-semibold text-muted">
-              保存后会作为标题生成器的系统提示词使用。
-            </p>
-          </div>
-          <button
-            className="rounded-md p-2 text-muted hover:bg-surface-muted hover:text-foreground"
-            onClick={onClose}
-            aria-label="关闭"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="p-5">
-          <textarea
-            className={`${fieldClass} h-[420px] resize-none font-mono text-xs leading-5`}
-            value={prompt}
-            onChange={(event) => onChange(event.target.value)}
-          />
-        </div>
-        <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
-          <Button variant="secondary" onClick={onClose}>
-            取消
-          </Button>
-          <Button onClick={onSave}>
-            <Save className="h-4 w-4" />
-            保存提示词
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1675,10 +945,6 @@ function ImagesSection({
     window.localStorage.setItem(galleryCellStylesStorageKey, JSON.stringify(cellStyles));
   }, [cellStyles]);
 
-  function galleryCellKey(rowLabel: string, columnKey: string) {
-    return `${rowLabel}::${columnKey}`;
-  }
-
   function toggleFocusedCellStyle(styleKey: keyof GalleryCellStyle) {
     if (!focusedCellKey) return;
     setCellStyles((current) => {
@@ -1704,14 +970,10 @@ function ImagesSection({
   }
 
   function normalizedRedRanges(value: string, styleKey?: string) {
-    const ranges = styleKey ? (cellStyles[styleKey]?.redRanges ?? []) : [];
-    return ranges
-      .map((range) => ({
-        start: Math.max(0, Math.min(value.length, range.start)),
-        end: Math.max(0, Math.min(value.length, range.end)),
-      }))
-      .filter((range) => range.end > range.start)
-      .sort((a, b) => a.start - b.start);
+    return normalizeGalleryRedRanges(
+      value,
+      styleKey ? cellStyles[styleKey] : undefined,
+    );
   }
 
   function richCellHtml(value: string, styleKey?: string) {
@@ -1790,85 +1052,6 @@ function ImagesSection({
       style?.redText ? "text-red-700 font-bold" : "text-foreground",
       style?.yellowBg ? "bg-yellow-100" : "bg-white",
     ].join(" ");
-  }
-
-  function applyGalleryCellStyleToExcelCell(cell: GalleryExcelCell, styleKey: string) {
-    const style = cellStyles[styleKey];
-    if (!style) return;
-    if (style.redText) {
-      cell.font = {
-        ...(cell.font ?? {}),
-        bold: true,
-        color: { argb: "FFFF0000" },
-      };
-    }
-    if (style.yellowBg) {
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFFF00" },
-      };
-    }
-  }
-
-  function setExcelCellText(cell: GalleryExcelCell, value: string, styleKey: string) {
-    const ranges = normalizedRedRanges(value, styleKey);
-    if (!ranges.length) {
-      cell.value = value;
-      return;
-    }
-
-    const richText: Array<{ text: string; font?: { bold?: boolean; color?: { argb: string } } }> =
-      [];
-    let cursor = 0;
-    ranges.forEach((range) => {
-      const start = Math.max(cursor, range.start);
-      const end = Math.max(start, range.end);
-      if (start > cursor) richText.push({ text: value.slice(cursor, start) });
-      richText.push({
-        text: value.slice(start, end),
-        font: { bold: true, color: { argb: "FFFF0000" } },
-      });
-      cursor = end;
-    });
-    if (cursor < value.length) richText.push({ text: value.slice(cursor) });
-    cell.value = { richText };
-  }
-
-  function excelCellStyleToGalleryStyle(cell: GalleryExcelCell) {
-    const fontColor = cell.font?.color?.argb?.toUpperCase() ?? "";
-    const fillColor = (
-      cell.fill?.fgColor?.argb ??
-      cell.fill?.bgColor?.argb ??
-      ""
-    ).toUpperCase();
-    const style: GalleryCellStyle = {};
-    if (fontColor.endsWith("FF0000")) style.redText = true;
-    if (fillColor.endsWith("FFFF00")) style.yellowBg = true;
-    const value = cell.value as { richText?: Array<{ text?: string; font?: { color?: { argb?: string } } }> };
-    if (Array.isArray(value?.richText)) {
-      let cursor = 0;
-      const redRanges: Array<{ start: number; end: number }> = [];
-      value.richText.forEach((part) => {
-        const text = part.text ?? "";
-        const start = cursor;
-        const end = start + text.length;
-        const partColor = part.font?.color?.argb?.toUpperCase() ?? "";
-        if (partColor.endsWith("FF0000") && end > start) redRanges.push({ start, end });
-        cursor = end;
-      });
-      if (redRanges.length) style.redRanges = redRanges;
-    }
-    return style;
-  }
-
-  function mergeCellStyle(
-    target: Record<string, GalleryCellStyle>,
-    styleKey: string,
-    style: GalleryCellStyle,
-  ) {
-    if (!style.redText && !style.yellowBg) return;
-    target[styleKey] = { ...(target[styleKey] ?? {}), ...style };
   }
 
   function setColumnImages(
@@ -2159,39 +1342,6 @@ function ImagesSection({
     URL.revokeObjectURL(url);
   }
 
-  function imageExtension(image: ImagePreview) {
-    const lowerName = image.name.toLowerCase();
-    if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "jpeg";
-    if (lowerName.endsWith(".gif")) return "gif";
-    return "png";
-  }
-
-  function excelCellToText(value: unknown): string {
-    if (value === null || value === undefined) return "";
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-      return String(value);
-    }
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
-    if (typeof value !== "object") return String(value);
-
-    const richValue = value as {
-      richText?: Array<{ text?: string }>;
-      text?: string;
-      result?: unknown;
-      formula?: string;
-      hyperlink?: string;
-    };
-    if (Array.isArray(richValue.richText)) {
-      return richValue.richText.map((part) => part.text ?? "").join("");
-    }
-    if (richValue.text !== undefined) return String(richValue.text);
-    if (richValue.result !== undefined) return excelCellToText(richValue.result);
-    if (richValue.formula !== undefined) return String(richValue.formula);
-    if (richValue.hyperlink !== undefined) return String(richValue.hyperlink);
-
-    return "";
-  }
-
   async function handleExportGalleryExcel() {
     setExcelBusy(true);
     setExcelError("");
@@ -2225,18 +1375,22 @@ function ImagesSection({
           const competitor = competitors[column.index];
           const cell = worksheet.getCell(rowNumber, columnIndex + 2);
           const styleKey = galleryCellKey(row.label, column.key);
-          setExcelCellText(cell, competitor ? row.competitorValue(competitor) : "", styleKey);
+          setExcelCellText(
+            cell,
+            competitor ? row.competitorValue(competitor) : "",
+            cellStyles[styleKey],
+          );
           applyGalleryCellStyleToExcelCell(
             cell,
-            styleKey,
+            cellStyles[styleKey],
           );
         });
         const mineCell = worksheet.getCell(rowNumber, competitorColumns.length + 2);
         const mineStyleKey = galleryCellKey(row.label, mineColumn.key);
-        setExcelCellText(mineCell, row.mineValue, mineStyleKey);
+        setExcelCellText(mineCell, row.mineValue, cellStyles[mineStyleKey]);
         applyGalleryCellStyleToExcelCell(
           mineCell,
-          mineStyleKey,
+          cellStyles[mineStyleKey],
         );
         worksheet.getRow(rowNumber).height = row.tall ? 115 : row.multiline ? 72 : 28;
       });
@@ -2249,19 +1403,23 @@ function ImagesSection({
         setExcelCellText(
           cell,
           competitor ? aplusRow.competitorValue(competitor) : "",
-          styleKey,
+          cellStyles[styleKey],
         );
         applyGalleryCellStyleToExcelCell(
           cell,
-          styleKey,
+          cellStyles[styleKey],
         );
       });
       const aplusMineCell = worksheet.getCell(aplusRowNumber, competitorColumns.length + 2);
       const aplusMineStyleKey = galleryCellKey(aplusRow.label, mineColumn.key);
-      setExcelCellText(aplusMineCell, aplusRow.mineValue, aplusMineStyleKey);
+      setExcelCellText(
+        aplusMineCell,
+        aplusRow.mineValue,
+        cellStyles[aplusMineStyleKey],
+      );
       applyGalleryCellStyleToExcelCell(
         aplusMineCell,
-        aplusMineStyleKey,
+        cellStyles[aplusMineStyleKey],
       );
       worksheet.getRow(aplusRowNumber).height = 72;
 
@@ -2414,7 +1572,7 @@ function ImagesSection({
         nextCompetitors.forEach((competitor, index) => {
           const colNumber = competitorColumnNumbers[index] ?? index + 2;
           const value = readCell(row.label, colNumber);
-          mergeCellStyle(
+          mergeGalleryCellStyle(
             nextCellStyles,
             galleryCellKey(row.label, `competitor-${index}`),
             readCellStyle(row.label, colNumber),
@@ -2435,7 +1593,7 @@ function ImagesSection({
         });
         const mineValue = mineColNumber ? readCell(row.label, mineColNumber) : "";
         if (mineColNumber) {
-          mergeCellStyle(
+          mergeGalleryCellStyle(
             nextCellStyles,
             galleryCellKey(row.label, mineColumn.key),
             readCellStyle(row.label, mineColNumber),
@@ -2466,7 +1624,7 @@ function ImagesSection({
       nextCompetitors.forEach((competitor, index) => {
         const colNumber = competitorColumnNumbers[index] ?? index + 2;
         const value = readCell("A+", colNumber);
-        mergeCellStyle(
+        mergeGalleryCellStyle(
           nextCellStyles,
           galleryCellKey(aplusRow.label, `competitor-${index}`),
           readCellStyle("A+", colNumber),
@@ -2474,7 +1632,7 @@ function ImagesSection({
         if (value) competitor.aplus = value;
       });
       if (mineColNumber) {
-        mergeCellStyle(
+        mergeGalleryCellStyle(
           nextCellStyles,
           galleryCellKey(aplusRow.label, mineColumn.key),
           readCellStyle("A+", mineColNumber),
@@ -2911,7 +2069,7 @@ function VisualAplusSection({
         update={update}
         handleImageUpload={handleImageUpload}
       />
-      <AplusSection
+      <ListingAiAplusPanel
         result={result}
         input={input}
         update={update}
@@ -3194,901 +2352,6 @@ function MineColumn({
   );
 }
 
-function ImageStrip({
-  title,
-  images,
-  onUpload,
-  mine,
-  variant = "gallery",
-}: {
-  title: string;
-  images: ImagePreview[];
-  onUpload: (files: FileList | null) => void;
-  mine?: boolean;
-  variant?: "main" | "single" | "gallery";
-}) {
-  const previewHeight = variant === "gallery" ? "h-40" : "h-28";
-  const gridClass = variant === "gallery" ? "grid-cols-3" : "grid-cols-1";
-
-  return (
-    <div className="rounded-md border border-border bg-white p-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className={labelClass}>{title}</p>
-        <MiniUploader images={images} label="Upload" onUpload={onUpload} />
-      </div>
-      <div className={`${previewHeight} overflow-hidden`}>
-        {images.length ? (
-          <div className={`grid ${gridClass} gap-2`}>
-            {images.slice(0, variant === "gallery" ? 9 : 1).map((image) => (
-              <GalleryCell
-                key={image.url}
-                image={image}
-                mine={mine}
-                compact={variant !== "gallery"}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted">
-            No Images
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AmazonLinkButton({ asin }: { asin: string }) {
-  const cleanAsin = asin.trim();
-  const disabled = !cleanAsin;
-
-  return (
-    <a
-      aria-disabled={disabled}
-      className={`flex h-10 items-center justify-center rounded-md border border-border bg-white text-muted transition ${
-        disabled
-          ? "pointer-events-none opacity-40"
-          : "hover:bg-surface-muted hover:text-brand"
-      }`}
-      href={
-        disabled
-          ? undefined
-          : `https://www.amazon.com/dp/${encodeURIComponent(cleanAsin)}`
-      }
-      rel="noreferrer"
-      target="_blank"
-      title="Open Amazon listing"
-    >
-      <ExternalLink className="h-4 w-4" />
-    </a>
-  );
-}
-
-function GalleryCell({
-  image,
-  mine,
-  compact,
-  draggable,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp,
-  canMoveDown,
-  onPreview,
-}: {
-  image?: ImagePreview;
-  mine?: boolean;
-  compact?: boolean;
-  draggable?: boolean;
-  onDragStart?: () => void;
-  onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
-  onDrop?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
-  onPreview?: () => void;
-}) {
-  return image ? (
-    <div
-      className={`group overflow-hidden rounded-md border ${mine ? "border-brand" : "border-border"} bg-white`}
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
-      <div className="relative">
-        <button
-          className={`${compact ? "h-20" : "aspect-square"} flex w-full cursor-zoom-in items-center justify-center bg-white`}
-          onClick={onPreview}
-          type="button"
-          title="View large image"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image.url}
-            alt={image.name}
-            className="h-full w-full object-contain"
-          />
-        </button>
-        {draggable ? (
-          <div className="absolute right-2 top-2 flex flex-col gap-1 opacity-0 transition group-hover:opacity-100">
-            <button
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canMoveUp}
-              onClick={onMoveUp}
-              type="button"
-              title="Move up"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
-            <button
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canMoveDown}
-              onClick={onMoveDown}
-              type="button"
-              title="Move down"
-            >
-              <ArrowDown className="h-4 w-4" />
-            </button>
-          </div>
-        ) : null}
-      </div>
-      <div className="flex items-center gap-1 px-2 py-1 text-xs text-muted">
-        {draggable ? <GripVertical className="h-3.5 w-3.5 shrink-0" /> : null}
-        <p className="truncate">{image.name}</p>
-      </div>
-    </div>
-  ) : (
-    <div
-      className="flex aspect-square items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted"
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
-      Empty
-    </div>
-  );
-}
-
-function ImagePreviewModal({
-  image,
-  onClose,
-}: {
-  image: ImagePreview;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-md border border-border bg-white shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <p className="truncate text-sm font-bold text-foreground">
-            {image.name}
-          </p>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-surface-muted p-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image.url}
-            alt={image.name}
-            className="max-h-[78vh] max-w-full object-contain"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AnalysisSection({
-  result,
-  loading,
-  error,
-  canSubmit,
-  onGenerate,
-}: {
-  result: ListingOptimizationResult | null;
-  loading: boolean;
-  error: string;
-  canSubmit: boolean;
-  onGenerate: () => void;
-}) {
-  if (!result) {
-    return (
-      <EmptyAiState
-        title="AI Analysis"
-        loading={loading}
-        error={error}
-        canSubmit={canSubmit}
-        onGenerate={onGenerate}
-      />
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-      <AnalysisCard
-        title="Position"
-        content={result.aiAnalysis.position || result.positioning.oneSentence}
-        tone="blue"
-      />
-      <AnalysisList
-        title="Strength"
-        items={result.aiAnalysis.strength}
-        tone="green"
-      />
-      <AnalysisList
-        title="Weakness"
-        items={result.aiAnalysis.weakness}
-        tone="amber"
-      />
-      <AnalysisList
-        title="Opportunity"
-        items={result.aiAnalysis.opportunity}
-        tone="blue"
-      />
-      <AnalysisList title="Risk" items={result.aiAnalysis.risk} tone="red" />
-    </div>
-  );
-}
-
-function ListingSection({
-  result,
-  copied,
-  copyText,
-}: {
-  result: ListingOptimizationResult | null;
-  copied: string;
-  copyText: (key: string, value: string) => void;
-}) {
-  if (!result) return <EmptyOutput title="Final Listing" />;
-
-  return (
-    <div className="space-y-4">
-      <OutputHeader
-        title="Final Listing"
-        onCopy={() => copyText("listing", formatCopywriting(result))}
-        copied={copied === "listing"}
-      />
-      <Card>
-        <CardHeader>
-          <CardTitle>Title Generation</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          {result.titleOptions.map((option) => (
-            <div
-              key={option.type}
-              className="rounded-md border border-border p-4"
-            >
-              <Badge tone={option.type === "balanced" ? "green" : "blue"}>
-                {option.type}
-              </Badge>
-              <p className="mt-3 text-sm font-bold leading-6 text-foreground">
-                {option.title}
-              </p>
-              <p className="mt-2 text-xs leading-5 text-muted">
-                {option.selfCheck}
-              </p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Bullet Generation</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {result.bullets.map((bullet, index) => (
-            <div
-              key={`${bullet.bullet}-${index}`}
-              className="rounded-md border border-border p-4"
-            >
-              <p className="font-bold leading-6 text-foreground">
-                {index + 1}. {bullet.bullet}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                {bullet.chineseExplanation}
-              </p>
-              <p className="mt-1 text-xs font-semibold text-brand">
-                Image: {bullet.imageExpression}
-              </p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ImagePlanSection({
-  result,
-  copied,
-  copyText,
-  imageGenerator,
-  imageGenerating,
-  imageGeneratorError,
-  setImageGenerator,
-  handleImageUpload,
-  onRunImageGenerator,
-}: {
-  result: ListingOptimizationResult | null;
-  copied: string;
-  copyText: (key: string, value: string) => void;
-  imageGenerator: ImageGeneratorDraft;
-  imageGenerating: boolean;
-  imageGeneratorError: string;
-  setImageGenerator: React.Dispatch<React.SetStateAction<ImageGeneratorDraft>>;
-  handleImageUpload: (
-    files: FileList | null,
-    callback: (images: ImagePreview[]) => void,
-  ) => void;
-  onRunImageGenerator: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      {result ? (
-        <>
-          <OutputHeader
-            title="Image Execution Board"
-            onCopy={() => copyText("images", formatImages(result))}
-            copied={copied === "images"}
-          />
-          <Card>
-        <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[1180px] text-left text-sm">
-            <thead className="bg-surface-muted text-xs font-bold text-muted">
-              <tr>
-                <th className="px-4 py-3">No</th>
-                <th className="px-4 py-3">主题</th>
-                <th className="px-4 py-3">卖点</th>
-                <th className="px-4 py-3">文案</th>
-                <th className="px-4 py-3">状态</th>
-                <th className="px-4 py-3">Prompt</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {result.imagePlan.map((item) => (
-                <tr key={`${item.imageNo}-${item.slot}`} className="align-top">
-                  <td className="px-4 py-3 font-black text-foreground">
-                    {item.imageNo}
-                  </td>
-                  <td className="px-4 py-3 font-bold text-foreground">
-                    {item.theme}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {item.amplifiedSellingPoint}
-                  </td>
-                  <td className="px-4 py-3 text-muted">{item.englishCopy}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone="amber">Planned</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <details>
-                      <summary className="cursor-pointer font-bold text-brand">
-                        展开
-                      </summary>
-                      <p className="mt-2 text-xs leading-5 text-muted">
-                        {item.enPrompt}
-                      </p>
-                      <p className="mt-2 text-xs leading-5 text-muted">
-                        {item.negativePrompt}
-                      </p>
-                    </details>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-          </Card>
-        </>
-      ) : (
-        <EmptyOutput title="Image Execution Board" />
-      )}
-      <ImagesGeneratorBoard
-        draft={imageGenerator}
-        error={imageGeneratorError}
-        loading={imageGenerating}
-        setDraft={setImageGenerator}
-        handleImageUpload={handleImageUpload}
-        onRun={onRunImageGenerator}
-      />
-    </div>
-  );
-}
-
-function ImagesGeneratorBoard({
-  draft,
-  error,
-  loading,
-  setDraft,
-  handleImageUpload,
-  onRun,
-}: {
-  draft: ImageGeneratorDraft;
-  error: string;
-  loading: boolean;
-  setDraft: React.Dispatch<React.SetStateAction<ImageGeneratorDraft>>;
-  handleImageUpload: (
-    files: FileList | null,
-    callback: (images: ImagePreview[]) => void,
-  ) => void;
-  onRun: () => void;
-}) {
-  const ownViewCount = imageGeneratorViews.reduce(
-    (total, view) => total + draft.ownViews[view.key].length,
-    0,
-  );
-  const canRun =
-    ownViewCount > 0 &&
-    draft.competitorImages.length > 0 &&
-    draft.prompt.trim().length > 0;
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>Images Generator</CardTitle>
-            <p className="mt-1 text-xs font-semibold text-muted">
-              上传竞品图和我的六视图，编辑提示词后生成图片；API 接入点已预留。
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge tone={canRun ? "green" : "gray"}>
-              {ownViewCount}/6 Views · {draft.competitorImages.length} Competitors
-            </Badge>
-            {draft.lastRunAt ? <Badge tone="blue">{draft.lastRunAt}</Badge> : null}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="overflow-x-auto p-0">
-        <div className="min-w-[1160px] divide-y divide-border">
-          <div className="grid grid-cols-[120px_repeat(6,minmax(150px,1fr))] divide-x divide-border">
-            <div className="p-3 text-sm font-bold text-foreground">我的六视图</div>
-            {imageGeneratorViews.map((view) => (
-              <div key={view.key} className="p-3">
-                <div className="mb-2 grid grid-cols-[1fr_auto] items-center gap-2">
-                  <p className="min-w-0 text-sm font-bold text-foreground">{view.label}</p>
-                  <MiniUploader
-                    images={draft.ownViews[view.key]}
-                    label="上传"
-                    onUpload={(files) =>
-                      handleImageUpload(files, (images) =>
-                        setDraft((current) => ({
-                          ...current,
-                          ownViews: {
-                            ...current.ownViews,
-                            [view.key]: images.slice(0, 1),
-                          },
-                        })),
-                      )
-                    }
-                  />
-                </div>
-                <ImagePreviewGrid images={draft.ownViews[view.key]} compact />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-[120px_minmax(320px,1.05fr)_minmax(260px,0.9fr)_minmax(340px,1.15fr)] divide-x divide-border">
-            <div className="p-3 text-sm font-bold text-foreground">上传竞品图</div>
-            <div className="p-3">
-              <MiniUploader
-                images={draft.competitorImages}
-                label="上传竞品图"
-                onUpload={(files) =>
-                  handleImageUpload(files, (images) =>
-                    setDraft((current) => ({
-                      ...current,
-                      competitorImages: images,
-                    })),
-                  )
-                }
-              />
-              <ImagePreviewGrid images={draft.competitorImages} />
-            </div>
-            <div className="flex flex-col gap-3 p-3">
-              <details className="rounded-md border border-border bg-surface-muted/50 p-3">
-                <summary className="cursor-pointer text-sm font-bold text-brand">
-                  提示词
-                </summary>
-                <textarea
-                  className={`${fieldClass} mt-3 min-h-44 resize-y`}
-                  value={draft.prompt}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      prompt: event.target.value,
-                    }))
-                  }
-                />
-              </details>
-              <Button className="self-start" disabled={!canRun || loading} onClick={onRun}>
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Wand2 className="h-4 w-4" />
-                )}
-                运行按钮
-              </Button>
-              {error ? (
-                <p className="max-w-64 text-center text-xs font-semibold leading-5 text-red-600">
-                  {error}
-                </p>
-              ) : (
-                <p className="max-w-64 text-center text-xs font-semibold leading-5 text-muted">
-                  调用 Settings 中保存的模型配置。
-                </p>
-              )}
-            </div>
-            <div className="p-3">
-              <p className="mb-2 text-sm font-bold text-foreground">
-                生成图展示
-              </p>
-              <ImagePreviewGrid images={draft.generatedImages} />
-              {false && !draft.generatedImages.length ? (
-                <div className="flex min-h-36 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted">
-                  等待生成图片
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ImagePreviewGrid({
-  images,
-  compact = false,
-}: {
-  images: ImagePreview[];
-  compact?: boolean;
-}) {
-  if (!images.length) {
-    return (
-      <div
-        className={`flex aspect-square items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted ${
-          compact ? "w-full" : "mt-3 w-full max-w-72"
-        }`}
-      >
-        暂无图片
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`grid gap-2 ${
-        compact
-          ? "grid-cols-1"
-          : "mt-3 grid-cols-[repeat(auto-fill,minmax(150px,220px))]"
-      }`}
-    >
-      {images.map((image) => (
-        <figure
-          key={`${image.name}-${image.url.slice(0, 24)}`}
-          className="overflow-hidden rounded-md border border-border bg-white"
-        >
-          <img
-            className="aspect-square w-full object-contain"
-            src={image.url}
-            alt={image.name}
-          />
-          <figcaption className="truncate border-t border-border px-2 py-1 text-[11px] font-semibold text-muted">
-            {image.name}
-          </figcaption>
-        </figure>
-      ))}
-    </div>
-  );
-}
-
-function AplusSection({
-  result,
-  input,
-  update,
-  error,
-  canSubmit,
-  loading,
-  onGenerate,
-}: {
-  result: ListingOptimizationResult | null;
-  input: ListingOptimizationRequest;
-  update: <K extends keyof ListingOptimizationRequest>(
-    key: K,
-    value: ListingOptimizationRequest[K],
-  ) => void;
-  error: string;
-  canSubmit: boolean;
-  loading: boolean;
-  onGenerate: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>A+ Requirements</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <textarea
-            className={`${fieldClass} min-h-32 resize-y`}
-            value={input.aplusRequirements}
-            onChange={(event) =>
-              update("aplusRequirements", event.target.value)
-            }
-          />
-          {error ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-              {error}
-            </div>
-          ) : null}
-          <Button disabled={!canSubmit} onClick={onGenerate}>
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Generate / Regenerate
-          </Button>
-        </CardContent>
-      </Card>
-      {result ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>A+ Execution Board</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {result.aplusPlan.map((module) => (
-              <div
-                key={module.moduleNo}
-                className="rounded-md border border-border p-4"
-              >
-                <Badge tone="blue">{module.moduleNo}</Badge>
-                <p className="mt-3 font-bold text-foreground">
-                  {module.coreMessage}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted">
-                  布局：{module.layout}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-muted">
-                  文案：{module.copy}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-muted">
-                  视觉：{module.visualElements}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-    </div>
-  );
-}
-
-function ReviewSection({
-  result,
-}: {
-  result: ListingOptimizationResult | null;
-}) {
-  if (!result) return <EmptyOutput title="AI Review" />;
-
-  const review = result.aiReview;
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>AI Review</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <ScoreTile label="Listing" value={review.listingScore} />
-          <ScoreTile label="Image" value={review.imageScore} />
-          <ScoreTile label="A+" value={review.aplusScore} />
-          <ScoreTile label="Keyword" value={review.keywordScore} />
-          <ScoreTile label="Buyer Desire" value={review.buyerDesireScore} />
-        </CardContent>
-      </Card>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <AnalysisCard title="Verdict" content={review.verdict} tone="blue" />
-        <AnalysisList title="Must Fix" items={review.mustFix} tone="red" />
-        <AnalysisList
-          title="Regeneration Advice"
-          items={review.regenerationAdvice}
-          tone="amber"
-        />
-      </div>
-    </div>
-  );
-}
-
-function ReviewHistorySection({
-  result,
-  records,
-  onLoad,
-}: {
-  result: ListingOptimizationResult | null;
-  records: SavedRecord[];
-  onLoad: (record: SavedRecord) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <ReviewSection result={result} />
-      <HistorySection records={records} onLoad={onLoad} />
-    </div>
-  );
-}
-
-function HistorySection({
-  records,
-  onLoad,
-}: {
-  records: SavedRecord[];
-  onLoad: (record: SavedRecord) => void;
-}) {
-  const grouped = records.reduce<Record<string, SavedRecord[]>>(
-    (acc, record) => {
-      acc[record.productName] = acc[record.productName]
-        ? [...acc[record.productName], record]
-        : [record];
-      return acc;
-    },
-    {},
-  );
-
-  return (
-    <div className="space-y-4">
-      {Object.entries(grouped).length ? (
-        Object.entries(grouped).map(([product, productRecords]) => (
-          <Card key={product}>
-            <CardHeader>
-              <CardTitle>{product}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {productRecords.map((record) => (
-                <button
-                  key={record.id}
-                  className="flex w-full items-center justify-between rounded-md border border-border px-4 py-3 text-left hover:bg-surface-muted"
-                  onClick={() => onLoad(record)}
-                >
-                  <span>
-                    <span className="block font-bold text-foreground">
-                      Version {record.version}
-                    </span>
-                    <span className="text-xs text-muted">
-                      {record.createdAt} · {record.submitter}
-                    </span>
-                  </span>
-                  <Badge tone="gray">Load</Badge>
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-        ))
-      ) : (
-        <EmptyOutput title="History" />
-      )}
-    </div>
-  );
-}
-
-function InfoField({
-  label,
-  children,
-  className = "",
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`rounded-md border border-border bg-white p-4 ${className}`}
-    >
-      <p className={labelClass}>{label}</p>
-      <div className="mt-3">{children}</div>
-    </div>
-  );
-}
-
-function AlignedPlaceholder({ label }: { label: string }) {
-  return (
-    <div className="rounded-md border border-dashed border-border bg-surface-muted/60 p-4">
-      <p className={labelClass}>{label}</p>
-      <div className="mt-3 flex h-[calc(100%-28px)] items-center justify-center rounded-md bg-white/60 text-xs font-bold text-muted">
-        不适用
-      </div>
-    </div>
-  );
-}
-
-function MiniUploader({
-  images,
-  onUpload,
-  label = "Upload",
-}: {
-  images: ImagePreview[];
-  onUpload: (files: FileList | null) => void;
-  label?: string;
-}) {
-  return (
-    <label className="inline-flex min-w-28 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-xs font-bold text-muted hover:bg-surface-muted">
-      <Upload className="h-4 w-4" />
-      {images.length ? `${images.length} Images` : label}
-      <input
-        className="hidden"
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={(event) => onUpload(event.target.files)}
-      />
-    </label>
-  );
-}
-
-function EmptyAiState({
-  title,
-  loading,
-  error,
-  canSubmit,
-  onGenerate,
-}: {
-  title: string;
-  loading: boolean;
-  error: string;
-  canSubmit: boolean;
-  onGenerate: () => void;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex min-h-[420px] flex-col items-center justify-center text-center">
-        <Sparkles className="h-10 w-10 text-brand" />
-        <h2 className="mt-4 text-xl font-black text-foreground">{title}</h2>
-        <p className="mt-2 max-w-md text-sm leading-6 text-muted">
-          录入 Information、Competitors、Images 后，生成 AI
-          分析、Listing、图片执行表、A+ 和自检结果。
-        </p>
-        {error ? (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-            {error}
-          </div>
-        ) : null}
-        <Button className="mt-5" disabled={!canSubmit} onClick={onGenerate}>
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-          Generate AI Analysis
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EmptyOutput({ title }: { title: string }) {
-  return (
-    <Card>
-      <CardContent className="flex min-h-[360px] flex-col items-center justify-center text-center">
-        <Layers3 className="h-10 w-10 text-muted" />
-        <h2 className="mt-4 text-xl font-black text-foreground">{title}</h2>
-        <p className="mt-2 text-sm text-muted">请先生成 AI Analysis。</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 function WorkspaceMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-h-32 flex-col justify-center p-4">
@@ -4100,179 +2363,3 @@ function WorkspaceMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function OutputHeader({
-  title,
-  onCopy,
-  copied,
-}: {
-  title: string;
-  onCopy: () => void;
-  copied: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-border bg-white px-5 py-4 shadow-sm">
-      <h2 className="text-lg font-black text-foreground">{title}</h2>
-      <Button variant="secondary" size="sm" onClick={onCopy}>
-        {copied ? (
-          <Check className="h-4 w-4" />
-        ) : (
-          <Clipboard className="h-4 w-4" />
-        )}
-        {copied ? "已复制" : "复制"}
-      </Button>
-    </div>
-  );
-}
-
-function AnalysisCard({
-  title,
-  content,
-  tone,
-}: {
-  title: string;
-  content: string;
-  tone: "blue" | "green" | "amber" | "red";
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <Badge tone={tone}>{title}</Badge>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm font-semibold leading-6 text-foreground">
-          {content || "暂无"}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function AnalysisList({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: string[];
-  tone: "blue" | "green" | "amber" | "red";
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <Badge tone={tone}>{title}</Badge>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {items?.length ? (
-          items.map((item, index) => (
-            <p
-              key={`${item}-${index}`}
-              className="text-sm leading-6 text-foreground"
-            >
-              {index + 1}. {item}
-            </p>
-          ))
-        ) : (
-          <p className="text-sm text-muted">暂无</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ScoreTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-border bg-surface-muted p-4">
-      <p className="text-xs font-bold text-muted">{label}</p>
-      <p className="mt-2 text-3xl font-black text-foreground">
-        {value || "--"}
-      </p>
-    </div>
-  );
-}
-
-function buildCompetitorInfo(competitors: CompetitorDraft[], ownNotes: string) {
-  return competitors
-    .map((competitor, index) =>
-      `
-Competitor ${index + 1}
-ASIN: ${competitor.asin || "Not provided"}
-Amazon URL: ${competitor.asin ? `https://www.amazon.com/dp/${competitor.asin}` : "Not provided"}
-Sales: ${competitor.sales || "Not provided"}
-Price: ${competitor.price || "Not provided"}
-Variations: ${competitor.variation || "Not provided"}
-Rating: ${competitor.rating || "Not provided"}
-Review count: ${competitor.reviewCount || "Not provided"}
-Title: ${competitor.title || "Not provided"}
-Bullets: ${competitor.bullets || "Not provided"}
-Target audience: ${competitor.targetAudience || "Not provided"}
-Use scenarios: ${competitor.useScenarios || "Not provided"}
-Product features: ${competitor.productFeatures || "Not provided"}
-Buyer concerns: ${competitor.buyerConcerns || "Not provided"}
-Negative review issues: ${competitor.negativeReviews || "Not provided"}
-Selling point comparison: ${competitor.opportunity || "Not provided"}
-A+ reference: ${competitor.aplus || "Not provided"}
-Screenshot names: ${competitor.screenshot.map((image) => image.name).join(", ") || "Not provided"}
-Main image name: ${competitor.mainImage.map((image) => image.name).join(", ") || "Not provided"}
-Uploaded image names: ${competitor.images.map((image) => image.name).join(", ") || "Not provided"}
-`.trim(),
-    )
-    .join("\n\n")
-    .concat(`\n\nOur image notes:\n${ownNotes || "Not provided"}`);
-}
-
-function buildImageRequirements(
-  baseRequirements: string,
-  competitors: CompetitorDraft[],
-  ownImages: OwnImageDraft,
-) {
-  return `
-${baseRequirements || "Not provided"}
-
-Competitor uploaded image names:
-${competitors.map((competitor, index) => `Competitor ${index + 1}: ${competitor.images.map((image) => image.name).join(", ") || "No images"}`).join("\n")}
-
-Own uploaded image names:
-Main image: ${ownImages.mainImage.map((image) => image.name).join(", ") || "No main image"}
-${ownImages.images.map((image) => image.name).join(", ") || "No images"}
-
-Image row notes:
-${ownImages.imageNotes.map((note, index) => `Image ${index + 1}: ${note || "No note"}`).join("\n") || "Not provided"}
-
-Own image structure notes:
-${ownImages.structureNotes || "Not provided"}
-`.trim();
-}
-
-function formatCopywriting(result: ListingOptimizationResult) {
-  return [
-    `产品定位：${result.positioning.oneSentence}`,
-    `主卖点：${result.positioning.strongestSellingPoint}`,
-    "",
-    "标题版本：",
-    ...result.titleOptions.map((item) => `${item.type}: ${item.title}`),
-    "",
-    `推荐标题：${result.title}`,
-    "",
-    "五点：",
-    ...result.bullets.map(
-      (item, index) =>
-        `${index + 1}. ${item.bullet}\n中文解释：${item.chineseExplanation}\n图片表达：${item.imageExpression}`,
-    ),
-  ].join("\n");
-}
-
-function formatImages(result: ListingOptimizationResult) {
-  return [
-    "图片执行表",
-    ...result.imagePlan.map(
-      (item) =>
-        `${item.imageNo} ${item.theme}\n买家想法：${item.buyerTakeaway}\n布局：${item.layout}\n角度：${item.productAngle}\n放大卖点：${item.amplifiedSellingPoint}\n英文文案：${item.englishCopy}\n美工说明：${item.designerInstruction}\n中文提示词：${item.cnPrompt}\n英文提示词：${item.enPrompt}\n负面提示词：${item.negativePrompt}`,
-    ),
-    "",
-    "A+ 页面方案",
-    ...result.aplusPlan.map(
-      (item) =>
-        `${item.moduleNo} ${item.coreMessage}\n布局：${item.layout}\n文案：${item.copy}\n视觉：${item.visualElements}`,
-    ),
-  ].join("\n\n");
-}

@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, SearchCheck, UploadCloud } from "lucide-react";
-import { AppShell } from "@/components/app-shell/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -173,7 +172,7 @@ export function SaihuSearchMergeWorkbench() {
   };
 
   return (
-    <AppShell title="赛狐客搜词合并数据" subtitle="上传赛狐搜索词报表，按用户搜索词合并广告订单、曝光、点击、花费与效率指标">
+    <>
       <div className="space-y-5">
         <Card>
           <CardHeader>
@@ -262,6 +261,6 @@ export function SaihuSearchMergeWorkbench() {
           </Card>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

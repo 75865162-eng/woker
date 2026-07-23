@@ -3,6 +3,7 @@
 import { Download, Layers3, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { OperationProgress } from "@/components/ui/operation-progress";
 import { exportSelectedDrafts } from "@/lib/excel/bulk-export";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 
@@ -19,8 +20,15 @@ function downloadArrayBuffer(data: ArrayBuffer, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+function waitForPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
 export function PendingDraftQueue() {
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ label: string; progress: number } | null>(null);
   const {
     pendingAdjustmentDrafts,
     campaignGroups,
@@ -53,9 +61,13 @@ export function PendingDraftQueue() {
     }
 
     setExporting(true);
+    setExportProgress({ label: "准备合并导出", progress: 20 });
 
     try {
+      await waitForPaint();
       const drafts = pendingAdjustmentDrafts.map((draft) => ({ ...draft, selected: true }));
+      setExportProgress({ label: "写回全部待处理草稿", progress: 55 });
+      await waitForPaint();
       const result = await exportSelectedDrafts({
         workbookBuffer: originalWorkbookBuffer,
         drafts,
@@ -63,13 +75,18 @@ export function PendingDraftQueue() {
       });
 
       if (result.writableCount === 0) {
+        setExportProgress(null);
         window.alert(`没有可写回的待处理草稿。冲突 ${result.conflictCount} 条，阻止 ${result.blockedCount} 条。`);
         return;
       }
 
+      setExportProgress({ label: "下载导出文件", progress: 90 });
       downloadArrayBuffer(result.data, result.fileName);
       recordExportHistory(result.fileName, drafts);
+      setExportProgress({ label: "导出完成", progress: 100 });
+      window.setTimeout(() => setExportProgress(null), 1200);
     } catch (error) {
+      setExportProgress(null);
       window.alert(error instanceof Error ? error.message : "合并导出 Bulk 文件失败，请稍后重试。");
     } finally {
       setExporting(false);
@@ -88,7 +105,8 @@ export function PendingDraftQueue() {
             已暂存 {pendingGroups.length} 个广告组、{pendingAdjustmentDrafts.length} 行修改，可继续运行其他广告组后统一导出。
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {exportProgress ? <OperationProgress label={exportProgress.label} progress={exportProgress.progress} /> : null}
           <Button
             variant="secondary"
             size="sm"

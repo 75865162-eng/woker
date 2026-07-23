@@ -1,0 +1,59 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: postgresql://amazon_bulk_ad:amazon_bulk_ad@postgres:5432/amazon_bulk_ad
+      REDIS_URL: redis://redis:6379
+      QUEUE_DRIVER: inline
+      STORAGE_DRIVER: local
+      UPLOAD_DIR: uploads
+      AUTH_SECRET: change-this-local-secret-before-production
+      BOOTSTRAP_ORG_NAME: Amazon Operations
+      BOOTSTRAP_ORG_SLUG: amazon-ops
+      BOOTSTRAP_ADMIN_EMAIL: "1"
+      BOOTSTRAP_ADMIN_PASSWORD: "1"
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: amazon_bulk_ad
+      POSTGRES_USER: amazon_bulk_ad
+      POSTGRES_PASSWORD: amazon_bulk_ad
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amazon_bulk_ad -d amazon_bulk_ad"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads:

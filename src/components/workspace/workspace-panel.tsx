@@ -1,18 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
-import { AlertCircle, CheckCircle2, FileSpreadsheet, UploadCloud } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertCircle, CheckCircle2, FileSpreadsheet, X } from "lucide-react";
 import { AdjustmentTable } from "@/components/workspace/adjustment-table";
 import { PendingDraftQueue } from "@/components/workspace/pending-draft-queue";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { defaultRules, lifecycleGroups } from "@/data/mock-data";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
+import type { OverallAdDataRow } from "@/lib/types";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";
 
+type OverallDetailView = "scope" | "processable" | "unmatched" | "ambiguous";
+
+const overallDetailTitles: Record<OverallDetailView, string> = {
+  scope: "范围广告组",
+  processable: "可处理数据",
+  unmatched: "未匹配数据",
+  ambiguous: "需消歧数据",
+};
+
 export function WorkspacePanel() {
-  const overallAdDataInputRef = useRef<HTMLInputElement>(null);
+  const [overallDetailView, setOverallDetailView] = useState<OverallDetailView | null>(null);
   const {
     campaignGroups,
     workspaceUnits,
@@ -20,9 +31,6 @@ export function WorkspacePanel() {
     activeWorkspaceUnitId,
     activeLifecycleGroupId,
     workspaceMode,
-    openTabIds,
-    setActiveCampaignGroup,
-    openCampaignGroup,
     setActiveWorkspaceUnit,
     overallAdDataFileName,
     overallAdDataRows,
@@ -32,7 +40,6 @@ export function WorkspacePanel() {
     persistenceStatus,
     persistenceError,
     clearPersistedWorkspace,
-    ingestOverallAdDataCsv,
     runRulesForActiveWorkspaceUnit,
   } = useWorkspaceStore();
   const activeGroup = campaignGroups.find((group) => group.id === activeCampaignGroupId);
@@ -41,24 +48,55 @@ export function WorkspacePanel() {
     workspaceMode === "lifecycle"
       ? lifecycleGroups.find((group) => group.id === activeLifecycleGroupId)
       : lifecycleGroups.find((group) => group.id === activeGroup?.lifecycleGroupId);
-  const workspaceUnitGroups = activeWorkspaceUnit
-    ? campaignGroups.filter((group) => activeWorkspaceUnit.campaignGroupIds.includes(group.id))
-    : [];
-  const scopedGroups =
-    workspaceMode === "workspace-unit"
-      ? workspaceUnitGroups
-      : workspaceMode === "lifecycle" && activeLifecycleGroupId
-      ? campaignGroups.filter((group) => group.lifecycleGroupId === activeLifecycleGroupId)
-      : activeGroup
-        ? [activeGroup]
-        : [];
-  const openTabs = workspaceMode === "lifecycle" ? scopedGroups : campaignGroups.filter((group) => openTabIds.includes(group.id));
+  const workspaceUnitGroups = useMemo(
+    () => (activeWorkspaceUnit ? campaignGroups.filter((group) => activeWorkspaceUnit.campaignGroupIds.includes(group.id)) : []),
+    [activeWorkspaceUnit, campaignGroups],
+  );
+  const scopedGroups = useMemo(() => {
+    if (workspaceMode === "workspace-unit") {
+      return workspaceUnitGroups;
+    }
+
+    if (workspaceMode === "lifecycle" && activeLifecycleGroupId) {
+      return campaignGroups.filter((group) => group.lifecycleGroupId === activeLifecycleGroupId);
+    }
+
+    return activeGroup ? [activeGroup] : [];
+  }, [activeGroup, activeLifecycleGroupId, campaignGroups, workspaceMode, workspaceUnitGroups]);
+  const overallScopeGroups = useMemo(() => {
+    if (workspaceMode === "workspace-unit" || workspaceMode === "lifecycle") {
+      return scopedGroups;
+    }
+
+    if (activeGroup?.lifecycleGroupId) {
+      const lifecycleScopeGroups = campaignGroups.filter((group) => group.lifecycleGroupId === activeGroup.lifecycleGroupId);
+
+      return lifecycleScopeGroups.length ? lifecycleScopeGroups : [activeGroup];
+    }
+
+    return activeGroup ? [activeGroup] : [];
+  }, [activeGroup, campaignGroups, scopedGroups, workspaceMode]);
   const activeRules = activeLifecycleGroup
     ? defaultRules.filter((rule) => rule.lifecycleGroupId === activeLifecycleGroup.id && rule.enabled)
     : [];
-  const scopedKeywordCount = scopedGroups.reduce((sum, group) => sum + group.keywordCount, 0);
+  const overallScopeGroupIds = useMemo(() => new Set(overallScopeGroups.map((group) => group.id)), [overallScopeGroups]);
+  const detailRows = useMemo(() => {
+    if (!overallDetailView || overallDetailView === "scope") {
+      return [];
+    }
+
+    if (overallDetailView === "processable") {
+      return overallAdDataRows.filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId);
+    }
+
+    if (overallDetailView === "ambiguous") {
+      return overallAdDataRows.filter((row) => row.matchStatus === "ambiguous");
+    }
+
+    return overallAdDataRows.filter((row) => row.matchStatus === "unmatched");
+  }, [overallAdDataRows, overallDetailView]);
   const overallTotals = overallAdDataRows
-    .filter((row) => row.matchStatus === "matched")
+    .filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId)
     .reduce(
       (totals, row) => ({
         spend: totals.spend + row.spend,
@@ -80,88 +118,10 @@ export function WorkspacePanel() {
             ? "自动保存异常"
             : "本地保存已就绪";
 
-  async function handleOverallAdDataSelected(file?: File) {
-    if (!file) {
-      return;
-    }
-
-    if (!/\.csv$/i.test(file.name)) {
-      window.alert("Overall 所有日期广告数据仅支持 .csv 文件。");
-      return;
-    }
-
-    try {
-      const scopeCampaignGroupIds =
-        workspaceMode === "lifecycle" ? scopedGroups.map((group) => group.id) : activeGroup ? [activeGroup.id] : [];
-
-      if (scopeCampaignGroupIds.length === 0) {
-        window.alert("请先打开要调整的广告组，或进入某个产品周期分组后再上传 Overall 所有日期广告数据。");
-        return;
-      }
-
-      ingestOverallAdDataCsv(file.name, await file.text(), scopeCampaignGroupIds);
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "读取 Overall 所有日期广告数据失败。");
-    } finally {
-      if (overallAdDataInputRef.current) {
-        overallAdDataInputRef.current.value = "";
-      }
-    }
-  }
-
   return (
     <div id={workspacePanelAnchorId} className="min-w-0 flex-1 scroll-mt-24 space-y-5">
-      <div className="thin-scrollbar flex gap-2 overflow-auto rounded-lg border border-border bg-white p-2">
-        {openTabs.length === 0 ? (
-          <span className="px-3 py-2 text-sm font-semibold text-muted">请选择广告组或产品周期分组</span>
-        ) : (
-          openTabs.map((group) => (
-            <button
-              key={group.id}
-              onClick={() => setActiveCampaignGroup(group.id)}
-              onDoubleClick={() => openCampaignGroup(group.id)}
-              className={`shrink-0 rounded-md px-3 py-2 text-sm font-bold transition-colors ${
-                group.id === activeCampaignGroupId ? "bg-brand text-white" : "text-muted hover:bg-surface-muted hover:text-foreground"
-              }`}
-            >
-              {group.adGroupName}
-            </button>
-          ))
-        )}
-      </div>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <div>
-            <CardTitle>
-              {workspaceMode === "workspace-unit"
-                ? activeWorkspaceUnit?.name ?? "组合工作单元"
-                : workspaceMode === "lifecycle"
-                ? `${activeLifecycleGroup?.name ?? "产品周期分组"}工作区`
-                : activeGroup?.adGroupName ?? "等待选择广告组"}
-            </CardTitle>
-            <p className="mt-1 text-xs font-medium text-muted">
-              {workspaceMode === "workspace-unit"
-                ? `当前组合单元包含 ${workspaceUnitGroups.length} 个广告组，合计 ${scopedKeywordCount.toLocaleString("zh-CN")} 条关键词。`
-                : workspaceMode === "lifecycle"
-                ? `仅展示该产品周期内 ${scopedGroups.length} 个广告组，合计 ${scopedKeywordCount.toLocaleString("zh-CN")} 条关键词。`
-                : activeGroup?.campaignName ?? "点击上方广告组卡片后，在这里处理该组广告数据、Overall 数据与规则结果。"}
-            </p>
-          </div>
-          <div>
-            <input
-              ref={overallAdDataInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(event) => void handleOverallAdDataSelected(event.target.files?.[0])}
-            />
-            <Button onClick={() => overallAdDataInputRef.current?.click()}>
-              <UploadCloud className="h-4 w-4" />
-              上传所有日期广告数据.csv
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-5 pt-5">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3">
             <div className="text-xs font-semibold text-muted">
               <span className={persistenceStatus === "failed" ? "text-danger" : "text-success"}>{persistenceLabel}</span>
@@ -212,7 +172,10 @@ export function WorkspacePanel() {
                     variant="secondary"
                     onClick={() => {
                       setActiveWorkspaceUnit(activeWorkspaceUnit.id);
-                      runRulesForActiveWorkspaceUnit();
+                      const result = runRulesForActiveWorkspaceUnit();
+                      if (result.message) {
+                        window.alert(result.message);
+                      }
                     }}
                   >
                     运行组合单元规则
@@ -226,7 +189,7 @@ export function WorkspacePanel() {
               <div>
                 <p className="text-sm font-bold text-foreground">Overall 所有日期广告数据</p>
                 <p className="text-xs font-medium text-muted">
-                  使用上方主按钮上传 CSV，系统按“关键词 + 匹配类型”同时一致来匹配 Bulk 行。
+                  使用上方主按钮可一次上传多个 CSV 或 Excel；Sellfox Overall 会优先按“广告组 + 投放/搜索词 + 匹配类型”匹配 Bulk 行。
                 </p>
               </div>
             </div>
@@ -242,10 +205,18 @@ export function WorkspacePanel() {
                       : "解析中"}
               </span>
               <span className="rounded-md bg-surface-muted px-3 py-2">数据行：{overallAdDataMatchSummary.totalRows}</span>
-              <span className="rounded-md bg-surface-muted px-3 py-2">范围广告组：{overallAdDataMatchSummary.scopedCampaignGroups}</span>
-              <span className="rounded-md bg-surface-muted px-3 py-2">已匹配：{overallAdDataMatchSummary.matchedRows}</span>
-              <span className="rounded-md bg-surface-muted px-3 py-2">未匹配：{overallAdDataMatchSummary.unmatchedRows}</span>
-              <span className="rounded-md bg-surface-muted px-3 py-2">重名冲突：{overallAdDataMatchSummary.ambiguousRows}</span>
+              <OverallStatButton onClick={() => setOverallDetailView("scope")}>
+                范围广告组：{overallAdDataMatchSummary.scopedCampaignGroups}
+              </OverallStatButton>
+              <OverallStatButton onClick={() => setOverallDetailView("processable")}>
+                可处理：{overallAdDataMatchSummary.matchedRows}
+              </OverallStatButton>
+              <OverallStatButton onClick={() => setOverallDetailView("unmatched")}>
+                未匹配：{overallAdDataMatchSummary.unmatchedRows}
+              </OverallStatButton>
+              <OverallStatButton onClick={() => setOverallDetailView("ambiguous")}>
+                需消歧：{overallAdDataMatchSummary.ambiguousRows}
+              </OverallStatButton>
               <span className="rounded-md bg-surface-muted px-3 py-2">
                 整体 ACOS：{overallAcos === undefined ? "-" : `${overallAcos.toFixed(1)}%`}
               </span>
@@ -278,6 +249,117 @@ export function WorkspacePanel() {
           <PendingDraftQueue />
         </CardContent>
       </Card>
+      {overallDetailView && (
+        <OverallDetailDialog
+          title={overallDetailTitles[overallDetailView]}
+          view={overallDetailView}
+          rows={detailRows}
+          scopedGroups={overallScopeGroups}
+          scopedGroupIds={overallScopeGroupIds}
+          onClose={() => setOverallDetailView(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function OverallStatButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="rounded-md bg-surface-muted px-3 py-2 text-left transition-colors hover:bg-brand/10 hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function OverallDetailDialog({
+  title,
+  view,
+  rows,
+  scopedGroups,
+  scopedGroupIds,
+  onClose,
+}: {
+  title: string;
+  view: OverallDetailView;
+  rows: OverallAdDataRow[];
+  scopedGroups: Array<{ id: string; campaignName: string; adGroupName: string; keywordCount: number }>;
+  scopedGroupIds: Set<string>;
+  onClose: () => void;
+}) {
+  const visibleRows = rows.slice(0, 300);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="flex max-h-[86vh] w-full max-w-6xl flex-col rounded-lg border border-border bg-white shadow-xl">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <div>
+            <h2 className="text-lg font-black text-foreground">{title}</h2>
+            <p className="mt-1 text-xs font-semibold text-muted">
+              {view === "scope" ? `${scopedGroups.length} 个广告组` : `${rows.length} 行，最多显示前 300 行`}
+            </p>
+          </div>
+          <button className="rounded-md p-2 text-muted hover:bg-surface-muted hover:text-foreground" onClick={onClose} aria-label="关闭">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="thin-scrollbar overflow-auto p-5">
+          {view === "scope" ? (
+            <div className="grid gap-2 md:grid-cols-2">
+              {scopedGroups.map((group) => (
+                <div key={group.id} className="rounded-md border border-border bg-surface-muted/40 p-3">
+                  <p className="text-sm font-bold text-foreground">{group.adGroupName}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted">{group.campaignName}</p>
+                  <p className="mt-2 text-xs font-semibold text-muted">关键词：{group.keywordCount.toLocaleString("zh-CN")}</p>
+                </div>
+              ))}
+            </div>
+          ) : visibleRows.length ? (
+            <table className="w-full min-w-[960px] border-separate border-spacing-0 text-left text-xs">
+              <thead className="sticky top-0 bg-white text-muted">
+                <tr>
+                  {["状态", "关键词 / 投放对象", "匹配类型", "广告组", "曝光", "点击", "花费", "销售", "ACOS", "原因"].map((label) => (
+                    <th key={label} className="border-b border-border px-3 py-2 font-bold">
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => (
+                  <tr key={row.id} className="border-b border-border">
+                    <td className="border-b border-border px-3 py-2">
+                      <Badge tone={row.matchStatus === "matched" ? "green" : row.matchStatus === "ambiguous" ? "amber" : "red"}>
+                        {row.matchStatus === "matched" ? "已匹配" : row.matchStatus === "ambiguous" ? "需消歧" : "未匹配"}
+                      </Badge>
+                    </td>
+                    <td className="border-b border-border px-3 py-2 font-semibold text-foreground">{row.keyword || row.target || "-"}</td>
+                    <td className="border-b border-border px-3 py-2 text-muted">{row.matchType || "-"}</td>
+                    <td className="border-b border-border px-3 py-2 text-muted">
+                      {row.adGroupName || (row.campaignGroupId && scopedGroupIds.has(row.campaignGroupId) ? row.campaignGroupId : "-")}
+                    </td>
+                    <td className="border-b border-border px-3 py-2 text-muted">{row.impressions.toLocaleString("zh-CN")}</td>
+                    <td className="border-b border-border px-3 py-2 text-muted">{row.clicks.toLocaleString("zh-CN")}</td>
+                    <td className="border-b border-border px-3 py-2 text-muted">${row.spend.toFixed(2)}</td>
+                    <td className="border-b border-border px-3 py-2 text-muted">${row.sales.toFixed(2)}</td>
+                    <td className="border-b border-border px-3 py-2 text-muted">
+                      {row.acos === undefined ? "-" : `${row.acos.toFixed(1)}%`}
+                    </td>
+                    <td className="border-b border-border px-3 py-2 text-muted">{row.matchError || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-sm font-bold text-muted">
+              暂无明细
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef } from "react";
-import { amazonBulkTargetSheets } from "@/lib/bulk/workbook-parser";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
+
+const targetSheets = ["商品推广活动", "Sponsored Products Campaigns", "Bulk Operations", "Sponsored Products"];
 
 type WorkerMessage = {
   type: "start" | "chunk" | "complete" | "error";
@@ -74,7 +75,7 @@ export function useBulkUpload() {
         worker.terminate();
       };
 
-      worker.postMessage({ file: buffer, targetSheets: amazonBulkTargetSheets, chunkSize: 2000 }, [buffer]);
+      worker.postMessage({ file: buffer, targetSheets, chunkSize: 2000 }, [buffer]);
     } catch (error) {
       setParseFailed(error instanceof Error ? error.message : "读取文件失败。");
     } finally {

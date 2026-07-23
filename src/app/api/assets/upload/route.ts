@@ -12,6 +12,7 @@ const supportedImageTypes = new Set([
   "image/gif",
   "image/avif",
 ]);
+const supportedImageExtensions = new Set([".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp"]);
 
 function createAssetKey(fileName: string) {
   const extension = path.extname(fileName).toLowerCase() || ".bin";
@@ -31,7 +32,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing upload file." }, { status: 400 });
     }
 
-    if (file.type && !supportedImageTypes.has(file.type)) {
+    const extension = path.extname(file.name).toLowerCase();
+
+    if (!supportedImageExtensions.has(extension) || (file.type && !supportedImageTypes.has(file.type))) {
       return NextResponse.json({ error: "Only image files are supported." }, { status: 400 });
     }
 

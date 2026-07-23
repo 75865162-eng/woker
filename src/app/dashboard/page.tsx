@@ -1,5 +1,10 @@
+import { AppShell } from "@/components/app-shell/app-shell";
 import { ProductWorkbench } from "@/components/products/product-workbench";
 
 export default function DashboardPage() {
-  return <ProductWorkbench />;
+  return (
+    <AppShell title="产品管理" subtitle="商品资料、竞品 ASIN、供应商与尺寸重量的统一工作台">
+      <ProductWorkbench />
+    </AppShell>
+  );
 }

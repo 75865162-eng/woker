@@ -61,6 +61,16 @@ function createAssetUrl(key: string) {
   return `/api/assets/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+function isValidAssetKey(key: string) {
+  const parts = key.split("/");
+
+  return (
+    parts.length > 1 &&
+    parts[0] === "assets" &&
+    parts.every((part) => part !== "" && part !== "." && part !== ".." && !part.includes("\\"))
+  );
+}
+
 function createGeneratedAssetKey(name: string) {
   const extension = path.extname(name).toLowerCase() || ".png";
   return `assets/listing-ai/generated/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extension}`;
@@ -91,7 +101,7 @@ async function flattenImages(body: ImageGeneratorRequest) {
         return image;
       }
 
-      if (image.assetId?.startsWith("assets/")) {
+      if (image.assetId && isValidAssetKey(image.assetId)) {
         return {
           ...image,
           url: await imageAssetToDataUrl(image.assetId),
@@ -195,6 +205,21 @@ function buildResponsesRequest(settings: AiModelSettings, prompt: string, refere
   };
 }
 
+function buildAiHeaders(settings: AiModelSettings) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${settings.apiKey}`,
+    "Content-Type": "application/json",
+  };
+  const isOpenRouter = settings.provider === "openrouter" || settings.baseUrl.includes("openrouter.ai");
+
+  if (isOpenRouter) {
+    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "http://localhost:3000";
+    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "Amazon Bulk Ad Workspace";
+  }
+
+  return headers;
+}
+
 function getBase64ImagePayload(url: string) {
   const match = url.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
 
@@ -286,10 +311,7 @@ export async function POST(request: Request) {
       response = await fetchAiApi(imageRequest.url, {
         method: "POST",
         signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${settings.apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: buildAiHeaders(settings),
         body: JSON.stringify(imageRequest.body),
       });
     } catch (error) {

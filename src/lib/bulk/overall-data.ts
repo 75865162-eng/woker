@@ -1,4 +1,4 @@
-import type { OverallAdDataMatchSummary, OverallAdDataRow, PerformanceRow } from "@/lib/types";
+﻿import type { OverallAdDataMatchSummary, OverallAdDataRow, PerformanceRow } from "@/lib/types";
 
 export type SheetRow = Record<string, string | number | boolean | null | undefined>;
 
@@ -24,6 +24,18 @@ const overallFieldCandidates = {
   acos: ["ACOS", "ACoS", "Advertising Cost of Sales"],
   roas: ["ROAS", "Return on Ad Spend"],
 };
+
+overallFieldCandidates.sheetName.push("店铺名称", "活动类型");
+overallFieldCandidates.campaignName.push("所在广告活动");
+overallFieldCandidates.adGroupName.push("所在广告组");
+overallFieldCandidates.keyword.push("用户搜索词", "投放");
+overallFieldCandidates.target.push("投放");
+overallFieldCandidates.matchType.push("匹配类型");
+overallFieldCandidates.impressions.push("广告曝光量");
+overallFieldCandidates.clicks.push("广告点击量");
+overallFieldCandidates.orders.push("广告订单量", "本广告产品订单量");
+overallFieldCandidates.sales.push("广告销售额", "本广告产品销售额");
+overallFieldCandidates.spend.push("广告花费");
 
 export function normalizeHeader(value: string) {
   return value
@@ -118,12 +130,21 @@ function normalizeMatchType(value: string | undefined) {
   const normalized = normalizeMatchValue(value);
   const matchTypeMap: Record<string, string> = {
     exact: "exact",
+    精确: "exact",
+    精确匹配: "exact",
     精准: "exact",
     phrase: "phrase",
+    词组: "phrase",
+    词组匹配: "phrase",
     短语: "phrase",
     broad: "broad",
     广泛: "broad",
+    广泛匹配: "broad",
     "broad match": "broad",
+    紧密匹配: "close match",
+    宽泛匹配: "loose match",
+    同类商品: "substitutes",
+    关联商品: "complements",
     "phrase match": "phrase",
     "exact match": "exact",
   };

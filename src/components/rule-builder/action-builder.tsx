@@ -39,6 +39,14 @@ function getActionPresentation(action: RuleAction): DisplayAction {
       return { id: action.id, type: action.type, label: "设置竞价", value: `Overall CPC × ${action.value ?? 0}%`, icon: TrendingUp };
     case "increase_bid_percent_capped_at_overall_cpc":
       return { id: action.id, type: action.type, label: "竞价提高", value: `${action.value ?? 0}% ≤ Overall CPC`, icon: TrendingUp };
+    case "increase_bid_percent_with_overall_cpc_bounds":
+      return {
+        id: action.id,
+        type: action.type,
+        label: "竞价提高",
+        value: `${action.value ?? 0}% · Overall CPC ${action.min ?? 0}%~${action.max ?? 100}%`,
+        icon: TrendingUp,
+      };
     case "add_label":
       return { id: action.id, type: action.type, label: "添加标签", value: action.label ?? "-", icon: CheckCircle2 };
     case "no_change":

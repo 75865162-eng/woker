@@ -45,7 +45,8 @@ export type BidActionType =
   | "decrease_bid_fixed"
   | "set_bid"
   | "set_bid_to_overall_cpc_ratio"
-  | "increase_bid_percent_capped_at_overall_cpc";
+  | "increase_bid_percent_capped_at_overall_cpc"
+  | "increase_bid_percent_with_overall_cpc_bounds";
 
 export type RuleActionType =
   | BidActionType
@@ -72,6 +73,13 @@ export interface CampaignGroup {
   lastUpdated: string;
 }
 
+export interface BlockedCampaignIdentity {
+  id: string;
+  campaignName: string;
+  adGroupName: string;
+  blockedAt: string;
+}
+
 export interface Campaign extends CampaignGroup {
   sourceWorkbookId?: string;
   productTargetCount?: number;
@@ -93,6 +101,48 @@ export interface WorkspaceUnit {
   campaignGroupIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OverallAdDataUpload {
+  id: string;
+  uploadedAt: string;
+  fileName: string;
+  scopeCampaignGroupIds: string[];
+  rows: OverallAdDataRow[];
+  status: OverallAdDataStatus;
+  error?: string;
+  matchSummary: OverallAdDataMatchSummary;
+}
+
+export interface ExportHistoryRecord {
+  id: string;
+  exportedAt: string;
+  fileName: string;
+  bulkFileName?: string;
+  overallFileName?: string;
+  lifecycleGroupId?: LifecycleGroupId;
+  lifecycleGroupName?: string;
+  campaignGroupIds: string[];
+  campaignGroupNames: string[];
+  keywordNames: string[];
+  overallAdDataRows: OverallAdDataRow[];
+  overallAdDataMatchSummary: OverallAdDataMatchSummary;
+  adjustmentDrafts: AdjustmentDraft[];
+  selectedDraftIds: string[];
+}
+
+export interface RuleRunHistoryRecord {
+  id: string;
+  ranAt: string;
+  exportedAt?: string;
+  exportFileName?: string;
+  bulkFileName?: string;
+  overallFileName?: string;
+  campaignGroupIds: string[];
+  campaignGroupNames: string[];
+  overallAdDataRows: OverallAdDataRow[];
+  overallAdDataMatchSummary: OverallAdDataMatchSummary;
+  adjustmentDrafts: AdjustmentDraft[];
 }
 
 export interface LifecycleGroup {
@@ -212,6 +262,8 @@ export interface RuleAction {
   id: string;
   type: RuleActionType;
   value?: number;
+  min?: number;
+  max?: number;
   label?: string;
 }
 
@@ -228,6 +280,7 @@ export interface Rule {
 
 export interface AdjustmentDraft {
   id: string;
+  runHistoryId?: string;
   batchId?: string;
   sheetName?: string;
   sourceRowIndex?: number;

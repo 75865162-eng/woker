@@ -111,6 +111,8 @@ function summarizeAction(action: RuleAction): string {
       return `bid = Overall CPC × ${action.value ?? 0}%`;
     case "increase_bid_percent_capped_at_overall_cpc":
       return `bid +${action.value ?? 0}% capped at Overall CPC`;
+    case "increase_bid_percent_with_overall_cpc_bounds":
+      return `bid +${action.value ?? 0}% bounded by Overall CPC ${action.min ?? 0}%~${action.max ?? 100}%`;
     case "add_label":
       return `label ${action.label ?? "-"}`;
     case "no_change":

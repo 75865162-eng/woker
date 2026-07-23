@@ -17,15 +17,23 @@ function getContentType(key: string) {
   return contentTypes[path.extname(key).toLowerCase()] ?? "application/octet-stream";
 }
 
+function isValidAssetKey(keyParts: string[]) {
+  return (
+    keyParts.length > 1 &&
+    keyParts[0] === "assets" &&
+    keyParts.every((part) => part !== "" && part !== "." && part !== ".." && !part.includes("\\"))
+  );
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   try {
     const { key: keyParts } = await params;
-    const key = keyParts.join("/");
 
-    if (!key.startsWith("assets/")) {
+    if (!isValidAssetKey(keyParts)) {
       return NextResponse.json({ error: "Asset not found." }, { status: 404 });
     }
 
+    const key = keyParts.join("/");
     const buffer = await getStorageDriver().getBuffer(key);
 
     return new Response(new Uint8Array(buffer), {

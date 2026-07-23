@@ -3,54 +3,70 @@
 import { create } from "zustand";
 import { campaignGroups, dataBatches, defaultRules, performanceRows as mockPerformanceRows } from "@/data/mock-data";
 import {
-  runBulkOptimizationForCampaignGroup,
-  runBulkOptimizationForLifecycleGroup,
-  runBulkOptimizationForWorkspaceUnit,
-} from "@/lib/bulk/optimization";
-import {
-  buildOverallAdDataRows,
-  matchOverallAdDataRows,
-  normalizeHeader,
-  normalizeMatchValue,
-  parseCsv,
-  type SheetRow,
-} from "@/lib/bulk/overall-data";
-import {
-  buildGroupsFromRows,
-  buildParseFailureMessage,
-  buildSheetGroups,
-  buildWorkspaceUnitName,
-  collectDiagnostics,
-  toPerformanceRow,
-  type ParseDiagnostics,
-} from "@/lib/bulk/workspace-builders";
-import {
   deleteWorkspaceSnapshot,
   readWorkspaceSnapshot,
   writeWorkspaceSnapshot,
 } from "@/lib/repositories/workspace-repository";
+import { runRuleEngine } from "@/lib/rule-engine/engine";
+import {
+  buildNoDraftMessage,
+  createRuleRunHistory,
+  findOverallAdDataUploadForScope,
+  getRunnableRowsForCampaignGroup,
+  replacePendingDraftsForCampaignGroups,
+  summarizeOverallRows,
+  upsertOverallAdDataUpload,
+} from "@/lib/workspace/workspace-drafts";
+import {
+  buildBlockedCampaignIdentityId,
+  buildGroupsFromRows,
+  buildOverallAdDataRows,
+  buildOverallAdDataRowsFromFiles,
+  buildParseFailureMessage,
+  buildSheetGroups,
+  buildWorkspaceUnitName,
+  buildWorkspaceUnitsFromGroupingRows,
+  collectDiagnostics,
+  createWorkspaceUnitId,
+  detachCampaignGroupFromWorkspaceUnits,
+  findWorkspaceUnitByCampaignGroupId,
+  matchOverallAdDataRows,
+  parseCsv,
+  rebuildWorkspaceUnits,
+  toPerformanceRow,
+  upsertWorkspaceUnitForCampaign,
+  type OverallAdDataCsvFile,
+  type ParseDiagnostics,
+  type SheetRow,
+} from "@/lib/workspace/workspace-import";
+import {
+  mergeDefaultRulesWithPersistedRules,
+  migrateWorkspaceSnapshot,
+  takeWorkspaceSnapshot,
+  type LegacyWorkspaceSnapshot,
+} from "@/lib/workspace/workspace-snapshot";
 import type {
   AdjustmentDraft,
+  BlockedCampaignIdentity,
   CampaignGroup,
   CampaignSheetGroup,
-  ConditionGroup,
+  ExportHistoryRecord,
   LifecycleGroupId,
   ParseJobStatus,
   PerformanceRow,
   OverallAdDataMatchSummary,
   OverallAdDataRow,
   OverallAdDataStatus,
+  OverallAdDataUpload,
   Rule,
+  RuleRunHistoryRecord,
   WorkspaceUnit,
 } from "@/lib/types";
-type LegacyWorkspaceSnapshot = WorkspaceSnapshot &
-  Partial<{
-    recentAdDataFileName: string;
-    recentAdDataRows: OverallAdDataRow[];
-    recentAdDataStatus: OverallAdDataStatus;
-    recentAdDataError: string;
-    recentAdDataMatchSummary: OverallAdDataMatchSummary;
-  }>;
+
+type RunRulesResult = {
+  draftCount: number;
+  message?: string;
+};
 
 interface WorkspaceState {
   rules: Rule[];
@@ -78,8 +94,12 @@ interface WorkspaceState {
   overallAdDataStatus: OverallAdDataStatus;
   overallAdDataError?: string;
   overallAdDataMatchSummary: OverallAdDataMatchSummary;
+  overallAdDataUploads: OverallAdDataUpload[];
   adjustmentDrafts: AdjustmentDraft[];
   pendingAdjustmentDrafts: AdjustmentDraft[];
+  exportHistoryRecords: ExportHistoryRecord[];
+  ruleRunHistoryRecords: RuleRunHistoryRecord[];
+  blockedCampaignIdentities: BlockedCampaignIdentity[];
   persistenceStatus: "loading" | "ready" | "saving" | "saved" | "failed";
   persistenceError?: string;
   setRules: (rules: Rule[]) => void;
@@ -92,10 +112,13 @@ interface WorkspaceState {
   setActiveWorkspaceUnit: (workspaceUnitId: string) => void;
   setActiveLifecycleGroup: (lifecycleGroupId?: LifecycleGroupId) => void;
   assignLifecycleGroup: (campaignGroupId: string, lifecycleGroupId: LifecycleGroupId) => void;
+  clearLifecycleGroup: (campaignGroupId: string) => void;
+  blockCampaignGroup: (campaignGroupId: string) => void;
+  unblockCampaignIdentity: (identityId: string) => void;
   importGroupingStatusCsv: (fileName: string, text: string) => { importedRows: number; workspaceUnitCount: number };
-  runRulesForActiveGroup: () => void;
-  runRulesForActiveLifecycleGroup: () => void;
-  runRulesForActiveWorkspaceUnit: () => void;
+  runRulesForActiveGroup: () => RunRulesResult;
+  runRulesForActiveLifecycleGroup: () => RunRulesResult;
+  runRulesForActiveWorkspaceUnit: () => RunRulesResult;
   toggleDraft: (draftId: string) => void;
   setDraftSelected: (draftId: string, selected: boolean) => void;
   selectAllDrafts: () => void;
@@ -103,47 +126,20 @@ interface WorkspaceState {
   clearDraftSelection: () => void;
   removePendingDraftsForCampaignGroup: (campaignGroupId: string) => void;
   clearPendingAdjustmentDrafts: () => void;
-  recordExportHistory: (fileName: string, drafts?: AdjustmentDraft[]) => void;
   setParseStarted: (fileName: string, originalWorkbookBuffer: ArrayBuffer) => void;
   setParseProgress: (progress: number, sheets?: string[]) => void;
   ingestParsedRows: (sheetName: string, rows: SheetRow[], startRowIndex: number) => void;
   setParseCompleted: (rowCount: number, sheets: string[]) => void;
   setParseFailed: (message: string) => void;
   ingestOverallAdDataCsv: (fileName: string, text: string, scopeCampaignGroupIds: string[]) => void;
+  ingestOverallAdDataCsvFiles: (files: OverallAdDataCsvFile[], scopeCampaignGroupIds: string[]) => void;
+  activateOverallAdDataForScope: (scopeCampaignGroupIds: string[]) => boolean;
+  recordExportHistory: (fileName: string, drafts?: AdjustmentDraft[]) => void;
+  reuseExportHistory: (recordId: string) => void;
+  reuseRuleRunHistory: (recordId: string) => void;
   hydratePersistedWorkspace: () => Promise<void>;
   clearPersistedWorkspace: () => Promise<void>;
 }
-
-type WorkspaceSnapshot = Pick<
-  WorkspaceState,
-  | "rules"
-  | "campaignGroups"
-  | "campaignSheetGroups"
-  | "workspaceUnits"
-  | "performanceRows"
-  | "activeCampaignGroupId"
-  | "activeWorkspaceUnitId"
-  | "activeLifecycleGroupId"
-  | "workspaceMode"
-  | "openTabIds"
-  | "selectedDraftIds"
-  | "parseStatus"
-  | "parseProgress"
-  | "uploadedFileName"
-  | "originalWorkbookBuffer"
-  | "activeBatchId"
-  | "parsedRowCount"
-  | "parsedSheets"
-  | "parseError"
-  | "parseDiagnostics"
-  | "overallAdDataFileName"
-  | "overallAdDataRows"
-  | "overallAdDataStatus"
-  | "overallAdDataError"
-  | "overallAdDataMatchSummary"
-  | "adjustmentDrafts"
-  | "pendingAdjustmentDrafts"
->;
 
 const initialActiveId = campaignGroups[0]?.id ?? "";
 
@@ -166,280 +162,6 @@ const emptyOverallAdDataMatchSummary: OverallAdDataMatchSummary = {
   matchedCampaignGroups: 0,
   scopedCampaignGroups: 0,
 };
-
-function takeWorkspaceSnapshot(state: WorkspaceState): WorkspaceSnapshot {
-  return {
-    rules: state.rules,
-    campaignGroups: state.campaignGroups,
-    campaignSheetGroups: state.campaignSheetGroups,
-    workspaceUnits: state.workspaceUnits,
-    performanceRows: state.performanceRows,
-    activeCampaignGroupId: state.activeCampaignGroupId,
-    activeWorkspaceUnitId: state.activeWorkspaceUnitId,
-    activeLifecycleGroupId: state.activeLifecycleGroupId,
-    workspaceMode: state.workspaceMode,
-    openTabIds: state.openTabIds,
-    selectedDraftIds: state.selectedDraftIds,
-    parseStatus: state.parseStatus,
-    parseProgress: state.parseProgress,
-    uploadedFileName: state.uploadedFileName,
-    originalWorkbookBuffer: state.originalWorkbookBuffer,
-    activeBatchId: state.activeBatchId,
-    parsedRowCount: state.parsedRowCount,
-    parsedSheets: state.parsedSheets,
-    parseError: state.parseError,
-    parseDiagnostics: state.parseDiagnostics,
-    overallAdDataFileName: state.overallAdDataFileName,
-    overallAdDataRows: state.overallAdDataRows,
-    overallAdDataStatus: state.overallAdDataStatus,
-    overallAdDataError: state.overallAdDataError,
-    overallAdDataMatchSummary: state.overallAdDataMatchSummary,
-    adjustmentDrafts: state.adjustmentDrafts,
-    pendingAdjustmentDrafts: state.pendingAdjustmentDrafts,
-  };
-}
-
-function migrateConditionGroupDataSources(group: ConditionGroup): ConditionGroup {
-  return {
-    ...group,
-    conditions: group.conditions.map((item) => {
-      if ("logic" in item) {
-        return migrateConditionGroupDataSources(item);
-      }
-
-      const legacyDataSource = item.dataSource as string | undefined;
-
-      return {
-        ...item,
-        dataSource: legacyDataSource === "recent" ? "overall" : item.dataSource,
-      };
-    }),
-  };
-}
-
-function migrateRulesDataSources(rules: Rule[]) {
-  return rules.map((rule) => ({
-    ...rule,
-    conditionGroup: migrateConditionGroupDataSources(rule.conditionGroup),
-  }));
-}
-
-function mergeDefaultRulesWithPersistedRules(rules: Rule[]) {
-  const migratedRules = migrateRulesDataSources(rules);
-  const defaultRuleIds = new Set(defaultRules.map((rule) => rule.id));
-  const legacyDefaultRuleIds = new Set([
-    "launch-bv-02-low-impression-boost",
-    "mature-bv-02-low-impression-boost",
-    "decline-bv-02-low-impression-boost",
-    "clearance-bv-02-low-impression-boost",
-  ]);
-  const persistedCustomRules = migratedRules.filter((rule) => !defaultRuleIds.has(rule.id) && !legacyDefaultRuleIds.has(rule.id));
-  const migratedRuleById = new Map(migratedRules.map((rule) => [rule.id, rule]));
-
-  return [
-    ...defaultRules.map((defaultRule) => {
-      const persistedRule = migratedRuleById.get(defaultRule.id);
-
-      if (!persistedRule) {
-        return defaultRule;
-      }
-
-      return {
-        ...defaultRule,
-        enabled: persistedRule.enabled,
-      };
-    }),
-    ...persistedCustomRules,
-  ];
-}
-
-function migrateWorkspaceSnapshot(snapshot: LegacyWorkspaceSnapshot): WorkspaceSnapshot {
-  return {
-    ...snapshot,
-    rules: mergeDefaultRulesWithPersistedRules(snapshot.rules ?? defaultRules),
-    overallAdDataFileName: snapshot.overallAdDataFileName ?? snapshot.recentAdDataFileName,
-    overallAdDataRows: snapshot.overallAdDataRows ?? snapshot.recentAdDataRows ?? [],
-    overallAdDataStatus: snapshot.overallAdDataStatus ?? snapshot.recentAdDataStatus ?? "idle",
-    overallAdDataError: snapshot.overallAdDataError ?? snapshot.recentAdDataError,
-    overallAdDataMatchSummary:
-      snapshot.overallAdDataMatchSummary ?? snapshot.recentAdDataMatchSummary ?? emptyOverallAdDataMatchSummary,
-    pendingAdjustmentDrafts: snapshot.pendingAdjustmentDrafts ?? [],
-  };
-}
-
-function readLooseColumn(row: SheetRow, candidates: string[]) {
-  const entries = Object.entries(row).filter(([key]) => !key.startsWith("__"));
-  const normalizedEntries = entries.map(([key, value]) => [normalizeHeader(key), value] as const);
-
-  for (const candidate of candidates.map(normalizeHeader)) {
-    const entry = normalizedEntries.find(([key]) => key === candidate);
-
-    if (entry) {
-      const value = entry[1];
-      return value === null || value === undefined ? "" : String(value).trim();
-    }
-  }
-
-  return "";
-}
-
-function createWorkspaceUnitId() {
-  return `workspace-unit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function upsertWorkspaceUnitForCampaign(
-  workspaceUnits: WorkspaceUnit[],
-  campaignGroups: CampaignGroup[],
-  campaignGroupId: string,
-  workspaceUnitId: string,
-) {
-  const groupIds = new Set<string>();
-
-  return workspaceUnits.map((unit) => {
-    if (unit.id === workspaceUnitId) {
-      unit.campaignGroupIds.forEach((id) => groupIds.add(id));
-      groupIds.add(campaignGroupId);
-      const nextCampaignGroupIds = Array.from(groupIds);
-      const nextGroups = campaignGroups.filter((group) => nextCampaignGroupIds.includes(group.id));
-
-      return {
-        ...unit,
-        campaignGroupIds: nextCampaignGroupIds,
-        name: buildWorkspaceUnitName(nextGroups),
-        updatedAt: new Date().toISOString(),
-      };
-    }
-
-    return {
-      ...unit,
-      campaignGroupIds: unit.campaignGroupIds.filter((id) => id !== campaignGroupId),
-    };
-  }).filter((unit) => unit.campaignGroupIds.length > 0);
-}
-
-function detachCampaignGroupFromWorkspaceUnits(workspaceUnits: WorkspaceUnit[], campaignGroupId: string) {
-  return workspaceUnits
-    .map((unit) => {
-      const nextCampaignGroupIds = unit.campaignGroupIds.filter((id) => id !== campaignGroupId);
-
-      return {
-        ...unit,
-        campaignGroupIds: nextCampaignGroupIds,
-      };
-    })
-    .filter((unit) => unit.campaignGroupIds.length > 0);
-}
-
-function rebuildWorkspaceUnits(workspaceUnits: WorkspaceUnit[], campaignGroups: CampaignGroup[]) {
-  return workspaceUnits
-    .map((unit) => {
-      const groups = campaignGroups.filter((group) => unit.campaignGroupIds.includes(group.id));
-
-      return {
-        ...unit,
-        name: buildWorkspaceUnitName(groups),
-        updatedAt: new Date().toISOString(),
-      };
-    })
-    .filter((unit) => unit.campaignGroupIds.length > 1);
-}
-
-function isLifecycleGroupId(value: string): value is LifecycleGroupId {
-  return ["launch", "mature", "decline", "clearance"].includes(value);
-}
-
-function buildCampaignGroupLookup(groups: CampaignGroup[]) {
-  return groups.reduce<Map<string, string>>((lookup, group) => {
-    [
-      group.id,
-      group.adGroupName,
-      `${group.sheetName ?? ""}::${group.adGroupName}`,
-      `${group.campaignName}::${group.adGroupName}`,
-    ].forEach((value) => {
-      const normalized = normalizeMatchValue(value);
-
-      if (normalized) {
-        lookup.set(normalized, group.id);
-      }
-    });
-
-    return lookup;
-  }, new Map());
-}
-
-function buildWorkspaceUnitsFromGroupingRows(rows: SheetRow[], groups: CampaignGroup[]) {
-  const groupLookup = buildCampaignGroupLookup(groups);
-  const unitRows = new Map<string, string[]>();
-  const lifecycleByCampaignGroupId = new Map<string, LifecycleGroupId | undefined>();
-  let importedRows = 0;
-
-  rows.forEach((row) => {
-    const campaignGroupKey =
-      readLooseColumn(row, ["campaignGroupId", "campaign_group_id", "id"]) ||
-      readLooseColumn(row, ["adGroupName", "ad_group_name", "Ad Group Name"]) ||
-      readLooseColumn(row, ["campaignName", "campaign_name", "Campaign Name"]);
-    const campaignGroupId = groupLookup.get(normalizeMatchValue(campaignGroupKey));
-
-    if (!campaignGroupId) {
-      return;
-    }
-
-    importedRows += 1;
-
-    const rawLifecycle = readLooseColumn(row, ["lifecycleGroup", "lifecycleGroupId", "lifecycle", "产品周期分组"]).toLowerCase();
-    lifecycleByCampaignGroupId.set(campaignGroupId, isLifecycleGroupId(rawLifecycle) ? rawLifecycle : undefined);
-
-    const workspaceUnitName = readLooseColumn(row, ["workspaceUnit", "workspaceUnitId", "workspace", "分组"]);
-
-    if (!workspaceUnitName) {
-      return;
-    }
-
-    const workspaceUnitKey = normalizeMatchValue(workspaceUnitName);
-    const currentIds = unitRows.get(workspaceUnitKey) ?? [];
-    unitRows.set(workspaceUnitKey, Array.from(new Set([...currentIds, campaignGroupId])));
-  });
-
-  const now = new Date().toISOString();
-  const workspaceUnits = Array.from(unitRows.entries()).flatMap(([key, campaignGroupIds], index): WorkspaceUnit[] => {
-    const validIds = campaignGroupIds.filter((id) => groups.some((group) => group.id === id));
-
-    if (validIds.length < 2) {
-      return [];
-    }
-
-    const unitGroups = groups.filter((group) => validIds.includes(group.id));
-
-    return [
-      {
-        id: `imported-workspace-unit-${index + 1}-${key.replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-").slice(0, 32)}`,
-        name: buildWorkspaceUnitName(unitGroups),
-        campaignGroupIds: validIds,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-  });
-
-  return { importedRows, lifecycleByCampaignGroupId, workspaceUnits };
-}
-
-function findWorkspaceUnitByCampaignGroupId(workspaceUnits: WorkspaceUnit[], campaignGroupId: string) {
-  return workspaceUnits.find((unit) => unit.campaignGroupIds.includes(campaignGroupId));
-}
-
-function replacePendingDraftsForCampaignGroups(
-  pendingDrafts: AdjustmentDraft[],
-  campaignGroupIds: string[],
-  drafts: AdjustmentDraft[],
-) {
-  const groupIdSet = new Set(campaignGroupIds);
-
-  return [
-    ...pendingDrafts.filter((draft) => !groupIdSet.has(draft.campaignGroupId)),
-    ...drafts,
-  ];
-}
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rules: defaultRules,
@@ -467,8 +189,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   overallAdDataStatus: "idle",
   overallAdDataError: undefined,
   overallAdDataMatchSummary: emptyOverallAdDataMatchSummary,
+  overallAdDataUploads: [],
   adjustmentDrafts: [],
   pendingAdjustmentDrafts: [],
+  exportHistoryRecords: [],
+  ruleRunHistoryRecords: [],
+  blockedCampaignIdentities: [],
   persistenceStatus: "loading",
   persistenceError: undefined,
   setRules: (rules) => set({ rules }),
@@ -646,6 +372,62 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         activeCampaignGroupId: campaignGroupId,
       };
     }),
+  clearLifecycleGroup: (campaignGroupId) =>
+    set((state) => {
+      const campaignGroups = state.campaignGroups.map((group) =>
+        group.id === campaignGroupId ? { ...group, lifecycleGroupId: undefined } : group,
+      );
+
+      return {
+        campaignGroups,
+        campaignSheetGroups: buildSheetGroups(campaignGroups),
+        activeLifecycleGroupId:
+          state.workspaceMode === "lifecycle" ? undefined : state.activeLifecycleGroupId,
+        workspaceMode: state.workspaceMode === "lifecycle" ? "campaign" : state.workspaceMode,
+        activeCampaignGroupId: campaignGroupId,
+        adjustmentDrafts: [],
+        selectedDraftIds: [],
+      };
+    }),
+  blockCampaignGroup: (campaignGroupId) =>
+    set((state) => {
+      const campaignGroup = state.campaignGroups.find((group) => group.id === campaignGroupId);
+
+      if (!campaignGroup) {
+        return {};
+      }
+
+      const id = buildBlockedCampaignIdentityId(campaignGroup.campaignName, campaignGroup.adGroupName);
+      const blockedCampaignIdentities = state.blockedCampaignIdentities.some((identity) => identity.id === id)
+        ? state.blockedCampaignIdentities
+        : [
+            ...state.blockedCampaignIdentities,
+            {
+              id,
+              campaignName: campaignGroup.campaignName,
+              adGroupName: campaignGroup.adGroupName,
+              blockedAt: new Date().toISOString(),
+            },
+          ];
+      const workspaceUnits = rebuildWorkspaceUnits(
+        detachCampaignGroupFromWorkspaceUnits(state.workspaceUnits, campaignGroupId),
+        state.campaignGroups,
+      );
+
+      return {
+        blockedCampaignIdentities,
+        workspaceUnits,
+        activeWorkspaceUnitId: undefined,
+        workspaceMode: state.workspaceMode === "workspace-unit" ? "campaign" : state.workspaceMode,
+        openTabIds: state.openTabIds.filter((id) => id !== campaignGroupId),
+        adjustmentDrafts: [],
+        selectedDraftIds: [],
+      };
+    }),
+  unblockCampaignIdentity: (identityId) =>
+    set((state) => ({
+      blockedCampaignIdentities: state.blockedCampaignIdentities.filter((identity) => identity.id !== identityId),
+    })),
   importGroupingStatusCsv: (_fileName, text) => {
     const rows = parseCsv(text);
     const result = buildWorkspaceUnitsFromGroupingRows(rows, get().campaignGroups);
@@ -680,28 +462,68 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const rules = mergeDefaultRulesWithPersistedRules(state.rules);
 
     if (!campaignGroup) {
-      return;
+      return { draftCount: 0, message: buildNoDraftMessage({ groupCount: 0, runnableRowCount: 0, ruleCount: rules.length }) };
     }
 
-    const drafts = runBulkOptimizationForCampaignGroup({
-      campaignGroup,
-      rows: state.performanceRows,
-      dataBatches,
-      activeBatchId: state.activeBatchId,
+    if (!campaignGroup.lifecycleGroupId) {
+      return { draftCount: 0, message: "请先把当前广告组拖入新品组、成熟组、衰退组或清库存组，再运行规则引擎。" };
+    }
+
+    const scopedCampaignGroups = [campaignGroup];
+    const runnableRowsByGroupId = new Map(
+      scopedCampaignGroups.map((group) => [
+        group.id,
+        getRunnableRowsForCampaignGroup({
+          performanceRows: state.performanceRows,
+          activeBatchId: state.activeBatchId,
+          mockBatchIds: dataBatches
+            .filter((batch) => batch.campaignGroupId === group.id)
+            .slice(-1)
+            .map((batch) => batch.id),
+          campaignGroupId: group.id,
+        }),
+      ]),
+    );
+    const runnableRowCount = Array.from(runnableRowsByGroupId.values()).reduce((total, rows) => total + rows.length, 0);
+    const ruleCount = rules.filter((rule) => rule.enabled && rule.lifecycleGroupId === campaignGroup.lifecycleGroupId).length;
+    const drafts = scopedCampaignGroups.flatMap((scopedCampaignGroup) => {
+      const rows = runnableRowsByGroupId.get(scopedCampaignGroup.id) ?? [];
+
+      return runRuleEngine({
+        campaignGroup: scopedCampaignGroup,
+        rows,
+        overallAdDataRows: state.overallAdDataRows,
+        rules,
+      });
+    });
+    const runHistory = createRuleRunHistory({
+      campaignGroups: state.campaignGroups,
+      uploadedFileName: state.uploadedFileName,
+      overallAdDataFileName: state.overallAdDataFileName,
       overallAdDataRows: state.overallAdDataRows,
-      rules,
+      overallAdDataMatchSummary: state.overallAdDataMatchSummary,
+      campaignGroupIds: scopedCampaignGroups.map((group) => group.id),
+      drafts,
     });
 
     set((current) => ({
       rules,
-      adjustmentDrafts: drafts,
+      adjustmentDrafts: runHistory.adjustmentDrafts,
       pendingAdjustmentDrafts: replacePendingDraftsForCampaignGroups(
         current.pendingAdjustmentDrafts,
-        [campaignGroup.id],
-        drafts,
+        scopedCampaignGroups.map((group) => group.id),
+        runHistory.adjustmentDrafts,
       ),
-      selectedDraftIds: drafts.filter((draft) => draft.selected).map((draft) => draft.id),
+      ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
+      selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    return {
+      draftCount: drafts.length,
+      message:
+        drafts.length === 0
+          ? buildNoDraftMessage({ groupCount: scopedCampaignGroups.length, runnableRowCount, ruleCount })
+          : undefined,
+    };
   },
   runRulesForActiveLifecycleGroup: () => {
     const state = get();
@@ -709,33 +531,64 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const rules = mergeDefaultRulesWithPersistedRules(state.rules);
 
     if (!lifecycleGroupId) {
-      return;
+      return { draftCount: 0, message: "请先选择一个产品周期分组，再运行产品周期规则。" };
     }
 
-    const drafts = runBulkOptimizationForLifecycleGroup({
-      lifecycleGroupId,
-      campaignGroups: state.campaignGroups,
-      rows: state.performanceRows,
-      dataBatches,
-      activeBatchId: state.activeBatchId,
-      overallAdDataRows: state.overallAdDataRows,
-      rules,
-    });
+    const campaignGroups = state.campaignGroups.filter((group) => group.lifecycleGroupId === lifecycleGroupId);
+    const runnableRowsByGroupId = new Map(
+      campaignGroups.map((group) => [
+        group.id,
+        getRunnableRowsForCampaignGroup({
+          performanceRows: state.performanceRows,
+          activeBatchId: state.activeBatchId,
+          mockBatchIds: dataBatches
+            .filter((batch) => batch.campaignGroupId === group.id)
+            .slice(-1)
+            .map((batch) => batch.id),
+          campaignGroupId: group.id,
+        }),
+      ]),
+    );
+    const runnableRowCount = Array.from(runnableRowsByGroupId.values()).reduce((total, rows) => total + rows.length, 0);
+    const ruleCount = rules.filter((rule) => rule.enabled && rule.lifecycleGroupId === lifecycleGroupId).length;
+    const drafts = campaignGroups.flatMap((campaignGroup) => {
+      const rows = runnableRowsByGroupId.get(campaignGroup.id) ?? [];
 
-    const lifecycleCampaignGroupIds = state.campaignGroups
-      .filter((group) => group.lifecycleGroupId === lifecycleGroupId)
-      .map((group) => group.id);
+      return runRuleEngine({
+        campaignGroup,
+        rows,
+        overallAdDataRows: state.overallAdDataRows,
+        rules,
+      });
+    });
+    const runHistory = createRuleRunHistory({
+      campaignGroups: state.campaignGroups,
+      uploadedFileName: state.uploadedFileName,
+      overallAdDataFileName: state.overallAdDataFileName,
+      overallAdDataRows: state.overallAdDataRows,
+      overallAdDataMatchSummary: state.overallAdDataMatchSummary,
+      campaignGroupIds: campaignGroups.map((group) => group.id),
+      drafts,
+    });
 
     set((current) => ({
       rules,
-      adjustmentDrafts: drafts,
+      adjustmentDrafts: runHistory.adjustmentDrafts,
       pendingAdjustmentDrafts: replacePendingDraftsForCampaignGroups(
         current.pendingAdjustmentDrafts,
-        lifecycleCampaignGroupIds,
-        drafts,
+        campaignGroups.map((group) => group.id),
+        runHistory.adjustmentDrafts,
       ),
-      selectedDraftIds: drafts.filter((draft) => draft.selected).map((draft) => draft.id),
+      ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
+      selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    return {
+      draftCount: drafts.length,
+      message:
+        drafts.length === 0
+          ? buildNoDraftMessage({ groupCount: campaignGroups.length, runnableRowCount, ruleCount })
+          : undefined,
+    };
   },
   runRulesForActiveWorkspaceUnit: () => {
     const state = get();
@@ -743,29 +596,83 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const rules = mergeDefaultRulesWithPersistedRules(state.rules);
 
     if (!workspaceUnit) {
-      return;
+      return { draftCount: 0, message: "请先选择组合工作单元，再运行组合单元规则。" };
     }
 
-    const drafts = runBulkOptimizationForWorkspaceUnit({
-      workspaceUnit,
+    const workspaceCampaignGroups = workspaceUnit.campaignGroupIds
+      .map((id) => state.campaignGroups.find((group) => group.id === id))
+      .filter((group): group is CampaignGroup => Boolean(group));
+    const lifecycleIds = workspaceCampaignGroups.map((group) => group.lifecycleGroupId);
+
+    if (
+      workspaceCampaignGroups.length !== workspaceUnit.campaignGroupIds.length ||
+      lifecycleIds.some((id) => !id) ||
+      new Set(lifecycleIds).size !== 1
+    ) {
+      return {
+        draftCount: 0,
+        message: "组合内所有广告组必须选择相同的生命周期组，统一后才能运行规则。",
+      };
+    }
+
+    let runnableRowCount = 0;
+    let ruleCount = 0;
+    const drafts = workspaceUnit.campaignGroupIds.flatMap((campaignGroupId) => {
+      const campaignGroup = state.campaignGroups.find((group) => group.id === campaignGroupId);
+
+      if (!campaignGroup) {
+        return [];
+      }
+
+      const rows = getRunnableRowsForCampaignGroup({
+        performanceRows: state.performanceRows,
+        activeBatchId: state.activeBatchId,
+        mockBatchIds: dataBatches
+          .filter((batch) => batch.campaignGroupId === campaignGroup.id)
+          .slice(-1)
+          .map((batch) => batch.id),
+        campaignGroupId: campaignGroup.id,
+      });
+      runnableRowCount += rows.length;
+      ruleCount += rules.filter((rule) => rule.enabled && rule.lifecycleGroupId === campaignGroup.lifecycleGroupId).length;
+
+      return runRuleEngine({
+        campaignGroup,
+        rows,
+        overallAdDataRows: state.overallAdDataRows.filter(
+          (row) => !row.campaignGroupId || workspaceUnit.campaignGroupIds.includes(row.campaignGroupId),
+        ),
+        rules,
+      });
+    });
+    const runHistory = createRuleRunHistory({
       campaignGroups: state.campaignGroups,
-      rows: state.performanceRows,
-      dataBatches,
-      activeBatchId: state.activeBatchId,
+      uploadedFileName: state.uploadedFileName,
+      overallAdDataFileName: state.overallAdDataFileName,
       overallAdDataRows: state.overallAdDataRows,
-      rules,
+      overallAdDataMatchSummary: state.overallAdDataMatchSummary,
+      campaignGroupIds: workspaceUnit.campaignGroupIds,
+      drafts,
     });
 
     set((current) => ({
       rules,
-      adjustmentDrafts: drafts,
+      adjustmentDrafts: runHistory.adjustmentDrafts,
       pendingAdjustmentDrafts: replacePendingDraftsForCampaignGroups(
         current.pendingAdjustmentDrafts,
         workspaceUnit.campaignGroupIds,
-        drafts,
+        runHistory.adjustmentDrafts,
       ),
-      selectedDraftIds: drafts.filter((draft) => draft.selected).map((draft) => draft.id),
+      ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
+      selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    return {
+      draftCount: drafts.length,
+      message:
+        drafts.length === 0
+          ? buildNoDraftMessage({ groupCount: workspaceUnit.campaignGroupIds.length, runnableRowCount, ruleCount })
+          : undefined,
+    };
   },
   toggleDraft: (draftId) =>
     set((state) => {
@@ -828,17 +735,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ),
     })),
   clearPendingAdjustmentDrafts: () => set({ pendingAdjustmentDrafts: [] }),
-  recordExportHistory: (_fileName, drafts) =>
-    set((state) => {
-      const exportedDrafts = drafts ?? state.pendingAdjustmentDrafts;
-      const exportedDraftIds = new Set(exportedDrafts.map((draft) => draft.id));
-
-      return {
-        pendingAdjustmentDrafts: state.pendingAdjustmentDrafts.filter(
-          (draft) => !exportedDraftIds.has(draft.id),
-        ),
-      };
-    }),
   setParseStarted: (fileName, originalWorkbookBuffer) => {
     const batchId = `batch-${Date.now()}`;
     set({
@@ -869,6 +765,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       overallAdDataStatus: "idle",
       overallAdDataError: undefined,
       overallAdDataMatchSummary: emptyOverallAdDataMatchSummary,
+      overallAdDataUploads: [],
     });
   },
   setParseProgress: (progress, sheets) =>
@@ -906,12 +803,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setParseCompleted: (rowCount, sheets) =>
     set((state) => {
       const overallMatch = state.overallAdDataRows.length
-        ? matchOverallAdDataRows({
-            rows: state.overallAdDataRows,
-            scopeCampaignGroupIds: state.overallAdDataRows[0]?.scopeCampaignGroupIds ?? state.campaignGroups.map((group) => group.id),
-            performanceRows: state.performanceRows,
-            fileName: state.overallAdDataFileName ?? "",
-          })
+        ? matchOverallAdDataRows(
+            state.overallAdDataRows,
+            state.overallAdDataRows[0]?.scopeCampaignGroupIds ?? state.campaignGroups.map((group) => group.id),
+            state.performanceRows,
+            state.overallAdDataFileName ?? "",
+          )
         : undefined;
 
       return {
@@ -933,22 +830,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   ingestOverallAdDataCsv: (fileName, text, scopeCampaignGroupIds) =>
     set((state) => {
       try {
-        const result = buildOverallAdDataRows({
-          fileName,
-          text,
-          scopeCampaignGroupIds,
-          performanceRows: state.performanceRows,
-        });
+        const result = buildOverallAdDataRows(fileName, text, scopeCampaignGroupIds, state.performanceRows);
         const hasFatalMismatch = result.summary.totalRows > 0 && result.summary.matchedRows === 0;
+        const status: OverallAdDataStatus = hasFatalMismatch ? "failed" : "matched";
+        const error = hasFatalMismatch ? "Overall 所有日期广告数据未匹配到任何 Bulk 行，请检查关键词和匹配类型是否完全一致。" : undefined;
+        const upload: OverallAdDataUpload = {
+          id: `overall-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          uploadedAt: new Date().toISOString(),
+          fileName: result.fileName,
+          scopeCampaignGroupIds: [...scopeCampaignGroupIds],
+          rows: result.rows,
+          status,
+          error,
+          matchSummary: result.summary,
+        };
 
         return {
           overallAdDataFileName: result.fileName,
           overallAdDataRows: result.rows,
-          overallAdDataStatus: hasFatalMismatch ? "failed" : "matched",
-          overallAdDataError: hasFatalMismatch ? "Overall 所有日期广告数据未匹配到任何 Bulk 行，请检查关键词和匹配类型是否完全一致。" : undefined,
-        overallAdDataMatchSummary: result.summary,
-        adjustmentDrafts: [],
-        selectedDraftIds: [],
+          overallAdDataStatus: status,
+          overallAdDataError: error,
+          overallAdDataMatchSummary: result.summary,
+          overallAdDataUploads: upsertOverallAdDataUpload(state.overallAdDataUploads, upload),
+          adjustmentDrafts: [],
+          selectedDraftIds: [],
         };
       } catch (error) {
         return {
@@ -960,6 +865,174 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         };
       }
     }),
+  ingestOverallAdDataCsvFiles: (files, scopeCampaignGroupIds) =>
+    set((state) => {
+      const fileName = files.length === 1 ? files[0]?.fileName ?? "" : `${files.length} 个 Overall 文件`;
+
+      try {
+        const result = buildOverallAdDataRowsFromFiles(files, scopeCampaignGroupIds, state.performanceRows);
+        const hasFatalMismatch = result.summary.totalRows > 0 && result.summary.matchedRows === 0;
+        const status: OverallAdDataStatus = hasFatalMismatch ? "failed" : "matched";
+        const error = hasFatalMismatch ? "Overall 所有日期广告数据未匹配到任何 Bulk 行，请检查关键词和匹配类型是否完全一致。" : undefined;
+        const upload: OverallAdDataUpload = {
+          id: `overall-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          uploadedAt: new Date().toISOString(),
+          fileName: result.fileName,
+          scopeCampaignGroupIds: [...scopeCampaignGroupIds],
+          rows: result.rows,
+          status,
+          error,
+          matchSummary: result.summary,
+        };
+
+        return {
+          overallAdDataFileName: result.fileName,
+          overallAdDataRows: result.rows,
+          overallAdDataStatus: status,
+          overallAdDataError: error,
+          overallAdDataMatchSummary: result.summary,
+          overallAdDataUploads: upsertOverallAdDataUpload(state.overallAdDataUploads, upload),
+          adjustmentDrafts: [],
+          selectedDraftIds: [],
+        };
+      } catch (error) {
+        return {
+          overallAdDataFileName: fileName,
+          overallAdDataRows: [],
+          overallAdDataStatus: "failed",
+          overallAdDataError: error instanceof Error ? error.message : "Overall 所有日期广告数据 CSV 解析失败。",
+          overallAdDataMatchSummary: emptyOverallAdDataMatchSummary,
+        };
+      }
+    }),
+  activateOverallAdDataForScope: (scopeCampaignGroupIds) => {
+    const upload = findOverallAdDataUploadForScope(get().overallAdDataUploads, scopeCampaignGroupIds);
+
+    if (!upload) {
+      return false;
+    }
+
+    const scopeSet = new Set(scopeCampaignGroupIds);
+    const scopedRows = upload.rows.filter((row) => row.campaignGroupId && scopeSet.has(row.campaignGroupId));
+
+    set({
+      overallAdDataFileName: upload.fileName,
+      overallAdDataRows: scopedRows,
+      overallAdDataStatus: upload.status,
+      overallAdDataError: upload.error,
+      overallAdDataMatchSummary: summarizeOverallRows(scopedRows, scopeCampaignGroupIds.length),
+    });
+    return true;
+  },
+  recordExportHistory: (fileName, drafts) =>
+    set((state) => {
+      const selectedDrafts = state.adjustmentDrafts.filter((draft) => state.selectedDraftIds.includes(draft.id));
+      const sourceDrafts = drafts ?? (selectedDrafts.length ? selectedDrafts : state.adjustmentDrafts);
+      const campaignGroupIds = Array.from(new Set(sourceDrafts.map((draft) => draft.campaignGroupId)));
+      const exportedRunHistoryIds = new Set(
+        sourceDrafts.flatMap((draft) => draft.runHistoryId ? [draft.runHistoryId] : []),
+      );
+      const exportedAt = new Date().toISOString();
+      const records: ExportHistoryRecord[] = campaignGroupIds.map((campaignGroupId) => {
+        const campaignGroup = state.campaignGroups.find((group) => group.id === campaignGroupId);
+        const groupDrafts = sourceDrafts.filter((draft) => draft.campaignGroupId === campaignGroupId);
+        const upload = state.overallAdDataUploads.find((item) => item.scopeCampaignGroupIds.includes(campaignGroupId));
+        const lifecycleGroupId = campaignGroup?.lifecycleGroupId;
+        const lifecycleGroupName =
+          lifecycleGroupId === "launch"
+            ? "新品组"
+            : lifecycleGroupId === "mature"
+              ? "成熟组"
+              : lifecycleGroupId === "decline"
+                ? "衰退组"
+                : lifecycleGroupId === "clearance"
+                  ? "清库存组"
+                  : undefined;
+
+        return {
+          id: `export-${Date.now()}-${campaignGroupId}-${Math.random().toString(36).slice(2, 8)}`,
+          exportedAt,
+          fileName,
+          bulkFileName: state.uploadedFileName,
+          overallFileName: upload?.fileName ?? state.overallAdDataFileName,
+          lifecycleGroupId,
+          lifecycleGroupName,
+          campaignGroupIds: [campaignGroupId],
+          campaignGroupNames: [campaignGroup?.adGroupName ?? campaignGroupId],
+          keywordNames: Array.from(new Set(groupDrafts.map((draft) => draft.keyword || draft.target).filter(Boolean))).slice(0, 80),
+          overallAdDataRows: (upload?.rows ?? state.overallAdDataRows).filter((row) => row.campaignGroupId === campaignGroupId),
+          overallAdDataMatchSummary: upload?.matchSummary ?? state.overallAdDataMatchSummary,
+          adjustmentDrafts: groupDrafts,
+          selectedDraftIds: groupDrafts.map((draft) => draft.id),
+        };
+      });
+      const exportedGroupIds = new Set(campaignGroupIds);
+
+      return {
+        exportHistoryRecords: [...records, ...state.exportHistoryRecords].slice(0, 100),
+        ruleRunHistoryRecords: state.ruleRunHistoryRecords.map((runRecord) =>
+          exportedRunHistoryIds.has(runRecord.id)
+            ? { ...runRecord, exportedAt, exportFileName: fileName }
+            : runRecord,
+        ),
+        overallAdDataUploads: state.overallAdDataUploads.filter(
+          (upload) => !upload.scopeCampaignGroupIds.some((id) => exportedGroupIds.has(id)),
+        ),
+        overallAdDataFileName: undefined,
+        overallAdDataRows: [],
+        overallAdDataStatus: "idle",
+        overallAdDataError: undefined,
+        overallAdDataMatchSummary: emptyOverallAdDataMatchSummary,
+      };
+    }),
+  reuseExportHistory: (recordId) =>
+    set((state) => {
+      const record = state.exportHistoryRecords.find((item) => item.id === recordId);
+
+      if (!record) {
+        return {};
+      }
+
+      return {
+        overallAdDataFileName: record.overallFileName,
+        overallAdDataRows: record.overallAdDataRows,
+        overallAdDataStatus: record.overallAdDataRows.length ? "matched" : "idle",
+        overallAdDataError: undefined,
+        overallAdDataMatchSummary: record.overallAdDataMatchSummary,
+        adjustmentDrafts: record.adjustmentDrafts,
+        selectedDraftIds: record.selectedDraftIds,
+        activeLifecycleGroupId: record.lifecycleGroupId ?? state.activeLifecycleGroupId,
+        activeCampaignGroupId: record.campaignGroupIds[0] ?? state.activeCampaignGroupId,
+        workspaceMode: record.lifecycleGroupId ? "lifecycle" : state.workspaceMode,
+      };
+    }),
+  reuseRuleRunHistory: (recordId) =>
+    set((state) => {
+      const record = state.ruleRunHistoryRecords.find((item) => item.id === recordId);
+
+      if (!record) {
+        return {};
+      }
+
+      return {
+        overallAdDataFileName: record.overallFileName,
+        overallAdDataRows: record.overallAdDataRows,
+        overallAdDataStatus: record.overallAdDataRows.length ? "matched" : "idle",
+        overallAdDataError: undefined,
+        overallAdDataMatchSummary: record.overallAdDataMatchSummary,
+        adjustmentDrafts: record.adjustmentDrafts,
+        pendingAdjustmentDrafts: replacePendingDraftsForCampaignGroups(
+          state.pendingAdjustmentDrafts,
+          record.campaignGroupIds,
+          record.adjustmentDrafts,
+        ),
+        selectedDraftIds: record.adjustmentDrafts.map((draft) => draft.id),
+        activeCampaignGroupId: record.campaignGroupIds[0] ?? state.activeCampaignGroupId,
+        activeLifecycleGroupId: undefined,
+        activeWorkspaceUnitId: undefined,
+        workspaceMode: "campaign",
+      };
+    }),
   hydratePersistedWorkspace: async () => {
     try {
       const persisted = await readWorkspaceSnapshot<LegacyWorkspaceSnapshot>();
@@ -969,13 +1042,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         return;
       }
 
-      const snapshot = migrateWorkspaceSnapshot(persisted.snapshot);
+      const snapshot = migrateWorkspaceSnapshot(persisted.snapshot, emptyOverallAdDataMatchSummary);
+      const overallMatch = snapshot.overallAdDataRows.length
+        ? matchOverallAdDataRows(
+            snapshot.overallAdDataRows,
+            snapshot.overallAdDataRows[0]?.scopeCampaignGroupIds ?? snapshot.campaignGroups.map((group) => group.id),
+            snapshot.performanceRows,
+            snapshot.overallAdDataFileName ?? "",
+          )
+        : undefined;
 
       set({
         ...snapshot,
         parseStatus: snapshot.parseStatus === "parsing" ? "completed" : snapshot.parseStatus,
         parseProgress: snapshot.parseStatus === "parsing" ? 100 : snapshot.parseProgress,
         campaignSheetGroups: buildSheetGroups(snapshot.campaignGroups),
+        overallAdDataRows: overallMatch?.rows ?? snapshot.overallAdDataRows,
+        overallAdDataMatchSummary: overallMatch?.summary ?? snapshot.overallAdDataMatchSummary,
         persistenceStatus: "ready",
         persistenceError: undefined,
       });
@@ -988,6 +1071,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
   clearPersistedWorkspace: async () => {
     try {
+      const exportHistoryRecords = get().exportHistoryRecords;
+      const ruleRunHistoryRecords = get().ruleRunHistoryRecords;
+      const blockedCampaignIdentities = get().blockedCampaignIdentities;
+
       await deleteWorkspaceSnapshot();
       set({
         campaignGroups,
@@ -1015,8 +1102,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         overallAdDataStatus: "idle",
         overallAdDataError: undefined,
         overallAdDataMatchSummary: emptyOverallAdDataMatchSummary,
+        overallAdDataUploads: [],
         adjustmentDrafts: [],
         pendingAdjustmentDrafts: [],
+        exportHistoryRecords,
+        ruleRunHistoryRecords,
+        blockedCampaignIdentities,
         persistenceStatus: "ready",
         persistenceError: undefined,
       });
@@ -1066,8 +1157,12 @@ if (typeof window !== "undefined") {
       state.overallAdDataStatus !== previousState.overallAdDataStatus ||
       state.overallAdDataError !== previousState.overallAdDataError ||
       state.overallAdDataMatchSummary !== previousState.overallAdDataMatchSummary ||
+      state.overallAdDataUploads !== previousState.overallAdDataUploads ||
       state.adjustmentDrafts !== previousState.adjustmentDrafts ||
-      state.pendingAdjustmentDrafts !== previousState.pendingAdjustmentDrafts;
+      state.pendingAdjustmentDrafts !== previousState.pendingAdjustmentDrafts ||
+      state.exportHistoryRecords !== previousState.exportHistoryRecords ||
+      state.ruleRunHistoryRecords !== previousState.ruleRunHistoryRecords ||
+      state.blockedCampaignIdentities !== previousState.blockedCampaignIdentities;
 
     if (!shouldSave) {
       return;
@@ -1092,3 +1187,4 @@ if (typeof window !== "undefined") {
     }, 500);
   });
 }
+
