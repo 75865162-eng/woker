@@ -20,6 +20,7 @@
 /.next-dev */
 /.next-build/
 /.next-build*/
+/.next-auth-check/
 /out/
 
 # production
