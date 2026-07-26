@@ -49,6 +49,7 @@ next-env.d.ts
 
 # local dev server logs
 dev-server.log
+standalone-start.*.log
 
 # local binary tools downloaded by setup scripts
 /tools/
