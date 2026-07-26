@@ -39,7 +39,6 @@
     ".next-auth-check/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "repo"
+    "node_modules"
   ]
 }

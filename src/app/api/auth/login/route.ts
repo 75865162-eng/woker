@@ -53,7 +53,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "账号尚未加入任何组织。" }, { status: 403 });
     }
 
-    await createSession(user.id);
+    const membership = user.memberships[0];
+
+    await createSession(user.id, {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: membership.role,
+      organizationId: membership.organizationId,
+      organizationName: "",
+    });
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },

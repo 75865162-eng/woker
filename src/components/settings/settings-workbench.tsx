@@ -6,17 +6,14 @@ import {
   Check,
   ChevronDown,
   Clipboard,
-  Database,
   FolderOpen,
   Eye,
   EyeOff,
-  FileOutput,
   KeyRound,
   Link2,
   RotateCcw,
   Save,
   Send,
-  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   Zap,
@@ -24,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { WeComNotificationSettingsPanel } from "@/components/settings/wecom-notification-settings";
 import {
   aiSettingsStorageKey,
   aiSettingsProfilesStorageKey,
@@ -36,33 +34,6 @@ import {
   type AiModelSettings,
   type SavedAiModelProfile,
 } from "@/lib/ai-settings";
-
-const safeguards = [
-  {
-    icon: ShieldCheck,
-    title: "数据安全策略",
-    text: "规则演算默认仅存在工作区，未点击提交禁止修改原始数据。",
-    badge: "强制开启",
-  },
-  {
-    icon: Database,
-    title: "广告组隔离",
-    text: "Selectors、Rule Runs、Export Jobs 全部绑定 campaignGroupId。",
-    badge: "最高优先级",
-  },
-  {
-    icon: Bot,
-    title: "AI Engine",
-    text: "Listing、规则建议、广告优化等功能统一读取本页的大模型配置。",
-    badge: "已接入",
-  },
-  {
-    icon: FileOutput,
-    title: "导出字段映射",
-    text: "复制原始 Workbook 后应用勾选 patch，生成已修改广告数据.xlsx。",
-    badge: "安全写回",
-  },
-];
 
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
@@ -413,7 +384,8 @@ export function SettingsWorkbench() {
                       className={fieldClass}
                       min={10}
                       max={240}
-                      type="number"
+                      inputMode="decimal"
+                      type="text"
                       value={settings.timeoutSeconds}
                       onChange={(event) => update("timeoutSeconds", Number(event.target.value))}
                     />
@@ -512,28 +484,8 @@ export function SettingsWorkbench() {
           </CardContent>
         </Card>
 
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {safeguards.map((item) => {
-            const Icon = item.icon;
+        <WeComNotificationSettingsPanel />
 
-            return (
-              <Card key={item.title}>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-surface-muted text-brand">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <CardTitle>{item.title}</CardTitle>
-                  </div>
-                  <Badge tone="blue">{item.badge}</Badge>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-6 text-muted">{item.text}</p>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </section>
       </div>
     </>
   );

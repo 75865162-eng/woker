@@ -72,7 +72,7 @@ ls node_modules/next/dist/docs
 
 ## 常用命令
 
-在 `repo/` 目录运行：
+在项目根目录运行：
 
 ```bash
 npm run dev
@@ -198,10 +198,10 @@ npm run dev
 
 ## Git 和仓库状态
 
-当前仓库可能有根目录到 `repo/` 的迁移痕迹，git status 里可能同时出现根目录文件删除和 `repo/` 文件新增/修改。不要为了“清理”而重置或删除用户已有改动。修改前先确认工作目录，通常应在：
+当前仓库目录就是项目根目录，不需要进入额外的子目录。不要为了“清理”而重置或删除用户已有改动。修改前先确认工作目录，通常应在：
 
 ```bash
-/Users/chenjieliang/Documents/amazon ad bulk operation/repo
+C:\Users\Administrator\Desktop\AMAZON BULK AD
 ```
 
 只改和任务直接相关的文件。

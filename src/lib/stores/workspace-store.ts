@@ -119,6 +119,7 @@ interface WorkspaceState {
   runRulesForActiveGroup: () => RunRulesResult;
   runRulesForActiveLifecycleGroup: () => RunRulesResult;
   runRulesForActiveWorkspaceUnit: () => RunRulesResult;
+  runRulesForMatchedOverallGroups: () => RunRulesResult;
   toggleDraft: (draftId: string) => void;
   setDraftSelected: (draftId: string, selected: boolean) => void;
   selectAllDrafts: () => void;
@@ -162,6 +163,12 @@ const emptyOverallAdDataMatchSummary: OverallAdDataMatchSummary = {
   matchedCampaignGroups: 0,
   scopedCampaignGroups: 0,
 };
+
+function countMatchedOverallRowsForCampaignGroups(rows: OverallAdDataRow[], campaignGroupIds: string[]) {
+  const scopeIds = new Set(campaignGroupIds);
+
+  return rows.filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId && scopeIds.has(row.campaignGroupId)).length;
+}
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rules: defaultRules,
@@ -486,6 +493,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     );
     const runnableRowCount = Array.from(runnableRowsByGroupId.values()).reduce((total, rows) => total + rows.length, 0);
     const ruleCount = rules.filter((rule) => rule.enabled && rule.lifecycleGroupId === campaignGroup.lifecycleGroupId).length;
+    const overallMatchedRowCount = countMatchedOverallRowsForCampaignGroups(
+      state.overallAdDataRows,
+      scopedCampaignGroups.map((group) => group.id),
+    );
     const drafts = scopedCampaignGroups.flatMap((scopedCampaignGroup) => {
       const rows = runnableRowsByGroupId.get(scopedCampaignGroup.id) ?? [];
 
@@ -521,7 +532,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       draftCount: drafts.length,
       message:
         drafts.length === 0
-          ? buildNoDraftMessage({ groupCount: scopedCampaignGroups.length, runnableRowCount, ruleCount })
+          ? buildNoDraftMessage({ groupCount: scopedCampaignGroups.length, runnableRowCount, ruleCount, overallMatchedRowCount })
           : undefined,
     };
   },
@@ -551,6 +562,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     );
     const runnableRowCount = Array.from(runnableRowsByGroupId.values()).reduce((total, rows) => total + rows.length, 0);
     const ruleCount = rules.filter((rule) => rule.enabled && rule.lifecycleGroupId === lifecycleGroupId).length;
+    const overallMatchedRowCount = countMatchedOverallRowsForCampaignGroups(
+      state.overallAdDataRows,
+      campaignGroups.map((group) => group.id),
+    );
     const drafts = campaignGroups.flatMap((campaignGroup) => {
       const rows = runnableRowsByGroupId.get(campaignGroup.id) ?? [];
 
@@ -586,7 +601,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       draftCount: drafts.length,
       message:
         drafts.length === 0
-          ? buildNoDraftMessage({ groupCount: campaignGroups.length, runnableRowCount, ruleCount })
+          ? buildNoDraftMessage({ groupCount: campaignGroups.length, runnableRowCount, ruleCount, overallMatchedRowCount })
           : undefined,
     };
   },
@@ -617,6 +632,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     let runnableRowCount = 0;
     let ruleCount = 0;
+    const overallMatchedRowCount = countMatchedOverallRowsForCampaignGroups(
+      state.overallAdDataRows,
+      workspaceUnit.campaignGroupIds,
+    );
     const drafts = workspaceUnit.campaignGroupIds.flatMap((campaignGroupId) => {
       const campaignGroup = state.campaignGroups.find((group) => group.id === campaignGroupId);
 
@@ -670,7 +689,94 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       draftCount: drafts.length,
       message:
         drafts.length === 0
-          ? buildNoDraftMessage({ groupCount: workspaceUnit.campaignGroupIds.length, runnableRowCount, ruleCount })
+          ? buildNoDraftMessage({ groupCount: workspaceUnit.campaignGroupIds.length, runnableRowCount, ruleCount, overallMatchedRowCount })
+          : undefined,
+    };
+  },
+  runRulesForMatchedOverallGroups: () => {
+    const state = get();
+    const rules = mergeDefaultRulesWithPersistedRules(state.rules);
+    const matchedCampaignGroupIds = Array.from(
+      new Set(
+        state.overallAdDataRows.flatMap((row) =>
+          row.matchStatus !== "unmatched" && row.campaignGroupId ? [row.campaignGroupId] : [],
+        ),
+      ),
+    );
+    const campaignGroups = matchedCampaignGroupIds
+      .map((id) => state.campaignGroups.find((group) => group.id === id))
+      .filter((group): group is CampaignGroup => Boolean(group?.lifecycleGroupId));
+
+    if (matchedCampaignGroupIds.length === 0) {
+      return { draftCount: 0, message: buildNoDraftMessage({ groupCount: 0, runnableRowCount: 0, ruleCount: rules.length }) };
+    }
+
+    if (campaignGroups.length === 0) {
+      return { draftCount: 0, message: "Sellfox Overall 已匹配广告组，但这些广告组还没有分配生命周期，请先选择新品组、成熟组、衰退组或清库存组。" };
+    }
+
+    let runnableRowCount = 0;
+    let ruleCount = 0;
+    const overallMatchedRowCount = countMatchedOverallRowsForCampaignGroups(
+      state.overallAdDataRows,
+      campaignGroups.map((group) => group.id),
+    );
+    const overallRowsByCampaignGroupId = state.overallAdDataRows.reduce<Map<string, OverallAdDataRow[]>>((map, row) => {
+      if (!row.campaignGroupId || row.matchStatus === "unmatched") {
+        return map;
+      }
+
+      map.set(row.campaignGroupId, [...(map.get(row.campaignGroupId) ?? []), row]);
+      return map;
+    }, new Map());
+    const drafts = campaignGroups.flatMap((campaignGroup) => {
+      const rows = getRunnableRowsForCampaignGroup({
+        performanceRows: state.performanceRows,
+        activeBatchId: state.activeBatchId,
+        mockBatchIds: dataBatches
+          .filter((batch) => batch.campaignGroupId === campaignGroup.id)
+          .slice(-1)
+          .map((batch) => batch.id),
+        campaignGroupId: campaignGroup.id,
+      });
+
+      runnableRowCount += rows.length;
+      ruleCount += rules.filter((rule) => rule.enabled && rule.lifecycleGroupId === campaignGroup.lifecycleGroupId).length;
+
+      return runRuleEngine({
+        campaignGroup,
+        rows,
+        overallAdDataRows: overallRowsByCampaignGroupId.get(campaignGroup.id) ?? [],
+        rules,
+      });
+    });
+    const campaignGroupIds = campaignGroups.map((group) => group.id);
+    const runHistory = createRuleRunHistory({
+      campaignGroups: state.campaignGroups,
+      uploadedFileName: state.uploadedFileName,
+      overallAdDataFileName: state.overallAdDataFileName,
+      overallAdDataRows: state.overallAdDataRows,
+      overallAdDataMatchSummary: state.overallAdDataMatchSummary,
+      campaignGroupIds,
+      drafts,
+    });
+
+    set((current) => ({
+      rules,
+      adjustmentDrafts: runHistory.adjustmentDrafts,
+      pendingAdjustmentDrafts: replacePendingDraftsForCampaignGroups(
+        current.pendingAdjustmentDrafts,
+        campaignGroupIds,
+        runHistory.adjustmentDrafts,
+      ),
+      ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
+      selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
+    }));
+    return {
+      draftCount: drafts.length,
+      message:
+        drafts.length === 0
+          ? buildNoDraftMessage({ groupCount: campaignGroups.length, runnableRowCount, ruleCount, overallMatchedRowCount })
           : undefined,
     };
   },

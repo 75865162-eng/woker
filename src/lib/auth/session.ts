@@ -10,6 +10,7 @@ type SessionPayload = {
   token: string;
   expiresAt: string;
   localUser?: CurrentUser;
+  sessionUser?: Pick<CurrentUser, "id" | "email" | "name" | "role" | "organizationId" | "organizationName">;
 };
 
 export type CurrentUser = {
@@ -63,7 +64,7 @@ function parseSessionCookie(value?: string): SessionPayload | undefined {
   }
 }
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, sessionUser?: CurrentUser) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   const session = await prisma.userSession.create({
@@ -79,6 +80,7 @@ export async function createSession(userId: string) {
     userId,
     token,
     expiresAt: expiresAt.toISOString(),
+    sessionUser,
   } satisfies SessionPayload);
   const signedCookie = `${payload}.${signPayload(payload)}`;
   const cookieStore = await cookies();

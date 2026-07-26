@@ -3,34 +3,47 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Boxes, Home, ImageUp, LogOut, PackageSearch, SearchCheck, Settings, SlidersHorizontal, Sparkles, UploadCloud } from "lucide-react";
+import { Boxes, Home, ImageUp, LogOut, PackageSearch, SearchCheck, Settings, SlidersHorizontal, Sparkles, UploadCloud, UsersRound } from "lucide-react";
+import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Button } from "@/components/ui/button";
+import { getModuleIdForPath, roleCanAccessModule, roleHasAnyPage, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/dashboard", label: "Products", icon: Boxes },
-  { href: "/workspace", label: "Workspace", icon: UploadCloud },
+  { href: "/", label: "Home", icon: Home, moduleId: null },
+  { href: "/dashboard", label: "Products", icon: Boxes, moduleId: "products" },
+  { href: "/workspace", label: "Workspace", icon: UploadCloud, moduleId: "workspace" },
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
-  { href: "/listing-ai", label: "Listing AI", icon: Sparkles },
-  { href: "/image-upscale", label: "Image Upscale", icon: ImageUp },
-  { href: "/logistics", label: "Logistics", icon: PackageSearch },
-  { href: "/rules", label: "Rules", icon: SlidersHorizontal },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
+  { href: "/image-upscale", label: "Image Upscale", icon: ImageUp, moduleId: "imageUpscale" },
+  { href: "/logistics", label: "Logistics", icon: PackageSearch, moduleId: "logistics" },
+  { href: "/rules", label: "Rules", icon: SlidersHorizontal, moduleId: "rules" },
+  { href: "/accounts", label: "Accounts", icon: UsersRound, moduleId: "accounts" },
+  { href: "/settings", label: "Settings", icon: Settings, moduleId: "settings" },
 ];
 
 export function AppShellClient({
   children,
   title,
   subtitle,
-  userInitials,
+  userInitials = "AM",
+  userRole,
+  rolePermissions,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle: string;
-  userInitials: string;
+  userInitials?: string;
+  userRole?: string;
+  rolePermissions?: RolePermissionMap | null;
 }) {
   const pathname = usePathname();
+  const canAccessAnyPage = roleHasAnyPage(userRole, rolePermissions);
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.href === "/") return canAccessAnyPage;
+
+    return roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href), rolePermissions);
+  });
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -39,6 +52,7 @@ export function AppShellClient({
 
   return (
     <div className="min-h-screen bg-background">
+      <WeComNotificationRunner />
       <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col items-center border-r border-border bg-white">
         <div className="flex h-16 w-full items-center justify-center border-b border-border">
           <div className="overflow-hidden rounded-lg">
@@ -46,7 +60,7 @@ export function AppShellClient({
           </div>
         </div>
         <nav className="flex flex-1 flex-col items-center gap-2 py-4">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
 

@@ -28,7 +28,7 @@ export function ImageStrip({
   mine?: boolean;
   variant?: "main" | "single" | "gallery";
 }) {
-  const previewHeight = variant === "gallery" ? "h-36" : "h-24";
+  const previewHeight = variant === "gallery" ? "h-40" : "h-28";
   const gridClass = variant === "gallery" ? "grid-cols-3" : "grid-cols-1";
 
   return (
@@ -122,7 +122,7 @@ export function GalleryCell({
     >
       <div className="relative">
         <button
-          className={`${compact ? "h-16" : "h-24"} flex w-full cursor-zoom-in items-center justify-center bg-white`}
+          className={`${compact ? "h-20" : "aspect-square"} flex w-full cursor-zoom-in items-center justify-center bg-white`}
           onClick={onPreview}
           type="button"
           title="View large image"
@@ -131,7 +131,7 @@ export function GalleryCell({
           <img
             src={image.url}
             alt={image.name}
-            className="h-full w-full object-contain p-1"
+            className="h-full w-full object-contain"
           />
         </button>
         {draggable ? (

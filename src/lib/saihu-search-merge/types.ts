@@ -48,6 +48,34 @@ export interface SaihuMergeResult {
   rows: SaihuMergedRow[];
 }
 
+export type SaihuExcelDiffSide = "first" | "second";
+
+export interface SaihuExcelDiffRow {
+  side: SaihuExcelDiffSide;
+  sheetName: string;
+  rowNumber: number;
+  values: Record<string, string>;
+}
+
+export interface SaihuExcelDiffSummary {
+  firstFileName: string;
+  secondFileName: string;
+  firstSheetCount: number;
+  secondSheetCount: number;
+  comparedSheetCount: number;
+  firstRows: number;
+  secondRows: number;
+  firstOnlyRows: number;
+  secondOnlyRows: number;
+  totalDifferentRows: number;
+}
+
+export interface SaihuExcelDiffResult {
+  columns: string[];
+  summary: SaihuExcelDiffSummary;
+  rows: SaihuExcelDiffRow[];
+}
+
 export type SaihuHistoryAction = "upload" | "export";
 
 export interface SaihuHistoryRecord {

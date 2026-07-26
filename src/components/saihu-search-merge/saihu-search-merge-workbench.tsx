@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, SearchCheck, UploadCloud } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,9 @@ import {
   createSaihuSearchMergeFileName,
   mergeSaihuSearchTerms,
 } from "@/lib/saihu-search-merge/merge";
+import { compareSaihuExcelRows } from "@/lib/saihu-search-merge/diff";
 import { createSaihuHistoryId, saveSaihuHistoryRecord } from "@/lib/saihu-search-merge/history";
-import type { SaihuMergeResult, SaihuMergedRow } from "@/lib/saihu-search-merge/types";
+import type { SaihuExcelDiffResult, SaihuExcelDiffRow, SaihuMergeResult, SaihuMergedRow } from "@/lib/saihu-search-merge/types";
 
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -104,6 +105,198 @@ function PreviewTable({ rows }: { rows: SaihuMergedRow[] }) {
         </table>
       </div>
     </div>
+  );
+}
+
+function DiffUploadBox({
+  label,
+  file,
+  disabled,
+  inputRef,
+  onFile,
+}: {
+  label: string;
+  file: File | null;
+  disabled: boolean;
+  inputRef: RefObject<HTMLInputElement | null>;
+  onFile: (file: File | null) => void;
+}) {
+  return (
+    <div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={(event) => {
+          onFile(event.target.files?.[0] ?? null);
+          event.currentTarget.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={disabled}
+        className="flex min-h-[118px] w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface-muted/50 px-5 py-6 text-center transition-colors hover:border-brand hover:bg-white disabled:pointer-events-none disabled:opacity-70"
+      >
+        <FileSpreadsheet className="h-8 w-8 text-brand" />
+        <span className="mt-3 text-sm font-semibold text-foreground">{file ? file.name : label}</span>
+        <span className="mt-1 text-xs text-muted">支持 .xlsx、.xls、.csv</span>
+      </button>
+    </div>
+  );
+}
+
+function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffRow[] }) {
+  return (
+    <div className="overflow-hidden rounded-md border border-border">
+      <div className="max-h-[520px] overflow-auto thin-scrollbar">
+        <table className="w-full min-w-[960px] border-collapse text-left text-sm">
+          <thead className="sticky top-0 z-[1] bg-surface-muted text-xs font-semibold text-muted">
+            <tr>
+              <th className="w-[120px] border-b border-border px-3 py-2">来源</th>
+              <th className="w-[150px] border-b border-border px-3 py-2">Tab</th>
+              <th className="w-[90px] border-b border-border px-3 py-2 text-right">行号</th>
+              {columns.map((column) => (
+                <th key={column} className="min-w-[160px] border-b border-border px-3 py-2">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border bg-white">
+            {rows.map((row, index) => (
+              <tr key={`${row.side}-${row.rowNumber}-${index}`} className="hover:bg-surface-muted/50">
+                <td className="px-3 py-2">
+                  <Badge tone={row.side === "first" ? "blue" : "amber"}>{row.side === "first" ? "只在表 A" : "只在表 B"}</Badge>
+                </td>
+                <td className="max-w-[180px] truncate px-3 py-2 font-semibold text-foreground" title={row.sheetName}>
+                  {row.sheetName}
+                </td>
+                <td className="px-3 py-2 text-right metric-tabular text-muted">{row.rowNumber}</td>
+                {columns.map((column) => (
+                  <td key={column} className="max-w-[260px] truncate px-3 py-2 text-foreground" title={row.values[column] || ""}>
+                    {row.values[column] || "--"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ExcelDiffWorkbench() {
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
+  const secondInputRef = useRef<HTMLInputElement | null>(null);
+  const [firstFile, setFirstFile] = useState<File | null>(null);
+  const [secondFile, setSecondFile] = useState<File | null>(null);
+  const [result, setResult] = useState<SaihuExcelDiffResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const previewRows = useMemo(() => result?.rows.slice(0, 500) ?? [], [result]);
+
+  const runCompare = async (nextFirstFile: File | null, nextSecondFile: File | null) => {
+    if ((nextFirstFile && !isSupportedFile(nextFirstFile)) || (nextSecondFile && !isSupportedFile(nextSecondFile))) {
+      setError("请上传 .xlsx、.xls 或 .csv 文件。");
+      setResult(null);
+      return;
+    }
+
+    if (!nextFirstFile || !nextSecondFile) {
+      setError(null);
+      setResult(null);
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      setResult(await compareSaihuExcelRows(nextFirstFile, nextSecondFile));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "文件比较失败。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleFirstFile = (selectedFile: File | null) => {
+    setFirstFile(selectedFile);
+    void runCompare(selectedFile, secondFile);
+  };
+
+  const handleSecondFile = (selectedFile: File | null) => {
+    setSecondFile(selectedFile);
+    void runCompare(firstFile, selectedFile);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle>两个 Excel 差异展示</CardTitle>
+            <p className="mt-1 text-sm text-muted">上传两个表后，按每个 tab 的整行内容比较，并依次列出只存在于其中一个表的数据。</p>
+          </div>
+          <Button variant="secondary" onClick={() => void runCompare(firstFile, secondFile)} disabled={busy || !firstFile || !secondFile}>
+            <SearchCheck className="h-4 w-4" />
+            重新比较
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 md:grid-cols-2">
+          <DiffUploadBox label="上传表 A" file={firstFile} disabled={busy} inputRef={firstInputRef} onFile={handleFirstFile} />
+          <DiffUploadBox label="上传表 B" file={secondFile} disabled={busy} inputRef={secondInputRef} onFile={handleSecondFile} />
+        </div>
+
+        {error ? (
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {busy ? (
+          <div className="mt-4 flex items-center gap-3 rounded-md border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
+            <FileSpreadsheet className="h-5 w-5 text-brand" />
+            正在比较两个表的数据...
+          </div>
+        ) : null}
+
+        {result && !busy ? (
+          <div className="mt-5 space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label="表 A 行数" value={formatNumber(result.summary.firstRows)} tone="blue" />
+              <MetricCard label="表 B 行数" value={formatNumber(result.summary.secondRows)} tone="blue" />
+              <MetricCard label="只在表 A" value={formatNumber(result.summary.firstOnlyRows)} tone="amber" />
+              <MetricCard label="只在表 B" value={formatNumber(result.summary.secondOnlyRows)} tone="amber" />
+            </div>
+            {result.rows.length ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted">
+                    共发现 {formatNumber(result.summary.totalDifferentRows)} 行差异，当前展示前 {formatNumber(previewRows.length)} 行。
+                  </p>
+                  <Badge tone="gray">已比较 {formatNumber(result.summary.comparedSheetCount)} 个 tab</Badge>
+                </div>
+                <DiffTable columns={result.columns} rows={previewRows} />
+              </>
+            ) : (
+              <div className="flex items-center gap-3 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                <CheckCircle2 className="h-5 w-5" />
+                两个表没有发现不同的数据行。
+              </div>
+            )}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -260,6 +453,7 @@ export function SaihuSearchMergeWorkbench() {
             </CardContent>
           </Card>
         )}
+        <ExcelDiffWorkbench />
       </div>
     </>
   );

@@ -27,6 +27,7 @@ export function buildNoDraftMessage(input: {
   groupCount: number;
   runnableRowCount: number;
   ruleCount: number;
+  overallMatchedRowCount?: number;
 }) {
   if (input.groupCount === 0) {
     return "当前没有可运行的广告组，请先选择或分配广告组。";
@@ -38,6 +39,10 @@ export function buildNoDraftMessage(input: {
 
   if (input.runnableRowCount === 0) {
     return "当前广告组没有可运行的 Bulk 行，请确认已上传 Bulk 文件并选择了包含关键词/投放对象和竞价的广告组。";
+  }
+
+  if ((input.overallMatchedRowCount ?? 0) > 0) {
+    return `规则引擎已运行，但没有生成可写回草稿。Sellfox Overall 已匹配 ${input.overallMatchedRowCount} 行，当前范围有 ${input.runnableRowCount} 条可运行 Bulk 行、${input.ruleCount} 条启用规则；说明匹配正常，但这些行没有达到当前生命周期规则的触发条件。`;
   }
 
   return "规则引擎已运行，但当前数据没有命中任何启用规则，所以没有生成可写回草稿。";

@@ -159,7 +159,8 @@ export function TitleGeneratorCard({
                     className="h-8 w-16 rounded-md border border-border bg-white px-2 text-right text-sm font-bold text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
                     max={100}
                     min={0}
-                    type="number"
+                    inputMode="decimal"
+                    type="text"
                     value={field.weight}
                     onChange={(event) =>
                       onFieldChange(field.key, {

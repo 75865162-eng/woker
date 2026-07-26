@@ -1,29 +1,15 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
 import { AppShellClient } from "@/components/app-shell/app-shell-client";
+import { cookies } from "next/headers";
+import { parseRolePermissionsCookie, rolePermissionsCookieName } from "@/lib/accounts/permissions";
+import { getCurrentUser } from "@/lib/auth/session";
 
 export async function AppShell({ children, title, subtitle }: { children: React.ReactNode; title: string; subtitle: string }) {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const [user, cookieStore] = await Promise.all([getCurrentUser(), cookies()]);
+  const rolePermissions = parseRolePermissionsCookie(cookieStore.get(rolePermissionsCookieName)?.value);
 
   return (
-    <AppShellClient title={title} subtitle={subtitle} userInitials={getInitials(user.name || user.email)}>
+    <AppShellClient title={title} subtitle={subtitle} userRole={user?.role} rolePermissions={rolePermissions}>
       {children}
     </AppShellClient>
   );
-}
-
-function getInitials(displayName: string) {
-  const initials = displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-
-  return initials || "AM";
 }

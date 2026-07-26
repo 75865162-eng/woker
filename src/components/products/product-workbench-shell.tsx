@@ -1,0 +1,195 @@
+import { ImagePlus, RotateCcw, Search, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
+import type { Product } from "@/lib/products/types";
+import { type ProductFilters } from "./product-workbench-model";
+import { LabeledInput } from "./product-workbench-fields";
+
+export function ProductFiltersBar({
+  filters,
+  onChange,
+  onReset,
+}: {
+  filters: ProductFilters;
+  onChange: (filters: ProductFilters) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-surface-muted p-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr_0.8fr_0.9fr_0.8fr_0.9fr_auto]">
+        <LabeledInput
+          label="品名 / SKU / 关键词"
+          value={filters.keyword}
+          placeholder="搜索品名、SKU、关键词"
+          onChange={(value) => onChange({ ...filters, keyword: value })}
+        />
+        <LabeledInput label="ASIN" value={filters.asin} placeholder="主 ASIN 或竞品 ASIN" onChange={(value) => onChange({ ...filters, asin: value })} />
+        <LabeledInput label="开发员" value={filters.developer} placeholder="姓名" onChange={(value) => onChange({ ...filters, developer: value })} />
+        <LabeledInput label="供应商名称" value={filters.supplierName} placeholder="供应商" onChange={(value) => onChange({ ...filters, supplierName: value })} />
+        <label className="text-xs font-semibold text-muted">
+          状态
+          <select
+            className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+            value={filters.status}
+            onChange={(event) => onChange({ ...filters, status: event.target.value as ProductFilters["status"] })}
+          >
+            <option value="all">全部状态</option>
+            {productStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <LabeledInput label="采购价从" type="number" value={filters.minPrice} placeholder="5" onChange={(value) => onChange({ ...filters, minPrice: value })} />
+          <LabeledInput label="到" type="number" value={filters.maxPrice} placeholder="10" onChange={(value) => onChange({ ...filters, maxPrice: value })} />
+        </div>
+        <div className="flex items-end gap-2">
+          <Button className="h-10" size="icon" title="搜索" onClick={() => onChange({ ...filters })}>
+            <Search className="h-4 w-4" />
+          </Button>
+          <Button className="h-10" size="icon" title="重置" variant="secondary" onClick={onReset}>
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ProductTable({
+  products,
+  totalCount,
+  onOpenProduct,
+}: {
+  products: Product[];
+  totalCount: number;
+  onOpenProduct: (productId: string) => void;
+}) {
+  return (
+    <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <p className="text-sm font-bold text-foreground">筛选结果</p>
+        <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
+      </div>
+      <div className="thin-scrollbar overflow-auto">
+        <table className="min-w-[1180px] table-fixed text-left text-sm">
+          <thead className="bg-surface-muted text-xs text-muted">
+            <tr>
+              <th className="w-[88px] px-3 py-3">图片</th>
+              <th className="w-[96px] px-3 py-3">SKU</th>
+              <th className="w-[190px] px-3 py-3">品名</th>
+              <th className="w-[124px] px-3 py-3">ASIN</th>
+              <th className="w-[92px] px-3 py-3">开发员</th>
+              <th className="w-[104px] px-3 py-3">采购价格</th>
+              <th className="w-[110px] px-3 py-3">状态</th>
+              <th className="w-[170px] px-3 py-3">供应商名称</th>
+              <th className="w-[170px] px-3 py-3">规格</th>
+              <th className="w-[100px] px-3 py-3">采购交期</th>
+              <th className="w-[112px] px-3 py-3">创建日期</th>
+              <th className="w-[160px] px-3 py-3">选品关键词</th>
+              <th className="w-[160px] px-3 py-3">备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((product) => (
+              <tr key={product.id} className="border-t border-border/70 align-top hover:bg-surface-muted/60">
+                <td className="px-3 py-3">
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
+                    {product.images[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={product.images[0]} alt={product.chineseName} className="h-full w-full object-contain p-1" />
+                    ) : (
+                      <ImagePlus className="h-5 w-5 text-muted" />
+                    )}
+                  </div>
+                </td>
+                <td className="px-3 py-3">
+                  <button className="font-bold text-brand hover:text-brand-dark" onClick={() => onOpenProduct(product.id)}>
+                    {product.sku}
+                  </button>
+                </td>
+                <td className="px-3 py-3">
+                  <p className="line-clamp-2 font-semibold text-foreground">{product.chineseName || "--"}</p>
+                  <p className="mt-1 line-clamp-1 text-xs text-muted">{product.englishName || "--"}</p>
+                </td>
+                <td className="px-3 py-3 font-mono text-xs">{product.asin || "--"}</td>
+                <td className="px-3 py-3">{product.developer || "--"}</td>
+                <td className="px-3 py-3 font-semibold metric-tabular">CNY {product.purchasePrice.toFixed(2)}</td>
+                <td className="px-3 py-3">
+                  <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
+                </td>
+                <td className="px-3 py-3">
+                  <p className="line-clamp-2">{product.supplierName || "--"}</p>
+                </td>
+                <td className="px-3 py-3">
+                  <p className="line-clamp-2 text-xs">{product.specs || "--"}</p>
+                </td>
+                <td className="px-3 py-3">{product.purchaseLeadTime || "--"}</td>
+                <td className="px-3 py-3">{product.createdAt}</td>
+                <td className="px-3 py-3">
+                  <p className="line-clamp-2 text-xs">{product.keywords || "--"}</p>
+                </td>
+                <td className="px-3 py-3">
+                  <p className="line-clamp-2 text-xs">{product.note || "--"}</p>
+                </td>
+              </tr>
+            ))}
+            {!products.length ? (
+              <tr>
+                <td colSpan={13} className="px-3 py-14 text-center text-sm text-muted">
+                  没有匹配的商品，调整筛选条件后再试。
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function ActivityLogModal({
+  entries,
+  onClose,
+  onResetDemoData,
+}: {
+  entries: string[];
+  onClose: () => void;
+  onResetDemoData: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
+      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <h3 className="text-lg font-bold text-foreground">处理记录</h3>
+            <p className="mt-1 text-xs font-semibold text-muted">查看最近的商品处理和系统操作。</p>
+          </div>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+            关闭
+          </Button>
+        </div>
+        <div className="thin-scrollbar flex-1 space-y-3 overflow-y-auto p-5">
+          {entries.map((entry, index) => (
+            <div key={`${entry}-${index}`} className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-medium text-foreground">
+              {entry}
+            </div>
+          ))}
+          {!entries.length ? <div className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm text-muted">暂无处理记录</div> : null}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
+          <Button variant="secondary" size="sm" onClick={onResetDemoData}>
+            恢复演示
+          </Button>
+          <Button size="sm" onClick={onClose}>
+            确定
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -211,6 +211,8 @@ export function AdjustmentTable() {
     overallAdDataMatchSummary,
     runRulesForActiveGroup,
     runRulesForActiveLifecycleGroup,
+    runRulesForActiveWorkspaceUnit,
+    runRulesForMatchedOverallGroups,
     toggleDraft,
     setDraftSelected,
     selectAllDrafts,
@@ -336,6 +338,15 @@ export function AdjustmentTable() {
   const visibleRows = tableRows.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
   const pageStart = tableRows.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
   const pageEnd = Math.min(safeCurrentPage * pageSize, tableRows.length);
+  const matchedOverallCampaignGroupCount = useMemo(
+    () =>
+      new Set(
+        overallAdDataRows.flatMap((row) =>
+          row.matchStatus !== "unmatched" && row.campaignGroupId ? [row.campaignGroupId] : [],
+        ),
+      ).size,
+    [overallAdDataRows],
+  );
 
   function handleSort(nextKey: SortKey) {
     setCurrentPage(1);
@@ -494,9 +505,22 @@ export function AdjustmentTable() {
       return;
     }
 
-    setOperationProgress({ label: "运行广告组规则", progress: 70 });
+    if (workspaceMode === "workspace-unit") {
+      setOperationProgress({ label: "运行组合单元规则", progress: 70 });
+      await waitForPaint();
+      const result = runRulesForActiveWorkspaceUnit();
+      setCurrentPage(1);
+      setOperationProgress({ label: "规则草稿已生成", progress: 100 });
+      window.setTimeout(() => setOperationProgress(null), 1200);
+      if (result.message) {
+        window.alert(result.message);
+      }
+      return;
+    }
+
+    setOperationProgress({ label: matchedOverallCampaignGroupCount > 1 ? "运行已匹配广告组规则" : "运行广告组规则", progress: 70 });
     await waitForPaint();
-    const result = runRulesForActiveGroup();
+    const result = matchedOverallCampaignGroupCount > 1 ? runRulesForMatchedOverallGroups() : runRulesForActiveGroup();
     setCurrentPage(1);
     setOperationProgress({ label: "规则草稿已生成", progress: 100 });
     window.setTimeout(() => setOperationProgress(null), 1200);
@@ -555,7 +579,11 @@ export function AdjustmentTable() {
           <p className="text-xs font-medium text-muted">
             {workspaceMode === "lifecycle"
               ? "当前为产品周期组视图，只会展示并处理该组内广告组的优化草稿。"
-              : "当前为单广告组视图，只会展示并处理点击打开的广告组数据。"}
+              : workspaceMode === "workspace-unit"
+                ? "当前为组合单元视图，会按组合内广告组统一生成优化草稿。"
+                : matchedOverallCampaignGroupCount > 1
+                  ? "当前 Overall 已匹配多个广告组，运行规则时会按已匹配广告组批量生成草稿。"
+                  : "当前为单广告组视图，只会展示并处理点击打开的广告组数据。"}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
