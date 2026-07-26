@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Download, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
-import { exportSelectedDrafts } from "@/lib/excel/bulk-export";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import type { AdjustmentDraft, PerformanceRow, OverallAdDataRow } from "@/lib/types";
 
@@ -546,6 +545,7 @@ export function AdjustmentTable() {
       await waitForPaint();
       setOperationProgress({ label: "写回勾选草稿", progress: 55 });
       await waitForPaint();
+      const { exportSelectedDrafts } = await import("@/lib/excel/bulk-export");
       const result = await exportSelectedDrafts({
         workbookBuffer: originalWorkbookBuffer,
         drafts: adjustmentDrafts,

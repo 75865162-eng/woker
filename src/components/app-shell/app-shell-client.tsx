@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Boxes, Home, ImageUp, LogOut, PackageSearch, SearchCheck, Settings, SlidersHorizontal, Sparkles, UploadCloud, UsersRound } from "lucide-react";
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ export function AppShellClient({
   rolePermissions?: RolePermissionMap | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const canAccessAnyPage = roleHasAnyPage(userRole, rolePermissions);
   const visibleNavItems = navItems.filter((item) => {
     if (item.href === "/") return canAccessAnyPage;
@@ -68,7 +69,10 @@ export function AppShellClient({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
                 title={item.label}
+                onMouseEnter={() => router.prefetch(item.href)}
+                onFocus={() => router.prefetch(item.href)}
                 className={cn(
                   "flex h-11 w-11 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground",
                   active && "bg-brand text-white hover:bg-brand hover:text-white",

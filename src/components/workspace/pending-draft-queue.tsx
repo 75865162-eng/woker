@@ -4,7 +4,6 @@ import { Download, Layers3, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
-import { exportSelectedDrafts } from "@/lib/excel/bulk-export";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 
 function downloadArrayBuffer(data: ArrayBuffer, fileName: string) {
@@ -68,6 +67,7 @@ export function PendingDraftQueue() {
       const drafts = pendingAdjustmentDrafts.map((draft) => ({ ...draft, selected: true }));
       setExportProgress({ label: "写回全部待处理草稿", progress: 55 });
       await waitForPaint();
+      const { exportSelectedDrafts } = await import("@/lib/excel/bulk-export");
       const result = await exportSelectedDrafts({
         workbookBuffer: originalWorkbookBuffer,
         drafts,

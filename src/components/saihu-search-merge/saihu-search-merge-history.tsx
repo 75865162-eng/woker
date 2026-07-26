@@ -55,7 +55,7 @@ function getHistoryDownloadName(record: SaihuHistoryRecord) {
   return record.outputFileName || createSaihuSearchMergeFileName(record.sourceFileName);
 }
 
-function getHistoryDownloadBlob(record: SaihuHistoryRecord) {
+async function getHistoryDownloadBlob(record: SaihuHistoryRecord) {
   if (record.outputBlob) {
     return record.outputBlob;
   }
@@ -93,8 +93,8 @@ export function SaihuSearchMergeHistory() {
     }
   };
 
-  const handleDownload = (record: SaihuHistoryRecord) => {
-    downloadBlob(getHistoryDownloadBlob(record), getHistoryDownloadName(record));
+  const handleDownload = async (record: SaihuHistoryRecord) => {
+    downloadBlob(await getHistoryDownloadBlob(record), getHistoryDownloadName(record));
   };
 
   return (
@@ -192,7 +192,7 @@ export function SaihuSearchMergeHistory() {
                           <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.totalSpend, 2)}</td>
                           <td className="px-3 py-2 text-right metric-tabular">{formatNumber(record.summary.totalSales, 2)}</td>
                           <td className="px-3 py-2 text-right">
-                            <Button size="sm" variant="secondary" onClick={() => handleDownload(record)}>
+                            <Button size="sm" variant="secondary" onClick={() => void handleDownload(record)}>
                               <Download className="h-4 w-4" />
                               下载
                             </Button>

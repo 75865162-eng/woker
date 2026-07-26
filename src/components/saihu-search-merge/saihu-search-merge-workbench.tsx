@@ -166,16 +166,25 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
           </thead>
           <tbody className="divide-y divide-border bg-white">
             {rows.map((row, index) => (
-              <tr key={`${row.side}-${row.rowNumber}-${index}`} className="hover:bg-surface-muted/50">
+              <tr
+                key={`${row.pairKey}-${row.side}-${row.rowNumber}-${index}`}
+                className={`${row.side === "first" ? "bg-white" : "border-b-2 border-b-border bg-amber-50/20"} hover:bg-surface-muted/50`}
+              >
                 <td className="px-3 py-2">
-                  <Badge tone={row.side === "first" ? "blue" : "amber"}>{row.side === "first" ? "只在表 A" : "只在表 B"}</Badge>
+                  <Badge tone={row.side === "first" ? "blue" : "amber"}>{row.side === "first" ? "表 A" : "表 B"}</Badge>
                 </td>
                 <td className="max-w-[180px] truncate px-3 py-2 font-semibold text-foreground" title={row.sheetName}>
                   {row.sheetName}
                 </td>
                 <td className="px-3 py-2 text-right metric-tabular text-muted">{row.rowNumber}</td>
                 {columns.map((column) => (
-                  <td key={column} className="max-w-[260px] truncate px-3 py-2 text-foreground" title={row.values[column] || ""}>
+                  <td
+                    key={column}
+                    className={`max-w-[260px] truncate px-3 py-2 text-foreground ${
+                      row.side === "second" && row.changedColumns.includes(column) ? "bg-yellow-200 font-semibold" : ""
+                    }`}
+                    title={row.values[column] || ""}
+                  >
                     {row.values[column] || "--"}
                   </td>
                 ))}
@@ -241,7 +250,7 @@ function ExcelDiffWorkbench() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <CardTitle>两个 Excel 差异展示</CardTitle>
-            <p className="mt-1 text-sm text-muted">上传两个表后，按每个 tab 的整行内容比较，并依次列出只存在于其中一个表的数据。</p>
+            <p className="mt-1 text-sm text-muted">上传两个表后，按每个 tab 的数据行逐列比较；只要一行内有任意单元格不同，就按 A/B 相邻展示，并标黄 B 表不同单元格。</p>
           </div>
           <Button variant="secondary" onClick={() => void runCompare(firstFile, secondFile)} disabled={busy || !firstFile || !secondFile}>
             <SearchCheck className="h-4 w-4" />
@@ -274,14 +283,14 @@ function ExcelDiffWorkbench() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard label="表 A 行数" value={formatNumber(result.summary.firstRows)} tone="blue" />
               <MetricCard label="表 B 行数" value={formatNumber(result.summary.secondRows)} tone="blue" />
-              <MetricCard label="只在表 A" value={formatNumber(result.summary.firstOnlyRows)} tone="amber" />
-              <MetricCard label="只在表 B" value={formatNumber(result.summary.secondOnlyRows)} tone="amber" />
+              <MetricCard label="内容不同" value={formatNumber(result.summary.changedRows)} tone="amber" />
+              <MetricCard label="只在单表" value={formatNumber(result.summary.firstOnlyRows + result.summary.secondOnlyRows)} tone="amber" />
             </div>
             {result.rows.length ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-muted">
-                    共发现 {formatNumber(result.summary.totalDifferentRows)} 行差异，当前展示前 {formatNumber(previewRows.length)} 行。
+                    共发现 {formatNumber(result.summary.totalDifferentRows)} 组差异，当前按 A/B 隔行展示前 {formatNumber(previewRows.length)} 行。
                   </p>
                   <Badge tone="gray">已比较 {formatNumber(result.summary.comparedSheetCount)} 个 tab</Badge>
                 </div>
@@ -349,7 +358,7 @@ export function SaihuSearchMergeWorkbench() {
       return;
     }
 
-    const blob = buildSaihuSearchMergeWorkbook(result);
+    const blob = await buildSaihuSearchMergeWorkbook(result);
     const outputFileName = createSaihuSearchMergeFileName(file.name);
     downloadBlob(blob, outputFileName);
     await saveSaihuHistoryRecord({

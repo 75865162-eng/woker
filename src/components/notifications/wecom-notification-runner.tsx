@@ -12,7 +12,6 @@ import {
   type WeComNotificationSentRecord,
   type WeComNotificationSettings,
 } from "@/lib/notifications/wecom";
-import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 
 const scanIntervalMs = 30 * 60 * 1000;
 
@@ -28,6 +27,7 @@ export function WeComNotificationRunner() {
       const settings = readSettings();
       if (!settings.enabled || !validateWeComWebhookUrl(settings.webhookUrl)) return;
 
+      const { useWorkspaceStore } = await import("@/lib/stores/workspace-store");
       const state = useWorkspaceStore.getState();
       if (!state.campaignGroups.length) return;
 

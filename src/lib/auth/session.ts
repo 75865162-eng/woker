@@ -187,3 +187,29 @@ export async function getCurrentUser(): Promise<CurrentUser | undefined> {
     organizationName: membership.organization.name,
   };
 }
+
+export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | undefined> {
+  const cookieStore = await cookies();
+  const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
+
+  if (!payload || new Date(payload.expiresAt).getTime() <= Date.now()) {
+    return undefined;
+  }
+
+  if (payload.driver === "local" || getAuthDriver() === "local") {
+    return payload.localUser;
+  }
+
+  if (!payload.sessionUser) {
+    return undefined;
+  }
+
+  return {
+    id: payload.sessionUser.id,
+    email: payload.sessionUser.email,
+    name: payload.sessionUser.name,
+    role: payload.sessionUser.role,
+    organizationId: payload.sessionUser.organizationId,
+    organizationName: payload.sessionUser.organizationName,
+  };
+}

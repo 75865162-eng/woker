@@ -1,5 +1,6 @@
-import * as XLSX from "xlsx";
 import type { SaihuExcelDiffResult, SaihuExcelDiffRow } from "@/lib/saihu-search-merge/types";
+
+type XlsxWorksheet = import("xlsx").WorkSheet;
 
 interface ParsedSheet {
   sheetName: string;
@@ -7,7 +8,6 @@ interface ParsedSheet {
   rows: Array<{
     rowNumber: number;
     values: Record<string, string>;
-    signature: string;
   }>;
 }
 
@@ -44,32 +44,46 @@ function buildColumns(headerRow: unknown[]) {
   });
 }
 
-function buildSignature(columns: string[], values: Record<string, string>) {
-  return JSON.stringify(columns.map((column) => values[column] ?? ""));
-}
+function parseSheet(sheetName: string, sheet: XlsxWorksheet, XLSX: typeof import("xlsx")): ParsedSheet | null {
+  const range = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null;
 
-function parseSheet(sheetName: string, sheet: XLSX.WorkSheet): ParsedSheet | null {
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null });
-  const headerRow = matrix.find((row) => row.some((cell) => toText(cell)));
+  if (!range) {
+    return null;
+  }
 
-  if (!headerRow) {
+  let headerIndex = -1;
+  let headerRow: unknown[] = [];
+
+  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
+    const row = Array.from({ length: range.e.c - range.s.c + 1 }, (_, offset) => {
+      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset });
+
+      return sheet[cellAddress]?.v ?? null;
+    });
+
+    if (row.some((cell) => toText(cell))) {
+      headerIndex = rowIndex;
+      headerRow = row;
+      break;
+    }
+  }
+
+  if (headerIndex < 0) {
     return null;
   }
 
   const columns = buildColumns(headerRow);
-  const headerIndex = matrix.indexOf(headerRow);
-  const rows = matrix
-    .slice(headerIndex + 1)
-    .map((row, index) => {
+  const rows = Array.from({ length: range.e.r - headerIndex }, (_, index) => {
+      const rowIndex = headerIndex + index + 1;
       const values = columns.reduce<Record<string, string>>((acc, column, columnIndex) => {
-        acc[column] = toText(row[columnIndex]);
+        const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + columnIndex });
+        acc[column] = toText(sheet[cellAddress]?.v);
         return acc;
       }, {});
 
       return {
-        rowNumber: headerIndex + index + 2,
+        rowNumber: rowIndex + 1,
         values,
-        signature: buildSignature(columns, values),
       };
     })
     .filter((row) => Object.values(row.values).some(Boolean));
@@ -82,11 +96,12 @@ function parseSheet(sheetName: string, sheet: XLSX.WorkSheet): ParsedSheet | nul
 }
 
 async function parseWorkbook(file: File): Promise<ParsedWorkbook> {
+  const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true, cellHTML: false, cellFormula: true });
   const sheets = workbook.SheetNames.reduce<ParsedSheet[]>((acc, sheetName) => {
     const sheet = workbook.Sheets[sheetName];
-    const parsedSheet = sheet ? parseSheet(sheetName, sheet) : null;
+    const parsedSheet = sheet ? parseSheet(sheetName, sheet, XLSX) : null;
 
     if (parsedSheet) {
       acc.push(parsedSheet);
@@ -105,61 +120,67 @@ async function parseWorkbook(file: File): Promise<ParsedWorkbook> {
   };
 }
 
-function countBySignature(rows: ParsedSheet["rows"]) {
-  const counts = new Map<string, number>();
-  rows.forEach((row) => {
-    counts.set(row.signature, (counts.get(row.signature) ?? 0) + 1);
-  });
-  return counts;
-}
-
-function collectDifferentRows(
-  rows: ParsedSheet["rows"],
-  otherCounts: Map<string, number>,
-  side: SaihuExcelDiffRow["side"],
-  sheetName: string,
-): SaihuExcelDiffRow[] {
-  const used = new Map<string, number>();
-
-  return rows.reduce<SaihuExcelDiffRow[]>((acc, row) => {
-    const matched = otherCounts.get(row.signature) ?? 0;
-    const currentUsed = used.get(row.signature) ?? 0;
-    used.set(row.signature, currentUsed + 1);
-
-    if (currentUsed >= matched) {
-      acc.push({
-        side,
-        sheetName,
-        rowNumber: row.rowNumber,
-        values: row.values,
-      });
-    }
-
-    return acc;
-  }, []);
-}
-
 export async function compareSaihuExcelRows(firstFile: File, secondFile: File): Promise<SaihuExcelDiffResult> {
   const [first, second] = await Promise.all([parseWorkbook(firstFile), parseWorkbook(secondFile)]);
   const firstSheets = new Map(first.sheets.map((sheet) => [sheet.sheetName, sheet]));
   const secondSheets = new Map(second.sheets.map((sheet) => [sheet.sheetName, sheet]));
   const sheetNames = Array.from(new Set([...firstSheets.keys(), ...secondSheets.keys()]));
   const columns = Array.from(new Set(first.sheets.concat(second.sheets).flatMap((sheet) => sheet.columns)));
-  const firstOnlyRows: SaihuExcelDiffRow[] = [];
-  const secondOnlyRows: SaihuExcelDiffRow[] = [];
+  const rows: SaihuExcelDiffRow[] = [];
+  let firstOnlyRows = 0;
+  let secondOnlyRows = 0;
+  let changedRows = 0;
 
   sheetNames.forEach((sheetName) => {
     const firstSheet = firstSheets.get(sheetName);
     const secondSheet = secondSheets.get(sheetName);
     const sheetColumns = Array.from(new Set([...(firstSheet?.columns ?? []), ...(secondSheet?.columns ?? [])]));
-    const firstRows = firstSheet?.rows.map((row) => ({ ...row, signature: buildSignature(sheetColumns, row.values) })) ?? [];
-    const secondRows = secondSheet?.rows.map((row) => ({ ...row, signature: buildSignature(sheetColumns, row.values) })) ?? [];
+    const firstRows = firstSheet?.rows ?? [];
+    const secondRows = secondSheet?.rows ?? [];
+    const firstRowsByNumber = new Map(firstRows.map((row) => [row.rowNumber, row]));
+    const secondRowsByNumber = new Map(secondRows.map((row) => [row.rowNumber, row]));
+    const rowNumbers = Array.from(new Set([...firstRowsByNumber.keys(), ...secondRowsByNumber.keys()])).sort((left, right) => left - right);
 
-    firstOnlyRows.push(...collectDifferentRows(firstRows, countBySignature(secondRows), "first", sheetName));
-    secondOnlyRows.push(...collectDifferentRows(secondRows, countBySignature(firstRows), "second", sheetName));
+    for (const rowNumber of rowNumbers) {
+      const firstRow = firstRowsByNumber.get(rowNumber) ?? null;
+      const secondRow = secondRowsByNumber.get(rowNumber) ?? null;
+      const changedColumns = sheetColumns.filter((column) => (firstRow?.values[column] ?? "") !== (secondRow?.values[column] ?? ""));
+
+      if (!changedColumns.length) continue;
+
+      const pairKey = `${sheetName}-${rowNumber}`;
+
+      if (firstRow && secondRow) {
+        changedRows += 1;
+      } else if (firstRow) {
+        firstOnlyRows += 1;
+      } else {
+        secondOnlyRows += 1;
+      }
+
+      if (firstRow) {
+        rows.push({
+          side: "first",
+          sheetName,
+          rowNumber: firstRow.rowNumber,
+          values: firstRow.values,
+          pairKey,
+          changedColumns,
+        });
+      }
+
+      if (secondRow) {
+        rows.push({
+          side: "second",
+          sheetName,
+          rowNumber: secondRow.rowNumber,
+          values: secondRow.values,
+          pairKey,
+          changedColumns,
+        });
+      }
+    }
   });
-
-  const rows = [...firstOnlyRows, ...secondOnlyRows];
 
   return {
     columns,
@@ -171,9 +192,10 @@ export async function compareSaihuExcelRows(firstFile: File, secondFile: File): 
       comparedSheetCount: sheetNames.length,
       firstRows: first.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0),
       secondRows: second.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0),
-      firstOnlyRows: firstOnlyRows.length,
-      secondOnlyRows: secondOnlyRows.length,
-      totalDifferentRows: rows.length,
+      firstOnlyRows,
+      secondOnlyRows,
+      changedRows,
+      totalDifferentRows: changedRows + firstOnlyRows + secondOnlyRows,
     },
     rows,
   };

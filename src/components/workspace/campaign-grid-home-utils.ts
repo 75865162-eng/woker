@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import type { Condition, ConditionGroup, LifecycleGroupId, OverallAdDataRow, RuleAction } from "@/lib/types";
 
 const lifecycleGroupOptions: LifecycleGroupId[] = ["launch", "mature", "decline", "clearance"];
@@ -53,6 +52,7 @@ export async function readOverallImportFile(file: File): Promise<OverallImportFi
     return { fileName: file.name, text: await file.text() };
   }
 
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
   const rows = workbook.SheetNames.flatMap((sheetName) => {
     const worksheet = workbook.Sheets[sheetName];
@@ -247,6 +247,7 @@ export async function readGroupingStatusFile(file: File) {
     return file.text();
   }
 
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
 
@@ -262,4 +263,4 @@ export async function readGroupingStatusFile(file: File) {
 
   return rowsToCsv(rows);
 }
-
+

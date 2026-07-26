@@ -55,6 +55,8 @@ export interface SaihuExcelDiffRow {
   sheetName: string;
   rowNumber: number;
   values: Record<string, string>;
+  pairKey: string;
+  changedColumns: string[];
 }
 
 export interface SaihuExcelDiffSummary {
@@ -67,6 +69,7 @@ export interface SaihuExcelDiffSummary {
   secondRows: number;
   firstOnlyRows: number;
   secondOnlyRows: number;
+  changedRows: number;
   totalDifferentRows: number;
 }
 

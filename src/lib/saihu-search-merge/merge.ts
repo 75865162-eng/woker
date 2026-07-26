@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import type { SaihuMergedRow, SaihuMergeResult } from "@/lib/saihu-search-merge/types";
 
 const requiredColumns = ["用户搜索词", "广告订单量", "广告曝光量", "广告点击量", "广告花费", "广告销售额"];
@@ -218,6 +217,7 @@ function validateColumns(columns: string[]) {
 }
 
 export async function mergeSaihuSearchTerms(file: File): Promise<SaihuMergeResult> {
+  const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true, cellHTML: false, cellFormula: true });
   const sheetName = workbook.SheetNames[0];
@@ -327,7 +327,8 @@ function toOutputRow(row: SaihuMergedRow) {
   };
 }
 
-export function buildSaihuSearchMergeWorkbook(result: SaihuMergeResult) {
+export async function buildSaihuSearchMergeWorkbook(result: SaihuMergeResult) {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(result.rows.map(toOutputRow), { header: outputHeaders });
 

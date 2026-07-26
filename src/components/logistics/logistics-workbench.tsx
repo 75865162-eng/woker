@@ -15,18 +15,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  buildLogisticsBWorkbook,
-  buildLogisticsCWorkbook,
-  buildLogisticsComparisonWorkbook,
-  buildLogisticsDWorkbooks,
-  buildLogisticsSaihuWorkbook,
-  parseLogisticsAWorkbook,
-  parseLogisticsBWorkbook,
-  parseLogisticsCWorkbook,
-  parseLogisticsPdfFiles,
-  parseLogisticsSaihuWorkbook,
-} from "@/lib/logistics/jobs";
 import type { LogisticsLogEntry, LogisticsStatusTone, LogisticsTemplateOption, LogisticsWorkspaceState, UploadedFileState } from "@/lib/logistics/types";
 import { downloadBlob, downloadFilesAsZip, formatMetricNumber, makeId } from "@/lib/logistics/utils";
 
@@ -120,6 +108,7 @@ export function LogisticsWorkbench() {
           });
         }
 
+        const { parseLogisticsAWorkbook } = await import("@/lib/logistics/jobs");
         const aSummary = await parseLogisticsAWorkbook(file, { skipImages: shouldSkipImages });
         setState((current) => ({
           ...current,
@@ -135,6 +124,7 @@ export function LogisticsWorkbench() {
       }
 
       if (slot === "b") {
+        const { parseLogisticsBWorkbook } = await import("@/lib/logistics/jobs");
         const bSummary = await parseLogisticsBWorkbook();
         setState((current) => ({
           ...current,
@@ -145,6 +135,7 @@ export function LogisticsWorkbench() {
       }
 
       if (slot === "c") {
+        const { parseLogisticsCWorkbook } = await import("@/lib/logistics/jobs");
         const cSummary = await parseLogisticsCWorkbook(file);
         setState((current) => ({
           ...current,
@@ -156,6 +147,7 @@ export function LogisticsWorkbench() {
       }
 
       if (slot === "saihu") {
+        const { parseLogisticsSaihuWorkbook } = await import("@/lib/logistics/jobs");
         const saihuSummary = await parseLogisticsSaihuWorkbook(file);
         setState((current) => ({
           ...current,
@@ -183,6 +175,7 @@ export function LogisticsWorkbench() {
     setRawFiles((current) => ({ ...current, pdf: files }));
 
     try {
+      const { parseLogisticsPdfFiles } = await import("@/lib/logistics/jobs");
       const summaries = await parseLogisticsPdfFiles(files);
       setState((current) => ({
         ...current,
@@ -214,6 +207,7 @@ export function LogisticsWorkbench() {
 
     setBusy(true);
     try {
+      const { buildLogisticsCWorkbook } = await import("@/lib/logistics/jobs");
       const result = await buildLogisticsCWorkbook(rawFiles.c, state.aSummary);
       setState((current) => ({ ...current, cExport: result, cError: null }));
       pushLog({ level: "success", message: `C表已生成：${result.fileName}` });
@@ -239,6 +233,7 @@ export function LogisticsWorkbench() {
 
     setBusy(true);
     try {
+      const { buildLogisticsDWorkbooks } = await import("@/lib/logistics/jobs");
       const results = await buildLogisticsDWorkbooks({
         aSummary: state.aSummary,
         pdfSummaries: state.pdfSummaries,
@@ -262,6 +257,7 @@ export function LogisticsWorkbench() {
 
     setBusy(true);
     try {
+      const { buildLogisticsComparisonWorkbook } = await import("@/lib/logistics/jobs");
       const result = await buildLogisticsComparisonWorkbook(state.aSummary, state.pdfSummaries);
       setState((current) => ({
         ...current,
@@ -284,6 +280,7 @@ export function LogisticsWorkbench() {
 
     setBusy(true);
     try {
+      const { buildLogisticsBWorkbook } = await import("@/lib/logistics/jobs");
       const result = await buildLogisticsBWorkbook(state.aSummary);
       setState((current) => ({
         ...current,
@@ -308,6 +305,7 @@ export function LogisticsWorkbench() {
 
     setBusy(true);
     try {
+      const { buildLogisticsSaihuWorkbook } = await import("@/lib/logistics/jobs");
       const result = await buildLogisticsSaihuWorkbook(rawFiles.saihu, state.aSummary);
       setState((current) => ({
         ...current,
