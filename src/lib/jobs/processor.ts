@@ -179,6 +179,8 @@ export async function processImportJob(jobId: string) {
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
 
+    const exportFileName = `${job.file.originalName.replace(/\.[^.]+$/, "")}-optimized.xlsx`;
+
     await prisma.importJob.update({
       where: { id: jobId },
       data: {
@@ -190,6 +192,30 @@ export async function processImportJob(jobId: string) {
             status: "done",
           },
         },
+      },
+    });
+
+    await prisma.exportRecord.upsert({
+      where: {
+        jobId_resultKey: {
+          jobId,
+          resultKey,
+        },
+      },
+      create: {
+        organizationId: job.organizationId,
+        userId: job.userId,
+        fileId: job.fileId,
+        jobId,
+        resultKey,
+        fileName: exportFileName,
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size: exportResult.data.byteLength,
+      },
+      update: {
+        fileName: exportFileName,
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size: exportResult.data.byteLength,
       },
     });
   } catch (error) {

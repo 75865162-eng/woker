@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/products/types";
+import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
 import {
   emptySize,
@@ -60,6 +61,8 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
   });
 
   const sku = nextSku(products);
+  const now = new Date();
+  const developer = extractDeveloperName(file.name);
 
   return {
     sku,
@@ -67,7 +70,7 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
     chineseName: detail.title,
     englishName: "",
     asin: detail.competitors[0]?.asin ?? "",
-    developer: extractDeveloperName(file.name),
+    developer,
     purchasePrice: detail.pricingRows[0]?.purchaseCost ?? 0,
     status: "pending",
     supplierName: detail.suppliers[0]?.factoryName ?? "",
@@ -93,6 +96,20 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
       width: detail.pricingRows[0]?.widthCm ?? 0,
       height: detail.pricingRows[0]?.heightCm ?? 0,
     },
+    selectionOwner: developer,
+    workflowStage: "selection_pending",
+    workflowStartedAt: now.toISOString(),
+    workflowUpdatedAt: now.toISOString(),
+    workflowDueAt: createWorkflowDueAt(now),
+    workflowHistory: [
+      buildWorkflowEvent({
+        stage: "selection_pending",
+        actorName: developer,
+        assigneeName: developer,
+        note: "导入商品并进入选品待提交。",
+        createdAt: now,
+      }),
+    ],
     workbookDetail: detail,
   } as Product;
 }
@@ -332,6 +349,10 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
       ...product,
       cancelReason: product.cancelReason ?? "",
       competitorAsins: product.competitorAsins.length ? product.competitorAsins : [""],
+      opsAssignees: normalizeAssigneeList(product.opsAssignee, product.opsAssignees),
+      designerAssignees: normalizeAssigneeList(product.designerAssignee, product.designerAssignees),
+      workflowStage: getProductWorkflowStage(product),
+      workflowHistory: product.workflowHistory ?? [],
       workbookDetail: normalizeWorkbookDetail(
         productWithWorkbook.workbookDetail,
         product.sku === "00001" ? createEspressoMirrorDetail() : createTrialProductDraft(),
@@ -362,6 +383,10 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
     packageWeightG: 0,
     productSizeCm: emptySize,
     packageSizeCm: emptySize,
+    workflowStage: "selection_pending",
+    opsAssignees: [],
+    designerAssignees: [],
+    workflowHistory: [],
     workbookDetail: createEspressoMirrorDetail(),
   };
 }

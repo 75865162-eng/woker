@@ -3,6 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
 import type { Product } from "@/lib/products/types";
+import {
+  formatAssigneeList,
+  formatWorkflowDate,
+  getCurrentWorkflowAssignee,
+  isProductWorkflowOverdue,
+  normalizeAssigneeList,
+} from "@/lib/products/workflow";
 import { type ProductFilters } from "./product-workbench-model";
 import { LabeledInput } from "./product-workbench-fields";
 
@@ -17,7 +24,7 @@ export function ProductFiltersBar({
 }) {
   return (
     <div className="rounded-lg border border-border bg-surface-muted p-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr_0.8fr_0.9fr_0.8fr_0.9fr_auto]">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr_0.9fr_0.8fr_0.9fr_auto]">
         <LabeledInput
           label="品名 / SKU / 关键词"
           value={filters.keyword}
@@ -25,7 +32,6 @@ export function ProductFiltersBar({
           onChange={(value) => onChange({ ...filters, keyword: value })}
         />
         <LabeledInput label="ASIN" value={filters.asin} placeholder="主 ASIN 或竞品 ASIN" onChange={(value) => onChange({ ...filters, asin: value })} />
-        <LabeledInput label="开发员" value={filters.developer} placeholder="姓名" onChange={(value) => onChange({ ...filters, developer: value })} />
         <LabeledInput label="供应商名称" value={filters.supplierName} placeholder="供应商" onChange={(value) => onChange({ ...filters, supplierName: value })} />
         <label className="text-xs font-semibold text-muted">
           状态
@@ -75,16 +81,19 @@ export function ProductTable({
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
       <div className="thin-scrollbar overflow-auto">
-        <table className="min-w-[1180px] table-fixed text-left text-sm">
+        <table className="min-w-[1400px] table-fixed text-left text-sm">
           <thead className="bg-surface-muted text-xs text-muted">
             <tr>
               <th className="w-[88px] px-3 py-3">图片</th>
               <th className="w-[96px] px-3 py-3">SKU</th>
               <th className="w-[190px] px-3 py-3">品名</th>
               <th className="w-[124px] px-3 py-3">ASIN</th>
-              <th className="w-[92px] px-3 py-3">开发员</th>
               <th className="w-[104px] px-3 py-3">采购价格</th>
-              <th className="w-[110px] px-3 py-3">状态</th>
+              <th className="w-[126px] px-3 py-3">状态</th>
+              <th className="w-[104px] px-3 py-3">当前负责人</th>
+              <th className="w-[96px] px-3 py-3">运营</th>
+              <th className="w-[96px] px-3 py-3">美工</th>
+              <th className="w-[132px] px-3 py-3">流程截止</th>
               <th className="w-[170px] px-3 py-3">供应商名称</th>
               <th className="w-[170px] px-3 py-3">规格</th>
               <th className="w-[100px] px-3 py-3">采购交期</th>
@@ -116,11 +125,15 @@ export function ProductTable({
                   <p className="mt-1 line-clamp-1 text-xs text-muted">{product.englishName || "--"}</p>
                 </td>
                 <td className="px-3 py-3 font-mono text-xs">{product.asin || "--"}</td>
-                <td className="px-3 py-3">{product.developer || "--"}</td>
                 <td className="px-3 py-3 font-semibold metric-tabular">CNY {product.purchasePrice.toFixed(2)}</td>
                 <td className="px-3 py-3">
                   <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
+                  {isProductWorkflowOverdue(product) ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
                 </td>
+                <td className="px-3 py-3">{getCurrentWorkflowAssignee(product) || "--"}</td>
+                <td className="px-3 py-3">{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</td>
+                <td className="px-3 py-3">{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</td>
+                <td className="px-3 py-3 text-xs">{formatWorkflowDate(product.workflowDueAt)}</td>
                 <td className="px-3 py-3">
                   <p className="line-clamp-2">{product.supplierName || "--"}</p>
                 </td>
@@ -139,7 +152,7 @@ export function ProductTable({
             ))}
             {!products.length ? (
               <tr>
-                <td colSpan={13} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={16} className="px-3 py-14 text-center text-sm text-muted">
                   没有匹配的商品，调整筛选条件后再试。
                 </td>
               </tr>

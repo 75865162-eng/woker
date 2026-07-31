@@ -56,3 +56,6 @@ standalone-start.*.log
 
 # user-uploaded runtime files
 /uploads/
+
+# temporary local work files
+/tmp/

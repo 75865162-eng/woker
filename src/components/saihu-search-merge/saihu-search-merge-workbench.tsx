@@ -147,10 +147,87 @@ function DiffUploadBox({
   );
 }
 
+function getPairedDiffRows(rows: SaihuExcelDiffRow[]) {
+  const groups = new Map<string, { first: SaihuExcelDiffRow | null; second: SaihuExcelDiffRow | null; changedColumns: string[] }>();
+
+  rows.forEach((row) => {
+    const existing = groups.get(row.pairKey) ?? { first: null, second: null, changedColumns: row.changedColumns };
+    groups.set(row.pairKey, {
+      ...existing,
+      [row.side]: row,
+      changedColumns: existing.changedColumns.length ? existing.changedColumns : row.changedColumns,
+    });
+  });
+
+  return Array.from(groups.values()).flatMap((group) => {
+    const referenceRow = group.first ?? group.second;
+
+    return group.changedColumns.map((column) => ({
+      pairKey: referenceRow?.pairKey ?? column,
+      sheetName: referenceRow?.sheetName ?? "",
+      rowNumber: referenceRow?.rowNumber ?? 0,
+      column,
+      firstValue: group.first?.values[column] ?? "",
+      secondValue: group.second?.values[column] ?? "",
+      firstOnly: Boolean(group.first && !group.second),
+      secondOnly: Boolean(group.second && !group.first),
+    }));
+  });
+}
+
 function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffRow[] }) {
+  const diffCells = getPairedDiffRows(rows);
+
   return (
-    <div className="overflow-hidden rounded-md border border-border">
-      <div className="max-h-[520px] overflow-auto thin-scrollbar">
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-md border border-border">
+        <div className="max-h-[520px] overflow-auto thin-scrollbar">
+          <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+            <thead className="sticky top-0 z-[1] bg-surface-muted text-xs font-semibold text-muted">
+              <tr>
+                <th className="w-[180px] border-b border-border px-3 py-2">Sheet</th>
+                <th className="w-[90px] border-b border-border px-3 py-2 text-right">Row</th>
+                <th className="w-[220px] border-b border-border px-3 py-2">Column</th>
+                <th className="border-b border-border px-3 py-2">A value</th>
+                <th className="border-b border-border px-3 py-2">B value</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border bg-white">
+              {diffCells.map((cell, index) => (
+                <tr key={`${cell.pairKey}-${cell.column}-${index}`} className="hover:bg-surface-muted/50">
+                  <td className="max-w-[220px] truncate px-3 py-2 font-semibold text-foreground" title={cell.sheetName}>
+                    {cell.sheetName}
+                  </td>
+                  <td className="px-3 py-2 text-right metric-tabular text-muted">{cell.rowNumber}</td>
+                  <td className="max-w-[260px] truncate px-3 py-2 font-semibold text-foreground" title={cell.column}>
+                    {cell.column}
+                  </td>
+                  <td
+                    className={`max-w-[320px] truncate px-3 py-2 ${
+                      cell.secondOnly ? "bg-red-50 text-muted" : "bg-blue-50/60 text-foreground"
+                    }`}
+                    title={cell.firstValue}
+                  >
+                    {cell.firstValue || "--"}
+                  </td>
+                  <td
+                    className={`max-w-[320px] truncate px-3 py-2 font-semibold ${
+                      cell.firstOnly ? "bg-red-50 text-muted" : "bg-yellow-200 text-foreground"
+                    }`}
+                    title={cell.secondValue}
+                  >
+                    {cell.secondValue || "--"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <details className="rounded-md border border-border bg-white">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">Full row detail</summary>
+        <div className="max-h-[520px] overflow-auto thin-scrollbar border-t border-border">
         <table className="w-full min-w-[960px] border-collapse text-left text-sm">
           <thead className="sticky top-0 z-[1] bg-surface-muted text-xs font-semibold text-muted">
             <tr>
@@ -193,6 +270,7 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
           </tbody>
         </table>
       </div>
+      </details>
     </div>
   );
 }
@@ -200,6 +278,7 @@ function DiffTable({ columns, rows }: { columns: string[]; rows: SaihuExcelDiffR
 function ExcelDiffWorkbench() {
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const secondInputRef = useRef<HTMLInputElement | null>(null);
+  const compareRunIdRef = useRef(0);
   const [firstFile, setFirstFile] = useState<File | null>(null);
   const [secondFile, setSecondFile] = useState<File | null>(null);
   const [result, setResult] = useState<SaihuExcelDiffResult | null>(null);
@@ -224,13 +303,22 @@ function ExcelDiffWorkbench() {
     setBusy(true);
     setError(null);
     setResult(null);
+    const compareRunId = compareRunIdRef.current + 1;
+    compareRunIdRef.current = compareRunId;
 
     try {
-      setResult(await compareSaihuExcelRows(nextFirstFile, nextSecondFile));
+      const nextResult = await compareSaihuExcelRows(nextFirstFile, nextSecondFile);
+      if (compareRunIdRef.current === compareRunId) {
+        setResult(nextResult);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "文件比较失败。");
+      if (compareRunIdRef.current === compareRunId) {
+        setError(err instanceof Error ? err.message : "文件比较失败。");
+      }
     } finally {
-      setBusy(false);
+      if (compareRunIdRef.current === compareRunId) {
+        setBusy(false);
+      }
     }
   };
 
@@ -286,7 +374,7 @@ function ExcelDiffWorkbench() {
               <MetricCard label="内容不同" value={formatNumber(result.summary.changedRows)} tone="amber" />
               <MetricCard label="只在单表" value={formatNumber(result.summary.firstOnlyRows + result.summary.secondOnlyRows)} tone="amber" />
             </div>
-            {result.rows.length ? (
+            {result.summary.totalDifferentRows > 0 ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-muted">

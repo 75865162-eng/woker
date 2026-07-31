@@ -4,10 +4,17 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserStatus {
   active
+  disabled
+}
+
+enum TeamAccountStatus {
+  active
+  pending
   disabled
 }
 
@@ -48,6 +55,7 @@ model Organization {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   members     OrganizationMember[]
+  teamRoster  TeamRosterMember[]
   auditLogs   AuditLog[]
 }
 
@@ -80,6 +88,27 @@ model OrganizationMember {
   @@index([organizationId, role])
 }
 
+model TeamRosterMember {
+  organizationId String
+  id             String
+  name           String
+  email          String
+  department     String
+  title          String
+  roleId         String
+  status         TeamAccountStatus @default(active)
+  lastActiveAt   String?
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, id])
+  @@index([organizationId, sortOrder])
+  @@index([organizationId, roleId])
+  @@index([organizationId, status])
+}
+
 model UserSession {
   id        String   @id @default(cuid())
   userId    String
@@ -110,30 +139,61 @@ model AuditLog {
 }
 
 model FileObject {
-  id           String           @id @default(cuid())
-  originalName String
-  mimeType     String?
-  size         Int?
-  storageKey   String
-  storageType  FileStorageType  @default(local)
-  status       FileObjectStatus @default(uploaded)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  jobs         ImportJob[]
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  originalName   String
+  mimeType       String?
+  size           Int?
+  storageKey     String
+  storageType    FileStorageType  @default(local)
+  status         FileObjectStatus @default(uploaded)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  jobs           ImportJob[]
+  exportRecords  ExportRecord[]
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model ImportJob {
-  id        String          @id @default(cuid())
-  fileId    String
-  type      String
-  status    ImportJobStatus @default(queued)
-  progress  Int             @default(0)
-  error     String?
-  resultKey String?
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  file      FileObject      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  id             String          @id @default(cuid())
+  organizationId String
+  userId         String
+  fileId         String
+  type           String
+  status         ImportJobStatus @default(queued)
+  progress       Int             @default(0)
+  error          String?
+  resultKey      String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  file           FileObject      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  exportRecords  ExportRecord[]
 
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
   @@index([fileId])
   @@index([status])
+}
+
+model ExportRecord {
+  id             String     @id @default(cuid())
+  organizationId String
+  userId         String
+  fileId         String
+  jobId          String
+  resultKey      String
+  fileName       String
+  mimeType       String?
+  size           Int?
+  createdAt      DateTime   @default(now())
+  file           FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  job            ImportJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, resultKey])
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([fileId])
 }

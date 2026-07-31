@@ -1,11 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, Save, X } from "lucide-react";
+import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, Save, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { initialProducts, productStatusOptions } from "@/data/products";
-import type { Product, ProductDraft, ProductStatus } from "@/lib/products/types";
+import {
+  accountRosterStorageKey,
+  accountsToTeamMembers,
+  defaultTeamAccounts,
+  filterTeamMembersByRoles,
+  normalizeTeamAccounts,
+  type TeamMember,
+} from "@/lib/accounts/team-roster";
+import type { Product, ProductDraft, ProductStatus, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
+import {
+  buildWorkflowEvent,
+  createWorkflowDueAt,
+  formatWorkflowDate,
+  getCurrentWorkflowAssignee,
+  getProductWorkflowStage,
+  isProductWorkflowOverdue,
+  formatAssigneeList,
+  normalizeAssigneeList,
+  productWorkflowStageLabels,
+  productWorkflowStageTones,
+} from "@/lib/products/workflow";
 
 import {
   initialFilters,
@@ -58,6 +79,47 @@ export function ProductWorkbench() {
   const [pageSize, setPageSize] = useState(20);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已就绪"]);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [creatorName, setCreatorName] = useState("当前创建人");
+  const opsOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["operations_supervisor", "operations"]), [teamMembers]);
+  const designerOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["designer"]), [teamMembers]);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { user?: { name?: string } } | null) => {
+        if (data?.user?.name) {
+          setCreatorName(data.user.name);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    let canceled = false;
+
+    async function loadTeamMembers() {
+      const [apiMembers, localMembers] = await Promise.all([loadTeamMembersFromApi(), Promise.resolve(loadTeamMembersFromLocalStorage())]);
+      if (canceled) return;
+
+      setTeamMembers(mergeTeamMembers(apiMembers, localMembers));
+    }
+
+    void loadTeamMembers();
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key === accountRosterStorageKey) {
+        void loadTeamMembers();
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      canceled = true;
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -106,7 +168,6 @@ export function ProductWorkbench() {
     const hasMaxPrice = filters.maxPrice.trim() !== "" && Number.isFinite(maxPrice);
     const keyword = filters.keyword.trim().toLowerCase();
     const asin = filters.asin.trim().toLowerCase();
-    const developer = filters.developer.trim().toLowerCase();
     const supplierName = filters.supplierName.trim().toLowerCase();
 
     return products.filter((product) => {
@@ -116,7 +177,6 @@ export function ProductWorkbench() {
 
       if (keyword && !searchable.includes(keyword)) return false;
       if (asin && !product.asin.toLowerCase().includes(asin) && !product.competitorAsins.join(" ").toLowerCase().includes(asin)) return false;
-      if (developer && !product.developer.toLowerCase().includes(developer)) return false;
       if (supplierName && !product.supplierName.toLowerCase().includes(supplierName)) return false;
       if (filters.status === "overdue" && !isOverdueProduct(product)) return false;
       if (filters.status !== "all" && filters.status !== "overdue" && product.status !== filters.status) return false;
@@ -145,6 +205,7 @@ export function ProductWorkbench() {
   const developingCount = products.filter((product) => product.status === "developing").length;
   const opsReviewCount = products.filter((product) => product.status === "ops_review").length;
   const overdueCount = products.filter(isOverdueProduct).length;
+  const workflowOverdueCount = products.filter((product) => isProductWorkflowOverdue(product)).length;
 
   function openNewProduct() {
     setActiveProductId(null);
@@ -200,8 +261,13 @@ export function ProductWorkbench() {
 
     try {
       const imported = await parseProductWorkbookFile(file, products);
-      setProducts((current) => [imported, ...current]);
-      setActiveProductId(imported.id);
+      const importedWithOwner = {
+        ...imported,
+        selectionOwner: creatorName,
+        developer: "",
+      };
+      setProducts((current) => [importedWithOwner, ...current]);
+      setActiveProductId(importedWithOwner.id);
       setIsEditorOpen(true);
       setActivityLog((current) => [`已导入 ${file.name}`, ...current].slice(0, 8));
     } catch (error) {
@@ -214,7 +280,7 @@ export function ProductWorkbench() {
   return (
     <>
       <div className="space-y-5">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <SummaryTile
             label="全部商品"
             value={products.length.toLocaleString("zh-CN")}
@@ -248,6 +314,11 @@ export function ProductWorkbench() {
             tone="red"
             active={filters.status === "overdue"}
             onClick={() => setFilters((current) => ({ ...current, status: "overdue" }))}
+          />
+          <SummaryTile
+            label="流程超时提醒"
+            value={workflowOverdueCount.toLocaleString("zh-CN")}
+            tone="red"
           />
         </section>
 
@@ -305,6 +376,9 @@ export function ProductWorkbench() {
           <ProductEditor
             product={activeProduct}
             products={products}
+            creatorName={creatorName}
+            opsOptions={opsOptions}
+            designerOptions={designerOptions}
             onClose={() => setIsEditorOpen(false)}
             onSave={handleSaveProduct}
           />
@@ -591,11 +665,17 @@ function TrialProductEditor({
 function ProductEditor({
   product,
   products,
+  creatorName,
+  opsOptions,
+  designerOptions,
   onClose,
   onSave,
 }: {
   product: Product | null;
   products: Product[];
+  creatorName: string;
+  opsOptions: string[];
+  designerOptions: string[];
   onClose: () => void;
   onSave: (draft: ProductDraft) => void;
 }) {
@@ -604,9 +684,84 @@ function ProductEditor({
   const isEditing = Boolean(product);
   const mainAmazonLink = buildAmazonLink(draft.asin);
   const workbookDetail = draft.workbookDetail;
+  const workflowStage = getProductWorkflowStage(draft);
+  const workflowAssignee = getCurrentWorkflowAssignee(draft);
+  const workflowOverdue = isProductWorkflowOverdue(draft);
+  const selectionOwner = draft.selectionOwner || (isEditing ? product?.selectionOwner : creatorName) || creatorName;
+  const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
+  const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateStatus(status: ProductStatus) {
+    const nextStage =
+      status === "ops_review"
+        ? "ops_confirming"
+        : status === "design_in_progress"
+          ? "design_in_progress"
+          : status === "listed"
+            ? "done"
+            : status === "canceled" || status === "delisted" || status === "patent_risk"
+              ? "blocked"
+              : "selection_pending";
+    const now = new Date();
+
+    setDraft((current) => ({
+      ...current,
+      status,
+      workflowStage: nextStage,
+      workflowUpdatedAt: now.toISOString(),
+      workflowDueAt: nextStage === "done" || nextStage === "blocked" ? "" : current.workflowDueAt || createWorkflowDueAt(now),
+    }));
+  }
+
+  function updateAssigneeList(field: "opsAssignees" | "designerAssignees", values: string[]) {
+    const normalized = Array.from(new Set(values.filter(Boolean)));
+
+    setDraft((current) => ({
+      ...current,
+      [field]: normalized,
+      ...(field === "opsAssignees" ? { opsAssignee: formatAssigneeList(normalized) } : { designerAssignee: formatAssigneeList(normalized) }),
+    }));
+  }
+
+  function moveWorkflow(stage: ProductWorkflowStage, assigneeName: string, note: string) {
+    const now = new Date();
+
+    setDraft((current) => {
+      const event = buildWorkflowEvent({
+        stage,
+        actorName: current.selectionOwner || creatorName,
+        assigneeName,
+        note,
+        createdAt: now,
+      });
+
+      return {
+        ...current,
+        status:
+          stage === "ops_confirming"
+            ? "ops_review"
+            : stage === "design_in_progress" || stage === "design_review"
+              ? "design_in_progress"
+              : stage === "done"
+                ? "listed"
+                : current.status,
+        workflowStage: stage,
+        workflowStartedAt: now.toISOString(),
+        workflowUpdatedAt: now.toISOString(),
+        workflowDueAt: stage === "done" || stage === "blocked" ? "" : createWorkflowDueAt(now),
+        opsAssignees: selectedOps,
+        opsAssignee: formatAssigneeList(selectedOps),
+        designerAssignees: selectedDesigners,
+        designerAssignee: formatAssigneeList(selectedDesigners),
+        editableBy: stage === "ops_confirming" || stage === "design_in_progress" || stage === "design_review" ? selectedOps : [],
+        viewableBy: [...selectedOps, ...selectedDesigners],
+        workflowHistory: [event, ...(current.workflowHistory ?? [])].slice(0, 20),
+      };
+    });
   }
 
   function setWorkbookDetail(updater: (current: TrialProductDraft) => TrialProductDraft) {
@@ -829,6 +984,35 @@ function ProductEditor({
       return;
     }
 
+    if (draft.status === "ops_review" && selectedOps.length === 0) {
+      window.alert("状态为运营确认中时，请至少选择一个运营负责人。");
+      return;
+    }
+
+    if (draft.status === "design_in_progress" && selectedDesigners.length === 0) {
+      window.alert("状态为美工处理中时，请至少选择一个美工负责人。");
+      return;
+    }
+
+    const now = new Date();
+    const normalizedStage = getProductWorkflowStage(draft);
+    const workflowHistory = draft.workflowHistory?.length
+      ? draft.workflowHistory
+      : [
+          buildWorkflowEvent({
+            stage: normalizedStage,
+            actorName: selectionOwner,
+            assigneeName:
+              normalizedStage === "ops_confirming"
+                ? formatAssigneeList(selectedOps)
+                : normalizedStage === "design_in_progress" || normalizedStage === "design_review"
+                  ? formatAssigneeList(selectedDesigners)
+                  : selectionOwner,
+            note: "创建商品并进入业务流程。",
+            createdAt: now,
+          }),
+        ];
+
     onSave({
       ...draft,
       sku: draft.sku.trim(),
@@ -837,6 +1021,25 @@ function ProductEditor({
       asin: draft.asin.trim().toUpperCase(),
       cancelReason: draft.cancelReason.trim(),
       competitorAsins: workbookDetail.competitors.map((competitor) => competitor.asin.trim().toUpperCase()).filter(Boolean),
+      developer: "",
+      selectionOwner,
+      opsAssignees: selectedOps,
+      opsAssignee: formatAssigneeList(selectedOps),
+      designerAssignees: selectedDesigners,
+      designerAssignee: formatAssigneeList(selectedDesigners),
+      editableBy:
+        normalizedStage === "ops_confirming" || normalizedStage === "design_in_progress" || normalizedStage === "design_review"
+          ? selectedOps
+          : [],
+      viewableBy: [...selectedOps, ...selectedDesigners],
+      workflowStage: normalizedStage,
+      workflowStartedAt: draft.workflowStartedAt || now.toISOString(),
+      workflowUpdatedAt: now.toISOString(),
+      workflowDueAt:
+        normalizedStage === "done" || normalizedStage === "blocked"
+          ? ""
+          : draft.workflowDueAt || createWorkflowDueAt(now),
+      workflowHistory,
     });
   }
 
@@ -899,7 +1102,7 @@ function ProductEditor({
                     <select
                       className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
                       value={draft.status}
-                      onChange={(event) => setField("status", event.target.value as ProductStatus)}
+                      onChange={(event) => updateStatus(event.target.value as ProductStatus)}
                     >
                       {productStatusOptions.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -916,9 +1119,53 @@ function ProductEditor({
                       onChange={(value) => setField("cancelReason", value)}
                     />
                   ) : null}
-                  <LabeledInput label="开发员" value={draft.developer} onChange={(value) => setField("developer", value)} />
+                  <ReadonlyField label="选品负责人（创建人）" value={selectionOwner || "--"} />
+                  <MultiSelectField label="运营负责人（可多选）" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
+                  <MultiSelectField label="美工负责人（可多选）" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
+                  <ReadonlyField label="当前负责人" value={workflowAssignee || "--"} />
+                  <ReadonlyField label="流程截止" value={formatWorkflowDate(draft.workflowDueAt)} />
                   <ReadonlyField label="创建日期（保存时生成）" value={draft.createdAt || "保存后自动生成"} />
                   <LabeledInput label="采购价格 CNY" type="number" value={String(draft.purchasePrice)} onChange={(value) => setField("purchasePrice", Number(value) || 0)} />
+                  <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">业务流转</p>
+                        <p className="mt-1 text-xs text-muted">
+                          {workflowOverdue ? "已超过 3 天未处理，需要提醒当前负责人。" : "每次流转会自动生成 3 天处理期限。"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={selectedOps.length === 0}
+                          onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "选品提交给运营确认。")}
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          交给运营
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={selectedDesigners.length === 0}
+                          onClick={() => moveWorkflow("design_in_progress", formatAssigneeList(selectedDesigners), "运营转交给美工处理。")}
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          交给美工
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", workflowAssignee, "当前流程已完成。")}>
+                          <Save className="h-4 w-4" />
+                          标记完成
+                        </Button>
+                      </div>
+                    </div>
+                    {workflowOverdue ? (
+                      <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                        <Bell className="h-4 w-4" />
+                        当前阶段已超时，负责人：{workflowAssignee || "未分配"}
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="flex items-end">
                     <a
                       className={`inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold ${mainAmazonLink ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
@@ -932,6 +1179,33 @@ function ProductEditor({
                   </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>流程记录</CardTitle>
+                <Badge tone={productWorkflowStageTones[workflowStage]}>{productWorkflowStageLabels[workflowStage]}</Badge>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(draft.workflowHistory ?? []).slice(0, 5).map((event) => (
+                  <div key={event.id} className="rounded-md border border-border bg-white px-3 py-2 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-bold text-foreground">{event.stageLabel}</p>
+                      <span className="text-xs text-muted">{formatWorkflowDate(event.createdAt)}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      {event.actorName ? `${event.actorName} 操作` : "系统记录"}
+                      {event.assigneeName ? `，负责人 ${event.assigneeName}` : ""}
+                      {event.note ? `。${event.note}` : ""}
+                    </p>
+                  </div>
+                ))}
+                {(draft.workflowHistory ?? []).length === 0 ? (
+                  <div className="rounded-md border border-border bg-surface-muted px-3 py-4 text-center text-sm text-muted">
+                    暂无流转记录，保存或点击流转按钮后会生成记录。
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -993,7 +1267,7 @@ function SummaryTile({
     </button>
   );
 }
-function ReadonlyField({ label, value }: { label: string; value: string }) {
+function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-xs font-semibold text-muted">
       {label}
@@ -1002,6 +1276,84 @@ function SummaryTile({
       </div>
     </div>
   );
+}
+
+function MultiSelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string[];
+  options: string[];
+  onChange: (value: string[]) => void;
+}) {
+  function toggle(option: string) {
+    onChange(value.includes(option) ? value.filter((item) => item !== option) : [...value, option]);
+  }
+
+  return (
+    <div className="text-xs font-semibold text-muted">
+      <p>{label}</p>
+      <div className="mt-1 min-h-10 rounded-md border border-border bg-white px-2 py-2">
+        {options.length ? (
+          <div className="flex flex-wrap gap-2">
+            {options.map((option) => {
+              const checked = value.includes(option);
+
+              return (
+                <label key={option} className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs ${checked ? "border-brand bg-brand/10 text-brand" : "border-border text-muted"}`}>
+                  <input checked={checked} className="h-3.5 w-3.5 accent-brand" type="checkbox" onChange={() => toggle(option)} />
+                  {option}
+                </label>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="py-1 text-xs text-muted">暂无可选账号，请先到账号管理创建对应角色。</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+async function loadTeamMembersFromApi() {
+  try {
+    const response = await fetch("/api/accounts/team-members");
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as { accounts?: unknown };
+    return accountsToTeamMembers(normalizeTeamAccounts(data.accounts));
+  } catch {
+    return [];
+  }
+}
+
+function loadTeamMembersFromLocalStorage() {
+  try {
+    const saved = window.localStorage.getItem(accountRosterStorageKey);
+    if (!saved) return accountsToTeamMembers(defaultTeamAccounts);
+
+    const accounts = normalizeTeamAccounts(JSON.parse(saved));
+    return accountsToTeamMembers(accounts.length ? accounts : defaultTeamAccounts);
+  } catch {
+    return accountsToTeamMembers(defaultTeamAccounts);
+  }
+}
+
+function mergeTeamMembers(...groups: TeamMember[][]) {
+  const merged = new Map<string, TeamMember>();
+
+  groups.flat().forEach((member) => {
+    merged.set(member.id, member);
+  });
+
+  return Array.from(merged.values());
+}
+
+function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[]) {
+  return filterTeamMembersByRoles(members, roles).map((member) => member.name);
 }
 
 function Pagination({

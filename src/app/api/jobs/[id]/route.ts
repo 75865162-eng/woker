@@ -1,13 +1,26 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
     const { id } = await params;
-    const job = await prisma.importJob.findUnique({
-      where: { id },
+    const job = await prisma.importJob.findFirst({
+      where: {
+        id,
+        organizationId: user.organizationId,
+        file: {
+          organizationId: user.organizationId,
+        },
+      },
       include: { file: true },
     });
 

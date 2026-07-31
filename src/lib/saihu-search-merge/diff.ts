@@ -1,6 +1,9 @@
 import type { SaihuExcelDiffResult, SaihuExcelDiffRow } from "@/lib/saihu-search-merge/types";
 
 type XlsxWorksheet = import("xlsx").WorkSheet;
+type XlsxCellAddress = import("xlsx").CellAddress;
+
+const diffPreviewRowLimit = 1000;
 
 interface ParsedSheet {
   sheetName: string;
@@ -28,6 +31,26 @@ function toText(value: unknown) {
   return String(value).trim();
 }
 
+function toCellText(cell: XlsxWorksheet[string] | undefined) {
+  if (!cell) {
+    return "";
+  }
+
+  if (cell.v instanceof Date) {
+    return cell.v.toISOString();
+  }
+
+  if (cell.v !== null && cell.v !== undefined) {
+    return String(cell.v);
+  }
+
+  if (cell.w !== undefined) {
+    return String(cell.w);
+  }
+
+  return cell.f ? `=${cell.f}` : "";
+}
+
 function normalizeHeader(value: unknown, index: number) {
   const header = toText(value);
   return header || `未命名列${index + 1}`;
@@ -44,8 +67,43 @@ function buildColumns(headerRow: unknown[]) {
   });
 }
 
+function getCellAddresses(sheet: XlsxWorksheet, XLSX: typeof import("xlsx")) {
+  return Object.keys(sheet)
+    .filter((key) => !key.startsWith("!"))
+    .map((cellAddress) => ({
+      cellAddress,
+      decoded: XLSX.utils.decode_cell(cellAddress),
+    }));
+}
+
+function getUsedRange(sheet: XlsxWorksheet, XLSX: typeof import("xlsx"), cells: Array<{ decoded: XlsxCellAddress }>) {
+  const refRange = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null;
+
+  if (!refRange && !cells.length) {
+    return null;
+  }
+
+  return cells.reduce(
+    (range, cell) => ({
+      s: {
+        r: Math.min(range.s.r, cell.decoded.r),
+        c: Math.min(range.s.c, cell.decoded.c),
+      },
+      e: {
+        r: Math.max(range.e.r, cell.decoded.r),
+        c: Math.max(range.e.c, cell.decoded.c),
+      },
+    }),
+    refRange ?? {
+      s: { r: cells[0].decoded.r, c: cells[0].decoded.c },
+      e: { r: cells[0].decoded.r, c: cells[0].decoded.c },
+    },
+  );
+}
+
 function parseSheet(sheetName: string, sheet: XlsxWorksheet, XLSX: typeof import("xlsx")): ParsedSheet | null {
-  const range = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null;
+  const cells = getCellAddresses(sheet, XLSX);
+  const range = getUsedRange(sheet, XLSX, cells);
 
   if (!range) {
     return null;
@@ -58,7 +116,7 @@ function parseSheet(sheetName: string, sheet: XlsxWorksheet, XLSX: typeof import
     const row = Array.from({ length: range.e.c - range.s.c + 1 }, (_, offset) => {
       const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + offset });
 
-      return sheet[cellAddress]?.v ?? null;
+      return toCellText(sheet[cellAddress]);
     });
 
     if (row.some((cell) => toText(cell))) {
@@ -74,19 +132,18 @@ function parseSheet(sheetName: string, sheet: XlsxWorksheet, XLSX: typeof import
 
   const columns = buildColumns(headerRow);
   const rows = Array.from({ length: range.e.r - headerIndex }, (_, index) => {
-      const rowIndex = headerIndex + index + 1;
-      const values = columns.reduce<Record<string, string>>((acc, column, columnIndex) => {
-        const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + columnIndex });
-        acc[column] = toText(sheet[cellAddress]?.v);
-        return acc;
-      }, {});
+    const rowIndex = headerIndex + index + 1;
+    const values = columns.reduce<Record<string, string>>((acc, column, columnIndex) => {
+      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: range.s.c + columnIndex });
+      acc[column] = toCellText(sheet[cellAddress]);
+      return acc;
+    }, {});
 
-      return {
-        rowNumber: rowIndex + 1,
-        values,
-      };
-    })
-    .filter((row) => Object.values(row.values).some(Boolean));
+    return {
+      rowNumber: rowIndex + 1,
+      values,
+    };
+  }).filter((row) => Object.values(row.values).some((value) => toText(value)));
 
   return {
     sheetName,
@@ -158,7 +215,7 @@ export async function compareSaihuExcelRows(firstFile: File, secondFile: File): 
         secondOnlyRows += 1;
       }
 
-      if (firstRow) {
+      if (firstRow && rows.length < diffPreviewRowLimit) {
         rows.push({
           side: "first",
           sheetName,
@@ -169,7 +226,7 @@ export async function compareSaihuExcelRows(firstFile: File, secondFile: File): 
         });
       }
 
-      if (secondRow) {
+      if (secondRow && rows.length < diffPreviewRowLimit) {
         rows.push({
           side: "second",
           sheetName,

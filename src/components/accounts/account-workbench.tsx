@@ -29,9 +29,10 @@ import {
   type PermissionAction,
   type RolePermissionMap,
 } from "@/lib/accounts/permissions";
+import { accountRosterStorageKey, defaultTeamAccounts, normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
 
 type AccountStatus = "active" | "pending" | "disabled";
-type RoleId = "owner" | "admin" | "ppc_manager" | "listing_operator" | "logistics_operator" | "viewer";
+type RoleId = AccountRoleId;
 
 type Account = {
   id: string;
@@ -66,6 +67,34 @@ const initialRoles: Role[] = [
     description: "管理业务数据、规则、导出与成员分工",
     memberCount: 2,
     permissions: createPermissions(["workspace", "rules", "listingAi", "products", "logistics"], ["view", "create", "edit", "approve", "export"]),
+  },
+  {
+    id: "operations_supervisor",
+    name: "运营主管",
+    description: "管理 SKU 流转、分配运营和查看全部处理状态",
+    memberCount: 1,
+    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
+  },
+  {
+    id: "operations",
+    name: "运营",
+    description: "负责 SKU 运营确认、资料完善和后续转交",
+    memberCount: 0,
+    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
+  },
+  {
+    id: "selection",
+    name: "选品",
+    description: "创建 SKU 并提交给运营确认",
+    memberCount: 0,
+    permissions: createPermissions(["products"], ["view", "create", "edit"]),
+  },
+  {
+    id: "designer",
+    name: "美工",
+    description: "处理分配给自己的商品图片和视觉资料",
+    memberCount: 0,
+    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "edit", "export"]),
   },
   {
     id: "ppc_manager",
@@ -175,9 +204,61 @@ const statusTones: Record<AccountStatus, "green" | "amber" | "gray"> = {
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const rolePermissionsStorageKey = "amazon-bulk-ad-role-permissions";
+const teamMembersApiPath = "/api/accounts/team-members";
+
+function loadInitialAccounts() {
+  const fallbackAccounts = defaultTeamAccounts.length ? (defaultTeamAccounts as Account[]) : initialAccounts;
+
+  if (typeof window === "undefined") return fallbackAccounts;
+
+  const saved = window.localStorage.getItem(accountRosterStorageKey);
+  if (!saved) return fallbackAccounts;
+
+  try {
+    const accounts = normalizeTeamAccounts(JSON.parse(saved));
+    return accounts.length
+      ? accounts.map((account) => ({
+          ...account,
+          lastActiveAt: account.lastActiveAt ?? "未记录",
+        }))
+      : fallbackAccounts;
+  } catch {
+    window.localStorage.removeItem(accountRosterStorageKey);
+    return fallbackAccounts;
+  }
+}
+
+async function loadAccountsFromApi() {
+  try {
+    const response = await fetch(teamMembersApiPath, { cache: "no-store" });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { accounts?: unknown };
+    return normalizeTeamAccounts(payload.accounts).map((account) => ({
+      ...account,
+      lastActiveAt: account.lastActiveAt ?? "未记录",
+    }));
+  } catch {
+    return null;
+  }
+}
+
+async function saveAccountsToApi(accounts: Account[]) {
+  try {
+    await fetch(teamMembersApiPath, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ accounts }),
+    });
+  } catch {
+    return undefined;
+  }
+}
 
 export function AccountWorkbench() {
-  const [accounts, setAccounts] = useState(initialAccounts);
+  const [accounts, setAccounts] = useState<Account[]>(loadInitialAccounts);
   const [roles, setRoles] = useState(initialRoles);
   const [activeRoleId, setActiveRoleId] = useState<RoleId>("ppc_manager");
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
@@ -186,6 +267,36 @@ export function AccountWorkbench() {
   const [passwordAccount, setPasswordAccount] = useState<Account | null>(null);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [permissionSavedAt, setPermissionSavedAt] = useState("");
+  const [rosterHydrated, setRosterHydrated] = useState(false);
+  const visibleRoles = useMemo(
+    () =>
+      roles.map((role) => ({
+        ...role,
+        memberCount: accounts.filter((account) => account.roleId === role.id).length,
+      })),
+    [accounts, roles],
+  );
+
+  useEffect(() => {
+    let canceled = false;
+
+    void loadAccountsFromApi().then((apiAccounts) => {
+      if (canceled) return;
+
+      if (!apiAccounts?.length) {
+        setRosterHydrated(true);
+        return;
+      }
+
+      setAccounts(apiAccounts);
+      window.localStorage.setItem(accountRosterStorageKey, JSON.stringify(apiAccounts));
+      setRosterHydrated(true);
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(rolePermissionsStorageKey);
@@ -204,7 +315,12 @@ export function AccountWorkbench() {
     }
   }, []);
 
-  const activeRole = roles.find((role) => role.id === activeRoleId) ?? roles[0];
+  useEffect(() => {
+    if (!rosterHydrated) return;
+    window.localStorage.setItem(accountRosterStorageKey, JSON.stringify(accounts));
+  }, [accounts, rosterHydrated]);
+
+  const activeRole = visibleRoles.find((role) => role.id === activeRoleId) ?? visibleRoles[0];
 
   const filteredAccounts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -227,6 +343,15 @@ export function AccountWorkbench() {
   const departments = Array.from(new Set(accounts.map((account) => account.department)));
   const roleMemberCount = accounts.filter((account) => account.roleId === activeRole.id).length;
 
+  function commitAccounts(updater: (current: Account[]) => Account[]) {
+    setAccounts((current) => {
+      const next = updater(current);
+      window.localStorage.setItem(accountRosterStorageKey, JSON.stringify(next));
+      void saveAccountsToApi(next);
+      return next;
+    });
+  }
+
   function createAccount(payload: Omit<Account, "id" | "status" | "lastActiveAt">) {
     const nextAccount: Account = {
       ...payload,
@@ -235,29 +360,26 @@ export function AccountWorkbench() {
       lastActiveAt: "待首次登录",
     };
 
-    setAccounts((current) => [nextAccount, ...current]);
-    setRoles((current) => bumpRoleCount(current, payload.roleId, 1));
+    commitAccounts((current) => [nextAccount, ...current]);
     setNewAccountOpen(false);
   }
 
   function updateAccountRole(accountId: string, roleId: RoleId) {
-    setAccounts((current) =>
+    commitAccounts((current) =>
       current.map((account) => {
         if (account.id !== accountId || account.roleId === roleId) return account;
-
-        setRoles((rolesCurrent) => bumpRoleCount(bumpRoleCount(rolesCurrent, account.roleId, -1), roleId, 1));
         return { ...account, roleId };
       }),
     );
   }
 
   function saveAccount(account: Account) {
-    setAccounts((current) => current.map((item) => (item.id === account.id ? account : item)));
+    commitAccounts((current) => current.map((item) => (item.id === account.id ? account : item)));
     setEditAccount(null);
   }
 
   function toggleAccountStatus(accountId: string) {
-    setAccounts((current) =>
+    commitAccounts((current) =>
       current.map((account) =>
         account.id === accountId ? { ...account, status: account.status === "disabled" ? "active" : "disabled" } : account,
       ),
@@ -436,10 +558,10 @@ export function AccountWorkbench() {
                 <CardTitle>角色权限</CardTitle>
                 <p className="mt-1 text-sm text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
               </div>
-              <Badge tone="blue">{roles.length} 个角色</Badge>
+                <Badge tone="blue">{visibleRoles.length} 个角色</Badge>
             </CardHeader>
             <CardContent className="space-y-3">
-              {roles.map((role) => (
+              {visibleRoles.map((role) => (
                 <button
                   key={role.id}
                   className={`w-full rounded-md border px-4 py-3 text-left transition ${
@@ -497,6 +619,26 @@ export function AccountWorkbench() {
           </Card>
         </div>
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>SKU 流转权限</CardTitle>
+          <p className="mt-1 text-sm text-muted">账号角色会直接决定商品页负责人下拉和 SKU 处理权限。</p>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+          {[
+            { title: "选品", body: "新建 SKU 后自动成为选品负责人，不需要手动选择。", tone: "gray" as const },
+            { title: "运营主管 / 运营", body: "SKU 状态为运营确认中时必须选择，可多选；被选中的运营获得该 SKU 编辑权。", tone: "amber" as const },
+            { title: "美工", body: "SKU 状态为美工处理中时必须选择，可多选；被选中的美工只有查看权。", tone: "blue" as const },
+            { title: "停用账号", body: "不会出现在运营或美工负责人下拉里，也不会获得新的 SKU 权限。", tone: "red" as const },
+          ].map((item) => (
+            <div key={item.title} className="rounded-md border border-border bg-white p-4">
+              <Badge tone={item.tone}>{item.title}</Badge>
+              <p className="mt-3 text-sm leading-6 text-muted">{item.body}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <Card>
@@ -767,8 +909,4 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
       </div>
     </div>
   );
-}
-
-function bumpRoleCount(roles: Role[], roleId: RoleId, delta: number) {
-  return roles.map((role) => (role.id === roleId ? { ...role, memberCount: Math.max(0, role.memberCount + delta) } : role));
 }

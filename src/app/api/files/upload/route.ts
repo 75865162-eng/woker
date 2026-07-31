@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { enqueueImportJob } from "@/lib/queue";
 import { getStorageDriver } from "@/lib/storage";
@@ -20,6 +21,12 @@ function createStorageKey(fileName: string) {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
     const jobType = String(formData.get("type") ?? "bulk_upload");
@@ -38,6 +45,8 @@ export async function POST(request: Request) {
 
     const fileObject = await prisma.fileObject.create({
       data: {
+        organizationId: user.organizationId,
+        userId: user.id,
         originalName: file.name,
         mimeType: file.type || undefined,
         size: storedObject.size,
@@ -48,6 +57,8 @@ export async function POST(request: Request) {
 
     const job = await prisma.importJob.create({
       data: {
+        organizationId: user.organizationId,
+        userId: user.id,
         fileId: fileObject.id,
         type: jobType,
       },

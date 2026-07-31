@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ImagePlus, Minus, Plus, Save, X } from "lucide-react";
+import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -31,6 +31,10 @@ import {
   SmallTextarea,
 } from "./product-workbench-fields";
 import { calculateExcelPricing } from "./product-workbench-utils";
+
+function isPdfDataUrl(value: string) {
+  return value.startsWith("data:application/pdf");
+}
 
 export function ProductWorkbookDetailSections({
   detail,
@@ -340,9 +344,11 @@ export function getSupplierTextareaSize(field: keyof TrialSupplierRow) {
 function ImageUploadSquare({
   image,
   onChange,
+  allowPdf = false,
 }: {
   image: string;
   onChange: (value: string) => void;
+  allowPdf?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -372,8 +378,15 @@ function ImageUploadSquare({
           onClick={() => setPreviewOpen(true)}
           title="查看大图"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="竞品图片" className="h-full w-full object-contain p-1" />
+          {isPdfDataUrl(image) ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-md bg-white text-center">
+              <FileText className="h-10 w-10 text-brand" />
+              <span className="text-xs font-semibold text-foreground">PDF</span>
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={image} alt="竞品图片" className="h-full w-full object-contain p-1" />
+          )}
         </button>
       ) : (
         <button
@@ -384,7 +397,7 @@ function ImageUploadSquare({
           上传图片
         </button>
       )}
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => handleFile(event.target.files?.[0])} />
+      <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => handleFile(event.target.files?.[0])} />
 
       {previewOpen && image ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70 p-6">
@@ -392,15 +405,21 @@ function ImageUploadSquare({
             <div className="absolute right-0 top-0 z-10 flex translate-y-[-120%] gap-2">
               <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
                 <ImagePlus className="h-4 w-4" />
-                替换图片
+                {allowPdf ? "替换文件" : "替换图片"}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
                 <X className="h-4 w-4" />
                 关闭
               </Button>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image} alt="竞品大图" className="max-h-[82vh] max-w-[88vw] rounded-lg bg-white object-contain shadow-2xl" />
+            {isPdfDataUrl(image) ? (
+              <object data={image} type="application/pdf" className="h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl">
+                <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
+              </object>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={image} alt="竞品大图" className="max-h-[82vh] max-w-[88vw] rounded-lg bg-white object-contain shadow-2xl" />
+            )}
           </div>
         </div>
       ) : null}
@@ -427,14 +446,14 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
         <p className="text-xs font-bold text-muted">备注图片</p>
         <Button variant="secondary" size="sm" onClick={() => inputRef.current?.click()}>
           <ImagePlus className="h-4 w-4" />
-          批量上传图片
+          批量上传图片 / PDF
         </Button>
       </div>
       <input
         ref={inputRef}
         className="hidden"
         type="file"
-        accept="image/*"
+        accept="image/*,.pdf"
         multiple
         onChange={(event) => {
           void handleFiles(event.target.files);
@@ -445,7 +464,7 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
         <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
           {images.map((image, index) => (
             <div key={`${image.slice(0, 32)}-${index}`} className="space-y-2">
-              <ImageUploadSquare image={image} onChange={(value) => onChange(images.map((item, itemIndex) => (itemIndex === index ? value : item)))} />
+              <ImageUploadSquare image={image} allowPdf onChange={(value) => onChange(images.map((item, itemIndex) => (itemIndex === index ? value : item)))} />
               <Button variant="secondary" size="sm" className="w-[130px]" onClick={() => onChange(images.filter((_, itemIndex) => itemIndex !== index))}>
                 删除
               </Button>
@@ -454,7 +473,7 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
         </div>
       ) : (
         <div className="mt-3 rounded-md border border-dashed border-border bg-white px-3 py-6 text-center text-xs font-semibold text-muted">
-          导入 Excel 中非热销变体图片，或手动批量上传图片后会显示在这里。
+          导入 Excel 中非热销变体图片，或手动批量上传图片 / PDF 后会显示在这里。
         </div>
       )}
     </div>
