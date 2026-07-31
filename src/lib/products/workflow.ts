@@ -44,6 +44,7 @@ const closedStages = new Set<ProductWorkflowStage>(["done", "blocked"]);
 export function getProductWorkflowStage(product: ProductWorkflowLike): ProductWorkflowStage {
   if (product.status === "ops_review") return "ops_confirming";
   if (product.status === "design_in_progress") return "design_in_progress";
+  if (product.status === "listing_confirming") return "design_review";
   if (product.status === "listed") return "done";
   if (product.status === "canceled" || product.status === "delisted" || product.status === "patent_risk") return "blocked";
 

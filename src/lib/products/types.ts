@@ -3,6 +3,7 @@ export type ProductStatus =
   | "developing"
   | "ops_review"
   | "design_in_progress"
+  | "listing_confirming"
   | "listed"
   | "canceled"
   | "delisted"
@@ -32,6 +33,53 @@ export type ProductWorkflowEvent = {
   assigneeName?: string;
   note?: string;
   createdAt: string;
+};
+
+export type ProductOperationStageId =
+  | "selection_data"
+  | "sample_confirmation"
+  | "backend_upload"
+  | "system_entry"
+  | "order"
+  | "image_request"
+  | "copywriting"
+  | "design"
+  | "final_sample_confirmation"
+  | "shipping"
+  | "keyword_research"
+  | "listing";
+
+export type ProductOperationStageStatus = "not_started" | "in_progress" | "completed" | "blocked";
+
+export type ProductOperationStage = {
+  id: ProductOperationStageId;
+  status: ProductOperationStageStatus;
+  owner: string;
+  plannedAt: string;
+  completedAt: string;
+  note: string;
+  updatedAt: string;
+};
+
+export type ProductOperationProgressEvent = {
+  id: string;
+  changedAt: string;
+  changedBy: string;
+  summary: string;
+};
+
+export type ProductOperationProgress = {
+  selectionDate: string;
+  orderQuantity: number;
+  orderDate: string;
+  shipDate: string;
+  dailyAdBudget: number;
+  forecastMonthlySales: number;
+  forecastPrice: number;
+  stages: ProductOperationStage[];
+  updatedAt: string;
+  updatedBy: string;
+  history: ProductOperationProgressEvent[];
 };
 
 export type Product = {
@@ -71,6 +119,7 @@ export type Product = {
   workflowUpdatedAt?: string;
   workflowReminderAt?: string;
   workflowHistory?: ProductWorkflowEvent[];
+  operationsProgress?: ProductOperationProgress;
 };
 
 export type ProductDraft = Omit<Product, "id"> & {

@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/products/types";
+import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
 import {
@@ -353,6 +354,7 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
       designerAssignees: normalizeAssigneeList(product.designerAssignee, product.designerAssignees),
       workflowStage: getProductWorkflowStage(product),
       workflowHistory: product.workflowHistory ?? [],
+      operationsProgress: normalizeOperationsProgress(product.operationsProgress, product.opsAssignee || product.selectionOwner || ""),
       workbookDetail: normalizeWorkbookDetail(
         productWithWorkbook.workbookDetail,
         product.sku === "00001" ? createEspressoMirrorDetail() : createTrialProductDraft(),

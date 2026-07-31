@@ -56,22 +56,15 @@ type Role = {
 const initialRoles: Role[] = [
   {
     id: "owner",
-    name: "系统管理员",
+    name: "超级管理员",
     description: "全局配置、账号、权限与审计管理",
     memberCount: 1,
     permissions: createFullPermissions(),
   },
   {
-    id: "admin",
-    name: "运营主管",
-    description: "管理业务数据、规则、导出与成员分工",
-    memberCount: 2,
-    permissions: createPermissions(["workspace", "rules", "listingAi", "products", "logistics"], ["view", "create", "edit", "approve", "export"]),
-  },
-  {
     id: "operations_supervisor",
-    name: "运营主管",
-    description: "管理 SKU 流转、分配运营和查看全部处理状态",
+    name: "主管",
+    description: "管理业务流转、成员分工和审批",
     memberCount: 1,
     permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
   },
@@ -83,11 +76,11 @@ const initialRoles: Role[] = [
     permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
   },
   {
-    id: "selection",
-    name: "选品",
-    description: "创建 SKU 并提交给运营确认",
+    id: "operations_assistant",
+    name: "运营助理",
+    description: "协助维护商品资料和运营任务",
     memberCount: 0,
-    permissions: createPermissions(["products"], ["view", "create", "edit"]),
+    permissions: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
   },
   {
     id: "designer",
@@ -97,32 +90,32 @@ const initialRoles: Role[] = [
     permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "edit", "export"]),
   },
   {
-    id: "ppc_manager",
-    name: "广告优化",
-    description: "处理 Bulk 导入、规则演算和广告调整草稿",
-    memberCount: 5,
-    permissions: createPermissions(["workspace", "rules"], ["view", "create", "edit", "export"]),
-  },
-  {
-    id: "listing_operator",
-    name: "Listing 运营",
-    description: "维护商品资料、关键词、图片计划和 Listing AI",
-    memberCount: 4,
-    permissions: createPermissions(["listingAi", "products"], ["view", "create", "edit", "export"]),
-  },
-  {
-    id: "logistics_operator",
-    name: "物流协同",
-    description: "处理物流模板、箱规、货件对比和导出",
-    memberCount: 3,
+    id: "warehouse",
+    name: "仓管",
+    description: "处理入库、出库、箱规和货件资料",
+    memberCount: 0,
     permissions: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
   },
   {
-    id: "viewer",
-    name: "只读成员",
-    description: "仅可查看已授权模块，不允许修改和导出",
-    memberCount: 8,
-    permissions: createPermissions(["workspace", "listingAi", "products", "logistics"], ["view"]),
+    id: "finance",
+    name: "财务",
+    description: "查看业务数据并导出财务所需资料",
+    memberCount: 0,
+    permissions: createPermissions(["workspace", "products", "logistics"], ["view", "export"]),
+  },
+  {
+    id: "warehouse_supervisor",
+    name: "仓库主管",
+    description: "管理仓库作业、物流资料和相关审批",
+    memberCount: 0,
+    permissions: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]),
+  },
+  {
+    id: "procurement",
+    name: "采购",
+    description: "维护采购商品资料并协同物流处理",
+    memberCount: 0,
+    permissions: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
   },
 ];
 
@@ -143,7 +136,7 @@ const initialAccounts: Account[] = [
     email: "zhangwei@example.local",
     department: "广告中心",
     title: "广告主管",
-    roleId: "ppc_manager",
+    roleId: "operations",
     status: "active",
     lastActiveAt: "今天 09:42",
   },
@@ -153,7 +146,7 @@ const initialAccounts: Account[] = [
     email: "lina@example.local",
     department: "采购中心",
     title: "运营主管",
-    roleId: "admin",
+    roleId: "operations_supervisor",
     status: "active",
     lastActiveAt: "今天 10:16",
   },
@@ -163,7 +156,7 @@ const initialAccounts: Account[] = [
     email: "chenchen@example.local",
     department: "Listing 组",
     title: "Listing 专员",
-    roleId: "listing_operator",
+    roleId: "operations",
     status: "pending",
     lastActiveAt: "待首次登录",
   },
@@ -173,7 +166,7 @@ const initialAccounts: Account[] = [
     email: "wangmin@example.local",
     department: "物流中心",
     title: "物流专员",
-    roleId: "logistics_operator",
+    roleId: "warehouse",
     status: "active",
     lastActiveAt: "昨天 18:03",
   },
@@ -183,7 +176,7 @@ const initialAccounts: Account[] = [
     email: "zhaoning@example.local",
     department: "财务协同",
     title: "只读审阅",
-    roleId: "viewer",
+    roleId: "finance",
     status: "disabled",
     lastActiveAt: "2026-07-18",
   },
@@ -260,7 +253,7 @@ async function saveAccountsToApi(accounts: Account[]) {
 export function AccountWorkbench() {
   const [accounts, setAccounts] = useState<Account[]>(loadInitialAccounts);
   const [roles, setRoles] = useState(initialRoles);
-  const [activeRoleId, setActiveRoleId] = useState<RoleId>("ppc_manager");
+  const [activeRoleId, setActiveRoleId] = useState<RoleId>("operations");
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
   const [query, setQuery] = useState("");
   const [newAccountOpen, setNewAccountOpen] = useState(false);
@@ -627,8 +620,8 @@ export function AccountWorkbench() {
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-4">
           {[
-            { title: "选品", body: "新建 SKU 后自动成为选品负责人，不需要手动选择。", tone: "gray" as const },
-            { title: "运营主管 / 运营", body: "SKU 状态为运营确认中时必须选择，可多选；被选中的运营获得该 SKU 编辑权。", tone: "amber" as const },
+            { title: "采购", body: "新建 SKU 后自动成为采购负责人，不需要手动选择。", tone: "gray" as const },
+            { title: "主管 / 运营 / 运营助理", body: "SKU 状态为运营确认中时必须选择，可多选；被选中的成员获得该 SKU 编辑权。", tone: "amber" as const },
             { title: "美工", body: "SKU 状态为美工处理中时必须选择，可多选；被选中的美工只有查看权。", tone: "blue" as const },
             { title: "停用账号", body: "不会出现在运营或美工负责人下拉里，也不会获得新的 SKU 权限。", tone: "red" as const },
           ].map((item) => (
@@ -663,7 +656,7 @@ export function AccountWorkbench() {
           </CardHeader>
           <CardContent className="space-y-4">
             {[
-              "李娜调整了广告优化角色的导出权限",
+              "李娜调整了运营角色的导出权限",
               "张伟重置了陈晨的首次登录密码",
               "系统停用了赵宁账号并保留审计记录",
             ].map((item, index) => (
@@ -756,7 +749,7 @@ function AccountDialog({
     email: "",
     department: "广告中心",
     title: "运营专员",
-    roleId: "viewer" as RoleId,
+    roleId: "operations" as RoleId,
   });
 
   const ready = form.name.trim() && form.email.trim();

@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/app-shell/app-shell";
+﻿import { AppShell } from "@/components/app-shell/app-shell";
 import { ProductWorkbench } from "@/components/products/product-workbench";
 
 export default function DashboardPage() {

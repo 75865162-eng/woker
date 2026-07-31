@@ -4,15 +4,14 @@ export type TeamMemberStatus = "active" | "pending" | "disabled";
 
 export type AccountRoleId =
   | "owner"
-  | "admin"
   | "operations_supervisor"
   | "operations"
-  | "selection"
+  | "operations_assistant"
   | "designer"
-  | "ppc_manager"
-  | "listing_operator"
-  | "logistics_operator"
-  | "viewer";
+  | "warehouse"
+  | "warehouse_supervisor"
+  | "finance"
+  | "procurement";
 
 export type TeamAccountRecord = {
   id: string;
@@ -54,7 +53,7 @@ export const defaultTeamAccounts: TeamAccountRecord[] = [
     email: "selection.chen@example.local",
     department: "选品中心",
     title: "选品",
-    roleId: "selection",
+    roleId: "procurement",
     status: "active",
     lastActiveAt: "今天 09:10",
   },
@@ -118,13 +117,20 @@ export const teamRoleLabels: Record<ProductWorkflowRole, string> = {
 };
 
 export const accountRoleToWorkflowRole: Partial<Record<AccountRoleId, ProductWorkflowRole>> = {
-  admin: "operations_supervisor",
   operations_supervisor: "operations_supervisor",
   operations: "operations",
-  selection: "selection",
+  operations_assistant: "operations",
+  procurement: "selection",
   designer: "designer",
+};
+
+const legacyRoleMap: Record<string, AccountRoleId> = {
+  admin: "operations_supervisor",
+  selection: "procurement",
   ppc_manager: "operations",
-  listing_operator: "designer",
+  listing_operator: "operations",
+  logistics_operator: "warehouse",
+  viewer: "finance",
 };
 
 export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
@@ -142,7 +148,7 @@ export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
         email: String(account.email ?? ""),
         department: String(account.department ?? ""),
         title: String(account.title ?? ""),
-        roleId: account.roleId as AccountRoleId,
+        roleId: legacyRoleMap[String(account.roleId)] ?? (account.roleId as AccountRoleId),
         status: account.status === "disabled" || account.status === "pending" ? account.status : "active",
         lastActiveAt: account.lastActiveAt,
       } satisfies TeamAccountRecord;

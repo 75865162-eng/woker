@@ -291,9 +291,9 @@ export function ProductWorkbookDetailSections({
           <CardTitle>区域 5：关键词</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <KeywordBulkInput onApply={onKeywordsReplace} />
-          <div className="thin-scrollbar overflow-auto">
-            <table className="min-w-[680px] text-left text-xs">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,1fr)]">
+            <div className="thin-scrollbar overflow-auto">
+              <table className="min-w-[680px] text-left text-xs">
               <thead className="bg-surface-muted text-muted">
                 <tr>
                   <th className="px-2 py-2">关键词</th>
@@ -313,6 +313,8 @@ export function ProductWorkbookDetailSections({
                 ))}
               </tbody>
             </table>
+            </div>
+            <KeywordBulkInput onApply={onKeywordsReplace} />
           </div>
           <label className="block text-xs font-semibold text-muted">
             备注
@@ -831,10 +833,10 @@ function KeywordBulkInput({ onApply }: { onApply: (keywords: TrialKeywordRow[]) 
   }
 
   return (
-    <label className="block text-xs font-semibold text-muted">
+    <label className="flex h-full flex-col text-xs font-semibold text-muted">
       批量输入关键词
       <textarea
-        className="mt-1 min-h-28 w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
+        className="mt-1 min-h-[240px] flex-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
         value={value}
         placeholder={"espresso shot mirror 0.2 456 1879\nespresso mirror 0.49 1539 1155349\n\n或旧格式：\nespresso shot mirror\n0.63\n488\n1756622"}
         onChange={(event) => handleChange(event.target.value)}

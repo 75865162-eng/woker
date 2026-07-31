@@ -1,0 +1,109 @@
+import type {
+  ProductOperationProgress,
+  ProductOperationStage,
+  ProductOperationStageId,
+  ProductOperationStageStatus,
+} from "@/lib/products/types";
+
+export const operationStageDefinitions: Array<{ id: ProductOperationStageId; label: string }> = [
+  { id: "selection_data", label: "选品数据" },
+  { id: "sample_confirmation", label: "样品确认" },
+  { id: "backend_upload", label: "后台上传" },
+  { id: "system_entry", label: "系统录入" },
+  { id: "order", label: "下单" },
+  { id: "image_request", label: "图片需求" },
+  { id: "copywriting", label: "文案编写" },
+  { id: "design", label: "美工制作" },
+  { id: "final_sample_confirmation", label: "大货终样确认" },
+  { id: "shipping", label: "出货" },
+  { id: "keyword_research", label: "关键词调研，竞品分析" },
+  { id: "listing", label: "上架" },
+];
+
+export const operationStageStatusOptions: Array<{ value: ProductOperationStageStatus; label: string }> = [
+  { value: "not_started", label: "未开始" },
+  { value: "in_progress", label: "进行中" },
+  { value: "completed", label: "已完成" },
+  { value: "blocked", label: "受阻" },
+];
+
+export function createEmptyOperationsProgress(owner = ""): ProductOperationProgress {
+  return {
+    selectionDate: "",
+    orderQuantity: 0,
+    orderDate: "",
+    shipDate: "",
+    dailyAdBudget: 0,
+    forecastMonthlySales: 0,
+    forecastPrice: 0,
+    stages: operationStageDefinitions.map(({ id }) => createEmptyStage(id, owner)),
+    updatedAt: "",
+    updatedBy: "",
+    history: [],
+  };
+}
+
+export function normalizeOperationsProgress(value: ProductOperationProgress | undefined, owner = ""): ProductOperationProgress {
+  const fallback = createEmptyOperationsProgress(owner);
+  if (!value) return fallback;
+
+  const stagesById = new Map((value.stages ?? []).map((stage) => [stage.id, stage]));
+
+  return {
+    ...fallback,
+    ...value,
+    stages: operationStageDefinitions.map(({ id }) => ({
+      ...createEmptyStage(id, owner),
+      ...stagesById.get(id),
+      id,
+    })),
+    history: value.history ?? [],
+  };
+}
+
+export function calculateForecastMonthlyRevenue(progress: ProductOperationProgress) {
+  return progress.forecastMonthlySales * progress.forecastPrice;
+}
+
+export function hasIncompleteOperationsProgress(progress?: ProductOperationProgress) {
+  return Boolean(progress?.stages?.length && progress.stages.some((stage) => stage.status !== "completed"));
+}
+
+export function summarizeOperationsProgressChanges(before: ProductOperationProgress, after: ProductOperationProgress) {
+  const changes: string[] = [];
+  const scalarFields: Array<[keyof ProductOperationProgress, string]> = [
+    ["selectionDate", "入选日期"],
+    ["orderQuantity", "下单数量"],
+    ["orderDate", "下单日期"],
+    ["shipDate", "出货日期"],
+    ["dailyAdBudget", "广告日预算"],
+    ["forecastMonthlySales", "预估月销"],
+    ["forecastPrice", "预估售价"],
+  ];
+
+  scalarFields.forEach(([field, label]) => {
+    if (before[field] !== after[field]) changes.push(label);
+  });
+
+  operationStageDefinitions.forEach(({ id, label }) => {
+    const previous = before.stages.find((stage) => stage.id === id);
+    const next = after.stages.find((stage) => stage.id === id);
+    if (JSON.stringify(previous) !== JSON.stringify(next)) changes.push(label);
+  });
+
+  if (!changes.length) return "检查运营进度，无字段变更";
+  const visible = changes.slice(0, 6).join("、");
+  return changes.length > 6 ? `更新 ${visible} 等 ${changes.length} 项` : `更新 ${visible}`;
+}
+
+function createEmptyStage(id: ProductOperationStageId, owner: string): ProductOperationStage {
+  return {
+    id,
+    status: "not_started",
+    owner,
+    plannedAt: "",
+    completedAt: "",
+    note: "",
+    updatedAt: "",
+  };
+}

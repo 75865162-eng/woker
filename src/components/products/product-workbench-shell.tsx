@@ -1,4 +1,4 @@
-import { ImagePlus, RotateCcw, Search, X } from "lucide-react";
+﻿import { ImagePlus, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
@@ -22,6 +22,14 @@ export function ProductFiltersBar({
   onChange: (filters: ProductFilters) => void;
   onReset: () => void;
 }) {
+  const statusOptions = [
+    { value: "all", label: "全部状态" },
+    ...productStatusOptions,
+    { value: "design_in_progress", label: "美工处理中" },
+    { value: "operations_progress", label: "运营进程" },
+    { value: "overdue", label: "超期处理" },
+  ];
+
   return (
     <div className="rounded-lg border border-border bg-surface-muted p-3">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr_0.9fr_0.8fr_0.9fr_auto]">
@@ -40,8 +48,7 @@ export function ProductFiltersBar({
             value={filters.status}
             onChange={(event) => onChange({ ...filters, status: event.target.value as ProductFilters["status"] })}
           >
-            <option value="all">全部状态</option>
-            {productStatusOptions.map((option) => (
+            {statusOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -49,7 +56,7 @@ export function ProductFiltersBar({
           </select>
         </label>
         <div className="grid grid-cols-2 gap-2">
-          <LabeledInput label="采购价从" type="number" value={filters.minPrice} placeholder="5" onChange={(value) => onChange({ ...filters, minPrice: value })} />
+          <LabeledInput label="采购价格从" type="number" value={filters.minPrice} placeholder="5" onChange={(value) => onChange({ ...filters, minPrice: value })} />
           <LabeledInput label="到" type="number" value={filters.maxPrice} placeholder="10" onChange={(value) => onChange({ ...filters, maxPrice: value })} />
         </div>
         <div className="flex items-end gap-2">
@@ -96,7 +103,7 @@ export function ProductTable({
               <th className="w-[132px] px-3 py-3">流程截止</th>
               <th className="w-[170px] px-3 py-3">供应商名称</th>
               <th className="w-[170px] px-3 py-3">规格</th>
-              <th className="w-[100px] px-3 py-3">采购交期</th>
+              <th className="w-[100px] px-3 py-3">采购周期</th>
               <th className="w-[112px] px-3 py-3">创建日期</th>
               <th className="w-[160px] px-3 py-3">选品关键词</th>
               <th className="w-[160px] px-3 py-3">备注</th>

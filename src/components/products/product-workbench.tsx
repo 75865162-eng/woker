@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, Save, X } from "lucide-react";
@@ -27,6 +27,7 @@ import {
   productWorkflowStageLabels,
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
+import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
 
 import {
   initialFilters,
@@ -53,6 +54,7 @@ import {
 } from "./product-workbook-detail-sections";
 import { ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
+import { ProductOperationsProgress } from "./product-operations-progress";
 import {
   buildAmazonLink,
   calculateTrialPricing,
@@ -179,7 +181,17 @@ export function ProductWorkbench() {
       if (asin && !product.asin.toLowerCase().includes(asin) && !product.competitorAsins.join(" ").toLowerCase().includes(asin)) return false;
       if (supplierName && !product.supplierName.toLowerCase().includes(supplierName)) return false;
       if (filters.status === "overdue" && !isOverdueProduct(product)) return false;
-      if (filters.status !== "all" && filters.status !== "overdue" && product.status !== filters.status) return false;
+      if (filters.status === "design_in_progress" && product.status !== "design_in_progress") return false;
+      if (filters.status === "operations_progress" && !hasIncompleteOperationsProgress(product.operationsProgress)) return false;
+      if (
+        filters.status !== "all" &&
+        filters.status !== "overdue" &&
+        filters.status !== "design_in_progress" &&
+        filters.status !== "operations_progress" &&
+        product.status !== filters.status
+      ) {
+        return false;
+      }
       if (hasMinPrice && product.purchasePrice < minPrice) return false;
       if (hasMaxPrice && product.purchasePrice > maxPrice) return false;
 
@@ -201,9 +213,10 @@ export function ProductWorkbench() {
     }
   }, [page, pageCount]);
 
-  const listedCount = products.filter((product) => product.status === "listed").length;
   const developingCount = products.filter((product) => product.status === "developing").length;
   const opsReviewCount = products.filter((product) => product.status === "ops_review").length;
+  const designInProgressProducts = products.filter((product) => product.status === "design_in_progress");
+  const operationsProgressProducts = products.filter((product) => hasIncompleteOperationsProgress(product.operationsProgress));
   const overdueCount = products.filter(isOverdueProduct).length;
   const workflowOverdueCount = products.filter((product) => isProductWorkflowOverdue(product)).length;
 
@@ -251,7 +264,7 @@ export function ProductWorkbench() {
 
   function resetDemoData() {
     setProducts(initialProducts);
-    setActivityLog((current) => ["已恢复演示产品数据", ...current].slice(0, 8));
+    setActivityLog((current) => ["已恢复演示商品数据", ...current].slice(0, 8));
   }
 
   async function handleImportFile(file: File | undefined) {
@@ -280,7 +293,7 @@ export function ProductWorkbench() {
   return (
     <>
       <div className="space-y-5">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
           <SummaryTile
             label="全部商品"
             value={products.length.toLocaleString("zh-CN")}
@@ -302,11 +315,20 @@ export function ProductWorkbench() {
             onClick={() => setFilters((current) => ({ ...current, status: "ops_review" }))}
           />
           <SummaryTile
-            label="已上架"
-            value={listedCount.toLocaleString("zh-CN")}
-            tone="green"
-            active={filters.status === "listed"}
-            onClick={() => setFilters((current) => ({ ...current, status: "listed" }))}
+            label="美工处理中"
+            value={designInProgressProducts.length.toLocaleString("zh-CN")}
+            tone="blue"
+            active={filters.status === "design_in_progress"}
+            detail={formatSkuPreview(designInProgressProducts)}
+            onClick={() => setFilters((current) => ({ ...current, status: "design_in_progress" }))}
+          />
+          <SummaryTile
+            label="运营进程"
+            value={operationsProgressProducts.length.toLocaleString("zh-CN")}
+            tone="amber"
+            active={filters.status === "operations_progress"}
+            detail={formatSkuPreview(operationsProgressProducts)}
+            onClick={() => setFilters((current) => ({ ...current, status: "operations_progress" }))}
           />
           <SummaryTile
             label="超期处理"
@@ -326,7 +348,7 @@ export function ProductWorkbench() {
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>产品列表</CardTitle>
-              <p className="mt-1 text-xs font-medium text-muted">新增 SKU 默认待开发；创建超过 7 天且未上架/未取消的商品会自动进入超期处理。</p>
+              <p className="mt-1 text-xs font-medium text-muted">新增 SKU 默认待开发；创建超过 7 天且未上架、未取消的商品会自动进入超期处理。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <input
@@ -353,7 +375,7 @@ export function ProductWorkbench() {
               </Button>
               <Button size="sm" onClick={openNewProduct}>
                 <PackagePlus className="h-4 w-4" />
-                新增商品
+                鏂板鍟嗗搧
               </Button>
               <Button size="sm" onClick={() => setIsTrialEditorOpen(true)}>
                 <PackagePlus className="h-4 w-4" />
@@ -489,7 +511,7 @@ function TrialProductEditor({
               <CardTitle>试算商品标题</CardTitle>
             </CardHeader>
             <CardContent>
-              <LabeledInput label="试算商品名称" value={draft.title} placeholder="例如：交易卡展示架" onChange={(value) => setDraft((current) => ({ ...current, title: value }))} />
+              <LabeledInput label="试算商品名称" value={draft.title} placeholder="例如：交易卡展示" onChange={(value) => setDraft((current) => ({ ...current, title: value }))} />
             </CardContent>
           </Card>
 
@@ -501,7 +523,7 @@ function TrialProductEditor({
               <table className="min-w-[1760px] text-left text-xs">
                 <thead className="bg-surface-muted text-muted">
                   <tr>
-                    {["品名", "长cm", "宽cm", "高cm", "实际重Kg", "材积重Kg", "建议售价(USD)", "采购成本（RMB）", "FBA配送费$", "3.5% 的燃油和物流相关附加费（USD)", "海运单价（RMB）", "海运头程（RMB）", "佣金(USD)", "月仓储费(USD)", "汇率", "保本价(USD)", "海运毛利润(USD)", "海运毛利润率", "体积重量/磅", "重量/磅"].map((label) => (
+                    {["品名", "长 cm", "宽 cm", "高 cm", "实际重量 g", "材积重量 g", "建议售价(USD)", "采购成本(RMB)", "FBA配送费$", "3.5% 燃油及物流附加费(USD)", "海运单价(RMB)", "海运头程(RMB)", "佣金(USD)", "月仓储费(USD)", "汇率", "保本价(USD)", "海运毛利(USD)", "海运毛利率", "体积重量/", "重量/"].map((label) => (
                       <th key={label} className="px-2 py-2 font-bold">
                         {label}
                       </th>
@@ -577,7 +599,7 @@ function TrialProductEditor({
               <table className="min-w-[1420px] text-left text-xs">
                 <thead className="bg-surface-muted text-muted">
                   <tr>
-                    {["供应商产品链接", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "采购成本（100套）", "采购成本（300）", "开票信息", "备注"].map((label) => (
+                    {["供应商产品链路", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "采购成本(100套)", "采购成本(300)", "开票信息", "备注"].map((label) => (
                       <th key={label} className="px-2 py-2 font-bold">{label}</th>
                     ))}
                   </tr>
@@ -680,6 +702,7 @@ function ProductEditor({
   onSave: (draft: ProductDraft) => void;
 }) {
   const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products));
+  const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
 
   const isEditing = Boolean(product);
   const mainAmazonLink = buildAmazonLink(draft.asin);
@@ -690,6 +713,7 @@ function ProductEditor({
   const selectionOwner = draft.selectionOwner || (isEditing ? product?.selectionOwner : creatorName) || creatorName;
   const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
   const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
+  const showListingActions = draft.status === "listing_confirming" || draft.status === "listed";
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -701,6 +725,8 @@ function ProductEditor({
         ? "ops_confirming"
         : status === "design_in_progress"
           ? "design_in_progress"
+          : status === "listing_confirming"
+            ? "design_review"
           : status === "listed"
             ? "done"
             : status === "canceled" || status === "delisted" || status === "patent_risk"
@@ -804,7 +830,7 @@ function ProductEditor({
         }
 
         const nextRow = { ...row, [field]: value };
-        if (field === "type" && value !== "直接竞品") {
+        if (field === "type" && value !== "鐩存帴绔炲搧") {
           return {
             ...nextRow,
             negativePoint1: "",
@@ -833,7 +859,7 @@ function ProductEditor({
       competitors: [
         ...current.competitors,
         {
-          type: "直接竞品",
+          type: "鐩存帴绔炲搧",
           hotVariantImage: "",
           asin: "",
           sales30Days: "",
@@ -985,12 +1011,12 @@ function ProductEditor({
     }
 
     if (draft.status === "ops_review" && selectedOps.length === 0) {
-      window.alert("状态为运营确认中时，请至少选择一个运营负责人。");
+      window.alert("状态为运营确认时，请至少选择一位运营负责人。");
       return;
     }
 
     if (draft.status === "design_in_progress" && selectedDesigners.length === 0) {
-      window.alert("状态为美工处理中时，请至少选择一个美工负责人。");
+      window.alert("状态为美工处理中时，请至少选择一位美工负责人。");
       return;
     }
 
@@ -1008,7 +1034,7 @@ function ProductEditor({
                 : normalizedStage === "design_in_progress" || normalizedStage === "design_review"
                   ? formatAssigneeList(selectedDesigners)
                   : selectionOwner,
-            note: "创建商品并进入业务流程。",
+      note: "创建商品并进入业务流程。",
             createdAt: now,
           }),
         ];
@@ -1052,6 +1078,16 @@ function ProductEditor({
             <p className="mt-1 text-xs font-medium text-muted">保存后会回到产品列表，SKU 页面与新增页面使用同一套字段。</p>
           </div>
           <div className="flex gap-2">
+            {showListingActions ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setOperationsProgressOpen(true)}>
+                  杩愯惀杩涘害
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => window.alert("图片文案功能待接入。")}> 
+                  鍥剧墖鏂囨
+                </Button>
+              </>
+            ) : null}
             <Button variant="secondary" size="sm" onClick={onClose}>
               <X className="h-4 w-4" />
               取消
@@ -1068,11 +1104,11 @@ function ProductEditor({
             <Card>
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">图片</h3>
+                  <h3 className="text-lg font-bold text-foreground">鍥剧墖</h3>
                   <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
                     <ImagePlus className="h-8 w-8 text-brand" />
-                    <span className="mt-2 text-sm font-semibold text-foreground">上传图片</span>
-                    <span className="mt-1 text-xs text-muted">可上传 5-10 张，列表显示第一张</span>
+                    <span className="mt-2 text-sm font-semibold text-foreground">涓婁紶鍥剧墖</span>
+                    <span className="mt-1 text-xs text-muted">可上传 5-10 张，列表默认显示第一张。</span>
                     <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
                   </label>
                   <div className="mt-3 grid grid-cols-5 gap-2">
@@ -1081,10 +1117,10 @@ function ProductEditor({
                         key={`${image.slice(0, 24)}-${index}`}
                         className="relative aspect-square overflow-hidden rounded-md border border-border bg-surface-muted"
                         onClick={() => setDraft((current) => ({ ...current, images: current.images.filter((_, imageIndex) => imageIndex !== index) }))}
-                        title="点击移除"
+                        title="鐐瑰嚮绉婚櫎"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={image} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
+                        <img src={image} alt={`鍟嗗搧鍥剧墖 ${index + 1}`} className="h-full w-full object-contain p-1" />
                       </button>
                     ))}
                   </div>
@@ -1098,8 +1134,8 @@ function ProductEditor({
                   <LabeledInput label="英文名（必填）" value={draft.englishName} onChange={(value) => setField("englishName", value)} />
                   <LabeledInput label="主 ASIN" value={draft.asin} onChange={(value) => setField("asin", value)} />
                   <label className="text-xs font-semibold text-muted">
-                    状态
-                    <select
+                    ??
+                    ??
                       className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
                       value={draft.status}
                       onChange={(event) => updateStatus(event.target.value as ProductStatus)}
@@ -1119,11 +1155,11 @@ function ProductEditor({
                       onChange={(value) => setField("cancelReason", value)}
                     />
                   ) : null}
-                  <ReadonlyField label="选品负责人（创建人）" value={selectionOwner || "--"} />
-                  <MultiSelectField label="运营负责人（可多选）" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
-                  <MultiSelectField label="美工负责人（可多选）" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
+                  <ReadonlyField label="选品负责人" value={selectionOwner || "--"} />
+                  <MultiSelectField label="杩愯惀" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
+                  <MultiSelectField label="美工负责人" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
                   <ReadonlyField label="当前负责人" value={workflowAssignee || "--"} />
-                  <ReadonlyField label="流程截止" value={formatWorkflowDate(draft.workflowDueAt)} />
+                  <ReadonlyField label="娴佺▼鎴" value={formatWorkflowDate(draft.workflowDueAt)} />
                   <ReadonlyField label="创建日期（保存时生成）" value={draft.createdAt || "保存后自动生成"} />
                   <LabeledInput label="采购价格 CNY" type="number" value={String(draft.purchasePrice)} onChange={(value) => setField("purchasePrice", Number(value) || 0)} />
                   <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-3">
@@ -1131,7 +1167,7 @@ function ProductEditor({
                       <div>
                         <p className="text-sm font-bold text-foreground">业务流转</p>
                         <p className="mt-1 text-xs text-muted">
-                          {workflowOverdue ? "已超过 3 天未处理，需要提醒当前负责人。" : "每次流转会自动生成 3 天处理期限。"}
+                          {workflowOverdue ? "已超 3 天未处理，需要提醒当前负责人。" : "每次流转会自动生成 3 天处理期限。"}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1139,7 +1175,7 @@ function ProductEditor({
                           size="sm"
                           variant="secondary"
                           disabled={selectedOps.length === 0}
-                          onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "选品提交给运营确认。")}
+                          onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "选品提交给运营确认。")} 
                         >
                           <ArrowRight className="h-4 w-4" />
                           交给运营
@@ -1148,12 +1184,18 @@ function ProductEditor({
                           size="sm"
                           variant="secondary"
                           disabled={selectedDesigners.length === 0}
-                          onClick={() => moveWorkflow("design_in_progress", formatAssigneeList(selectedDesigners), "运营转交给美工处理。")}
+                          onClick={() => moveWorkflow("design_in_progress", formatAssigneeList(selectedDesigners), "运营转交给美工处理。")} 
                         >
                           <ArrowRight className="h-4 w-4" />
                           交给美工
                         </Button>
                         <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", workflowAssignee, "当前流程已完成。")}>
+                        {workflowStage === "design_in_progress" || workflowStage === "design_review" ? (
+                          <Button size="sm" variant="secondary" disabled={selectedOps.length === 0} onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "美工完成后转回运营。")}>
+                            <ArrowRight className="h-4 w-4" />
+                            转回运营
+                          </Button>
+                        ) : null}
                           <Save className="h-4 w-4" />
                           标记完成
                         </Button>
@@ -1181,6 +1223,24 @@ function ProductEditor({
                 </div>
               </CardContent>
             </Card>
+            <ProductWorkbookDetailSections
+              detail={workbookDetail}
+              onPricingChange={updateWorkbookPricingRow}
+              onPricingAdd={addWorkbookPricingRow}
+              onPricingRemove={removeWorkbookPricingRow}
+              onCompetitorChange={updateWorkbookCompetitor}
+              onCompetitorAdd={addWorkbookCompetitor}
+              onCompetitorRemove={removeWorkbookCompetitor}
+              onSupplierChange={updateWorkbookSupplier}
+              onSupplierAdd={addWorkbookSupplier}
+              onSupplierRemove={removeWorkbookSupplier}
+              onImprovementChange={updateWorkbookImprovement}
+              onImprovementRowChange={updateWorkbookImprovementRow}
+              onKeywordChange={updateWorkbookKeyword}
+              onKeywordsReplace={replaceWorkbookKeywords}
+              onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
+              onRemarkImagesChange={updateWorkbookRemarkImages}
+            />
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -1203,33 +1263,27 @@ function ProductEditor({
                 ))}
                 {(draft.workflowHistory ?? []).length === 0 ? (
                   <div className="rounded-md border border-border bg-surface-muted px-3 py-4 text-center text-sm text-muted">
-                    暂无流转记录，保存或点击流转按钮后会生成记录。
+                    暂无流程记录，保存或点击流转按钮后会生成记录。
                   </div>
                 ) : null}
               </CardContent>
             </Card>
-
-            <ProductWorkbookDetailSections
-              detail={workbookDetail}
-              onPricingChange={updateWorkbookPricingRow}
-              onPricingAdd={addWorkbookPricingRow}
-              onPricingRemove={removeWorkbookPricingRow}
-              onCompetitorChange={updateWorkbookCompetitor}
-              onCompetitorAdd={addWorkbookCompetitor}
-              onCompetitorRemove={removeWorkbookCompetitor}
-              onSupplierChange={updateWorkbookSupplier}
-              onSupplierAdd={addWorkbookSupplier}
-              onSupplierRemove={removeWorkbookSupplier}
-              onImprovementChange={updateWorkbookImprovement}
-              onImprovementRowChange={updateWorkbookImprovementRow}
-              onKeywordChange={updateWorkbookKeyword}
-              onKeywordsReplace={replaceWorkbookKeywords}
-              onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
-              onRemarkImagesChange={updateWorkbookRemarkImages}
-            />
           </section>
         </div>
       </div>
+      {operationsProgressOpen ? (
+        <ProductOperationsProgress
+          productName={draft.chineseName}
+          value={draft.operationsProgress}
+          currentUser={creatorName}
+          defaultOwner={formatAssigneeList(selectedOps) || selectionOwner}
+          onClose={() => setOperationsProgressOpen(false)}
+          onApply={(operationsProgress) => {
+            setDraft((current) => ({ ...current, operationsProgress }));
+            setOperationsProgressOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1239,12 +1293,14 @@ function SummaryTile({
   value,
   tone = "gray",
   active,
+  detail,
   onClick,
 }: {
   label: string;
   value: string;
   tone?: "gray" | "blue" | "green" | "amber" | "red";
   active?: boolean;
+  detail?: string;
   onClick?: () => void;
 }) {
   const toneClass = {
@@ -1257,15 +1313,24 @@ function SummaryTile({
 
   return (
     <button
-      className={`rounded-lg border bg-white p-4 text-left shadow-sm transition-colors hover:border-brand hover:bg-surface-muted ${
+      className={`flex min-h-[116px] flex-col rounded-lg border bg-white p-4 text-left shadow-sm transition-colors hover:border-brand hover:bg-surface-muted ${
         active ? "border-brand ring-2 ring-brand/15" : "border-border"
       }`}
       onClick={onClick}
     >
       <p className="text-xs font-semibold text-muted">{label}</p>
       <p className={`mt-2 text-2xl font-black metric-tabular ${toneClass}`}>{value}</p>
+      {detail ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted">{detail}</p> : null}
     </button>
   );
+}
+
+function formatSkuPreview(products: Product[], limit = 4) {
+  const skus = products.map((product) => product.sku).filter(Boolean);
+  if (!skus.length) return "暂无对应 SKU";
+
+  const visible = skus.slice(0, limit).join("、");
+  return skus.length > limit ? `SKU ${visible} 等 ${skus.length} 个` : `SKU ${visible}`;
 }
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
@@ -1389,11 +1454,10 @@ function Pagination({
       >
         {pageSizeOptions.map((option) => (
           <option key={option} value={option}>
-            {option}条/页
+            {option} 条 / 页
           </option>
         ))}
       </select>
     </div>
   );
 }
-

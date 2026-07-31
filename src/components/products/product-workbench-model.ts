@@ -6,7 +6,7 @@ export const pageSizeOptions = [20, 50, 100];
 export const emptySize: ProductSizeCm = { length: 0, width: 0, height: 0 };
 export const overdueThresholdDays = 7;
 
-export type ProductStatusFilter = "all" | "overdue" | ProductStatus;
+export type ProductStatusFilter = "all" | "overdue" | "design_in_progress" | "operations_progress" | ProductStatus;
 
 export type TrialPriceRow = {
   name: string;
