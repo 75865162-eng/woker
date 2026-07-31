@@ -1,4 +1,4 @@
-import type { ProductDraft, ProductSizeCm, ProductStatus } from "@/lib/products/types";
+﻿import type { ProductDraft, ProductSizeCm, ProductStatus } from "@/lib/products/types";
 
 export const storageKey = "amazon-bulk-ad-products-v2";
 export const trialStorageKey = "amazon-bulk-ad-trial-products-v1";
@@ -203,7 +203,7 @@ export const improvementColumns: Array<{ field: TrialImprovementCellKey; label: 
   { field: "accessories", label: "配件（搭配）" },
   { field: "packaging", label: "包装改进" },
   { field: "manual", label: "说明书" },
-  { field: "imageCopySuggestion", label: "文案/主/附图片建议" },
+  { field: "imageCopySuggestion", label: "文案/主图附图建议" },
   { field: "certification", label: "备注" },
 ];
 export const scalarImprovementFields: Array<Exclude<keyof TrialImprovement, "rows">> = [
@@ -235,3 +235,4 @@ export const peakSeasonLevels = [
   "bg-orange-500 text-white",
   "bg-red-600 text-white",
 ];
+

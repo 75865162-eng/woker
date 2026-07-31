@@ -5,7 +5,7 @@ import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, P
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { initialProducts, productStatusOptions } from "@/data/products";
+import { initialProducts, newProductStatusOptions, productStatusOptions } from "@/data/products";
 import {
   accountRosterStorageKey,
   accountsToTeamMembers,
@@ -52,6 +52,7 @@ import {
   getImprovementRow,
   getSupplierTextareaSize,
 } from "./product-workbook-detail-sections";
+import { ProductImageCopyGalleryModal } from "./product-image-copy-gallery-modal";
 import { ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
 import { ProductOperationsProgress } from "./product-operations-progress";
@@ -85,6 +86,7 @@ export function ProductWorkbench() {
   const [creatorName, setCreatorName] = useState("当前创建人");
   const opsOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["operations_supervisor", "operations"]), [teamMembers]);
   const designerOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["designer"]), [teamMembers]);
+  const newProductStatusValues = useMemo(() => new Set(newProductStatusOptions.map((option) => option.value)), []);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -232,8 +234,10 @@ export function ProductWorkbench() {
 
   function handleSaveProduct(draft: ProductDraft) {
     const existing = draft.id ? products.find((product) => product.id === draft.id) : null;
+    const normalizedStatus = existing || newProductStatusValues.has(draft.status) ? draft.status : "pending";
     const nextProduct: Product = {
       ...draft,
+      status: normalizedStatus,
       id: existing?.id ?? `prod-${draft.sku}`,
       sku: existing?.sku ?? draft.sku,
       createdAt: existing?.createdAt ?? formatDateTime(new Date()),
@@ -375,7 +379,7 @@ export function ProductWorkbench() {
               </Button>
               <Button size="sm" onClick={openNewProduct}>
                 <PackagePlus className="h-4 w-4" />
-                鏂板鍟嗗搧
+                新增商品
               </Button>
               <Button size="sm" onClick={() => setIsTrialEditorOpen(true)}>
                 <PackagePlus className="h-4 w-4" />
@@ -703,6 +707,7 @@ function ProductEditor({
 }) {
   const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products));
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
+  const [imageCopyGalleryOpen, setImageCopyGalleryOpen] = useState(false);
 
   const isEditing = Boolean(product);
   const mainAmazonLink = buildAmazonLink(draft.asin);
@@ -714,6 +719,7 @@ function ProductEditor({
   const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
   const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
   const showListingActions = draft.status === "listing_confirming" || draft.status === "listed";
+  const statusOptions = isEditing ? productStatusOptions : newProductStatusOptions;
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -830,7 +836,7 @@ function ProductEditor({
         }
 
         const nextRow = { ...row, [field]: value };
-        if (field === "type" && value !== "鐩存帴绔炲搧") {
+        if (field === "type" && value !== "直接竞品") {
           return {
             ...nextRow,
             negativePoint1: "",
@@ -859,7 +865,7 @@ function ProductEditor({
       competitors: [
         ...current.competitors,
         {
-          type: "鐩存帴绔炲搧",
+          type: "直接竞品",
           hotVariantImage: "",
           asin: "",
           sales30Days: "",
@@ -1081,10 +1087,10 @@ function ProductEditor({
             {showListingActions ? (
               <>
                 <Button variant="secondary" size="sm" onClick={() => setOperationsProgressOpen(true)}>
-                  杩愯惀杩涘害
+                  运营进度
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => window.alert("图片文案功能待接入。")}> 
-                  鍥剧墖鏂囨
+                <Button variant="secondary" size="sm" onClick={() => setImageCopyGalleryOpen(true)}>
+                  图片文案
                 </Button>
               </>
             ) : null}
@@ -1104,10 +1110,10 @@ function ProductEditor({
             <Card>
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">鍥剧墖</h3>
+                  <h3 className="text-lg font-bold text-foreground">图片</h3>
                   <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
                     <ImagePlus className="h-8 w-8 text-brand" />
-                    <span className="mt-2 text-sm font-semibold text-foreground">涓婁紶鍥剧墖</span>
+                    <span className="mt-2 text-sm font-semibold text-foreground">上传图片</span>
                     <span className="mt-1 text-xs text-muted">可上传 5-10 张，列表默认显示第一张。</span>
                     <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
                   </label>
@@ -1117,10 +1123,10 @@ function ProductEditor({
                         key={`${image.slice(0, 24)}-${index}`}
                         className="relative aspect-square overflow-hidden rounded-md border border-border bg-surface-muted"
                         onClick={() => setDraft((current) => ({ ...current, images: current.images.filter((_, imageIndex) => imageIndex !== index) }))}
-                        title="鐐瑰嚮绉婚櫎"
+                        title="点击移除"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={image} alt={`鍟嗗搧鍥剧墖 ${index + 1}`} className="h-full w-full object-contain p-1" />
+                        <img src={image} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
                       </button>
                     ))}
                   </div>
@@ -1134,13 +1140,13 @@ function ProductEditor({
                   <LabeledInput label="英文名（必填）" value={draft.englishName} onChange={(value) => setField("englishName", value)} />
                   <LabeledInput label="主 ASIN" value={draft.asin} onChange={(value) => setField("asin", value)} />
                   <label className="text-xs font-semibold text-muted">
-                    ??
-                    ??
+                    状态
+                    <select
                       className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
                       value={draft.status}
                       onChange={(event) => updateStatus(event.target.value as ProductStatus)}
                     >
-                      {productStatusOptions.map((option) => (
+                      {statusOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
@@ -1156,10 +1162,10 @@ function ProductEditor({
                     />
                   ) : null}
                   <ReadonlyField label="选品负责人" value={selectionOwner || "--"} />
-                  <MultiSelectField label="杩愯惀" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
+                  <MultiSelectField label="运营负责人" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
                   <MultiSelectField label="美工负责人" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
                   <ReadonlyField label="当前负责人" value={workflowAssignee || "--"} />
-                  <ReadonlyField label="娴佺▼鎴" value={formatWorkflowDate(draft.workflowDueAt)} />
+                  <ReadonlyField label="流程截止" value={formatWorkflowDate(draft.workflowDueAt)} />
                   <ReadonlyField label="创建日期（保存时生成）" value={draft.createdAt || "保存后自动生成"} />
                   <LabeledInput label="采购价格 CNY" type="number" value={String(draft.purchasePrice)} onChange={(value) => setField("purchasePrice", Number(value) || 0)} />
                   <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-3">
@@ -1282,6 +1288,13 @@ function ProductEditor({
             setDraft((current) => ({ ...current, operationsProgress }));
             setOperationsProgressOpen(false);
           }}
+        />
+      ) : null}
+      {imageCopyGalleryOpen ? (
+        <ProductImageCopyGalleryModal
+          sku={draft.sku}
+          productName={draft.chineseName}
+          onClose={() => setImageCopyGalleryOpen(false)}
         />
       ) : null}
     </div>
@@ -1461,3 +1474,4 @@ function Pagination({
     </div>
   );
 }
+
