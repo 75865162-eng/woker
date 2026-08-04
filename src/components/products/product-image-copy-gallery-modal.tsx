@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,6 @@ import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
 import type { ImagePreview } from "@/lib/listing-ai/workspace-draft";
 import {
   createEmptyProductImageCopyGallery,
-  getProductImageCopyGalleryStorageKey,
   normalizeProductImageCopyGallery,
   type ProductImageCopyGalleryDraft,
 } from "@/lib/products/image-copy-gallery";
@@ -44,10 +43,6 @@ export function ProductImageCopyGalleryModal({
   productName: string;
   onClose: () => void;
 }) {
-  const storageKey = useMemo(
-    () => getProductImageCopyGalleryStorageKey(sku),
-    [sku],
-  );
   const [draft, setDraft] = useState<ProductImageCopyGalleryDraft>(() =>
     createEmptyProductImageCopyGallery(),
   );
@@ -57,43 +52,78 @@ export function ProductImageCopyGalleryModal({
     imageIndex: number;
   } | null>(null);
   const [ready, setReady] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
-    try {
-      const saved = window.localStorage.getItem(storageKey);
-      const parsed = saved
-        ? (JSON.parse(saved) as Partial<ProductImageCopyGalleryDraft>)
-        : null;
-      if (!cancelled) {
-        setDraft(normalizeProductImageCopyGallery(parsed, 3));
-      }
-    } catch {
-      window.localStorage.removeItem(storageKey);
-      if (!cancelled) {
-        setDraft(createEmptyProductImageCopyGallery());
-      }
-    } finally {
-      if (!cancelled) {
-        setReady(true);
+    async function loadGallery() {
+      setReady(false);
+      setError("");
+
+      try {
+        const response = await fetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, { cache: "no-store" });
+        const data = (await response.json()) as { gallery?: Partial<ProductImageCopyGalleryDraft>; error?: string };
+
+        if (!response.ok) {
+          throw new Error(data.error || "图片文案草稿读取失败");
+        }
+
+        if (!cancelled) {
+          setDraft(normalizeProductImageCopyGallery(data.gallery, 3));
+        }
+      } catch (loadError) {
+        const message = loadError instanceof Error ? loadError.message : "图片文案草稿读取失败";
+        if (!cancelled) {
+          setError(message);
+          setDraft(createEmptyProductImageCopyGallery());
+        }
+      } finally {
+        if (!cancelled) {
+          setReady(true);
+        }
       }
     }
+
+    void loadGallery();
 
     return () => {
       cancelled = true;
     };
-  }, [storageKey]);
+  }, [sku]);
 
   useEffect(() => {
     if (!ready) return;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      setSaveStatus("saving");
+      fetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gallery: draft }),
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          const data = (await response.json()) as { error?: string };
+          if (!response.ok) {
+            throw new Error(data.error || "图片文案草稿保存失败");
+          }
+          setSaveStatus("saved");
+          setError("");
+        })
+        .catch((saveError) => {
+          if (controller.signal.aborted) return;
+          setSaveStatus("failed");
+          setError(saveError instanceof Error ? saveError.message : "图片文案草稿保存失败");
+        });
+    }, 500);
 
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(draft));
-    } catch {
-      window.localStorage.removeItem(storageKey);
-    }
-  }, [draft, ready, storageKey]);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [draft, ready, sku]);
 
   function updateImageNote(index: number, value: string) {
     setDraft((current) => {
@@ -271,6 +301,10 @@ export function ProductImageCopyGalleryModal({
             <p className="mt-1 text-xs font-medium text-muted">
               SKU {sku} {productName ? `· ${productName}` : ""}
             </p>
+            <p className="mt-1 text-xs font-semibold text-muted">
+              {ready ? saveStatus === "saving" ? "正在保存到数据库" : saveStatus === "failed" ? "保存失败" : "已连接数据库草稿" : "正在读取数据库草稿"}
+            </p>
+            {error ? <p className="mt-1 text-xs font-semibold text-danger">{error}</p> : null}
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={addCompetitorColumn}>
@@ -297,7 +331,7 @@ export function ProductImageCopyGalleryModal({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle>Competitor Images Gallery</CardTitle>
-              <p className="text-xs font-semibold text-muted">每个 SKU 独立保存</p>
+              <p className="text-xs font-semibold text-muted">每个 SKU 独立保存到数据库</p>
             </CardHeader>
             <CardContent className="p-0">
               <div className="max-h-[74vh] overflow-auto thin-scrollbar">

@@ -238,11 +238,9 @@ export function ProductTable({
 export function ActivityLogModal({
   entries,
   onClose,
-  onResetDemoData,
 }: {
   entries: string[];
   onClose: () => void;
-  onResetDemoData: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
@@ -266,9 +264,6 @@ export function ActivityLogModal({
           {!entries.length ? <div className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm text-muted">暂无处理记录</div> : null}
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
-          <Button variant="secondary" size="sm" onClick={onResetDemoData}>
-            恢复演示
-          </Button>
           <Button size="sm" onClick={onClose}>
             确定
           </Button>

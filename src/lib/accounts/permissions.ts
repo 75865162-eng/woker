@@ -35,6 +35,10 @@ export const routeModuleIds = permissionModules.flatMap((module) =>
 
 export const defaultRolePermissionMap: RolePermissionMap = {
   owner: createFullPermissions(),
+  database_admin: createPermissions(
+    ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules", "accounts", "settings"],
+    ["view", "create", "edit", "export"],
+  ),
   admin: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
   operations_manager: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
   operations_supervisor: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
@@ -53,7 +57,7 @@ export const defaultRolePermissionMap: RolePermissionMap = {
   listing_operator: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
   logistics_specialist: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
   logistics_operator: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  viewer: createPermissions(["workspace", "products", "listingAi", "logistics"], ["view"]),
+  viewer: {},
 };
 
 export function allActions() {

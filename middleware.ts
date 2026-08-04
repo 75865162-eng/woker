@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
+import { getAuthDriver, publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
 import {
   getModuleIdForPath,
   parseRolePermissionsCookie,
   roleCanAccessModule,
-  roleHasAnyPage,
   rolePermissionsCookieName,
 } from "@/lib/accounts/permissions";
 
@@ -43,9 +42,9 @@ async function hasValidSessionCookie(request: NextRequest) {
   }
 
   try {
-    const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as { expiresAt?: string };
+    const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as { driver?: "database" | "local"; expiresAt?: string };
 
-    return Boolean(parsed.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now());
+    return Boolean(parsed.driver === getAuthDriver() && parsed.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now());
   } catch {
     return false;
   }
@@ -89,7 +88,7 @@ export async function middleware(request: NextRequest) {
       const role = parseSessionRole(request);
       const rolePermissions = parseRolePermissionsCookie(request.cookies.get(rolePermissionsCookieName)?.value);
       const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
-      const canOpenRequestedPage = pathname === "/" ? roleHasAnyPage(role, rolePermissions) : roleCanAccessModule(role, moduleId, rolePermissions);
+      const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, rolePermissions);
 
       if (!canOpenRequestedPage) {
         return NextResponse.redirect(new URL("/forbidden", request.url));

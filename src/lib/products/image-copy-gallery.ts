@@ -12,13 +12,6 @@ export type ProductImageCopyGalleryDraft = {
   mineImages: ImagePreview[];
 };
 
-export const productImageCopyGalleryStoragePrefix =
-  "amazon-bulk-ad-product-image-copy-gallery-v1";
-
-export function getProductImageCopyGalleryStorageKey(sku: string) {
-  return `${productImageCopyGalleryStoragePrefix}:${sku.trim().toUpperCase()}`;
-}
-
 export function createEmptyProductImageCopyGallery(
   competitorCount = 3,
 ): ProductImageCopyGalleryDraft {

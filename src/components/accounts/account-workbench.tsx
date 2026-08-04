@@ -31,7 +31,7 @@ import {
   type PermissionAction,
   type RolePermissionMap,
 } from "@/lib/accounts/permissions";
-import { accountRosterStorageKey, defaultTeamAccounts, normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
+import { normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
 
 type AccountStatus = "active" | "pending" | "disabled";
 type RoleId = AccountRoleId;
@@ -63,6 +63,16 @@ const initialRoles: Role[] = [
     description: "全局配置、账号、权限与审计管理",
     memberCount: 1,
     permissions: createFullPermissions(),
+  },
+  {
+    id: "database_admin",
+    name: "数据库管理员",
+    description: "维护账号、权限、系统设置和数据治理，不默认拥有业务审批权",
+    memberCount: 0,
+    permissions: createPermissions(
+      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules", "accounts", "settings"],
+      ["view", "create", "edit", "export"],
+    ),
   },
   {
     id: "operations_supervisor",
@@ -136,69 +146,6 @@ const initialRoles: Role[] = [
   },
 ];
 
-const initialAccounts: Account[] = [
-  {
-    id: "local-admin",
-    name: "Local Admin",
-    email: "1",
-    department: "系统管理",
-    title: "本地引导管理员",
-    roleId: "owner",
-    status: "active",
-    lastActiveAt: "当前登录账号",
-  },
-  {
-    id: "u-001",
-    name: "张伟",
-    email: "zhangwei@example.local",
-    department: "广告中心",
-    title: "广告主管",
-    roleId: "operations",
-    status: "active",
-    lastActiveAt: "今天 09:42",
-  },
-  {
-    id: "u-002",
-    name: "李娜",
-    email: "lina@example.local",
-    department: "采购中心",
-    title: "运营主管",
-    roleId: "operations_supervisor",
-    status: "active",
-    lastActiveAt: "今天 10:16",
-  },
-  {
-    id: "u-003",
-    name: "陈晨",
-    email: "chenchen@example.local",
-    department: "Listing 组",
-    title: "Listing 专员",
-    roleId: "operations",
-    status: "pending",
-    lastActiveAt: "待首次登录",
-  },
-  {
-    id: "u-004",
-    name: "王敏",
-    email: "wangmin@example.local",
-    department: "物流中心",
-    title: "物流专员",
-    roleId: "warehouse",
-    status: "active",
-    lastActiveAt: "昨天 18:03",
-  },
-  {
-    id: "u-005",
-    name: "赵宁",
-    email: "zhaoning@example.local",
-    department: "财务协同",
-    title: "只读审阅",
-    roleId: "finance",
-    status: "disabled",
-    lastActiveAt: "2026-07-18",
-  },
-];
-
 const statusLabels: Record<AccountStatus, string> = {
   active: "在线",
   pending: "待激活",
@@ -213,8 +160,8 @@ const statusTones: Record<AccountStatus, "green" | "amber" | "gray"> = {
 
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
-const rolePermissionsStorageKey = "amazon-bulk-ad-role-permissions";
 const teamMembersApiPath = "/api/accounts/team-members";
+const rolePermissionsApiPath = "/api/accounts/role-permissions";
 
 function getFallbackPassword(accountId: string) {
   return accountId === "local-admin" ? "1" : "12345678";
@@ -227,35 +174,6 @@ function withAccountPassword(account: Account): Account {
   };
 }
 
-function getSavedAccountPasswords() {
-  if (typeof window === "undefined") return new Map<string, string>();
-
-  try {
-    const saved = window.localStorage.getItem(accountRosterStorageKey);
-    if (!saved) return new Map<string, string>();
-
-    return new Map(
-      normalizeTeamAccounts(JSON.parse(saved))
-        .map((account) => account as Account)
-        .filter((account): account is Account & { password: string } => Boolean(account.password))
-        .map((account) => [account.id, account.password] as const),
-    );
-  } catch {
-    return new Map<string, string>();
-  }
-}
-
-function mergeAccountsWithLocalPasswords(accounts: Account[]) {
-  const savedPasswords = getSavedAccountPasswords();
-
-  return accounts.map((account) =>
-    withAccountPassword({
-      ...account,
-      password: savedPasswords.get(account.id) ?? account.password,
-    }),
-  );
-}
-
 function stripAccountPasswords(accounts: Account[]) {
   return accounts.map((account) => {
     const record = { ...account };
@@ -264,38 +182,16 @@ function stripAccountPasswords(accounts: Account[]) {
   });
 }
 
-function loadInitialAccounts() {
-  const fallbackAccounts = defaultTeamAccounts.length ? (defaultTeamAccounts as Account[]) : initialAccounts;
-
-  if (typeof window === "undefined") return fallbackAccounts.map(withAccountPassword);
-
-  const saved = window.localStorage.getItem(accountRosterStorageKey);
-  if (!saved) return fallbackAccounts.map(withAccountPassword);
-
-  try {
-    const accounts = normalizeTeamAccounts(JSON.parse(saved));
-    return accounts.length
-      ? mergeAccountsWithLocalPasswords(accounts.map((account) => ({
-          ...account,
-          lastActiveAt: account.lastActiveAt ?? "未记录",
-        })) as Account[])
-      : fallbackAccounts.map(withAccountPassword);
-  } catch {
-    window.localStorage.removeItem(accountRosterStorageKey);
-    return fallbackAccounts.map(withAccountPassword);
-  }
-}
-
 async function loadAccountsFromApi() {
   try {
     const response = await fetch(teamMembersApiPath, { cache: "no-store" });
     if (!response.ok) return null;
 
     const payload = (await response.json()) as { accounts?: unknown };
-    return mergeAccountsWithLocalPasswords(normalizeTeamAccounts(payload.accounts).map((account) => ({
+    return normalizeTeamAccounts(payload.accounts).map((account) => withAccountPassword({
       ...account,
       lastActiveAt: account.lastActiveAt ?? "未记录",
-    })) as Account[]);
+    })) as Account[];
   } catch {
     return null;
   }
@@ -315,8 +211,32 @@ async function saveAccountsToApi(accounts: Account[]) {
   }
 }
 
+async function loadRolePermissionsFromApi() {
+  try {
+    const response = await fetch(rolePermissionsApiPath, { cache: "no-store" });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { permissions?: RolePermissionMap };
+    return payload.permissions ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveRolePermissionsToApi(permissions: RolePermissionMap) {
+  const response = await fetch(rolePermissionsApiPath, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ permissions }),
+  });
+
+  return response.ok;
+}
+
 export function AccountWorkbench() {
-  const [accounts, setAccounts] = useState<Account[]>(loadInitialAccounts);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [roles, setRoles] = useState(initialRoles);
   const [activeRoleId, setActiveRoleId] = useState<RoleId>("operations");
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
@@ -325,7 +245,6 @@ export function AccountWorkbench() {
   const [passwordAccount, setPasswordAccount] = useState<Account | null>(null);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [permissionSavedAt, setPermissionSavedAt] = useState("");
-  const [rosterHydrated, setRosterHydrated] = useState(false);
   const visibleRoles = useMemo(
     () =>
       roles.map((role) => ({
@@ -342,13 +261,10 @@ export function AccountWorkbench() {
       if (canceled) return;
 
       if (!apiAccounts?.length) {
-        setRosterHydrated(true);
         return;
       }
 
       setAccounts(apiAccounts);
-      window.localStorage.setItem(accountRosterStorageKey, JSON.stringify(apiAccounts));
-      setRosterHydrated(true);
     });
 
     return () => {
@@ -357,26 +273,23 @@ export function AccountWorkbench() {
   }, []);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(rolePermissionsStorageKey);
-    if (!saved) return;
+    let canceled = false;
 
-    try {
-      const savedRolePermissions = JSON.parse(saved) as RolePermissionMap;
+    void loadRolePermissionsFromApi().then((savedRolePermissions) => {
+      if (canceled || !savedRolePermissions) return;
+
       setRoles((current) =>
         current.map((role) => ({
           ...role,
           permissions: savedRolePermissions[role.id] ?? role.permissions,
         })),
       );
-    } catch {
-      window.localStorage.removeItem(rolePermissionsStorageKey);
-    }
-  }, []);
+    });
 
-  useEffect(() => {
-    if (!rosterHydrated) return;
-    window.localStorage.setItem(accountRosterStorageKey, JSON.stringify(accounts));
-  }, [accounts, rosterHydrated]);
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   const activeRole = visibleRoles.find((role) => role.id === activeRoleId) ?? visibleRoles[0];
 
@@ -404,7 +317,6 @@ export function AccountWorkbench() {
   function commitAccounts(updater: (current: Account[]) => Account[]) {
     setAccounts((current) => {
       const next = updater(current);
-      window.localStorage.setItem(accountRosterStorageKey, JSON.stringify(next));
       void saveAccountsToApi(next);
       return next;
     });
@@ -474,13 +386,13 @@ export function AccountWorkbench() {
     );
   }
 
-  function saveRolePermissions() {
+  async function saveRolePermissions() {
     const rolePermissionMap = Object.fromEntries(roles.map((role) => [role.id, role.permissions])) as RolePermissionMap;
     const serialized = JSON.stringify(rolePermissionMap);
+    const savedToApi = await saveRolePermissionsToApi(rolePermissionMap);
 
-    window.localStorage.setItem(rolePermissionsStorageKey, serialized);
     document.cookie = `${rolePermissionsCookieName}=${encodeURIComponent(serialized)}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
-    setPermissionSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+    setPermissionSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi ? "" : "（仅本机）"}`);
     window.setTimeout(() => window.location.reload(), 250);
   }
 

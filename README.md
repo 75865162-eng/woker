@@ -6,6 +6,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+For a local database restore, create the bootstrap super account after migrations:
+
+```bash
+npm run db:seed-admin
+```
+
+The development bootstrap account follows `.env.example`: account `1`, password `1`. Change `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` before real company use.
+
 First, run the development server:
 
 ```bash

@@ -7,7 +7,7 @@ import { Boxes, Home, ImageUp, LogOut, PackageSearch, SearchCheck, Settings, Sli
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getModuleIdForPath, roleCanAccessModule, roleHasAnyPage, type RolePermissionMap } from "@/lib/accounts/permissions";
+import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -48,9 +48,8 @@ export function AppShellClient({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const canAccessAnyPage = roleHasAnyPage(userRole, rolePermissions);
   const visibleNavItems = navItems.filter((item) => {
-    if (item.href === "/") return canAccessAnyPage;
+    if (item.href === "/") return true;
 
     return roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href), rolePermissions);
   });

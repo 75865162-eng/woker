@@ -2,6 +2,8 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import { getAuthDriver, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
+import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
+import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 
 type SessionPayload = {
   driver?: "database" | "local";
@@ -93,6 +95,17 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
     path: "/",
   });
 
+  if (sessionUser?.organizationId) {
+    const rolePermissions = await getOrganizationRolePermissions(sessionUser.organizationId);
+
+    cookieStore.set(rolePermissionsCookieName, encodeURIComponent(JSON.stringify(rolePermissions)), {
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
+  }
+
   return session;
 }
 
@@ -132,6 +145,7 @@ export async function destroyCurrentSession() {
   }
 
   cookieStore.delete(sessionCookieName);
+  cookieStore.delete(rolePermissionsCookieName);
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | undefined> {
@@ -139,6 +153,10 @@ export async function getCurrentUser(): Promise<CurrentUser | undefined> {
   const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
 
   if (!payload || new Date(payload.expiresAt).getTime() <= Date.now()) {
+    return undefined;
+  }
+
+  if (payload.driver !== getAuthDriver()) {
     return undefined;
   }
 
@@ -193,6 +211,10 @@ export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | un
   const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
 
   if (!payload || new Date(payload.expiresAt).getTime() <= Date.now()) {
+    return undefined;
+  }
+
+  if (payload.driver !== getAuthDriver()) {
     return undefined;
   }
 

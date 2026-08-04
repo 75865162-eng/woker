@@ -8,7 +8,7 @@
     "start": "node scripts/next-run.mjs .next-build start",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed-admin": "node scripts/seed-admin.mjs",
+    "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "lint": "eslint"
   },

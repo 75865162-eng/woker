@@ -20,6 +20,7 @@ enum TeamAccountStatus {
 enum OrganizationRole {
   owner
   admin
+  database_admin
   operations_manager
   ppc_specialist
   listing_specialist
@@ -55,6 +56,7 @@ model Organization {
   updatedAt   DateTime             @updatedAt
   members     OrganizationMember[]
   teamRoster  TeamRosterMember[]
+  rolePermissions OrganizationRolePermission?
   auditLogs   AuditLog[]
 }
 
@@ -106,6 +108,14 @@ model TeamRosterMember {
   @@index([organizationId, sortOrder])
   @@index([organizationId, roleId])
   @@index([organizationId, status])
+}
+
+model OrganizationRolePermission {
+  organizationId String   @id
+  permissions    Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model UserSession {
@@ -195,4 +205,32 @@ model ExportRecord {
   @@index([organizationId, createdAt])
   @@index([userId, createdAt])
   @@index([fileId])
+}
+
+model ProductRecord {
+  id             String   @id
+  organizationId String
+  userId         String
+  sku            String
+  payload        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, updatedAt])
+  @@index([userId, updatedAt])
+}
+
+model ProductImageCopyGalleryRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  sku            String
+  payload        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, updatedAt])
+  @@index([userId, updatedAt])
 }

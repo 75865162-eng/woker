@@ -4,6 +4,7 @@ export type TeamMemberStatus = "active" | "pending" | "disabled";
 
 export type AccountRoleId =
   | "owner"
+  | "database_admin"
   | "operations_supervisor"
   | "operations"
   | "operations_assistant"
@@ -37,81 +38,6 @@ export type TeamMember = {
   status: TeamMemberStatus;
 };
 
-export const accountRosterStorageKey = "amazon-bulk-ad-accounts-v1";
-
-export const defaultTeamAccounts: TeamAccountRecord[] = [
-  {
-    id: "local-admin",
-    name: "Local Admin",
-    email: "1",
-    department: "系统管理",
-    title: "系统管理员",
-    roleId: "owner",
-    status: "active",
-    lastActiveAt: "当前登录账号",
-  },
-  {
-    id: "u-selection-001",
-    name: "陈选品",
-    email: "selection.chen@example.local",
-    department: "选品中心",
-    title: "选品",
-    roleId: "procurement",
-    status: "active",
-    lastActiveAt: "今天 09:10",
-  },
-  {
-    id: "u-ops-manager-001",
-    name: "李主管",
-    email: "ops.manager.li@example.local",
-    department: "运营中心",
-    title: "运营主管",
-    roleId: "operations_supervisor",
-    status: "active",
-    lastActiveAt: "今天 09:42",
-  },
-  {
-    id: "u-ops-001",
-    name: "张运营",
-    email: "ops.zhang@example.local",
-    department: "运营中心",
-    title: "运营",
-    roleId: "operations",
-    status: "active",
-    lastActiveAt: "今天 10:16",
-  },
-  {
-    id: "u-ops-002",
-    name: "周运营",
-    email: "ops.zhou@example.local",
-    department: "运营中心",
-    title: "运营",
-    roleId: "operations",
-    status: "active",
-    lastActiveAt: "昨天 18:03",
-  },
-  {
-    id: "u-designer-001",
-    name: "林美工",
-    email: "designer.lin@example.local",
-    department: "设计中心",
-    title: "美工",
-    roleId: "designer",
-    status: "active",
-    lastActiveAt: "今天 11:20",
-  },
-  {
-    id: "u-designer-002",
-    name: "赵美工",
-    email: "designer.zhao@example.local",
-    department: "设计中心",
-    title: "美工",
-    roleId: "designer",
-    status: "pending",
-    lastActiveAt: "待首次登录",
-  },
-];
-
 export const teamRoleLabels: Record<ProductWorkflowRole, string> = {
   selection: "选品",
   operations_supervisor: "运营主管",
@@ -129,6 +55,7 @@ export const accountRoleToWorkflowRole: Partial<Record<AccountRoleId, ProductWor
 
 const legacyRoleMap: Record<string, AccountRoleId> = {
   admin: "operations_supervisor",
+  database_admin: "database_admin",
   selection: "procurement",
   ppc_manager: "operations",
   listing_operator: "operations",

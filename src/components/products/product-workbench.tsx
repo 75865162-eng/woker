@@ -5,12 +5,10 @@ import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, P
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { initialProducts, newProductStatusOptions, productStatusOptions } from "@/data/products";
+import { newProductStatusOptions, productStatusOptions } from "@/data/products";
 import {
-  accountRosterStorageKey,
   accountsToTeamMembers,
   type AccountRoleId,
-  defaultTeamAccounts,
   filterTeamMembersByRoles,
   normalizeTeamAccounts,
   type TeamAccountRecord,
@@ -35,9 +33,7 @@ import {
   initialFilters,
   pageSizeOptions,
   scalarImprovementFields,
-  storageKey,
   supplierFields,
-  trialStorageKey,
   type ProductEditorDraft,
   type ProductFilters,
   type TrialCompetitorRow,
@@ -66,15 +62,14 @@ import {
 } from "./product-workbench-utils";
 import {
   createTrialProductDraft,
-  hydrateProductFromExcelSeed,
   parseProductWorkbookFile,
   productToDraft,
   trialImprovementLabels,
 } from "./product-workbench-data";
 
 export function ProductWorkbench() {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [trialProducts, setTrialProducts] = useState<TrialProductDraft[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
   const [filters, setFilters] = useState<ProductFilters>(initialFilters);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -82,7 +77,9 @@ export function ProductWorkbench() {
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已就绪"]);
+  const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
   const [creatorName, setCreatorName] = useState("当前创建人");
@@ -109,67 +106,57 @@ export function ProductWorkbench() {
     let canceled = false;
 
     async function loadTeamAccounts() {
-      const [apiAccounts, localAccounts] = await Promise.all([loadTeamAccountsFromApi(), Promise.resolve(loadTeamAccountsFromLocalStorage())]);
+      const apiAccounts = await loadTeamAccountsFromApi();
       if (canceled) return;
 
-      setTeamAccounts(mergeTeamAccounts(apiAccounts, localAccounts));
+      setTeamAccounts(apiAccounts);
     }
 
     void loadTeamAccounts();
 
-    function handleStorage(event: StorageEvent) {
-      if (event.key === accountRosterStorageKey) {
-        void loadTeamAccounts();
-      }
-    }
-
-    window.addEventListener("storage", handleStorage);
-
     return () => {
       canceled = true;
-      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(storageKey);
-    if (!saved) {
-      return;
-    }
+    let canceled = false;
 
-    try {
-      const parsed = JSON.parse(saved) as Product[];
-      if (Array.isArray(parsed)) {
-        setProducts(parsed.map(hydrateProductFromExcelSeed));
+    async function loadProducts() {
+      setProductsLoading(true);
+      setProductsError("");
+
+      try {
+        const response = await fetch("/api/products", { cache: "no-store" });
+        const data = (await response.json()) as { products?: Product[]; error?: string };
+
+        if (!response.ok) {
+          throw new Error(data.error || "商品数据读取失败");
+        }
+
+        if (!canceled) {
+          setProducts(Array.isArray(data.products) ? data.products : []);
+          setActivityLog((current) => ["已从数据库读取商品数据", ...current].slice(0, 8));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "商品数据读取失败";
+        if (!canceled) {
+          setProductsError(message);
+          setActivityLog((current) => [`商品数据读取失败：${message}`, ...current].slice(0, 8));
+        }
+      } finally {
+        if (!canceled) {
+          setProductsLoading(false);
+        }
       }
-    } catch {
-      setActivityLog((current) => ["本地产品数据读取失败，已使用演示数据", ...current]);
     }
+
+    void loadProducts();
+
+    return () => {
+      canceled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem(trialStorageKey);
-    if (!saved) {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as TrialProductDraft[];
-      if (Array.isArray(parsed)) {
-        setTrialProducts(parsed);
-      }
-    } catch {
-      setActivityLog((current) => ["试算商品数据读取失败，已跳过本地缓存", ...current]);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    window.localStorage.setItem(trialStorageKey, JSON.stringify(trialProducts));
-  }, [trialProducts]);
 
   const filteredProducts = useMemo(() => {
     const minPrice = Number(filters.minPrice);
@@ -247,7 +234,22 @@ export function ProductWorkbench() {
     setIsEditorOpen(true);
   }
 
-  function handleSaveProduct(draft: ProductDraft) {
+  async function persistProduct(product: Product) {
+    const response = await fetch("/api/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product }),
+    });
+    const data = (await response.json()) as { product?: Product; error?: string };
+
+    if (!response.ok || !data.product) {
+      throw new Error(data.error || "商品保存失败");
+    }
+
+    return data.product;
+  }
+
+  async function handleSaveProduct(draft: ProductDraft) {
     const existing = draft.id ? products.find((product) => product.id === draft.id) : null;
     const normalizedStatus = existing || newProductStatusValues.has(draft.status) ? draft.status : "pending";
     const nextProduct: Product = {
@@ -258,16 +260,23 @@ export function ProductWorkbench() {
       createdAt: existing?.createdAt ?? formatDateTime(new Date()),
     };
 
-    setProducts((current) => {
-      if (existing) {
-        return current.map((product) => (product.id === existing.id ? nextProduct : product));
-      }
+    try {
+      const savedProduct = await persistProduct(nextProduct);
+      setProducts((current) => {
+        if (existing) {
+          return current.map((product) => (product.id === existing.id ? savedProduct : product));
+        }
 
-      return [nextProduct, ...current];
-    });
-    setActiveProductId(nextProduct.id);
-    setIsEditorOpen(false);
-    setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${nextProduct.sku}`, ...current].slice(0, 8));
+        return [savedProduct, ...current];
+      });
+      setActiveProductId(savedProduct.id);
+      setIsEditorOpen(false);
+      setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "商品保存失败";
+      window.alert(message);
+      setActivityLog((current) => [`商品保存失败：${message}`, ...current].slice(0, 8));
+    }
   }
 
   function handleSaveTrialProduct(draft: TrialProductDraft) {
@@ -279,11 +288,6 @@ export function ProductWorkbench() {
     setTrialProducts((current) => [nextTrialProduct, ...current]);
     setIsTrialEditorOpen(false);
     setActivityLog((current) => [`新增试算商品 ${nextTrialProduct.title || nextTrialProduct.pricingRows[0]?.name || "未命名"}`, ...current].slice(0, 8));
-  }
-
-  function resetDemoData() {
-    setProducts(initialProducts);
-    setActivityLog((current) => ["已恢复演示商品数据", ...current].slice(0, 8));
   }
 
   async function handleImportFile(file: File | undefined) {
@@ -298,10 +302,11 @@ export function ProductWorkbench() {
         selectionOwner: creatorName,
         developer: "",
       };
-      setProducts((current) => [importedWithOwner, ...current]);
-      setActiveProductId(importedWithOwner.id);
+      const savedProduct = await persistProduct(importedWithOwner);
+      setProducts((current) => [savedProduct, ...current.filter((product) => product.sku !== savedProduct.sku)]);
+      setActiveProductId(savedProduct.id);
       setIsEditorOpen(true);
-      setActivityLog((current) => [`已导入 ${file.name}`, ...current].slice(0, 8));
+      setActivityLog((current) => [`已导入 ${file.name} 并保存到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "导入失败";
       window.alert(message);
@@ -312,6 +317,12 @@ export function ProductWorkbench() {
   return (
     <>
       <div className="space-y-5">
+        {productsError ? (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{productsError}</div>
+        ) : null}
+        {productsLoading ? (
+          <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
+        ) : null}
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
           <SummaryTile
             label="全部商品"
@@ -417,7 +428,7 @@ export function ProductWorkbench() {
         </Card>
 
         {isActivityLogOpen ? (
-          <ActivityLogModal entries={activityLog} onClose={() => setIsActivityLogOpen(false)} onResetDemoData={resetDemoData} />
+          <ActivityLogModal entries={activityLog} onClose={() => setIsActivityLogOpen(false)} />
         ) : null}
 
         {isEditorOpen ? (
@@ -1428,28 +1439,6 @@ async function loadTeamAccountsFromApi() {
   } catch {
     return [];
   }
-}
-
-function loadTeamAccountsFromLocalStorage() {
-  try {
-    const saved = window.localStorage.getItem(accountRosterStorageKey);
-    if (!saved) return defaultTeamAccounts;
-
-    const accounts = normalizeTeamAccounts(JSON.parse(saved));
-    return accounts.length ? accounts : defaultTeamAccounts;
-  } catch {
-    return defaultTeamAccounts;
-  }
-}
-
-function mergeTeamAccounts(...groups: TeamAccountRecord[][]) {
-  const merged = new Map<string, TeamAccountRecord>();
-
-  groups.flat().forEach((account) => {
-    merged.set(account.id, account);
-  });
-
-  return Array.from(merged.values());
 }
 
 function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[]) {

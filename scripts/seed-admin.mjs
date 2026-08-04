@@ -36,8 +36,8 @@ const organizationSlug = process.env.BOOTSTRAP_ORG_SLUG || slugify(organizationN
 const adminEmail = requiredEnv("BOOTSTRAP_ADMIN_EMAIL").trim().toLowerCase();
 const adminPassword = requiredEnv("BOOTSTRAP_ADMIN_PASSWORD");
 
-if (adminPassword.length < 10 || adminPassword === "change-me-now") {
-  throw new Error("BOOTSTRAP_ADMIN_PASSWORD must be changed and contain at least 10 characters.");
+if (process.env.NODE_ENV === "production" && adminPassword.length < 10) {
+  throw new Error("BOOTSTRAP_ADMIN_PASSWORD must contain at least 10 characters in production.");
 }
 
 const organization = await prisma.organization.upsert({
@@ -49,19 +49,20 @@ const organization = await prisma.organization.upsert({
   },
 });
 
-const existingUser = await prisma.user.findUnique({
+const user = await prisma.user.upsert({
   where: { email: adminEmail },
+  update: {
+    name: "Super Admin",
+    passwordHash: hashPassword(adminPassword),
+    status: "active",
+  },
+  create: {
+    email: adminEmail,
+    name: "Super Admin",
+    passwordHash: hashPassword(adminPassword),
+    status: "active",
+  },
 });
-
-const user =
-  existingUser ??
-  (await prisma.user.create({
-    data: {
-      email: adminEmail,
-      name: "System Admin",
-      passwordHash: hashPassword(adminPassword),
-    },
-  }));
 
 await prisma.organizationMember.upsert({
   where: {
@@ -77,6 +78,37 @@ await prisma.organizationMember.upsert({
     organizationId: organization.id,
     userId: user.id,
     role: "owner",
+  },
+});
+
+await prisma.teamRosterMember.upsert({
+  where: {
+    organizationId_id: {
+      organizationId: organization.id,
+      id: user.id,
+    },
+  },
+  update: {
+    name: user.name,
+    email: user.email,
+    department: "System",
+    title: "Owner",
+    roleId: "owner",
+    status: "active",
+    lastActiveAt: "Bootstrap admin",
+    sortOrder: 0,
+  },
+  create: {
+    organizationId: organization.id,
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    department: "System",
+    title: "Owner",
+    roleId: "owner",
+    status: "active",
+    lastActiveAt: "Bootstrap admin",
+    sortOrder: 0,
   },
 });
 

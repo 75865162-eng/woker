@@ -63,6 +63,12 @@ export async function POST(request: Request) {
           slug: organizationSlug,
         },
       });
+      const existingMemberCount = await tx.organizationMember.count({
+        where: {
+          organizationId: organization.id,
+        },
+      });
+      const membershipRole = existingMemberCount === 0 ? "owner" : "viewer";
       const user = await tx.user.create({
         data: {
           email,
@@ -71,7 +77,7 @@ export async function POST(request: Request) {
           memberships: {
             create: {
               organizationId: organization.id,
-              role: "viewer",
+              role: membershipRole,
             },
           },
         },
@@ -108,7 +114,7 @@ export async function POST(request: Request) {
           email: user.email,
           department: "未分配",
           title: "注册用户",
-          roleId: "viewer",
+          roleId: membershipRole,
           status: "active",
           lastActiveAt: "已注册",
           sortOrder: 1000,

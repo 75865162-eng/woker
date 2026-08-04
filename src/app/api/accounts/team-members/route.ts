@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { defaultTeamAccounts, normalizeTeamAccounts, type TeamAccountRecord } from "@/lib/accounts/team-roster";
+import { normalizeTeamAccounts, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 
 export const runtime = "nodejs";
 
@@ -37,9 +37,20 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
 
 function mapOrganizationRoleToAccountRole(role: string): TeamAccountRecord["roleId"] {
   if (role === "owner") return "owner";
+  if (role === "database_admin") return "database_admin";
   if (role === "admin" || role === "operations_manager") return "operations_supervisor";
   if (role === "logistics_specialist") return "warehouse";
   if (role === "ppc_specialist" || role === "listing_specialist") return "operations";
+
+  return "viewer";
+}
+
+function mapAccountRoleToOrganizationRole(roleId: TeamAccountRecord["roleId"]) {
+  if (roleId === "owner") return "owner";
+  if (roleId === "database_admin") return "database_admin";
+  if (roleId === "operations_supervisor") return "operations_manager";
+  if (roleId === "warehouse" || roleId === "warehouse_supervisor") return "logistics_specialist";
+  if (roleId === "operations" || roleId === "operations_assistant") return "ppc_specialist";
 
   return "viewer";
 }
@@ -64,20 +75,6 @@ export async function GET() {
         sortOrder: "asc",
       },
     });
-
-    if (!members.length) {
-      const seedAccounts = normalizeTeamAccounts(defaultTeamAccounts).map((account, index) => ({
-        ...stripAccountPassword(account),
-        organizationId: user.organizationId,
-        sortOrder: index,
-      }));
-
-      if (seedAccounts.length) {
-        await prisma.teamRosterMember.createMany({ data: seedAccounts });
-      }
-
-      members = seedAccounts;
-    }
 
     const existingRosterIds = new Set(members.map((member) => member.id));
     const userMemberships = await prisma.organizationMember.findMany({
@@ -154,6 +151,25 @@ export async function PUT(request: Request) {
             }),
           ]
         : []),
+      ...normalized.map((account) =>
+        prisma.organizationMember.updateMany({
+          where: {
+            organizationId: user.organizationId,
+            userId: account.id,
+          },
+          data: {
+            role: mapAccountRoleToOrganizationRole(account.roleId),
+          },
+        }),
+      ),
+      prisma.userSession.deleteMany({
+        where: {
+          userId: {
+            not: user.id,
+            in: normalized.map((account) => account.id),
+          },
+        },
+      }),
     ]);
 
     return NextResponse.json({
