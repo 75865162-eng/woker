@@ -26,8 +26,9 @@ QQ_BOT_CODEX_WORKDIR=/path/to/repo
 QQ_BOT_CODEX_SANDBOX=workspace-write
 QQ_BOT_CODEX_MODEL=
 QQ_BOT_ALLOWED_USER_IDS=
-QQ_BOT_WS_INTENTS=33554432
+QQ_BOT_WS_INTENTS=1107296256
 QQ_BOT_WS_RECONNECT_MS=5000
+QQ_BOT_DEBUG_EVENTS=true
 ```
 
 `QQ_BOT_SECRET` 会用于换取 QQ Bot access token 来连接 WebSocket 和主动回消息。Webhook 模式下也会用于 Ed25519 地址验证签名。生产环境不要关闭 `QQ_BOT_SIGNATURE_CHECK`。
@@ -36,7 +37,7 @@ QQ_BOT_WS_RECONNECT_MS=5000
 
 `QQ_BOT_ALLOWED_USER_IDS` 可以填逗号分隔的用户 ID 白名单；留空表示所有能给机器人发消息的人都能触发 Codex。
 
-`QQ_BOT_WS_INTENTS` 默认 `33554432`，用于单聊/群聊消息事件。若你在 QQ 后台使用的是频道/子频道事件，需要按官方 intents 调整。
+`QQ_BOT_WS_INTENTS` 默认 `1107296256`，包含单聊/群聊消息事件和频道 @ 消息事件。若 QQ 后台未给对应事件权限，需要在机器人管理后台开启对应事件订阅/权限。
 
 ## Webhook 方式
 

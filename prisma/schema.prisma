@@ -74,6 +74,7 @@ model User {
   auditLogs    AuditLog[]
   aiModelSetting AiModelSetting?
   listingAiWorkspace ListingAiWorkspace?
+  workspaceSnapshot WorkspaceSnapshot?
 }
 
 model OrganizationMember {
@@ -257,6 +258,20 @@ model ListingAiWorkspace {
   userId         String   @unique
   draft          Json
   records        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, updatedAt])
+}
+
+model WorkspaceSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String   @unique
+  version        Int      @default(1)
+  savedAt        DateTime @default(now())
+  snapshot       Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)

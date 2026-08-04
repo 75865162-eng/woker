@@ -14,8 +14,9 @@ const config = {
   codexSandbox: parseSandbox(process.env.QQ_BOT_CODEX_SANDBOX),
   codexModel: process.env.QQ_BOT_CODEX_MODEL?.trim() || "",
   allowedUserIds: parseCsv(process.env.QQ_BOT_ALLOWED_USER_IDS),
-  intents: Number(process.env.QQ_BOT_WS_INTENTS || 33554432),
+  intents: Number(process.env.QQ_BOT_WS_INTENTS || 1107296256),
   reconnectMs: Number(process.env.QQ_BOT_WS_RECONNECT_MS || 5000),
+  debugEvents: process.env.QQ_BOT_DEBUG_EVENTS !== "false",
 };
 
 const COMMAND_PREFIXES = ["/code", "/status"];
@@ -202,6 +203,9 @@ async function handleDispatch(payload) {
   }
 
   const message = payload.d;
+  if (config.debugEvents) {
+    console.log("[qq-codex-bot] 收到事件：", payload.t, summarizeEvent(message));
+  }
   if (!message || typeof message.content !== "string") return;
 
   const command = parseCommand(message);
@@ -252,6 +256,17 @@ function resolveConversation(message) {
   if (message.user_openid) return { kind: "c2c", openid: message.user_openid };
   if (message.channel_id) return { kind: "channel", channelId: message.channel_id };
   return null;
+}
+
+function summarizeEvent(message) {
+  if (!message || typeof message !== "object") return "";
+  return {
+    hasContent: typeof message.content === "string",
+    group: Boolean(message.group_openid),
+    c2c: Boolean(message.user_openid),
+    channel: Boolean(message.channel_id),
+    contentPreview: typeof message.content === "string" ? message.content.trim().slice(0, 40) : "",
+  };
 }
 
 function normalizeContent(content) {
