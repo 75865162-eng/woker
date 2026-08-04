@@ -17,6 +17,9 @@ function resolveConversation(message: QqBotMessageData): QqBotConversation | und
   if (message.user_openid) {
     return { kind: "c2c", openid: message.user_openid };
   }
+  if (message.author?.user_openid) {
+    return { kind: "c2c", openid: message.author.user_openid };
+  }
   if (message.channel_id) {
     return { kind: "channel", channelId: message.channel_id };
   }

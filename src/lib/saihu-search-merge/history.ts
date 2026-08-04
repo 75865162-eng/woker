@@ -1,57 +1,49 @@
 import type { SaihuHistoryRecord } from "@/lib/saihu-search-merge/types";
 
-const databaseName = "saihu-search-merge-history";
-const storeName = "history";
-const databaseVersion = 1;
-
-function openHistoryDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, databaseVersion);
-
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(storeName)) {
-        const store = database.createObjectStore(storeName, { keyPath: "id" });
-        store.createIndex("createdAt", "createdAt", { unique: false });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("历史记录数据库打开失败。"));
-  });
-}
-
-function transact<T>(mode: IDBTransactionMode, runner: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T | void> {
-  return openHistoryDatabase().then(
-    (database) =>
-      new Promise((resolve, reject) => {
-        const transaction = database.transaction(storeName, mode);
-        const store = transaction.objectStore(storeName);
-        const request = runner(store);
-
-        transaction.oncomplete = () => {
-          database.close();
-          resolve(request ? request.result : undefined);
-        };
-        transaction.onerror = () => {
-          database.close();
-          reject(transaction.error ?? new Error("历史记录操作失败。"));
-        };
-      }),
-  );
-}
-
 export async function saveSaihuHistoryRecord(record: SaihuHistoryRecord) {
-  await transact("readwrite", (store) => store.put(record));
+  const persistableRecord = {
+    id: record.id,
+    action: record.action,
+    createdAt: record.createdAt,
+    sourceFileName: record.sourceFileName,
+    outputFileName: record.outputFileName,
+    summary: record.summary,
+    rows: record.rows,
+  };
+  const response = await fetch("/api/saihu-search-merge/history", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ record: persistableRecord }),
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "历史记录保存失败。");
+  }
 }
 
 export async function listSaihuHistoryRecords() {
-  const records = (await transact<SaihuHistoryRecord[]>("readonly", (store) => store.getAll())) ?? [];
-  return records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const response = await fetch("/api/saihu-search-merge/history");
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "历史记录读取失败。");
+  }
+
+  const data = (await response.json()) as { records?: SaihuHistoryRecord[] };
+
+  return data.records ?? [];
 }
 
 export async function clearSaihuHistoryRecords() {
-  await transact("readwrite", (store) => store.clear());
+  const response = await fetch("/api/saihu-search-merge/history", {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "历史记录清空失败。");
+  }
 }
 
 export function createSaihuHistoryId(prefix: string) {

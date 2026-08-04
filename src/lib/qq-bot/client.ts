@@ -7,6 +7,7 @@ interface QqBotAccessToken {
 }
 
 let cachedAccessToken: { token: string; expiresAt: number } | undefined;
+let messageSeq = Date.now() % 1_000_000;
 
 async function getAccessToken(config: QqBotConfig) {
   const now = Date.now();
@@ -49,8 +50,14 @@ function buildMessageBody(content: string, messageId?: string) {
   return {
     content: content.slice(0, 1800),
     msg_type: 0,
+    msg_seq: nextMessageSeq(),
     ...(messageId ? { msg_id: messageId } : {}),
   };
+}
+
+function nextMessageSeq() {
+  messageSeq = (messageSeq + 1) % 1_000_000;
+  return messageSeq || 1;
 }
 
 export async function sendQqBotMessage(

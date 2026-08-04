@@ -62,7 +62,7 @@ function handleCommandInBackground(config: ReturnType<typeof getQqBotConfig>, co
 
       await sendQqBotMessage(config, conversation, "收到，正在让 Codex 处理。完成后我会把结果发回来。", command.messageId);
       const result = await runCodexTask(config, command.args);
-      await sendQqBotMessage(config, conversation, formatCodexResult(result.id, result.ok, result.output));
+      await sendQqBotMessage(config, conversation, formatCodexResult(result.id, result.ok, result.output), command.messageId);
     } catch (error) {
       console.error("QQ Bot Codex command failed", error);
     }

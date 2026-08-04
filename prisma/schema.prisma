@@ -75,6 +75,7 @@ model User {
   aiModelSetting AiModelSetting?
   listingAiWorkspace ListingAiWorkspace?
   workspaceSnapshot WorkspaceSnapshot?
+  saihuSearchMergeHistory SaihuSearchMergeHistoryRecord[]
 }
 
 model OrganizationMember {
@@ -277,4 +278,21 @@ model WorkspaceSnapshot {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, updatedAt])
+}
+
+model SaihuSearchMergeHistoryRecord {
+  id             String   @id
+  organizationId String
+  userId         String
+  action         String
+  sourceFileName String
+  outputFileName String?
+  summary        Json
+  rows           Json
+  createdAt      DateTime
+  savedAt        DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
 }

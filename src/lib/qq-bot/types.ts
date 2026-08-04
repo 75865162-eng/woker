@@ -17,6 +17,7 @@ export interface QqBotMessageData {
   author?: {
     id?: string;
     username?: string;
+    user_openid?: string;
   };
   member?: {
     nick?: string;

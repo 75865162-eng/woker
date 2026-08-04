@@ -28,6 +28,7 @@ let heartbeatTimer;
 let lastSeq = null;
 let reconnectTimer;
 let reconnecting = false;
+let messageSeq = Date.now() % 1_000_000;
 
 main().catch((error) => {
   console.error("[qq-codex-bot] 启动失败：", error.message);
@@ -254,6 +255,7 @@ function parseCommand(message) {
 function resolveConversation(message) {
   if (message.group_openid) return { kind: "group", openid: message.group_openid };
   if (message.user_openid) return { kind: "c2c", openid: message.user_openid };
+  if (message.author?.user_openid) return { kind: "c2c", openid: message.author.user_openid };
   if (message.channel_id) return { kind: "channel", channelId: message.channel_id };
   return null;
 }
@@ -263,8 +265,10 @@ function summarizeEvent(message) {
   return {
     hasContent: typeof message.content === "string",
     group: Boolean(message.group_openid),
-    c2c: Boolean(message.user_openid),
+    c2c: Boolean(message.user_openid || message.author?.user_openid),
     channel: Boolean(message.channel_id),
+    keys: Object.keys(message).slice(0, 12),
+    authorKeys: message.author && typeof message.author === "object" ? Object.keys(message.author).slice(0, 12) : [],
     contentPreview: typeof message.content === "string" ? message.content.trim().slice(0, 40) : "",
   };
 }
@@ -305,12 +309,12 @@ async function runCodexAndReply(command) {
     task.status = "done";
     task.finishedAt = Date.now();
     task.output = output;
-    await sendMessage(command.conversation, formatCodexResult(id, true, output));
+    await sendMessage(command.conversation, formatCodexResult(id, true, output), command.messageId);
   } catch (error) {
     task.status = "failed";
     task.finishedAt = Date.now();
     task.output = error instanceof Error ? error.message : String(error);
-    await sendMessage(command.conversation, formatCodexResult(id, false, task.output));
+    await sendMessage(command.conversation, formatCodexResult(id, false, task.output), command.messageId);
   }
 }
 
@@ -322,8 +326,6 @@ async function runCodexTask(id, userPrompt) {
     config.codexWorkdir,
     "--sandbox",
     config.codexSandbox,
-    "--ask-for-approval",
-    "never",
     "--output-last-message",
     outputFile,
   ];
@@ -377,6 +379,7 @@ async function sendMessage(conversation, content, messageId) {
   const body = {
     content: content.slice(0, 1800),
     msg_type: 0,
+    msg_seq: nextMessageSeq(),
     ...(messageId ? { msg_id: messageId } : {}),
   };
 
@@ -393,6 +396,11 @@ async function sendMessage(conversation, content, messageId) {
     const text = await response.text().catch(() => "");
     console.error("[qq-codex-bot] 发送消息失败：", response.status, text.slice(0, 200));
   }
+}
+
+function nextMessageSeq() {
+  messageSeq = (messageSeq + 1) % 1_000_000;
+  return messageSeq || 1;
 }
 
 function formatCodexResult(taskId, ok, output) {

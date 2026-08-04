@@ -38,8 +38,6 @@ function buildArgs(config: QqBotConfig, outputFile: string) {
     config.codexWorkdir,
     "--sandbox",
     config.codexSandbox,
-    "--ask-for-approval",
-    "never",
     "--output-last-message",
     outputFile,
   ];

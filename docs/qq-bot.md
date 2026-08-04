@@ -68,7 +68,7 @@ https://你的域名/api/bots/qq/webhook
 没有显式命令的普通消息也会按 `/code` 处理。收到 `/code` 后，服务端会后台运行：
 
 ```bash
-codex exec --cd "$QQ_BOT_CODEX_WORKDIR" --sandbox "$QQ_BOT_CODEX_SANDBOX" --ask-for-approval never
+codex exec --cd "$QQ_BOT_CODEX_WORKDIR" --sandbox "$QQ_BOT_CODEX_SANDBOX"
 ```
 
 完成后机器人会把 Codex 最终结果发回 QQ。
