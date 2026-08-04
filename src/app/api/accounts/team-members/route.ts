@@ -22,6 +22,17 @@ type RosterAccountRow = {
   lastActiveAt?: string | null;
 };
 
+type OrganizationMembershipWithUser = {
+  role: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    status: string;
+    lastLoginAt: Date | null;
+  };
+};
+
 function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
   return {
     id: member.id,
@@ -77,7 +88,7 @@ export async function GET() {
     });
 
     const existingRosterIds = new Set(members.map((member) => member.id));
-    const userMemberships = await prisma.organizationMember.findMany({
+    const userMemberships = (await prisma.organizationMember.findMany({
       where: {
         organizationId: user.organizationId,
       },
@@ -87,7 +98,7 @@ export async function GET() {
       orderBy: {
         createdAt: "asc",
       },
-    });
+    })) as OrganizationMembershipWithUser[];
     const missingUserAccounts = userMemberships
       .filter((membership) => !existingRosterIds.has(membership.user.id))
       .map((membership, index) => ({

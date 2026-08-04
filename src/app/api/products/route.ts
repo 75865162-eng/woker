@@ -41,7 +41,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      products: records.map((record) => record.payload),
+      products: records.map((record) => record.payload as unknown as Product),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load products.";

@@ -196,89 +196,125 @@ export function ListingAiWorkbench() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const [draftReady, setDraftReady] = useState(false);
+  const [workspaceSaveError, setWorkspaceSaveError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
+    async function applyWorkspaceDraft(draft: Partial<WorkspaceDraft>) {
+      if (draft.input && !cancelled) setInput({ ...initialInput, ...draft.input });
+      if (draft.competitors) {
+        const restoredCompetitors = await Promise.all(
+          initialCompetitors.map((emptyCompetitor, index) =>
+            hydrateCompetitorDraft({
+              ...emptyCompetitor,
+              ...draft.competitors?.[index],
+            }),
+          ),
+        );
+        if (!cancelled) setCompetitors(restoredCompetitors);
+      }
+      if (draft.ownImages) {
+        const emptyOwnImages: OwnImageDraft = {
+          structureNotes: "",
+          mainImage: [],
+          images: [],
+          imageNotes: [],
+          sales: "",
+          price: "",
+          rating: "",
+          reviewCount: "",
+        };
+        const restoredOwnImages = await hydrateOwnImageDraft({
+          ...emptyOwnImages,
+          ...draft.ownImages,
+        });
+        if (!cancelled) setOwnImages(restoredOwnImages);
+      }
+      if (draft.titleGenerator && !cancelled) {
+        setTitleGenerator({
+          ...initialTitleGenerator,
+          ...draft.titleGenerator,
+          fields: initialTitleGenerator.fields.map((field) => ({
+            ...field,
+            ...draft.titleGenerator?.fields?.find(
+              (savedField) => savedField.key === field.key,
+            ),
+          })),
+          history: Array.isArray(draft.titleGenerator.history)
+            ? draft.titleGenerator.history
+            : [],
+        });
+      }
+      if (draft.imageGenerator) {
+        const restoredImageGenerator = await hydrateImageGeneratorDraft({
+          ...initialImageGenerator,
+          ...draft.imageGenerator,
+          ownViews: {
+            ...initialImageGenerator.ownViews,
+            ...draft.imageGenerator.ownViews,
+          },
+          competitorImages: Array.isArray(
+            draft.imageGenerator.competitorImages,
+          )
+            ? draft.imageGenerator.competitorImages
+            : [],
+          generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
+            ? draft.imageGenerator.generatedImages
+            : [],
+          prompt: draft.imageGenerator.prompt?.trim()
+            ? draft.imageGenerator.prompt
+            : defaultImageGeneratorPrompt,
+        });
+        if (!cancelled) setImageGenerator(restoredImageGenerator);
+      }
+      if (draft.activeTab && !cancelled) setActiveTab(draft.activeTab);
+    }
+
     async function restoreDraft() {
       try {
-        const saved = window.localStorage.getItem(storageKey);
-        if (saved && !cancelled) setRecords(JSON.parse(saved) as SavedRecord[]);
+        const response = await fetch("/api/listing-ai/workspace");
 
-        const draft = window.localStorage.getItem(draftStorageKey);
-        if (draft) {
-          const parsed = JSON.parse(draft) as Partial<WorkspaceDraft>;
-          if (parsed.input && !cancelled) setInput({ ...initialInput, ...parsed.input });
-          if (parsed.competitors) {
-            const restoredCompetitors = await Promise.all(
-              initialCompetitors.map((emptyCompetitor, index) =>
-                hydrateCompetitorDraft({
-                  ...emptyCompetitor,
-                  ...parsed.competitors?.[index],
-                }),
-              ),
-            );
-            if (!cancelled) setCompetitors(restoredCompetitors);
-          }
-          if (parsed.ownImages) {
-            const emptyOwnImages: OwnImageDraft = {
-              structureNotes: "",
-              mainImage: [],
-              images: [],
-              imageNotes: [],
-              sales: "",
-              price: "",
-              rating: "",
-              reviewCount: "",
-            };
-            const restoredOwnImages = await hydrateOwnImageDraft({
-              ...emptyOwnImages,
-              ...parsed.ownImages,
-            });
-            if (!cancelled) setOwnImages(restoredOwnImages);
-          }
-          if (parsed.titleGenerator && !cancelled) {
-            setTitleGenerator({
-              ...initialTitleGenerator,
-              ...parsed.titleGenerator,
-              fields: initialTitleGenerator.fields.map((field) => ({
-                ...field,
-                ...parsed.titleGenerator?.fields?.find(
-                  (savedField) => savedField.key === field.key,
-                ),
-              })),
-              history: Array.isArray(parsed.titleGenerator.history)
-                ? parsed.titleGenerator.history
-                : [],
-            });
-          }
-          if (parsed.imageGenerator) {
-            const restoredImageGenerator = await hydrateImageGeneratorDraft({
-              ...initialImageGenerator,
-              ...parsed.imageGenerator,
-              ownViews: {
-                ...initialImageGenerator.ownViews,
-                ...parsed.imageGenerator.ownViews,
-              },
-              competitorImages: Array.isArray(
-                parsed.imageGenerator.competitorImages,
-              )
-                ? parsed.imageGenerator.competitorImages
-                : [],
-              generatedImages: Array.isArray(parsed.imageGenerator.generatedImages)
-                ? parsed.imageGenerator.generatedImages
-                : [],
-              prompt: parsed.imageGenerator.prompt?.trim()
-                ? parsed.imageGenerator.prompt
-                : defaultImageGeneratorPrompt,
-            });
-            if (!cancelled) setImageGenerator(restoredImageGenerator);
-          }
-          if (parsed.activeTab && !cancelled) setActiveTab(parsed.activeTab);
+        if (!response.ok) {
+          throw new Error("无法从数据库读取 Listing AI 工作区。");
+        }
+
+        const data = (await response.json()) as {
+          draft?: Partial<WorkspaceDraft> | null;
+          records?: SavedRecord[];
+        };
+
+        if (data.records?.length && !cancelled) {
+          setRecords(data.records);
+          window.localStorage.setItem(storageKey, JSON.stringify(data.records));
+        }
+
+        if (data.draft) {
+          await applyWorkspaceDraft(data.draft);
+          window.localStorage.setItem(draftStorageKey, JSON.stringify(data.draft));
+          return;
+        }
+
+        const localRecords = readLocalListingAiRecords();
+        const localDraft = readLocalListingAiDraft();
+
+        if (localRecords.length && !cancelled) setRecords(localRecords);
+        if (localDraft) await applyWorkspaceDraft(localDraft);
+
+        if (localDraft || localRecords.length) {
+          await saveListingAiWorkspace(
+            normalizeWorkspaceDraft(localDraft),
+            localRecords,
+          );
         }
       } catch (storageError) {
         console.warn("Failed to restore Listing AI draft.", storageError);
-        window.localStorage.removeItem(draftStorageKey);
+        const localRecords = readLocalListingAiRecords();
+        const localDraft = readLocalListingAiDraft();
+
+        if (localRecords.length && !cancelled) setRecords(localRecords);
+        if (localDraft) await applyWorkspaceDraft(localDraft);
+        if (!cancelled) setWorkspaceSaveError(storageError instanceof Error ? storageError.message : "Listing AI 工作区读取失败。");
       } finally {
         if (!cancelled) setDraftReady(true);
       }
@@ -302,10 +338,18 @@ export function ListingAiWorkbench() {
       activeTab,
     };
     try {
-      window.localStorage.setItem(
-        draftStorageKey,
-        JSON.stringify(createPersistableDraft(draft)),
-      );
+      const persistableDraft = createPersistableDraft(draft);
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(persistableDraft));
+      window.localStorage.setItem(storageKey, JSON.stringify(records));
+      const timeout = window.setTimeout(() => {
+        void saveListingAiWorkspace(persistableDraft, records).then(
+          () => setWorkspaceSaveError(""),
+          (saveError: unknown) =>
+            setWorkspaceSaveError(saveError instanceof Error ? saveError.message : "Listing AI 工作区保存失败。"),
+        );
+      }, 700);
+
+      return () => window.clearTimeout(timeout);
     } catch (storageError) {
       console.warn("Failed to persist Listing AI draft.", storageError);
       window.localStorage.removeItem(draftStorageKey);
@@ -317,6 +361,7 @@ export function ListingAiWorkbench() {
     imageGenerator,
     input,
     ownImages,
+    records,
     titleGenerator,
   ]);
 
@@ -527,11 +572,6 @@ export function ListingAiWorkbench() {
     };
     const nextRecords = [record, ...records].slice(0, 50);
     setRecords(nextRecords);
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(nextRecords));
-    } catch (storageError) {
-      console.warn("Failed to persist Listing AI history.", storageError);
-    }
   }
 
   function loadRecord(record: SavedRecord) {
@@ -638,6 +678,7 @@ export function ListingAiWorkbench() {
               <Badge tone="blue">Listing Optimization Workspace</Badge>
               <Badge tone="green">Autosaved</Badge>
               <Badge tone="amber">Version {latestVersion || 1}</Badge>
+              {workspaceSaveError ? <Badge tone="red">Database Sync Error</Badge> : null}
               <Button size="sm" variant="secondary" onClick={resetDraft}>
                 <RotateCcw className="h-4 w-4" />
                 一键撤销输入
@@ -650,6 +691,9 @@ export function ListingAiWorkbench() {
               一个工作区管理产品信息、竞品、图片图库、AI 分析、Listing、Image
               Plan、A+、AI Review 和历史版本。
             </p>
+            {workspaceSaveError ? (
+              <p className="mt-2 text-sm font-medium text-red-600">{workspaceSaveError}</p>
+            ) : null}
           </div>
           <div className="grid grid-cols-4 divide-x divide-border">
             <WorkspaceMetric label="Facts" value={`${productFactsCount}/50`} />
@@ -757,6 +801,84 @@ export function ListingAiWorkbench() {
       </main>
     </div>
   );
+}
+
+function readLocalListingAiRecords() {
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+
+    return saved ? (JSON.parse(saved) as SavedRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readLocalListingAiDraft() {
+  try {
+    const draft = window.localStorage.getItem(draftStorageKey);
+
+    return draft ? (JSON.parse(draft) as Partial<WorkspaceDraft>) : null;
+  } catch {
+    window.localStorage.removeItem(draftStorageKey);
+    return null;
+  }
+}
+
+function normalizeWorkspaceDraft(draft?: Partial<WorkspaceDraft> | null): WorkspaceDraft {
+  return createPersistableDraft({
+    input: {
+      ...initialInput,
+      ...draft?.input,
+    },
+    competitors: initialCompetitors.map((competitor, index) => ({
+      ...competitor,
+      ...draft?.competitors?.[index],
+    })),
+    ownImages: {
+      structureNotes: "",
+      mainImage: [],
+      images: [],
+      imageNotes: [],
+      sales: "",
+      price: "",
+      rating: "",
+      reviewCount: "",
+      ...draft?.ownImages,
+    },
+    titleGenerator: {
+      ...initialTitleGenerator,
+      ...draft?.titleGenerator,
+      fields: initialTitleGenerator.fields.map((field) => ({
+        ...field,
+        ...draft?.titleGenerator?.fields?.find((savedField) => savedField.key === field.key),
+      })),
+    },
+    imageGenerator: {
+      ...initialImageGenerator,
+      ...draft?.imageGenerator,
+      ownViews: {
+        ...initialImageGenerator.ownViews,
+        ...draft?.imageGenerator?.ownViews,
+      },
+    },
+    activeTab: draft?.activeTab ?? "input",
+  });
+}
+
+async function saveListingAiWorkspace(draft: WorkspaceDraft, records: SavedRecord[]) {
+  const response = await fetch("/api/listing-ai/workspace", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      draft,
+      records,
+    }),
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Listing AI 工作区保存失败。");
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -13,6 +13,11 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+type RegistrationTransaction = Pick<
+  typeof prisma,
+  "user" | "organization" | "organizationMember" | "auditLog" | "teamRosterMember"
+>;
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -45,7 +50,7 @@ export async function POST(request: Request) {
     const organizationName = process.env.BOOTSTRAP_ORG_NAME || "Amazon Operations";
     const organizationSlug = process.env.BOOTSTRAP_ORG_SLUG || slugify(organizationName) || "amazon-operations";
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: RegistrationTransaction) => {
       const existingUser = await tx.user.findUnique({
         where: { email },
         select: { id: true },

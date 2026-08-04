@@ -53,28 +53,69 @@ export function SettingsWorkbench() {
   const [chatError, setChatError] = useState("");
   const [profiles, setProfiles] = useState<SavedAiModelProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState("");
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(aiSettingsStorageKey);
-    if (saved) {
-      const parsed = normalizeAiSettings(JSON.parse(saved) as Partial<AiModelSettings>);
-      setSettings(parsed);
+    let cancelled = false;
+
+    async function restoreSettings() {
+      try {
+        const response = await fetch("/api/ai-settings");
+
+        if (!response.ok) {
+          throw new Error("无法从数据库读取 AI 配置。");
+        }
+
+        const data = (await response.json()) as {
+          settings?: Partial<AiModelSettings> | null;
+          profiles?: SavedAiModelProfile[];
+          activeProfileId?: string;
+        };
+        const localSettings = readLocalAiSettings();
+        const localProfiles = readLocalAiProfiles();
+        const databaseProfiles = normalizeProfiles(data.profiles);
+
+        if (data.settings) {
+          const normalized = normalizeBeforeSave(data.settings as AiModelSettings);
+          const nextProfiles = databaseProfiles.length ? databaseProfiles : [createProfile(normalized)];
+
+          if (cancelled) return;
+          setSettings(normalized);
+          setProfiles(nextProfiles);
+          setActiveProfileId(data.activeProfileId || nextProfiles[0]?.id || "");
+          cacheAiSettings(normalized, nextProfiles);
+          return;
+        }
+
+        const migratedSettings = localSettings ?? defaultAiModelSettings;
+        const migratedProfiles = localProfiles.length ? localProfiles : [createProfile(migratedSettings)];
+        const migratedActiveProfileId = migratedProfiles[0]?.id ?? "";
+
+        await persistSettings(migratedSettings, migratedProfiles, migratedActiveProfileId);
+
+        if (cancelled) return;
+        setSettings(migratedSettings);
+        setProfiles(migratedProfiles);
+        setActiveProfileId(migratedActiveProfileId);
+      } catch (error) {
+        const localSettings = readLocalAiSettings();
+        const localProfiles = readLocalAiProfiles();
+
+        if (cancelled) return;
+        if (localSettings) setSettings(localSettings);
+        if (localProfiles.length) setProfiles(localProfiles);
+        setSettingsError(error instanceof Error ? error.message : "AI 配置加载失败。");
+      } finally {
+        if (!cancelled) setSettingsLoading(false);
+      }
     }
 
-    const savedProfiles = window.localStorage.getItem(aiSettingsProfilesStorageKey);
-    if (savedProfiles) {
-      setProfiles(
-        (JSON.parse(savedProfiles) as SavedAiModelProfile[]).map((profile) => ({
-          ...profile,
-          settings: profile.settings.provider === "custom" ? normalizeBeforeSave(profile.settings) : normalizeAiSettings(profile.settings),
-        })),
-      );
-    } else {
-      const builtInProfile = createProfile(defaultAiModelSettings);
-      window.localStorage.setItem(aiSettingsProfilesStorageKey, JSON.stringify([builtInProfile]));
-      setProfiles([builtInProfile]);
-      setActiveProfileId(builtInProfile.id);
-    }
+    void restoreSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const publicSettings = useMemo(() => toPublicAiSettings(normalizeAiSettings(settings)), [settings]);
@@ -129,7 +170,26 @@ export function SettingsWorkbench() {
     };
   }
 
-  function saveSettings() {
+  async function persistSettings(nextSettings: AiModelSettings, nextProfiles: SavedAiModelProfile[], nextActiveProfileId: string) {
+    const response = await fetch("/api/ai-settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        settings: nextSettings,
+        profiles: nextProfiles,
+        activeProfileId: nextActiveProfileId,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error || "AI 配置保存失败。");
+    }
+
+    cacheAiSettings(nextSettings, nextProfiles);
+  }
+
+  async function saveSettings() {
     const normalized = normalizeBeforeSave(settings);
     const now = new Date().toISOString();
     const existingProfileId = activeProfileId || profiles.find((profile) => profile.settings.provider === normalized.provider)?.id || "";
@@ -144,37 +204,60 @@ export function SettingsWorkbench() {
       : createProfile(normalized, now);
     const nextProfiles = [nextProfile, ...profiles.filter((profile) => profile.id !== nextProfile.id)].slice(0, 20);
 
-    window.localStorage.setItem(aiSettingsStorageKey, JSON.stringify(normalized));
-    window.localStorage.setItem(aiSettingsProfilesStorageKey, JSON.stringify(nextProfiles));
-    setSettings(normalized);
-    setProfiles(nextProfiles);
-    setActiveProfileId(nextProfile.id);
-    setSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+    try {
+      await persistSettings(normalized, nextProfiles, nextProfile.id);
+      setSettings(normalized);
+      setProfiles(nextProfiles);
+      setActiveProfileId(nextProfile.id);
+      setSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+      setSettingsError("");
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "AI 配置保存失败。");
+    }
   }
 
-  function resetSettings() {
+  async function resetSettings() {
     window.localStorage.removeItem(aiSettingsStorageKey);
-    setSettings(defaultAiModelSettings);
-    setActiveProfileId("");
-    setSavedAt("");
+    const builtInProfile = createProfile(defaultAiModelSettings);
+
+    try {
+      await persistSettings(defaultAiModelSettings, [builtInProfile], builtInProfile.id);
+      setSettings(defaultAiModelSettings);
+      setProfiles([builtInProfile]);
+      setActiveProfileId(builtInProfile.id);
+      setSavedAt("");
+      setSettingsError("");
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "AI 配置重置失败。");
+    }
   }
 
-  function loadProfile(profile: SavedAiModelProfile) {
+  async function loadProfile(profile: SavedAiModelProfile) {
     const normalized = profile.settings.provider === "custom" ? normalizeBeforeSave(profile.settings) : normalizeAiSettings(profile.settings);
-    window.localStorage.setItem(aiSettingsStorageKey, JSON.stringify(normalized));
-    setSettings(normalized);
-    setActiveProfileId(profile.id);
-    setSavedAt("");
-    setChatError("");
+
+    try {
+      await persistSettings(normalized, profiles, profile.id);
+      setSettings(normalized);
+      setActiveProfileId(profile.id);
+      setSavedAt("");
+      setChatError("");
+      setSettingsError("");
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "AI 配置切换失败。");
+    }
   }
 
-  function deleteProfile(profileId: string) {
+  async function deleteProfile(profileId: string) {
     const nextProfiles = profiles.filter((profile) => profile.id !== profileId);
-    window.localStorage.setItem(aiSettingsProfilesStorageKey, JSON.stringify(nextProfiles));
-    setProfiles(nextProfiles);
+    const nextActiveProfileId = activeProfileId === profileId ? "" : activeProfileId;
 
-    if (activeProfileId === profileId) {
-      setActiveProfileId("");
+    try {
+      await persistSettings(settings, nextProfiles, nextActiveProfileId);
+      setProfiles(nextProfiles);
+      setActiveProfileId(nextActiveProfileId);
+      setSettingsError("");
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "AI 配置删除失败。");
     }
   }
 
@@ -244,7 +327,7 @@ export function SettingsWorkbench() {
 
                   return (
                     <div key={profile.id} className={`rounded-md border p-3 ${active ? "border-brand bg-brand/5" : "border-border bg-white"}`}>
-                      <button className="w-full text-left" onClick={() => loadProfile(profile)} type="button">
+                      <button className="w-full text-left" onClick={() => void loadProfile(profile)} type="button">
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-bold text-foreground">{profile.name}</p>
                           {active ? <Badge tone="green">当前</Badge> : null}
@@ -252,7 +335,7 @@ export function SettingsWorkbench() {
                         <p className="mt-1 truncate text-xs text-muted">{profile.settings.baseUrl}</p>
                         <p className="mt-1 text-xs text-muted">{profile.settings.wireApi}</p>
                       </button>
-                      <Button className="mt-3 w-full" size="sm" variant="secondary" onClick={() => deleteProfile(profile.id)}>
+                      <Button className="mt-3 w-full" size="sm" variant="secondary" onClick={() => void deleteProfile(profile.id)}>
                         <Trash2 className="h-4 w-4" />
                         删除
                       </Button>
@@ -260,7 +343,7 @@ export function SettingsWorkbench() {
                   );
                 })
               ) : (
-                <p className="text-sm leading-6 text-muted">暂无保存配置。点击保存配置后会出现在这里。</p>
+                <p className="text-sm leading-6 text-muted">{settingsLoading ? "正在读取数据库配置..." : "暂无保存配置。点击保存配置后会出现在这里。"}</p>
               )}
             </CardContent>
           </Card>
@@ -389,14 +472,14 @@ export function SettingsWorkbench() {
 
               <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-muted">
-                  {savedAt ? <span>已保存：{savedAt}</span> : <span>填写 API Key 后点击保存，Listing AI 会立即使用新配置。</span>}
+                  {settingsError ? <span className="text-red-600">{settingsError}</span> : savedAt ? <span>已保存：{savedAt}</span> : <span>填写 API Key 后点击保存，Listing AI 会立即使用新配置。</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" onClick={resetSettings}>
+                  <Button variant="secondary" onClick={() => void resetSettings()}>
                     <RotateCcw className="h-4 w-4" />
                     重置
                   </Button>
-                  <Button onClick={saveSettings} disabled={!settings.apiKey.trim()}>
+                  <Button onClick={() => void saveSettings()} disabled={!settings.apiKey.trim()}>
                     <Save className="h-4 w-4" />
                     保存配置
                   </Button>
@@ -501,6 +584,43 @@ function StatusItem({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate text-sm font-bold text-foreground">{value}</p>
     </div>
   );
+}
+
+function readLocalAiSettings() {
+  try {
+    const saved = window.localStorage.getItem(aiSettingsStorageKey);
+
+    return saved ? normalizeAiSettings(JSON.parse(saved) as Partial<AiModelSettings>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readLocalAiProfiles() {
+  try {
+    const savedProfiles = window.localStorage.getItem(aiSettingsProfilesStorageKey);
+
+    return savedProfiles ? normalizeProfiles(JSON.parse(savedProfiles) as SavedAiModelProfile[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeProfiles(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((profile): profile is SavedAiModelProfile => Boolean(profile && typeof profile === "object" && "settings" in profile))
+    .map((profile) => ({
+      ...profile,
+      settings: profile.settings.provider === "custom" ? normalizeAiSettings(profile.settings) : normalizeAiSettings(profile.settings),
+    }))
+    .slice(0, 20);
+}
+
+function cacheAiSettings(settings: AiModelSettings, profiles: SavedAiModelProfile[]) {
+  window.localStorage.setItem(aiSettingsStorageKey, JSON.stringify(settings));
+  window.localStorage.setItem(aiSettingsProfilesStorageKey, JSON.stringify(profiles));
 }
 
 function createProfile(settings: AiModelSettings, timestamp = new Date().toISOString()): SavedAiModelProfile {
