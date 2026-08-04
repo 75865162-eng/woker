@@ -37,11 +37,19 @@ export const localStorageDriver: StorageDriver = {
     return readFile(resolveStoragePath(key));
   },
 
+  getLocalPath(key) {
+    return resolveStoragePath(key);
+  },
+
   getPublicPath(key) {
     return resolveStoragePath(key);
   },
 
   async delete(key) {
     await rm(resolveStoragePath(key), { force: true });
+  },
+
+  async deletePrefix(keyPrefix) {
+    await rm(resolveStoragePath(keyPrefix), { force: true, recursive: true });
   },
 };

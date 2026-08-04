@@ -15,7 +15,7 @@ export const permissionActions: Array<{ id: PermissionAction; label: string }> =
 ];
 
 export const permissionModules = [
-  { id: "workspace", name: "PPC Workspace", paths: ["/workspace", "/history"] },
+  { id: "workspace", name: "PPC Workspace", paths: ["/workspace", "/history", "/tasks"] },
   { id: "products", name: "Products", paths: ["/dashboard"] },
   { id: "searchMerge", name: "Search Merge", paths: ["/saihu-search-merge"] },
   { id: "listingAi", name: "Listing AI", paths: ["/listing-ai"] },
@@ -23,7 +23,7 @@ export const permissionModules = [
   { id: "logistics", name: "Logistics", paths: ["/logistics"] },
   { id: "rules", name: "Rule Center", paths: ["/rules"] },
   { id: "accounts", name: "Accounts", paths: ["/accounts"] },
-  { id: "settings", name: "Settings", paths: ["/settings"] },
+  { id: "settings", name: "Settings", paths: ["/settings", "/versions"] },
 ];
 
 export const routeModuleIds = permissionModules.flatMap((module) =>
@@ -93,6 +93,19 @@ export function roleCanAccessModule(role: string | undefined, moduleId: string |
   const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
 
   return (rolePermissions[moduleId] ?? []).length > 0;
+}
+
+export function roleCanPerformAction(
+  role: string | undefined,
+  moduleId: string | null,
+  action: PermissionAction,
+  permissions?: RolePermissionMap | null,
+) {
+  if (!moduleId) return true;
+
+  const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
+
+  return (rolePermissions[moduleId] ?? []).includes(action);
 }
 
 export function roleHasAnyPage(role: string | undefined, permissions?: RolePermissionMap | null) {

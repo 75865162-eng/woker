@@ -1,5 +1,5 @@
 ﻿import { AppShell } from "@/components/app-shell/app-shell";
-import { ProductWorkbench } from "@/components/products/product-workbench";
+import { ProductWorkbench } from "@/components/app-shell/lazy-workbenches";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
 
 export default function DashboardPage() {

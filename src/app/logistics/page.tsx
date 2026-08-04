@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell/app-shell";
+import { LogisticsWorkbench } from "@/components/app-shell/lazy-workbenches";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
-import { LogisticsWorkbench } from "@/components/logistics/logistics-workbench";
 
 export default function LogisticsPage() {
   return (

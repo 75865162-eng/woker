@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Boxes, Home, ImageUp, LogOut, PackageSearch, SearchCheck, Settings, SlidersHorizontal, Sparkles, UploadCloud, UsersRound } from "lucide-react";
+import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, UploadCloud, UsersRound } from "lucide-react";
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
+import { WorkspaceScopeSelector } from "./workspace-scope-selector";
 
 const navItems = [
   { href: "/", label: "工作台首页", icon: Home, moduleId: null },
@@ -16,9 +17,12 @@ const navItems = [
   { href: "/workspace", label: "PPC 优化", icon: UploadCloud, moduleId: "workspace" },
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
   { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
-  { href: "/image-upscale", label: "图片放大", icon: ImageUp, moduleId: "imageUpscale" },
   { href: "/logistics", label: "物流处理", icon: PackageSearch, moduleId: "logistics" },
-  { href: "/rules", label: "规则中心", icon: SlidersHorizontal, moduleId: "rules" },
+];
+
+const accountMenuItems = [
+  { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "workspace" },
+  { href: "/versions", label: "版本审计", icon: History, moduleId: "settings" },
   { href: "/accounts", label: "账号权限", icon: UsersRound, moduleId: "accounts" },
   { href: "/settings", label: "系统设置", icon: Settings, moduleId: "settings" },
 ];
@@ -48,6 +52,7 @@ export function AppShellClient({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const accountMenu = accountMenuItems.filter((item) => roleCanAccessModule(userRole, item.moduleId, rolePermissions));
   const visibleNavItems = navItems.filter((item) => {
     if (item.href === "/") return true;
 
@@ -77,7 +82,7 @@ export function AppShellClient({
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch
+                prefetch={false}
                 title={item.label}
                 onMouseEnter={() => router.prefetch(item.href)}
                 onFocus={() => router.prefetch(item.href)}
@@ -99,6 +104,7 @@ export function AppShellClient({
             <p className="text-xs font-medium text-muted">{subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
+            <WorkspaceScopeSelector />
             <div className="hidden items-center gap-2 lg:flex">
               <Badge tone={authDriver === "database" ? "green" : "amber"}>
                 {authDriver === "database" ? "数据库模式" : "本地登录"}
@@ -106,14 +112,51 @@ export function AppShellClient({
               <Badge tone="blue">存储：{storageDriver === "s3" || storageDriver === "r2" ? storageDriver.toUpperCase() : "本地文件"}</Badge>
               {organizationName ? <span className="max-w-[180px] truncate text-xs font-semibold text-muted">{organizationName}</span> : null}
             </div>
-            <Button type="button" variant="ghost" size="icon" title="退出登录" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
-            </Button>
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-dark text-xs font-bold text-white"
-              title={[userName, userRole].filter(Boolean).join(" / ")}
-            >
-              {userInitials}
+            <div className="group relative">
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-dark text-xs font-bold text-white outline-none ring-brand transition group-hover:ring-2 focus-visible:ring-2"
+                title={[userName, userRole].filter(Boolean).join(" / ")}
+              >
+                {userInitials}
+              </button>
+              <div className="invisible absolute right-0 top-full z-30 w-56 translate-y-1 rounded-lg border border-border bg-white p-2 opacity-0 shadow-lg transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                <div className="border-b border-border px-3 py-2">
+                  <p className="truncate text-sm font-bold text-foreground">{userName || userInitials}</p>
+                  {userRole ? <p className="mt-0.5 truncate text-xs font-medium text-muted">{userRole}</p> : null}
+                </div>
+                <div className="py-1">
+                  {accountMenu.map((item) => {
+                    const Icon = item.icon;
+                    const itemClassName = "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-muted";
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        prefetch={false}
+                        className={itemClassName}
+                        onMouseEnter={() => router.prefetch(item.href)}
+                        onFocus={() => router.prefetch(item.href)}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+                <div className="border-t border-border pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full justify-start px-3 text-sm font-semibold"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    退出登录
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </header>

@@ -1,5 +1,5 @@
-import { RulesEditorShell } from "@/components/rule-builder/rules-editor-shell";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { RulesEditorShell } from "@/components/app-shell/lazy-workbenches";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
 import { lifecycleGroups } from "@/data/mock-data";
 

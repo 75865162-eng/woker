@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell/app-shell";
-import { SaihuSearchMergeHistory } from "@/components/saihu-search-merge/saihu-search-merge-history";
+import { SaihuSearchMergeHistory } from "@/components/app-shell/lazy-workbenches";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
 
 export default function HistoryPage() {

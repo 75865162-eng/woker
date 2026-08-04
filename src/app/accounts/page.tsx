@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell/app-shell";
-import { AccountWorkbench } from "@/components/accounts/account-workbench";
+import { AccountWorkbench } from "@/components/app-shell/lazy-workbenches";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
 
 export default function AccountsPage() {

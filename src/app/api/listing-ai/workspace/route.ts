@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth/session";
+import { recordDataChangeVersion } from "@/lib/audit/versioning";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import {
   createPersistableDraft,
@@ -11,6 +12,7 @@ import {
   type SavedRecord,
   type WorkspaceDraft,
 } from "@/lib/listing-ai/workspace-draft";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -89,17 +91,23 @@ function normalizeRecords(value: unknown): SavedRecord[] {
     .slice(0, 50);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const permission = await requireApiPermission("listingAi", "view");
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!permission.ok) {
+      return permission.response;
     }
+    const { user } = permission;
 
+    const scope = workspaceScopeFromRequest(request);
     const workspace = await prisma.listingAiWorkspace.findUnique({
       where: {
-        userId: user.id,
+        organizationId_workspaceId_userId: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          userId: user.id,
+        },
       },
     });
 
@@ -119,31 +127,51 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const permission = await requireApiPermission("listingAi", "edit");
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!permission.ok) {
+      return permission.response;
     }
+    const { user } = permission;
 
     const body = (await request.json()) as WorkspacePayload;
+    const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
     const draft = normalizeDraft(body.draft);
     const records = normalizeRecords(body.records);
 
     await prisma.listingAiWorkspace.upsert({
       where: {
-        userId: user.id,
+        organizationId_workspaceId_userId: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          userId: user.id,
+        },
       },
       create: {
         organizationId: user.organizationId,
         userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
         draft: draft as unknown as Prisma.InputJsonValue,
         records: records as unknown as Prisma.InputJsonValue,
       },
       update: {
         organizationId: user.organizationId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
         draft: draft as unknown as Prisma.InputJsonValue,
         records: records as unknown as Prisma.InputJsonValue,
       },
+    });
+    await recordDataChangeVersion({
+      user,
+      entityType: "listing_ai_workspace",
+      entityId: `${scope.workspaceId}:${user.id}`,
+      action: "listing_ai_workspace_save",
+      summary: `Listing AI 草稿，历史 ${records.length} 条`,
+      payload: { draft, records } as unknown as Prisma.InputJsonValue,
+      scope,
     });
 
     return NextResponse.json({ draft, records });

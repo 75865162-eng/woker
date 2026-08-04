@@ -1,21 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { NextResponse } from "next/server";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { getStorageDriver } from "@/lib/storage";
+import type { StorageDriver } from "@/lib/storage/types";
 
 export const runtime = "nodejs";
 
 const supportedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxFileSize = 25 * 1024 * 1024;
+const maxFileSize = 50 * 1024 * 1024;
 const maxLogLength = 4000;
 
 type ImageKind = "illustration" | "photo";
 type NoiseLevel = "none" | "low" | "medium" | "high";
-
-function getUploadRoot() {
-  return path.resolve(process.cwd(), process.env.UPLOAD_DIR ?? "uploads");
-}
 
 function getEnginePath() {
   return path.resolve(process.cwd(), process.env.REALESRGAN_NCNN_EXE ?? "tools/realesrgan-ncnn-vulkan/realesrgan-ncnn-vulkan.exe");
@@ -59,15 +57,12 @@ function isValidNoiseLevel(value: string): value is NoiseLevel {
   return value === "none" || value === "low" || value === "medium" || value === "high";
 }
 
-function createWorkDir(jobId: string) {
-  const uploadRoot = getUploadRoot();
-  const workDir = path.resolve(uploadRoot, "image-upscale", new Date().toISOString().slice(0, 10), jobId);
-
-  if (!workDir.startsWith(uploadRoot + path.sep)) {
-    throw new Error("Invalid image workspace path.");
+function requireLocalPathStorage(storage: StorageDriver) {
+  if (!storage.getLocalPath) {
+    throw new Error("Image upscale currently requires a storage driver with local file paths.");
   }
 
-  return workDir;
+  return storage.getLocalPath.bind(storage);
 }
 
 function runRealEsrgan(input: {
@@ -124,8 +119,16 @@ function runRealEsrgan(input: {
 }
 
 export async function POST(request: Request) {
+  const permission = await requireApiPermission("imageUpscale", "create");
+
+  if (!permission.ok) {
+    return permission.response;
+  }
+
   const jobId = randomUUID();
-  const workDir = createWorkDir(jobId);
+  const storage = getStorageDriver();
+  const getLocalPath = requireLocalPathStorage(storage);
+  const workKey = `image-upscale/${new Date().toISOString().slice(0, 10)}/${jobId}`;
 
   try {
     const formData = await request.formData();
@@ -143,7 +146,7 @@ export async function POST(request: Request) {
     }
 
     if (file.size > maxFileSize) {
-      return NextResponse.json({ error: "图片不能超过 25MB。" }, { status: 400 });
+      return NextResponse.json({ error: "图片不能超过 50MB。" }, { status: 400 });
     }
 
     if (!isValidScale(scaleValue) || !isValidImageKind(imageKindValue) || !isValidNoiseLevel(noiseLevelValue)) {
@@ -151,12 +154,13 @@ export async function POST(request: Request) {
     }
 
     const enginePath = getEnginePath();
-    const inputPath = path.join(workDir, `input${getExtension(file)}`);
-    const outputPath = path.join(workDir, "result.png");
+    const inputKey = `${workKey}/input${getExtension(file)}`;
+    const outputKey = `${workKey}/result.png`;
+    const inputPath = getLocalPath(inputKey);
+    const outputPath = getLocalPath(outputKey);
     const modelName = getModelName(imageKindValue, noiseLevelValue);
 
-    await mkdir(workDir, { recursive: true });
-    await writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
+    await storage.putFile({ key: inputKey, file });
     await runRealEsrgan({
       enginePath,
       inputPath,
@@ -165,7 +169,7 @@ export async function POST(request: Request) {
       scale: scaleValue,
     });
 
-    const result = await readFile(outputPath);
+    const result = await storage.getBuffer(outputKey);
     const body = new Uint8Array(result);
     const baseName = file.name.replace(/\.[^.]+$/, "");
     const fileName = encodeURIComponent(`${baseName}-${scaleValue}x-ai-upscaled.png`);
@@ -191,6 +195,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: message }, { status: 500 });
   } finally {
-    await rm(workDir, { force: true, recursive: true });
+    await storage.deletePrefix?.(workKey);
   }
 }

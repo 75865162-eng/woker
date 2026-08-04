@@ -14,7 +14,7 @@ services:
       HOSTNAME: 0.0.0.0
       DATABASE_URL: postgresql://amazon_bulk_ad:amazon_bulk_ad@postgres:5432/amazon_bulk_ad
       REDIS_URL: redis://redis:6379
-      QUEUE_DRIVER: inline
+      QUEUE_DRIVER: redis
       STORAGE_DRIVER: local
       UPLOAD_DIR: uploads
       AUTH_SECRET: change-this-local-secret-before-production
@@ -27,6 +27,33 @@ services:
       AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.4}
     ports:
       - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://amazon_bulk_ad:amazon_bulk_ad@postgres:5432/amazon_bulk_ad
+      REDIS_URL: redis://redis:6379
+      QUEUE_DRIVER: redis
+      STORAGE_DRIVER: local
+      UPLOAD_DIR: uploads
+      WORKER_CONCURRENCY: 2
+      AUTH_SECRET: change-this-local-secret-before-production
+      AIGOCODE_API_KEY: ${AIGOCODE_API_KEY}
+      AIGOCODE_BASE_URL: ${AIGOCODE_BASE_URL:-https://api.aigocode.app/v1}
+      AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.4}
+    command: ["npm", "run", "worker"]
     volumes:
       - uploads:/app/uploads
     restart: unless-stopped

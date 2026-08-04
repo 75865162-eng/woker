@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth/session";
+import { recordDataChangeVersion } from "@/lib/audit/versioning";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import type { Product } from "@/lib/products/types";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -23,25 +25,59 @@ function normalizeProduct(product: Product): Product {
   };
 }
 
-export async function GET() {
+function clampPageSize(value: string | null) {
+  const pageSize = Number(value) || 50;
+  return Math.min(Math.max(pageSize, 1), 200);
+}
+
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const permission = await requireApiPermission("products", "view");
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!permission.ok) {
+      return permission.response;
     }
+    const { user } = permission;
 
-    const records = await prisma.productRecord.findMany({
+    const url = new URL(request.url);
+    const scope = workspaceScopeFromRequest(request);
+    const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
+    const pageSize = clampPageSize(url.searchParams.get("pageSize"));
+    const search = url.searchParams.get("search")?.trim();
+    const where: Prisma.ProductRecordWhereInput = {
+      organizationId: user.organizationId,
+      workspaceId: scope.workspaceId,
+      ...(search
+        ? {
+            OR: [
+              { sku: { contains: search, mode: "insensitive" } },
+              { id: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+    const [total, records] = await Promise.all([
+      prisma.productRecord.count({ where }),
+      prisma.productRecord.findMany({
       where: {
-        organizationId: user.organizationId,
+          ...where,
       },
       orderBy: {
         updatedAt: "desc",
       },
-    });
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
 
     return NextResponse.json({
       products: records.map((record) => record.payload as unknown as Product),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load products.";
@@ -51,24 +87,27 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const permission = await requireApiPermission("products", "edit");
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!permission.ok) {
+      return permission.response;
     }
+    const { user } = permission;
 
-    const body = (await request.json()) as { product?: unknown };
+    const body = (await request.json()) as { product?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
 
     if (!isProduct(body.product)) {
       return NextResponse.json({ error: "Invalid product payload." }, { status: 400 });
     }
 
     const product = normalizeProduct(body.product);
+    const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
 
     await prisma.productRecord.upsert({
       where: {
-        organizationId_sku: {
+        organizationId_workspaceId_sku: {
           organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
           sku: product.sku,
         },
       },
@@ -76,13 +115,27 @@ export async function POST(request: Request) {
         id: product.id,
         organizationId: user.organizationId,
         userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
         sku: product.sku,
         payload: product as unknown as Prisma.InputJsonValue,
       },
       update: {
         userId: user.id,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
         payload: product as unknown as Prisma.InputJsonValue,
       },
+    });
+    await recordDataChangeVersion({
+      user,
+      entityType: "product",
+      entityId: product.sku,
+      action: "product_save",
+      summary: `${product.sku} ${product.chineseName}`,
+      payload: product as unknown as Prisma.InputJsonValue,
+      scope,
     });
 
     return NextResponse.json({ product });

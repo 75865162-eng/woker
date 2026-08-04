@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { validateWeComWebhookUrl } from "@/lib/notifications/wecom";
 
 export const runtime = "nodejs";
@@ -10,6 +11,12 @@ interface WeComWebhookResponse {
 
 export async function POST(request: Request) {
   try {
+    const permission = await requireApiPermission("settings", "view");
+
+    if (!permission.ok) {
+      return permission.response;
+    }
+
     const body = (await request.json()) as { webhookUrl?: string; message?: string };
     const webhookUrl = body.webhookUrl?.trim() ?? "";
     const message = body.message?.trim() ?? "";

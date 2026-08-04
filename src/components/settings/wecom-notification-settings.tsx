@@ -20,7 +20,7 @@ import {
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 
 const fieldClass =
-  "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
 
 export function WeComNotificationSettingsPanel() {
@@ -141,22 +141,22 @@ export function WeComNotificationSettingsPanel() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-surface-muted text-brand">
-            <BellRing className="h-5 w-5" />
+      <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
+            <BellRing className="h-4 w-4" />
           </div>
           <div>
-            <CardTitle>企业微信通知</CardTitle>
-            <p className="mt-1 text-sm text-muted">新品组超期后，把当前广告状态推送到企业微信群。</p>
+            <CardTitle className="text-sm">企业微信通知</CardTitle>
+            <p className="mt-0.5 text-xs text-muted">新品组超期后，把当前广告状态推送到企业微信群。</p>
           </div>
         </div>
         <Badge tone={settings.enabled && webhookReady ? "green" : webhookReady ? "amber" : "gray"}>
           {settings.enabled && webhookReady ? "已启用" : webhookReady ? "待启用" : "待配置"}
         </Badge>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_180px_170px]">
+      <CardContent className="space-y-3 p-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_150px_140px]">
           <Field label="群机器人 Webhook">
             <input
               className={`${fieldClass} font-mono`}
@@ -178,7 +178,7 @@ export function WeComNotificationSettingsPanel() {
             />
           </Field>
           <div className="flex items-end">
-            <label className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold text-foreground">
+            <label className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold text-foreground">
               <input
                 checked={settings.enabled}
                 onChange={(event) => update("enabled", event.target.checked)}
@@ -198,7 +198,7 @@ export function WeComNotificationSettingsPanel() {
           同一个广告组每天只提醒一次
         </label>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           <StatusItem label="新品组广告组" value={`${campaignGroups.filter((group) => group.lifecycleGroupId === "launch").length} 个`} />
           <StatusItem label="当前待提醒" value={`${currentAlerts.length} 个`} />
           <StatusItem label="Webhook" value={webhookReady ? "有效" : "未通过"} />
@@ -212,7 +212,7 @@ export function WeComNotificationSettingsPanel() {
         ) : null}
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</div> : null}
 
-        <div className="flex flex-col gap-3 border-t border-border pt-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2 border-t border-border pt-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2 text-sm text-muted">
             <ShieldCheck className="h-4 w-4" />
             {savedAt ? <span>已保存：{savedAt}</span> : <span>Webhook 保存在本机浏览器，不写入代码。</span>}
@@ -255,7 +255,7 @@ function readSentRecords(): WeComNotificationSentRecord[] {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="space-y-2">
+    <label className="space-y-1.5">
       <span className={labelClass}>{label}</span>
       {children}
     </label>

@@ -9,20 +9,20 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
-    "qq:codex-bot": "node --env-file=.env scripts/qq-codex-bot.mjs",
+    "worker": "tsx scripts/import-worker.ts",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "lint": "eslint"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1084.0",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
     "bullmq": "^5.79.3",
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.20.0",
-    "next": "^15.5.19",
+    "next": "^15.5.22",
     "pako": "^3.0.0",
     "pdfjs-dist": "^6.1.200",
     "pg": "^8.22.0",
@@ -39,9 +39,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^15.5.19",
-    "prisma": "^7.8.0",
+    "eslint-config-next": "^15.5.22",
+    "prisma": "^7.9.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.5",
     "typescript": "^5"
   }
 }

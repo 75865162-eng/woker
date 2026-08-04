@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import {
   normalizeAiSettings,
   type AiModelSettings,
   type SavedAiModelProfile,
 } from "@/lib/ai-settings";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,9 @@ type AiSettingsPayload = {
   settings?: unknown;
   profiles?: unknown;
   activeProfileId?: unknown;
+  workspaceId?: unknown;
+  accountId?: unknown;
+  marketplace?: unknown;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,17 +52,23 @@ function parseProfiles(value: unknown): SavedAiModelProfile[] {
     .slice(0, 20);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const permission = await requireApiPermission("settings", "view");
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!permission.ok) {
+      return permission.response;
     }
+    const { user } = permission;
 
+    const scope = workspaceScopeFromRequest(request);
     const record = await prisma.aiModelSetting.findUnique({
       where: {
-        userId: user.id,
+        organizationId_workspaceId_userId: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          userId: user.id,
+        },
       },
     });
 
@@ -79,30 +89,41 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const permission = await requireApiPermission("settings", "edit");
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!permission.ok) {
+      return permission.response;
     }
+    const { user } = permission;
 
     const body = (await request.json()) as AiSettingsPayload;
+    const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
     const settings = parseSettings(body.settings);
     const profiles = parseProfiles(body.profiles);
     const activeProfileId = typeof body.activeProfileId === "string" ? body.activeProfileId : "";
 
     await prisma.aiModelSetting.upsert({
       where: {
-        userId: user.id,
+        organizationId_workspaceId_userId: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          userId: user.id,
+        },
       },
       create: {
         organizationId: user.organizationId,
         userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
         activeProfileId,
         settings: settings as unknown as Prisma.InputJsonValue,
         profiles: profiles as unknown as Prisma.InputJsonValue,
       },
       update: {
         organizationId: user.organizationId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
         activeProfileId,
         settings: settings as unknown as Prisma.InputJsonValue,
         profiles: profiles as unknown as Prisma.InputJsonValue,

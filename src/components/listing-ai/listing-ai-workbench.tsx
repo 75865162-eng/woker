@@ -1,24 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   BarChart3,
   Download,
   Highlighter,
   History,
   ImageIcon,
+  ImageUp,
   Layers3,
   Loader2,
   Minus,
   Plus,
-  RotateCcw,
   Search,
   Sparkles,
   Upload,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImageUpscaleWorkbench } from "@/components/image-upscale/image-upscale-workbench";
 import {
   AlignedPlaceholder,
   AmazonLinkButton,
@@ -98,7 +99,15 @@ const tabs = [
   { id: "listing", label: "Listing", icon: Sparkles },
   { id: "imagePlan", label: "Image Plan", icon: Layers3 },
   { id: "review", label: "Review & History", icon: History },
+  { id: "upscale", label: "图片放大", icon: ImageUp },
 ] as const;
+
+function normalizeTabId(tab: string | null): TabId | null {
+  if (!tab) return null;
+  if (tab === "image-upscale") return "upscale";
+
+  return tabs.some((item) => item.id === tab) ? (tab as TabId) : null;
+}
 
 async function hydrateImage(image: ImagePreview): Promise<ImagePreview> {
   if (image.url || !image.assetId) {
@@ -165,7 +174,9 @@ async function hydrateImageGeneratorDraft(draft: ImageGeneratorDraft) {
 }
 
 export function ListingAiWorkbench() {
-  const [activeTab, setActiveTab] = useState<TabId>("input");
+  const searchParams = useSearchParams();
+  const requestedTab = normalizeTabId(searchParams.get("tab"));
+  const [activeTab, setActiveTab] = useState<TabId>(requestedTab ?? "input");
   const [input, setInput] = useState(initialInput);
   const [competitors, setCompetitors] =
     useState<CompetitorDraft[]>(initialCompetitors);
@@ -196,7 +207,6 @@ export function ListingAiWorkbench() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const [draftReady, setDraftReady] = useState(false);
-  const [workspaceSaveError, setWorkspaceSaveError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -268,7 +278,9 @@ export function ListingAiWorkbench() {
         });
         if (!cancelled) setImageGenerator(restoredImageGenerator);
       }
-      if (draft.activeTab && !cancelled) setActiveTab(draft.activeTab);
+      if (draft.activeTab && !cancelled && !requestedTab) {
+        setActiveTab(draft.activeTab);
+      }
     }
 
     async function restoreDraft() {
@@ -314,10 +326,13 @@ export function ListingAiWorkbench() {
 
         if (localRecords.length && !cancelled) setRecords(localRecords);
         if (localDraft) await applyWorkspaceDraft(localDraft);
-        if (!cancelled) setWorkspaceSaveError(storageError instanceof Error ? storageError.message : "Listing AI 工作区读取失败。");
       } finally {
         if (!cancelled) setDraftReady(true);
       }
+    }
+
+    if (requestedTab) {
+      setActiveTab(requestedTab);
     }
 
     void restoreDraft();
@@ -325,7 +340,7 @@ export function ListingAiWorkbench() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [requestedTab]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -343,9 +358,10 @@ export function ListingAiWorkbench() {
       window.localStorage.setItem(storageKey, JSON.stringify(records));
       const timeout = window.setTimeout(() => {
         void saveListingAiWorkspace(persistableDraft, records).then(
-          () => setWorkspaceSaveError(""),
-          (saveError: unknown) =>
-            setWorkspaceSaveError(saveError instanceof Error ? saveError.message : "Listing AI 工作区保存失败。"),
+          undefined,
+          (saveError: unknown) => {
+            console.warn("Failed to sync Listing AI workspace.", saveError);
+          },
         );
       }, 700);
 
@@ -373,13 +389,6 @@ export function ListingAiWorkbench() {
   const productFactsCount = input.productFacts.trim().length;
   const canSubmit =
     input.asin.trim().length > 1 && productFactsCount >= 50 && !loading;
-  const latestVersion =
-    records.find((record) => record.productName === productName)?.version ?? 0;
-  const competitorImageCount = competitors.reduce(
-    (total, competitor) => total + competitor.images.length,
-    0,
-  );
-  const ownImageCount = ownImages.images.length;
   const competitorInfo = useMemo(
     () => buildCompetitorInfo(competitors, ownImages.structureNotes),
     [competitors, ownImages.structureNotes],
@@ -581,29 +590,6 @@ export function ListingAiWorkbench() {
     setError("");
   }
 
-  function resetDraft() {
-    setInput(initialInput);
-    setCompetitors(initialCompetitors);
-    setOwnImages({
-      structureNotes: "",
-      mainImage: [],
-      images: [],
-      imageNotes: [],
-      sales: "",
-      price: "",
-      rating: "",
-      reviewCount: "",
-    });
-    setTitleGenerator(initialTitleGenerator);
-    setImageGenerator(initialImageGenerator);
-    setTitleGeneratorError("");
-    setImageGeneratorError("");
-    setResult(null);
-    setActiveTab("input");
-    setError("");
-    window.localStorage.removeItem(draftStorageKey);
-  }
-
   async function copyText(key: string, value: string) {
     await navigator.clipboard.writeText(value);
     setCopied(key);
@@ -671,45 +657,6 @@ export function ListingAiWorkbench() {
 
   return (
     <div className="space-y-4">
-      <section className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_520px]">
-          <div className="border-b border-border p-5 xl:border-b-0 xl:border-r">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="blue">Listing Optimization Workspace</Badge>
-              <Badge tone="green">Autosaved</Badge>
-              <Badge tone="amber">Version {latestVersion || 1}</Badge>
-              {workspaceSaveError ? <Badge tone="red">Database Sync Error</Badge> : null}
-              <Button size="sm" variant="secondary" onClick={resetDraft}>
-                <RotateCcw className="h-4 w-4" />
-                一键撤销输入
-              </Button>
-            </div>
-            <h2 className="mt-4 text-2xl font-black leading-tight text-foreground md:text-3xl">
-              {productName}
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-              一个工作区管理产品信息、竞品、图片图库、AI 分析、Listing、Image
-              Plan、A+、AI Review 和历史版本。
-            </p>
-            {workspaceSaveError ? (
-              <p className="mt-2 text-sm font-medium text-red-600">{workspaceSaveError}</p>
-            ) : null}
-          </div>
-          <div className="grid grid-cols-4 divide-x divide-border">
-            <WorkspaceMetric label="Facts" value={`${productFactsCount}/50`} />
-            <WorkspaceMetric
-              label="Competitor Images"
-              value={`${competitorImageCount}`}
-            />
-            <WorkspaceMetric label="Mine" value={`${ownImageCount}`} />
-            <WorkspaceMetric
-              label="AI Score"
-              value={result ? `${result.score}` : "--"}
-            />
-          </div>
-        </div>
-      </section>
-
       <Card>
         <CardContent className="overflow-x-auto p-2">
           <div className="flex min-w-max gap-2">
@@ -798,6 +745,7 @@ export function ListingAiWorkbench() {
             onLoad={loadRecord}
           />
         ) : null}
+        {activeTab === "upscale" ? <ImageUpscaleWorkbench /> : null}
       </main>
     </div>
   );
@@ -2459,17 +2407,6 @@ function MineColumn({
           variant="gallery"
         />
       </div>
-    </div>
-  );
-}
-
-function WorkspaceMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex min-h-32 flex-col justify-center p-4">
-      <p className="text-xs font-bold uppercase tracking-normal text-muted">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-black text-foreground">{value}</p>
     </div>
   );
 }

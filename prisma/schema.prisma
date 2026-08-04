@@ -48,6 +48,12 @@ enum ImportJobStatus {
   failed
 }
 
+enum WorkerHeartbeatStatus {
+  online
+  stopping
+  offline
+}
+
 model Organization {
   id          String               @id @default(cuid())
   name        String
@@ -58,6 +64,9 @@ model Organization {
   teamRoster  TeamRosterMember[]
   rolePermissions OrganizationRolePermission?
   auditLogs   AuditLog[]
+  workspaceScopes WorkspaceScope[]
+  dataChangeVersions DataChangeVersion[]
+  workerHeartbeats WorkerHeartbeat[]
 }
 
 model User {
@@ -72,10 +81,27 @@ model User {
   memberships  OrganizationMember[]
   sessions     UserSession[]
   auditLogs    AuditLog[]
-  aiModelSetting AiModelSetting?
-  listingAiWorkspace ListingAiWorkspace?
-  workspaceSnapshot WorkspaceSnapshot?
+  aiModelSettings AiModelSetting[]
+  listingAiWorkspaces ListingAiWorkspace[]
+  workspaceSnapshots WorkspaceSnapshot[]
   saihuSearchMergeHistory SaihuSearchMergeHistoryRecord[]
+  dataChangeVersions DataChangeVersion[]
+}
+
+model WorkspaceScope {
+  organizationId String
+  id             String
+  name           String
+  accountId      String   @default("")
+  marketplace    String   @default("")
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, id])
+  @@index([organizationId, accountId])
+  @@index([organizationId, marketplace])
 }
 
 model OrganizationMember {
@@ -155,6 +181,9 @@ model FileObject {
   id             String           @id @default(cuid())
   organizationId String
   userId         String
+  workspaceId    String           @default("default")
+  accountId      String           @default("")
+  marketplace    String           @default("")
   originalName   String
   mimeType       String?
   size           Int?
@@ -167,6 +196,8 @@ model FileObject {
   exportRecords  ExportRecord[]
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([organizationId, accountId, marketplace, createdAt])
   @@index([userId, createdAt])
 }
 
@@ -174,6 +205,9 @@ model ImportJob {
   id             String          @id @default(cuid())
   organizationId String
   userId         String
+  workspaceId    String          @default("default")
+  accountId      String          @default("")
+  marketplace    String          @default("")
   fileId         String
   type           String
   status         ImportJobStatus @default(queued)
@@ -186,6 +220,8 @@ model ImportJob {
   exportRecords  ExportRecord[]
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([organizationId, accountId, marketplace, createdAt])
   @@index([userId, createdAt])
   @@index([fileId])
   @@index([status])
@@ -195,6 +231,9 @@ model ExportRecord {
   id             String     @id @default(cuid())
   organizationId String
   userId         String
+  workspaceId    String     @default("default")
+  accountId      String     @default("")
+  marketplace    String     @default("")
   fileId         String
   jobId          String
   resultKey      String
@@ -207,6 +246,8 @@ model ExportRecord {
 
   @@unique([jobId, resultKey])
   @@index([organizationId, createdAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([organizationId, accountId, marketplace, createdAt])
   @@index([userId, createdAt])
   @@index([fileId])
 }
@@ -215,13 +256,19 @@ model ProductRecord {
   id             String   @id
   organizationId String
   userId         String
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   sku            String
   payload        Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([organizationId, sku])
+  @@unique([organizationId, workspaceId, sku])
   @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([organizationId, accountId, marketplace, updatedAt])
+  @@index([organizationId, sku])
   @@index([userId, updatedAt])
 }
 
@@ -229,20 +276,68 @@ model ProductImageCopyGalleryRecord {
   id             String   @id @default(cuid())
   organizationId String
   userId         String
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   sku            String
   payload        Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([organizationId, sku])
+  @@unique([organizationId, workspaceId, sku])
   @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([organizationId, accountId, marketplace, updatedAt])
   @@index([userId, updatedAt])
+}
+
+model DataChangeVersion {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
+  entityType     String
+  entityId       String
+  version        Int
+  action         String
+  summary        String?
+  payload        Json
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, entityType, entityId, version])
+  @@index([organizationId, entityType, entityId, createdAt])
+  @@index([organizationId, workspaceId, entityType, createdAt])
+  @@index([userId, createdAt])
+}
+
+model WorkerHeartbeat {
+  id             String                @id
+  organizationId String?
+  workerName     String
+  queueName      String
+  status         WorkerHeartbeatStatus @default(online)
+  concurrency    Int                   @default(1)
+  lastSeenAt     DateTime              @default(now())
+  metadata       Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization?         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([queueName, lastSeenAt])
+  @@index([organizationId, lastSeenAt])
 }
 
 model AiModelSetting {
   id              String   @id @default(cuid())
   organizationId  String
-  userId          String   @unique
+  userId          String
+  workspaceId     String   @default("default")
+  accountId       String   @default("")
+  marketplace     String   @default("")
   activeProfileId String?
   settings        Json
   profiles        Json
@@ -250,26 +345,38 @@ model AiModelSetting {
   updatedAt       DateTime @updatedAt
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([organizationId, workspaceId, userId])
   @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([userId, updatedAt])
 }
 
 model ListingAiWorkspace {
   id             String   @id @default(cuid())
   organizationId String
-  userId         String   @unique
+  userId         String
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   draft          Json
   records        Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([organizationId, workspaceId, userId])
   @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([userId, updatedAt])
 }
 
 model WorkspaceSnapshot {
   id             String   @id @default(cuid())
   organizationId String
-  userId         String   @unique
+  userId         String
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   version        Int      @default(1)
   savedAt        DateTime @default(now())
   snapshot       Json
@@ -277,13 +384,19 @@ model WorkspaceSnapshot {
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([organizationId, workspaceId, userId])
   @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([userId, updatedAt])
 }
 
 model SaihuSearchMergeHistoryRecord {
   id             String   @id
   organizationId String
   userId         String
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   action         String
   sourceFileName String
   outputFileName String?
@@ -294,5 +407,7 @@ model SaihuSearchMergeHistoryRecord {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([organizationId, accountId, marketplace, createdAt])
   @@index([userId, createdAt])
 }

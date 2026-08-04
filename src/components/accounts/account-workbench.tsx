@@ -187,27 +187,52 @@ async function loadAccountsFromApi() {
     const response = await fetch(teamMembersApiPath, { cache: "no-store" });
     if (!response.ok) return null;
 
-    const payload = (await response.json()) as { accounts?: unknown };
-    return normalizeTeamAccounts(payload.accounts).map((account) => withAccountPassword({
-      ...account,
-      lastActiveAt: account.lastActiveAt ?? "未记录",
-    })) as Account[];
+    const payload = (await response.json()) as { accounts?: unknown; revision?: unknown };
+    return {
+      accounts: normalizeTeamAccounts(payload.accounts).map((account) => withAccountPassword({
+        ...account,
+        lastActiveAt: account.lastActiveAt ?? "未记录",
+      })) as Account[],
+      revision: typeof payload.revision === "string" ? payload.revision : "",
+    };
   } catch {
     return null;
   }
 }
 
-async function saveAccountsToApi(accounts: Account[]) {
+async function saveAccountsToApi(accounts: Account[], revision: string) {
   try {
-    await fetch(teamMembersApiPath, {
+    const response = await fetch(teamMembersApiPath, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ accounts: stripAccountPasswords(accounts) }),
+      body: JSON.stringify({ accounts: stripAccountPasswords(accounts), revision }),
     });
+    const payload = (await response.json()) as { accounts?: unknown; revision?: unknown; error?: string };
+
+    if (!response.ok) {
+      return {
+        ok: false as const,
+        error: payload.error ?? "账号列表保存失败。",
+        revision: typeof payload.revision === "string" ? payload.revision : "",
+      };
+    }
+
+    return {
+      ok: true as const,
+      accounts: normalizeTeamAccounts(payload.accounts).map((account) => withAccountPassword({
+        ...account,
+        lastActiveAt: account.lastActiveAt ?? "未记录",
+      })) as Account[],
+      revision: typeof payload.revision === "string" ? payload.revision : "",
+    };
   } catch {
-    return undefined;
+    return {
+      ok: false as const,
+      error: "账号列表保存失败。",
+      revision: "",
+    };
   }
 }
 
@@ -237,6 +262,8 @@ async function saveRolePermissionsToApi(permissions: RolePermissionMap) {
 
 export function AccountWorkbench() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountRevision, setAccountRevision] = useState("");
+  const [accountSaveError, setAccountSaveError] = useState("");
   const [roles, setRoles] = useState(initialRoles);
   const [activeRoleId, setActiveRoleId] = useState<RoleId>("operations");
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
@@ -257,14 +284,15 @@ export function AccountWorkbench() {
   useEffect(() => {
     let canceled = false;
 
-    void loadAccountsFromApi().then((apiAccounts) => {
+    void loadAccountsFromApi().then((payload) => {
       if (canceled) return;
 
-      if (!apiAccounts?.length) {
+      if (!payload?.accounts.length) {
         return;
       }
 
-      setAccounts(apiAccounts);
+      setAccounts(payload.accounts);
+      setAccountRevision(payload.revision);
     });
 
     return () => {
@@ -317,7 +345,24 @@ export function AccountWorkbench() {
   function commitAccounts(updater: (current: Account[]) => Account[]) {
     setAccounts((current) => {
       const next = updater(current);
-      void saveAccountsToApi(next);
+      const revision = accountRevision;
+      setAccountSaveError("");
+      void saveAccountsToApi(next, revision).then((result) => {
+        if (!result) return;
+
+        if (!result.ok) {
+          setAccountSaveError(result.error);
+          void loadAccountsFromApi().then((payload) => {
+            if (!payload) return;
+            setAccounts(payload.accounts);
+            setAccountRevision(payload.revision || result.revision);
+          });
+          return;
+        }
+
+        setAccounts(result.accounts);
+        setAccountRevision(result.revision);
+      });
       return next;
     });
   }
@@ -397,7 +442,7 @@ export function AccountWorkbench() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2">
           {[
@@ -429,15 +474,20 @@ export function AccountWorkbench() {
           </Button>
         </div>
       </div>
+      {accountSaveError ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {accountSaveError}
+        </div>
+      ) : null}
 
-      <section className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="账号总数" value={accounts.length} note={`在线 ${activeAccounts}`} icon={UsersRound} tone="blue" />
         <MetricCard title="业务部门" value={departments.length} note={departments.slice(0, 2).join(" / ")} icon={Building2} tone="green" />
         <MetricCard title="待激活账号" value={pendingAccounts} note="新建后首次登录改密" icon={Mail} tone="amber" />
         <MetricCard title="停用账号" value={disabledAccounts} note="保留审计记录" icon={LockKeyhole} tone="gray" />
       </section>
 
-      <section className="grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1fr)_420px]">
+      <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -530,60 +580,60 @@ export function AccountWorkbench() {
           </CardContent>
         </Card>
 
-        <div className="space-y-5">
+        <div className="space-y-3">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
               <div>
-                <CardTitle>角色权限</CardTitle>
-                <p className="mt-1 text-sm text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
+                <CardTitle className="text-sm">角色权限</CardTitle>
+                <p className="mt-0.5 text-xs text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
               </div>
-                <Badge tone="blue">{visibleRoles.length} 个角色</Badge>
+                <Badge className="shrink-0" tone="blue">{visibleRoles.length} 个角色</Badge>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1.5 p-3">
               {visibleRoles.map((role) => (
                 <button
                   key={role.id}
-                  className={`w-full rounded-md border px-4 py-3 text-left transition ${
+                  className={`w-full rounded-md border px-2.5 py-2 text-left transition ${
                     activeRole.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
                   }`}
                   onClick={() => setActiveRoleId(role.id)}
                   type="button"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-bold text-foreground">{role.name}</p>
+                    <p className="text-sm font-bold text-foreground">{role.name}</p>
                     <Badge tone={activeRole.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-muted">{role.description}</p>
+                  <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
                 </button>
               ))}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
               <div>
-                <CardTitle>{activeRole.name} 权限矩阵</CardTitle>
-                <p className="mt-1 text-sm text-muted">当前实际绑定 {roleMemberCount} 个账号。</p>
+                <CardTitle className="text-sm">{activeRole.name} 权限矩阵</CardTitle>
+                <p className="mt-0.5 text-xs text-muted">当前实际绑定 {roleMemberCount} 个账号。</p>
               </div>
-              <Button size="sm" variant="secondary" onClick={saveRolePermissions}>
-                <ShieldCheck className="h-4 w-4" />
+              <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={saveRolePermissions}>
+                <ShieldCheck className="h-3.5 w-3.5" />
                 保存权限
               </Button>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1.5 p-3">
               {permissionSavedAt ? <p className="text-xs font-medium text-green-700">权限已保存：{permissionSavedAt}，页面正在刷新。</p> : null}
               {permissionModules.map((module) => (
-                <div key={module.id} className="grid grid-cols-[130px_minmax(0,1fr)] items-center gap-3 rounded-md border border-border px-3 py-2">
-                  <p className="text-sm font-bold text-foreground">{module.name}</p>
-                  <div className="grid grid-cols-5 gap-2">
+                <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
+                  <p className="text-xs font-bold text-foreground">{module.name}</p>
+                  <div className="grid grid-cols-5 gap-1">
                     {permissionActions.map((action) => {
                       const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
 
                       return (
-                        <label key={action.id} className="flex items-center justify-center gap-1 text-xs font-medium text-muted">
+                        <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
                           <input
                             checked={checked}
-                            className="h-4 w-4 accent-brand"
+                            className="h-3.5 w-3.5 accent-brand"
                             onChange={() => togglePermission(module.id, action.id)}
                             type="checkbox"
                           />
@@ -600,32 +650,32 @@ export function AccountWorkbench() {
       </section>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 py-3">
           <CardTitle>SKU 流转权限</CardTitle>
           <p className="mt-1 text-sm text-muted">账号角色会直接决定商品页负责人下拉和 SKU 处理权限。</p>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+        <CardContent className="grid grid-cols-1 gap-3 p-4 lg:grid-cols-4">
           {[
             { title: "采购", body: "新建 SKU 后自动成为采购负责人，不需要手动选择。", tone: "gray" as const },
             { title: "主管 / 运营 / 运营助理", body: "SKU 状态为运营确认中时必须选择，可多选；被选中的成员获得该 SKU 编辑权。", tone: "amber" as const },
             { title: "美工", body: "SKU 状态为美工处理中时必须选择，可多选；被选中的美工只有查看权。", tone: "blue" as const },
             { title: "停用账号", body: "不会出现在运营或美工负责人下拉里，也不会获得新的 SKU 权限。", tone: "red" as const },
           ].map((item) => (
-            <div key={item.title} className="rounded-md border border-border bg-white p-4">
+            <div key={item.title} className="rounded-md border border-border bg-white p-3">
               <Badge tone={item.tone}>{item.title}</Badge>
-              <p className="mt-3 text-sm leading-6 text-muted">{item.body}</p>
+              <p className="mt-2 text-sm leading-5 text-muted">{item.body}</p>
             </div>
           ))}
         </CardContent>
       </Card>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
             <CardTitle>人员分布</CardTitle>
             <Badge tone="gray">按部门</Badge>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <CardContent className="grid grid-cols-1 gap-2 p-4 md:grid-cols-2">
             {departments.map((department) => {
               const count = accounts.filter((account) => account.department === department).length;
               const percent = Math.round((count / accounts.length) * 100);
@@ -636,11 +686,11 @@ export function AccountWorkbench() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
             <CardTitle>最近账号动态</CardTitle>
             <Badge tone="blue">审计预览</Badge>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 p-4">
             {[
               "李娜调整了运营角色的导出权限",
               "张伟重置了陈晨的首次登录密码",
@@ -691,13 +741,13 @@ function MetricCard({
 
   return (
     <Card className={`border-t-4 ${colorClass}`}>
-      <CardContent className="flex items-center justify-between">
+      <CardContent className="flex items-center justify-between p-4">
         <div>
-          <p className="text-sm font-bold text-muted">{title}</p>
-          <p className="mt-2 text-3xl font-black text-foreground">{value}</p>
+          <p className="text-xs font-bold text-muted">{title}</p>
+          <p className="mt-1 text-2xl font-black text-foreground">{value}</p>
           <p className="mt-1 text-xs text-muted">{note}</p>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-md bg-surface-muted">
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-muted">
           <Icon className={`h-5 w-5 ${colorClass}`} />
         </div>
       </CardContent>
@@ -707,12 +757,12 @@ function MetricCard({
 
 function DepartmentBar({ name, count, percent }: { name: string; count: number; percent: number }) {
   return (
-    <div className="rounded-md border border-border px-4 py-3">
+    <div className="rounded-md border border-border px-3 py-2.5">
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-foreground">{name}</p>
         <span className="text-sm font-black text-foreground">{count}</span>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-muted">
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
         <div className="h-full rounded-full bg-brand" style={{ width: `${percent}%` }} />
       </div>
     </div>

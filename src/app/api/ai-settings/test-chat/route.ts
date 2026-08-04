@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { type AiModelSettings } from "@/lib/ai-settings";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
 import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
@@ -28,6 +29,12 @@ function buildAiHeaders(settings: AiModelSettings) {
 
 export async function POST(request: Request) {
   try {
+    const permission = await requireApiPermission("settings", "view");
+
+    if (!permission.ok) {
+      return permission.response;
+    }
+
     const body = (await request.json()) as TestChatRequest;
     const settings = resolveAiSettings(body.aiSettings);
     const message = body.message?.trim() || "请用一句中文回复：模型配置连接成功。";

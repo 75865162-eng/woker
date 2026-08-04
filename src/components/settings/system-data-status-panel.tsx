@@ -97,23 +97,23 @@ export async function SystemDataStatusPanel() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-surface-muted text-brand">
-            {healthy ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5 text-amber-600" />}
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
+            {healthy ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
           </div>
           <div>
-            <CardTitle>数据库接入状态</CardTitle>
-            <p className="mt-1 text-xs font-medium text-muted">用于判断哪些页面已经具备多人共享的数据边界。</p>
+            <CardTitle className="text-sm">数据库接入状态</CardTitle>
+            <p className="mt-0.5 text-xs font-medium text-muted">用于判断哪些页面已经具备多人共享的数据边界。</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <Badge tone={authDriver === "database" ? "green" : "amber"}>{authDriver === "database" ? "数据库鉴权" : "本地鉴权"}</Badge>
           <Badge tone={storageDriver === "local" ? "amber" : "green"}>文件：{storageDriver === "local" ? "本地" : storageDriver.toUpperCase()}</Badge>
           <Badge tone={queueDriver === "inline" ? "amber" : "green"}>任务：{queueDriver === "inline" ? "同步处理" : queueDriver}</Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 p-3">
         {databaseError ? (
           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
             数据库可配置但当前读取失败：{databaseError}
@@ -126,35 +126,35 @@ export async function SystemDataStatusPanel() {
           </div>
         ) : null}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+        <div className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           {statusMetrics.map((item) => {
             const Icon = item.icon;
 
             return (
-              <div key={item.label} className="rounded-md border border-border bg-surface-muted px-3 py-3">
+              <div key={item.label} className="rounded-md border border-border bg-surface-muted px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-bold text-muted">{item.label}</p>
                   <Icon className="h-4 w-4 text-brand" />
                 </div>
-                <p className="mt-2 text-2xl font-black metric-tabular text-foreground">{item.value}</p>
+                <p className="mt-1 text-xl font-black metric-tabular text-foreground">{item.value}</p>
                 <p className="mt-1 truncate text-xs font-medium text-muted">{item.detail}</p>
               </div>
             );
           })}
         </div>
 
-        <div className="grid gap-3 text-xs font-medium leading-5 text-muted lg:grid-cols-3">
-          <div className="rounded-md border border-border bg-white p-3">
+        <div className="grid gap-2 text-xs font-medium leading-4 text-muted lg:grid-cols-3">
+          <div className="rounded-md border border-border bg-white p-2.5">
             <p className="font-bold text-foreground">已接后端边界</p>
-            <p className="mt-1">账号、组织、团队成员、商品清单、图片文案、文件对象、处理任务、导出记录。</p>
+            <p className="mt-0.5">账号、组织、团队成员、商品清单、图片文案、文件对象、处理任务、导出记录。</p>
           </div>
-          <div className="rounded-md border border-border bg-white p-3">
+          <div className="rounded-md border border-border bg-white p-2.5">
             <p className="font-bold text-foreground">仍在本地草稿</p>
-            <p className="mt-1">PPC 工作区、Listing AI 历史、搜索词合并历史、物流当次处理状态。</p>
+            <p className="mt-0.5">PPC 工作区、Listing AI 历史、搜索词合并历史、物流当次处理状态。</p>
           </div>
-          <div className="rounded-md border border-border bg-white p-3">
+          <div className="rounded-md border border-border bg-white p-2.5">
             <p className="font-bold text-foreground">下一步建议</p>
-            <p className="mt-1">下一步把商品试算草稿绑定 SKU，再迁 PPC workspace snapshot。</p>
+            <p className="mt-0.5">下一步把商品试算草稿绑定 SKU，再迁 PPC workspace snapshot。</p>
           </div>
         </div>
       </CardContent>

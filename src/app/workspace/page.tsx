@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/app-shell/app-shell";
+import { CampaignGridHome, WorkspacePanel } from "@/components/app-shell/lazy-workbenches";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
-import { CampaignGridHome } from "@/components/workspace/campaign-grid-home";
-import { WorkspacePanel } from "@/components/workspace/workspace-panel";
 
 export default function WorkspacePage() {
   return (

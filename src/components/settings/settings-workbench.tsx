@@ -36,7 +36,7 @@ import {
 } from "@/lib/ai-settings";
 
 const fieldClass =
-  "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
 
 export function SettingsWorkbench() {
@@ -310,23 +310,23 @@ export function SettingsWorkbench() {
 
   return (
     <>
-      <div className="space-y-5">
-        <section className="grid grid-cols-1 gap-5 2xl:grid-cols-[260px_minmax(0,1fr)_380px]">
+      <div className="space-y-3">
+        <section className="grid grid-cols-1 gap-3 2xl:grid-cols-[220px_minmax(0,1fr)_300px]">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between px-3 py-2.5">
               <div className="flex items-center gap-2">
-                <FolderOpen className="h-5 w-5 text-brand" />
-                <CardTitle>已保存配置</CardTitle>
+                <FolderOpen className="h-4 w-4 text-brand" />
+                <CardTitle className="text-sm">已保存配置</CardTitle>
               </div>
               <Badge tone="gray">{profiles.length} 个</Badge>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 p-3">
               {profiles.length ? (
                 profiles.map((profile) => {
                   const active = profile.id === activeProfileId;
 
                   return (
-                    <div key={profile.id} className={`rounded-md border p-3 ${active ? "border-brand bg-brand/5" : "border-border bg-white"}`}>
+                    <div key={profile.id} className={`rounded-md border p-2.5 ${active ? "border-brand bg-brand/5" : "border-border bg-white"}`}>
                       <button className="w-full text-left" onClick={() => void loadProfile(profile)} type="button">
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-bold text-foreground">{profile.name}</p>
@@ -335,7 +335,7 @@ export function SettingsWorkbench() {
                         <p className="mt-1 truncate text-xs text-muted">{profile.settings.baseUrl}</p>
                         <p className="mt-1 text-xs text-muted">{profile.settings.wireApi}</p>
                       </button>
-                      <Button className="mt-3 w-full" size="sm" variant="secondary" onClick={() => void deleteProfile(profile.id)}>
+                      <Button className="mt-2 w-full" size="sm" variant="secondary" onClick={() => void deleteProfile(profile.id)}>
                         <Trash2 className="h-4 w-4" />
                         删除
                       </Button>
@@ -349,44 +349,44 @@ export function SettingsWorkbench() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-md bg-brand text-white">
-                  <Bot className="h-5 w-5" />
+            <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-white">
+                  <Bot className="h-4 w-4" />
                 </div>
                 <div>
-                  <CardTitle>AI 大模型配置</CardTitle>
-                  <p className="mt-1 text-sm text-muted">按 OpenAI 兼容 Responses 协议提交，其他功能会统一读取这里的配置。</p>
+                  <CardTitle className="text-sm">AI 大模型配置</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted">按 OpenAI 兼容 Responses 协议提交，其他功能会统一读取这里的配置。</p>
                 </div>
               </div>
               <Badge tone={ready ? "green" : "amber"}>{ready ? "可调用" : "待完善"}</Badge>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
+            <CardContent className="space-y-3 p-3">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-bold text-foreground">预设供应商</p>
-                    <p className="mt-1 text-xs text-muted">选择供应商后只需要粘贴 API Key，再点击保存配置。</p>
+                    <p className="mt-0.5 text-xs text-muted">选择供应商后只需要粘贴 API Key，再点击保存配置。</p>
                   </div>
                   <Button variant="secondary" size="sm" onClick={applyDeepseekPreset}>
                     <Zap className="h-4 w-4" />
                     推荐
                   </Button>
                 </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {aiProviderOptions.map((provider) => {
                     const active = settings.provider === provider.id;
 
                     return (
                       <button
                         key={provider.id}
-                        className={`relative flex min-h-16 items-center gap-3 rounded-md border px-4 py-3 text-left transition ${
+                        className={`relative flex min-h-12 items-center gap-2 rounded-md border px-3 py-2 text-left transition ${
                           active ? "border-brand bg-brand text-white shadow-sm" : "border-border bg-surface-muted hover:border-brand hover:bg-white"
                         }`}
                         onClick={() => applyProviderPreset(provider.id)}
                         type="button"
                       >
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-black ${active ? "bg-white text-brand" : provider.accentClass}`}>
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-black ${active ? "bg-white text-brand" : provider.accentClass}`}>
                           {provider.shortLabel}
                         </span>
                         <span className="min-w-0">
@@ -400,7 +400,7 @@ export function SettingsWorkbench() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_0.8fr]">
                 <Field label="API Key">
                   <div className="relative">
                     <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -427,7 +427,7 @@ export function SettingsWorkbench() {
               </div>
 
               <button
-                className="flex w-full items-center justify-between rounded-md border border-border px-4 py-3 text-left transition hover:bg-surface-muted"
+                className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2 text-left transition hover:bg-surface-muted"
                 onClick={() => setShowAdvanced((current) => !current)}
                 type="button"
               >
@@ -435,14 +435,14 @@ export function SettingsWorkbench() {
                   <SlidersHorizontal className="h-4 w-4 text-brand" />
                   <div>
                     <p className="text-sm font-bold text-foreground">高级连接参数</p>
-                    <p className="mt-1 text-xs text-muted">默认不用改；只有换供应商或模型时再调整。</p>
+                    <p className="mt-0.5 text-xs text-muted">默认不用改；只有换供应商或模型时再调整。</p>
                   </div>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-muted transition ${showAdvanced ? "rotate-180" : ""}`} />
               </button>
 
               {showAdvanced ? (
-                <div className="grid grid-cols-1 gap-4 rounded-md border border-border bg-surface-muted p-4 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 rounded-md border border-border bg-surface-muted p-3 xl:grid-cols-3">
                   <Field label="Base URL">
                     <div className="relative">
                       <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -470,7 +470,7 @@ export function SettingsWorkbench() {
                 </div>
               ) : null}
 
-              <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-muted">
                   {settingsError ? <span className="text-red-600">{settingsError}</span> : savedAt ? <span>已保存：{savedAt}</span> : <span>填写 API Key 后点击保存，Listing AI 会立即使用新配置。</span>}
                 </div>
@@ -489,18 +489,18 @@ export function SettingsWorkbench() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>调用摘要</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between px-3 py-2.5">
+              <CardTitle className="text-sm">调用摘要</CardTitle>
               <Badge tone={publicSettings.hasApiKey ? "green" : "gray"}>{publicSettings.hasApiKey ? "Key 已就绪" : "未填 Key"}</Badge>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <CardContent className="space-y-3 p-3">
+              <div className="grid grid-cols-2 gap-2">
                 <StatusItem label="供应商" value={getProviderLabel(publicSettings.provider)} />
                 <StatusItem label="协议" value={publicSettings.wireApi} />
                 <StatusItem label="模型" value={publicSettings.model} />
                 <StatusItem label="状态" value={ready ? "ready" : "setup"} />
               </div>
-              <pre className="max-h-52 overflow-auto rounded-md border border-border bg-surface-muted p-3 text-xs leading-5 text-foreground thin-scrollbar">
+              <pre className="max-h-40 overflow-auto rounded-md border border-border bg-surface-muted p-2.5 text-xs leading-5 text-foreground thin-scrollbar">
                 {JSON.stringify(publicSettings, null, 2)}
               </pre>
               <Button className="w-full" variant="secondary" onClick={copyPublicSettings}>
@@ -512,24 +512,24 @@ export function SettingsWorkbench() {
         </section>
 
         <Card>
-          <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-surface-muted text-brand">
-                <Bot className="h-5 w-5" />
+          <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
+                <Bot className="h-4 w-4" />
               </div>
               <div>
-                <CardTitle>测试聊天</CardTitle>
-                <p className="mt-1 text-sm text-muted">发送一条短消息，验证 API Key、Base URL、模型和 Responses 协议是否可用。</p>
+                <CardTitle className="text-sm">测试聊天</CardTitle>
+                <p className="mt-0.5 text-xs text-muted">发送一条短消息，验证 API Key、Base URL、模型和 Responses 协议是否可用。</p>
               </div>
             </div>
             <Badge tone={testingChat ? "amber" : ready ? "green" : "gray"}>{testingChat ? "测试中" : ready ? "可测试" : "待配置"}</Badge>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="max-h-80 space-y-3 overflow-auto rounded-md border border-border bg-surface-muted p-4 thin-scrollbar">
+          <CardContent className="space-y-3 p-3">
+            <div className="max-h-56 space-y-2 overflow-auto rounded-md border border-border bg-surface-muted p-3 thin-scrollbar">
               {chatMessages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`max-w-[78%] whitespace-pre-wrap rounded-md px-4 py-3 text-sm leading-6 ${
+                    className={`max-w-[78%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm leading-5 ${
                       message.role === "user" ? "bg-brand text-white" : "border border-border bg-white text-foreground"
                     }`}
                   >
@@ -541,9 +541,9 @@ export function SettingsWorkbench() {
 
             {chatError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{chatError}</div> : null}
 
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_150px]">
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_130px]">
               <textarea
-                className={`${fieldClass} min-h-20 resize-y`}
+                className={`${fieldClass} min-h-16 resize-y py-2`}
                 value={chatInput}
                 onChange={(event) => setChatInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -553,7 +553,7 @@ export function SettingsWorkbench() {
                 }}
                 placeholder="输入测试消息"
               />
-              <Button className="h-auto min-h-20" disabled={!chatInput.trim() || testingChat} onClick={sendTestChat}>
+              <Button className="h-auto min-h-16" disabled={!chatInput.trim() || testingChat} onClick={sendTestChat}>
                 <Send className="h-4 w-4" />
                 {testingChat ? "发送中" : "发送测试"}
               </Button>
@@ -570,7 +570,7 @@ export function SettingsWorkbench() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="space-y-2">
+    <label className="space-y-1.5">
       <span className={labelClass}>{label}</span>
       {children}
     </label>
@@ -579,7 +579,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function StatusItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-border px-3 py-2">
+    <div className="rounded-md border border-border px-2.5 py-2">
       <p className="text-xs font-bold text-muted">{label}</p>
       <p className="mt-1 truncate text-sm font-bold text-foreground">{value}</p>
     </div>

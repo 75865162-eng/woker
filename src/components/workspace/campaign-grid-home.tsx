@@ -1,10 +1,12 @@
 ﻿"use client";
 
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Download, EyeOff, History, Play, RotateCcw, Search, SlidersHorizontal, UploadCloud, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Download, EyeOff, History, ListChecks, Play, RotateCcw, Search, SlidersHorizontal, UploadCloud, X } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { RulesEditorShell } from "@/components/app-shell/lazy-workbenches";
 import { Button } from "@/components/ui/button";
+import { DataSourceBanner } from "@/components/ui/data-source-banner";
 import { OperationProgress } from "@/components/ui/operation-progress";
-import { defaultRules } from "@/data/mock-data";
+import { defaultRules, lifecycleGroups } from "@/data/mock-data";
 import { useBulkUpload } from "@/lib/hooks/use-bulk-upload";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";
@@ -59,6 +61,7 @@ export function CampaignGridHome() {
   const overallScopeRef = useRef<string[]>([]);
   const [historyScopeIds, setHistoryScopeIds] = useState<string[] | null>(null);
   const [blockedModalOpen, setBlockedModalOpen] = useState(false);
+  const [rulesCenterOpen, setRulesCenterOpen] = useState(false);
   const [ruleModalLifecycleId, setRuleModalLifecycleId] = useState<LifecycleGroupId | null>(null);
   const [overallUploadProgress, setOverallUploadProgress] = useState<{ label: string; progress: number } | null>(null);
   const [ruleRunProgress, setRuleRunProgress] = useState<{ label: string; progress: number } | null>(null);
@@ -615,6 +618,14 @@ export function CampaignGridHome() {
           {filteredCampaigns.length} campaigns · Page {page} / {totalPages}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setRulesCenterOpen(true)}
+            title="打开规则中心"
+          >
+            <ListChecks className="h-4 w-4" />
+            规则中心
+          </Button>
           <Button variant="secondary" onClick={selectOverallFilesForAllCampaigns}>
             <UploadCloud className="h-4 w-4" />
             上传匹配所有广告组
@@ -884,6 +895,39 @@ export function CampaignGridHome() {
           </tbody>
         </table>
       </div>
+
+      {rulesCenterOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6" onClick={() => setRulesCenterOpen(false)}>
+          <section
+            className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-lg border border-border bg-white shadow-[0_24px_80px_rgba(15,23,42,0.25)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+              <div>
+                <h2 className="text-base font-black text-foreground">规则中心</h2>
+                <p className="mt-0.5 text-xs font-semibold text-muted">产品生命周期规则与 IF / THEN 编辑器。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRulesCenterOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded border border-border text-muted hover:text-foreground"
+                title="关闭规则中心"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="thin-scrollbar flex-1 space-y-3 overflow-auto p-4">
+              <DataSourceBanner
+                className="rounded-md px-3 py-2"
+                tone="local"
+                title="规则仓库当前同步到本地工作区"
+                description="规则会驱动 PPC 草稿生成，不直接覆盖原始文件；当前保存到浏览器 IndexedDB。"
+              />
+              <RulesEditorShell lifecycleGroups={lifecycleGroups} initialLifecycleId={activeLifecycleGroupId ?? lifecycleGroups[0].id} />
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {ruleModalLifecycleId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={() => setRuleModalLifecycleId(null)}>

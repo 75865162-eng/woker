@@ -1,4 +1,4 @@
-﻿import { ImagePlus, RotateCcw, Search, X } from "lucide-react";
+﻿import { History, ImagePlus, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
@@ -140,10 +140,12 @@ export function ProductTable({
   products,
   totalCount,
   onOpenProduct,
+  onOpenHistory,
 }: {
   products: Product[];
   totalCount: number;
   onOpenProduct: (productId: string) => void;
+  onOpenHistory: (product: Product) => void;
 }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
@@ -171,6 +173,7 @@ export function ProductTable({
               <th className="w-[112px] px-3 py-3">创建日期</th>
               <th className="w-[160px] px-3 py-3">选品关键词</th>
               <th className="w-[160px] px-3 py-3">备注</th>
+              <th className="w-[96px] px-3 py-3 text-right">版本</th>
             </tr>
           </thead>
           <tbody>
@@ -219,11 +222,16 @@ export function ProductTable({
                 <td className="px-3 py-3">
                   <p className="line-clamp-2 text-xs">{product.note || "--"}</p>
                 </td>
+                <td className="px-3 py-3 text-right">
+                  <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>
+                    <History className="h-4 w-4" />
+                  </Button>
+                </td>
               </tr>
             ))}
             {!products.length ? (
               <tr>
-                <td colSpan={16} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={17} className="px-3 py-14 text-center text-sm text-muted">
                   没有匹配的商品，调整筛选条件后再试。
                 </td>
               </tr>

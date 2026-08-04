@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell/app-shell";
+import { ListingAiWorkbench } from "@/components/app-shell/lazy-workbenches";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
-import { ListingAiWorkbench } from "@/components/listing-ai/listing-ai-workbench";
 
 export default function ListingAiPage() {
   return (

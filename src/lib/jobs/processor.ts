@@ -205,6 +205,9 @@ export async function processImportJob(jobId: string) {
       create: {
         organizationId: job.organizationId,
         userId: job.userId,
+        workspaceId: job.workspaceId,
+        accountId: job.accountId,
+        marketplace: job.marketplace,
         fileId: job.fileId,
         jobId,
         resultKey,

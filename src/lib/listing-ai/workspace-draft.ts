@@ -129,7 +129,14 @@ export interface ImageGeneratorDraft {
   lastRunAt: string;
 }
 
-export type TabId = "input" | "visual" | "analysis" | "listing" | "imagePlan" | "review";
+export type TabId =
+  | "input"
+  | "visual"
+  | "analysis"
+  | "listing"
+  | "imagePlan"
+  | "review"
+  | "upscale";
 
 export interface WorkspaceDraft {
   input: ListingOptimizationRequest;

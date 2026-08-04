@@ -1,5 +1,7 @@
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -27,6 +29,13 @@ function isValidAssetKey(keyParts: string[]) {
 
 export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   try {
+    const permission = await requireApiPermission("listingAi", "view");
+
+    if (!permission.ok) {
+      return permission.response;
+    }
+    const { user } = permission;
+
     const { key: keyParts } = await params;
 
     if (!isValidAssetKey(keyParts)) {
@@ -34,6 +43,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ key
     }
 
     const key = keyParts.join("/");
+    if (process.env.DATABASE_URL) {
+      const fileObject = await prisma.fileObject.findFirst({
+        where: {
+          storageKey: key,
+          organizationId: user.organizationId,
+        },
+      });
+
+      if (!fileObject) {
+        return NextResponse.json({ error: "Asset not found." }, { status: 404 });
+      }
+    }
+
     const buffer = await getStorageDriver().getBuffer(key);
 
     return new Response(new Uint8Array(buffer), {

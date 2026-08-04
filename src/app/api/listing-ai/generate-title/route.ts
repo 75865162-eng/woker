@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { type AiModelSettings } from "@/lib/ai-settings";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
 import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
@@ -83,6 +84,12 @@ function parseTitleResults(text: string) {
 
 export async function POST(request: Request) {
   try {
+    const permission = await requireApiPermission("listingAi", "create");
+
+    if (!permission.ok) {
+      return permission.response;
+    }
+
     const body = (await request.json()) as TitleGeneratorRequest;
     const settings = resolveAiSettings(body.aiSettings);
     const prompt = body.prompt?.trim();

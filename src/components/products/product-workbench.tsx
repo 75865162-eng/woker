@@ -1,7 +1,7 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, Save, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, RotateCcw, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,6 +75,7 @@ export function ProductWorkbench() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
+  const [versionProduct, setVersionProduct] = useState<Product | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
@@ -157,6 +158,26 @@ export function ProductWorkbench() {
       canceled = true;
     };
   }, []);
+
+  async function reloadProducts() {
+    setProductsLoading(true);
+    setProductsError("");
+
+    try {
+      const response = await fetch("/api/products", { cache: "no-store" });
+      const data = (await response.json()) as { products?: Product[]; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || "商品数据读取失败");
+      }
+
+      setProducts(Array.isArray(data.products) ? data.products : []);
+    } catch (error) {
+      setProductsError(error instanceof Error ? error.message : "商品数据读取失败");
+    } finally {
+      setProductsLoading(false);
+    }
+  }
 
   const filteredProducts = useMemo(() => {
     const minPrice = Number(filters.minPrice);
@@ -277,9 +298,9 @@ export function ProductWorkbench() {
       window.alert(message);
       setActivityLog((current) => [`商品保存失败：${message}`, ...current].slice(0, 8));
     }
-  }
+}
 
-  function handleSaveTrialProduct(draft: TrialProductDraft) {
+function handleSaveTrialProduct(draft: TrialProductDraft) {
     const nextTrialProduct = {
       ...draft,
       id: draft.id ?? `trial-${Date.now()}`,
@@ -323,7 +344,7 @@ export function ProductWorkbench() {
         {productsLoading ? (
           <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
         ) : null}
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+        <section className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           <SummaryTile
             label="全部商品"
             value={products.length.toLocaleString("zh-CN")}
@@ -422,13 +443,24 @@ export function ProductWorkbench() {
               onChange={setFilters}
               onReset={() => setFilters(initialFilters)}
             />
-            <ProductTable products={visibleProducts} totalCount={filteredProducts.length} onOpenProduct={openProduct} />
+            <ProductTable products={visibleProducts} totalCount={filteredProducts.length} onOpenProduct={openProduct} onOpenHistory={setVersionProduct} />
             <Pagination page={page} pageCount={pageCount} pageSize={pageSize} pageSizeOptions={pageSizeOptions} onPageChange={setPage} onPageSizeChange={setPageSize} />
           </CardContent>
         </Card>
 
         {isActivityLogOpen ? (
           <ActivityLogModal entries={activityLog} onClose={() => setIsActivityLogOpen(false)} />
+        ) : null}
+
+        {versionProduct ? (
+          <ProductVersionModal
+            product={versionProduct}
+            onClose={() => setVersionProduct(null)}
+            onRestored={() => {
+              void reloadProducts();
+              setActivityLog((current) => [`已恢复商品 ${versionProduct.sku} 的历史版本`, ...current].slice(0, 8));
+            }}
+          />
         ) : null}
 
         {isEditorOpen ? (
@@ -451,6 +483,124 @@ export function ProductWorkbench() {
         ) : null}
       </div>
     </>
+  );
+}
+
+type ProductVersionRecord = {
+  id: string;
+  version: number;
+  action: string;
+  summary?: string | null;
+  createdAt: string;
+  userId?: string | null;
+};
+
+function ProductVersionModal({
+  product,
+  onClose,
+  onRestored,
+}: {
+  product: Product;
+  onClose: () => void;
+  onRestored: () => void;
+}) {
+  const [versions, setVersions] = useState<ProductVersionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState("");
+  const [error, setError] = useState("");
+
+  const loadVersions = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams({
+        entityType: "product",
+        entityId: product.sku,
+        pageSize: "50",
+      });
+      const response = await fetch(`/api/audit/versions?${params.toString()}`, { cache: "no-store" });
+      const data = (await response.json()) as { versions?: ProductVersionRecord[]; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || "版本历史读取失败。");
+      }
+
+      setVersions(Array.isArray(data.versions) ? data.versions : []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "版本历史读取失败。");
+    } finally {
+      setLoading(false);
+    }
+  }, [product.sku]);
+
+  async function restoreVersion(version: ProductVersionRecord) {
+    if (!window.confirm(`确定恢复 ${product.sku} 到版本 ${version.version} 吗？`)) {
+      return;
+    }
+
+    setBusyId(version.id);
+    setError("");
+
+    try {
+      const response = await fetch("/api/audit/versions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ versionId: version.id }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || "版本恢复失败。");
+      }
+
+      onRestored();
+      await loadVersions();
+    } catch (restoreError) {
+      setError(restoreError instanceof Error ? restoreError.message : "版本恢复失败。");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  useEffect(() => {
+    void loadVersions();
+  }, [loadVersions]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
+      <div className="flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <h3 className="text-lg font-bold text-foreground">版本历史：{product.sku}</h3>
+            <p className="mt-1 text-xs font-semibold text-muted">{product.chineseName || product.englishName || "未命名商品"}</p>
+          </div>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+            关闭
+          </Button>
+        </div>
+        <div className="thin-scrollbar flex-1 space-y-3 overflow-y-auto p-5">
+          {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
+          {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取版本历史...</div> : null}
+          {versions.map((version) => (
+            <div key={version.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-muted px-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground">版本 {version.version} · {version.action}</p>
+                <p className="mt-1 truncate text-xs font-medium text-muted">{version.summary || "无摘要"} · {new Date(version.createdAt).toLocaleString("zh-CN", { hour12: false })}</p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => void restoreVersion(version)} disabled={Boolean(busyId)}>
+                <RotateCcw className="h-4 w-4" />
+                {busyId === version.id ? "恢复中" : "恢复"}
+              </Button>
+            </div>
+          ))}
+          {!loading && versions.length === 0 ? (
+            <p className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm font-medium text-muted">这个商品还没有版本记录。</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1359,14 +1509,15 @@ function SummaryTile({
 
   return (
     <button
-      className={`flex min-h-[116px] flex-col rounded-lg border bg-white p-4 text-left shadow-sm transition-colors hover:border-brand hover:bg-surface-muted ${
+      className={`flex min-h-[82px] w-32 flex-col rounded-md border bg-white px-3 py-2.5 text-left shadow-sm transition-colors hover:border-brand hover:bg-surface-muted ${
         active ? "border-brand ring-2 ring-brand/15" : "border-border"
       }`}
       onClick={onClick}
+      type="button"
     >
       <p className="text-xs font-semibold text-muted">{label}</p>
-      <p className={`mt-2 text-2xl font-black metric-tabular ${toneClass}`}>{value}</p>
-      {detail ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted">{detail}</p> : null}
+      <p className={`mt-1 text-xl font-black metric-tabular ${toneClass}`}>{value}</p>
+      {detail ? <p className="mt-1 line-clamp-1 text-xs leading-5 text-muted">{detail}</p> : null}
     </button>
   );
 }
@@ -1500,4 +1651,3 @@ function Pagination({
     </div>
   );
 }
-

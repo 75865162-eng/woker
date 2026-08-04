@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser();
+    const permission = await requireApiPermission("workspace", "view");
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!permission.ok) {
+      return permission.response;
     }
+    const { user } = permission;
 
     const { id } = await params;
     const job = await prisma.importJob.findFirst({

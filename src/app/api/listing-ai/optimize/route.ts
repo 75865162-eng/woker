@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { optimizeListing } from "@/lib/listing-ai/client";
 import type { ListingOptimizationApiRequest, ListingOptimizationRequest } from "@/lib/listing-ai/types";
 
@@ -8,6 +9,12 @@ const requiredFields: Array<keyof ListingOptimizationRequest> = ["marketplace", 
 
 export async function POST(request: Request) {
   try {
+    const permission = await requireApiPermission("listingAi", "create");
+
+    if (!permission.ok) {
+      return permission.response;
+    }
+
     const body = (await request.json()) as ListingOptimizationApiRequest;
     const missing = requiredFields.filter((field) => !body[field]);
 

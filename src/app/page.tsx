@@ -2,10 +2,8 @@ import Link from "next/link";
 import {
   ArrowRight,
   Boxes,
-  ImageUp,
   PackageSearch,
   SearchCheck,
-  Settings,
   SlidersHorizontal,
   Sparkles,
   UploadCloud,
@@ -21,9 +19,7 @@ const modules = [
   { href: "/rules", title: "规则中心", description: "维护 PPC 生命周期规则，输出可审阅草稿", icon: SlidersHorizontal },
   { href: "/listing-ai", title: "Listing AI", description: "标题、图片、A+ 和 Listing 优化建议", icon: Sparkles },
   { href: "/saihu-search-merge", title: "搜索词合并", description: "合并赛狐搜索词报表并导出汇总", icon: SearchCheck },
-  { href: "/image-upscale", title: "图片放大", description: "商品图超分辨率预处理", icon: ImageUp },
   { href: "/logistics", title: "物流处理", description: "装箱表、箱唛 PDF、物流模板和对比表", icon: PackageSearch },
-  { href: "/settings", title: "系统设置", description: "AI 模型、通知和系统配置", icon: Settings },
 ];
 
 export default function Home() {
@@ -42,13 +38,13 @@ export default function Home() {
             <p className="mt-2 text-sm text-muted">选择一个模块开始工作，页面会标明当前数据来源和待迁移边界。</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/workspace">
+            <Link href="/workspace" prefetch={false}>
               <Button>
                 PPC 优化
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/listing-ai">
+            <Link href="/listing-ai" prefetch={false}>
               <Button variant="secondary">Listing AI</Button>
             </Link>
           </div>
@@ -59,7 +55,7 @@ export default function Home() {
             const Icon = module.icon;
 
             return (
-              <Link key={module.href} href={module.href} className="group block">
+              <Link key={module.href} href={module.href} prefetch={false} className="group block">
                 <Card className="h-full transition-colors group-hover:border-brand">
                   <CardContent className="flex min-h-[96px] items-center justify-between gap-4 p-5">
                     <div className="flex items-center gap-3">

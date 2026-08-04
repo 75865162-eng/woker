@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { type AiModelSettings } from "@/lib/ai-settings";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { type CurrentUser } from "@/lib/auth/session";
+import { prisma } from "@/lib/db/prisma";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
 import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
-import { getStorageDriver } from "@/lib/storage";
+import { getStorageDriver, getStorageType } from "@/lib/storage";
+import { workspaceScopeFromRequest, type WorkspaceScopeInput } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -77,12 +81,25 @@ function createGeneratedAssetKey(name: string) {
   return `assets/listing-ai/generated/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extension}`;
 }
 
-async function imageAssetToDataUrl(assetId: string) {
+async function imageAssetToDataUrl(assetId: string, user: CurrentUser) {
+  if (process.env.DATABASE_URL) {
+    const asset = await prisma.fileObject.findFirst({
+      where: {
+        storageKey: assetId,
+        organizationId: user.organizationId,
+      },
+    });
+
+    if (!asset) {
+      return "";
+    }
+  }
+
   const buffer = await getStorageDriver().getBuffer(assetId);
   return `data:${getImageContentType(assetId)};base64,${buffer.toString("base64")}`;
 }
 
-async function flattenImages(body: ImageGeneratorRequest) {
+async function flattenImages(body: ImageGeneratorRequest, user: CurrentUser) {
   const ownViews = Object.entries(body.ownViews ?? {}).flatMap(
     ([view, images]) =>
       (Array.isArray(images) ? images : []).map((image) => ({
@@ -105,7 +122,7 @@ async function flattenImages(body: ImageGeneratorRequest) {
       if (image.assetId && isValidAssetKey(image.assetId)) {
         return {
           ...image,
-          url: await imageAssetToDataUrl(image.assetId),
+          url: await imageAssetToDataUrl(image.assetId, user),
         };
       }
 
@@ -234,7 +251,7 @@ function getBase64ImagePayload(url: string) {
   };
 }
 
-async function persistGeneratedImages(images: ImagePreviewPayload[]) {
+async function persistGeneratedImages(images: ImagePreviewPayload[], user: CurrentUser, scope: WorkspaceScopeInput) {
   const storage = getStorageDriver();
 
   return Promise.all(
@@ -251,6 +268,23 @@ async function persistGeneratedImages(images: ImagePreviewPayload[]) {
         buffer: payload.buffer,
         contentType: payload.contentType,
       });
+      if (process.env.DATABASE_URL) {
+        await prisma.fileObject.create({
+          data: {
+            organizationId: user.organizationId,
+            userId: user.id,
+            workspaceId: scope.workspaceId,
+            accountId: scope.accountId,
+            marketplace: scope.marketplace,
+            originalName: image.name,
+            mimeType: payload.contentType,
+            size: storedObject.size,
+            storageKey: storedObject.key,
+            storageType: getStorageType(),
+            status: "done",
+          },
+        });
+      }
 
       return {
         ...image,
@@ -263,10 +297,18 @@ async function persistGeneratedImages(images: ImagePreviewPayload[]) {
 
 export async function POST(request: Request) {
   try {
+    const permission = await requireApiPermission("listingAi", "create");
+
+    if (!permission.ok) {
+      return permission.response;
+    }
+    const { user } = permission;
+
     const body = (await request.json()) as ImageGeneratorRequest;
+    const scope = workspaceScopeFromRequest(request);
     const settings = resolveAiSettings(body.aiSettings);
     const prompt = body.prompt?.trim();
-    const referenceImages = await flattenImages(body);
+    const referenceImages = await flattenImages(body, user);
 
     if (!settings.apiKey?.trim()) {
       return NextResponse.json(
@@ -344,7 +386,7 @@ export async function POST(request: Request) {
     }
 
     const data = (await response.json()) as ResponsesImageOutput | ImageGenerationsOutput;
-    const images = await persistGeneratedImages(extractGeneratedImages(data));
+    const images = await persistGeneratedImages(extractGeneratedImages(data), user, scope);
 
     if (!images.length) {
       return NextResponse.json(
