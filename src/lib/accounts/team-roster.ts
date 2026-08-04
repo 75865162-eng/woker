@@ -7,16 +7,19 @@ export type AccountRoleId =
   | "operations_supervisor"
   | "operations"
   | "operations_assistant"
+  | "developer"
   | "designer"
   | "warehouse"
   | "warehouse_supervisor"
   | "finance"
-  | "procurement";
+  | "procurement"
+  | "viewer";
 
 export type TeamAccountRecord = {
   id: string;
   name: string;
   email: string;
+  password?: string;
   department: string;
   title: string;
   roleId: AccountRoleId;
@@ -130,7 +133,6 @@ const legacyRoleMap: Record<string, AccountRoleId> = {
   ppc_manager: "operations",
   listing_operator: "operations",
   logistics_operator: "warehouse",
-  viewer: "finance",
 };
 
 export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
@@ -146,6 +148,7 @@ export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
         id: String(account.id),
         name: String(account.name),
         email: String(account.email ?? ""),
+        password: typeof account.password === "string" ? account.password : undefined,
         department: String(account.department ?? ""),
         title: String(account.title ?? ""),
         roleId: legacyRoleMap[String(account.roleId)] ?? (account.roleId as AccountRoleId),

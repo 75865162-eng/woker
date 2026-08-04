@@ -5,7 +5,13 @@ import { defaultTeamAccounts, normalizeTeamAccounts, type TeamAccountRecord } fr
 
 export const runtime = "nodejs";
 
-function toAccountRecord(member: {
+function stripAccountPassword(account: TeamAccountRecord) {
+  const record = { ...account };
+  delete record.password;
+  return record;
+}
+
+type RosterAccountRow = {
   id: string;
   name: string;
   email: string;
@@ -14,7 +20,9 @@ function toAccountRecord(member: {
   roleId: string;
   status: string;
   lastActiveAt?: string | null;
-}): TeamAccountRecord {
+};
+
+function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
   return {
     id: member.id,
     name: member.name,
@@ -25,6 +33,15 @@ function toAccountRecord(member: {
     status: member.status === "disabled" || member.status === "pending" ? member.status : "active",
     lastActiveAt: member.lastActiveAt ?? undefined,
   };
+}
+
+function mapOrganizationRoleToAccountRole(role: string): TeamAccountRecord["roleId"] {
+  if (role === "owner") return "owner";
+  if (role === "admin" || role === "operations_manager") return "operations_supervisor";
+  if (role === "logistics_specialist") return "warehouse";
+  if (role === "ppc_specialist" || role === "listing_specialist") return "operations";
+
+  return "viewer";
 }
 
 export async function GET() {
@@ -39,7 +56,7 @@ export async function GET() {
       return NextResponse.json({ accounts: [] });
     }
 
-    const members = await prisma.teamRosterMember.findMany({
+    let members: RosterAccountRow[] = await prisma.teamRosterMember.findMany({
       where: {
         organizationId: user.organizationId,
       },
@@ -50,7 +67,7 @@ export async function GET() {
 
     if (!members.length) {
       const seedAccounts = normalizeTeamAccounts(defaultTeamAccounts).map((account, index) => ({
-        ...account,
+        ...stripAccountPassword(account),
         organizationId: user.organizationId,
         sortOrder: index,
       }));
@@ -59,7 +76,42 @@ export async function GET() {
         await prisma.teamRosterMember.createMany({ data: seedAccounts });
       }
 
-      return NextResponse.json({ accounts: seedAccounts.map(toAccountRecord) });
+      members = seedAccounts;
+    }
+
+    const existingRosterIds = new Set(members.map((member) => member.id));
+    const userMemberships = await prisma.organizationMember.findMany({
+      where: {
+        organizationId: user.organizationId,
+      },
+      include: {
+        user: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+    const missingUserAccounts = userMemberships
+      .filter((membership) => !existingRosterIds.has(membership.user.id))
+      .map((membership, index) => ({
+        organizationId: user.organizationId,
+        id: membership.user.id,
+        name: membership.user.name,
+        email: membership.user.email,
+        department: "未分配",
+        title: "注册用户",
+        roleId: mapOrganizationRoleToAccountRole(membership.role),
+        status: membership.user.status === "disabled" ? ("disabled" as const) : ("active" as const),
+        lastActiveAt: membership.user.lastLoginAt ? membership.user.lastLoginAt.toLocaleString("zh-CN", { hour12: false }) : "已注册",
+        sortOrder: members.length + index,
+      }));
+
+    if (missingUserAccounts.length) {
+      await prisma.teamRosterMember.createMany({
+        data: missingUserAccounts,
+        skipDuplicates: true,
+      });
+      members = [...members, ...missingUserAccounts];
     }
 
     return NextResponse.json({ accounts: members.map(toAccountRecord) });
@@ -80,7 +132,7 @@ export async function PUT(request: Request) {
     const body = (await request.json()) as { accounts?: unknown; members?: unknown };
     const input = body.accounts ?? body.members;
     const normalized = normalizeTeamAccounts(input).map((account, index) => ({
-      ...account,
+      ...stripAccountPassword(account),
       organizationId: user.organizationId,
       sortOrder: index,
     }));

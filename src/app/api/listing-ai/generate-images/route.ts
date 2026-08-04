@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { normalizeAiSettings, type AiModelSettings } from "@/lib/ai-settings";
+import { type AiModelSettings } from "@/lib/ai-settings";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
+import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
 import { getStorageDriver } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -182,7 +183,7 @@ function buildImagesGenerationsRequest(settings: AiModelSettings, prompt: string
 
 function buildResponsesRequest(settings: AiModelSettings, prompt: string, referenceImages: FlattenedImage[]) {
   return {
-    url: `${settings.baseUrl}/responses`,
+    url: buildAiTextEndpoint(settings),
     body: {
       model: settings.model,
       tools: [{ type: "image_generation" }],
@@ -263,7 +264,7 @@ async function persistGeneratedImages(images: ImagePreviewPayload[]) {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as ImageGeneratorRequest;
-    const settings = normalizeAiSettings(body.aiSettings);
+    const settings = resolveAiSettings(body.aiSettings);
     const prompt = body.prompt?.trim();
     const referenceImages = await flattenImages(body);
 

@@ -5,21 +5,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Boxes, Home, ImageUp, LogOut, PackageSearch, SearchCheck, Settings, SlidersHorizontal, Sparkles, UploadCloud, UsersRound } from "lucide-react";
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, roleHasAnyPage, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home, moduleId: null },
-  { href: "/dashboard", label: "Products", icon: Boxes, moduleId: "products" },
-  { href: "/workspace", label: "Workspace", icon: UploadCloud, moduleId: "workspace" },
+  { href: "/", label: "工作台首页", icon: Home, moduleId: null },
+  { href: "/dashboard", label: "产品管理", icon: Boxes, moduleId: "products" },
+  { href: "/workspace", label: "PPC 优化", icon: UploadCloud, moduleId: "workspace" },
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
   { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
-  { href: "/image-upscale", label: "Image Upscale", icon: ImageUp, moduleId: "imageUpscale" },
-  { href: "/logistics", label: "Logistics", icon: PackageSearch, moduleId: "logistics" },
-  { href: "/rules", label: "Rules", icon: SlidersHorizontal, moduleId: "rules" },
-  { href: "/accounts", label: "Accounts", icon: UsersRound, moduleId: "accounts" },
-  { href: "/settings", label: "Settings", icon: Settings, moduleId: "settings" },
+  { href: "/image-upscale", label: "图片放大", icon: ImageUp, moduleId: "imageUpscale" },
+  { href: "/logistics", label: "物流处理", icon: PackageSearch, moduleId: "logistics" },
+  { href: "/rules", label: "规则中心", icon: SlidersHorizontal, moduleId: "rules" },
+  { href: "/accounts", label: "账号权限", icon: UsersRound, moduleId: "accounts" },
+  { href: "/settings", label: "系统设置", icon: Settings, moduleId: "settings" },
 ];
 
 export function AppShellClient({
@@ -27,15 +28,23 @@ export function AppShellClient({
   title,
   subtitle,
   userInitials = "AM",
+  userName,
   userRole,
+  organizationName,
   rolePermissions,
+  authDriver,
+  storageDriver,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle: string;
   userInitials?: string;
+  userName?: string;
   userRole?: string;
+  organizationName?: string;
   rolePermissions?: RolePermissionMap | null;
+  authDriver?: "database" | "local";
+  storageDriver?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -91,10 +100,22 @@ export function AppShellClient({
             <p className="text-xs font-medium text-muted">{subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Badge tone={authDriver === "database" ? "green" : "amber"}>
+                {authDriver === "database" ? "数据库模式" : "本地登录"}
+              </Badge>
+              <Badge tone="blue">存储：{storageDriver === "s3" || storageDriver === "r2" ? storageDriver.toUpperCase() : "本地文件"}</Badge>
+              {organizationName ? <span className="max-w-[180px] truncate text-xs font-semibold text-muted">{organizationName}</span> : null}
+            </div>
             <Button type="button" variant="ghost" size="icon" title="退出登录" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
             </Button>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-dark text-xs font-bold text-white">{userInitials}</div>
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-dark text-xs font-bold text-white"
+              title={[userName, userRole].filter(Boolean).join(" / ")}
+            >
+              {userInitials}
+            </div>
           </div>
         </header>
         <div className="p-6">{children}</div>

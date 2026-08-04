@@ -1,6 +1,7 @@
 import { buildListingOptimizationPrompt } from "./prompt";
 import { normalizeAiSettings, type AiModelSettings } from "@/lib/ai-settings";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
+import { buildAiTextEndpoint } from "@/lib/server/ai-runtime";
 import type { ListingOptimizationRequest, ListingOptimizationResult } from "./types";
 
 export interface ResponsesApiOutput {
@@ -120,7 +121,7 @@ export async function optimizeListing(input: ListingOptimizationRequest, aiSetti
 
   try {
     const isChatCompletions = requestSettings?.wireApi === "chat_completions";
-    response = await fetchAiApi(`${baseUrl.replace(/\/$/, "")}${isChatCompletions ? "/chat/completions" : "/v1/responses"}`, {
+    response = await fetchAiApi(buildAiTextEndpoint({ baseUrl, wireApi: isChatCompletions ? "chat_completions" : "responses" }), {
       method: "POST",
       signal: controller.signal,
       headers: {

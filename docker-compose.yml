@@ -22,6 +22,9 @@ services:
       BOOTSTRAP_ORG_SLUG: amazon-ops
       BOOTSTRAP_ADMIN_EMAIL: "1"
       BOOTSTRAP_ADMIN_PASSWORD: "1"
+      AIGOCODE_API_KEY: ${AIGOCODE_API_KEY}
+      AIGOCODE_BASE_URL: ${AIGOCODE_BASE_URL:-https://api.aigocode.app/v1}
+      AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.4}
     ports:
       - "3000:3000"
     volumes:
@@ -29,7 +32,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: amazon_bulk_ad
       POSTGRES_USER: amazon_bulk_ad

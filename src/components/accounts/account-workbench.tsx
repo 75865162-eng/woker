@@ -5,6 +5,8 @@ import {
   Activity,
   Building2,
   Check,
+  Eye,
+  EyeOff,
   Filter,
   KeyRound,
   LockKeyhole,
@@ -38,6 +40,7 @@ type Account = {
   id: string;
   name: string;
   email: string;
+  password?: string;
   department: string;
   title: string;
   roleId: RoleId;
@@ -83,6 +86,13 @@ const initialRoles: Role[] = [
     permissions: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
   },
   {
+    id: "developer",
+    name: "开发",
+    description: "负责新品开发、供应商资料和选品信息维护",
+    memberCount: 0,
+    permissions: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
+  },
+  {
     id: "designer",
     name: "美工",
     description: "处理分配给自己的商品图片和视觉资料",
@@ -109,6 +119,13 @@ const initialRoles: Role[] = [
     description: "管理仓库作业、物流资料和相关审批",
     memberCount: 0,
     permissions: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]),
+  },
+  {
+    id: "viewer",
+    name: "查看者",
+    description: "只查看工作台、商品、Listing AI 和物流基础数据",
+    memberCount: 0,
+    permissions: createPermissions(["workspace", "products", "listingAi", "logistics"], ["view"]),
   },
   {
     id: "procurement",
@@ -199,25 +216,73 @@ const fieldClass =
 const rolePermissionsStorageKey = "amazon-bulk-ad-role-permissions";
 const teamMembersApiPath = "/api/accounts/team-members";
 
+function getFallbackPassword(accountId: string) {
+  return accountId === "local-admin" ? "1" : "12345678";
+}
+
+function withAccountPassword(account: Account): Account {
+  return {
+    ...account,
+    password: account.password || getFallbackPassword(account.id),
+  };
+}
+
+function getSavedAccountPasswords() {
+  if (typeof window === "undefined") return new Map<string, string>();
+
+  try {
+    const saved = window.localStorage.getItem(accountRosterStorageKey);
+    if (!saved) return new Map<string, string>();
+
+    return new Map(
+      normalizeTeamAccounts(JSON.parse(saved))
+        .map((account) => account as Account)
+        .filter((account): account is Account & { password: string } => Boolean(account.password))
+        .map((account) => [account.id, account.password] as const),
+    );
+  } catch {
+    return new Map<string, string>();
+  }
+}
+
+function mergeAccountsWithLocalPasswords(accounts: Account[]) {
+  const savedPasswords = getSavedAccountPasswords();
+
+  return accounts.map((account) =>
+    withAccountPassword({
+      ...account,
+      password: savedPasswords.get(account.id) ?? account.password,
+    }),
+  );
+}
+
+function stripAccountPasswords(accounts: Account[]) {
+  return accounts.map((account) => {
+    const record = { ...account };
+    delete record.password;
+    return record;
+  });
+}
+
 function loadInitialAccounts() {
   const fallbackAccounts = defaultTeamAccounts.length ? (defaultTeamAccounts as Account[]) : initialAccounts;
 
-  if (typeof window === "undefined") return fallbackAccounts;
+  if (typeof window === "undefined") return fallbackAccounts.map(withAccountPassword);
 
   const saved = window.localStorage.getItem(accountRosterStorageKey);
-  if (!saved) return fallbackAccounts;
+  if (!saved) return fallbackAccounts.map(withAccountPassword);
 
   try {
     const accounts = normalizeTeamAccounts(JSON.parse(saved));
     return accounts.length
-      ? accounts.map((account) => ({
+      ? mergeAccountsWithLocalPasswords(accounts.map((account) => ({
           ...account,
           lastActiveAt: account.lastActiveAt ?? "未记录",
-        }))
-      : fallbackAccounts;
+        })) as Account[])
+      : fallbackAccounts.map(withAccountPassword);
   } catch {
     window.localStorage.removeItem(accountRosterStorageKey);
-    return fallbackAccounts;
+    return fallbackAccounts.map(withAccountPassword);
   }
 }
 
@@ -227,10 +292,10 @@ async function loadAccountsFromApi() {
     if (!response.ok) return null;
 
     const payload = (await response.json()) as { accounts?: unknown };
-    return normalizeTeamAccounts(payload.accounts).map((account) => ({
+    return mergeAccountsWithLocalPasswords(normalizeTeamAccounts(payload.accounts).map((account) => ({
       ...account,
       lastActiveAt: account.lastActiveAt ?? "未记录",
-    }));
+    })) as Account[]);
   } catch {
     return null;
   }
@@ -243,7 +308,7 @@ async function saveAccountsToApi(accounts: Account[]) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ accounts }),
+      body: JSON.stringify({ accounts: stripAccountPasswords(accounts) }),
     });
   } catch {
     return undefined;
@@ -346,9 +411,11 @@ export function AccountWorkbench() {
   }
 
   function createAccount(payload: Omit<Account, "id" | "status" | "lastActiveAt">) {
+    const id = `u-${Date.now()}`;
     const nextAccount: Account = {
       ...payload,
-      id: `u-${Date.now()}`,
+      id,
+      password: payload.password || getFallbackPassword(id),
       status: "pending",
       lastActiveAt: "待首次登录",
     };
@@ -369,6 +436,13 @@ export function AccountWorkbench() {
   function saveAccount(account: Account) {
     commitAccounts((current) => current.map((item) => (item.id === account.id ? account : item)));
     setEditAccount(null);
+  }
+
+  function saveAccountPassword(accountId: string, password: string) {
+    commitAccounts((current) =>
+      current.map((account) => (account.id === accountId ? { ...account, password } : account)),
+    );
+    setPasswordAccount(null);
   }
 
   function toggleAccountStatus(accountId: string) {
@@ -528,7 +602,7 @@ export function AccountWorkbench() {
                           </Button>
                           <Button size="sm" variant="secondary" onClick={() => setPasswordAccount(account)}>
                             <KeyRound className="h-4 w-4" />
-                            改密
+                            账密
                           </Button>
                           <Button size="sm" variant={account.status === "disabled" ? "secondary" : "danger"} onClick={() => toggleAccountStatus(account.id)}>
                             {account.status === "disabled" ? "启用" : "停用"}
@@ -678,7 +752,7 @@ export function AccountWorkbench() {
       {editAccount ? (
         <EditAccountDialog account={editAccount} roles={roles} onClose={() => setEditAccount(null)} onSubmit={saveAccount} />
       ) : null}
-      {passwordAccount ? <PasswordDialog account={passwordAccount} onClose={() => setPasswordAccount(null)} /> : null}
+      {passwordAccount ? <PasswordDialog account={passwordAccount} onClose={() => setPasswordAccount(null)} onSubmit={saveAccountPassword} /> : null}
     </div>
   );
 }
@@ -817,9 +891,6 @@ function EditAccountDialog({
         <Field label="部门">
           <input className={fieldClass} value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })} />
         </Field>
-        <Field label="岗位">
-          <input className={fieldClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
-        </Field>
         <Field label="系统角色">
           <select className={fieldClass} value={form.roleId} onChange={(event) => setForm({ ...form, roleId: event.target.value as RoleId })}>
             {roles.map((role) => (
@@ -843,17 +914,47 @@ function EditAccountDialog({
   );
 }
 
-function PasswordDialog({ account, onClose }: { account: Account; onClose: () => void }) {
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const matched = password.length >= 8 && password === confirmPassword;
+function PasswordDialog({
+  account,
+  onClose,
+  onSubmit,
+}: {
+  account: Account;
+  onClose: () => void;
+  onSubmit: (accountId: string, password: string) => void;
+}) {
+  const currentPassword = account.password || getFallbackPassword(account.id);
+  const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState(currentPassword);
+  const [confirmPassword, setConfirmPassword] = useState(currentPassword);
+  const matched = password.length >= 1 && password === confirmPassword;
 
   return (
-    <Modal title={`修改密码：${account.name}`} onClose={onClose}>
+    <Modal title={`账密：${account.name}`} onClose={onClose}>
       <div className="space-y-4">
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          新密码仅用于该同事下次登录。正式接入后这里会调用服务端密码重置接口。
-        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="账号">
+            <input className={fieldClass} readOnly value={account.email || account.id} />
+          </Field>
+          <Field label="当前密码">
+            <div className="flex rounded-md border border-border bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
+              <input
+                className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm text-foreground outline-none"
+                readOnly
+                type={showPassword ? "text" : "password"}
+                value={currentPassword}
+              />
+              <button
+                aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                className="flex h-9 w-9 items-center justify-center rounded-r-md text-muted hover:bg-surface-muted hover:text-foreground"
+                onClick={() => setShowPassword((value) => !value)}
+                type="button"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </Field>
+        </div>
         <Field label="新密码">
           <input className={fieldClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
         </Field>
@@ -865,15 +966,14 @@ function PasswordDialog({ account, onClose }: { account: Account; onClose: () =>
         <Button variant="secondary" onClick={onClose}>
           取消
         </Button>
-        <Button disabled={!matched} onClick={onClose}>
+        <Button disabled={!matched} onClick={() => onSubmit(account.id, password)}>
           <KeyRound className="h-4 w-4" />
-          确认改密
+          保存密码
         </Button>
       </div>
     </Modal>
   );
 }
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-2">

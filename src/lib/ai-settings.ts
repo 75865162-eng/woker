@@ -114,7 +114,7 @@ export const aiProviderOptions: AiProviderOption[] = [
     label: "AIGOCODE",
     shortLabel: "AG",
     accentClass: "bg-orange-50 text-orange-700",
-    baseUrl: "https://api.aigocode.com",
+    baseUrl: "https://api.aigocode.app/v1",
     model: "gpt-5.4",
     wireApi: "responses",
   },

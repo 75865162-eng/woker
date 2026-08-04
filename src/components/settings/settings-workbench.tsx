@@ -58,12 +58,7 @@ export function SettingsWorkbench() {
     const saved = window.localStorage.getItem(aiSettingsStorageKey);
     if (saved) {
       const parsed = normalizeAiSettings(JSON.parse(saved) as Partial<AiModelSettings>);
-      if (parsed.provider === "aigocode" || parsed.baseUrl.includes("aigocode.com")) {
-        window.localStorage.setItem(aiSettingsStorageKey, JSON.stringify(defaultAiModelSettings));
-        setSettings(defaultAiModelSettings);
-      } else {
-        setSettings(parsed);
-      }
+      setSettings(parsed);
     }
 
     const savedProfiles = window.localStorage.getItem(aiSettingsProfilesStorageKey);
@@ -194,10 +189,6 @@ export function SettingsWorkbench() {
     if (!message || testingChat) return;
 
     const normalized = normalizeAiSettings(settings);
-    if (!normalized.apiKey.trim()) {
-      setChatError("请先填写并保存 API Key。");
-      return;
-    }
 
     setTestingChat(true);
     setChatError("");
@@ -208,7 +199,10 @@ export function SettingsWorkbench() {
       const response = await fetch("/api/ai-settings/test-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, aiSettings: normalized }),
+        body: JSON.stringify({
+          message,
+          aiSettings: normalized.apiKey.trim() ? normalized : undefined,
+        }),
       });
       const data = (await response.json()) as { result?: { message: string; model: string; baseUrl: string }; error?: string };
 
@@ -476,7 +470,7 @@ export function SettingsWorkbench() {
                 }}
                 placeholder="输入测试消息"
               />
-              <Button className="h-auto min-h-20" disabled={!chatInput.trim() || testingChat || !ready} onClick={sendTestChat}>
+              <Button className="h-auto min-h-20" disabled={!chatInput.trim() || testingChat} onClick={sendTestChat}>
                 <Send className="h-4 w-4" />
                 {testingChat ? "发送中" : "发送测试"}
               </Button>

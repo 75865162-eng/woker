@@ -124,7 +124,9 @@ export type ProductEditorDraft = ProductDraft & {
 export type ProductFilters = {
   keyword: string;
   asin: string;
-  developer: string;
+  opsAssignees: string[];
+  selectionOwners: string[];
+  designerAssignees: string[];
   supplierName: string;
   status: ProductStatusFilter;
   minPrice: string;
@@ -134,7 +136,9 @@ export type ProductFilters = {
 export const initialFilters: ProductFilters = {
   keyword: "",
   asin: "",
-  developer: "",
+  opsAssignees: [],
+  selectionOwners: [],
+  designerAssignees: [],
   supplierName: "",
   status: "all",
   minPrice: "",

@@ -417,17 +417,14 @@ export function ListingAiWorkbench() {
         )
       : null;
 
-    if (!aiSettings?.apiKey.trim()) {
-      setTitleGeneratorError("请先到 Settings 保存 AI 大模型 API Key。");
-      setTitleGenerating(false);
-      return;
-    }
-
     try {
       const response = await fetch("/api/listing-ai/generate-title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...titleGenerator, aiSettings }),
+        body: JSON.stringify({
+          ...titleGenerator,
+          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
+        }),
       });
       const data = (await response.json()) as {
         results?: string[];
@@ -473,12 +470,6 @@ export function ListingAiWorkbench() {
         )
       : null;
 
-    if (!aiSettings?.apiKey.trim()) {
-      setError("请先到 Settings 保存 AI 大模型 API Key。");
-      setLoading(false);
-      return;
-    }
-
     const payload: ListingOptimizationRequest = {
       ...input,
       productType: input.productType || input.productEnglishName || input.asin,
@@ -492,7 +483,7 @@ export function ListingAiWorkbench() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          aiSettings,
+          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
         } satisfies ListingOptimizationApiRequest),
       });
       const data = (await response.json()) as {
@@ -600,11 +591,6 @@ export function ListingAiWorkbench() {
         )
       : null;
 
-    if (!aiSettings?.apiKey.trim()) {
-      setImageGeneratorError("请先到 Settings 保存可用于图片生成的大模型 API Key。");
-      return;
-    }
-
     setImageGenerating(true);
     setImageGeneratorError("");
 
@@ -612,7 +598,10 @@ export function ListingAiWorkbench() {
       const response = await fetch("/api/listing-ai/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...imageGenerator, aiSettings }),
+        body: JSON.stringify({
+          ...imageGenerator,
+          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
+        }),
       });
       const data = (await response.json()) as {
         images?: ImagePreview[];
@@ -2362,4 +2351,3 @@ function WorkspaceMetric({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

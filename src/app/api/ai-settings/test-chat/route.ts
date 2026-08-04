@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { normalizeAiSettings, type AiModelSettings } from "@/lib/ai-settings";
+import { type AiModelSettings } from "@/lib/ai-settings";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
+import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
 
 export const runtime = "nodejs";
 
@@ -28,7 +29,7 @@ function buildAiHeaders(settings: AiModelSettings) {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TestChatRequest;
-    const settings = normalizeAiSettings(body.aiSettings);
+    const settings = resolveAiSettings(body.aiSettings);
     const message = body.message?.trim() || "请用一句中文回复：模型配置连接成功。";
 
     if (!settings.apiKey?.trim()) {
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
 
     try {
       const isChatCompletions = settings.wireApi === "chat_completions";
-      response = await fetchAiApi(`${settings.baseUrl}${isChatCompletions ? "/chat/completions" : "/v1/responses"}`, {
+      response = await fetchAiApi(buildAiTextEndpoint(settings), {
         method: "POST",
         signal: controller.signal,
         headers: buildAiHeaders(settings),

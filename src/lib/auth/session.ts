@@ -142,7 +142,7 @@ export async function getCurrentUser(): Promise<CurrentUser | undefined> {
     return undefined;
   }
 
-  if (payload.driver === "local" || getAuthDriver() === "local") {
+  if (payload.driver === "local") {
     return payload.localUser;
   }
 
@@ -196,7 +196,7 @@ export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | un
     return undefined;
   }
 
-  if (payload.driver === "local" || getAuthDriver() === "local") {
+  if (payload.driver === "local") {
     return payload.localUser;
   }
 

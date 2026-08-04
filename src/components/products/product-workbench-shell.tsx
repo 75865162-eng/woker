@@ -15,10 +15,16 @@ import { LabeledInput } from "./product-workbench-fields";
 
 export function ProductFiltersBar({
   filters,
+  opsAssigneeOptions,
+  selectionOwnerOptions,
+  designerAssigneeOptions,
   onChange,
   onReset,
 }: {
   filters: ProductFilters;
+  opsAssigneeOptions: string[];
+  selectionOwnerOptions: string[];
+  designerAssigneeOptions: string[];
   onChange: (filters: ProductFilters) => void;
   onReset: () => void;
 }) {
@@ -32,7 +38,7 @@ export function ProductFiltersBar({
 
   return (
     <div className="rounded-lg border border-border bg-surface-muted p-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr_0.9fr_0.8fr_0.9fr_auto]">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_0.7fr_0.9fr_0.8fr_0.9fr_auto]">
         <LabeledInput
           label="品名 / SKU / 关键词"
           value={filters.keyword}
@@ -40,6 +46,9 @@ export function ProductFiltersBar({
           onChange={(value) => onChange({ ...filters, keyword: value })}
         />
         <LabeledInput label="ASIN" value={filters.asin} placeholder="主 ASIN 或竞品 ASIN" onChange={(value) => onChange({ ...filters, asin: value })} />
+        <FilterCheckboxMenu label="运营" value={filters.opsAssignees} options={opsAssigneeOptions} placeholder="全部运营" onChange={(value) => onChange({ ...filters, opsAssignees: value })} />
+        <FilterCheckboxMenu label="选品" value={filters.selectionOwners} options={selectionOwnerOptions} placeholder="全部选品" onChange={(value) => onChange({ ...filters, selectionOwners: value })} />
+        <FilterCheckboxMenu label="美工" value={filters.designerAssignees} options={designerAssigneeOptions} placeholder="全部美工" onChange={(value) => onChange({ ...filters, designerAssignees: value })} />
         <LabeledInput label="供应商名称" value={filters.supplierName} placeholder="供应商" onChange={(value) => onChange({ ...filters, supplierName: value })} />
         <label className="text-xs font-semibold text-muted">
           状态
@@ -68,6 +77,61 @@ export function ProductFiltersBar({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function FilterCheckboxMenu({
+  label,
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string[];
+  options: string[];
+  placeholder: string;
+  onChange: (value: string[]) => void;
+}) {
+  const normalizedOptions = Array.from(new Set([...value, ...options].filter(Boolean)));
+  const summary = value.length === 0 ? placeholder : value.length === 1 ? value[0] : `已选 ${value.length} 人`;
+
+  function toggleOption(option: string) {
+    onChange(value.includes(option) ? value.filter((item) => item !== option) : [...value, option]);
+  }
+
+  return (
+    <div className="relative text-xs font-semibold text-muted">
+      <span>{label}</span>
+      <details className="group mt-1">
+        <summary className="flex h-10 cursor-pointer list-none items-center justify-between rounded-md border border-border bg-white px-3 text-sm font-medium text-foreground outline-none focus:border-brand [&::-webkit-details-marker]:hidden">
+          <span className="truncate">{summary}</span>
+          <span className="ml-2 text-xs text-muted">▾</span>
+        </summary>
+        <div className="absolute z-20 mt-1 max-h-64 w-full min-w-[160px] overflow-auto rounded-md border border-border bg-white p-2 shadow-lg">
+          {normalizedOptions.length ? (
+            normalizedOptions.map((option) => (
+              <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-foreground hover:bg-surface-muted">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-brand"
+                  checked={value.includes(option)}
+                  onChange={() => toggleOption(option)}
+                />
+                <span className="truncate">{option}</span>
+              </label>
+            ))
+          ) : (
+            <div className="px-2 py-2 text-sm font-medium text-muted">暂无可选人员</div>
+          )}
+          {value.length ? (
+            <button type="button" className="mt-1 w-full rounded px-2 py-1.5 text-left text-sm font-semibold text-brand hover:bg-surface-muted" onClick={() => onChange([])}>
+              清空选择
+            </button>
+          ) : null}
+        </div>
+      </details>
     </div>
   );
 }

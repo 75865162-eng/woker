@@ -40,6 +40,7 @@ export const defaultRolePermissionMap: RolePermissionMap = {
   operations_supervisor: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
   operations: createPermissions(["products", "listingAi"], ["view", "create", "edit", "export"]),
   operations_assistant: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
+  developer: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
   warehouse: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
   warehouse_supervisor: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]),
   finance: createPermissions(["workspace", "products", "logistics"], ["view", "export"]),

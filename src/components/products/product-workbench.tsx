@@ -9,9 +9,11 @@ import { initialProducts, newProductStatusOptions, productStatusOptions } from "
 import {
   accountRosterStorageKey,
   accountsToTeamMembers,
+  type AccountRoleId,
   defaultTeamAccounts,
   filterTeamMembersByRoles,
   normalizeTeamAccounts,
+  type TeamAccountRecord,
   type TeamMember,
 } from "@/lib/accounts/team-roster";
 import type { Product, ProductDraft, ProductStatus, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
@@ -82,10 +84,14 @@ export function ProductWorkbench() {
   const [pageSize, setPageSize] = useState(20);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已就绪"]);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
   const [creatorName, setCreatorName] = useState("当前创建人");
+  const teamMembers = useMemo(() => accountsToTeamMembers(teamAccounts), [teamAccounts]);
   const opsOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["operations_supervisor", "operations"]), [teamMembers]);
   const designerOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["designer"]), [teamMembers]);
+  const opsFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["operations"]), [teamAccounts]);
+  const selectionOwnerFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["developer", "procurement"]), [teamAccounts]);
+  const designerFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["designer"]), [teamAccounts]);
   const newProductStatusValues = useMemo(() => new Set(newProductStatusOptions.map((option) => option.value)), []);
 
   useEffect(() => {
@@ -102,18 +108,18 @@ export function ProductWorkbench() {
   useEffect(() => {
     let canceled = false;
 
-    async function loadTeamMembers() {
-      const [apiMembers, localMembers] = await Promise.all([loadTeamMembersFromApi(), Promise.resolve(loadTeamMembersFromLocalStorage())]);
+    async function loadTeamAccounts() {
+      const [apiAccounts, localAccounts] = await Promise.all([loadTeamAccountsFromApi(), Promise.resolve(loadTeamAccountsFromLocalStorage())]);
       if (canceled) return;
 
-      setTeamMembers(mergeTeamMembers(apiMembers, localMembers));
+      setTeamAccounts(mergeTeamAccounts(apiAccounts, localAccounts));
     }
 
-    void loadTeamMembers();
+    void loadTeamAccounts();
 
     function handleStorage(event: StorageEvent) {
       if (event.key === accountRosterStorageKey) {
-        void loadTeamMembers();
+        void loadTeamAccounts();
       }
     }
 
@@ -172,15 +178,24 @@ export function ProductWorkbench() {
     const hasMaxPrice = filters.maxPrice.trim() !== "" && Number.isFinite(maxPrice);
     const keyword = filters.keyword.trim().toLowerCase();
     const asin = filters.asin.trim().toLowerCase();
+    const opsAssignees = normalizeFilterNames(filters.opsAssignees);
+    const selectionOwners = normalizeFilterNames(filters.selectionOwners);
+    const designerAssignees = normalizeFilterNames(filters.designerAssignees);
     const supplierName = filters.supplierName.trim().toLowerCase();
 
     return products.filter((product) => {
       const searchable = [product.sku, product.chineseName, product.englishName, product.keywords, product.note]
         .join(" ")
         .toLowerCase();
+      const productOpsAssignees = normalizeAssigneeList(product.opsAssignee, product.opsAssignees).map((item) => item.toLowerCase());
+      const productSelectionOwner = (product.selectionOwner || product.developer).toLowerCase();
+      const productDesignerAssignees = normalizeAssigneeList(product.designerAssignee, product.designerAssignees).map((item) => item.toLowerCase());
 
       if (keyword && !searchable.includes(keyword)) return false;
       if (asin && !product.asin.toLowerCase().includes(asin) && !product.competitorAsins.join(" ").toLowerCase().includes(asin)) return false;
+      if (opsAssignees.length && !matchesAnyName(productOpsAssignees, opsAssignees)) return false;
+      if (selectionOwners.length && !matchesAnyName([productSelectionOwner], selectionOwners)) return false;
+      if (designerAssignees.length && !matchesAnyName(productDesignerAssignees, designerAssignees)) return false;
       if (supplierName && !product.supplierName.toLowerCase().includes(supplierName)) return false;
       if (filters.status === "overdue" && !isOverdueProduct(product)) return false;
       if (filters.status === "design_in_progress" && product.status !== "design_in_progress") return false;
@@ -388,7 +403,14 @@ export function ProductWorkbench() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ProductFiltersBar filters={filters} onChange={setFilters} onReset={() => setFilters(initialFilters)} />
+            <ProductFiltersBar
+              filters={filters}
+              opsAssigneeOptions={opsFilterOptions}
+              selectionOwnerOptions={selectionOwnerFilterOptions}
+              designerAssigneeOptions={designerFilterOptions}
+              onChange={setFilters}
+              onReset={() => setFilters(initialFilters)}
+            />
             <ProductTable products={visibleProducts} totalCount={filteredProducts.length} onOpenProduct={openProduct} />
             <Pagination page={page} pageCount={pageCount} pageSize={pageSize} pageSizeOptions={pageSizeOptions} onPageChange={setPage} onPageSizeChange={setPageSize} />
           </CardContent>
@@ -1396,35 +1418,35 @@ function MultiSelectField({
   );
 }
 
-async function loadTeamMembersFromApi() {
+async function loadTeamAccountsFromApi() {
   try {
     const response = await fetch("/api/accounts/team-members");
     if (!response.ok) return [];
 
     const data = (await response.json()) as { accounts?: unknown };
-    return accountsToTeamMembers(normalizeTeamAccounts(data.accounts));
+    return normalizeTeamAccounts(data.accounts);
   } catch {
     return [];
   }
 }
 
-function loadTeamMembersFromLocalStorage() {
+function loadTeamAccountsFromLocalStorage() {
   try {
     const saved = window.localStorage.getItem(accountRosterStorageKey);
-    if (!saved) return accountsToTeamMembers(defaultTeamAccounts);
+    if (!saved) return defaultTeamAccounts;
 
     const accounts = normalizeTeamAccounts(JSON.parse(saved));
-    return accountsToTeamMembers(accounts.length ? accounts : defaultTeamAccounts);
+    return accounts.length ? accounts : defaultTeamAccounts;
   } catch {
-    return accountsToTeamMembers(defaultTeamAccounts);
+    return defaultTeamAccounts;
   }
 }
 
-function mergeTeamMembers(...groups: TeamMember[][]) {
-  const merged = new Map<string, TeamMember>();
+function mergeTeamAccounts(...groups: TeamAccountRecord[][]) {
+  const merged = new Map<string, TeamAccountRecord>();
 
-  groups.flat().forEach((member) => {
-    merged.set(member.id, member);
+  groups.flat().forEach((account) => {
+    merged.set(account.id, account);
   });
 
   return Array.from(merged.values());
@@ -1432,6 +1454,21 @@ function mergeTeamMembers(...groups: TeamMember[][]) {
 
 function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[]) {
   return filterTeamMembersByRoles(members, roles).map((member) => member.name);
+}
+
+function getAccountNameOptionsByRoleIds(accounts: TeamAccountRecord[], roleIds: AccountRoleId[]) {
+  const roleSet = new Set<AccountRoleId>(roleIds);
+  const names = accounts.filter((account) => account.status !== "disabled" && roleSet.has(account.roleId)).map((account) => account.name.trim()).filter(Boolean);
+
+  return Array.from(new Set(names));
+}
+
+function normalizeFilterNames(values: string[]) {
+  return values.map((value) => value.trim().toLowerCase()).filter(Boolean);
+}
+
+function matchesAnyName(productNames: string[], selectedNames: string[]) {
+  return selectedNames.some((selectedName) => productNames.some((productName) => productName.includes(selectedName)));
 }
 
 function Pagination({
