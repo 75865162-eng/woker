@@ -15,6 +15,31 @@ export type ProductSizeCm = {
   height: number;
 };
 
+export type ProductSourceWorkbookRow = {
+  rowNumber: number;
+  values: Record<string, string>;
+};
+
+export type ProductSourceImageAsset = {
+  sourceUrl: string;
+  assetUrl?: string;
+  assetKey?: string;
+  status: "pending" | "downloaded" | "failed" | "skipped";
+  error?: string;
+  downloadedAt?: string;
+};
+
+export type ProductSourceWorkbook = {
+  kind: "commodity-create";
+  importedFileName: string;
+  importedAt: string;
+  headersBySheet: Record<string, string[]>;
+  rowsBySheet: Record<string, ProductSourceWorkbookRow[]>;
+  mappedFields: string[];
+  unmappedFields: string[];
+  imageAssets?: ProductSourceImageAsset[];
+};
+
 export type ProductWorkflowStage =
   | "selection_pending"
   | "ops_confirming"
@@ -120,6 +145,7 @@ export type Product = {
   workflowReminderAt?: string;
   workflowHistory?: ProductWorkflowEvent[];
   operationsProgress?: ProductOperationProgress;
+  sourceWorkbook?: ProductSourceWorkbook;
 };
 
 export type ProductDraft = Omit<Product, "id"> & {

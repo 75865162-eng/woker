@@ -10,8 +10,23 @@ import {
   type ParseDiagnostics,
 } from "@/lib/bulk/workspace-builders";
 import { prisma } from "@/lib/db/prisma";
+import { importCommodityWorkbook } from "@/lib/products/commodity-import";
 import { getStorageDriver } from "@/lib/storage";
 import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
+
+type ImportJobWithFile = {
+  id: string;
+  organizationId: string;
+  userId: string;
+  workspaceId: string;
+  accountId: string;
+  marketplace: string;
+  fileId: string;
+  file: {
+    originalName: string;
+    storageKey: string;
+  };
+};
 
 function createResultKey(jobId: string) {
   return `results/${new Date().toISOString().slice(0, 10)}/${jobId}.xlsx`;
@@ -116,6 +131,11 @@ export async function processImportJob(jobId: string) {
   });
 
   try {
+    if (job.type === "product_commodity_import") {
+      await processProductCommodityImportJob(job);
+      return;
+    }
+
     const storage = getStorageDriver();
     const fileBuffer = await storage.getBuffer(job.file.storageKey);
     const arrayBuffer = new Uint8Array(fileBuffer).buffer;
@@ -236,4 +256,40 @@ export async function processImportJob(jobId: string) {
       },
     });
   }
+}
+
+async function processProductCommodityImportJob(job: ImportJobWithFile) {
+  const storage = getStorageDriver();
+  const fileBuffer = await storage.getBuffer(job.file.storageKey);
+  const arrayBuffer = new Uint8Array(fileBuffer).buffer;
+
+  const result = await importCommodityWorkbook({
+    organizationId: job.organizationId,
+    userId: job.userId,
+    workspaceId: job.workspaceId,
+    accountId: job.accountId,
+    marketplace: job.marketplace,
+    fileName: job.file.originalName,
+    workbookBuffer: arrayBuffer,
+    onProgress: async (progress) => {
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: { progress },
+      });
+    },
+  });
+
+  await prisma.importJob.update({
+    where: { id: job.id },
+    data: {
+      status: "done",
+      progress: 100,
+      error: `已导入 ${result.importedCount} 个商品；主图下载 ${result.imageDownloadedCount} 个，失败 ${result.imageFailedCount} 个，跳过 ${result.skippedRowCount} 行。`,
+      file: {
+        update: {
+          status: "done",
+        },
+      },
+    },
+  });
 }

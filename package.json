@@ -10,6 +10,7 @@
     "db:push": "prisma db push",
     "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "worker": "tsx scripts/import-worker.ts",
+    "products:delete-amzn-gr": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/delete-amzn-gr-products.ts",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "lint": "eslint"
   },

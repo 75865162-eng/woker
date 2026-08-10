@@ -2,6 +2,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
+import { getProductListImage } from "@/lib/products/image-assets";
 import type { Product } from "@/lib/products/types";
 import {
   formatAssigneeList,
@@ -177,13 +178,16 @@ export function ProductTable({
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => (
-              <tr key={product.id} className="border-t border-border/70 align-top hover:bg-surface-muted/60">
+            {products.map((product) => {
+              const listImage = getProductListImage(product);
+
+              return (
+                <tr key={product.id} className="border-t border-border/70 align-top hover:bg-surface-muted/60">
                 <td className="px-3 py-3">
                   <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
-                    {product.images[0] ? (
+                    {listImage ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.images[0]} alt={product.chineseName} className="h-full w-full object-contain p-1" />
+                      <img src={listImage} alt={product.chineseName} className="h-full w-full object-contain p-1" />
                     ) : (
                       <ImagePlus className="h-5 w-5 text-muted" />
                     )}
@@ -227,8 +231,9 @@ export function ProductTable({
                     <History className="h-4 w-4" />
                   </Button>
                 </td>
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
             {!products.length ? (
               <tr>
                 <td colSpan={17} className="px-3 py-14 text-center text-sm text-muted">
