@@ -34,6 +34,7 @@ import {
   type AiModelSettings,
   type SavedAiModelProfile,
 } from "@/lib/ai-settings";
+import { scopedFetch } from "@/lib/workspace/scoped-fetch";
 
 const fieldClass =
   "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
@@ -61,7 +62,7 @@ export function SettingsWorkbench() {
 
     async function restoreSettings() {
       try {
-        const response = await fetch("/api/ai-settings");
+        const response = await scopedFetch("/api/ai-settings");
 
         if (!response.ok) {
           throw new Error("无法从数据库读取 AI 配置。");
@@ -171,7 +172,7 @@ export function SettingsWorkbench() {
   }
 
   async function persistSettings(nextSettings: AiModelSettings, nextProfiles: SavedAiModelProfile[], nextActiveProfileId: string) {
-    const response = await fetch("/api/ai-settings", {
+    const response = await scopedFetch("/api/ai-settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -279,7 +280,7 @@ export function SettingsWorkbench() {
     setChatInput("");
 
     try {
-      const response = await fetch("/api/ai-settings/test-chat", {
+      const response = await scopedFetch("/api/ai-settings/test-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

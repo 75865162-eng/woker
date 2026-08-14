@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getAuthDriver } from "@/lib/auth/constants";
+import { getAuthDriver, getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
 import { createLocalSession, createSession } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db/prisma";
+import { normalizeAccountRoleId } from "@/lib/accounts/team-roster";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     if (getAuthDriver() === "local") {
-      const configuredEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || "1").trim().toLowerCase();
+      const configuredEmail = getBootstrapAdminEmail();
       const configuredPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || "1";
 
       if (email !== configuredEmail || password !== configuredPassword) {
@@ -54,12 +55,50 @@ export async function POST(request: Request) {
     }
 
     const membership = user.memberships[0];
+    const rosterMember = await prisma.teamRosterMember.findUnique({
+      where: {
+        organizationId_id: {
+          organizationId: membership.organizationId,
+          id: user.id,
+        },
+      },
+      select: {
+        roleId: true,
+      },
+    });
+    const effectiveRole = isBootstrapAdminEmail(user.email) ? "owner" : normalizeAccountRoleId(rosterMember?.roleId ?? membership.role);
+
+    if (isBootstrapAdminEmail(user.email)) {
+      await Promise.all([
+        prisma.organizationMember.updateMany({
+          where: {
+            organizationId: membership.organizationId,
+            userId: user.id,
+          },
+          data: {
+            role: "owner",
+          },
+        }),
+        prisma.teamRosterMember.updateMany({
+          where: {
+            organizationId: membership.organizationId,
+            id: user.id,
+          },
+          data: {
+            name: user.name,
+            email: user.email,
+            roleId: "owner",
+            status: "active",
+          },
+        }),
+      ]);
+    }
 
     await createSession(user.id, {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: membership.role,
+      role: effectiveRole,
       organizationId: membership.organizationId,
       organizationName: "",
     });

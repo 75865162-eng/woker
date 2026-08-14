@@ -1,3 +1,5 @@
+import { addWorkspaceScopeToFormData, scopedFetch } from "@/lib/workspace/scoped-fetch";
+
 export interface ListingAiImageAsset {
   id: string;
   name: string;
@@ -11,8 +13,9 @@ export interface ListingAiImageAsset {
 export async function saveListingAiImageAsset(file: File) {
   const formData = new FormData();
   formData.set("file", file);
+  addWorkspaceScopeToFormData(formData);
 
-  const response = await fetch("/api/assets/upload", {
+  const response = await scopedFetch("/api/assets/upload", {
     method: "POST",
     body: formData,
   });
@@ -36,7 +39,7 @@ export async function readListingAiImageAsset(id: string) {
     return undefined;
   }
 
-  const response = await fetch(`/api/assets/${id.split("/").map(encodeURIComponent).join("/")}`);
+  const response = await scopedFetch(`/api/assets/${id.split("/").map(encodeURIComponent).join("/")}`);
 
   if (!response.ok) {
     return undefined;

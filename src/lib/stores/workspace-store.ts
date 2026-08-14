@@ -60,6 +60,7 @@ import type {
   OverallAdDataUpload,
   Rule,
   RuleRunHistoryRecord,
+  WorkspaceDatasetPayload,
   WorkspaceUnit,
 } from "@/lib/types";
 
@@ -100,6 +101,12 @@ interface WorkspaceState {
   exportHistoryRecords: ExportHistoryRecord[];
   ruleRunHistoryRecords: RuleRunHistoryRecord[];
   blockedCampaignIdentities: BlockedCampaignIdentity[];
+  workspaceDatasetId?: string;
+  sourceFileId?: string;
+  importJobId?: string;
+  sourceParserVersion?: string;
+  sourceDatasetCreatedAt?: string;
+  activeDraftRunId?: string;
   persistenceStatus: "loading" | "ready" | "saving" | "saved" | "failed";
   persistenceError?: string;
   setRules: (rules: Rule[]) => void;
@@ -128,6 +135,8 @@ interface WorkspaceState {
   removePendingDraftsForCampaignGroup: (campaignGroupId: string) => void;
   clearPendingAdjustmentDrafts: () => void;
   setParseStarted: (fileName: string, originalWorkbookBuffer: ArrayBuffer) => void;
+  applyWorkspaceDataset: (dataset: WorkspaceDatasetPayload, originalWorkbookBuffer?: ArrayBuffer) => void;
+  setActiveDraftRunId: (draftRunId?: string) => void;
   setParseProgress: (progress: number, sheets?: string[]) => void;
   ingestParsedRows: (sheetName: string, rows: SheetRow[], startRowIndex: number) => void;
   setParseCompleted: (rowCount: number, sheets: string[]) => void;
@@ -202,6 +211,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   exportHistoryRecords: [],
   ruleRunHistoryRecords: [],
   blockedCampaignIdentities: [],
+  workspaceDatasetId: undefined,
+  sourceFileId: undefined,
+  importJobId: undefined,
+  sourceParserVersion: undefined,
+  sourceDatasetCreatedAt: undefined,
+  activeDraftRunId: undefined,
   persistenceStatus: "loading",
   persistenceError: undefined,
   setRules: (rules) => set({ rules }),
@@ -872,8 +887,59 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       overallAdDataError: undefined,
       overallAdDataMatchSummary: emptyOverallAdDataMatchSummary,
       overallAdDataUploads: [],
+      workspaceDatasetId: undefined,
+      sourceFileId: undefined,
+      importJobId: undefined,
+      sourceParserVersion: undefined,
+      sourceDatasetCreatedAt: undefined,
+      activeDraftRunId: undefined,
     });
   },
+  applyWorkspaceDataset: (dataset, originalWorkbookBuffer) =>
+    set((state) => {
+      const activeCampaignGroupId = dataset.campaignGroups[0]?.id ?? "";
+      const overallMatch = state.overallAdDataRows.length
+        ? matchOverallAdDataRows(
+            state.overallAdDataRows,
+            state.overallAdDataRows[0]?.scopeCampaignGroupIds ?? dataset.campaignGroups.map((group) => group.id),
+            dataset.performanceRows,
+            state.overallAdDataFileName ?? "",
+          )
+        : undefined;
+
+      return {
+        campaignGroups: dataset.campaignGroups,
+        campaignSheetGroups: buildSheetGroups(dataset.campaignGroups),
+        workspaceUnits: [],
+        performanceRows: dataset.performanceRows,
+        activeCampaignGroupId,
+        activeWorkspaceUnitId: undefined,
+        activeLifecycleGroupId: undefined,
+        workspaceMode: "campaign",
+        openTabIds: dataset.campaignGroups.slice(0, 4).map((group) => group.id),
+        adjustmentDrafts: [],
+        pendingAdjustmentDrafts: [],
+        selectedDraftIds: [],
+        parseStatus: "completed" as const,
+        parseProgress: 100,
+        uploadedFileName: dataset.sourceFileName,
+        originalWorkbookBuffer: originalWorkbookBuffer ?? state.originalWorkbookBuffer,
+        activeBatchId: dataset.dataBatches[0]?.id,
+        parsedRowCount: dataset.rowCount,
+        parsedSheets: Array.from(new Set(dataset.campaignGroups.map((group) => group.sheetName).filter(Boolean))) as string[],
+        parseError: dataset.campaignGroups.length ? undefined : "数据库数据集没有可用广告组。",
+        parseDiagnostics: dataset.parseDiagnostics as ParseDiagnostics,
+        overallAdDataRows: overallMatch?.rows ?? state.overallAdDataRows,
+        overallAdDataMatchSummary: overallMatch?.summary ?? state.overallAdDataMatchSummary,
+        workspaceDatasetId: dataset.id,
+        sourceFileId: dataset.fileId,
+        importJobId: dataset.jobId,
+        sourceParserVersion: dataset.parserVersion,
+        sourceDatasetCreatedAt: dataset.createdAt,
+        activeDraftRunId: undefined,
+      };
+    }),
+  setActiveDraftRunId: (draftRunId) => set({ activeDraftRunId: draftRunId }),
   setParseProgress: (progress, sheets) =>
     set((state) => ({
       parseStatus: "parsing",
@@ -1070,6 +1136,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           overallAdDataMatchSummary: upload?.matchSummary ?? state.overallAdDataMatchSummary,
           adjustmentDrafts: groupDrafts,
           selectedDraftIds: groupDrafts.map((draft) => draft.id),
+          draftRunId: state.activeDraftRunId,
+          datasetId: state.workspaceDatasetId,
+          fileId: state.sourceFileId,
+          jobId: state.importJobId,
         };
       });
       const exportedGroupIds = new Set(campaignGroupIds);
@@ -1214,6 +1284,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         exportHistoryRecords,
         ruleRunHistoryRecords,
         blockedCampaignIdentities,
+        workspaceDatasetId: undefined,
+        sourceFileId: undefined,
+        importJobId: undefined,
+        sourceParserVersion: undefined,
+        sourceDatasetCreatedAt: undefined,
+        activeDraftRunId: undefined,
         persistenceStatus: "ready",
         persistenceError: undefined,
       });
@@ -1268,7 +1344,13 @@ if (typeof window !== "undefined") {
       state.pendingAdjustmentDrafts !== previousState.pendingAdjustmentDrafts ||
       state.exportHistoryRecords !== previousState.exportHistoryRecords ||
       state.ruleRunHistoryRecords !== previousState.ruleRunHistoryRecords ||
-      state.blockedCampaignIdentities !== previousState.blockedCampaignIdentities;
+      state.blockedCampaignIdentities !== previousState.blockedCampaignIdentities ||
+      state.workspaceDatasetId !== previousState.workspaceDatasetId ||
+      state.sourceFileId !== previousState.sourceFileId ||
+      state.importJobId !== previousState.importJobId ||
+      state.sourceParserVersion !== previousState.sourceParserVersion ||
+      state.sourceDatasetCreatedAt !== previousState.sourceDatasetCreatedAt ||
+      state.activeDraftRunId !== previousState.activeDraftRunId;
 
     if (!shouldSave) {
       return;
@@ -1293,4 +1375,3 @@ if (typeof window !== "undefined") {
     }, 500);
   });
 }
-

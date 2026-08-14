@@ -172,29 +172,51 @@ npm run lint
 
 ## 验证清单
 
-改代码后按风险选择验证：
+改代码后按改动类型运行最低验证；无法执行的项目必须在交付报告中说明原因和风险。
 
-```bash
-npm run lint
-npm run build
+| 改动类型 | 最低自动验证 | 必要的手动检查 |
+| --- | --- | --- |
+| 纯文档、配置或不影响运行时代码的改动 | `npm run lint`（适用时） | 检查链接、命令和配置引用有效 |
+| TypeScript 类型、纯函数、store 或规则引擎 | `npm run lint`；运行相关自动化测试（如存在） | 覆盖受影响的业务规则、边界值和旧数据兼容性 |
+| React 组件、页面或样式 | `npm run lint`、`npm run build` | 启动 `npm run dev`，检查受影响页面的加载、空态、loading、成功和错误状态；在桌面和移动宽度确认无溢出或重叠 |
+| Next API route、鉴权、文件上传或服务端逻辑 | `npm run lint`、`npm run build`；运行相关自动化测试（如存在） | 验证成功、输入校验、未授权、失败响应；不得回显密钥或敏感请求头 |
+| Prisma schema 或 migration | `npm run lint`、`npm run build`、`npx prisma validate` | 检查 migration 与 schema 一致；仅在明确授权的本地/测试数据库应用 migration，并验证升级路径 |
+| Excel、PDF、导入或导出 | `npm run lint`、`npm run build` | 使用代表性文件验证上传、解析、错误提示和导出；确认导出保留原文件名、sheet、row number 及业务追溯信息 |
+| AI 配置或 Listing AI | `npm run lint`、`npm run build` | 验证设置页测试连接及受影响的生成流程；确认错误信息不泄露密钥、Authorization header 或长响应体 |
+
+页面检查按实际受影响路由选择，不要求无关页面回归：
+
+- PPC workspace：`/workspace`
+- Rule Center：`/rules`
+- Dashboard：`/dashboard`
+- Listing AI：`/listing-ai`
+- Logistics：`/logistics`
+- Settings：`/settings`
+- 账户与权限：`/accounts`
+- 商品工作台：`/products`
+- 任务中心：`/tasks`
+- 版本历史：`/versions`
+- Sellfox：`/sellfox`
+
+## 执行任务交付格式
+
+执行任务完成时必须使用以下格式向主控汇报。不要用“已完成”代替可审查证据。
+
+```text
+结果：完成 / 部分完成 / 阻塞
+分支：<branch name 或 N/A；Git 改动必须提供分支>
+提交：<commit SHA 或 N/A；Git 改动必须提供 SHA>
+改动文件：
+- <path>：<简述>
+验证：
+- <command 或手动步骤>：通过 / 失败 / 未运行（原因）
+页面检查：
+- <route>：<检查的状态与结果；不适用则说明>
+风险与待办：
+- <无，或具体风险、已知限制、未执行验证及原因>
 ```
 
-涉及 UI 的改动应启动：
-
-```bash
-npm run dev
-```
-
-然后在浏览器检查对应页面：
-
-- `/workspace`
-- `/rules`
-- `/dashboard`
-- `/listing-ai`
-- `/logistics`
-- `/settings`
-
-涉及 Excel / PDF / AI 的改动，至少手动跑一遍对应上传、解析、导出或测试连接流程。
+主控创建执行任务时必须提供目标、范围边界、验收标准和本节适用的验证项。执行任务不得自行扩大需求；审查任务以该报告和实际分支/提交为输入独立验证。
 
 ## Git 和仓库状态
 

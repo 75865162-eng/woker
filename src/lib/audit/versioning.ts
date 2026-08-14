@@ -3,7 +3,14 @@ import { prisma } from "@/lib/db/prisma";
 import type { CurrentUser } from "@/lib/auth/session";
 import { normalizeWorkspaceScope, type WorkspaceScopeInput } from "@/lib/workspace/scope";
 
-export type VersionedEntityType = "product" | "listing_ai_workspace" | "ppc_workspace_snapshot" | "rule_config";
+export type VersionedEntityType =
+  | "product"
+  | "listing_ai_workspace"
+  | "ppc_workspace_snapshot"
+  | "rule_config"
+  | "workspace_dataset"
+  | "draft_run"
+  | "export_record";
 
 type RecordVersionInput = {
   user: CurrentUser;
@@ -92,4 +99,3 @@ export async function recordDataChangeVersion(input: RecordVersionInput) {
 
   return version;
 }
-

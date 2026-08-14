@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -37,6 +39,8 @@ services:
       dockerfile: Dockerfile
       target: builder
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -57,6 +61,24 @@ services:
     volumes:
       - uploads:/app/uploads
     restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://amazon_bulk_ad:amazon_bulk_ad@postgres:5432/amazon_bulk_ad
+      AUTH_SECRET: change-this-local-secret-before-production
+      BOOTSTRAP_ORG_NAME: Amazon Operations
+      BOOTSTRAP_ORG_SLUG: amazon-ops
+      BOOTSTRAP_ADMIN_EMAIL: "1"
+      BOOTSTRAP_ADMIN_PASSWORD: "1"
+    command: ["sh", "-c", "npx prisma migrate deploy && npm run db:seed-admin"]
+    restart: "no"
 
   postgres:
     image: postgres:16-alpine

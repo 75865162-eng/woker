@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness } from "lucide-react";
-
-const storageKey = "amazon_bulk_ad_workspace_scope";
+import { readSelectedWorkspaceScope, writeSelectedWorkspaceScope } from "@/lib/workspace/scoped-fetch";
 
 type WorkspaceScope = {
   id: string;
@@ -13,86 +12,13 @@ type WorkspaceScope = {
   isDefault?: boolean;
 };
 
-type SelectedScope = {
-  workspaceId: string;
-  accountId: string;
-  marketplace: string;
-};
-
-declare global {
-  interface Window {
-    __amazonBulkAdScopedFetchPatched?: boolean;
-  }
-}
-
-function readSelectedScope(): SelectedScope {
-  if (typeof window === "undefined") {
-    return { workspaceId: "default", accountId: "", marketplace: "" };
-  }
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") as Partial<SelectedScope>;
-
-    return {
-      workspaceId: parsed.workspaceId || "default",
-      accountId: parsed.accountId || "",
-      marketplace: parsed.marketplace || "",
-    };
-  } catch {
-    return { workspaceId: "default", accountId: "", marketplace: "" };
-  }
-}
-
-function writeSelectedScope(scope: SelectedScope) {
-  window.localStorage.setItem(storageKey, JSON.stringify(scope));
-}
-
-function shouldScopeFetch(input: RequestInfo | URL) {
-  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-
-  if (url.startsWith("/api/")) return true;
-
-  try {
-    const parsed = new URL(url, window.location.origin);
-
-    return parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/");
-  } catch {
-    return false;
-  }
-}
-
-function patchFetchWithWorkspaceScope() {
-  if (typeof window === "undefined" || window.__amazonBulkAdScopedFetchPatched) return;
-
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    if (!shouldScopeFetch(input)) {
-      return originalFetch(input, init);
-    }
-
-    const scope = readSelectedScope();
-    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
-
-    headers.set("x-workspace-id", scope.workspaceId);
-    if (scope.accountId) headers.set("x-account-id", scope.accountId);
-    if (scope.marketplace) headers.set("x-marketplace", scope.marketplace);
-
-    return originalFetch(input, { ...init, headers });
-  };
-  window.__amazonBulkAdScopedFetchPatched = true;
-}
-
 function scopeLabel(scope: WorkspaceScope) {
   return [scope.name || scope.id, scope.marketplace, scope.accountId].filter(Boolean).join(" / ");
 }
 
 export function WorkspaceScopeSelector() {
   const [workspaces, setWorkspaces] = useState<WorkspaceScope[]>([]);
-  const [selected, setSelected] = useState(() => readSelectedScope());
-
-  useEffect(() => {
-    patchFetchWithWorkspaceScope();
-  }, []);
+  const [selected, setSelected] = useState(() => readSelectedWorkspaceScope());
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +40,7 @@ export function WorkspaceScopeSelector() {
               marketplace: fallback.marketplace ?? "",
             };
             setSelected(nextSelected);
-            writeSelectedScope(nextSelected);
+            writeSelectedWorkspaceScope(nextSelected);
           }
         }
       })
@@ -138,7 +64,7 @@ export function WorkspaceScopeSelector() {
     };
 
     setSelected(nextSelected);
-    writeSelectedScope(nextSelected);
+    writeSelectedWorkspaceScope(nextSelected);
     window.location.reload();
   }
 

@@ -1,4 +1,4 @@
-import type { Product } from "@/lib/products/types";
+import type { Product, ProductSourceWorkbook, ProductSourceWorkbookRow, ProductStatus } from "@/lib/products/types";
 import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
@@ -14,7 +14,212 @@ import {
 } from "./product-workbench-model";
 import { formatDateTime, nextSku } from "./product-workbench-utils";
 
+const commoditySheetName = "商品";
+const countryFreightSheetName = "按国家维护头程费用";
+const supplierQuoteSheetName = "更多供应商报价";
+
+const commodityHeaders = [
+  "SKU",
+  "品名",
+  "商品编码",
+  "图片链接",
+  "分类",
+  "识别码",
+  "商品品牌",
+  "材质",
+  "型号",
+  "用途",
+  "单位",
+  "spu",
+  "变种属性(中)",
+  "变种属性(英)",
+  "款名",
+  "组合明细",
+  "关联辅料数",
+  "包含单品（品名）",
+  "包含单品（SKU）",
+  "Listing配对状态",
+  "状态",
+  "1688配对",
+  "HS Code配对状态",
+  "商品备注",
+  "开发员",
+  "采购员",
+  "查看人",
+  "开启加工过程",
+  "加工费(¥)",
+  "商品重量",
+  "商品重量单位",
+  "开发时间",
+  "商品标签",
+  "商品规格长(cm)",
+  "商品规格宽(cm)",
+  "商品规格高(cm)",
+  "采购成本(￥)",
+  "采购备注",
+  "采购交期",
+  "开启质检流程",
+  "最低采购量",
+  "箱规长(cm)",
+  "箱规宽(cm)",
+  "箱规高(cm)",
+  "单箱重量(kg)",
+  "单箱数量(pcs)",
+  "中文报关名",
+  "英文报关名",
+  "报关单价",
+  "报关单价币种",
+  "报关重量(g)",
+  "危险品运输",
+  "海关编码",
+  "创建时间",
+  "来源",
+  "首选供应商",
+  "供应商名称",
+  "币种",
+  "商品包装规格长(cm)",
+  "商品包装规格宽(cm)",
+  "商品包装规格高(cm)",
+  "商品包装重量",
+  "商品包装重量单位",
+  "是否含税",
+  "税率",
+  "更新时间",
+  "采购单价",
+  "报价（20套）",
+  "含税价",
+  "采购链接",
+  "供应商产品链接",
+  "报价备注",
+  "最小采购量",
+  "中文材质",
+  "英文材质",
+  "中文用途",
+  "英文用途",
+  "报关型号",
+  "报关单位",
+  "品牌类型",
+  "出口享惠情况",
+  "申报要素",
+  "原产地(地区)",
+  "境内货源地",
+  "征免",
+  "生产销售企业名称",
+  "生产销售企业代码",
+];
+
+const supplierQuoteHeaders = ["SKU", "首选供应商", "供应商名称", "币种", "是否含税", "税率", "采购单价", "含税价", "采购链接", "报价备注", "最小采购量"];
+const countryFreightHeaders = ["SKU", "国家名称", "头程费用（CNY）", "清关HSCODE", "清关单价", "清关单价币种", "清关税率", "产品链接", "备注"];
+
+const commodityVisibleSheets = [commoditySheetName, supplierQuoteSheetName, countryFreightSheetName];
+const commodityMappedFields = [
+  "*SKU",
+  "*品名",
+  "状态",
+  "材质",
+  "型号",
+  "用途",
+  "开发员",
+  "查看人",
+  "图片链接",
+  "采购成本(CNY)",
+  "采购备注",
+  "采购交期",
+  "商品备注",
+  "中文报关名",
+  "英文报关名",
+  "报关重量(g)",
+  "海关编码",
+  "商品包装规格长(cm)",
+  "商品包装规格宽(cm)",
+  "商品包装规格高(cm)",
+  "商品包装重量",
+  "商品包装重量单位",
+  "商品尺寸长(cm)",
+  "商品尺寸宽(cm)",
+  "商品尺寸高(cm)",
+  "商品重量",
+  "商品重量单位",
+  "首选供应商名称",
+  "最小采购量",
+  "采购单价",
+  "报价（20套）",
+  "采购链接",
+  "供应商产品链接",
+  "开发时间",
+];
+
+const commodityStatusMap: Record<string, ProductStatus> = {
+  开发中: "developing",
+  待售: "listing_confirming",
+  在售: "listed",
+  清仓: "developing",
+  停售: "delisted",
+};
+
+const productStatusCommodityLabels: Partial<Record<ProductStatus, string>> = {
+  pending: "开发中",
+  developing: "开发中",
+  ops_review: "开发中",
+  design_in_progress: "开发中",
+  listing_confirming: "待售",
+  listed: "在售",
+  canceled: "停售",
+  delisted: "停售",
+  patent_risk: "停售",
+};
+
+const commodityFieldAliases = {
+  sku: ["*SKU", "SKU"],
+  name: ["*品名", "品名"],
+  status: ["状态"],
+  material: ["材质"],
+  model: ["型号"],
+  use: ["用途"],
+  developer: ["开发员"],
+  viewer: ["查看人"],
+  imageUrl: ["图片链接"],
+  purchaseCost: ["采购成本(CNY)", "采购成本(￥)"],
+  purchaseLeadTime: ["采购交期"],
+  purchaseNote: ["采购备注"],
+  minPurchaseQuantity: ["最低采购量", "最小采购量"],
+  productNote: ["商品备注"],
+  customsChineseName: ["中文报关名"],
+  customsEnglishName: ["英文报关名"],
+  customsWeightG: ["报关重量(g)"],
+  hsCode: ["海关编码", "HS Code"],
+  productLengthCm: ["商品尺寸长(cm)", "商品规格长(cm)"],
+  productWidthCm: ["商品尺寸宽(cm)", "商品规格宽(cm)"],
+  productHeightCm: ["商品尺寸高(cm)", "商品规格高(cm)"],
+  productWeight: ["商品重量"],
+  productWeightUnit: ["商品重量单位"],
+  packageLengthCm: ["商品包装规格长(cm)"],
+  packageWidthCm: ["商品包装规格宽(cm)"],
+  packageHeightCm: ["商品包装规格高(cm)"],
+  packageWeight: ["商品包装重量"],
+  packageWeightUnit: ["商品包装重量单位"],
+  preferredSupplierName: ["首选供应商名称", "首选供应商", "供应商名称"],
+  currency: ["货币单位", "币种"],
+  taxIncluded: ["是否含税"],
+  taxRate: ["税率"],
+  purchasePrice: ["采购单价"],
+  taxIncludedPrice: ["含税价"],
+  purchaseUrl: ["采购链接"],
+  quote20: ["报价（20套）"],
+  supplierProductUrl: ["供应商产品链接"],
+  quoteNote: ["报价备注"],
+  developmentDate: ["开发时间", "创建时间"],
+} satisfies Record<string, string[]>;
+
 export async function parseProductWorkbookFile(file: File, products: Product[]): Promise<Product> {
+  const parsedProducts = await parseProductWorkbookProducts(file, products);
+  if (!parsedProducts[0]) {
+    throw new Error("Excel 文件没有可导入的数据行。");
+  }
+  return parsedProducts[0];
+}
+
+export async function parseProductWorkbookProducts(file: File, products: Product[]): Promise<Product[]> {
   const buffer = await file.arrayBuffer();
   const [XLSXModule, JSZipModule] = await Promise.all([import("xlsx"), import("jszip")]);
   const XLSX = XLSXModule;
@@ -28,19 +233,29 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
   }
 
   const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "", raw: false, blankrows: false });
+  if (isCommodityCreateWorkbook(workbook, XLSX)) {
+    return parseCommodityCreateWorkbook(workbook, XLSX, file.name, products);
+  }
+
   const detail = createTrialProductDraft();
   const pricingHeaderIndex = 0;
-  const competitorHeaderIndex = findRowIndex(rows, "ASIN");
-  const supplierHeaderIndex = findRowIndex(rows, "供应商产品链接");
-  const improvementHeaderIndex = findRowIndex(rows, "使用人群");
-  const keywordHeaderIndex = findRowIndex(rows, "关键词");
+  const competitorHeaderIndex = findOptionalRowIndex(rows, "ASIN");
+  const supplierHeaderIndex = findOptionalRowIndex(rows, "供应商产品链接");
+  const improvementHeaderIndex = findOptionalRowIndex(rows, "使用人群");
+  const keywordHeaderIndex = findOptionalRowIndex(rows, "关键词");
+  const remarkHeaderIndex = findOptionalRowIndex(rows, "备注");
+  const pricingEndIndex = findNextRowIndex(rows.length, pricingHeaderIndex, [competitorHeaderIndex, supplierHeaderIndex, improvementHeaderIndex, keywordHeaderIndex, remarkHeaderIndex]);
+  const competitorEndIndex = findNextRowIndex(rows.length, competitorHeaderIndex, [supplierHeaderIndex, improvementHeaderIndex, keywordHeaderIndex, remarkHeaderIndex]);
+  const supplierEndIndex = findNextRowIndex(rows.length, supplierHeaderIndex, [improvementHeaderIndex, keywordHeaderIndex, remarkHeaderIndex]);
+  const improvementEndIndex = findNextRowIndex(rows.length, improvementHeaderIndex, [keywordHeaderIndex, remarkHeaderIndex]);
+  const keywordEndIndex = findNextRowIndex(rows.length, keywordHeaderIndex, [remarkHeaderIndex]);
 
   detail.title = textAt(rows, pricingHeaderIndex + 1, 0) || file.name.replace(/\.(xlsx|xls)$/i, "");
-  detail.pricingRows = parsePricingRows(rows, pricingHeaderIndex, competitorHeaderIndex);
-  detail.competitors = parseCompetitorRows(rows, competitorHeaderIndex, supplierHeaderIndex);
-  detail.suppliers = parseSupplierRows(rows, supplierHeaderIndex, improvementHeaderIndex);
-  detail.improvement = parseImprovementRows(rows, improvementHeaderIndex);
-  detail.keywords = parseKeywordRows(rows, keywordHeaderIndex);
+  detail.pricingRows = parsePricingRows(rows, pricingHeaderIndex, pricingEndIndex);
+  detail.competitors = parseCompetitorRows(rows, competitorHeaderIndex, competitorEndIndex);
+  detail.suppliers = supplierHeaderIndex >= 0 ? parseSupplierRows(rows, supplierHeaderIndex, supplierEndIndex) : [];
+  detail.improvement = parseImprovementRows(rows, improvementHeaderIndex, improvementEndIndex);
+  detail.keywords = parseKeywordRows(rows, keywordHeaderIndex, keywordEndIndex);
   detail.remark = textAt(rows, findRowIndex(rows, "备注"), 0) === "备注" ? "" : detail.remark;
   detail.remarkImages = [];
 
@@ -65,7 +280,7 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
   const now = new Date();
   const developer = extractDeveloperName(file.name);
 
-  return {
+  return [{
     sku,
     id: `prod-${sku}`,
     chineseName: detail.title,
@@ -112,7 +327,406 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
       }),
     ],
     workbookDetail: detail,
+  } as Product];
+}
+
+export async function exportProductsToCommodityCreateWorkbook(products: Product[]) {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+  const headersBySheet = getCommodityExportHeaders(products);
+  const commodityRows = products.map((product) => buildCommodityExportRow(product, headersBySheet[commoditySheetName]));
+  const supplierRows = products.flatMap((product) => {
+    const originalRows = buildOriginalRowsForSheet(product, supplierQuoteSheetName, headersBySheet[supplierQuoteSheetName]);
+    return originalRows.length ? originalRows : buildSupplierQuoteRows(product, headersBySheet[supplierQuoteSheetName]);
+  });
+  const countryRows = products.flatMap((product) => buildOriginalRowsForSheet(product, countryFreightSheetName, headersBySheet[countryFreightSheetName]));
+
+  appendSheet(XLSX, workbook, commoditySheetName, headersBySheet[commoditySheetName], commodityRows);
+  appendSheet(XLSX, workbook, supplierQuoteSheetName, headersBySheet[supplierQuoteSheetName], supplierRows);
+  appendSheet(XLSX, workbook, countryFreightSheetName, headersBySheet[countryFreightSheetName], countryRows);
+
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+  XLSX.writeFile(workbook, `商品导出-${stamp}.xlsx`);
+}
+
+function isCommodityCreateWorkbook(workbook: import("xlsx").WorkBook, XLSX: typeof import("xlsx")) {
+  const sheet = workbook.Sheets[commoditySheetName];
+  if (!sheet) return false;
+  const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "", raw: false, blankrows: false });
+  const header = rows[0] ?? [];
+  return [commodityFieldAliases.sku, commodityFieldAliases.name, commodityFieldAliases.imageUrl]
+    .every((aliases) => header.some((cell) => aliases.includes(cleanText(cell))));
+}
+
+function parseCommodityCreateWorkbook(
+  workbook: import("xlsx").WorkBook,
+  XLSX: typeof import("xlsx"),
+  fileName: string,
+  products: Product[],
+): Product[] {
+  const sheetRows = new Map<string, string[][]>();
+  const headersBySheet: Record<string, string[]> = {};
+  const rowsBySkuBySheet = new Map<string, Map<string, ProductSourceWorkbookRow[]>>();
+
+  commodityVisibleSheets.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = sheet ? XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "", raw: false, blankrows: false }) : [];
+    const headers = normalizeHeaders(rows[0] ?? fallbackCommodityHeaders(sheetName));
+    sheetRows.set(sheetName, rows);
+    headersBySheet[sheetName] = headers;
+
+    const skuColumn = findColumnIndexByAliases(headers, commodityFieldAliases.sku);
+    rows.slice(1).forEach((row, index) => {
+      if (!row.some((cell) => cleanText(cell))) return;
+      const sku = cleanText(row[skuColumn]);
+      if (!sku) return;
+      const bySheet = rowsBySkuBySheet.get(sku) ?? new Map<string, ProductSourceWorkbookRow[]>();
+      const sheetProductRows = bySheet.get(sheetName) ?? [];
+      sheetProductRows.push({ rowNumber: index + 2, values: rowToRecord(headers, row) });
+      bySheet.set(sheetName, sheetProductRows);
+      rowsBySkuBySheet.set(sku, bySheet);
+    });
+  });
+
+  const commodityRows = sheetRows.get(commoditySheetName) ?? [];
+  const commodityHeader = headersBySheet[commoditySheetName] ?? commodityHeaders;
+  const productsWithImportedRows = [...products];
+  const importedAt = new Date().toISOString();
+
+  return commodityRows.slice(1).filter((row) => row.some((cell) => cleanText(cell))).map((row) => {
+    const record = rowToRecord(commodityHeader, row);
+    const importedSku = readCommodityRecord(record, "sku");
+    const sku = importedSku || nextSku(productsWithImportedRows);
+    const detail = createEmptyProductWorkbookDetail(readCommodityRecord(record, "name") || fileName.replace(/\.(xlsx|xls)$/i, ""));
+    const sourceWorkbook = buildCommoditySourceWorkbook(fileName, importedAt, sku, headersBySheet, rowsBySkuBySheet, record);
+    const product = commodityRecordToProduct(record, sku, detail, sourceWorkbook);
+    productsWithImportedRows.push(product);
+    return product;
+  });
+}
+
+function commodityRecordToProduct(
+  record: Record<string, string>,
+  sku: string,
+  detail: TrialProductDraft,
+  sourceWorkbook: ProductSourceWorkbook,
+): Product {
+  const now = new Date();
+  const name = readCommodityRecord(record, "name");
+  const developer = readCommodityRecord(record, "developer");
+  const supplierName = readCommodityRecord(record, "preferredSupplierName");
+  const supplierUrl = readCommodityRecord(record, "supplierProductUrl") || readCommodityRecord(record, "purchaseUrl");
+  const quote20 = parseNumber(readCommodityRecord(record, "quote20"));
+  const purchasePrice = quote20 || parseNumber(readCommodityRecord(record, "purchasePrice")) || parseNumber(readCommodityRecord(record, "purchaseCost"));
+  const productWeightG = convertWeightToGram(readCommodityRecord(record, "productWeight"), readCommodityRecord(record, "productWeightUnit")) || parseNumber(readCommodityRecord(record, "customsWeightG"));
+  const packageWeightG = convertWeightToGram(readCommodityRecord(record, "packageWeight"), readCommodityRecord(record, "packageWeightUnit"));
+  const originalImageUrls = splitList(readCommodityRecord(record, "imageUrl"));
+
+  detail.title = name;
+  detail.pricingRows = [{
+    name: readCommodityRecord(record, "model") || name,
+    lengthCm: parseNumber(readCommodityRecord(record, "productLengthCm")),
+    widthCm: parseNumber(readCommodityRecord(record, "productWidthCm")),
+    heightCm: parseNumber(readCommodityRecord(record, "productHeightCm")),
+    actualWeightKg: productWeightG / 1000,
+    suggestedPrice: 0,
+    purchaseCost: purchasePrice,
+    oceanFreightUnitPrice: 12,
+    fbaFee: 0,
+    exchangeRate: 6.9,
+  }].filter((row) => row.name || row.purchaseCost || row.lengthCm || row.widthCm || row.heightCm);
+  detail.suppliers = [{
+    productUrl: supplierUrl,
+    factoryName: supplierName,
+    configuration: readCommodityRecord(record, "model"),
+    moq: readCommodityRecord(record, "minPurchaseQuantity"),
+    leadTime: readCommodityRecord(record, "purchaseLeadTime"),
+    domesticFreightIncluded: "",
+    certifications: "",
+    patentCountry: "",
+    packagingMethod: "",
+    cost100: quote20 || purchasePrice,
+    cost300: 0,
+    taxPoint: readCommodityRecord(record, "taxRate"),
+    invoiceName: "",
+    invoiceSpecUnit: "",
+    invoiceRegion: "",
+  }].filter((row) => row.productUrl || row.factoryName || row.cost300 || row.moq);
+  detail.remark = readCommodityRecord(record, "productNote") || readCommodityRecord(record, "purchaseNote") || readCommodityRecord(record, "quoteNote");
+
+  return {
+    sku,
+    id: `prod-${sku}`,
+    chineseName: name,
+    englishName: readCommodityRecord(record, "customsEnglishName"),
+    asin: "",
+    developer,
+    purchasePrice,
+    status: commodityStatusMap[readCommodityRecord(record, "status")] ?? "pending",
+    supplierName,
+    supplierUrl,
+    specs: [readCommodityRecord(record, "material"), readCommodityRecord(record, "model"), readCommodityRecord(record, "use")].filter(Boolean).join(";"),
+    purchaseLeadTime: readCommodityRecord(record, "purchaseLeadTime"),
+    createdAt: readCommodityRecord(record, "developmentDate") || formatDateTime(now),
+    keywords: "",
+    note: detail.remark,
+    cancelReason: "",
+    hsCode: readCommodityRecord(record, "hsCode"),
+    images: originalImageUrls,
+    competitorAsins: [],
+    productWeightG,
+    packageWeightG,
+    productSizeCm: {
+      length: parseNumber(readCommodityRecord(record, "productLengthCm")),
+      width: parseNumber(readCommodityRecord(record, "productWidthCm")),
+      height: parseNumber(readCommodityRecord(record, "productHeightCm")),
+    },
+    packageSizeCm: {
+      length: parseNumber(readCommodityRecord(record, "packageLengthCm")),
+      width: parseNumber(readCommodityRecord(record, "packageWidthCm")),
+      height: parseNumber(readCommodityRecord(record, "packageHeightCm")),
+    },
+    selectionOwner: developer,
+    opsAssignees: splitList(readCommodityRecord(record, "viewer")),
+    opsAssignee: readCommodityRecord(record, "viewer"),
+    viewableBy: splitList(readCommodityRecord(record, "viewer")),
+    workflowStage: "selection_pending",
+    workflowStartedAt: now.toISOString(),
+    workflowUpdatedAt: now.toISOString(),
+    workflowDueAt: createWorkflowDueAt(now),
+    workflowHistory: [
+      buildWorkflowEvent({
+        stage: "selection_pending",
+        actorName: developer,
+        assigneeName: developer,
+        note: "从商品创建模板导入商品。",
+        createdAt: now,
+      }),
+    ],
+    workbookDetail: detail,
+    sourceWorkbook,
   } as Product;
+}
+
+function buildCommoditySourceWorkbook(
+  fileName: string,
+  importedAt: string,
+  sku: string,
+  headersBySheet: Record<string, string[]>,
+  rowsBySkuBySheet: Map<string, Map<string, ProductSourceWorkbookRow[]>>,
+  fallbackCommodityRecord: Record<string, string>,
+): ProductSourceWorkbook {
+  const rowsBySheet = Object.fromEntries(
+    commodityVisibleSheets.map((sheetName) => {
+      const rows = rowsBySkuBySheet.get(sku)?.get(sheetName) ?? [];
+      if (sheetName === commoditySheetName && !rows.length) {
+        return [sheetName, [{ rowNumber: 0, values: fallbackCommodityRecord }]];
+      }
+      return [sheetName, rows];
+    }),
+  );
+  const allHeaders = Object.values(headersBySheet).flat();
+  const mappedFieldSet = new Set(commodityMappedFields);
+
+  return {
+    kind: "commodity-create",
+    importedFileName: fileName,
+    importedAt,
+    headersBySheet,
+    rowsBySheet,
+    mappedFields: commodityMappedFields.filter((field) => allHeaders.includes(field)),
+    unmappedFields: allHeaders.filter((field) => field && !mappedFieldSet.has(field)),
+  };
+}
+
+function createEmptyProductWorkbookDetail(title: string): TrialProductDraft {
+  return {
+    title,
+    pricingRows: [],
+    competitors: [],
+    suppliers: [],
+    improvement: createEmptyImprovement(),
+    remark: "",
+    remarkImages: [],
+    keywords: [],
+  };
+}
+
+function createEmptyImprovement(): TrialImprovement {
+  return {
+    audience: "",
+    scenario: "",
+    painPoint1: "",
+    painPoint2: "",
+    painPoint3: "",
+    material: "",
+    size: "",
+    functionImprovement: "",
+    appearance: "",
+    accessories: "",
+    packaging: "",
+    manual: "",
+    imageCopySuggestion: "",
+    peakSeason: "",
+    peakSales: "",
+    offSeasonSales: "",
+    targetSales: "",
+    infringement: "",
+    certification: "",
+    rows: [],
+  };
+}
+
+function getCommodityExportHeaders(products: Product[]) {
+  return {
+    [commoditySheetName]: mergeHeaders(commodityHeaders, products, commoditySheetName),
+    [supplierQuoteSheetName]: mergeHeaders(supplierQuoteHeaders, products, supplierQuoteSheetName),
+    [countryFreightSheetName]: mergeHeaders(countryFreightHeaders, products, countryFreightSheetName),
+  };
+}
+
+function mergeHeaders(baseHeaders: string[], products: Product[], sheetName: string) {
+  const extraHeaders = products.flatMap((product) => product.sourceWorkbook?.kind === "commodity-create" ? product.sourceWorkbook.headersBySheet[sheetName] ?? [] : []);
+  return Array.from(new Set([...baseHeaders, ...extraHeaders.filter(Boolean)]));
+}
+
+function buildCommodityExportRow(product: Product, headers: string[]) {
+  const sourceValues = getFirstOriginalRow(product, commoditySheetName);
+  const row = { ...sourceValues };
+  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+  const detail = productWithWorkbook.workbookDetail;
+  const firstPriceRow = detail?.pricingRows?.[0];
+  const firstSupplier = detail?.suppliers?.[0];
+
+  setCommodityRecord(row, headers, "sku", product.sku);
+  setCommodityRecord(row, headers, "name", product.chineseName);
+  setCommodityRecord(row, headers, "status", productStatusCommodityLabels[product.status] ?? "");
+  setCommodityRecord(row, headers, "material", detail?.improvement.material || readCommodityRecord(row, "material"));
+  setCommodityRecord(row, headers, "model", firstPriceRow?.name || readCommodityRecord(row, "model"));
+  setCommodityRecord(row, headers, "use", detail?.improvement.scenario || readCommodityRecord(row, "use"));
+  setCommodityRecord(row, headers, "developer", product.selectionOwner || product.developer || "");
+  setCommodityRecord(row, headers, "viewer", normalizeAssigneeList(product.opsAssignee, product.opsAssignees).join(",") || product.viewableBy?.join(",") || readCommodityRecord(row, "viewer"));
+  setCommodityRecord(row, headers, "imageUrl", product.images.join(","));
+  setCommodityRecord(row, headers, "purchaseCost", String(product.purchasePrice || ""));
+  setCommodityRecord(row, headers, "purchaseLeadTime", product.purchaseLeadTime);
+  setCommodityRecord(row, headers, "productNote", product.note);
+  setCommodityRecord(row, headers, "purchaseNote", product.note);
+  setCommodityRecord(row, headers, "customsChineseName", readCommodityRecord(row, "customsChineseName") || product.chineseName);
+  setCommodityRecord(row, headers, "customsEnglishName", product.englishName);
+  setCommodityRecord(row, headers, "customsWeightG", String(product.productWeightG || ""));
+  setCommodityRecord(row, headers, "hsCode", product.hsCode);
+  setCommodityRecord(row, headers, "packageLengthCm", String(product.packageSizeCm.length || ""));
+  setCommodityRecord(row, headers, "packageWidthCm", String(product.packageSizeCm.width || ""));
+  setCommodityRecord(row, headers, "packageHeightCm", String(product.packageSizeCm.height || ""));
+  setCommodityRecord(row, headers, "packageWeight", String(product.packageWeightG || ""));
+  setCommodityRecord(row, headers, "packageWeightUnit", product.packageWeightG ? "g" : readCommodityRecord(row, "packageWeightUnit"));
+  setCommodityRecord(row, headers, "productLengthCm", String(product.productSizeCm.length || ""));
+  setCommodityRecord(row, headers, "productWidthCm", String(product.productSizeCm.width || ""));
+  setCommodityRecord(row, headers, "productHeightCm", String(product.productSizeCm.height || ""));
+  setCommodityRecord(row, headers, "productWeight", String(product.productWeightG || ""));
+  setCommodityRecord(row, headers, "productWeightUnit", product.productWeightG ? "g" : readCommodityRecord(row, "productWeightUnit"));
+  setCommodityRecord(row, headers, "preferredSupplierName", product.supplierName || firstSupplier?.factoryName || "");
+  setCommodityRecord(row, headers, "minPurchaseQuantity", firstSupplier?.moq || readCommodityRecord(row, "minPurchaseQuantity"));
+  setCommodityRecord(row, headers, "purchasePrice", String(product.purchasePrice || firstSupplier?.cost300 || ""));
+  setCommodityRecord(row, headers, "purchaseUrl", product.supplierUrl || firstSupplier?.productUrl || "");
+  setCommodityRecord(row, headers, "quote20", String(firstSupplier?.cost100 || product.purchasePrice || ""));
+  setCommodityRecord(row, headers, "supplierProductUrl", firstSupplier?.productUrl || product.supplierUrl || "");
+  setCommodityRecord(row, headers, "developmentDate", product.createdAt);
+
+  return headers.map((header) => row[header] ?? "");
+}
+
+function buildOriginalRowsForSheet(product: Product, sheetName: string, headers: string[]) {
+  const sourceRows = product.sourceWorkbook?.kind === "commodity-create" ? product.sourceWorkbook.rowsBySheet[sheetName] ?? [] : [];
+  return sourceRows.map((row) => headers.map((header) => row.values[header] ?? ""));
+}
+
+function buildSupplierQuoteRows(product: Product, headers: string[]) {
+  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+  return (productWithWorkbook.workbookDetail?.suppliers ?? []).map((supplier, index) => {
+    const row: Record<string, string> = {};
+    setRecord(row, "SKU", product.sku);
+    setRecord(row, "首选供应商", index === 0 ? "是" : "否");
+    setRecord(row, "供应商名称", supplier.factoryName || product.supplierName);
+    setRecord(row, "币种", "CNY");
+    setRecord(row, "是否含税", "");
+    setRecord(row, "税率", supplier.taxPoint);
+    setRecord(row, "采购单价", String(supplier.cost100 || product.purchasePrice || ""));
+    setRecord(row, "含税价", "");
+    setRecord(row, "采购链接", supplier.productUrl || product.supplierUrl);
+    setRecord(row, "报价备注", supplier.configuration);
+    setRecord(row, "最小采购量", supplier.moq);
+    return headers.map((header) => row[header] ?? "");
+  });
+}
+
+function appendSheet(
+  XLSX: typeof import("xlsx"),
+  workbook: import("xlsx").WorkBook,
+  sheetName: string,
+  headers: string[],
+  rows: string[][],
+) {
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  worksheet["!cols"] = headers.map((header) => ({ wch: Math.min(Math.max(header.length + 4, 12), 26) }));
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+}
+
+function fallbackCommodityHeaders(sheetName: string) {
+  if (sheetName === countryFreightSheetName) return countryFreightHeaders;
+  if (sheetName === supplierQuoteSheetName) return supplierQuoteHeaders;
+  return commodityHeaders;
+}
+
+function normalizeHeaders(headers: string[]) {
+  return headers.map(cleanText).filter(Boolean);
+}
+
+function rowToRecord(headers: string[], row: string[]) {
+  return Object.fromEntries(headers.map((header, index) => [header, cleanText(row[index])]));
+}
+
+function readRecord(record: Record<string, string>, key: string) {
+  return cleanText(record[key]);
+}
+
+function setRecord(record: Record<string, string>, key: string, value: string) {
+  record[key] = value;
+}
+
+function readCommodityRecord(record: Record<string, string>, field: keyof typeof commodityFieldAliases) {
+  return commodityFieldAliases[field].map((alias) => readRecord(record, alias)).find(Boolean) ?? "";
+}
+
+function setCommodityRecord(record: Record<string, string>, headers: string[], field: keyof typeof commodityFieldAliases, value: string) {
+  const aliases = commodityFieldAliases[field];
+  const target = aliases.find((alias) => headers.includes(alias)) ?? aliases[0];
+  setRecord(record, target, value);
+}
+
+function findColumnIndexByAliases(row: string[], aliases: string[]) {
+  const index = row.findIndex((cell) => aliases.includes(cleanText(cell)));
+  return index >= 0 ? index : -1;
+}
+
+function getFirstOriginalRow(product: Product, sheetName: string) {
+  return product.sourceWorkbook?.kind === "commodity-create"
+    ? { ...(product.sourceWorkbook.rowsBySheet[sheetName]?.[0]?.values ?? {}) }
+    : {};
+}
+
+function splitList(value: string) {
+  return value.split(/[,，;\s]+/u).map((item) => item.trim()).filter(Boolean);
+}
+
+function convertWeightToGram(value: string, unit: string) {
+  const weight = parseNumber(value);
+  if (!weight) return 0;
+  const normalizedUnit = unit.trim().toLowerCase();
+  if (normalizedUnit === "kg") return Math.round(weight * 1000);
+  if (normalizedUnit === "lb") return Math.round(weight * 453.59237);
+  if (normalizedUnit === "oz") return Math.round(weight * 28.349523125);
+  return Math.round(weight);
 }
 
 function parsePricingRows(rows: string[][], headerIndex: number, endIndex: number): TrialPriceRow[] {
@@ -131,10 +745,14 @@ function parsePricingRows(rows: string[][], headerIndex: number, endIndex: numbe
 }
 
 function parseCompetitorRows(rows: string[][], headerIndex: number, endIndex: number): TrialCompetitorRow[] {
+  if (headerIndex < 0) {
+    return [];
+  }
+
   return rows.slice(headerIndex + 1, endIndex).filter((row) => row.some(Boolean)).map((row) => {
     const price = cleanText(row[7]);
     return {
-      type: cleanText(row[0]) || "参考竞品",
+      type: cleanText(row[0]),
       hotVariantImage: "",
       asin: cleanText(row[1]),
       sales30Days: cleanText(row[2]),
@@ -155,7 +773,7 @@ function parseCompetitorRows(rows: string[][], headerIndex: number, endIndex: nu
       note: cleanText(row[17]),
       noteImage: "",
     };
-  }).filter((row) => row.asin || row.type);
+  }).filter((row) => Object.values(row).some((value) => cleanText(value)));
 }
 
 function parseSupplierRows(rows: string[][], headerIndex: number, endIndex: number): TrialSupplierRow[] {
@@ -178,14 +796,29 @@ function parseSupplierRows(rows: string[][], headerIndex: number, endIndex: numb
   }));
 }
 
-function parseImprovementRows(rows: string[][], headerIndex: number): TrialImprovement {
+function parseImprovementRows(rows: string[][], headerIndex: number, endIndex: number): TrialImprovement {
+  if (headerIndex < 0) {
+    return createEmptyImprovement();
+  }
+
   const header = rows[headerIndex] ?? [];
-  const value = rows[headerIndex + 1] ?? [];
-  const fallback = createTrialProductDraft().improvement;
+  const value = headerIndex + 1 < endIndex ? rows[headerIndex + 1] ?? [] : [];
   const read = (label: string) => cleanText(value[findColumnIndex(header, label)]);
+  const improvementRow = {
+    ...createEmptyImprovementRow(),
+    material: read("材质改进"),
+    size: read("尺寸改进"),
+    functionImprovement: read("功能改进"),
+    appearance: read("外观"),
+    accessories: read("配件"),
+    packaging: read("包装改进"),
+    manual: read("说明书"),
+    imageCopySuggestion: read("文案"),
+    certification: "",
+  };
 
   return {
-    ...fallback,
+    ...createEmptyImprovement(),
     audience: read("使用人群"),
     scenario: read("主要适用场景"),
     painPoint1: read("产品痛点1"),
@@ -205,23 +838,16 @@ function parseImprovementRows(rows: string[][], headerIndex: number): TrialImpro
     targetSales: read("目标销量"),
     infringement: read("侵权"),
     certification: read("认证"),
-    rows: [{
-      ...createEmptyImprovementRow(),
-      material: read("材质改进"),
-      size: read("尺寸改进"),
-      functionImprovement: read("功能改进"),
-      appearance: read("外观"),
-      accessories: read("配件"),
-      packaging: read("包装改进"),
-      manual: read("说明书"),
-      imageCopySuggestion: read("文案"),
-      certification: "",
-    }],
+    rows: Object.values(improvementRow).some(Boolean) ? [improvementRow] : [],
   };
 }
 
-function parseKeywordRows(rows: string[][], headerIndex: number): TrialKeywordRow[] {
-  return rows.slice(headerIndex + 1).filter((row) => cleanText(row[0])).map((row) => ({
+function parseKeywordRows(rows: string[][], headerIndex: number, endIndex: number): TrialKeywordRow[] {
+  if (headerIndex < 0) {
+    return [];
+  }
+
+  return rows.slice(headerIndex + 1, endIndex).filter((row) => cleanText(row[0])).map((row) => ({
     keyword: cleanText(row[0]),
     cpc: parseNumber(row[1]),
     monthlySearches: parseNumber(row[2]),
@@ -306,6 +932,20 @@ function findRowIndex(rows: string[][], label: string) {
   return index >= 0 ? index : 0;
 }
 
+function findOptionalRowIndex(rows: string[][], label: string) {
+  return rows.findIndex((row) => row.some((cell) => cleanText(cell).includes(label)));
+}
+
+function findNextRowIndex(fallback: number, currentIndex: number, candidates: number[]) {
+  if (currentIndex < 0) {
+    return fallback;
+  }
+
+  return candidates
+    .filter((index) => index > currentIndex)
+    .sort((left, right) => left - right)[0] ?? fallback;
+}
+
 function findColumnIndex(row: string[], label: string) {
   const index = row.findIndex((cell) => cleanText(cell).includes(label));
   return index >= 0 ? index : -1;
@@ -357,7 +997,7 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
       operationsProgress: normalizeOperationsProgress(product.operationsProgress, product.opsAssignee || product.selectionOwner || ""),
       workbookDetail: normalizeWorkbookDetail(
         productWithWorkbook.workbookDetail,
-        product.sku === "00001" ? createEspressoMirrorDetail() : createTrialProductDraft(),
+        createEmptyProductWorkbookDetail(product.chineseName || ""),
       ),
     };
   }
@@ -389,45 +1029,20 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
     opsAssignees: [],
     designerAssignees: [],
     workflowHistory: [],
-    workbookDetail: createEspressoMirrorDetail(),
+    workbookDetail: createEmptyProductWorkbookDetail(""),
   };
 }
 
 export function hydrateProductFromExcelSeed(product: Product): Product {
-  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  if (product.sku !== "00001" || productWithWorkbook.workbookDetail) {
-    return product;
-  }
-
-  return {
-    ...product,
-    chineseName: "浓缩咖啡机镜子",
-    englishName: "Espresso Shot Mirror",
-    asin: "",
-    developer: "黄斯涵",
-    purchasePrice: 6.5405,
-    status: "developing",
-    supplierName: "深圳泰沃数码科技有限公司",
-    supplierUrl: "https://detail.1688.com/offer/927860044677.html?spm=a21i7k.1688_web_im.chatboxOD.0",
-    specs: "普通磁铁 / 强磁;底座+引磁片",
-    purchaseLeadTime: "",
-    createdAt: product.createdAt.includes(":") ? product.createdAt : `${product.createdAt || "2026-07-23"} 20:37:13`,
-    keywords: "espresso shot mirror,espresso mirror",
-    note: "咖啡爱好者 / 咖啡师用于观察咖啡液流出形态；重点改进强磁底座、3M背胶引磁片、飞机盒和说明书。",
-    hsCode: "",
-    competitorAsins: ["B0D2WNHF3V", "B0BJP1FM72", "B0DM1TB116", "B0F9Y1C7MZ", "B0GVDVJDVH", "B0BXCLX3HC"],
-    productWeightG: 100,
-    packageWeightG: 108.86,
-    productSizeCm: { length: 10, width: 10, height: 5 },
-    packageSizeCm: { length: 9.14, width: 9.14, height: 5.33 },
-    workbookDetail: createEspressoMirrorDetail(),
-  } as Product;
+  return product;
 }
 
 function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback: TrialProductDraft): TrialProductDraft {
   if (!detail) {
     return fallback;
   }
+
+  const fallbackImprovement = createEmptyImprovement();
 
   return {
     ...fallback,
@@ -443,17 +1058,17 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
           negativePoint5: row.negativePoint5 ?? "",
           noteImage: row.noteImage ?? "",
         }))
-      : fallback.competitors,
+      : [],
     suppliers: detail.suppliers?.length ? detail.suppliers : fallback.suppliers,
     improvement: {
-      ...fallback.improvement,
+      ...fallbackImprovement,
       ...detail.improvement,
       rows: detail.improvement?.rows?.length
         ? detail.improvement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
-        : fallback.improvement.rows,
+        : [],
     },
     remarkImages: detail.remarkImages ?? fallback.remarkImages ?? [],
-    keywords: detail.keywords?.length ? detail.keywords : fallback.keywords,
+    keywords: detail.keywords?.length ? detail.keywords : [],
   };
 }
 
@@ -486,311 +1101,13 @@ export function createTrialProductDraft(): TrialProductDraft {
       { name: "交易卡展示架10pcs", lengthCm: 18.5, widthCm: 15, heightCm: 8, actualWeightKg: 0.6, suggestedPrice: 23.99, purchaseCost: 35, oceanFreightUnitPrice: 12, fbaFee: 5.42, exchangeRate: 6.8 },
       { name: "交易卡展示架24pcs", lengthCm: 25, widthCm: 20, heightCm: 8, actualWeightKg: 1.2, suggestedPrice: 37.99, purchaseCost: 76.8, oceanFreightUnitPrice: 12, fbaFee: 6.67, exchangeRate: 6.8 },
     ],
-    competitors: [
-      { type: "头部竞品", hotVariantImage: "", asin: "B0GL1XGNQM", sales30Days: "849 / 2026-02-14", variantCount: "5", variantType: "数量", hotVariantSpec: "17.5*8.5*2", hotVariantPrice: "40.88 / 750g", fbaFee: "5.76", priceChangeNote: "42.99-59.99", reviewCount: "13", rating: "4.5", negativePoint1: "希望它们再抬高一点", negativePoint2: "", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "18.29 x 13.72 x 8.64 cm", note: "杂", noteImage: "" },
-      { type: "直接竞品", hotVariantImage: "", asin: "B0GVSNLDYF", sales30Days: "160 / 2026-05-09", variantCount: "", variantType: "", hotVariantSpec: "16.2*8.4*1.3", hotVariantPrice: "25.99 / 680g", fbaFee: "5.61", priceChangeNote: "28.9-31.99", reviewCount: "19", rating: "4.3", negativePoint1: "", negativePoint2: "", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "42.67 x 17.78 x 9.91 cm", note: "杂", noteImage: "" },
-      { type: "参考竞品", hotVariantImage: "", asin: "B0GYF4D1B5", sales30Days: "201 / 2026-05-03", variantCount: "", variantType: "", hotVariantSpec: "16*8.5", hotVariantPrice: "59.97 / 1100g", fbaFee: "6.58", priceChangeNote: "69.97-59.97", reviewCount: "26", rating: "4.8", negativePoint1: "没这么牢固，有锁扣更好", negativePoint2: "黑色丙烯看起来非常干净", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "18.80 x 15.75 x 9.65 cm", note: "收纳居多", noteImage: "" },
-    ],
+    competitors: [],
     suppliers: [
       { productUrl: "", factoryName: "广州飞伦工艺品有限公司", configuration: "", moq: "1000", leadTime: "", domesticFreightIncluded: "否", certifications: "无", patentCountry: "", packagingMethod: "", cost100: 3.5, cost300: 35, taxPoint: "普票2%", invoiceName: "", invoiceSpecUnit: "", invoiceRegion: "" },
     ],
-    improvement: {
-      audience: "卡片爱好者",
-      scenario: "家中",
-      painPoint1: "可以考虑怎么加锁扣或者防滑",
-      painPoint2: "去掉 logo，做差异化镂空之类的",
-      painPoint3: "采样看看品控",
-      material: "亚克力",
-      size: "17.5*8.5",
-      functionImprovement: "收纳整理、展示",
-      appearance: "",
-      accessories: "可以配一个收纳袋",
-      packaging: "前期先牛皮纸盒，后期看有没有必要加彩盒",
-      manual: "简单产品介绍显得专业",
-      imageCopySuggestion: "",
-      peakSeason: "产品较新",
-      peakSales: "400-500",
-      offSeasonSales: "",
-      targetSales: "100",
-      infringement: "",
-      certification: "",
-      rows: [
-        {
-          material: "亚克力",
-          size: "17.5*8.5",
-          functionImprovement: "收纳整理、展示",
-          appearance: "",
-          accessories: "可以配一个收纳袋",
-          packaging: "前期先牛皮纸盒，后期看有没有必要加彩盒",
-          manual: "简单产品介绍显得专业",
-          imageCopySuggestion: "",
-          certification: "",
-        },
-      ],
-    },
+    improvement: createEmptyImprovement(),
     remark: "",
     remarkImages: [],
-    keywords: [
-      { keyword: "card risers for display case", cpc: 0.4, monthlySearches: 4401, abaRank: 317832 },
-      { keyword: "graded card display", cpc: 1.53, monthlySearches: 11912, abaRank: 124848 },
-      { keyword: "sports card display", cpc: 0.72, monthlySearches: 9331, abaRank: 150351 },
-      { keyword: "sports card display case", cpc: 1.54, monthlySearches: 7112, abaRank: 213697 },
-      { keyword: "card display case", cpc: 1.84, monthlySearches: 31321, abaRank: 42337 },
-      { keyword: "pokemon card display", cpc: 0.86, monthlySearches: 10715, abaRank: 154350 },
-    ],
-  };
-}
-
-function createEspressoMirrorDetail(): TrialProductDraft {
-  return {
-    title: "浓缩咖啡机镜子",
-    pricingRows: [
-      { name: "普通磁铁", lengthCm: 10, widthCm: 10, heightCm: 5, actualWeightKg: 0.1, suggestedPrice: 13.99, purchaseCost: 6.5405, oceanFreightUnitPrice: 12, fbaFee: 3.73, exchangeRate: 6.9 },
-      { name: "强磁", lengthCm: 6.5, widthCm: 4, heightCm: 7.5, actualWeightKg: 0.11, suggestedPrice: 13.99, purchaseCost: 8.034, oceanFreightUnitPrice: 12, fbaFee: 3.73, exchangeRate: 6.9 },
-    ],
-    competitors: [
-      {
-        type: "头部竞品",
-        hotVariantImage: "",
-        asin: "B0D2WNHF3V",
-        sales30Days: "427\n2024-05-07",
-        variantCount: "2",
-        variantType: "底座颜色（银色、黑色）",
-        hotVariantSpec: "银色底座\n不锈钢镜面\n108.86 g",
-        hotVariantPrice: "13.80\ncoupon11.73",
-        fbaFee: "3.86",
-        priceChangeNote: "/",
-        reviewCount: "198",
-        rating: "4.6",
-        negativePoint1: "尺寸偏大，适配性差（13）\n镜子太大\n机身高度不足无法使用",
-        negativePoint2: "磁吸 / 粘贴结构不稳（8）\n磁吸力度不足\n配套背胶贴片粘性差\n部分咖啡机机身无磁性用不了",
-        negativePoint3: "镜面材质效果不佳（11）\n不锈钢镜子清晰度一般，成像偏暗\n支架 / 调节结构缺陷（7）\n调节关节阻尼偏大\n支架臂长度不足",
-        negativePoint4: "配件与附加工具问题（4）\n无说明书",
-        negativePoint5: "外观设计短板（2）\n质感一般\n不精致",
-        packageSize: "9.14 x 9.14 x 5.33 cm",
-        note: "",
-        noteImage: "",
-      },
-      {
-        type: "参考竞品",
-        hotVariantImage: "",
-        asin: "B0BJP1FM72",
-        sales30Days: "161\n2022-11-14",
-        variantCount: "1",
-        variantType: "/",
-        hotVariantSpec: "黑色底座\n玻璃镜面\n90.72 g",
-        hotVariantPrice: "14.99",
-        fbaFee: "3.86",
-        priceChangeNote: "/",
-        reviewCount: "256",
-        rating: "4.5",
-        negativePoint1: "配套金属贴片背胶品质差（4）\n引磁片双面胶老化\n粘合力不足",
-        negativePoint2: "磁吸性能不稳定（4）\n磁铁吸力不足\n用户不愿意在咖啡机身粘胶",
-        negativePoint3: "支架结构缺陷（5）\n支架臂长度偏短\n万向球头最大转角不足90度\n稳定性差",
-        negativePoint4: "镜面相关问题（5）\n玻璃边角磕碰缺角\n无放大效果\n咖啡污渍附着后清洁难度偏高",
-        negativePoint5: "缺少配套说明书（3）\n无说明书",
-        packageSize: "7.87 x 7.62 x 5.08 cm",
-        note: "",
-        noteImage: "",
-      },
-      {
-        type: "参考竞品",
-        hotVariantImage: "",
-        asin: "B0DM1TB116",
-        sales30Days: "87\n2024-11-20",
-        variantCount: "2",
-        variantType: "底座颜色（银色、黑色）",
-        hotVariantSpec: "银色底座\n不锈钢镜面\n81.65 g",
-        hotVariantPrice: "9.99",
-        fbaFee: "3.01",
-        priceChangeNote: "7.89-9.99",
-        reviewCount: "36",
-        rating: "4.4",
-        negativePoint1: "产品做工粗糙廉价（1）\n整体用料做工差、品质低劣",
-        negativePoint2: "镜面尺寸偏大（3）\n镜面规格过大\n部分机型安装后干涉配件摆放",
-        negativePoint3: "外观设计简陋（1）\n镜面无包边装饰\n不锈钢镜面材质缺陷（3）\n容易刮花\n粘指纹\n比不上玻璃镜面",
-        negativePoint4: "使用环境易起雾（1）\n出厂零配件带油污（1）",
-        negativePoint5: "",
-        packageSize: "8.89 x 7.87 x 5.08 cm",
-        note: "",
-        noteImage: "",
-      },
-      {
-        type: "参考竞品",
-        hotVariantImage: "",
-        asin: "B0F9Y1C7MZ",
-        sales30Days: "64\n2025-07-10",
-        variantCount: "1",
-        variantType: "/",
-        hotVariantSpec: "银色底座\n不锈钢镜面\n81.65 g",
-        hotVariantPrice: "9.99",
-        fbaFee: "3.01",
-        priceChangeNote: "/",
-        reviewCount: "13",
-        rating: "4.3",
-        negativePoint1: "磁吸相关问题（3）\n咖啡机不锈钢不带磁\n引磁片背胶粘不住\n磁铁吸力弱",
-        negativePoint2: "机型空间适配不足（1）\n适配机型不足",
-        negativePoint3: "镜片尺寸偏小（1）",
-        negativePoint4: "镜面出场瑕疵（1）",
-        negativePoint5: "",
-        packageSize: "8.38 x 7.87 x 5.08 cm",
-        note: "",
-        noteImage: "",
-      },
-      {
-        type: "参考竞品",
-        hotVariantImage: "",
-        asin: "B0GVDVJDVH",
-        sales30Days: "76\n2026-05-21",
-        variantCount: "1",
-        variantType: "/",
-        hotVariantSpec: "银色底座\n不锈钢镜面\n90.72 g",
-        hotVariantPrice: "7.99",
-        fbaFee: "3.01",
-        priceChangeNote: "/",
-        reviewCount: "3",
-        rating: "3.9",
-        negativePoint1: "质量差",
-        negativePoint2: "",
-        negativePoint3: "",
-        negativePoint4: "",
-        negativePoint5: "",
-        packageSize: "",
-        note: "",
-        noteImage: "",
-      },
-      {
-        type: "参考竞品",
-        hotVariantImage: "",
-        asin: "B0BXCLX3HC",
-        sales30Days: "42\n2023-03-03",
-        variantCount: "4",
-        variantType: "",
-        hotVariantSpec: "黑色底座\n木头镜子\n81.93 g",
-        hotVariantPrice: "9.99",
-        fbaFee: "3.73",
-        priceChangeNote: "/",
-        reviewCount: "203",
-        rating: "3.9",
-        negativePoint1: "运输破损严重，包装防护不足（12）\n镜子碎，底座破损",
-        negativePoint2: "热胀冷缩导致玻璃开裂（9）\n装配公差过紧，玻璃膨胀崩裂",
-        negativePoint3: "做工粗糙、用料差（3）\n1.木头表面工艺粗糙\n2.底座装配错位\n3.木框为未处理原木，遇水吸水膨胀\n4.漆面 / 木饰面质感差",
-        negativePoint4: "磁吸相关缺陷（5）\n磁铁吸力偏弱\n配套引磁贴片不适合经常擦拭的接水盘",
-        negativePoint5: "结构设计缺陷（5）\n仅有单旋转支点，调节角度有限\n支架臂偏短，调节范围不足\n擦拭时玻璃容易脱落\n边框尺寸偏大，挤占接水盘空间",
-        packageSize: "",
-        note: "",
-        noteImage: "",
-      },
-    ],
-    suppliers: [
-      {
-        productUrl: "https://detail.1688.com/offer/927860044677.html?spm=a21i7k.1688_web_im.chatboxOD.0",
-        factoryName: "深圳泰沃数码科技有限公司",
-        configuration: "底座+2片引磁片",
-        moq: "",
-        leadTime: "",
-        domesticFreightIncluded: "",
-        certifications: "",
-        patentCountry: "",
-        packagingMethod: "开窗纸盒\n\n换飞机盒",
-        cost100: 0,
-        cost300: 6.5,
-        taxPoint: "普票3个点开票免费",
-        invoiceName: "",
-        invoiceSpecUnit: "",
-        invoiceRegion: "",
-      },
-      {
-        productUrl: "https://detail.1688.com/offer/992102683422.html?spm=a26352.13672862.offerlist.30.4c961e62TBS4cq&cosite=-&tracelog=p4p&_p_isad=1&clickid=12136426181a4fc5ada1168d16a05051&sessionid=bce541a9bb314e8e974468aba916b0d3",
-        factoryName: "东莞市科世达包装制品有限公司",
-        configuration: "飞机盒",
-        moq: "",
-        leadTime: "",
-        domesticFreightIncluded: "",
-        certifications: "",
-        patentCountry: "",
-        packagingMethod: "",
-        cost100: 0,
-        cost300: 0.3,
-        taxPoint: "",
-        invoiceName: "",
-        invoiceSpecUnit: "",
-        invoiceRegion: "",
-      },
-      {
-        productUrl: "https://detail.1688.com/offer/999202581627.html?spm=a262uh.11734184.footprint-offer-list-offer3.2.35b92ef6DiT714",
-        factoryName: "义乌市子漫工艺品有限公司",
-        configuration: "镜子7cm",
-        moq: "",
-        leadTime: "",
-        domesticFreightIncluded: "",
-        certifications: "",
-        patentCountry: "",
-        packagingMethod: "",
-        cost100: 0,
-        cost300: 0.75,
-        taxPoint: "",
-        invoiceName: "",
-        invoiceSpecUnit: "",
-        invoiceRegion: "",
-      },
-      {
-        productUrl: "https://detail.1688.com/offer/972335245714.html?spm=a262uh.11734184.footprint-offer-list-offer4.2.35b92ef6DiT714",
-        factoryName: "金华荀梦电子商务有限责任公司",
-        configuration: "镜子6cm",
-        moq: "",
-        leadTime: "",
-        domesticFreightIncluded: "",
-        certifications: "",
-        patentCountry: "",
-        packagingMethod: "",
-        cost100: 0,
-        cost300: 0.43,
-        taxPoint: "",
-        invoiceName: "",
-        invoiceSpecUnit: "",
-        invoiceRegion: "",
-      },
-    ],
-    improvement: {
-      audience: "咖啡爱好者，咖啡师",
-      scenario: "观察咖啡液流出的形态",
-      painPoint1: "强磁底座",
-      painPoint2: "3M背胶引磁片，我们自己测试粘在不锈钢上会不会掉",
-      painPoint3: "否",
-      material: "否",
-      size: "否",
-      functionImprovement: "否",
-      appearance: "否",
-      accessories: "无",
-      packaging: "飞机盒",
-      manual: "做使用说明书",
-      imageCopySuggestion: "",
-      peakSeason: "",
-      peakSales: "",
-      offSeasonSales: "500",
-      targetSales: "150",
-      infringement: "",
-      certification: "",
-      rows: [
-        {
-          material: "否",
-          size: "否",
-          functionImprovement: "否",
-          appearance: "否",
-          accessories: "无",
-          packaging: "飞机盒",
-          manual: "做使用说明书",
-          imageCopySuggestion: "",
-          certification: "",
-        },
-      ],
-    },
-    remark: "成本拆分：普通磁铁=支架5.05+税0.1515+飞机盒0.3+镜子1+税0.039；强磁=支架6.5+税0.195+飞机盒0.3+镜子1+税0.039。",
-    remarkImages: [],
-    keywords: [
-      { keyword: "espresso shot mirror", cpc: 0.63, monthlySearches: 488, abaRank: 1756622 },
-      { keyword: "espresso mirror", cpc: 0.49, monthlySearches: 1539, abaRank: 1155349 },
-    ],
+    keywords: [],
   };
 }

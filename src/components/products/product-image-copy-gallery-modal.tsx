@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { scopedFetch } from "@/lib/workspace/scoped-fetch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   GalleryCell,
@@ -63,7 +64,7 @@ export function ProductImageCopyGalleryModal({
       setError("");
 
       try {
-        const response = await fetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, { cache: "no-store" });
+        const response = await scopedFetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, { cache: "no-store" });
         const data = (await response.json()) as { gallery?: Partial<ProductImageCopyGalleryDraft>; error?: string };
 
         if (!response.ok) {
@@ -98,7 +99,7 @@ export function ProductImageCopyGalleryModal({
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => {
       setSaveStatus("saving");
-      fetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, {
+      scopedFetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gallery: draft }),

@@ -1,3 +1,5 @@
+import { accountRoleIds } from "@/lib/accounts/team-roster";
+
 export type PermissionAction = "view" | "create" | "edit" | "approve" | "export";
 
 export type RolePermissions = Record<string, PermissionAction[]>;
@@ -5,6 +7,7 @@ export type RolePermissions = Record<string, PermissionAction[]>;
 export type RolePermissionMap = Record<string, RolePermissions>;
 
 export const rolePermissionsCookieName = "amazon_bulk_ad_role_permissions";
+const validRoleIds = new Set<string>(accountRoleIds);
 
 export const permissionActions: Array<{ id: PermissionAction; label: string }> = [
   { id: "view", label: "查看" },
@@ -15,48 +18,50 @@ export const permissionActions: Array<{ id: PermissionAction; label: string }> =
 ];
 
 export const permissionModules = [
-  { id: "workspace", name: "PPC Workspace", paths: ["/workspace", "/history", "/tasks"] },
-  { id: "products", name: "Products", paths: ["/dashboard"] },
-  { id: "searchMerge", name: "Search Merge", paths: ["/saihu-search-merge"] },
+  { id: "products", name: "产品管理", paths: ["/dashboard"] },
+  { id: "sellfox", name: "Sellfox 同步", paths: ["/sellfox"] },
+  { id: "workspace", name: "PPC 优化", paths: ["/workspace"] },
+  { id: "searchMerge", name: "赛狐搜词合并", paths: ["/saihu-search-merge"] },
+  { id: "searchMergeHistory", name: "搜索词历史", paths: ["/history"] },
   { id: "listingAi", name: "Listing AI", paths: ["/listing-ai"] },
-  { id: "imageUpscale", name: "Image Upscale", paths: ["/image-upscale"] },
-  { id: "logistics", name: "Logistics", paths: ["/logistics"] },
-  { id: "rules", name: "Rule Center", paths: ["/rules"] },
-  { id: "accounts", name: "Accounts", paths: ["/accounts"] },
-  { id: "settings", name: "Settings", paths: ["/settings", "/versions"] },
+  { id: "imageUpscale", name: "图片放大", paths: ["/image-upscale"] },
+  { id: "logistics", name: "物流处理", paths: ["/logistics"] },
+  { id: "tasks", name: "任务中心", paths: ["/tasks"] },
+  { id: "versions", name: "版本审计", paths: ["/versions"] },
+  { id: "accounts", name: "账号权限", paths: ["/accounts"] },
+  { id: "settings", name: "系统设置", paths: ["/settings"] },
 ];
 
-export const routeModuleIds = permissionModules.flatMap((module) =>
-  module.paths.map((path) => ({
-    moduleId: module.id,
-    path,
-  })),
-);
+const legacyRouteModuleIds = [{ moduleId: "workspace", path: "/rules" }];
+
+export const routeModuleIds = [
+  ...permissionModules.flatMap((module) =>
+    module.paths.map((path) => ({
+      moduleId: module.id,
+      path,
+    })),
+  ),
+  ...legacyRouteModuleIds,
+];
 
 export const defaultRolePermissionMap: RolePermissionMap = {
   owner: createFullPermissions(),
   database_admin: createPermissions(
-    ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules", "accounts", "settings"],
+    ["products", "sellfox", "workspace", "searchMerge", "searchMergeHistory", "listingAi", "imageUpscale", "logistics", "tasks", "versions", "accounts", "settings"],
     ["view", "create", "edit", "export"],
   ),
-  admin: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
-  operations_manager: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
-  operations_supervisor: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
-  operations: createPermissions(["products", "listingAi"], ["view", "create", "edit", "export"]),
+  operations_supervisor: createPermissions(["products", "sellfox", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
+  operations: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
   operations_assistant: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
   developer: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
   warehouse: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  warehouse_supervisor: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]),
-  finance: createPermissions(["workspace", "products", "logistics"], ["view", "export"]),
+  warehouse_supervisor: createPermissions(
+    ["logistics", "accounts"],
+    ["view", "create", "edit", "approve", "export"],
+  ),
+  finance: createPermissions(["products", "workspace", "logistics", "versions"], ["view", "export"]),
   procurement: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
-  selection: createPermissions(["products"], ["view", "create", "edit"]),
   designer: createPermissions(["products", "listingAi", "imageUpscale"], ["view"]),
-  ppc_specialist: createPermissions(["workspace", "searchMerge", "rules"], ["view", "create", "edit", "export"]),
-  ppc_manager: createPermissions(["workspace", "searchMerge", "rules"], ["view", "create", "edit", "export"]),
-  listing_specialist: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
-  listing_operator: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
-  logistics_specialist: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  logistics_operator: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
   viewer: {},
 };
 
@@ -75,10 +80,18 @@ export function createPermissions(moduleIds: string[], actions: PermissionAction
 export function getEffectiveRolePermissionMap(overrides?: RolePermissionMap | null): RolePermissionMap {
   if (!overrides) return defaultRolePermissionMap;
 
-  return {
-    ...defaultRolePermissionMap,
-    ...overrides,
-  };
+  const merged: RolePermissionMap = { ...defaultRolePermissionMap };
+
+  for (const [roleId, rolePermissions] of Object.entries(overrides)) {
+    if (!validRoleIds.has(roleId)) continue;
+
+    merged[roleId] = {
+      ...(merged[roleId] ?? defaultRolePermissionMap[roleId] ?? {}),
+      ...rolePermissions,
+    };
+  }
+
+  return merged;
 }
 
 export function getModuleIdForPath(pathname: string): string | null {
@@ -90,9 +103,7 @@ export function getModuleIdForPath(pathname: string): string | null {
 export function roleCanAccessModule(role: string | undefined, moduleId: string | null, permissions?: RolePermissionMap | null) {
   if (!moduleId) return true;
 
-  const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
-
-  return (rolePermissions[moduleId] ?? []).length > 0;
+  return getRoleModulePermissionActions(role, moduleId, permissions).length > 0;
 }
 
 export function roleCanPerformAction(
@@ -103,15 +114,23 @@ export function roleCanPerformAction(
 ) {
   if (!moduleId) return true;
 
-  const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
-
-  return (rolePermissions[moduleId] ?? []).includes(action);
+  return getRoleModulePermissionActions(role, moduleId, permissions).includes(action);
 }
 
 export function roleHasAnyPage(role: string | undefined, permissions?: RolePermissionMap | null) {
-  const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
+  return permissionModules.some((module) => getRoleModulePermissionActions(role, module.id, permissions).length > 0);
+}
 
-  return permissionModules.some((module) => (rolePermissions[module.id] ?? []).length > 0);
+function getModulePermissionActions(rolePermissions: RolePermissions, moduleId: string) {
+  return rolePermissions[moduleId] ?? [];
+}
+
+function getRoleModulePermissionActions(role: string | undefined, moduleId: string, permissions?: RolePermissionMap | null) {
+  const effectivePermissions = getEffectiveRolePermissionMap(permissions);
+  const roleId = role ?? "";
+  const actions = getModulePermissionActions(effectivePermissions[roleId] ?? {}, moduleId);
+
+  return actions;
 }
 
 export function parseRolePermissionsCookie(value?: string): RolePermissionMap | null {

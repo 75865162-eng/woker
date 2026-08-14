@@ -5,7 +5,9 @@ import {
   parseRolePermissionsCookie,
   roleCanAccessModule,
   rolePermissionsCookieName,
+  type RolePermissionMap,
 } from "@/lib/accounts/permissions";
+import { normalizeAccountRoleId } from "@/lib/accounts/team-roster";
 
 function base64UrlToBytes(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -62,10 +64,64 @@ function parseSessionRole(request: NextRequest) {
       sessionUser?: { role?: string };
     };
 
-    return parsed.localUser?.role ?? parsed.sessionUser?.role;
+    return normalizeAccountRoleId(parsed.localUser?.role ?? parsed.sessionUser?.role);
   } catch {
     return undefined;
   }
+}
+
+type MiddlewareCurrentUser = {
+  role?: string;
+};
+
+async function loadCurrentUserFromApi(request: NextRequest): Promise<MiddlewareCurrentUser | null> {
+  try {
+    const response = await fetch(new URL("/api/auth/me", request.url), {
+      cache: "no-store",
+      headers: {
+        cookie: request.headers.get("cookie") ?? "",
+      },
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { user?: MiddlewareCurrentUser | null };
+
+    return payload.user ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadLatestRolePermissions(request: NextRequest): Promise<RolePermissionMap | null> {
+  try {
+    const response = await fetch(new URL("/api/accounts/role-permissions", request.url), {
+      cache: "no-store",
+      headers: {
+        cookie: request.headers.get("cookie") ?? "",
+      },
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { permissions?: RolePermissionMap };
+
+    return payload.permissions ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function buildNextResponse(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  const { pathname } = request.nextUrl;
+  requestHeaders.set("x-current-path", pathname);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 export async function middleware(request: NextRequest) {
@@ -85,24 +141,41 @@ export async function middleware(request: NextRequest) {
     }
 
     if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
-      const role = parseSessionRole(request);
+      const currentUser = await loadCurrentUserFromApi(request);
+
+      if (!currentUser) {
+        const loginUrl = new URL("/login", request.url);
+        loginUrl.searchParams.set("next", pathname);
+
+        return NextResponse.redirect(loginUrl);
+      }
+
+      const role = normalizeAccountRoleId(currentUser.role ?? parseSessionRole(request));
       const rolePermissions = parseRolePermissionsCookie(request.cookies.get(rolePermissionsCookieName)?.value);
       const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
-      const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, rolePermissions);
+      const latestRolePermissions = await loadLatestRolePermissions(request);
+      const effectiveRolePermissions = latestRolePermissions ?? rolePermissions;
+      const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, effectiveRolePermissions);
 
       if (!canOpenRequestedPage) {
         return NextResponse.redirect(new URL("/forbidden", request.url));
       }
+
+      if (latestRolePermissions) {
+        const response = buildNextResponse(request);
+
+        response.cookies.set(rolePermissionsCookieName, encodeURIComponent(JSON.stringify(latestRolePermissions)), {
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 60 * 60 * 24 * 365,
+          path: "/",
+        });
+
+        return response;
+      }
     }
 
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set("x-current-path", pathname);
-
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+    return buildNextResponse(request);
   }
 
   if (pathname.startsWith("/api/")) {

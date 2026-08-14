@@ -1,6 +1,8 @@
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver } from "@/lib/storage";
 
@@ -29,12 +31,20 @@ function isValidAssetKey(keyParts: string[]) {
 
 export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   try {
-    const permission = await requireApiPermission("listingAi", "view");
+    const user = await getCurrentUser();
 
-    if (!permission.ok) {
-      return permission.response;
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
-    const { user } = permission;
+
+    const permissions = await getOrganizationRolePermissions(user.organizationId);
+    const canViewAsset =
+      roleCanPerformAction(user.role, "listingAi", "view", permissions) ||
+      roleCanPerformAction(user.role, "products", "view", permissions);
+
+    if (!canViewAsset) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    }
 
     const { key: keyParts } = await params;
 

@@ -29,6 +29,8 @@ export async function GET(request: Request) {
     const where: Prisma.ImportJobWhereInput = {
       organizationId: user.organizationId,
       workspaceId: scope.workspaceId,
+      ...(scope.accountId ? { accountId: scope.accountId } : {}),
+      ...(scope.marketplace ? { marketplace: scope.marketplace } : {}),
       ...(status ? { status: status as Prisma.EnumImportJobStatusFilter["equals"] } : {}),
       ...(search
         ? {

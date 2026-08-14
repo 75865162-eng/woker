@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { defaultRules } from "@/data/default-rules";
 import { exportBulkDrafts } from "@/lib/bulk/export";
 import { runBulkOptimizationForCampaignGroup } from "@/lib/bulk/optimization";
@@ -13,6 +14,8 @@ import { prisma } from "@/lib/db/prisma";
 import { importCommodityWorkbook } from "@/lib/products/commodity-import";
 import { getStorageDriver } from "@/lib/storage";
 import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
+
+const parserVersion = "bulk-workbook-parser-v1";
 
 type ImportJobWithFile = {
   id: string;
@@ -30,6 +33,63 @@ type ImportJobWithFile = {
 
 function createResultKey(jobId: string) {
   return `results/${new Date().toISOString().slice(0, 10)}/${jobId}.xlsx`;
+}
+
+async function recordJobDataChange(input: {
+  organizationId: string;
+  userId: string;
+  workspaceId: string;
+  accountId: string;
+  marketplace: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  summary: string;
+  payload: Prisma.InputJsonValue;
+}) {
+  const latest = await prisma.dataChangeVersion.aggregate({
+    where: {
+      organizationId: input.organizationId,
+      entityType: input.entityType,
+      entityId: input.entityId,
+    },
+    _max: { version: true },
+  });
+  const version = (latest._max.version ?? 0) + 1;
+
+  await prisma.$transaction([
+    prisma.dataChangeVersion.create({
+      data: {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        workspaceId: input.workspaceId,
+        accountId: input.accountId,
+        marketplace: input.marketplace,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        version,
+        action: input.action,
+        summary: input.summary,
+        payload: input.payload,
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        action: input.action,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        metadata: {
+          version,
+          workspaceId: input.workspaceId,
+          accountId: input.accountId,
+          marketplace: input.marketplace,
+          summary: input.summary,
+        },
+      },
+    }),
+  ]);
 }
 
 function getDefaultLifecycleGroupId(): LifecycleGroupId {
@@ -175,9 +235,74 @@ export async function processImportJob(jobId: string) {
       dataBatches,
       batchId,
     });
+    const workspaceDataset = await prisma.workspaceDataset.upsert({
+      where: { jobId },
+      create: {
+        organizationId: job.organizationId,
+        userId: job.userId,
+        workspaceId: job.workspaceId,
+        accountId: job.accountId,
+        marketplace: job.marketplace,
+        fileId: job.fileId,
+        jobId,
+        sourceFileName: job.file.originalName,
+        parserVersion,
+        rowCount: importedData.performanceRows.length,
+        campaignCount: campaignGroups.length,
+        campaignGroups: campaignGroups as unknown as Prisma.InputJsonValue,
+        performanceRows: importedData.performanceRows as unknown as Prisma.InputJsonValue,
+        dataBatches: dataBatches as unknown as Prisma.InputJsonValue,
+        parseDiagnostics: importedData.diagnostics as unknown as Prisma.InputJsonValue,
+      },
+      update: {
+        sourceFileName: job.file.originalName,
+        parserVersion,
+        rowCount: importedData.performanceRows.length,
+        campaignCount: campaignGroups.length,
+        campaignGroups: campaignGroups as unknown as Prisma.InputJsonValue,
+        performanceRows: importedData.performanceRows as unknown as Prisma.InputJsonValue,
+        dataBatches: dataBatches as unknown as Prisma.InputJsonValue,
+        parseDiagnostics: importedData.diagnostics as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await recordJobDataChange({
+      organizationId: job.organizationId,
+      userId: job.userId,
+      workspaceId: job.workspaceId,
+      accountId: job.accountId,
+      marketplace: job.marketplace,
+      entityType: "workspace_dataset",
+      entityId: workspaceDataset.id,
+      action: "workspace_dataset_import",
+      summary: `导入 ${campaignGroups.length} 个广告组、${importedData.performanceRows.length} 行 Bulk 数据`,
+      payload: {
+        datasetId: workspaceDataset.id,
+        fileId: job.fileId,
+        jobId,
+        sourceFileName: job.file.originalName,
+        parserVersion,
+        rowCount: importedData.performanceRows.length,
+        campaignCount: campaignGroups.length,
+        diagnostics: importedData.diagnostics,
+      } as Prisma.InputJsonValue,
+    });
 
     if (drafts.length === 0) {
-      throw new Error("规则未生成可写回草稿，请检查 Bulk 指标、规则条件或默认生命周期分组。");
+      await prisma.importJob.update({
+        where: { id: jobId },
+        data: {
+          status: "done",
+          progress: 100,
+          error: "Bulk 数据集已导入；默认规则未生成自动草稿，请在 PPC 工作台中选择范围后手动运行规则。",
+          file: {
+            update: {
+              status: "done",
+            },
+          },
+        },
+      });
+      return;
     }
 
     const resultKey = createResultKey(jobId);
@@ -188,9 +313,20 @@ export async function processImportJob(jobId: string) {
     });
 
     if (exportResult.writableCount === 0) {
-      throw new Error(
-        `没有可写回的草稿。冲突 ${exportResult.conflictCount} 条，阻止 ${exportResult.blockedCount} 条。`,
-      );
+      await prisma.importJob.update({
+        where: { id: jobId },
+        data: {
+          status: "done",
+          progress: 100,
+          error: `Bulk 数据集已导入；自动导出没有可写回草稿。冲突 ${exportResult.conflictCount} 条，阻止 ${exportResult.blockedCount} 条。`,
+          file: {
+            update: {
+              status: "done",
+            },
+          },
+        },
+      });
+      return;
     }
 
     await storage.putBuffer({
@@ -234,11 +370,39 @@ export async function processImportJob(jobId: string) {
         fileName: exportFileName,
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         size: exportResult.data.byteLength,
+        draftIds: drafts.map((draft) => draft.id) as unknown as Prisma.InputJsonValue,
+        validation: {
+          writableCount: exportResult.writableCount,
+          conflictCount: exportResult.conflictCount,
+          blockedCount: exportResult.blockedCount,
+        } as Prisma.InputJsonValue,
+        lineage: {
+          datasetId: workspaceDataset.id,
+          fileId: job.fileId,
+          jobId,
+          parserVersion,
+          sourceFileName: job.file.originalName,
+          mode: "worker_auto_export",
+        } as Prisma.InputJsonValue,
       },
       update: {
         fileName: exportFileName,
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         size: exportResult.data.byteLength,
+        draftIds: drafts.map((draft) => draft.id) as unknown as Prisma.InputJsonValue,
+        validation: {
+          writableCount: exportResult.writableCount,
+          conflictCount: exportResult.conflictCount,
+          blockedCount: exportResult.blockedCount,
+        } as Prisma.InputJsonValue,
+        lineage: {
+          datasetId: workspaceDataset.id,
+          fileId: job.fileId,
+          jobId,
+          parserVersion,
+          sourceFileName: job.file.originalName,
+          mode: "worker_auto_export",
+        } as Prisma.InputJsonValue,
       },
     });
   } catch (error) {

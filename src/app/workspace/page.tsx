@@ -8,8 +8,8 @@ export default function WorkspacePage() {
       <div className="space-y-5">
         <DataSourceBanner
           tone="mixed"
-          title="PPC 数据仍以本地工作区为主"
-          description="Bulk workbook、Overall 文件、规则运行结果和导出草稿会自动保存到浏览器 IndexedDB；数据库已准备好文件、任务和导出记录边界，后续可迁移为团队共享工作区。"
+          title="PPC 数据已接入可追溯工作区"
+          description="Bulk workbook 会先创建 ImportJob，由 Worker 解析为 WorkspaceDataset；规则运行写入 DraftRun，导出写入 ExportRecord 和版本审计。Overall 匹配和现有操作流程保持一致。"
         />
         <div className="min-w-0">
           <CampaignGridHome />

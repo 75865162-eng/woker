@@ -1,4 +1,5 @@
 import type { SaihuHistoryRecord } from "@/lib/saihu-search-merge/types";
+import { scopedFetch } from "@/lib/workspace/scoped-fetch";
 
 export async function saveSaihuHistoryRecord(record: SaihuHistoryRecord) {
   const persistableRecord = {
@@ -10,7 +11,7 @@ export async function saveSaihuHistoryRecord(record: SaihuHistoryRecord) {
     summary: record.summary,
     rows: record.rows,
   };
-  const response = await fetch("/api/saihu-search-merge/history", {
+  const response = await scopedFetch("/api/saihu-search-merge/history", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ record: persistableRecord }),
@@ -23,7 +24,7 @@ export async function saveSaihuHistoryRecord(record: SaihuHistoryRecord) {
 }
 
 export async function listSaihuHistoryRecords() {
-  const response = await fetch("/api/saihu-search-merge/history");
+  const response = await scopedFetch("/api/saihu-search-merge/history");
 
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { error?: string };
@@ -36,7 +37,7 @@ export async function listSaihuHistoryRecords() {
 }
 
 export async function clearSaihuHistoryRecords() {
-  const response = await fetch("/api/saihu-search-merge/history", {
+  const response = await scopedFetch("/api/saihu-search-merge/history", {
     method: "DELETE",
   });
 

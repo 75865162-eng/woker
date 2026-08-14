@@ -1,8 +1,9 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
-import { getAuthDriver, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
+import { getAuthDriver, isBootstrapAdminEmail, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
+import { normalizeAccountRoleId } from "@/lib/accounts/team-roster";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 
 type SessionPayload = {
@@ -161,7 +162,12 @@ export async function getCurrentUser(): Promise<CurrentUser | undefined> {
   }
 
   if (payload.driver === "local") {
-    return payload.localUser;
+    return payload.localUser
+      ? {
+          ...payload.localUser,
+          role: normalizeAccountRoleId(payload.localUser.role),
+        }
+      : undefined;
   }
 
   const session = await prisma.userSession.findFirst({
@@ -196,11 +202,23 @@ export async function getCurrentUser(): Promise<CurrentUser | undefined> {
     return undefined;
   }
 
+  const rosterMember = await prisma.teamRosterMember.findUnique({
+    where: {
+      organizationId_id: {
+        organizationId: membership.organizationId,
+        id: session.user.id,
+      },
+    },
+    select: {
+      roleId: true,
+    },
+  });
+
   return {
     id: session.user.id,
     email: session.user.email,
     name: session.user.name,
-    role: membership.role,
+    role: isBootstrapAdminEmail(session.user.email) ? "owner" : normalizeAccountRoleId(rosterMember?.roleId ?? membership.role),
     organizationId: membership.organizationId,
     organizationName: membership.organization.name,
   };
@@ -219,7 +237,12 @@ export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | un
   }
 
   if (payload.driver === "local") {
-    return payload.localUser;
+    return payload.localUser
+      ? {
+          ...payload.localUser,
+          role: normalizeAccountRoleId(payload.localUser.role),
+        }
+      : undefined;
   }
 
   if (!payload.sessionUser) {
@@ -230,7 +253,7 @@ export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | un
     id: payload.sessionUser.id,
     email: payload.sessionUser.email,
     name: payload.sessionUser.name,
-    role: payload.sessionUser.role,
+    role: isBootstrapAdminEmail(payload.sessionUser.email) ? "owner" : normalizeAccountRoleId(payload.sessionUser.role),
     organizationId: payload.sessionUser.organizationId,
     organizationName: payload.sessionUser.organizationName,
   };

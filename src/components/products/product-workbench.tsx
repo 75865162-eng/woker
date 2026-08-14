@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, RotateCcw, Save, X } from "lucide-react";
+import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, LoaderCircle, PackagePlus, RotateCcw, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import {
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
 import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
+import { addWorkspaceScopeToFormData, scopedFetch } from "@/lib/workspace/scoped-fetch";
 
 import {
   initialFilters,
@@ -62,10 +63,21 @@ import {
 } from "./product-workbench-utils";
 import {
   createTrialProductDraft,
-  parseProductWorkbookFile,
+  exportProductsToCommodityCreateWorkbook,
   productToDraft,
   trialImprovementLabels,
 } from "./product-workbench-data";
+
+function isProductOverdueForHandling(product: Product) {
+  return isOverdueProduct(product) || isProductWorkflowOverdue(product);
+}
+
+type ProductImportJob = {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  progress: number;
+  error?: string | null;
+};
 
 export function ProductWorkbench() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -78,9 +90,12 @@ export function ProductWorkbench() {
   const [versionProduct, setVersionProduct] = useState<Product | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [productsTotalCount, setProductsTotalCount] = useState(0);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
   const [creatorName, setCreatorName] = useState("当前创建人");
@@ -128,8 +143,8 @@ export function ProductWorkbench() {
       setProductsError("");
 
       try {
-        const response = await fetch("/api/products", { cache: "no-store" });
-        const data = (await response.json()) as { products?: Product[]; error?: string };
+        const response = await scopedFetch(buildProductsApiPath(page, pageSize, filters), { cache: "no-store" });
+        const data = (await response.json()) as { products?: Product[]; pagination?: { total?: number; pageCount?: number }; error?: string };
 
         if (!response.ok) {
           throw new Error(data.error || "商品数据读取失败");
@@ -137,6 +152,7 @@ export function ProductWorkbench() {
 
         if (!canceled) {
           setProducts(Array.isArray(data.products) ? data.products : []);
+          setProductsTotalCount(data.pagination?.total ?? 0);
           setActivityLog((current) => ["已从数据库读取商品数据", ...current].slice(0, 8));
         }
       } catch (error) {
@@ -157,21 +173,22 @@ export function ProductWorkbench() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [filters, page, pageSize]);
 
   async function reloadProducts() {
     setProductsLoading(true);
     setProductsError("");
 
     try {
-      const response = await fetch("/api/products", { cache: "no-store" });
-      const data = (await response.json()) as { products?: Product[]; error?: string };
+      const response = await scopedFetch(buildProductsApiPath(page, pageSize, filters), { cache: "no-store" });
+      const data = (await response.json()) as { products?: Product[]; pagination?: { total?: number; pageCount?: number }; error?: string };
 
       if (!response.ok) {
         throw new Error(data.error || "商品数据读取失败");
       }
 
       setProducts(Array.isArray(data.products) ? data.products : []);
+      setProductsTotalCount(data.pagination?.total ?? 0);
     } catch (error) {
       setProductsError(error instanceof Error ? error.message : "商品数据读取失败");
     } finally {
@@ -179,53 +196,8 @@ export function ProductWorkbench() {
     }
   }
 
-  const filteredProducts = useMemo(() => {
-    const minPrice = Number(filters.minPrice);
-    const maxPrice = Number(filters.maxPrice);
-    const hasMinPrice = filters.minPrice.trim() !== "" && Number.isFinite(minPrice);
-    const hasMaxPrice = filters.maxPrice.trim() !== "" && Number.isFinite(maxPrice);
-    const keyword = filters.keyword.trim().toLowerCase();
-    const asin = filters.asin.trim().toLowerCase();
-    const opsAssignees = normalizeFilterNames(filters.opsAssignees);
-    const selectionOwners = normalizeFilterNames(filters.selectionOwners);
-    const designerAssignees = normalizeFilterNames(filters.designerAssignees);
-    const supplierName = filters.supplierName.trim().toLowerCase();
-
-    return products.filter((product) => {
-      const searchable = [product.sku, product.chineseName, product.englishName, product.keywords, product.note]
-        .join(" ")
-        .toLowerCase();
-      const productOpsAssignees = normalizeAssigneeList(product.opsAssignee, product.opsAssignees).map((item) => item.toLowerCase());
-      const productSelectionOwner = (product.selectionOwner || product.developer).toLowerCase();
-      const productDesignerAssignees = normalizeAssigneeList(product.designerAssignee, product.designerAssignees).map((item) => item.toLowerCase());
-
-      if (keyword && !searchable.includes(keyword)) return false;
-      if (asin && !product.asin.toLowerCase().includes(asin) && !product.competitorAsins.join(" ").toLowerCase().includes(asin)) return false;
-      if (opsAssignees.length && !matchesAnyName(productOpsAssignees, opsAssignees)) return false;
-      if (selectionOwners.length && !matchesAnyName([productSelectionOwner], selectionOwners)) return false;
-      if (designerAssignees.length && !matchesAnyName(productDesignerAssignees, designerAssignees)) return false;
-      if (supplierName && !product.supplierName.toLowerCase().includes(supplierName)) return false;
-      if (filters.status === "overdue" && !isOverdueProduct(product)) return false;
-      if (filters.status === "design_in_progress" && product.status !== "design_in_progress") return false;
-      if (filters.status === "operations_progress" && !hasIncompleteOperationsProgress(product.operationsProgress)) return false;
-      if (
-        filters.status !== "all" &&
-        filters.status !== "overdue" &&
-        filters.status !== "design_in_progress" &&
-        filters.status !== "operations_progress" &&
-        product.status !== filters.status
-      ) {
-        return false;
-      }
-      if (hasMinPrice && product.purchasePrice < minPrice) return false;
-      if (hasMaxPrice && product.purchasePrice > maxPrice) return false;
-
-      return true;
-    });
-  }, [filters, products]);
-
-  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
-  const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
+  const visibleProducts = products;
+  const pageCount = Math.max(1, Math.ceil(productsTotalCount / pageSize));
   const activeProduct = products.find((product) => product.id === activeProductId) ?? null;
 
   useEffect(() => {
@@ -238,12 +210,11 @@ export function ProductWorkbench() {
     }
   }, [page, pageCount]);
 
-  const developingCount = products.filter((product) => product.status === "developing").length;
-  const opsReviewCount = products.filter((product) => product.status === "ops_review").length;
+  const developingCount = filters.status === "developing" ? productsTotalCount : products.filter((product) => product.status === "developing").length;
+  const opsReviewCount = filters.status === "ops_review" ? productsTotalCount : products.filter((product) => product.status === "ops_review").length;
   const designInProgressProducts = products.filter((product) => product.status === "design_in_progress");
   const operationsProgressProducts = products.filter((product) => hasIncompleteOperationsProgress(product.operationsProgress));
-  const overdueCount = products.filter(isOverdueProduct).length;
-  const workflowOverdueCount = products.filter((product) => isProductWorkflowOverdue(product)).length;
+  const overdueCount = filters.status === "overdue" ? productsTotalCount : products.filter(isProductOverdueForHandling).length;
 
   function openNewProduct() {
     setActiveProductId(null);
@@ -256,7 +227,7 @@ export function ProductWorkbench() {
   }
 
   async function persistProduct(product: Product) {
-    const response = await fetch("/api/products", {
+    const response = await scopedFetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ product }),
@@ -300,7 +271,7 @@ export function ProductWorkbench() {
     }
 }
 
-function handleSaveTrialProduct(draft: TrialProductDraft) {
+  function handleSaveTrialProduct(draft: TrialProductDraft) {
     const nextTrialProduct = {
       ...draft,
       id: draft.id ?? `trial-${Date.now()}`,
@@ -308,7 +279,36 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
 
     setTrialProducts((current) => [nextTrialProduct, ...current]);
     setIsTrialEditorOpen(false);
-    setActivityLog((current) => [`新增试算商品 ${nextTrialProduct.title || nextTrialProduct.pricingRows[0]?.name || "未命名"}`, ...current].slice(0, 8));
+      setActivityLog((current) => [`新增试算商品 ${nextTrialProduct.title || nextTrialProduct.pricingRows[0]?.name || "未命名"}`, ...current].slice(0, 8));
+    }
+
+  async function waitForProductImportJob(jobId: string) {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < 120_000) {
+      const response = await scopedFetch(`/api/jobs/${jobId}`, { cache: "no-store" });
+      const data = (await response.json().catch(() => ({}))) as { job?: ProductImportJob; error?: string };
+
+      if (!response.ok || !data.job) {
+        throw new Error(data.error || "商品导入任务状态读取失败");
+      }
+
+      if (data.job.status === "done") {
+        return data.job;
+      }
+
+      if (data.job.status === "failed") {
+        throw new Error(data.job.error || "商品导入任务失败");
+      }
+
+      const statusLabel = data.job.status === "queued" ? "已排队，等待后台处理" : "正在导入商品数据";
+      const status = `${statusLabel}（${data.job.progress}%）`;
+      setImportStatus(status);
+      setActivityLog((current) => [`商品导入${status}`, ...current].slice(0, 8));
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
+
+    throw new Error("商品导入任务仍在队列中，请确认 Worker 正在运行后稍后刷新商品列表。");
   }
 
   async function handleImportFile(file: File | undefined) {
@@ -316,22 +316,55 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
       return;
     }
 
+    setIsImporting(true);
+    setImportStatus(`正在上传 ${file.name}`);
+
     try {
-      const imported = await parseProductWorkbookFile(file, products);
-      const importedWithOwner = {
-        ...imported,
-        selectionOwner: creatorName,
-        developer: "",
-      };
-      const savedProduct = await persistProduct(importedWithOwner);
-      setProducts((current) => [savedProduct, ...current.filter((product) => product.sku !== savedProduct.sku)]);
-      setActiveProductId(savedProduct.id);
-      setIsEditorOpen(true);
-      setActivityLog((current) => [`已导入 ${file.name} 并保存到数据库`, ...current].slice(0, 8));
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("type", "product_commodity_import");
+      addWorkspaceScopeToFormData(formData);
+
+      const response = await scopedFetch("/api/files/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as { job?: ProductImportJob; error?: string };
+
+      const job = data.job;
+
+      if (!response.ok || !job) {
+        throw new Error(data.error || "导入任务创建失败");
+      }
+
+      setActivityLog((current) => [`已创建商品导入任务 ${job.id}：${file.name}`, ...current].slice(0, 8));
+      const completedJob = job.status === "done" ? job : await waitForProductImportJob(job.id);
+      await reloadProducts();
+      setImportStatus(completedJob.error || `${file.name} 导入完成`);
+      setActivityLog((current) => [`商品导入完成：${completedJob.error || file.name}`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "导入失败";
+      setImportStatus(`导入失败：${message}`);
       window.alert(message);
       setActivityLog((current) => [`导入失败：${message}`, ...current].slice(0, 8));
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  async function handleExportProducts() {
+    if (!visibleProducts.length) {
+      window.alert("当前没有可导出的商品。");
+      return;
+    }
+
+    try {
+      await exportProductsToCommodityCreateWorkbook(visibleProducts);
+      setActivityLog((current) => [`已按商品创建模板导出当前页 ${visibleProducts.length} 个商品`, ...current].slice(0, 8));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "导出失败";
+      window.alert(message);
+      setActivityLog((current) => [`导出失败：${message}`, ...current].slice(0, 8));
     }
   }
 
@@ -341,13 +374,18 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         {productsError ? (
           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{productsError}</div>
         ) : null}
+        {importStatus ? (
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700" role="status">
+            {importStatus}
+          </div>
+        ) : null}
         {productsLoading ? (
           <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
         ) : null}
         <section className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           <SummaryTile
             label="全部商品"
-            value={products.length.toLocaleString("zh-CN")}
+            value={productsTotalCount.toLocaleString("zh-CN")}
             active={filters.status === "all"}
             onClick={() => setFilters((current) => ({ ...current, status: "all" }))}
           />
@@ -388,11 +426,6 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             active={filters.status === "overdue"}
             onClick={() => setFilters((current) => ({ ...current, status: "overdue" }))}
           />
-          <SummaryTile
-            label="流程超时提醒"
-            value={workflowOverdueCount.toLocaleString("zh-CN")}
-            tone="red"
-          />
         </section>
 
         <Card>
@@ -412,11 +445,11 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
                   event.currentTarget.value = "";
                 }}
               />
-              <Button variant="secondary" size="sm" onClick={() => importInputRef.current?.click()}>
-                <FileUp className="h-4 w-4" />
-                导入数据
+              <Button variant="secondary" size="sm" disabled={isImporting} onClick={() => importInputRef.current?.click()}>
+                {isImporting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                {isImporting ? "导入中" : "导入数据"}
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setActivityLog((current) => ["导出功能待接入 Excel 模板", ...current].slice(0, 8))}>
+              <Button variant="secondary" size="sm" onClick={() => void handleExportProducts()}>
                 <FileDown className="h-4 w-4" />
                 导出数据
               </Button>
@@ -443,7 +476,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               onChange={setFilters}
               onReset={() => setFilters(initialFilters)}
             />
-            <ProductTable products={visibleProducts} totalCount={filteredProducts.length} onOpenProduct={openProduct} onOpenHistory={setVersionProduct} />
+            <ProductTable products={visibleProducts} totalCount={productsTotalCount} onOpenProduct={openProduct} onOpenHistory={setVersionProduct} />
             <Pagination page={page} pageCount={pageCount} pageSize={pageSize} pageSizeOptions={pageSizeOptions} onPageChange={setPage} onPageSizeChange={setPageSize} />
           </CardContent>
         </Card>
@@ -519,7 +552,7 @@ function ProductVersionModal({
         entityId: product.sku,
         pageSize: "50",
       });
-      const response = await fetch(`/api/audit/versions?${params.toString()}`, { cache: "no-store" });
+      const response = await scopedFetch(`/api/audit/versions?${params.toString()}`, { cache: "no-store" });
       const data = (await response.json()) as { versions?: ProductVersionRecord[]; error?: string };
 
       if (!response.ok) {
@@ -543,7 +576,7 @@ function ProductVersionModal({
     setError("");
 
     try {
-      const response = await fetch("/api/audit/versions", {
+      const response = await scopedFetch("/api/audit/versions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ versionId: version.id }),
@@ -786,7 +819,7 @@ function TrialProductEditor({
               <table className="min-w-[1420px] text-left text-xs">
                 <thead className="bg-surface-muted text-muted">
                   <tr>
-                    {["供应商产品链路", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "采购成本(100套)", "采购成本(300)", "开票信息", "备注"].map((label) => (
+                    {["供应商产品链接", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "采购单价", "报价（100-500套）", "开票信息", "备注"].map((label) => (
                       <th key={label} className="px-2 py-2 font-bold">{label}</th>
                     ))}
                   </tr>
@@ -933,7 +966,7 @@ function ProductEditor({
   }
 
   function updateAssigneeList(field: "opsAssignees" | "designerAssignees", values: string[]) {
-    const normalized = Array.from(new Set(values.filter(Boolean)));
+    const normalized = normalizeAssigneeList(undefined, values);
 
     setDraft((current) => ({
       ...current,
@@ -1344,9 +1377,9 @@ function ProductEditor({
                       onChange={(value) => setField("cancelReason", value)}
                     />
                   ) : null}
-                  <ReadonlyField label="选品负责人" value={selectionOwner || "--"} />
-                  <MultiSelectField label="运营负责人" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
-                  <MultiSelectField label="美工负责人" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
+                  <ReadonlyField label="选品" value={selectionOwner || "--"} />
+                  <MultiSelectField label="运营" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
+                  <MultiSelectField label="美工" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
                   <ReadonlyField label="当前负责人" value={workflowAssignee || "--"} />
                   <ReadonlyField label="流程截止" value={formatWorkflowDate(draft.workflowDueAt)} />
                   <ReadonlyField label="创建日期（保存时生成）" value={draft.createdAt || "保存后自动生成"} />
@@ -1603,12 +1636,28 @@ function getAccountNameOptionsByRoleIds(accounts: TeamAccountRecord[], roleIds: 
   return Array.from(new Set(names));
 }
 
-function normalizeFilterNames(values: string[]) {
-  return values.map((value) => value.trim().toLowerCase()).filter(Boolean);
-}
+function buildProductsApiPath(page: number, pageSize: number, filters: ProductFilters) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
 
-function matchesAnyName(productNames: string[], selectedNames: string[]) {
-  return selectedNames.some((selectedName) => productNames.some((productName) => productName.includes(selectedName)));
+  if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+  if (filters.asin.trim()) params.set("asin", filters.asin.trim());
+  if (filters.supplierName.trim()) params.set("supplierName", filters.supplierName.trim());
+  if (filters.minPrice.trim()) params.set("minPrice", filters.minPrice.trim());
+  if (filters.maxPrice.trim()) params.set("maxPrice", filters.maxPrice.trim());
+  filters.opsAssignees.forEach((name) => params.append("opsAssignee", name));
+  filters.selectionOwners.forEach((name) => params.append("selectionOwner", name));
+  filters.designerAssignees.forEach((name) => params.append("designerAssignee", name));
+  if (filters.status !== "all" && filters.status !== "overdue" && filters.status !== "operations_progress") {
+    params.set("status", filters.status);
+  }
+  if (filters.status === "overdue" || filters.status === "operations_progress") {
+    params.set("status", filters.status);
+  }
+
+  return `/api/products?${params.toString()}`;
 }
 
 function Pagination({

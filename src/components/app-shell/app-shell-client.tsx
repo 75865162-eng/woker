@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, UploadCloud, UsersRound } from "lucide-react";
+import { useEffect } from "react";
+import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { WorkspaceScopeSelector } from "./workspace-scope-selector";
 const navItems = [
   { href: "/", label: "工作台首页", icon: Home, moduleId: null },
   { href: "/dashboard", label: "产品管理", icon: Boxes, moduleId: "products" },
+  { href: "/sellfox", label: "Sellfox 同步", icon: Store, moduleId: "sellfox" },
   { href: "/workspace", label: "PPC 优化", icon: UploadCloud, moduleId: "workspace" },
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
   { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
@@ -21,8 +23,9 @@ const navItems = [
 ];
 
 const accountMenuItems = [
-  { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "workspace" },
-  { href: "/versions", label: "版本审计", icon: History, moduleId: "settings" },
+  { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
+  { href: "/history", label: "搜索词历史", icon: History, moduleId: "searchMergeHistory" },
+  { href: "/versions", label: "版本审计", icon: History, moduleId: "versions" },
   { href: "/accounts", label: "账号权限", icon: UsersRound, moduleId: "accounts" },
   { href: "/settings", label: "系统设置", icon: Settings, moduleId: "settings" },
 ];
@@ -58,6 +61,54 @@ export function AppShellClient({
 
     return roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href), rolePermissions);
   });
+
+  useEffect(() => {
+    let canceled = false;
+    const currentRolePermissions = JSON.stringify(rolePermissions ?? null);
+
+    async function refreshAccessState() {
+      try {
+        const [userResponse, permissionResponse] = await Promise.all([
+          fetch("/api/auth/me", { cache: "no-store" }),
+          fetch("/api/accounts/role-permissions", { cache: "no-store" }),
+        ]);
+
+        if (canceled) return;
+
+        if (!userResponse.ok) {
+          window.location.href = "/login";
+          return;
+        }
+
+        const userPayload = (await userResponse.json()) as { user?: { role?: string } | null };
+        const permissionPayload = permissionResponse.ok
+          ? ((await permissionResponse.json()) as { permissions?: RolePermissionMap })
+          : { permissions: rolePermissions };
+        const nextRole = userPayload.user?.role;
+        const nextPermissions = permissionPayload.permissions ?? null;
+        const currentModuleId = pathname === "/" ? null : getModuleIdForPath(pathname);
+
+        if (pathname !== "/" && !roleCanAccessModule(nextRole, currentModuleId, nextPermissions)) {
+          window.location.href = "/forbidden";
+          return;
+        }
+
+        if (nextRole !== userRole || JSON.stringify(nextPermissions) !== currentRolePermissions) {
+          router.refresh();
+        }
+      } catch {
+        // Permission refresh should never interrupt the workspace.
+      }
+    }
+
+    void refreshAccessState();
+    const refreshTimer = window.setInterval(refreshAccessState, 5000);
+
+    return () => {
+      canceled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, [pathname, rolePermissions, router, userRole]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });

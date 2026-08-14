@@ -3,6 +3,7 @@ import path from "node:path";
 import { Prisma } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/db/prisma";
+import { buildProductRecordIndex } from "@/lib/products/product-record-index";
 import { isIgnoredProductSku } from "@/lib/products/sku-utils";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import type { Product, ProductSourceImageAsset, ProductSourceWorkbook, ProductSourceWorkbookRow, ProductStatus } from "@/lib/products/types";
@@ -153,6 +154,7 @@ export async function importCommodityWorkbook(options: CommodityImportOptions): 
     const sourceWorkbook = buildSourceWorkbook(options.fileName, sku, headersBySheet, rowsBySkuBySheet, record);
     const product = buildProductFromCommodityRecord(record, sourceWorkbook);
     const productWithImage = await hydrateProductMainImage(product, options);
+    const productIndex = buildProductRecordIndex(productWithImage);
     const imageAsset = productWithImage.sourceWorkbook?.imageAssets?.at(-1);
 
     if (imageAsset?.status === "downloaded") imageDownloadedCount += 1;
@@ -174,12 +176,14 @@ export async function importCommodityWorkbook(options: CommodityImportOptions): 
         accountId: options.accountId,
         marketplace: options.marketplace,
         sku: productWithImage.sku,
+        ...productIndex,
         payload: productWithImage as unknown as Prisma.InputJsonValue,
       },
       update: {
         userId: options.userId,
         accountId: options.accountId,
         marketplace: options.marketplace,
+        ...productIndex,
         payload: productWithImage as unknown as Prisma.InputJsonValue,
       },
     });

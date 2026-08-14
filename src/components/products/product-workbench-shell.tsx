@@ -32,7 +32,6 @@ export function ProductFiltersBar({
   const statusOptions = [
     { value: "all", label: "全部状态" },
     ...productStatusOptions,
-    { value: "design_in_progress", label: "美工处理中" },
     { value: "operations_progress", label: "运营进程" },
     { value: "overdue", label: "超期处理" },
   ];
@@ -155,26 +154,45 @@ export function ProductTable({
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
       <div className="thin-scrollbar overflow-auto">
-        <table className="min-w-[1400px] table-fixed text-left text-sm">
+        <table className="w-[1856px] table-fixed text-left text-sm [&_td]:overflow-hidden [&_th]:overflow-hidden">
+          <colgroup>
+            <col className="w-[64px]" />
+            <col className="w-[96px]" />
+            <col className="w-[160px]" />
+            <col className="w-[112px]" />
+            <col className="w-[92px]" />
+            <col className="w-[104px]" />
+            <col className="w-[96px]" />
+            <col className="w-[84px]" />
+            <col className="w-[84px]" />
+            <col className="w-[112px]" />
+            <col className="w-[140px]" />
+            <col className="w-[130px]" />
+            <col className="w-[84px]" />
+            <col className="w-[106px]" />
+            <col className="w-[180px]" />
+            <col className="w-[140px]" />
+            <col className="w-[72px]" />
+          </colgroup>
           <thead className="bg-surface-muted text-xs text-muted">
             <tr>
-              <th className="w-[88px] px-3 py-3">图片</th>
-              <th className="w-[96px] px-3 py-3">SKU</th>
-              <th className="w-[190px] px-3 py-3">品名</th>
-              <th className="w-[124px] px-3 py-3">ASIN</th>
-              <th className="w-[104px] px-3 py-3">采购价格</th>
-              <th className="w-[126px] px-3 py-3">状态</th>
-              <th className="w-[104px] px-3 py-3">当前负责人</th>
-              <th className="w-[96px] px-3 py-3">运营</th>
-              <th className="w-[96px] px-3 py-3">美工</th>
-              <th className="w-[132px] px-3 py-3">流程截止</th>
-              <th className="w-[170px] px-3 py-3">供应商名称</th>
-              <th className="w-[170px] px-3 py-3">规格</th>
-              <th className="w-[100px] px-3 py-3">采购周期</th>
-              <th className="w-[112px] px-3 py-3">创建日期</th>
-              <th className="w-[160px] px-3 py-3">选品关键词</th>
-              <th className="w-[160px] px-3 py-3">备注</th>
-              <th className="w-[96px] px-3 py-3 text-right">版本</th>
+              <th className="px-3 py-3">图片</th>
+              <th className="px-3 py-3">SKU</th>
+              <th className="px-3 py-3">品名</th>
+              <th className="px-3 py-3">ASIN</th>
+              <th className="px-3 py-3">采购价格</th>
+              <th className="px-3 py-3">状态</th>
+              <th className="px-3 py-3">当前负责人</th>
+              <th className="px-3 py-3">运营</th>
+              <th className="px-3 py-3">美工</th>
+              <th className="px-3 py-3">流程截止</th>
+              <th className="px-3 py-3">供应商名称</th>
+              <th className="px-3 py-3">规格</th>
+              <th className="px-3 py-3">采购周期</th>
+              <th className="px-3 py-3">创建日期</th>
+              <th className="px-3 py-3">选品关键词</th>
+              <th className="px-3 py-3">备注</th>
+              <th className="px-3 py-3 text-right">版本</th>
             </tr>
           </thead>
           <tbody>
@@ -183,54 +201,68 @@ export function ProductTable({
 
               return (
                 <tr key={product.id} className="border-t border-border/70 align-top hover:bg-surface-muted/60">
-                <td className="px-3 py-3">
-                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
-                    {listImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={listImage} alt={product.chineseName} className="h-full w-full object-contain p-1" />
-                    ) : (
-                      <ImagePlus className="h-5 w-5 text-muted" />
-                    )}
-                  </div>
-                </td>
-                <td className="px-3 py-3">
-                  <button className="font-bold text-brand hover:text-brand-dark" onClick={() => onOpenProduct(product.id)}>
-                    {product.sku}
-                  </button>
-                </td>
-                <td className="px-3 py-3">
-                  <p className="line-clamp-2 font-semibold text-foreground">{product.chineseName || "--"}</p>
-                  <p className="mt-1 line-clamp-1 text-xs text-muted">{product.englishName || "--"}</p>
-                </td>
-                <td className="px-3 py-3 font-mono text-xs">{product.asin || "--"}</td>
-                <td className="px-3 py-3 font-semibold metric-tabular">CNY {product.purchasePrice.toFixed(2)}</td>
-                <td className="px-3 py-3">
-                  <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
-                  {isProductWorkflowOverdue(product) ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
-                </td>
-                <td className="px-3 py-3">{getCurrentWorkflowAssignee(product) || "--"}</td>
-                <td className="px-3 py-3">{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</td>
-                <td className="px-3 py-3">{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</td>
-                <td className="px-3 py-3 text-xs">{formatWorkflowDate(product.workflowDueAt)}</td>
-                <td className="px-3 py-3">
-                  <p className="line-clamp-2">{product.supplierName || "--"}</p>
-                </td>
-                <td className="px-3 py-3">
-                  <p className="line-clamp-2 text-xs">{product.specs || "--"}</p>
-                </td>
-                <td className="px-3 py-3">{product.purchaseLeadTime || "--"}</td>
-                <td className="px-3 py-3">{product.createdAt}</td>
-                <td className="px-3 py-3">
-                  <p className="line-clamp-2 text-xs">{product.keywords || "--"}</p>
-                </td>
-                <td className="px-3 py-3">
-                  <p className="line-clamp-2 text-xs">{product.note || "--"}</p>
-                </td>
-                <td className="px-3 py-3 text-right">
-                  <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>
-                    <History className="h-4 w-4" />
-                  </Button>
-                </td>
+                  <td className="px-3 py-3">
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
+                      {listImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={listImage} alt={product.chineseName} className="h-full w-full object-contain p-1" />
+                      ) : (
+                        <ImagePlus className="h-5 w-5 text-muted" />
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <button className="block max-w-full truncate font-bold text-brand hover:text-brand-dark" title={product.sku} onClick={() => onOpenProduct(product.id)}>
+                      {product.sku}
+                    </button>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="line-clamp-2 font-semibold text-foreground">{product.chineseName || "--"}</p>
+                    <p className="mt-1 line-clamp-1 text-xs text-muted">{product.englishName || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3 font-mono text-xs">
+                    <p className="truncate" title={product.asin || "--"}>{product.asin || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3 font-semibold metric-tabular">CNY {product.purchasePrice.toFixed(2)}</td>
+                  <td className="px-3 py-3">
+                    <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
+                    {isProductWorkflowOverdue(product) ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="truncate" title={getCurrentWorkflowAssignee(product) || "--"}>{getCurrentWorkflowAssignee(product) || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3 text-xs">
+                    <p className="truncate" title={formatWorkflowDate(product.workflowDueAt)}>{formatWorkflowDate(product.workflowDueAt)}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="line-clamp-2 break-all" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="line-clamp-2 break-all text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="truncate" title={product.purchaseLeadTime || "--"}>{product.purchaseLeadTime || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="truncate" title={product.createdAt}>{product.createdAt}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="line-clamp-2 break-all text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="line-clamp-2 break-all text-xs" title={product.note || "--"}>{product.note || "--"}</p>
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>
+                      <History className="h-4 w-4" />
+                    </Button>
+                  </td>
                 </tr>
               );
             })}

@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver } from "@/lib/storage";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const permission = await requireApiPermission("workspace", "export");
 
@@ -15,10 +16,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { user } = permission;
 
     const { id } = await params;
+    const scope = workspaceScopeFromRequest(request);
     const job = await prisma.importJob.findFirst({
       where: {
         id,
         organizationId: user.organizationId,
+        workspaceId: scope.workspaceId,
+        ...(scope.accountId ? { accountId: scope.accountId } : {}),
+        ...(scope.marketplace ? { marketplace: scope.marketplace } : {}),
         file: {
           organizationId: user.organizationId,
         },

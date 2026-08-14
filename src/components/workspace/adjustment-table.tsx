@@ -5,6 +5,7 @@ import { Download, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
+import { recordCurrentDraftRun, recordReviewedExport } from "@/lib/workspace/lineage-client";
 import type { AdjustmentDraft, PerformanceRow, OverallAdDataRow } from "@/lib/types";
 
 const pageSize = 20;
@@ -495,6 +496,9 @@ export function AdjustmentTable() {
       setOperationProgress({ label: "运行产品周期规则", progress: 70 });
       await waitForPaint();
       const result = runRulesForActiveLifecycleGroup();
+      if (result.draftCount > 0) {
+        recordCurrentDraftRun("lifecycle").catch((error) => console.warn("Failed to record draft run.", error));
+      }
       setCurrentPage(1);
       setOperationProgress({ label: "规则草稿已生成", progress: 100 });
       window.setTimeout(() => setOperationProgress(null), 1200);
@@ -508,6 +512,9 @@ export function AdjustmentTable() {
       setOperationProgress({ label: "运行组合单元规则", progress: 70 });
       await waitForPaint();
       const result = runRulesForActiveWorkspaceUnit();
+      if (result.draftCount > 0) {
+        recordCurrentDraftRun("workspace-unit").catch((error) => console.warn("Failed to record draft run.", error));
+      }
       setCurrentPage(1);
       setOperationProgress({ label: "规则草稿已生成", progress: 100 });
       window.setTimeout(() => setOperationProgress(null), 1200);
@@ -520,6 +527,11 @@ export function AdjustmentTable() {
     setOperationProgress({ label: matchedOverallCampaignGroupCount > 1 ? "运行已匹配广告组规则" : "运行广告组规则", progress: 70 });
     await waitForPaint();
     const result = matchedOverallCampaignGroupCount > 1 ? runRulesForMatchedOverallGroups() : runRulesForActiveGroup();
+    if (result.draftCount > 0) {
+      await recordCurrentDraftRun(matchedOverallCampaignGroupCount > 1 ? "matched-overall" : "campaign").catch((error) =>
+        console.warn("Failed to record draft run.", error),
+      );
+    }
     setCurrentPage(1);
     setOperationProgress({ label: "规则草稿已生成", progress: 100 });
     window.setTimeout(() => setOperationProgress(null), 1200);
@@ -559,6 +571,16 @@ export function AdjustmentTable() {
       }
 
       setOperationProgress({ label: "下载导出文件", progress: 90 });
+      await recordReviewedExport({
+        fileName: result.fileName,
+        data: result.data,
+        selectedDraftIds,
+        validation: {
+          writableCount: result.writableCount,
+          conflictCount: result.conflictCount,
+          blockedCount: result.blockedCount,
+        },
+      }).catch((error) => console.warn("Failed to record export.", error));
       downloadArrayBuffer(result.data, result.fileName);
       recordExportHistory(result.fileName);
       setOperationProgress({ label: "导出完成", progress: 100 });

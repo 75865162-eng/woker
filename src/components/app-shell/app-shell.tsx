@@ -1,12 +1,12 @@
 import { AppShellClient } from "@/components/app-shell/app-shell-client";
-import { cookies } from "next/headers";
-import { parseRolePermissionsCookie, rolePermissionsCookieName } from "@/lib/accounts/permissions";
+import { defaultRolePermissionMap } from "@/lib/accounts/permissions";
+import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { getAuthDriver } from "@/lib/auth/constants";
-import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 
 export async function AppShell({ children, title, subtitle }: { children: React.ReactNode; title: string; subtitle: string }) {
-  const [user, cookieStore] = await Promise.all([getCurrentUserFromSignedCookie(), cookies()]);
-  const rolePermissions = parseRolePermissionsCookie(cookieStore.get(rolePermissionsCookieName)?.value);
+  const user = await getCurrentUser();
+  const rolePermissions = user ? await getOrganizationRolePermissions(user.organizationId) : defaultRolePermissionMap;
   const initials = user?.name
     ? user.name.slice(0, 2).toUpperCase()
     : user?.email

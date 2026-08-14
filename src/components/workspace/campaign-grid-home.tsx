@@ -10,6 +10,7 @@ import { defaultRules, lifecycleGroups } from "@/data/mock-data";
 import { useBulkUpload } from "@/lib/hooks/use-bulk-upload";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";
+import { recordCurrentDraftRun } from "@/lib/workspace/lineage-client";
 import type { ExportHistoryRecord, LifecycleGroupId, PerformanceRow, RuleRunHistoryRecord } from "@/lib/types";
 
 import {
@@ -474,11 +475,17 @@ export function CampaignGridHome() {
       await waitForPaint();
       setActiveWorkspaceUnit(workspaceUnitId);
       result = runRulesForActiveWorkspaceUnit();
+      if (result.draftCount > 0) {
+        await recordCurrentDraftRun("workspace-unit").catch((error) => console.warn("Failed to record draft run.", error));
+      }
     } else {
       setRuleRunProgress({ label: "运行广告组规则", progress: 65 });
       await waitForPaint();
       openCampaignGroup(campaignGroupId);
       result = runRulesForActiveGroup();
+      if (result.draftCount > 0) {
+        await recordCurrentDraftRun("campaign").catch((error) => console.warn("Failed to record draft run.", error));
+      }
     }
 
     setRuleRunProgress({ label: "规则草稿已生成", progress: 100 });
@@ -921,7 +928,7 @@ export function CampaignGridHome() {
                 className="rounded-md px-3 py-2"
                 tone="local"
                 title="规则仓库当前同步到本地工作区"
-                description="规则会驱动 PPC 草稿生成，不直接覆盖原始文件；当前保存到浏览器 IndexedDB。"
+                description="规则会驱动 PPC 草稿生成，不直接覆盖原始文件；运行结果会写入 DraftRun 和版本审计。"
               />
               <RulesEditorShell lifecycleGroups={lifecycleGroups} initialLifecycleId={activeLifecycleGroupId ?? lifecycleGroups[0].id} />
             </div>

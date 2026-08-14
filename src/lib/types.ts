@@ -73,6 +73,22 @@ export interface CampaignGroup {
   lastUpdated: string;
 }
 
+export interface WorkspaceDatasetPayload {
+  id: string;
+  fileId: string;
+  jobId: string;
+  sourceFileName: string;
+  parserVersion: string;
+  rowCount: number;
+  campaignCount: number;
+  campaignGroups: CampaignGroup[];
+  performanceRows: PerformanceRow[];
+  dataBatches: DataBatch[];
+  parseDiagnostics: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BlockedCampaignIdentity {
   id: string;
   campaignName: string;
@@ -129,10 +145,18 @@ export interface ExportHistoryRecord {
   overallAdDataMatchSummary: OverallAdDataMatchSummary;
   adjustmentDrafts: AdjustmentDraft[];
   selectedDraftIds: string[];
+  draftRunId?: string;
+  datasetId?: string;
+  fileId?: string;
+  jobId?: string;
 }
 
 export interface RuleRunHistoryRecord {
   id: string;
+  draftRunId?: string;
+  datasetId?: string;
+  fileId?: string;
+  jobId?: string;
   ranAt: string;
   exportedAt?: string;
   exportFileName?: string;

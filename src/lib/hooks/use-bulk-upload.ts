@@ -2,19 +2,23 @@
 
 import { useRef } from "react";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
+import type { WorkspaceDatasetPayload } from "@/lib/types";
+import { addWorkspaceScopeToFormData, scopedApiPath, scopedFetch } from "@/lib/workspace/scoped-fetch";
 
-const targetSheets = ["商品推广活动", "Sponsored Products Campaigns", "Bulk Operations", "Sponsored Products"];
+type ImportJobResponse = {
+  job?: {
+    id: string;
+    status: "queued" | "running" | "done" | "failed";
+    progress: number;
+    error?: string | null;
+    workspaceDataset?: WorkspaceDatasetPayload | null;
+  };
+  error?: string;
+};
 
-type WorkerMessage = {
-  type: "start" | "chunk" | "complete" | "error";
-  progress?: number;
-  rowCount?: number;
-  sheets?: string[];
-  workbookSheets?: string[];
-  sheetName?: string;
-  startRowIndex?: number;
-  rows?: Record<string, string | number | boolean | null>[];
-  message?: string;
+type DatasetResponse = {
+  dataset?: WorkspaceDatasetPayload | null;
+  error?: string;
 };
 
 function isSupportedFile(file: File) {
@@ -23,12 +27,67 @@ function isSupportedFile(file: File) {
 
 export function useBulkUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const parseProgress = useWorkspaceStore((state) => state.parseProgress);
   const setParseStarted = useWorkspaceStore((state) => state.setParseStarted);
   const setParseProgress = useWorkspaceStore((state) => state.setParseProgress);
-  const ingestParsedRows = useWorkspaceStore((state) => state.ingestParsedRows);
-  const setParseCompleted = useWorkspaceStore((state) => state.setParseCompleted);
+  const applyWorkspaceDataset = useWorkspaceStore((state) => state.applyWorkspaceDataset);
   const setParseFailed = useWorkspaceStore((state) => state.setParseFailed);
+
+  async function readJob(jobId: string) {
+    const response = await scopedFetch(`/api/jobs/${jobId}`);
+    const data = (await response.json().catch(() => ({}))) as ImportJobResponse;
+
+    if (!response.ok) {
+      throw new Error(data.error || "读取导入任务失败。");
+    }
+
+    if (!data.job) {
+      throw new Error("导入任务不存在。");
+    }
+
+    return data.job;
+  }
+
+  async function readDataset(jobId: string) {
+    const response = await scopedFetch(scopedApiPath(`/api/workspace/datasets?jobId=${encodeURIComponent(jobId)}`));
+    const data = (await response.json().catch(() => ({}))) as DatasetResponse;
+
+    if (!response.ok) {
+      throw new Error(data.error || "读取 WorkspaceDataset 失败。");
+    }
+
+    if (!data.dataset) {
+      throw new Error("导入任务已完成，但未找到结构化 WorkspaceDataset。");
+    }
+
+    return data.dataset;
+  }
+
+  async function waitForDataset(jobId: string) {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < 120_000) {
+      const job = await readJob(jobId);
+
+      setParseProgress(Math.max(10, job.progress || 10));
+
+      if (job.status === "done") {
+        return job.workspaceDataset ?? readDataset(jobId);
+      }
+
+      if (job.status === "failed") {
+        try {
+          return await readDataset(jobId);
+        } catch {
+          // Keep the original worker failure visible when no dataset was produced.
+        }
+        throw new Error(job.error || "后端 Worker 解析 Bulk 文件失败。");
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
+
+    throw new Error("导入任务仍在队列中，请确认 Worker 正在运行后稍后刷新工作区。");
+  }
 
   async function handleFileSelected(file?: File) {
     if (!file) {
@@ -43,41 +102,28 @@ export function useBulkUpload() {
     try {
       const buffer = await file.arrayBuffer();
       setParseStarted(file.name, buffer.slice(0));
-      const worker = new Worker(new URL("../../workers/excel-parser.worker.ts", import.meta.url), { type: "module" });
 
-      worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-        const message = event.data;
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("type", "bulk_upload");
+      addWorkspaceScopeToFormData(formData);
+      setParseProgress(8);
 
-        if (message.type === "start") {
-          setParseProgress(5, message.sheets ?? []);
-        }
+      const uploadResponse = await scopedFetch("/api/files/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const uploadData = (await uploadResponse.json().catch(() => ({}))) as ImportJobResponse;
 
-        if (message.type === "chunk") {
-          setParseProgress(message.progress ?? parseProgress, message.sheets);
-          if (message.sheetName && message.rows) {
-            ingestParsedRows(message.sheetName, message.rows, message.startRowIndex ?? 0);
-          }
-        }
+      if (!uploadResponse.ok || !uploadData.job) {
+        throw new Error(uploadData.error || "创建导入任务失败。");
+      }
 
-        if (message.type === "complete") {
-          setParseCompleted(message.rowCount ?? 0, message.sheets ?? []);
-          worker.terminate();
-        }
-
-        if (message.type === "error") {
-          setParseFailed(message.message ?? "Excel 解析失败，请检查文件格式。");
-          worker.terminate();
-        }
-      };
-
-      worker.onerror = () => {
-        setParseFailed("解析 Worker 启动失败，请重试或检查文件是否损坏。");
-        worker.terminate();
-      };
-
-      worker.postMessage({ file: buffer, targetSheets, chunkSize: 2000 }, [buffer]);
+      setParseProgress(Math.max(12, uploadData.job.progress || 12));
+      const dataset = uploadData.job.workspaceDataset ?? await waitForDataset(uploadData.job.id);
+      applyWorkspaceDataset(dataset, buffer.slice(0));
     } catch (error) {
-      setParseFailed(error instanceof Error ? error.message : "读取文件失败。");
+      setParseFailed(error instanceof Error ? error.message : "上传或解析文件失败。");
     } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";

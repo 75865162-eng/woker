@@ -86,7 +86,7 @@ export async function POST(request: Request) {
 
     const queuedJob = await prisma.importJob.findUniqueOrThrow({
       where: { id: job.id },
-      include: { file: true },
+      include: { file: true, workspaceDataset: true },
     });
 
     return NextResponse.json({

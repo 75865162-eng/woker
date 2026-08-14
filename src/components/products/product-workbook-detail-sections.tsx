@@ -183,6 +183,7 @@ export function ProductWorkbookDetailSections({
                         value={row.type}
                         onChange={(event) => onCompetitorChange(index, "type", event.target.value)}
                       >
+                        <option value=""></option>
                         {competitorTypeOptions.map((option) => (
                           <option key={option} value={option}>{option}</option>
                         ))}
@@ -241,7 +242,7 @@ export function ProductWorkbookDetailSections({
           <table className="min-w-[1540px] text-left text-xs">
             <thead className="bg-surface-muted text-muted">
               <tr>
-                {["供应商产品链接", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "报价（20套）", "报价（100-500套）", "开票信息", "备注"].map((label) => (
+                {["供应商产品链接", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "采购单价", "报价（100-500套）", "开票信息", "备注"].map((label) => (
                   <th key={label} className="px-2 py-2 font-bold">{label}</th>
                 ))}
               </tr>
@@ -838,7 +839,7 @@ function KeywordBulkInput({ onApply }: { onApply: (keywords: TrialKeywordRow[]) 
       <textarea
         className="mt-1 min-h-[240px] flex-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
         value={value}
-        placeholder={"espresso shot mirror 0.2 456 1879\nespresso mirror 0.49 1539 1155349\n\n或旧格式：\nespresso shot mirror\n0.63\n488\n1756622"}
+        placeholder={"关键词 CPC 月搜索量 ABA排名\n关键词 CPC 月搜索量 ABA排名\n\n或旧格式：\n关键词\nCPC\n月搜索量\nABA排名"}
         onChange={(event) => handleChange(event.target.value)}
       />
     </label>

@@ -51,6 +51,12 @@ export type WorkspaceSnapshot = {
   exportHistoryRecords: ExportHistoryRecord[];
   ruleRunHistoryRecords: RuleRunHistoryRecord[];
   blockedCampaignIdentities: BlockedCampaignIdentity[];
+  workspaceDatasetId?: string;
+  sourceFileId?: string;
+  importJobId?: string;
+  sourceParserVersion?: string;
+  sourceDatasetCreatedAt?: string;
+  activeDraftRunId?: string;
 };
 
 export type LegacyWorkspaceSnapshot = WorkspaceSnapshot &
@@ -95,6 +101,12 @@ export function takeWorkspaceSnapshot(state: WorkspaceSnapshot): WorkspaceSnapsh
     exportHistoryRecords: state.exportHistoryRecords,
     ruleRunHistoryRecords: state.ruleRunHistoryRecords,
     blockedCampaignIdentities: state.blockedCampaignIdentities,
+    workspaceDatasetId: state.workspaceDatasetId,
+    sourceFileId: state.sourceFileId,
+    importJobId: state.importJobId,
+    sourceParserVersion: state.sourceParserVersion,
+    sourceDatasetCreatedAt: state.sourceDatasetCreatedAt,
+    activeDraftRunId: state.activeDraftRunId,
   };
 }
 
@@ -185,5 +197,11 @@ export function migrateWorkspaceSnapshot(
     ruleRunHistoryRecords: snapshot.ruleRunHistoryRecords ?? [],
     blockedCampaignIdentities: snapshot.blockedCampaignIdentities ?? [],
     pendingAdjustmentDrafts: snapshot.pendingAdjustmentDrafts ?? [],
+    workspaceDatasetId: snapshot.workspaceDatasetId,
+    sourceFileId: snapshot.sourceFileId,
+    importJobId: snapshot.importJobId,
+    sourceParserVersion: snapshot.sourceParserVersion,
+    sourceDatasetCreatedAt: snapshot.sourceDatasetCreatedAt,
+    activeDraftRunId: snapshot.activeDraftRunId,
   };
 }

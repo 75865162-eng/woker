@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, FileSpreadsheet, X } from "lucide-react";
 import { AdjustmentTable } from "@/components/workspace/adjustment-table";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { defaultRules, lifecycleGroups } from "@/data/mock-data";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
+import { recordCurrentDraftRun } from "@/lib/workspace/lineage-client";
 import type { OverallAdDataRow } from "@/lib/types";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";
 
@@ -37,6 +37,10 @@ export function WorkspacePanel() {
     overallAdDataStatus,
     overallAdDataError,
     overallAdDataMatchSummary,
+    workspaceDatasetId,
+    sourceFileId,
+    importJobId,
+    sourceParserVersion,
     persistenceStatus,
     persistenceError,
     clearPersistedWorkspace,
@@ -127,6 +131,11 @@ export function WorkspacePanel() {
               <span className={persistenceStatus === "failed" ? "text-danger" : "text-success"}>{persistenceLabel}</span>
               <span className="ml-2">刷新页面后会自动恢复产品周期分组、Overall 数据和草稿勾选。</span>
               {persistenceError && <span className="ml-2 text-danger">{persistenceError}</span>}
+              {workspaceDatasetId ? (
+                <span className="ml-2 text-brand">
+                  数据集：{workspaceDatasetId.slice(0, 8)} · 文件 {sourceFileId?.slice(0, 8) ?? "-"} · 任务 {importJobId?.slice(0, 8) ?? "-"} · {sourceParserVersion ?? "parser"}
+                </span>
+              ) : null}
             </div>
             <Button
               variant="secondary"
@@ -158,13 +167,12 @@ export function WorkspacePanel() {
               </div>
               <div className="flex flex-wrap gap-2">
               {activeRules.slice(0, 4).map((rule) => (
-                  <Link
+                  <span
                     key={rule.id}
-                    href={`/rules?lifecycle=${activeLifecycleGroup?.id ?? rule.lifecycleGroupId}`}
-                    className="rounded-md border border-border bg-white px-2 py-1 text-xs font-semibold text-muted transition-colors hover:border-brand hover:text-foreground"
+                    className="rounded-md border border-border bg-white px-2 py-1 text-xs font-semibold text-muted"
                   >
                     {rule.name}
-                  </Link>
+                  </span>
                 ))}
                 {workspaceMode === "workspace-unit" && activeWorkspaceUnit && (
                   <Button
@@ -173,6 +181,9 @@ export function WorkspacePanel() {
                     onClick={() => {
                       setActiveWorkspaceUnit(activeWorkspaceUnit.id);
                       const result = runRulesForActiveWorkspaceUnit();
+                      if (result.draftCount > 0) {
+                        recordCurrentDraftRun("workspace-unit").catch((error) => console.warn("Failed to record draft run.", error));
+                      }
                       if (result.message) {
                         window.alert(result.message);
                       }

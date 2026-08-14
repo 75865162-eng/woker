@@ -42,6 +42,7 @@ import {
   normalizeAiSettings,
   type AiModelSettings,
 } from "@/lib/ai-settings";
+import { scopedFetch } from "@/lib/workspace/scoped-fetch";
 import {
   blobToDataUrl,
   readListingAiImageAsset,
@@ -285,7 +286,7 @@ export function ListingAiWorkbench() {
 
     async function restoreDraft() {
       try {
-        const response = await fetch("/api/listing-ai/workspace");
+        const response = await scopedFetch("/api/listing-ai/workspace");
 
         if (!response.ok) {
           throw new Error("无法从数据库读取 Listing AI 工作区。");
@@ -472,7 +473,7 @@ export function ListingAiWorkbench() {
       : null;
 
     try {
-      const response = await fetch("/api/listing-ai/generate-title", {
+      const response = await scopedFetch("/api/listing-ai/generate-title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -532,7 +533,7 @@ export function ListingAiWorkbench() {
     };
 
     try {
-      const response = await fetch("/api/listing-ai/optimize", {
+      const response = await scopedFetch("/api/listing-ai/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -621,7 +622,7 @@ export function ListingAiWorkbench() {
     setImageGeneratorError("");
 
     try {
-      const response = await fetch("/api/listing-ai/generate-images", {
+      const response = await scopedFetch("/api/listing-ai/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -814,7 +815,7 @@ function normalizeWorkspaceDraft(draft?: Partial<WorkspaceDraft> | null): Worksp
 }
 
 async function saveListingAiWorkspace(draft: WorkspaceDraft, records: SavedRecord[]) {
-  const response = await fetch("/api/listing-ai/workspace", {
+  const response = await scopedFetch("/api/listing-ai/workspace", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

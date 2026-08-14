@@ -5,6 +5,7 @@ import { Download, RefreshCw, RotateCcw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { scopedApiPath, scopedFetch } from "@/lib/workspace/scoped-fetch";
 
 type ImportJobStatus = "queued" | "running" | "done" | "failed";
 
@@ -93,7 +94,7 @@ export function TaskCenterWorkbench() {
     setLoading(true);
     setError("");
 
-    fetch(`/api/jobs?${searchParams.toString()}`)
+    scopedFetch(`/api/jobs?${searchParams.toString()}`)
       .then(async (response) => {
         const data = await response.json();
 
@@ -127,7 +128,7 @@ export function TaskCenterWorkbench() {
     setError("");
 
     try {
-      const response = await fetch(`/api/jobs/${jobId}/retry`, { method: "POST" });
+      const response = await scopedFetch(`/api/jobs/${jobId}/retry`, { method: "POST" });
       const data = await response.json();
 
       if (!response.ok) {
@@ -217,7 +218,7 @@ export function TaskCenterWorkbench() {
                     <td className="px-3 py-2 text-right">
                       <div className="flex justify-end gap-2">
                         {job.status === "done" && job.resultKey ? (
-                          <a href={`/api/files/${job.id}/download`} className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground hover:bg-surface-muted">
+                          <a href={scopedApiPath(`/api/files/${job.id}/download`)} className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground hover:bg-surface-muted">
                             <Download className="h-4 w-4" />
                             下载
                           </a>

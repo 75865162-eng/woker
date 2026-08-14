@@ -1,4 +1,5 @@
 import type { WorkspaceSnapshotRecord } from "@/lib/types";
+import { scopedFetch } from "@/lib/workspace/scoped-fetch";
 
 const arrayBufferMarker = "__workspaceArrayBufferBase64";
 
@@ -79,7 +80,7 @@ export async function deleteWorkspaceSnapshot() {
 
 async function readRemoteWorkspaceSnapshot<T>(): Promise<WorkspaceSnapshotApiRecord<T> | undefined> {
   try {
-    const response = await fetch("/api/workspace/snapshot");
+    const response = await scopedFetch("/api/workspace/snapshot");
 
     if (response.status === 401 || response.status === 404) {
       return undefined;
@@ -110,7 +111,7 @@ async function readRemoteWorkspaceSnapshot<T>(): Promise<WorkspaceSnapshotApiRec
 }
 
 async function writeRemoteWorkspaceSnapshot<T>(snapshot: T) {
-  const response = await fetch("/api/workspace/snapshot", {
+  const response = await scopedFetch("/api/workspace/snapshot", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -130,7 +131,7 @@ async function writeRemoteWorkspaceSnapshot<T>(snapshot: T) {
 }
 
 async function deleteRemoteWorkspaceSnapshot() {
-  const response = await fetch("/api/workspace/snapshot", {
+  const response = await scopedFetch("/api/workspace/snapshot", {
     method: "DELETE",
   });
 

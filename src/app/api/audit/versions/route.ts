@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { recordDataChangeVersion, type VersionedEntityType } from "@/lib/audit/versioning";
 import { prisma } from "@/lib/db/prisma";
+import { buildProductRecordIndex } from "@/lib/products/product-record-index";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
@@ -14,9 +15,19 @@ const restorableEntityTypes = new Set<VersionedEntityType>([
   "ppc_workspace_snapshot",
   "rule_config",
 ]);
+const filterableEntityTypes = new Set<VersionedEntityType>([
+  ...restorableEntityTypes,
+  "workspace_dataset",
+  "draft_run",
+  "export_record",
+]);
 
 function isVersionedEntityType(value: string | null): value is VersionedEntityType {
-  return Boolean(value && restorableEntityTypes.has(value as VersionedEntityType));
+  return Boolean(value && filterableEntityTypes.has(value as VersionedEntityType));
+}
+
+function isRestorableEntityType(value: string): value is VersionedEntityType {
+  return restorableEntityTypes.has(value as VersionedEntityType);
 }
 
 function clampPageSize(value: string | null) {
@@ -50,6 +61,8 @@ export async function GET(request: Request) {
     const where: Prisma.DataChangeVersionWhereInput = {
       organizationId: user.organizationId,
       workspaceId: scope.workspaceId,
+      ...(scope.accountId ? { accountId: scope.accountId } : {}),
+      ...(scope.marketplace ? { marketplace: scope.marketplace } : {}),
       ...(isVersionedEntityType(entityType) ? { entityType } : {}),
       ...(entityId ? { entityId } : {}),
     };
@@ -101,7 +114,7 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!version || !isVersionedEntityType(version.entityType)) {
+    if (!version || !isRestorableEntityType(version.entityType)) {
       return NextResponse.json({ error: "Version not found." }, { status: 404 });
     }
 
@@ -114,6 +127,7 @@ export async function POST(request: Request) {
 
     if (version.entityType === "product") {
       const product = version.payload as unknown as Product;
+      const productIndex = buildProductRecordIndex(product);
 
       await prisma.productRecord.upsert({
         where: {
@@ -124,6 +138,7 @@ export async function POST(request: Request) {
           },
         },
         create: {
+          ...productIndex,
           id: product.id,
           organizationId: user.organizationId,
           userId: user.id,
@@ -137,6 +152,7 @@ export async function POST(request: Request) {
           userId: user.id,
           accountId: scope.accountId,
           marketplace: scope.marketplace,
+          ...productIndex,
           payload: product as unknown as Prisma.InputJsonValue,
         },
       });

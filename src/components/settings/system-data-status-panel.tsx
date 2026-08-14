@@ -12,7 +12,7 @@ type StatusMetric = {
 };
 
 async function loadDatabaseMetrics() {
-  const [organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, exports] = await Promise.all([
+  const [organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, datasets, draftRuns, exports] = await Promise.all([
     prisma.organization.count(),
     prisma.user.count(),
     prisma.teamRosterMember.count(),
@@ -20,10 +20,12 @@ async function loadDatabaseMetrics() {
     prisma.productImageCopyGalleryRecord.count(),
     prisma.fileObject.count(),
     prisma.importJob.count(),
+    prisma.workspaceDataset.count(),
+    prisma.draftRun.count(),
     prisma.exportRecord.count(),
   ]);
 
-  return { organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, exports };
+  return { organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, datasets, draftRuns, exports };
 }
 
 export async function SystemDataStatusPanel() {
@@ -83,6 +85,18 @@ export async function SystemDataStatusPanel() {
       label: "处理任务",
       value: metrics ? metrics.jobs.toLocaleString("zh-CN") : "-",
       detail: "ImportJob",
+      icon: ListChecks,
+    },
+    {
+      label: "PPC 数据集",
+      value: metrics ? metrics.datasets.toLocaleString("zh-CN") : "-",
+      detail: "WorkspaceDataset",
+      icon: Database,
+    },
+    {
+      label: "规则运行",
+      value: metrics ? metrics.draftRuns.toLocaleString("zh-CN") : "-",
+      detail: "DraftRun",
       icon: ListChecks,
     },
     {

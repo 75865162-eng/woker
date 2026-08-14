@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
+import { recordReviewedExport } from "@/lib/workspace/lineage-client";
 
 function downloadArrayBuffer(data: ArrayBuffer, fileName: string) {
   const blob = new Blob([data], {
@@ -81,6 +82,16 @@ export function PendingDraftQueue() {
       }
 
       setExportProgress({ label: "下载导出文件", progress: 90 });
+      await recordReviewedExport({
+        fileName: result.fileName,
+        data: result.data,
+        selectedDraftIds: drafts.map((draft) => draft.id),
+        validation: {
+          writableCount: result.writableCount,
+          conflictCount: result.conflictCount,
+          blockedCount: result.blockedCount,
+        },
+      }).catch((error) => console.warn("Failed to record export.", error));
       downloadArrayBuffer(result.data, result.fileName);
       recordExportHistory(result.fileName, drafts);
       setExportProgress({ label: "导出完成", progress: 100 });

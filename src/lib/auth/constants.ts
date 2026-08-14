@@ -11,3 +11,11 @@ export type AuthDriver = "local" | "database";
 export function getAuthDriver(): AuthDriver {
   return process.env.AUTH_DRIVER === "database" ? "database" : "local";
 }
+
+export function getBootstrapAdminEmail() {
+  return (process.env.BOOTSTRAP_ADMIN_EMAIL || "1").trim().toLowerCase();
+}
+
+export function isBootstrapAdminEmail(email?: string | null) {
+  return Boolean(email && email.trim().toLowerCase() === getBootstrapAdminEmail());
+}
