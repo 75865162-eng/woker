@@ -37,6 +37,14 @@ function getAuthSecret() {
   return secret || "local-development-auth-secret";
 }
 
+function shouldUseSecureCookies() {
+  if (process.env.AUTH_COOKIE_SECURE === "false") {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 function base64UrlJson(value: unknown) {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }
@@ -91,7 +99,7 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
   cookieStore.set(sessionCookieName, signedCookie, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     maxAge: sessionMaxAgeSeconds,
     path: "/",
   });
@@ -101,7 +109,7 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
 
     cookieStore.set(rolePermissionsCookieName, encodeURIComponent(JSON.stringify(rolePermissions)), {
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: shouldUseSecureCookies(),
       maxAge: 60 * 60 * 24 * 365,
       path: "/",
     });
@@ -126,7 +134,7 @@ export async function createLocalSession(user: CurrentUser) {
   cookieStore.set(sessionCookieName, `${payload}.${signPayload(payload)}`, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     maxAge: sessionMaxAgeSeconds,
     path: "/",
   });

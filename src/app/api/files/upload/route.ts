@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -21,7 +21,96 @@ function createStorageKey(fileName: string) {
   return `original/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extension}`;
 }
 
+function hashBuffer(buffer: Buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+function getUploadErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "Upload failed.";
+
+  if (message.includes("contentHash")) {
+    return "数据库未应用文件去重迁移，请先执行 Prisma migration 后再上传 Bulk 文件。";
+  }
+
+  return message;
+}
+
+async function findExistingFileObject(input: {
+  organizationId: string;
+  workspaceId: string;
+  accountId: string;
+  marketplace: string;
+  storageType: ReturnType<typeof getStorageType>;
+  contentHash: string;
+  size: number;
+}) {
+  const matchedFileObject = await prisma.fileObject.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      workspaceId: input.workspaceId,
+      accountId: input.accountId,
+      marketplace: input.marketplace,
+      storageType: input.storageType,
+      contentHash: input.contentHash,
+      size: input.size,
+    },
+    include: {
+      workspaceDatasets: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (matchedFileObject) {
+    return matchedFileObject;
+  }
+
+  const storage = getStorageDriver();
+  const legacyCandidates = await prisma.fileObject.findMany({
+    where: {
+      organizationId: input.organizationId,
+      workspaceId: input.workspaceId,
+      accountId: input.accountId,
+      marketplace: input.marketplace,
+      storageType: input.storageType,
+      contentHash: null,
+      size: input.size,
+    },
+    include: {
+      workspaceDatasets: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  for (const candidate of legacyCandidates) {
+    try {
+      const candidateHash = hashBuffer(await storage.getBuffer(candidate.storageKey));
+
+      await prisma.fileObject.update({
+        where: { id: candidate.id },
+        data: { contentHash: candidateHash },
+      });
+
+      if (candidateHash === input.contentHash) {
+        return { ...candidate, contentHash: candidateHash };
+      }
+    } catch {
+      // Ignore unreadable legacy objects and continue with a fresh upload.
+    }
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
+  let uploadedStorageKey: string | undefined;
+
   try {
     const permission = await requireApiPermission("workspace", "create");
 
@@ -51,9 +140,66 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "文件不能超过 50MB。" }, { status: 400 });
     }
 
+    const storageType = getStorageType();
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const contentHash = hashBuffer(fileBuffer);
+    const existingFileObject = await findExistingFileObject({
+      organizationId: user.organizationId,
+      workspaceId: scope.workspaceId,
+      accountId: scope.accountId,
+      marketplace: scope.marketplace,
+      storageType,
+      contentHash,
+      size: fileBuffer.byteLength,
+    });
+
+    if (existingFileObject) {
+      const existingDataset = existingFileObject.workspaceDatasets[0];
+
+      if (existingDataset) {
+        const existingJob = await prisma.importJob.findUnique({
+          where: { id: existingDataset.jobId },
+          include: { file: true, workspaceDataset: true },
+        });
+
+        if (existingJob) {
+          return NextResponse.json({ job: existingJob });
+        }
+      }
+
+      const job = await prisma.importJob.create({
+        data: {
+          organizationId: user.organizationId,
+          userId: user.id,
+          workspaceId: scope.workspaceId,
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          fileId: existingFileObject.id,
+          type: jobType,
+        },
+        include: { file: true, workspaceDataset: true },
+      });
+
+      await enqueueImportJob(job.id);
+
+      const queuedJob = await prisma.importJob.findUniqueOrThrow({
+        where: { id: job.id },
+        include: { file: true, workspaceDataset: true },
+      });
+
+      return NextResponse.json({
+        job: queuedJob,
+      });
+    }
+
     const storage = getStorageDriver();
     const storageKey = createStorageKey(file.name);
-    const storedObject = await storage.putFile({ key: storageKey, file });
+    const storedObject = await storage.putBuffer({
+      key: storageKey,
+      buffer: fileBuffer,
+      contentType: file.type || undefined,
+    });
+    uploadedStorageKey = storedObject.key;
 
     const fileObject = await prisma.fileObject.create({
       data: {
@@ -65,10 +211,12 @@ export async function POST(request: Request) {
         originalName: file.name,
         mimeType: file.type || undefined,
         size: storedObject.size,
+        contentHash,
         storageKey: storedObject.key,
-        storageType: getStorageType(),
+        storageType,
       },
     });
+    uploadedStorageKey = undefined;
 
     const job = await prisma.importJob.create({
       data: {
@@ -93,7 +241,10 @@ export async function POST(request: Request) {
       job: queuedJob,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (uploadedStorageKey) {
+      await getStorageDriver().delete(uploadedStorageKey).catch(() => undefined);
+    }
+
+    return NextResponse.json({ error: getUploadErrorMessage(error) }, { status: 500 });
   }
 }

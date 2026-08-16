@@ -27,7 +27,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           organizationId: user.organizationId,
         },
       },
-      include: { file: true },
+      include: { file: true, workspaceDataset: true },
     });
 
     if (!job) {

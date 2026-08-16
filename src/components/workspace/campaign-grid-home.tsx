@@ -76,6 +76,7 @@ export function CampaignGridHome() {
     activeLifecycleGroupId,
     parseStatus,
     parseProgress,
+    parseError,
     overallAdDataUploads,
     exportHistoryRecords,
     ruleRunHistoryRecords,
@@ -575,9 +576,9 @@ export function CampaignGridHome() {
           aria-hidden
           onChange={(event) => void handleOverallSelected(event.target.files)}
         />
-        <Button onClick={() => fileInputRef.current?.click()}>
+        <Button onClick={() => fileInputRef.current?.click()} disabled={parseStatus === "parsing"}>
           <UploadCloud className="h-4 w-4" />
-          Upload Bulk
+          {parseStatus === "parsing" ? "解析中..." : "Upload Bulk"}
         </Button>
         <Button variant="secondary" onClick={() => groupingInputRef.current?.click()}>
           <UploadCloud className="h-4 w-4" />
@@ -619,6 +620,12 @@ export function CampaignGridHome() {
         {overallUploadProgress ? <OperationProgress label={overallUploadProgress.label} progress={overallUploadProgress.progress} /> : null}
         {ruleRunProgress ? <OperationProgress label={ruleRunProgress.label} progress={ruleRunProgress.progress} /> : null}
       </div>
+
+      {parseStatus === "failed" && parseError ? (
+        <div className="rounded-lg border border-danger/30 bg-red-50 px-4 py-3 text-sm font-semibold text-danger">
+          {parseError}
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-muted">
@@ -896,7 +903,9 @@ export function CampaignGridHome() {
             })}
             {pagedCampaigns.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-12 text-center text-sm font-semibold text-muted">没有符合当前筛选条件的广告组。</td>
+                <td colSpan={12} className="px-4 py-12 text-center text-sm font-semibold text-muted">
+                  {campaignGroups.length === 0 ? "请先上传 Bulk 文件。" : "没有符合当前筛选条件的广告组。"}
+                </td>
               </tr>
             ) : null}
           </tbody>
@@ -1264,7 +1273,7 @@ export function CampaignGridHome() {
 
       {pagedCampaigns.length === 0 && (
         <div className="rounded-xl border border-dashed border-border bg-white px-5 py-10 text-center text-sm font-medium text-muted">
-          No campaign groups match the current filters.
+          {campaignGroups.length === 0 ? "请先上传 Bulk 文件。" : "No campaign groups match the current filters."}
         </div>
       )}
     </section>

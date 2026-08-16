@@ -200,6 +200,7 @@ model FileObject {
   originalName   String
   mimeType       String?
   size           Int?
+  contentHash    String?
   storageKey     String
   storageType    FileStorageType  @default(local)
   status         FileObjectStatus @default(uploaded)
@@ -213,6 +214,7 @@ model FileObject {
   @@index([organizationId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
   @@index([organizationId, accountId, marketplace, createdAt])
+  @@index([organizationId, workspaceId, accountId, marketplace, storageType, contentHash], map: "FileObject_contentHash_scope_idx")
   @@index([userId, createdAt])
 }
 

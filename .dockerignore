@@ -1,7 +1,10 @@
 .git
+Dockerfile
+docker-compose.yml
 .next
 .next-*
 node_modules
+node_modules.*
 coverage
 out
 build

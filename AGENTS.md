@@ -128,7 +128,7 @@ npm run lint
 
 ## 可迁移部署架构
 
-当前阶段采用 Next.js + Prisma + PostgreSQL + local uploads。未来服务器部署目标是 Next.js + Prisma + PostgreSQL + R2/S3-compatible object storage + Queue Worker。
+当前阶段采用 Next.js + Prisma + PostgreSQL。生产服务器文件存储使用 Cloudflare R2；本地开发可继续使用 local uploads。未来多人部署目标是 Next.js + Prisma + PostgreSQL + R2/S3-compatible object storage + Queue Worker。
 
 - 数据库存业务数据和文件元数据；原始文件、导入文件、导出文件等二进制对象存储在 storage provider。
 - 业务代码不要直接依赖 `uploads/` 本地路径，应通过 storage adapter 读写文件。
@@ -136,6 +136,72 @@ npm run lint
 - 长任务在业务层通过 `jobId` / `ProcessingJob` 引用；API route 负责创建任务和查询状态，处理逻辑应放在 job handler / processor。
 - 当前可以使用 local storage 和 inline processor，但接口边界应兼容未来替换为 R2/S3 和 queue worker。
 - 所有未来需要多人使用的数据模型，应预留 `orgId` / `userId` / ownership 边界。
+
+## 服务器部署与更新规则
+
+生产服务器当前资源较紧，部署时必须先按磁盘空间规划，避免把本地开发产物、旧修复目录或 Docker 构建缓存带上服务器。
+
+- 服务器 IP：`108.61.0.221`。
+- SSH 用户：`root`。
+- 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
+- 默认访问地址：`https://108-61-0-221.sslip.io`。
+- 备用直连地址：`http://108.61.0.221:3000`。注意 `3000` 端口是 HTTP，不是 HTTPS；正式访问优先使用 sslip.io HTTPS 地址。
+- 服务器系统：Ubuntu 24.04 LTS x64。
+- Docker 服务：`web`、`worker`、`migrate`、`postgres`、`redis`；另有 Caddy 反代容器提供 HTTPS。
+- Caddy 入口：`80/443`，反代到 Docker 网络内的 `amazon-ad-bulk-operation-web-1:3000`。
+- 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
+- 管理员登录信息保存位置：`/root/amazon-ad-bulk-credentials.txt`。不要把密码写入仓库文档。
+- 生产服务器默认文件存储：Cloudflare R2，`STORAGE_DRIVER=r2`，bucket 为 `amazon-bulk-uploads`。R2/S3 密钥只允许写在服务器 `.env` 或受控密钥管理中，不要提交到仓库或写入文档。
+- 部署同步必须排除大目录和历史产物：`.git`、`node_modules`、`node_modules.*`、`.next`、`.next-*`、`uploads`、`coverage`、`out`、`build`。
+- 项目目录里曾出现过 `node_modules.broken-audit-fix-*`、`.next-build.broken-*`、`.next-build-stale-*` 等历史目录；这些目录绝不能同步到服务器，也不能进入 Docker build context。
+- `.dockerignore` 必须持续覆盖 `node_modules.*` 和 `.next-*`；不要为了临时构建删除这些排除规则。
+- 不要使用会把整个本地工作区无差别覆盖到服务器的命令。同步前先确认排除规则；优先使用带 `--exclude` 的 `rsync`。
+- 服务器上的 `.env`、Docker volumes、`uploads` 属于运行态数据；除非用户明确要求，不要删除或覆盖。
+- PostgreSQL 和 Redis 默认只在 Docker 网络内使用，不要重新暴露公网端口。
+- `docker-compose.yml` 中的 `STORAGE_DRIVER`、`S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`、`S3_FORCE_PATH_STYLE` 必须从服务器 `.env` 注入；不要写死真实密钥。
+- Docker 构建应优先使用 Next standalone 产物和最小运行依赖；不要在 runner 镜像中复制完整 `node_modules`，除非已经确认磁盘和镜像体积风险。
+- 小盘服务器上构建完成后，如磁盘紧张，优先运行 `docker builder prune -af` 清理 build cache；不要清理 Docker volumes。
+- 每次部署后必须检查 `df -h /`、`docker compose ps`、`docker compose logs --tail=100 web` 和 `docker compose logs --tail=100 worker`。
+
+推荐更新流程：
+
+```bash
+npm run lint
+npm run build
+
+rsync -av \
+  --exclude '.git' \
+  --exclude 'node_modules' \
+  --exclude 'node_modules.*' \
+  --exclude '.next' \
+  --exclude '.next-*' \
+  --exclude 'uploads' \
+  --exclude 'coverage' \
+  --exclude 'out' \
+  --exclude 'build' \
+  ./ root@108.61.0.221:/opt/amazon-ad-bulk-operation/
+
+ssh root@108.61.0.221
+cd /opt/amazon-ad-bulk-operation
+docker compose up -d --build web worker
+docker compose ps
+docker compose logs --tail=100 web
+docker compose logs --tail=100 worker
+df -h /
+```
+
+如果包含 Prisma migration，部署后要确认迁移执行成功：
+
+```bash
+cd /opt/amazon-ad-bulk-operation
+docker compose run --rm migrate
+```
+
+如果 Docker build cache 占用过高，可在服务启动并验证通过后清理：
+
+```bash
+docker builder prune -af
+```
 
 ## UI 与交互约定
 

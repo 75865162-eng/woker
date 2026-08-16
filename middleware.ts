@@ -142,15 +142,15 @@ export async function middleware(request: NextRequest) {
 
     if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
       const currentUser = await loadCurrentUserFromApi(request);
+      const role = normalizeAccountRoleId(currentUser?.role ?? parseSessionRole(request));
 
-      if (!currentUser) {
+      if (!role) {
         const loginUrl = new URL("/login", request.url);
         loginUrl.searchParams.set("next", pathname);
 
         return NextResponse.redirect(loginUrl);
       }
 
-      const role = normalizeAccountRoleId(currentUser.role ?? parseSessionRole(request));
       const rolePermissions = parseRolePermissionsCookie(request.cookies.get(rolePermissionsCookieName)?.value);
       const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
       const latestRolePermissions = await loadLatestRolePermissions(request);

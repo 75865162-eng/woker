@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { campaignGroups, dataBatches, defaultRules, performanceRows as mockPerformanceRows } from "@/data/mock-data";
+import { dataBatches, defaultRules } from "@/data/mock-data";
 import {
   deleteWorkspaceSnapshot,
   readWorkspaceSnapshot,
@@ -151,7 +151,7 @@ interface WorkspaceState {
   clearPersistedWorkspace: () => Promise<void>;
 }
 
-const initialActiveId = campaignGroups[0]?.id ?? "";
+const initialActiveId = "";
 
 const emptyDiagnostics: ParseDiagnostics = {
   totalRows: 0,
@@ -179,17 +179,25 @@ function countMatchedOverallRowsForCampaignGroups(rows: OverallAdDataRow[], camp
   return rows.filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId && scopeIds.has(row.campaignGroupId)).length;
 }
 
+function isEmptyImportSnapshot(snapshot: LegacyWorkspaceSnapshot) {
+  return (
+    (snapshot.parseStatus === "parsing" || snapshot.parseStatus === "failed" || Boolean(snapshot.uploadedFileName)) &&
+    (snapshot.campaignGroups?.length ?? 0) === 0 &&
+    (snapshot.performanceRows?.length ?? 0) === 0
+  );
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rules: defaultRules,
-  campaignGroups,
-  campaignSheetGroups: buildSheetGroups(campaignGroups),
+  campaignGroups: [],
+  campaignSheetGroups: [],
   workspaceUnits: [],
-  performanceRows: mockPerformanceRows,
+  performanceRows: [],
   activeCampaignGroupId: initialActiveId,
   activeWorkspaceUnitId: undefined,
   activeLifecycleGroupId: undefined,
   workspaceMode: "campaign",
-  openTabIds: campaignGroups.slice(0, 4).map((group) => group.id),
+  openTabIds: [],
   selectedDraftIds: [],
   parseStatus: "idle",
   parseProgress: 0,
@@ -1218,6 +1226,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         return;
       }
 
+      if (isEmptyImportSnapshot(persisted.snapshot)) {
+        set({ persistenceStatus: "ready", persistenceError: undefined });
+        return;
+      }
+
       const snapshot = migrateWorkspaceSnapshot(persisted.snapshot, emptyOverallAdDataMatchSummary);
       const overallMatch = snapshot.overallAdDataRows.length
         ? matchOverallAdDataRows(
@@ -1247,22 +1260,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
   clearPersistedWorkspace: async () => {
     try {
-      const exportHistoryRecords = get().exportHistoryRecords;
-      const ruleRunHistoryRecords = get().ruleRunHistoryRecords;
-      const blockedCampaignIdentities = get().blockedCampaignIdentities;
-
       await deleteWorkspaceSnapshot();
       set({
-        campaignGroups,
-        campaignSheetGroups: buildSheetGroups(campaignGroups),
+        campaignGroups: [],
+        campaignSheetGroups: [],
         workspaceUnits: [],
         rules: defaultRules,
-        performanceRows: mockPerformanceRows,
+        performanceRows: [],
         activeCampaignGroupId: initialActiveId,
         activeWorkspaceUnitId: undefined,
         activeLifecycleGroupId: undefined,
         workspaceMode: "campaign",
-        openTabIds: campaignGroups.slice(0, 4).map((group) => group.id),
+        openTabIds: [],
         selectedDraftIds: [],
         parseStatus: "idle",
         parseProgress: 0,
@@ -1281,9 +1290,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         overallAdDataUploads: [],
         adjustmentDrafts: [],
         pendingAdjustmentDrafts: [],
-        exportHistoryRecords,
-        ruleRunHistoryRecords,
-        blockedCampaignIdentities,
+        exportHistoryRecords: [],
+        ruleRunHistoryRecords: [],
+        blockedCampaignIdentities: [],
         workspaceDatasetId: undefined,
         sourceFileId: undefined,
         importJobId: undefined,
@@ -1353,6 +1362,16 @@ if (typeof window !== "undefined") {
       state.activeDraftRunId !== previousState.activeDraftRunId;
 
     if (!shouldSave) {
+      return;
+    }
+
+    const shouldSkipTransientImportSnapshot =
+      state.parseStatus === "parsing" &&
+      state.campaignGroups.length === 0 &&
+      state.performanceRows.length === 0 &&
+      Boolean(state.uploadedFileName);
+
+    if (shouldSkipTransientImportSnapshot) {
       return;
     }
 

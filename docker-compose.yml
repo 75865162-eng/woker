@@ -17,13 +17,21 @@ services:
       DATABASE_URL: postgresql://amazon_bulk_ad:amazon_bulk_ad@postgres:5432/amazon_bulk_ad
       REDIS_URL: redis://redis:6379
       QUEUE_DRIVER: redis
-      STORAGE_DRIVER: local
-      UPLOAD_DIR: uploads
-      AUTH_SECRET: change-this-local-secret-before-production
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      UPLOAD_DIR: ${UPLOAD_DIR:-uploads}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      AUTH_DRIVER: database
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       BOOTSTRAP_ORG_NAME: Amazon Operations
       BOOTSTRAP_ORG_SLUG: amazon-ops
-      BOOTSTRAP_ADMIN_EMAIL: "1"
-      BOOTSTRAP_ADMIN_PASSWORD: "1"
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       AIGOCODE_API_KEY: ${AIGOCODE_API_KEY}
       AIGOCODE_BASE_URL: ${AIGOCODE_BASE_URL:-https://api.aigocode.app/v1}
       AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.4}
@@ -50,10 +58,17 @@ services:
       DATABASE_URL: postgresql://amazon_bulk_ad:amazon_bulk_ad@postgres:5432/amazon_bulk_ad
       REDIS_URL: redis://redis:6379
       QUEUE_DRIVER: redis
-      STORAGE_DRIVER: local
-      UPLOAD_DIR: uploads
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      UPLOAD_DIR: ${UPLOAD_DIR:-uploads}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       WORKER_CONCURRENCY: 2
-      AUTH_SECRET: change-this-local-secret-before-production
+      AUTH_DRIVER: database
+      AUTH_SECRET: ${AUTH_SECRET}
       AIGOCODE_API_KEY: ${AIGOCODE_API_KEY}
       AIGOCODE_BASE_URL: ${AIGOCODE_BASE_URL:-https://api.aigocode.app/v1}
       AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.4}
@@ -72,12 +87,13 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://amazon_bulk_ad:amazon_bulk_ad@postgres:5432/amazon_bulk_ad
-      AUTH_SECRET: change-this-local-secret-before-production
+      AUTH_DRIVER: database
+      AUTH_SECRET: ${AUTH_SECRET}
       BOOTSTRAP_ORG_NAME: Amazon Operations
       BOOTSTRAP_ORG_SLUG: amazon-ops
-      BOOTSTRAP_ADMIN_EMAIL: "1"
-      BOOTSTRAP_ADMIN_PASSWORD: "1"
-    command: ["sh", "-c", "npx prisma migrate deploy && npm run db:seed-admin"]
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+    command: ["sh", "-c", "npx prisma migrate deploy && node scripts/seed-admin.mjs"]
     restart: "no"
 
   postgres:
@@ -86,8 +102,6 @@ services:
       POSTGRES_DB: amazon_bulk_ad
       POSTGRES_USER: amazon_bulk_ad
       POSTGRES_PASSWORD: amazon_bulk_ad
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -99,8 +113,6 @@ services:
 
   redis:
     image: redis:8-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
     restart: unless-stopped
