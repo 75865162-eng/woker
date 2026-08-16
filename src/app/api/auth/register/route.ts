@@ -13,11 +13,6 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-type RegistrationTransaction = Pick<
-  typeof prisma,
-  "user" | "organization" | "organizationMember" | "auditLog" | "teamRosterMember"
->;
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -50,107 +45,96 @@ export async function POST(request: Request) {
     const organizationName = process.env.BOOTSTRAP_ORG_NAME || "Amazon Operations";
     const organizationSlug = process.env.BOOTSTRAP_ORG_SLUG || slugify(organizationName) || "amazon-operations";
 
-    const result = await prisma.$transaction(async (tx: RegistrationTransaction) => {
-      const existingUser = await tx.user.findUnique({
-        where: { email },
-        select: { id: true },
-      });
-
-      if (existingUser) {
-        return { error: "该账号已注册。" };
-      }
-
-      const organization = await tx.organization.upsert({
-        where: { slug: organizationSlug },
-        update: { name: organizationName },
-        create: {
-          name: organizationName,
-          slug: organizationSlug,
-        },
-      });
-      const existingMemberCount = await tx.organizationMember.count({
-        where: {
-          organizationId: organization.id,
-        },
-      });
-      const membershipRole = existingMemberCount === 0 ? "owner" : "viewer";
-      const user = await tx.user.create({
-        data: {
-          email,
-          name,
-          passwordHash: hashPassword(password),
-          memberships: {
-            create: {
-              organizationId: organization.id,
-              role: membershipRole,
-            },
-          },
-        },
-        include: {
-          memberships: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          organizationId: organization.id,
-          userId: user.id,
-          action: "user_register",
-          entityType: "User",
-          entityId: user.id,
-        },
-      });
-      await tx.teamRosterMember.upsert({
-        where: {
-          organizationId_id: {
-            organizationId: organization.id,
-            id: user.id,
-          },
-        },
-        update: {
-          name: user.name,
-          email: user.email,
-          status: "active",
-        },
-        create: {
-          organizationId: organization.id,
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          department: "未分配",
-          title: "注册用户",
-          roleId: membershipRole,
-          status: "active",
-          lastActiveAt: "已注册",
-          sortOrder: 1000,
-        },
-      });
-
-      return {
-        user,
-        organization,
-        membership: user.memberships[0],
-      };
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
     });
 
-    if ("error" in result) {
-      return NextResponse.json({ error: result.error }, { status: 409 });
+    if (existingUser) {
+      return NextResponse.json({ error: "该账号已注册。" }, { status: 409 });
     }
 
-    await createSession(result.user.id, {
-      id: result.user.id,
-      email: result.user.email,
-      name: result.user.name,
-      role: result.membership.role,
-      organizationId: result.organization.id,
-      organizationName: result.organization.name,
+    const organization = await prisma.organization.upsert({
+      where: { slug: organizationSlug },
+      update: { name: organizationName },
+      create: {
+        name: organizationName,
+        slug: organizationSlug,
+      },
+    });
+    const existingMemberCount = await prisma.organizationMember.count({
+      where: {
+        organizationId: organization.id,
+      },
+    });
+    const membershipRole = existingMemberCount === 0 ? "owner" : "viewer";
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name,
+        passwordHash: hashPassword(password),
+        memberships: {
+          create: {
+            organizationId: organization.id,
+            role: membershipRole,
+          },
+        },
+      },
+      include: {
+        memberships: true,
+      },
+    });
+    const membership = user.memberships[0];
+
+    await prisma.auditLog.create({
+      data: {
+        organizationId: organization.id,
+        userId: user.id,
+        action: "user_register",
+        entityType: "User",
+        entityId: user.id,
+      },
+    });
+    await prisma.teamRosterMember.upsert({
+      where: {
+        organizationId_id: {
+          organizationId: organization.id,
+          id: user.id,
+        },
+      },
+      update: {
+        name: user.name,
+        email: user.email,
+        status: "active",
+      },
+      create: {
+        organizationId: organization.id,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        department: "未分配",
+        title: "注册用户",
+        roleId: membershipRole,
+        status: "active",
+        lastActiveAt: "已注册",
+        sortOrder: 1000,
+      },
+    });
+
+    await createSession(user.id, {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: membership.role,
+      organizationId: organization.id,
+      organizationName: organization.name,
     });
 
     return NextResponse.json({
       user: {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
+        id: user.id,
+        email: user.email,
+        name: user.name,
       },
     });
   } catch (error) {
