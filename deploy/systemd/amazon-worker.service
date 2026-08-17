@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/amazon-ad-bulk-operation
+WorkingDirectory=/opt/amazon-ad-bulk-current
 EnvironmentFile=/opt/amazon-ad-bulk-operation/.env
 Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1

@@ -172,7 +172,12 @@ npm run lint
 - 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
 - worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
 - 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
-- 服务器发布脚本负责启动 Docker infra、Prisma generate、Prisma migrate deploy、bootstrap admin seed、Next standalone build、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器。
+- 服务器发布脚本负责启动 Docker infra、Prisma generate、Prisma migrate deploy、bootstrap admin seed、Next standalone build、生成 release 目录、切换 current symlink、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器。
+- 发布产物目录：`/opt/amazon-ad-bulk-releases/<timestamp>-<branch>-<commit>`。
+- 当前线上版本软链接：`/opt/amazon-ad-bulk-current`。`amazon-web` 和 `amazon-worker` 都从该 symlink 启动，保证 web/worker 版本一致。
+- 发布记录文件：`/opt/amazon-ad-bulk-release-log.jsonl`。每次部署和回滚都应追加记录。
+- release 目录只保存运行所需的 standalone、源码、脚本、Prisma 和 public；`node_modules` 通过 symlink 共享 `/opt/amazon-ad-bulk-operation/node_modules`，避免复制大依赖。
+- 默认只保留最近 5 个 release。可通过服务器环境变量 `KEEP_RELEASES` 临时调整；不要为了省空间删除当前 release 或 Docker volumes。
 - 小盘服务器上如果历史 Docker build cache 占用过高，可在服务启动并验证通过后运行 `docker builder prune -af`；不要清理 Docker volumes。
 - 每次部署后必须检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker`、`journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
 
@@ -198,6 +203,33 @@ npm run db:migrate
 cd /opt/amazon-ad-bulk-operation
 bash scripts/server-native-release.sh
 ```
+
+查看当前发布版本：
+
+```bash
+cd /opt/amazon-ad-bulk-operation
+bash scripts/server-release-status.sh
+```
+
+回滚到上一版：
+
+```bash
+cd /opt/amazon-ad-bulk-operation
+bash scripts/server-rollback.sh previous
+```
+
+回滚到指定版本：
+
+```bash
+cd /opt/amazon-ad-bulk-operation
+bash scripts/server-rollback.sh <release-id>
+```
+
+回滚规则：
+
+- 默认只回滚代码产物和 web/worker 进程，不自动回滚数据库。
+- 如果本次发布包含破坏性 Prisma migration，回滚前必须先确认旧代码是否兼容当前数据库。
+- 回滚后必须重新跑服务状态、登录、`/api/auth/me` 和首页检查。
 
 生产外部验证流程：
 
