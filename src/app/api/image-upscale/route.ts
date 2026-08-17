@@ -119,7 +119,7 @@ function runRealEsrgan(input: {
 }
 
 export async function POST(request: Request) {
-  const permission = await requireApiPermission("imageUpscale", "create");
+  const permission = await requireApiPermission(request, "imageUpscale", "create");
 
   if (!permission.ok) {
     return permission.response;

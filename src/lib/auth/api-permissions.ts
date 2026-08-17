@@ -13,8 +13,8 @@ export type ApiPermissionResult =
       response: NextResponse;
     };
 
-export async function requireApiPermission(moduleId: string, action: PermissionAction): Promise<ApiPermissionResult> {
-  const user = await getCurrentUser();
+export async function requireApiPermission(request: Request, moduleId: string, action: PermissionAction): Promise<ApiPermissionResult> {
+  const user = await getCurrentUser(request);
 
   if (!user) {
     return {
@@ -37,4 +37,3 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
     user,
   };
 }
-

@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Amazon Bulk Ad Operation
+
+Next.js 15 + Prisma + PostgreSQL + Redis operations workspace for Amazon advertising, listing AI, product, file, and logistics workflows.
 
 ## Project Definitions
 
@@ -28,9 +30,33 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Production Deployment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Production on `108.61.0.221` uses a lightweight native layout:
+
+- PostgreSQL and Redis run in Docker via `docker-compose.yml`.
+- Next.js web runs on the server with systemd as `amazon-web`.
+- Worker runs on the server with systemd as `amazon-worker`.
+- Caddy runs in Docker with host networking and proxies HTTPS to the local web process.
+- Production file storage uses Cloudflare R2 from the server `.env`.
+
+Deploy from this repository:
+
+```bash
+npm run lint
+npm run build
+bash scripts/deploy-native-server.sh
+```
+
+Server-side release command:
+
+```bash
+cd /opt/amazon-ad-bulk-operation
+bash scripts/server-native-release.sh
+```
+
+Do not sync `.env`, `uploads`, `.next*`, `node_modules*`, or historical broken build directories to the server.
+When `package-lock.json` is unchanged, the server release script skips `npm ci` and only regenerates Prisma, builds, and restarts services.
 
 ## Learn More
 
@@ -41,8 +67,13 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Useful Production Checks
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+systemctl status amazon-web amazon-worker
+journalctl -u amazon-web -u amazon-worker -n 100 --no-pager
+docker compose ps
+df -h /
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `AGENTS.md` for the full deployment and update rules.

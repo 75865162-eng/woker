@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getAuthDriver, isBootstrapAdminEmail, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
@@ -15,6 +16,8 @@ type SessionPayload = {
   localUser?: CurrentUser;
   sessionUser?: Pick<CurrentUser, "id" | "email" | "name" | "role" | "organizationId" | "organizationName">;
 };
+
+type WritableCookieStore = Awaited<ReturnType<typeof cookies>> | NextResponse["cookies"];
 
 export type CurrentUser = {
   id: string;
@@ -75,7 +78,23 @@ function parseSessionCookie(value?: string): SessionPayload | undefined {
   }
 }
 
-export async function createSession(userId: string, sessionUser?: CurrentUser) {
+function getCookieValue(cookieHeader: string | null | undefined, name: string) {
+  if (!cookieHeader) {
+    return undefined;
+  }
+
+  const cookiesByName = cookieHeader.split(";").map((cookie) => cookie.trim());
+  const prefix = `${name}=`;
+  const cookie = cookiesByName.find((item) => item.startsWith(prefix));
+
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : undefined;
+}
+
+async function getWritableCookies(response?: NextResponse): Promise<WritableCookieStore> {
+  return response?.cookies ?? (await cookies());
+}
+
+export async function createSession(userId: string, sessionUser?: CurrentUser, response?: NextResponse) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   const session = await prisma.userSession.create({
@@ -94,7 +113,7 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
     sessionUser,
   } satisfies SessionPayload);
   const signedCookie = `${payload}.${signPayload(payload)}`;
-  const cookieStore = await cookies();
+  const cookieStore = await getWritableCookies(response);
 
   cookieStore.set(sessionCookieName, signedCookie, {
     httpOnly: true,
@@ -118,7 +137,7 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
   return session;
 }
 
-export async function createLocalSession(user: CurrentUser) {
+export async function createLocalSession(user: CurrentUser, response?: NextResponse) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   const payload = base64UrlJson({
@@ -129,7 +148,7 @@ export async function createLocalSession(user: CurrentUser) {
     expiresAt: expiresAt.toISOString(),
     localUser: user,
   } satisfies SessionPayload);
-  const cookieStore = await cookies();
+  const cookieStore = await getWritableCookies(response);
 
   cookieStore.set(sessionCookieName, `${payload}.${signPayload(payload)}`, {
     httpOnly: true,
@@ -140,9 +159,10 @@ export async function createLocalSession(user: CurrentUser) {
   });
 }
 
-export async function destroyCurrentSession() {
-  const cookieStore = await cookies();
-  const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
+export async function destroyCurrentSession(response?: NextResponse, request?: Request) {
+  const payload = request
+    ? parseSessionCookie(getCookieValue(request.headers.get("cookie"), sessionCookieName))
+    : parseSessionCookie((await cookies()).get(sessionCookieName)?.value);
 
   if (payload && payload.driver !== "local" && getAuthDriver() === "database") {
     await prisma.userSession.deleteMany({
@@ -153,14 +173,29 @@ export async function destroyCurrentSession() {
     });
   }
 
-  cookieStore.delete(sessionCookieName);
-  cookieStore.delete(rolePermissionsCookieName);
+  const writableCookieStore = await getWritableCookies(response);
+  writableCookieStore.delete(sessionCookieName);
+  writableCookieStore.delete(rolePermissionsCookieName);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | undefined> {
+export async function getCurrentUser(request?: Request): Promise<CurrentUser | undefined> {
+  if (request) {
+    return getCurrentUserFromRequest(request);
+  }
+
   const cookieStore = await cookies();
   const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
 
+  return getCurrentUserFromPayload(payload);
+}
+
+export async function getCurrentUserFromRequest(request: Request): Promise<CurrentUser | undefined> {
+  const payload = parseSessionCookie(getCookieValue(request.headers.get("cookie"), sessionCookieName));
+
+  return getCurrentUserFromPayload(payload);
+}
+
+async function getCurrentUserFromPayload(payload: SessionPayload | undefined): Promise<CurrentUser | undefined> {
   if (!payload || new Date(payload.expiresAt).getTime() <= Date.now()) {
     return undefined;
   }

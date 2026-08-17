@@ -116,6 +116,10 @@ npm run lint
 - `docs/`：PPC 工作台、数据模型、导出、规则、UI、物流等规格文档。
 - `public/logistics-templates/`：物流导出使用的模板文件。
 - `scripts/next-run.mjs`：为 Next dev/build 指定不同 distDir。
+- `scripts/deploy-native-server.sh`：从本地同步到生产服务器并触发本机生产发布。
+- `scripts/server-native-release.sh`：服务器侧发布脚本，负责 infra、Prisma、build、systemd 和 Caddy。
+- `deploy/systemd/`：生产服务器 web/worker systemd unit。
+- `deploy/caddy/`：生产 Caddy 容器启动脚本，反代到本机 web 进程。
 
 ## 业务边界
 
@@ -145,23 +149,28 @@ npm run lint
 - SSH 用户：`root`。
 - 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
 - 默认访问地址：`https://108-61-0-221.sslip.io`。
-- 备用直连地址：`http://108.61.0.221:3000`。注意 `3000` 端口是 HTTP，不是 HTTPS；正式访问优先使用 sslip.io HTTPS 地址。
+- 本机直连检查地址：`http://127.0.0.1:3000`，只能在服务器内使用；正式访问使用 sslip.io HTTPS 地址。
 - 服务器系统：Ubuntu 24.04 LTS x64。
-- Docker 服务：`web`、`worker`、`migrate`、`postgres`、`redis`；另有 Caddy 反代容器提供 HTTPS。
-- Caddy 入口：`80/443`，反代到 Docker 网络内的 `amazon-ad-bulk-operation-web-1:3000`。
+- 生产架构：PostgreSQL 和 Redis 使用 Docker；Next web 和 worker 使用服务器本机 Node.js + systemd；Caddy 使用 Docker 反代到本机 web。
+- Docker Compose 只管理 infra：`postgres`、`redis`。不要再为普通代码更新执行 `docker compose up -d --build web worker`。
+- systemd 服务：`amazon-web`、`amazon-worker`。
+- Caddy 入口：`80/443`，使用 host network 并反代到 `127.0.0.1:3000` 的本机 `amazon-web`。
+- UFW 必须允许 `22/tcp`、`80/tcp`、`443/tcp`；`3000`、`5432`、`6379` 不开放公网。
+- Caddy 证书和配置使用 Docker volumes `amazon-caddy-data`、`amazon-caddy-config` 持久化；不要无备份删除这些 volumes。
 - 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
 - 管理员登录信息保存位置：`/root/amazon-ad-bulk-credentials.txt`。不要把密码写入仓库文档。
 - 生产服务器默认文件存储：Cloudflare R2，`STORAGE_DRIVER=r2`，bucket 为 `amazon-bulk-uploads`。R2/S3 密钥只允许写在服务器 `.env` 或受控密钥管理中，不要提交到仓库或写入文档。
 - 部署同步必须排除大目录和历史产物：`.git`、`node_modules`、`node_modules.*`、`.next`、`.next-*`、`uploads`、`coverage`、`out`、`build`。
-- 项目目录里曾出现过 `node_modules.broken-audit-fix-*`、`.next-build.broken-*`、`.next-build-stale-*` 等历史目录；这些目录绝不能同步到服务器，也不能进入 Docker build context。
-- `.dockerignore` 必须持续覆盖 `node_modules.*` 和 `.next-*`；不要为了临时构建删除这些排除规则。
+- 项目目录里曾出现过 `node_modules.broken-audit-fix-*`、`.next-build.broken-*`、`.next-build-stale-*` 等历史目录；这些目录绝不能同步到服务器。
 - 不要使用会把整个本地工作区无差别覆盖到服务器的命令。同步前先确认排除规则；优先使用带 `--exclude` 的 `rsync`。
 - 服务器上的 `.env`、Docker volumes、`uploads` 属于运行态数据；除非用户明确要求，不要删除或覆盖。
-- PostgreSQL 和 Redis 默认只在 Docker 网络内使用，不要重新暴露公网端口。
-- `docker-compose.yml` 中的 `STORAGE_DRIVER`、`S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`、`S3_FORCE_PATH_STYLE` 必须从服务器 `.env` 注入；不要写死真实密钥。
-- Docker 构建应优先使用 Next standalone 产物和最小运行依赖；不要在 runner 镜像中复制完整 `node_modules`，除非已经确认磁盘和镜像体积风险。
-- 小盘服务器上构建完成后，如磁盘紧张，优先运行 `docker builder prune -af` 清理 build cache；不要清理 Docker volumes。
-- 每次部署后必须检查 `df -h /`、`docker compose ps`、`docker compose logs --tail=100 web` 和 `docker compose logs --tail=100 worker`。
+- PostgreSQL 和 Redis 只绑定 `127.0.0.1:5432`、`127.0.0.1:6379`，不要暴露公网端口。
+- 生产 `.env` 中 `DATABASE_URL` 应指向 `127.0.0.1:5432`，`REDIS_URL` 应指向 `127.0.0.1:6379`。
+- 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
+- worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
+- 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
+- 小盘服务器上如果历史 Docker build cache 占用过高，可在服务启动并验证通过后运行 `docker builder prune -af`；不要清理 Docker volumes。
+- 每次部署后必须检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker`、`journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
 
 推荐更新流程：
 
@@ -169,38 +178,21 @@ npm run lint
 npm run lint
 npm run build
 
-rsync -av \
-  --exclude '.git' \
-  --exclude 'node_modules' \
-  --exclude 'node_modules.*' \
-  --exclude '.next' \
-  --exclude '.next-*' \
-  --exclude 'uploads' \
-  --exclude 'coverage' \
-  --exclude 'out' \
-  --exclude 'build' \
-  ./ root@108.61.0.221:/opt/amazon-ad-bulk-operation/
-
-ssh root@108.61.0.221
-cd /opt/amazon-ad-bulk-operation
-docker compose up -d --build web worker
-docker compose ps
-docker compose logs --tail=100 web
-docker compose logs --tail=100 worker
-df -h /
+bash scripts/deploy-native-server.sh
 ```
 
 如果包含 Prisma migration，部署后要确认迁移执行成功：
 
 ```bash
 cd /opt/amazon-ad-bulk-operation
-docker compose run --rm migrate
+npm run db:migrate
 ```
 
-如果 Docker build cache 占用过高，可在服务启动并验证通过后清理：
+服务器侧快速手动发布流程：
 
 ```bash
-docker builder prune -af
+cd /opt/amazon-ad-bulk-operation
+bash scripts/server-native-release.sh
 ```
 
 ## UI 与交互约定

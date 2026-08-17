@@ -3,8 +3,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  const user = await getCurrentUser();
+export async function GET(request: Request) {
+  const user = await getCurrentUser(request);
 
   if (!user) {
     return NextResponse.json({ user: null }, { status: 401 });

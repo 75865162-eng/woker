@@ -7,7 +7,7 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const permission = await requireApiPermission("sellfox", "export");
+  const permission = await requireApiPermission(request, "sellfox", "export");
   if (!permission.ok) return permission.response;
   const scope = workspaceScopeFromRequest(request);
   const url = new URL(request.url);

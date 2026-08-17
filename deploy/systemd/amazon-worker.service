@@ -1,0 +1,20 @@
+[Unit]
+Description=Amazon Bulk Ad import worker
+After=network-online.target docker.service amazon-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/amazon-ad-bulk-operation
+EnvironmentFile=/opt/amazon-ad-bulk-operation/.env
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/npm run worker
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+User=root
+
+[Install]
+WantedBy=multi-user.target

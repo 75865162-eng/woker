@@ -20,7 +20,7 @@ const sellfoxProductWhere = {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("sellfox", "view");
+    const permission = await requireApiPermission(request, "sellfox", "view");
     if (!permission.ok) return permission.response;
 
     const scope = workspaceScopeFromRequest(request);

@@ -46,7 +46,7 @@ function parseRemoteImageUrl(value: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("products", "edit");
+    const permission = await requireApiPermission(request, "products", "edit");
 
     if (!permission.ok) {
       return permission.response;

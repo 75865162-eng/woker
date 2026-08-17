@@ -297,7 +297,7 @@ async function persistGeneratedImages(images: ImagePreviewPayload[], user: Curre
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("listingAi", "create");
+    const permission = await requireApiPermission(request, "listingAi", "create");
 
     if (!permission.ok) {
       return permission.response;

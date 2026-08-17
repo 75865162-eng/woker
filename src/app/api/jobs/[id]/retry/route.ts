@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const permission = await requireApiPermission("workspace", "edit");
+    const permission = await requireApiPermission(request, "workspace", "edit");
 
     if (!permission.ok) {
       return permission.response;

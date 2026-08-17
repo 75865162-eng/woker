@@ -5,9 +5,9 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const permission = await requireApiPermission("workspace", "view");
+    const permission = await requireApiPermission(request, "workspace", "view");
 
     if (!permission.ok) {
       return permission.response;
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { user } = permission;
 
     const { id } = await params;
-    const scope = workspaceScopeFromRequest(_request);
+    const scope = workspaceScopeFromRequest(request);
     const job = await prisma.importJob.findFirst({
       where: {
         id,

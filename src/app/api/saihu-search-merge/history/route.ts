@@ -74,7 +74,7 @@ function clampPageSize(value: string | null) {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("searchMerge", "view");
+    const permission = await requireApiPermission(request, "searchMerge", "view");
 
     if (!permission.ok) {
       return permission.response;
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("searchMerge", "create");
+    const permission = await requireApiPermission(request, "searchMerge", "create");
 
     if (!permission.ok) {
       return permission.response;
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const permission = await requireApiPermission("searchMerge", "edit");
+    const permission = await requireApiPermission(request, "searchMerge", "edit");
 
     if (!permission.ok) {
       return permission.response;

@@ -16,7 +16,7 @@ function normalizeSku(sku: string) {
 
 export async function GET(request: Request, { params }: { params: Promise<{ sku: string }> }) {
   try {
-    const permission = await requireApiPermission("products", "view");
+    const permission = await requireApiPermission(request, "products", "view");
 
     if (!permission.ok) {
       return permission.response;
@@ -47,7 +47,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
 
 export async function PUT(request: Request, { params }: { params: Promise<{ sku: string }> }) {
   try {
-    const permission = await requireApiPermission("products", "edit");
+    const permission = await requireApiPermission(request, "products", "edit");
 
     if (!permission.ok) {
       return permission.response;

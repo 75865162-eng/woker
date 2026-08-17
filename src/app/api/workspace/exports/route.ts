@@ -24,7 +24,7 @@ function resultKey(fileName: string) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("workspace", "export");
+    const permission = await requireApiPermission(request, "workspace", "export");
 
     if (!permission.ok) {
       return permission.response;

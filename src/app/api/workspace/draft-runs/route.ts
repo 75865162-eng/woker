@@ -17,7 +17,7 @@ function jsonArray(value: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("workspace", "edit");
+    const permission = await requireApiPermission(request, "workspace", "edit");
 
     if (!permission.ok) {
       return permission.response;

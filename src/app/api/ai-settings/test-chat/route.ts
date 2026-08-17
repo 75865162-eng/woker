@@ -29,7 +29,7 @@ function buildAiHeaders(settings: AiModelSettings) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view");
+    const permission = await requireApiPermission(request, "settings", "view");
 
     if (!permission.ok) {
       return permission.response;

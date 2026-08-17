@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   let uploadedStorageKey: string | undefined;
 
   try {
-    const permission = await requireApiPermission("workspace", "create");
+    const permission = await requireApiPermission(request, "workspace", "create");
 
     if (!permission.ok) {
       return permission.response;

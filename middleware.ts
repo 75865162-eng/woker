@@ -124,6 +124,15 @@ function buildNextResponse(request: NextRequest) {
   });
 }
 
+function buildExternalUrl(request: NextRequest, pathname: string) {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
+  const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(/:$/, "");
+  const url = new URL(`${proto}://${host}`);
+  url.pathname = pathname;
+
+  return url;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublicRoute = publicRoutes.includes(pathname);
@@ -137,7 +146,7 @@ export async function middleware(request: NextRequest) {
 
   if (validSession) {
     if (pathname === "/login") {
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(buildExternalUrl(request, "/"));
     }
 
     if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
@@ -145,7 +154,7 @@ export async function middleware(request: NextRequest) {
       const role = normalizeAccountRoleId(currentUser?.role ?? parseSessionRole(request));
 
       if (!role) {
-        const loginUrl = new URL("/login", request.url);
+        const loginUrl = buildExternalUrl(request, "/login");
         loginUrl.searchParams.set("next", pathname);
 
         return NextResponse.redirect(loginUrl);
@@ -158,7 +167,7 @@ export async function middleware(request: NextRequest) {
       const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, effectiveRolePermissions);
 
       if (!canOpenRequestedPage) {
-        return NextResponse.redirect(new URL("/forbidden", request.url));
+        return NextResponse.redirect(buildExternalUrl(request, "/forbidden"));
       }
 
       if (latestRolePermissions) {
@@ -182,7 +191,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = buildExternalUrl(request, "/login");
   loginUrl.searchParams.set("next", pathname);
 
   return NextResponse.redirect(loginUrl);

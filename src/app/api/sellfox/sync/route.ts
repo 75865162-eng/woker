@@ -175,7 +175,7 @@ async function syncHourly(organizationId: string, workspaceId: string, storeOffs
 }
 
 export async function POST(request: Request) {
-  const permission = await requireApiPermission("sellfox", "create");
+  const permission = await requireApiPermission(request, "sellfox", "create");
   if (!permission.ok) return permission.response;
   const body = await request.json().catch(() => ({})) as { resource?: SyncResource; storeOffset?: unknown; storeLimit?: unknown; storeExternalId?: unknown; reportDate?: unknown };
   const resource = body.resource;

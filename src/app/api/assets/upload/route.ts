@@ -29,7 +29,7 @@ function createAssetUrl(key: string) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("listingAi", "create");
+    const permission = await requireApiPermission(request, "listingAi", "create");
 
     if (!permission.ok) {
       return permission.response;

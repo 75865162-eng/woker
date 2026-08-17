@@ -53,7 +53,7 @@ function payloadArrayContains(path: string[], value: string): Prisma.ProductReco
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("products", "view");
+    const permission = await requireApiPermission(request, "products", "view");
 
     if (!permission.ok) {
       return permission.response;
@@ -194,7 +194,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("products", "edit");
+    const permission = await requireApiPermission(request, "products", "edit");
 
     if (!permission.ok) {
       return permission.response;

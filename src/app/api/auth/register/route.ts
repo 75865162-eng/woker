@@ -121,6 +121,14 @@ export async function POST(request: Request) {
       },
     });
 
+    const response = NextResponse.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
+    });
+
     await createSession(user.id, {
       id: user.id,
       email: user.email,
@@ -128,15 +136,9 @@ export async function POST(request: Request) {
       role: membership.role,
       organizationId: organization.id,
       organizationName: organization.name,
-    });
+    }, response);
 
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-    });
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "注册失败。";
     return NextResponse.json({ error: message }, { status: 500 });

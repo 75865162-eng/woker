@@ -54,7 +54,7 @@ function parseProfiles(value: unknown): SavedAiModelProfile[] {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view");
+    const permission = await requireApiPermission(request, "settings", "view");
 
     if (!permission.ok) {
       return permission.response;
@@ -89,7 +89,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "edit");
+    const permission = await requireApiPermission(request, "settings", "edit");
 
     if (!permission.ok) {
       return permission.response;

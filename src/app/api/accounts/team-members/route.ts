@@ -232,9 +232,9 @@ async function runRosterSaveTransaction<T>(operation: () => Promise<T>) {
   throw new Error("账号列表保存失败，请重试。");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -312,7 +312,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
