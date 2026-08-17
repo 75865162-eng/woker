@@ -143,7 +143,7 @@ npm run lint
 
 ## 服务器部署与更新规则
 
-完整服务器部署清单见 `docs/server-deployment.md`。新开窗口接手服务器更新时，先读本节和该文档。
+本节是生产服务器部署与更新的唯一仓库内记录。新开窗口接手服务器更新时，先读本节；不要依赖散落在其他文档或聊天记录里的部署规则。
 
 生产服务器当前资源较紧，部署时必须先按磁盘空间规划，避免把本地开发产物、旧修复目录或 Docker 构建缓存带上服务器。
 
@@ -162,6 +162,7 @@ npm run lint
 - 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
 - 管理员登录信息保存位置：`/root/amazon-ad-bulk-credentials.txt`。不要把密码写入仓库文档。
 - 生产服务器默认文件存储：Cloudflare R2，`STORAGE_DRIVER=r2`，bucket 为 `amazon-bulk-uploads`。R2/S3 密钥只允许写在服务器 `.env` 或受控密钥管理中，不要提交到仓库或写入文档。
+- 本地开发可继续使用 `STORAGE_DRIVER=local` 和 `uploads/`。更新生产系统时，不要把本地 local uploads 覆盖到服务器，也不要把生产 R2 设置改回 local。
 - 部署同步必须排除大目录和历史产物：`.git`、`node_modules`、`node_modules.*`、`.next`、`.next-*`、`uploads`、`coverage`、`out`、`build`。
 - 项目目录里曾出现过 `node_modules.broken-audit-fix-*`、`.next-build.broken-*`、`.next-build-stale-*` 等历史目录；这些目录绝不能同步到服务器。
 - 不要使用会把整个本地工作区无差别覆盖到服务器的命令。同步前先确认排除规则；优先使用带 `--exclude` 的 `rsync`。
@@ -171,6 +172,7 @@ npm run lint
 - 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
 - worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
 - 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
+- 服务器发布脚本负责启动 Docker infra、Prisma generate、Prisma migrate deploy、bootstrap admin seed、Next standalone build、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器。
 - 小盘服务器上如果历史 Docker build cache 占用过高，可在服务启动并验证通过后运行 `docker builder prune -af`；不要清理 Docker volumes。
 - 每次部署后必须检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker`、`journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
 
@@ -196,6 +198,33 @@ npm run db:migrate
 cd /opt/amazon-ad-bulk-operation
 bash scripts/server-native-release.sh
 ```
+
+生产外部验证流程：
+
+```bash
+curl -k -s -o /tmp/login.json -w 'login:%{http_code}\n' \
+  -c /tmp/cj \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"${BOOTSTRAP_ADMIN_EMAIL}\",\"password\":\"${BOOTSTRAP_ADMIN_PASSWORD}\"}" \
+  https://108-61-0-221.sslip.io/api/auth/login
+
+curl -k -s -o /tmp/me.json -w 'me:%{http_code}\n' \
+  -b /tmp/cj \
+  https://108-61-0-221.sslip.io/api/auth/me
+
+curl -k -s -o /tmp/root.html -w 'root:%{http_code}:%{content_type}\n' \
+  -b /tmp/cj \
+  https://108-61-0-221.sslip.io/
+```
+
+期望结果：
+
+- `http://108-61-0-221.sslip.io/` 以 308 跳转到 HTTPS。
+- 未登录访问 `https://108-61-0-221.sslip.io/` 以 307 跳转到 `/login?next=%2F`。
+- bootstrap 账号登录返回 200。
+- 登录后 `/api/auth/me` 返回 200。
+- 登录后 `/` 返回 200。
+- 根分区应保留数 GB 可用空间。
 
 ## UI 与交互约定
 

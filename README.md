@@ -32,7 +32,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## Production Deployment
 
-See [docs/server-deployment.md](docs/server-deployment.md) for the production server checklist.
+See `AGENTS.md` for the production server checklist and update rules.
 
 Production on `108.61.0.221` uses a lightweight native layout:
 
