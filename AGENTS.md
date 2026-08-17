@@ -150,13 +150,14 @@ npm run lint
 - 服务器 IP：`108.61.0.221`。
 - SSH 用户：`root`。
 - 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
-- 默认访问地址：`https://108-61-0-221.sslip.io`。
-- 本机直连检查地址：`http://127.0.0.1:3000`，只能在服务器内使用；正式访问使用 sslip.io HTTPS 地址。
+- 正式访问地址：`https://aecob.com`。
+- 备用访问地址：`https://108-61-0-221.sslip.io`。
+- 本机直连检查地址：`http://127.0.0.1:3000`，只能在服务器内使用；正式访问使用 `https://aecob.com`。
 - 服务器系统：Ubuntu 24.04 LTS x64。
 - 生产架构：PostgreSQL 和 Redis 使用 Docker；Next web 和 worker 使用服务器本机 Node.js + systemd；Caddy 使用 Docker 反代到本机 web。
 - Docker Compose 只管理 infra：`postgres`、`redis`。不要再为普通代码更新执行 `docker compose up -d --build web worker`。
 - systemd 服务：`amazon-web`、`amazon-worker`。
-- Caddy 入口：`80/443`，使用 host network 并反代到 `127.0.0.1:3000` 的本机 `amazon-web`。
+- Caddy 入口：`80/443`，使用 host network 并反代到 `127.0.0.1:3000` 的本机 `amazon-web`。当前托管域名包括 `aecob.com`、`www.aecob.com` 和备用 `108-61-0-221.sslip.io`。
 - UFW 必须允许 `22/tcp`、`80/tcp`、`443/tcp`；`3000`、`5432`、`6379` 不开放公网。
 - Caddy 证书和配置使用 Docker volumes `amazon-caddy-data`、`amazon-caddy-config` 持久化；不要无备份删除这些 volumes。
 - 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
