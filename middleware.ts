@@ -5,7 +5,6 @@ import {
   parseRolePermissionsCookie,
   roleCanAccessModule,
   rolePermissionsCookieName,
-  type RolePermissionMap,
 } from "@/lib/accounts/permissions";
 import { normalizeAccountRoleId } from "@/lib/accounts/team-roster";
 
@@ -70,48 +69,6 @@ function parseSessionRole(request: NextRequest) {
   }
 }
 
-type MiddlewareCurrentUser = {
-  role?: string;
-};
-
-async function loadCurrentUserFromApi(request: NextRequest): Promise<MiddlewareCurrentUser | null> {
-  try {
-    const response = await fetch(new URL("/api/auth/me", request.url), {
-      cache: "no-store",
-      headers: {
-        cookie: request.headers.get("cookie") ?? "",
-      },
-    });
-
-    if (!response.ok) return null;
-
-    const payload = (await response.json()) as { user?: MiddlewareCurrentUser | null };
-
-    return payload.user ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function loadLatestRolePermissions(request: NextRequest): Promise<RolePermissionMap | null> {
-  try {
-    const response = await fetch(new URL("/api/accounts/role-permissions", request.url), {
-      cache: "no-store",
-      headers: {
-        cookie: request.headers.get("cookie") ?? "",
-      },
-    });
-
-    if (!response.ok) return null;
-
-    const payload = (await response.json()) as { permissions?: RolePermissionMap };
-
-    return payload.permissions ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function buildNextResponse(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   const { pathname } = request.nextUrl;
@@ -150,8 +107,7 @@ export async function middleware(request: NextRequest) {
     }
 
     if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
-      const currentUser = await loadCurrentUserFromApi(request);
-      const role = normalizeAccountRoleId(currentUser?.role ?? parseSessionRole(request));
+      const role = normalizeAccountRoleId(parseSessionRole(request));
 
       if (!role) {
         const loginUrl = buildExternalUrl(request, "/login");
@@ -162,25 +118,10 @@ export async function middleware(request: NextRequest) {
 
       const rolePermissions = parseRolePermissionsCookie(request.cookies.get(rolePermissionsCookieName)?.value);
       const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
-      const latestRolePermissions = await loadLatestRolePermissions(request);
-      const effectiveRolePermissions = latestRolePermissions ?? rolePermissions;
-      const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, effectiveRolePermissions);
+      const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, rolePermissions);
 
       if (!canOpenRequestedPage) {
         return NextResponse.redirect(buildExternalUrl(request, "/forbidden"));
-      }
-
-      if (latestRolePermissions) {
-        const response = buildNextResponse(request);
-
-        response.cookies.set(rolePermissionsCookieName, encodeURIComponent(JSON.stringify(latestRolePermissions)), {
-          sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
-          maxAge: 60 * 60 * 24 * 365,
-          path: "/",
-        });
-
-        return response;
       }
     }
 

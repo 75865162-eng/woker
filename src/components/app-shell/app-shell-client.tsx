@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Badge } from "@/components/ui/badge";
@@ -55,12 +55,19 @@ export function AppShellClient({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const accountMenu = accountMenuItems.filter((item) => roleCanAccessModule(userRole, item.moduleId, rolePermissions));
-  const visibleNavItems = navItems.filter((item) => {
-    if (item.href === "/") return true;
+  const accountMenu = useMemo(
+    () => accountMenuItems.filter((item) => roleCanAccessModule(userRole, item.moduleId, rolePermissions)),
+    [rolePermissions, userRole],
+  );
+  const visibleNavItems = useMemo(
+    () =>
+      navItems.filter((item) => {
+        if (item.href === "/") return true;
 
-    return roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href), rolePermissions);
-  });
+        return roleCanAccessModule(userRole, item.moduleId ?? getModuleIdForPath(item.href), rolePermissions);
+      }),
+    [rolePermissions, userRole],
+  );
 
   useEffect(() => {
     let canceled = false;
@@ -102,13 +109,30 @@ export function AppShellClient({
     }
 
     void refreshAccessState();
-    const refreshTimer = window.setInterval(refreshAccessState, 5000);
 
     return () => {
       canceled = true;
-      window.clearInterval(refreshTimer);
     };
   }, [pathname, rolePermissions, router, userRole]);
+
+  useEffect(() => {
+    const prefetch = () => {
+      for (const item of visibleNavItems) {
+        if (item.href !== pathname) {
+          router.prefetch(item.href);
+        }
+      }
+    };
+    const idleCallback = window.requestIdleCallback?.(prefetch, { timeout: 2500 });
+
+    if (!idleCallback) {
+      const timer = window.setTimeout(prefetch, 1200);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    return () => window.cancelIdleCallback?.(idleCallback);
+  }, [pathname, router, visibleNavItems]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -133,7 +157,6 @@ export function AppShellClient({
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
                 title={item.label}
                 onMouseEnter={() => router.prefetch(item.href)}
                 onFocus={() => router.prefetch(item.href)}
@@ -185,7 +208,6 @@ export function AppShellClient({
                       <Link
                         key={item.href}
                         href={item.href}
-                        prefetch={false}
                         className={itemClassName}
                         onMouseEnter={() => router.prefetch(item.href)}
                         onFocus={() => router.prefetch(item.href)}

@@ -12,8 +12,32 @@ type WorkspaceScope = {
   isDefault?: boolean;
 };
 
+const workspacesCacheKey = "amazon_bulk_ad_workspaces_cache";
+const workspacesCacheMaxAgeMs = 5 * 60 * 1000;
+
 function scopeLabel(scope: WorkspaceScope) {
   return [scope.name || scope.id, scope.marketplace, scope.accountId].filter(Boolean).join(" / ");
+}
+
+function readCachedWorkspaces() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const cached = JSON.parse(window.sessionStorage.getItem(workspacesCacheKey) ?? "{}") as {
+      savedAt?: number;
+      workspaces?: WorkspaceScope[];
+    };
+
+    if (!cached.savedAt || Date.now() - cached.savedAt > workspacesCacheMaxAgeMs) return [];
+
+    return Array.isArray(cached.workspaces) ? cached.workspaces : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedWorkspaces(workspaces: WorkspaceScope[]) {
+  window.sessionStorage.setItem(workspacesCacheKey, JSON.stringify({ savedAt: Date.now(), workspaces }));
 }
 
 export function WorkspaceScopeSelector() {
@@ -22,27 +46,40 @@ export function WorkspaceScopeSelector() {
 
   useEffect(() => {
     let cancelled = false;
+    const cachedWorkspaces = readCachedWorkspaces();
 
-    fetch("/api/workspaces")
+    function applyWorkspaces(nextWorkspaces: WorkspaceScope[]) {
+      setWorkspaces(nextWorkspaces);
+      if (!nextWorkspaces.some((workspace) => workspace.id === selected.workspaceId)) {
+        const fallback = nextWorkspaces.find((workspace) => workspace.isDefault) ?? nextWorkspaces[0];
+
+        if (fallback) {
+          const nextSelected = {
+            workspaceId: fallback.id,
+            accountId: fallback.accountId ?? "",
+            marketplace: fallback.marketplace ?? "",
+          };
+          setSelected(nextSelected);
+          writeSelectedWorkspaceScope(nextSelected);
+        }
+      }
+    }
+
+    if (cachedWorkspaces.length) {
+      applyWorkspaces(cachedWorkspaces);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    fetch("/api/workspaces", { cache: "force-cache" })
       .then((response) => (response.ok ? response.json() : { workspaces: [] }))
       .then((data: { workspaces?: WorkspaceScope[] }) => {
         if (cancelled) return;
 
         const nextWorkspaces = Array.isArray(data.workspaces) ? data.workspaces : [];
-        setWorkspaces(nextWorkspaces);
-        if (!nextWorkspaces.some((workspace) => workspace.id === selected.workspaceId)) {
-          const fallback = nextWorkspaces.find((workspace) => workspace.isDefault) ?? nextWorkspaces[0];
-
-          if (fallback) {
-            const nextSelected = {
-              workspaceId: fallback.id,
-              accountId: fallback.accountId ?? "",
-              marketplace: fallback.marketplace ?? "",
-            };
-            setSelected(nextSelected);
-            writeSelectedWorkspaceScope(nextSelected);
-          }
-        }
+        writeCachedWorkspaces(nextWorkspaces);
+        applyWorkspaces(nextWorkspaces);
       })
       .catch(() => {
         if (!cancelled) setWorkspaces([]);
