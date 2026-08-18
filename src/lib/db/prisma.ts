@@ -19,9 +19,7 @@ function getPrismaClient() {
   const adapter = new PrismaPg({ connectionString });
   const prismaClient = new PrismaClient({ adapter });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = prismaClient;
-  }
+  globalForPrisma.prisma = prismaClient;
 
   return prismaClient;
 }
