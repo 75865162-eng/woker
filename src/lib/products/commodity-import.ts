@@ -92,6 +92,7 @@ const contentTypeExtensions: Record<string, string> = {
   "image/webp": ".webp",
 };
 const maxAssetSize = 50 * 1024 * 1024;
+const imageDownloadConcurrency = 6;
 
 export async function importCommodityWorkbook(options: CommodityImportOptions): Promise<CommodityImportResult> {
   const workbook = XLSX.read(options.workbookBuffer, { cellDates: true });
@@ -141,14 +142,25 @@ export async function importCommodityWorkbook(options: CommodityImportOptions): 
 
   await options.onProgress?.(20);
 
-  for (const [index, row] of rows.entries()) {
+  let completedRowCount = 0;
+  async function reportRowCompleted() {
+    completedRowCount += 1;
+
+    if (completedRowCount % 25 === 0 || completedRowCount === rows.length) {
+      const progress = rows.length ? 20 + Math.round((completedRowCount / rows.length) * 75) : 95;
+      await options.onProgress?.(Math.min(progress, 95));
+    }
+  }
+
+  await runWithConcurrency(rows, imageDownloadConcurrency, async (row) => {
     const record = rowToRecord(commodityHeaders, row);
     const sku = readCommodityRecord(record, "sku");
     const name = readCommodityRecord(record, "name");
 
     if (!sku || !name || isIgnoredProductSku(sku)) {
       skippedRowCount += 1;
-      continue;
+      await reportRowCompleted();
+      return;
     }
 
     const sourceWorkbook = buildSourceWorkbook(options.fileName, sku, headersBySheet, rowsBySkuBySheet, record);
@@ -189,12 +201,8 @@ export async function importCommodityWorkbook(options: CommodityImportOptions): 
     });
 
     importedCount += 1;
-
-    if (index % 25 === 0 || index === rows.length - 1) {
-      const progress = rows.length ? 20 + Math.round(((index + 1) / rows.length) * 75) : 95;
-      await options.onProgress?.(Math.min(progress, 95));
-    }
-  }
+    await reportRowCompleted();
+  });
 
   await prisma.auditLog.create({
     data: {
@@ -392,12 +400,8 @@ async function downloadImageAsset(sourceUrl: string, sku: string, scope: Commodi
       throw new Error(`远程图片下载失败：${response.status}`);
     }
 
-    const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
+    const responseContentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
     const contentLength = Number(response.headers.get("content-length"));
-
-    if (!supportedImageTypes.has(contentType)) {
-      throw new Error("远程文件不是支持的图片格式。");
-    }
 
     if (Number.isFinite(contentLength) && contentLength > maxAssetSize) {
       throw new Error("图片超过 50MB。");
@@ -406,6 +410,14 @@ async function downloadImageAsset(sourceUrl: string, sku: string, scope: Commodi
     const buffer = Buffer.from(await response.arrayBuffer());
     if (buffer.byteLength > maxAssetSize) {
       throw new Error("图片超过 50MB。");
+    }
+
+    const contentType = supportedImageTypes.has(responseContentType)
+      ? responseContentType
+      : inferImageContentType(url, buffer);
+
+    if (!contentType) {
+      throw new Error("远程文件不是支持的图片格式。");
     }
 
     const key = createImageAssetKey(sku, url, contentType);
@@ -450,8 +462,43 @@ function createImageAssetKey(sku: string, url: URL, contentType: string) {
   return `assets/products/${new Date().toISOString().slice(0, 10)}/${normalizedSku}-${randomUUID()}${extension}`;
 }
 
+function inferImageContentType(url: URL, buffer: Buffer) {
+  const extension = path.extname(url.pathname).toLowerCase();
+
+  if (extension === ".avif") return "image/avif";
+  if (extension === ".gif") return "image/gif";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".png") return "image/png";
+  if (extension === ".webp") return "image/webp";
+  if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return "image/jpeg";
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (buffer.subarray(0, 6).toString("ascii") === "GIF87a" || buffer.subarray(0, 6).toString("ascii") === "GIF89a") return "image/gif";
+  if (buffer.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  if (buffer.subarray(4, 12).toString("ascii") === "ftypavif") return "image/avif";
+
+  return "";
+}
+
 function createAssetUrl(key: string) {
   return `/api/assets/${key.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>) {
+  const pending = new Set<Promise<void>>();
+
+  for (const item of items) {
+    const task = worker(item);
+    const trackedTask = task.finally(() => {
+      pending.delete(trackedTask);
+    });
+    pending.add(trackedTask);
+
+    if (pending.size >= concurrency) {
+      await Promise.race(pending);
+    }
+  }
+
+  await Promise.all(pending);
 }
 
 function normalizeHeaders(headers: string[]) {

@@ -285,7 +285,7 @@ export function ProductWorkbench() {
   async function waitForProductImportJob(jobId: string) {
     const startedAt = Date.now();
 
-    while (Date.now() - startedAt < 120_000) {
+    while (Date.now() - startedAt < 10 * 60_000) {
       const response = await scopedFetch(`/api/jobs/${jobId}`, { cache: "no-store" });
       const data = (await response.json().catch(() => ({}))) as { job?: ProductImportJob; error?: string };
 
@@ -308,7 +308,7 @@ export function ProductWorkbench() {
       await new Promise((resolve) => window.setTimeout(resolve, 1200));
     }
 
-    throw new Error("商品导入任务仍在队列中，请确认 Worker 正在运行后稍后刷新商品列表。");
+    throw new Error("商品导入任务仍在处理中，请到任务中心查看进度，或稍后刷新商品列表。");
   }
 
   async function handleImportFile(file: File | undefined) {
