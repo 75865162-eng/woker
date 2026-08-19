@@ -108,6 +108,32 @@ async function findExistingFileObject(input: {
   return null;
 }
 
+async function restoreExistingStorageObjectIfMissing(input: {
+  fileObjectId: string;
+  storageKey: string;
+  fileBuffer: Buffer;
+  contentType?: string;
+}) {
+  const storage = getStorageDriver();
+
+  try {
+    await storage.getBuffer(input.storageKey);
+  } catch {
+    await storage.putBuffer({
+      key: input.storageKey,
+      buffer: input.fileBuffer,
+      contentType: input.contentType,
+    });
+    await prisma.fileObject.update({
+      where: { id: input.fileObjectId },
+      data: {
+        status: "uploaded",
+        size: input.fileBuffer.byteLength,
+      },
+    });
+  }
+}
+
 export async function POST(request: Request) {
   let uploadedStorageKey: string | undefined;
 
@@ -165,6 +191,31 @@ export async function POST(request: Request) {
         if (existingJob) {
           return NextResponse.json({ job: existingJob });
         }
+      }
+
+      await restoreExistingStorageObjectIfMissing({
+        fileObjectId: existingFileObject.id,
+        storageKey: existingFileObject.storageKey,
+        fileBuffer,
+        contentType: file.type || undefined,
+      });
+
+      const activeExistingJob = await prisma.importJob.findFirst({
+        where: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          fileId: existingFileObject.id,
+          type: jobType,
+          status: { in: ["queued", "running"] },
+        },
+        include: { file: true, workspaceDataset: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (activeExistingJob) {
+        return NextResponse.json({ job: activeExistingJob });
       }
 
       const job = await prisma.importJob.create({
