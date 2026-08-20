@@ -4,6 +4,8 @@ import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, norma
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
 import {
   emptySize,
+  createDefaultPeakSeasonWeights,
+  normalizePeakSeasonWeights,
   type ProductEditorDraft,
   type TrialCompetitorRow,
   type TrialImprovement,
@@ -567,7 +569,7 @@ function createEmptyImprovement(): TrialImprovement {
     packaging: "",
     manual: "",
     imageCopySuggestion: "",
-    peakSeason: "",
+    peakSeasonWeights: createDefaultPeakSeasonWeights(),
     peakSales: "",
     offSeasonSales: "",
     targetSales: "",
@@ -601,9 +603,9 @@ function buildCommodityExportRow(product: Product, headers: string[]) {
   setCommodityRecord(row, headers, "sku", product.sku);
   setCommodityRecord(row, headers, "name", product.chineseName);
   setCommodityRecord(row, headers, "status", productStatusCommodityLabels[product.status] ?? "");
-  setCommodityRecord(row, headers, "material", detail?.improvement.material || readCommodityRecord(row, "material"));
+  setCommodityRecord(row, headers, "material", detail?.improvement?.material || readCommodityRecord(row, "material"));
   setCommodityRecord(row, headers, "model", firstPriceRow?.name || readCommodityRecord(row, "model"));
-  setCommodityRecord(row, headers, "use", detail?.improvement.scenario || readCommodityRecord(row, "use"));
+  setCommodityRecord(row, headers, "use", detail?.improvement?.scenario || readCommodityRecord(row, "use"));
   setCommodityRecord(row, headers, "developer", product.selectionOwner || product.developer || "");
   setCommodityRecord(row, headers, "viewer", normalizeAssigneeList(product.opsAssignee, product.opsAssignees).join(",") || product.viewableBy?.join(",") || readCommodityRecord(row, "viewer"));
   setCommodityRecord(row, headers, "imageUrl", product.images.join(","));
@@ -832,7 +834,7 @@ function parseImprovementRows(rows: string[][], headerIndex: number, endIndex: n
     packaging: read("包装改进"),
     manual: read("说明书"),
     imageCopySuggestion: read("文案"),
-    peakSeason: read("旺季月份"),
+    peakSeasonWeights: normalizePeakSeasonWeights(read("旺季月份")),
     peakSales: read("头部旺季平均销量"),
     offSeasonSales: read("头部淡季平均销量"),
     targetSales: read("目标销量"),
@@ -1043,6 +1045,7 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
   }
 
   const fallbackImprovement = createEmptyImprovement();
+  const sourceImprovement = detail.improvement ?? fallbackImprovement;
 
   return {
     ...fallback,
@@ -1062,9 +1065,13 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
     suppliers: detail.suppliers?.length ? detail.suppliers : fallback.suppliers,
     improvement: {
       ...fallbackImprovement,
-      ...detail.improvement,
-      rows: detail.improvement?.rows?.length
-        ? detail.improvement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
+      ...sourceImprovement,
+      peakSeasonWeights: normalizePeakSeasonWeights(
+        (sourceImprovement as TrialImprovement & { peakSeason?: unknown }).peakSeasonWeights
+        ?? (sourceImprovement as TrialImprovement & { peakSeason?: unknown }).peakSeason,
+      ),
+      rows: sourceImprovement.rows?.length
+        ? sourceImprovement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
         : [],
     },
     remarkImages: detail.remarkImages ?? fallback.remarkImages ?? [],
@@ -1086,7 +1093,7 @@ export const trialImprovementLabels: Record<Exclude<keyof TrialImprovement, "row
   packaging: "包装改进",
   manual: "说明书",
   imageCopySuggestion: "文案/主/附图片建议",
-  peakSeason: "旺季月份",
+  peakSeasonWeights: "旺季月份权重",
   peakSales: "头部旺季平均销量",
   offSeasonSales: "头部淡季平均销量",
   targetSales: "目标销量",

@@ -1,8 +1,14 @@
 # AGENTS.md
 
 这份文件给 Codex、Claude Code 和其他代码 agent 使用。进入本仓库后先读这里，再改代码。
-系统要做“可迁移设计”。
-也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。等要多人使用时，再把存储层从浏览器 IndexedDB 换成后端数据库，而不是把整个系统重写
+系统要做“可迁移设计”：一边继续开发功能，一边把业务逻辑、数据模型、文件处理和部署边界理清楚。当前是本地开发、服务器部署、约 30 人协作的阶段，后续如果扩到多人使用，尽量在现有边界上升级存储和权限，而不是重写整套系统。
+
+# 当前阶段重点
+
+- 本地开发和服务器运行态分离，避免把开发产物、上传文件、缓存和生产数据混在一起。
+- 业务数据、文件元数据、导入导出记录和任务状态要可追踪，避免只依赖磁盘路径或单个 workbook。
+- 现阶段先把 ownership、role、audit、job/file 边界写清楚，后面扩多人时再平滑升级。
+- 保持最小改动，优先扩展现有模块，不随意重构目录、状态或数据模型。
 # Development Principles
 
 1. Workspace First
@@ -42,13 +48,8 @@ When introducing new functionality:
 
 ## 项目概览
 
-这是一个本地优先的 Amazon 运营工作台，基于 Next.js 15、React 19、TypeScript、Tailwind CSS 4 构建。当前主要业务模块：
+这是一个Amazon 运营工作台，基于 Next.js 15、React 19、TypeScript、Tailwind CSS 4 构建。
 
-- Amazon PPC Optimization Workspace：导入 Amazon Bulk workbook，按 Campaign / Ad Group / Lifecycle / Workspace Unit 组织优化工作流，生成可审阅的调整草稿。
-- Rule Center：维护 PPC 规则条件和动作，规则引擎输出 draft，不直接修改原始文件。
-- Dashboard：展示广告指标、趋势和筛选。
-- Listing AI：根据商品、关键词、广告数据和竞品信息生成 Listing 优化建议、图片计划和 A+ 模块建议。
-- Logistics：处理物流相关 Excel / PDF 模板、箱规、货件对比和导出。
 
 ## 技术栈
 
@@ -70,21 +71,6 @@ ls node_modules/next/dist/docs
 
 项目通过 `scripts/next-run.mjs` 为 dev/build 使用不同的 dist 目录，避免 `.next` 状态互相污染。
 
-## 常用命令
-
-在项目根目录运行：
-
-```bash
-npm run dev
-npm run build
-npm run lint
-```
-
-脚本说明：
-
-- `npm run dev` 使用 `.next-dev`，并启用 Turbopack。
-- `npm run build` 使用 `.next-build`，配置为 standalone 输出。
-- `npm run lint` 运行 ESLint flat config。
 
 ## 目录地图
 
@@ -127,12 +113,14 @@ npm run lint
 - 规则引擎应生成草稿，由用户选择后再导出；不要让规则自动直接覆盖原始数据。
 - `workspace-store.ts` 当前承担较多状态和数据转换职责。新增复杂逻辑时优先放到 `src/lib/*` 的纯函数模块，再由 store 调用。
 - IndexedDB snapshot 是本地恢复机制。改 state shape 时要考虑旧 snapshot 的兼容性或降级处理。
+- 多用户相关能力要显式预留 `orgId` / `userId` / ownership 边界；权限判断不要只写在页面层。
+- 关键操作要能追踪来源与结果，至少保留谁在什么时间对哪个对象做了什么。
 - Listing AI 的输出结构由 `src/lib/listing-ai/types.ts` 定义，改 prompt 或 client 时要保持 UI 消费字段稳定。
 - Logistics 模块依赖实际 Excel/PDF 模板和中文字段名，改解析逻辑前先看 `src/lib/logistics/types.ts`、`excel.ts`、`pdf.ts` 以及 `public/logistics-templates/`。
 
 ## 可迁移部署架构
 
-当前阶段采用 Next.js + Prisma + PostgreSQL。生产服务器文件存储使用 Cloudflare R2；本地开发可继续使用 local uploads。未来多人部署目标是 Next.js + Prisma + PostgreSQL + R2/S3-compatible object storage + Queue Worker。
+当前阶段采用 Next.js + Prisma + PostgreSQL。生产服务器文件存储使用 Cloudflare R2；本地开发可继续使用 local uploads。未来多人部署目标是 Next.js + Prisma + PostgreSQL + R2 + Queue Worker。
 
 - 数据库存业务数据和文件元数据；原始文件、导入文件、导出文件等二进制对象存储在 storage provider。
 - 业务代码不要直接依赖 `uploads/` 本地路径，应通过 storage adapter 读写文件。
@@ -147,17 +135,14 @@ npm run lint
 
 生产服务器当前资源较紧，部署时必须先按磁盘空间规划，避免把本地开发产物、旧修复目录或 Docker 构建缓存带上服务器。
 
-- 服务器 IP：`108.61.0.221`。
-- SSH 用户：`root`。
+- 服务器 IP：`159.75.203.221`。
+- SSH 用户：`ubuntu`。
 - 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
 - 正式访问地址：`https://aecob.com`。
-- 备用访问地址：`https://108-61-0-221.sslip.io`。
-- 本机直连检查地址：`http://127.0.0.1:3000`，只能在服务器内使用；正式访问使用 `https://aecob.com`。
 - 服务器系统：Ubuntu 24.04 LTS x64。
 - 生产架构：PostgreSQL 和 Redis 使用 Docker；Next web 和 worker 使用服务器本机 Node.js + systemd；Caddy 使用 Docker 反代到本机 web。
 - Docker Compose 只管理 infra：`postgres`、`redis`。不要再为普通代码更新执行 `docker compose up -d --build web worker`。
 - systemd 服务：`amazon-web`、`amazon-worker`。
-- Caddy 入口：`80/443`，使用 host network 并反代到 `127.0.0.1:3000` 的本机 `amazon-web`，并启用 `zstd` / `gzip` 压缩。当前托管域名包括 `aecob.com`、`www.aecob.com` 和备用 `108-61-0-221.sslip.io`。
 - UFW 必须允许 `22/tcp`、`80/tcp`、`443/tcp`；`3000`、`5432`、`6379` 不开放公网。
 - Caddy 证书和配置使用 Docker volumes `amazon-caddy-data`、`amazon-caddy-config` 持久化；不要无备份删除这些 volumes。
 - 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
@@ -205,59 +190,6 @@ cd /opt/amazon-ad-bulk-operation
 bash scripts/server-native-release.sh
 ```
 
-查看当前发布版本：
-
-```bash
-cd /opt/amazon-ad-bulk-operation
-bash scripts/server-release-status.sh
-```
-
-回滚到上一版：
-
-```bash
-cd /opt/amazon-ad-bulk-operation
-bash scripts/server-rollback.sh previous
-```
-
-回滚到指定版本：
-
-```bash
-cd /opt/amazon-ad-bulk-operation
-bash scripts/server-rollback.sh <release-id>
-```
-
-回滚规则：
-
-- 默认只回滚代码产物和 web/worker 进程，不自动回滚数据库。
-- 如果本次发布包含破坏性 Prisma migration，回滚前必须先确认旧代码是否兼容当前数据库。
-- 回滚后必须重新跑服务状态、登录、`/api/auth/me` 和首页检查。
-
-生产外部验证流程：
-
-```bash
-curl -k -s -o /tmp/login.json -w 'login:%{http_code}\n' \
-  -c /tmp/cj \
-  -H 'Content-Type: application/json' \
-  -d "{\"email\":\"${BOOTSTRAP_ADMIN_EMAIL}\",\"password\":\"${BOOTSTRAP_ADMIN_PASSWORD}\"}" \
-  https://108-61-0-221.sslip.io/api/auth/login
-
-curl -k -s -o /tmp/me.json -w 'me:%{http_code}\n' \
-  -b /tmp/cj \
-  https://108-61-0-221.sslip.io/api/auth/me
-
-curl -k -s -o /tmp/root.html -w 'root:%{http_code}:%{content_type}\n' \
-  -b /tmp/cj \
-  https://108-61-0-221.sslip.io/
-```
-
-期望结果：
-
-- `http://108-61-0-221.sslip.io/` 以 308 跳转到 HTTPS。
-- 未登录访问 `https://108-61-0-221.sslip.io/` 以 307 跳转到 `/login?next=%2F`。
-- bootstrap 账号登录返回 200。
-- 登录后 `/api/auth/me` 返回 200。
-- 登录后 `/` 返回 200。
-- 根分区应保留数 GB 可用空间。
 
 ## UI 与交互约定
 
@@ -272,9 +204,7 @@ curl -k -s -o /tmp/root.html -w 'root:%{http_code}:%{content_type}\n' \
 ## 数据和文件处理
 
 - Excel workbook 处理优先使用 exceljs / xlsx 等结构化 API，不要用字符串拼接伪造表格。
-- PDF 解析逻辑集中在 Logistics 模块，注意浏览器端兼容和大文件性能。
-- 批量导入可能有大 workbook，避免在渲染路径里做重计算；必要时使用 worker、memo 或分块处理。
-- 导出文件必须保留用户可追溯的信息，例如原文件名、sheet、row number、campaign/ad group/key。
+- PDF 解析逻辑集中在 Logistics 原文件名、sheet、row number、campaign/ad group/key。
 
 ## AI 配置和安全
 
@@ -291,6 +221,17 @@ curl -k -s -o /tmp/root.html -w 'root:%{http_code}:%{content_type}\n' \
 - Server route handler 中需要 Node 能力时声明 `export const runtime = "nodejs"`。
 - 保持函数小而清晰。解析、归一化、计算指标等逻辑优先写成可测试纯函数。
 - 不要随意重排大文件或做无关格式化，避免污染 diff。
+
+## 省 Token 规则
+
+- 默认只看当前任务直接相关的文件，不做全仓搜索和无关日志回读。
+- 先改最小范围，再验证最小范围；不要为了“顺手”扩大改动面。
+- 纯文档、注释、配置小改动：优先只做局部检查，通常不必跑 `build`。
+- TypeScript 纯逻辑、store、规则引擎：优先 `lint`，再看是否需要针对性测试。
+- React 页面、组件、样式、Next 路由、API、鉴权、文件上传、服务端逻辑：通常需要 `lint + build`。
+- Prisma、migration、数据模型改动：必须补 `build`，必要时再做 schema / migration 相关校验。
+- 需要反复试错时，优先缩小输入、缩小文件集、缩小输出，不要反复整仓重跑。
+- 最耗 token 的通常是大体积 `build` 输出、全仓读取、反复修同一问题和重复验证。
 
 ## 验证清单
 
@@ -342,13 +283,9 @@ curl -k -s -o /tmp/root.html -w 'root:%{http_code}:%{content_type}\n' \
 
 ## Git 和仓库状态
 
-当前仓库目录就是项目根目录，不需要进入额外的子目录。不要为了“清理”而重置或删除用户已有改动。修改前先确认工作目录，通常应在：
-
-```bash
-C:\Users\Administrator\Desktop\AMAZON BULK AD
-```
-
-只改和任务直接相关的文件。
+当前仓库目录就是项目根目录，不需要进入额外的子目录。不要为了“清理”而重置或删除用户已有改动。修改前先确认工作目录，只改和任务直接相关的文件。
+默认只动目标文件，不提无关改动；如果当前工作区已有别的改动，先识别并避开它们。
+- 默认先做 git 备份意识检查：改动前后先看 `git status`，涉及较大改动或高风险修改时优先保留备份 commit / 备份分支。
 
 ## 文档维护
 

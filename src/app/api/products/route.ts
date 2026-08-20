@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
+import { getProductImageCopyGalleryMineImageUrls } from "@/lib/products/image-copy-gallery";
 import { buildProductRecordIndex } from "@/lib/products/product-record-index";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -48,6 +49,21 @@ function payloadArrayContains(path: string[], value: string): Prisma.ProductReco
       path,
       array_contains: value,
     },
+  };
+}
+
+function hasVisibleImages(images: string[] | undefined) {
+  return Array.isArray(images) && images.some((image) => image.trim());
+}
+
+function mergeGalleryImages(product: Product, galleryMineImages: string[]) {
+  if (hasVisibleImages(product.images) || !galleryMineImages.length) {
+    return product;
+  }
+
+  return {
+    ...product,
+    images: galleryMineImages,
   };
 }
 
@@ -166,19 +182,43 @@ export async function GET(request: Request) {
     const [total, records] = await Promise.all([
       prisma.productRecord.count({ where }),
       prisma.productRecord.findMany({
-      where: {
+        where: {
           ...where,
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
     ]);
 
+    const skus = records.map((record) => record.sku);
+    const galleryRecords = skus.length
+      ? await prisma.productImageCopyGalleryRecord.findMany({
+          where: {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            sku: { in: skus },
+          },
+          select: {
+            sku: true,
+            payload: true,
+          },
+        })
+      : [];
+    const galleryMineImagesBySku = new Map(
+      galleryRecords.map((record) => [
+        record.sku,
+        getProductImageCopyGalleryMineImageUrls(record.payload as Record<string, unknown> | null | undefined),
+      ]),
+    );
+
     return NextResponse.json({
-      products: records.map((record) => record.payload as unknown as Product),
+      products: records.map((record) =>
+        mergeGalleryImages(
+          record.payload as unknown as Product,
+          galleryMineImagesBySku.get(record.sku) ?? [],
+        ),
+      ),
       pagination: {
         page,
         pageSize,

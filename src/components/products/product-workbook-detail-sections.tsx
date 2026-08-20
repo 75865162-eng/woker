@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { FileText, ImagePlus, Loader2, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { uploadProductImageAsset } from "@/lib/products/image-assets";
 import {
   compactCompetitorFields,
   competitorTextFields,
   competitorTypeOptions,
+  createDefaultPeakSeasonWeights,
   extraWideSupplierFields,
   improvementColumns,
   mediumSupplierFields,
   negativeCompetitorFields,
-  peakSeasonLevels,
+  peakSeasonMonths,
+  peakSeasonWeightLevels,
   supplierFields,
   wideSupplierFields,
   type TrialCompetitorRow,
@@ -36,6 +39,41 @@ function isPdfDataUrl(value: string) {
   return value.startsWith("data:application/pdf");
 }
 
+function isPdfImageSource(value: string) {
+  if (isPdfDataUrl(value)) {
+    return true;
+  }
+
+  const path = value.split("#")[0].split("?")[0].toLowerCase();
+  return path.endsWith(".pdf");
+}
+
+const pricingHeaders: Array<{ label: ReactNode; widthClass?: string }> = [
+  { label: "品名", widthClass: "w-[140px] min-w-[140px] max-w-[140px]" },
+  { label: <>长<br />（cm）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: <>宽<br />（cm）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: <>高<br />（cm）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: <>实际重<br />（Kg）</>, widthClass: "w-[70px] min-w-[70px] max-w-[70px]" },
+  { label: <>材积重<br />（Kg）</>, widthClass: "w-[68px] min-w-[68px] max-w-[68px]" },
+  { label: "建议售价(USD)", widthClass: "w-[78px] min-w-[78px] max-w-[78px]" },
+  { label: "采购成本（RMB）", widthClass: "w-[82px] min-w-[82px] max-w-[82px]" },
+  { label: <>FBA配送费<br />(USD)</>, widthClass: "w-[68px] min-w-[68px] max-w-[68px]" },
+  { label: <>3.5%燃油<br />附加费（USD)</>, widthClass: "w-[35px] min-w-[35px] max-w-[35px]" },
+  { label: <>海运价<br />（RMB）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: "海运头程（RMB）", widthClass: "w-[86px] min-w-[86px] max-w-[86px]" },
+  { label: <>佣金<br />(USD)</>, widthClass: "w-[68px] min-w-[68px] max-w-[68px]" },
+  { label: "月仓储费(USD)", widthClass: "w-[82px] min-w-[82px] max-w-[82px]" },
+  { label: "汇率", widthClass: "w-[62px] min-w-[62px] max-w-[62px]" },
+  { label: <>保本价<br />(USD)</>, widthClass: "w-[80px] min-w-[80px] max-w-[80px]" },
+  { label: "海运毛利润(USD)", widthClass: "w-[92px] min-w-[92px] max-w-[92px]" },
+  { label: "海运毛利润率", widthClass: "w-[82px] min-w-[82px] max-w-[82px]" },
+  { label: "体积重量/磅", widthClass: "w-[78px] min-w-[78px] max-w-[78px]" },
+  { label: "重量/磅", widthClass: "w-[70px] min-w-[70px] max-w-[70px]" },
+];
+
+const pricingDimensionCellClass = "w-[45px] min-w-[45px] max-w-[45px] px-1 py-2 [&_input]:w-[45px] [&_input]:min-w-[45px] [&_input]:px-1";
+const pricingOceanPriceCellClass = "w-[45px] min-w-[45px] max-w-[45px] px-1 py-2 [&_input]:w-[45px] [&_input]:min-w-[45px] [&_input]:px-1";
+
 export function ProductWorkbookDetailSections({
   detail,
   onPricingChange,
@@ -48,6 +86,7 @@ export function ProductWorkbookDetailSections({
   onSupplierAdd,
   onSupplierRemove,
   onImprovementChange,
+  onPeakSeasonWeightsChange,
   onImprovementRowChange,
   onKeywordChange,
   onKeywordsReplace,
@@ -64,7 +103,8 @@ export function ProductWorkbookDetailSections({
   onSupplierChange: (index: number, field: keyof TrialSupplierRow, value: string) => void;
   onSupplierAdd: () => void;
   onSupplierRemove: () => void;
-  onImprovementChange: (field: Exclude<keyof TrialImprovement, "rows">, value: string) => void;
+  onImprovementChange: (field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) => void;
+  onPeakSeasonWeightsChange: (value: number[]) => void;
   onImprovementRowChange: (index: number, field: TrialImprovementCellKey, value: string) => void;
   onKeywordChange: (index: number, field: keyof TrialKeywordRow, value: string) => void;
   onKeywordsReplace: (keywords: TrialKeywordRow[]) => void;
@@ -86,33 +126,17 @@ export function ProductWorkbookDetailSections({
           </div>
         </CardHeader>
         <CardContent className="thin-scrollbar overflow-auto">
-          <table className="min-w-[1540px] text-left text-xs">
+          <table className="w-max table-fixed text-left text-xs">
+            <colgroup>
+              {pricingHeaders.map((header, index) => (
+                <col key={index} className={header.widthClass} />
+              ))}
+            </colgroup>
             <thead className="bg-surface-muted text-muted">
               <tr>
-                {[
-                  "品名",
-                  "长cm",
-                  "宽cm",
-                  "高cm",
-                  "实际重Kg",
-                  "材积重Kg",
-                  "建议售价(USD)",
-                  "采购成本（RMB）",
-                  "FBA配送费$",
-                  "3.5% 的燃油和物流相关附加费（USD)",
-                  "海运单价（RMB）",
-                  "海运头程（RMB）",
-                  "佣金(USD)",
-                  "月仓储费(USD)",
-                  "汇率",
-                  "保本价(USD)",
-                  "海运毛利润(USD)",
-                  "海运毛利润率",
-                  "体积重量/磅",
-                  "重量/磅",
-                ].map((label) => (
-                  <th key={label} className="px-2 py-2 font-bold">
-                    {label}
+                {pricingHeaders.map((header, index) => (
+                  <th key={index} className="px-1 py-2 text-center font-bold leading-tight">
+                    {header.label}
                   </th>
                 ))}
               </tr>
@@ -124,16 +148,16 @@ export function ProductWorkbookDetailSections({
                 return (
                   <tr key={index} className="border-t border-border align-top">
                     <td className="px-2 py-2"><SmallInput value={row.name} onChange={(value) => onPricingChange(index, "name", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.lengthCm} onChange={(value) => onPricingChange(index, "lengthCm", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.widthCm} onChange={(value) => onPricingChange(index, "widthCm", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.heightCm} onChange={(value) => onPricingChange(index, "heightCm", value)} /></td>
+                    <td className={pricingDimensionCellClass}><SmallInput compact type="number" value={row.lengthCm} onChange={(value) => onPricingChange(index, "lengthCm", value)} /></td>
+                    <td className={pricingDimensionCellClass}><SmallInput compact type="number" value={row.widthCm} onChange={(value) => onPricingChange(index, "widthCm", value)} /></td>
+                    <td className={pricingDimensionCellClass}><SmallInput compact type="number" value={row.heightCm} onChange={(value) => onPricingChange(index, "heightCm", value)} /></td>
                     <td className="px-2 py-2"><SmallInput compact type="number" value={row.actualWeightKg} onChange={(value) => onPricingChange(index, "actualWeightKg", value)} /></td>
                     <ReadonlyMetric value={calc.volumeWeightKg} />
                     <td className="px-2 py-2"><SmallInput compact type="number" value={row.suggestedPrice} onChange={(value) => onPricingChange(index, "suggestedPrice", value)} /></td>
                     <td className="px-2 py-2"><SmallInput compact type="number" value={row.purchaseCost} onChange={(value) => onPricingChange(index, "purchaseCost", value)} /></td>
                     <td className="px-2 py-2"><SmallInput compact type="number" value={row.fbaFee} onChange={(value) => onPricingChange(index, "fbaFee", value)} /></td>
-                    <ReadonlyMetric value={calc.fuelFee} />
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.oceanFreightUnitPrice} onChange={(value) => onPricingChange(index, "oceanFreightUnitPrice", value)} /></td>
+                    <ReadonlyMetric value={calc.fuelFee} className="w-[35px] min-w-[35px] max-w-[35px] px-1 text-center" />
+                    <td className={pricingOceanPriceCellClass}><SmallInput compact type="number" value={row.oceanFreightUnitPrice} onChange={(value) => onPricingChange(index, "oceanFreightUnitPrice", value)} /></td>
                     <ReadonlyMetric value={calc.oceanFreight} />
                     <ReadonlyMetric value={calc.commission} />
                     <ReadonlyMetric value={calc.monthlyStorageFee} />
@@ -282,7 +306,10 @@ export function ProductWorkbookDetailSections({
             detail={detail}
             improvement={detail.improvement}
             onChange={onImprovementChange}
+            onPeakSeasonWeightsChange={onPeakSeasonWeightsChange}
             onRowChange={onImprovementRowChange}
+            onRemarkChange={onRemarkChange}
+            onRemarkImagesChange={onRemarkImagesChange}
           />
         </CardContent>
       </Card>
@@ -317,15 +344,6 @@ export function ProductWorkbookDetailSections({
             </div>
             <KeywordBulkInput onApply={onKeywordsReplace} />
           </div>
-          <label className="block text-xs font-semibold text-muted">
-            备注
-            <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-border px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
-              value={detail.remark}
-              onChange={(event) => onRemarkChange(event.target.value)}
-            />
-          </label>
-          <RemarkImagesUploader images={detail.remarkImages ?? []} onChange={onRemarkImagesChange} />
         </CardContent>
       </Card>
     </div>
@@ -354,22 +372,30 @@ function ImageUploadSquare({
   allowPdf?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  function handleFile(file: File | undefined) {
+  async function handleFile(file: File | undefined) {
     if (!file) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      onChange(String(reader.result));
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const nextImage = await uploadProductImageAsset(file);
+      onChange(nextImage);
       setPreviewOpen(false);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "图片上传失败。");
+    } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-    };
-    reader.readAsDataURL(file);
+      setIsUploading(false);
+    }
   }
 
   return (
@@ -381,7 +407,7 @@ function ImageUploadSquare({
           onClick={() => setPreviewOpen(true)}
           title="查看大图"
         >
-          {isPdfDataUrl(image) ? (
+          {allowPdf && isPdfImageSource(image) ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-md bg-white text-center">
               <FileText className="h-10 w-10 text-brand" />
               <span className="text-xs font-semibold text-foreground">PDF</span>
@@ -395,27 +421,29 @@ function ImageUploadSquare({
         <button
           type="button"
           className="flex h-[130px] w-[130px] items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center text-xs font-semibold text-muted transition-colors hover:border-brand hover:bg-white"
+          disabled={isUploading}
           onClick={() => fileInputRef.current?.click()}
         >
-          上传图片
+          {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "上传图片"}
         </button>
       )}
+      {uploadError ? <p className="text-[11px] font-semibold text-danger">{uploadError}</p> : null}
       <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => handleFile(event.target.files?.[0])} />
 
       {previewOpen && image ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70 p-6">
           <div className="relative flex max-h-full max-w-5xl items-center justify-center">
-            <div className="absolute right-0 top-0 z-10 flex translate-y-[-120%] gap-2">
-              <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <div className="absolute right-0 top-0 z-10 flex translate-y-[-120%] flex-nowrap gap-2">
+              <Button className="min-w-[96px] whitespace-nowrap" variant="secondary" size="sm" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
                 <ImagePlus className="h-4 w-4" />
-                {allowPdf ? "替换文件" : "替换图片"}
+                {isUploading ? "上传中" : allowPdf ? "替换文件" : "替换图片"}
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
+              <Button className="min-w-[78px] whitespace-nowrap" variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
                 <X className="h-4 w-4" />
                 关闭
               </Button>
             </div>
-            {isPdfDataUrl(image) ? (
+            {allowPdf && isPdfImageSource(image) ? (
               <object data={image} type="application/pdf" className="h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl">
                 <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
               </object>
@@ -432,6 +460,8 @@ function ImageUploadSquare({
 
 function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange: (images: string[]) => void }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   async function handleFiles(files: FileList | null) {
     const selected = Array.from(files ?? []);
@@ -439,19 +469,36 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
       return;
     }
 
-    const nextImages = await Promise.all(selected.map(fileToDataUrl));
-    onChange([...images, ...nextImages]);
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const results = await Promise.allSettled(selected.map((file) => uploadProductImageAsset(file)));
+      const nextImages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const firstError = results.find((result) => result.status === "rejected");
+
+      if (nextImages.length) {
+        onChange([...images, ...nextImages]);
+      }
+
+      if (firstError && firstError.status === "rejected") {
+        setUploadError(firstError.reason instanceof Error ? firstError.reason.message : "图片上传失败。");
+      }
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   return (
     <div className="rounded-md border border-border bg-surface-muted p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-bold text-muted">备注图片</p>
-        <Button variant="secondary" size="sm" onClick={() => inputRef.current?.click()}>
-          <ImagePlus className="h-4 w-4" />
-          批量上传图片 / PDF
+        <Button variant="secondary" size="sm" onClick={() => inputRef.current?.click()} disabled={isUploading}>
+          {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+          {isUploading ? "上传中" : "批量上传图片 / PDF"}
         </Button>
       </div>
+      {uploadError ? <p className="mt-2 text-xs font-semibold text-danger">{uploadError}</p> : null}
       <input
         ref={inputRef}
         className="hidden"
@@ -479,6 +526,32 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
           导入 Excel 中非热销变体图片，或手动批量上传图片 / PDF 后会显示在这里。
         </div>
       )}
+    </div>
+  );
+}
+
+function ProductRemarkPanel({
+  remark,
+  remarkImages,
+  onRemarkChange,
+  onRemarkImagesChange,
+}: {
+  remark: string;
+  remarkImages: string[];
+  onRemarkChange: (value: string) => void;
+  onRemarkImagesChange: (images: string[]) => void;
+}) {
+  return (
+    <div className="w-[380px] flex-none space-y-3">
+      <label className="block text-xs font-semibold text-muted">
+        备注
+        <textarea
+          className="mt-1 min-h-[150px] w-full rounded-md border border-border px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
+          value={remark}
+          onChange={(event) => onRemarkChange(event.target.value)}
+        />
+      </label>
+      <RemarkImagesUploader images={remarkImages} onChange={onRemarkImagesChange} />
     </div>
   );
 }
@@ -652,64 +725,84 @@ function ImprovementTable({
   detail,
   improvement,
   onChange,
+  onPeakSeasonWeightsChange,
   onRowChange,
+  onRemarkChange,
+  onRemarkImagesChange,
 }: {
   detail: TrialProductDraft;
   improvement: TrialImprovement;
-  onChange: (field: Exclude<keyof TrialImprovement, "rows">, value: string) => void;
+  onChange: (field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) => void;
+  onPeakSeasonWeightsChange: (value: number[]) => void;
   onRowChange: (index: number, field: TrialImprovementCellKey, value: string) => void;
+  onRemarkChange: (value: string) => void;
+  onRemarkImagesChange: (images: string[]) => void;
 }) {
   const painRows = buildImprovementPainRows(detail);
   const visiblePainRows = painRows.length ? painRows : [{ summary: "", count: "" }];
+  const improvementColumnWidths = improvementColumns.map((column) => getImprovementColumnWidth(improvement, visiblePainRows.length, column.field));
+  const tableWidth = 412 + improvementColumnWidths.reduce((total, width) => total + width, 0);
 
   return (
-    <table className="min-w-[1980px] table-fixed overflow-hidden rounded-md border border-border text-left text-xs">
+    <table className="table-fixed overflow-hidden rounded-md border border-border text-left text-xs" style={{ width: tableWidth }}>
+      <colgroup>
+        <col style={{ width: 120 }} />
+        <col style={{ width: 220 }} />
+        <col style={{ width: 72 }} />
+        {improvementColumns.map((column, index) => (
+          <col key={column.field} style={{ width: improvementColumnWidths[index] }} />
+        ))}
+      </colgroup>
       <tbody>
         <tr>
-          <ImprovementHeader colSpan={2}>使用人群</ImprovementHeader>
-          <ImprovementHeader colSpan={2} className="w-[350px]">主要适用场景</ImprovementHeader>
-          <ImprovementHeader className="w-[120px]">目标销量</ImprovementHeader>
-          <ImprovementHeader className="w-[120px]">头部旺季平均销量</ImprovementHeader>
-          <ImprovementHeader className="w-[120px]">头部淡季平均销量</ImprovementHeader>
-          <ImprovementHeader colSpan={4}>
-            <div className="flex items-center gap-2">
-              <span>旺季月份</span>
-              <button
-                type="button"
-                className="rounded border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-muted hover:border-brand hover:text-brand"
-                onClick={() => onChange("peakSeason", "")}
-              >
-                清除
-              </button>
-            </div>
-          </ImprovementHeader>
+          <ImprovementHeader colSpan={3}>使用人群</ImprovementHeader>
+          <ImprovementHeader colSpan={3}>主要适用场景</ImprovementHeader>
+          <ImprovementHeader colSpan={2}>目标销量</ImprovementHeader>
+          <ImprovementHeader colSpan={2}>头部旺季平均销量</ImprovementHeader>
+          <ImprovementHeader colSpan={2}>头部淡季平均销量</ImprovementHeader>
         </tr>
         <tr>
-          <ImprovementCell colSpan={2}>
+          <ImprovementCell colSpan={3}>
             <ImprovementInput value={improvement.audience} placeholder="填空格" onChange={(value) => onChange("audience", value)} />
           </ImprovementCell>
-          <ImprovementCell colSpan={2} className="w-[350px]">
-            <ImprovementInput className="w-[350px]" value={improvement.scenario} placeholder="填空格" onChange={(value) => onChange("scenario", value)} />
+          <ImprovementCell colSpan={3}>
+            <ImprovementInput value={improvement.scenario} placeholder="填空格" onChange={(value) => onChange("scenario", value)} />
           </ImprovementCell>
-          <ImprovementCell className="w-[120px] font-bold">
-            <ImprovementInput className="w-[120px]" value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
+          <ImprovementCell colSpan={2} className="font-bold">
+            <ImprovementInput value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
           </ImprovementCell>
-          <ImprovementCell className="w-[120px]">
-            <ImprovementInput className="w-[120px]" value={improvement.peakSales} onChange={(value) => onChange("peakSales", value)} />
+          <ImprovementCell colSpan={2}>
+            <ImprovementInput value={improvement.peakSales} onChange={(value) => onChange("peakSales", value)} />
           </ImprovementCell>
-          <ImprovementCell className="w-[120px]">
-            <ImprovementInput className="w-[120px]" value={improvement.offSeasonSales} onChange={(value) => onChange("offSeasonSales", value)} />
+          <ImprovementCell colSpan={2}>
+            <ImprovementInput value={improvement.offSeasonSales} onChange={(value) => onChange("offSeasonSales", value)} />
           </ImprovementCell>
-          <ImprovementCell colSpan={4}>
-            <PeakSeasonSelector value={improvement.peakSeason} onChange={(value) => onChange("peakSeason", value)} />
-          </ImprovementCell>
+        </tr>
+        <tr>
+          <td colSpan={12} className="border-b border-r border-border bg-white px-1 py-1 first:border-l">
+            <div className="flex min-w-[1030px] items-start gap-4">
+              <PeakSeasonWeightMatrix
+                value={improvement.peakSeasonWeights}
+                onChange={onPeakSeasonWeightsChange}
+                onReset={() => onPeakSeasonWeightsChange(createDefaultPeakSeasonWeights())}
+              />
+              <ProductRemarkPanel
+                remark={detail.remark}
+                remarkImages={detail.remarkImages ?? []}
+                onRemarkChange={onRemarkChange}
+                onRemarkImagesChange={onRemarkImagesChange}
+              />
+            </div>
+          </td>
         </tr>
         <tr>
           <ImprovementSubHeader>产品改进点</ImprovementSubHeader>
           <ImprovementSubHeader>差评</ImprovementSubHeader>
           <ImprovementSubHeader>数量</ImprovementSubHeader>
-          {improvementColumns.map((column) => (
-            <ImprovementSubHeader key={column.field}>{column.label}</ImprovementSubHeader>
+          {improvementColumns.map((column, index) => (
+            <ImprovementSubHeader key={column.field} style={{ width: improvementColumnWidths[index], maxWidth: 300 }}>
+              {column.label}
+            </ImprovementSubHeader>
           ))}
         </tr>
         {visiblePainRows.map((pain, index) => {
@@ -719,9 +812,14 @@ function ImprovementTable({
               <ImprovementCell className="text-center font-bold">差评点{index + 1}</ImprovementCell>
               <ImprovementCell>{pain?.summary ?? ""}</ImprovementCell>
               <ImprovementCell>{pain?.count ?? ""}</ImprovementCell>
-              {improvementColumns.map((column) => (
-                <ImprovementCell key={column.field}>
-                  <ImprovementInput value={improvementRow[column.field]} onChange={(value) => onRowChange(index, column.field, value)} />
+              {improvementColumns.map((column, columnIndex) => (
+                <ImprovementCell key={column.field} style={{ width: improvementColumnWidths[columnIndex], maxWidth: 300 }}>
+                  <ImprovementInput
+                    multiline
+                    width={improvementColumnWidths[columnIndex] - 16}
+                    value={improvementRow[column.field]}
+                    onChange={(value) => onRowChange(index, column.field, value)}
+                  />
                 </ImprovementCell>
               ))}
             </tr>
@@ -730,6 +828,20 @@ function ImprovementTable({
       </tbody>
     </table>
   );
+}
+
+function getImprovementColumnWidth(improvement: TrialImprovement, rowCount: number, field: TrialImprovementCellKey) {
+  const values = Array.from({ length: rowCount }, (_, index) => getImprovementRow(improvement, index)[field]);
+  const longestLineLength = Math.max(
+    0,
+    ...values.flatMap((value) => value.split(/\r?\n/).map((line) => Array.from(line.trim()).length)),
+  );
+
+  if (longestLineLength === 0) {
+    return 100;
+  }
+
+  return Math.min(300, Math.max(100, longestLineLength * 12 + 28));
 }
 
 function ImprovementHeader({
@@ -744,20 +856,34 @@ function ImprovementHeader({
   return <th colSpan={colSpan} className={`border-b border-r border-border bg-surface-muted px-2 py-2 font-bold text-muted first:border-l ${className}`}>{children}</th>;
 }
 
-function ImprovementSubHeader({ children }: { children: ReactNode }) {
-  return <td className="border-b border-r border-border bg-surface-muted px-2 py-2 font-bold text-muted first:border-l">{children}</td>;
+function ImprovementSubHeader({
+  children,
+  className = "",
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <td style={style} className={`whitespace-normal break-words border-b border-r border-border bg-surface-muted px-2 py-2 font-bold leading-5 text-muted first:border-l ${className}`}>
+      {children}
+    </td>
+  );
 }
 
 function ImprovementCell({
   children,
   className = "",
   colSpan,
+  style,
 }: {
   children?: ReactNode;
   className?: string;
   colSpan?: number;
+  style?: React.CSSProperties;
 }) {
-  return <td colSpan={colSpan} className={`h-9 border-b border-r border-border bg-white px-2 py-1 align-top text-foreground first:border-l ${className}`}>{children}</td>;
+  return <td colSpan={colSpan} style={style} className={`h-9 border-b border-r border-border bg-white px-2 py-1 align-top text-foreground first:border-l ${className}`}>{children}</td>;
 }
 
 function ImprovementInput({
@@ -765,12 +891,41 @@ function ImprovementInput({
   onChange,
   placeholder,
   className = "w-full",
+  multiline = false,
+  width,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  multiline?: boolean;
+  width?: number;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!multiline || !textareaRef.current) {
+      return;
+    }
+
+    textareaRef.current.style.height = "32px";
+    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+  }, [multiline, value]);
+
+  if (multiline) {
+    return (
+      <textarea
+        ref={textareaRef}
+        style={width ? { width } : undefined}
+        className={`min-h-8 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-white px-2 py-2 text-xs font-semibold leading-5 text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
+        value={value}
+        placeholder={placeholder}
+        rows={1}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  }
+
   return (
     <input
       className={`h-8 rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
@@ -781,45 +936,101 @@ function ImprovementInput({
   );
 }
 
-function PeakSeasonSelector({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const levels = parsePeakSeasonLevels(value);
+export function PeakSeasonWeightMatrix({
+  value,
+  onChange,
+  onReset,
+}: {
+  value: number[];
+  onChange: (value: number[]) => void;
+  onReset: () => void;
+}) {
+  const weights = peakSeasonMonths.map((_, index) => normalizePeakSeasonWeight(value[index] ?? 10));
 
-  function updateMonth(index: number) {
-    const next = [...levels];
-    next[index] = (next[index] + 1) % peakSeasonLevels.length;
-    onChange(formatPeakSeasonLevels(next));
+  function updateMonth(index: number, weight: number) {
+    const next = [...weights];
+    next[index] = weight;
+    onChange(next);
   }
 
   return (
-    <div className="rounded-md border border-border bg-white p-2">
-      <div className="grid grid-cols-12 gap-1">
-        {levels.map((level, index) => (
-          <button
-            key={index}
-            type="button"
-            className={`h-7 rounded border border-border text-[11px] font-bold transition-colors ${peakSeasonLevels[level]}`}
-            onClick={() => updateMonth(index)}
-            title={`${index + 1}月`}
-          >
-            {index + 1}
-          </button>
-        ))}
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-muted">旺季月份</div>
+        <button
+          type="button"
+          className="rounded border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-muted hover:border-brand hover:text-brand"
+          onClick={onReset}
+        >
+          清除
+        </button>
+      </div>
+      <div className="overflow-auto rounded-md border border-border">
+        <table className="w-max table-fixed border-collapse text-center text-xs">
+          <colgroup>
+            <col className="w-[50px]" />
+            {peakSeasonMonths.map((month) => (
+              <col key={month} className="w-[50px]" />
+            ))}
+          </colgroup>
+          <tbody>
+            {peakSeasonWeightLevels.map((weight) => (
+              <tr key={weight}>
+                <td className="h-8 border-r border-b border-border bg-surface-muted px-1 text-[11px] font-semibold text-muted">
+                  {weight}
+                </td>
+                {weights.map((monthWeight, monthIndex) => {
+                  const active = monthWeight >= weight;
+                  const selected = monthWeight === weight;
+                  return (
+                    <td key={`${monthIndex}-${weight}`} className="border-r border-b border-border p-0 last:border-r-0">
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        title={`${monthIndex + 1}月：${weight}`}
+                        className={[
+                          "flex h-8 w-full items-center justify-center border-0 text-[11px] font-semibold transition-colors",
+                          active
+                            ? selected
+                              ? "bg-orange-500 text-white"
+                              : "bg-orange-100 text-orange-900"
+                            : "bg-white text-transparent hover:bg-surface-muted",
+                        ].join(" ")}
+                        onClick={() => updateMonth(monthIndex, weight)}
+                      >
+                        {selected ? weight : ""}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr>
+              <td className="h-8 border-r border-border bg-surface-muted px-1 text-[11px] font-semibold text-muted">权重</td>
+              {peakSeasonMonths.map((month) => (
+                <td key={`bottom-${month}`} className="h-8 border-r border-border bg-surface-muted px-1 text-[11px] font-semibold text-foreground last:border-r-0">
+                  {month}月
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function parsePeakSeasonLevels(value: string) {
-  const parts = value.split(",").map((part) => Number(part));
-  if (parts.length !== 12 || parts.some((part) => !Number.isInteger(part))) {
-    return Array.from({ length: 12 }, () => 0);
+function normalizePeakSeasonWeight(value: number) {
+  const rounded = Math.round(Number(value) || 0);
+  if (rounded >= 10) {
+    return Math.max(10, Math.min(100, rounded - (rounded % 10 || 0)));
   }
 
-  return parts.map((part) => Math.max(0, Math.min(part, peakSeasonLevels.length - 1)));
-}
+  if (rounded <= 5) {
+    return Math.max(10, Math.min(100, rounded * 20));
+  }
 
-function formatPeakSeasonLevels(levels: number[]) {
-  return levels.some(Boolean) ? levels.join(",") : "";
+  return 10;
 }
 
 function KeywordBulkInput({ onApply }: { onApply: (keywords: TrialKeywordRow[]) => void }) {
@@ -954,12 +1165,4 @@ function parseOriginalCount(count: string) {
 
 function normalizeOriginalsLength(originals: string[], count: number) {
   return Array.from({ length: count }, (_, index) => originals[index] ?? "");
-}
-
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
 }

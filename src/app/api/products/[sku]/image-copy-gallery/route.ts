@@ -4,6 +4,7 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import {
+  createPersistableProductImageCopyGallery,
   normalizeProductImageCopyGallery,
   type ProductImageCopyGalleryDraft,
 } from "@/lib/products/image-copy-gallery";
@@ -58,7 +59,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sku:
     const normalizedSku = normalizeSku(sku);
     const body = (await request.json()) as { gallery?: Partial<ProductImageCopyGalleryDraft>; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
     const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
-    const gallery = normalizeProductImageCopyGallery(body.gallery, 3);
+    const gallery = createPersistableProductImageCopyGallery(
+      normalizeProductImageCopyGallery(body.gallery, 3),
+    );
 
     await prisma.productImageCopyGalleryRecord.upsert({
       where: {

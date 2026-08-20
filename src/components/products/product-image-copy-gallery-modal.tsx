@@ -1,52 +1,153 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { scopedFetch } from "@/lib/workspace/scoped-fetch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   GalleryCell,
+  AmazonLinkButton,
   ImagePreviewModal,
 } from "@/components/listing-ai/gallery-primitives";
 import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
+import { blobToDataUrl, readListingAiImageAsset, saveListingAiImageAsset } from "@/lib/listing-ai/image-assets";
 import type { ImagePreview } from "@/lib/listing-ai/workspace-draft";
 import {
   createEmptyProductImageCopyGallery,
+  createPersistableProductImageCopyGallery,
   normalizeProductImageCopyGallery,
+  type ProductGalleryInfo,
   type ProductImageCopyGalleryDraft,
 } from "@/lib/products/image-copy-gallery";
 
+function createEmptyGalleryInfo(): ProductGalleryInfo {
+  return {
+    asin: "",
+    productFeatures: "",
+    sales: "",
+    price: "",
+    variation: "",
+    rating: "",
+    reviewCount: "",
+    title: "",
+    bullets: "",
+    aplus: "",
+  };
+}
+
+function getBulletLine(text: string, index: number) {
+  return text.split(/\n/)[index] ?? "";
+}
+
+function updateBulletLine(text: string, index: number, value: string) {
+  const lines = text.split(/\n/);
+  while (lines.length <= index) {
+    lines.push("");
+  }
+  lines[index] = value;
+  return lines.join("\n").replace(/\n+$/u, "");
+}
+
+async function uploadPreview(file: File): Promise<ImagePreview> {
+  try {
+    const asset = await saveListingAiImageAsset(file);
+    return {
+      name: asset.name,
+      url: await blobToDataUrl(asset.blob),
+      assetId: asset.id,
+    };
+  } catch (storageError) {
+    console.warn("Failed to save product gallery image asset.", storageError);
+    return new Promise<ImagePreview>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () =>
+        resolve({ name: file.name, url: String(reader.result || "") });
+      reader.onerror = () =>
+        resolve({ name: file.name, url: URL.createObjectURL(file) });
+      reader.readAsDataURL(file);
+    });
+  }
+}
+
 async function readFilesAsPreviews(files: FileList | null) {
   const selected = Array.from(files ?? []).slice(0, 12);
+  return Promise.all(selected.map((file) => uploadPreview(file)));
+}
 
-  return Promise.all(
-    selected.map(
-      (file) =>
-        new Promise<ImagePreview>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () =>
-            resolve({ name: file.name, url: String(reader.result || "") });
-          reader.onerror = () =>
-            resolve({ name: file.name, url: URL.createObjectURL(file) });
-          reader.readAsDataURL(file);
-        }),
-    ),
+async function hydratePreview(image: ImagePreview) {
+  if (image.url && image.assetId) {
+    return image;
+  }
+
+  if (image.assetId) {
+    try {
+      const asset = await readListingAiImageAsset(image.assetId);
+      if (!asset) return image;
+      return {
+        ...image,
+        name: image.name || asset.name,
+        url: await blobToDataUrl(asset.blob),
+      };
+    } catch (storageError) {
+      console.warn("Failed to restore product gallery image asset.", storageError);
+      return image;
+    }
+  }
+
+  if (image.url?.startsWith("data:image/") || image.url?.startsWith("blob:")) {
+    try {
+      const blob = await (await fetch(image.url)).blob();
+      const file = new File([blob], image.name || "image", {
+        type: blob.type || "image/png",
+      });
+      return uploadPreview(file);
+    } catch {
+      return image;
+    }
+  }
+
+  return image;
+}
+
+async function hydrateGalleryDraft(draft: ProductImageCopyGalleryDraft) {
+  const competitorColumns = await Promise.all(
+    draft.competitorColumns.map(async (column) => ({
+      ...column,
+      images: await Promise.all(column.images.map(hydratePreview)),
+    })),
   );
+
+  return {
+    ...draft,
+    competitorColumns,
+    mineImages: await Promise.all(draft.mineImages.map(hydratePreview)),
+  };
 }
 
 export function ProductImageCopyGalleryModal({
   sku,
   productName,
+  initialMineInfo,
   onClose,
 }: {
   sku: string;
   productName: string;
+  initialMineInfo?: Partial<ProductGalleryInfo>;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<ProductImageCopyGalleryDraft>(() =>
-    createEmptyProductImageCopyGallery(),
+  const initialMineInfoDraft = useMemo(
+    () => ({
+      ...createEmptyGalleryInfo(),
+      ...(initialMineInfo ?? {}),
+      asin: initialMineInfo?.asin?.trim() ?? "",
+    }),
+    [initialMineInfo],
   );
+  const [draft, setDraft] = useState<ProductImageCopyGalleryDraft>(() => ({
+    ...createEmptyProductImageCopyGallery(),
+    mineInfo: initialMineInfoDraft,
+  }));
   const [previewImage, setPreviewImage] = useState<ImagePreview | null>(null);
   const [draggedImage, setDraggedImage] = useState<{
     columnIndex: number;
@@ -62,23 +163,42 @@ export function ProductImageCopyGalleryModal({
     async function loadGallery() {
       setReady(false);
       setError("");
+      setSaveStatus("idle");
 
       try {
-        const response = await scopedFetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, { cache: "no-store" });
-        const data = (await response.json()) as { gallery?: Partial<ProductImageCopyGalleryDraft>; error?: string };
+        const response = await scopedFetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, {
+          cache: "no-store",
+        });
+        const data = (await response.json()) as {
+          gallery?: Partial<ProductImageCopyGalleryDraft>;
+          error?: string;
+        };
 
         if (!response.ok) {
           throw new Error(data.error || "图片文案草稿读取失败");
         }
 
+        const normalized = normalizeProductImageCopyGallery(data.gallery, 3);
+        const hydrated = await hydrateGalleryDraft(normalized);
+
         if (!cancelled) {
-          setDraft(normalizeProductImageCopyGallery(data.gallery, 3));
-        }
+            setDraft({
+              ...hydrated,
+              mineInfo: {
+                ...initialMineInfoDraft,
+                ...hydrated.mineInfo,
+                asin: hydrated.mineInfo.asin || initialMineInfoDraft.asin || "",
+              },
+            });
+          }
       } catch (loadError) {
         const message = loadError instanceof Error ? loadError.message : "图片文案草稿读取失败";
         if (!cancelled) {
           setError(message);
-          setDraft(createEmptyProductImageCopyGallery());
+          setDraft({
+            ...createEmptyProductImageCopyGallery(),
+            mineInfo: initialMineInfoDraft,
+          });
         }
       } finally {
         if (!cancelled) {
@@ -92,7 +212,7 @@ export function ProductImageCopyGalleryModal({
     return () => {
       cancelled = true;
     };
-  }, [sku]);
+  }, [initialMineInfoDraft, sku]);
 
   useEffect(() => {
     if (!ready) return;
@@ -102,7 +222,7 @@ export function ProductImageCopyGalleryModal({
       scopedFetch(`/api/products/${encodeURIComponent(sku)}/image-copy-gallery`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gallery: draft }),
+        body: JSON.stringify({ gallery: createPersistableProductImageCopyGallery(draft) }),
         signal: controller.signal,
       })
         .then(async (response) => {
@@ -141,6 +261,7 @@ export function ProductImageCopyGalleryModal({
         ...current.competitorColumns,
         {
           label: `Competitor ${current.competitorColumns.length + 1}`,
+          info: createEmptyGalleryInfo(),
           images: [],
         },
       ],
@@ -168,6 +289,37 @@ export function ProductImageCopyGalleryModal({
 
   function setMineImages(images: ImagePreview[]) {
     setDraft((current) => ({ ...current, mineImages: images }));
+  }
+
+  function updateCompetitorInfo(
+    columnIndex: number,
+    key: keyof ProductGalleryInfo,
+    value: string,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      competitorColumns: current.competitorColumns.map((column, index) =>
+        index === columnIndex
+          ? {
+              ...column,
+              info: {
+                ...column.info,
+                [key]: key === "asin" ? value.trim() : value,
+              },
+            }
+          : column,
+      ),
+    }));
+  }
+
+  function updateMineInfo(key: keyof ProductGalleryInfo, value: string) {
+    setDraft((current) => ({
+      ...current,
+      mineInfo: {
+        ...current.mineInfo,
+        [key]: key === "asin" ? value.trim() : value,
+      },
+    }));
   }
 
   function moveColumnImage(
@@ -291,6 +443,23 @@ export function ProductImageCopyGalleryModal({
     ...draft.competitorColumns.map((column) => column.images.length),
   );
 
+  const infoRows = [
+    { label: "ASIN", key: "asin" as const, asin: true },
+    { label: "产品卖点", key: "productFeatures" as const, multiline: true },
+    { label: "销量", key: "sales" as const },
+    { label: "价格", key: "price" as const },
+    { label: "变体", key: "variation" as const },
+    { label: "星级", key: "rating" as const },
+    { label: "评论数", key: "reviewCount" as const },
+    { label: "标题", key: "title" as const, multiline: true },
+    { label: "5点1", key: "bullets" as const, multiline: true, tall: true, bulletIndex: 0 },
+    { label: "5点2", key: "bullets" as const, multiline: true, tall: true, bulletIndex: 1 },
+    { label: "5点3", key: "bullets" as const, multiline: true, tall: true, bulletIndex: 2 },
+    { label: "5点4", key: "bullets" as const, multiline: true, tall: true, bulletIndex: 3 },
+    { label: "5点5", key: "bullets" as const, multiline: true, tall: true, bulletIndex: 4 },
+    { label: "5点6", key: "bullets" as const, multiline: true, tall: true, bulletIndex: 5 },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 bg-foreground/35 p-4 backdrop-blur-sm">
       <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
@@ -303,9 +472,17 @@ export function ProductImageCopyGalleryModal({
               SKU {sku} {productName ? `· ${productName}` : ""}
             </p>
             <p className="mt-1 text-xs font-semibold text-muted">
-              {ready ? saveStatus === "saving" ? "正在保存到数据库" : saveStatus === "failed" ? "保存失败" : "已连接数据库草稿" : "正在读取数据库草稿"}
+              {ready
+                ? saveStatus === "saving"
+                  ? "正在保存到数据库"
+                  : saveStatus === "failed"
+                    ? "保存失败"
+                    : "图片已走对象存储，草稿已连接数据库"
+                : "正在读取数据库草稿"}
             </p>
-            {error ? <p className="mt-1 text-xs font-semibold text-danger">{error}</p> : null}
+            {error ? (
+              <p className="mt-1 text-xs font-semibold text-danger">{error}</p>
+            ) : null}
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={addCompetitorColumn}>
@@ -348,7 +525,10 @@ export function ProductImageCopyGalleryModal({
                         Image
                       </th>
                       {draft.competitorColumns.map((column, index) => (
-                        <th key={`${column.label}-${index}`} className="w-[260px] px-4 py-3">
+                        <th
+                          key={`${column.label}-${index}`}
+                          className="w-[260px] px-4 py-3"
+                        >
                           <div className="flex items-center justify-between gap-2">
                             <span>{column.label}</span>
                             <MiniUploader
@@ -394,7 +574,10 @@ export function ProductImageCopyGalleryModal({
                           />
                         </td>
                         {draft.competitorColumns.map((column, columnIndex) => (
-                          <td key={`${column.label}-${columnIndex}`} className="px-4 py-3 align-top">
+                          <td
+                            key={`${column.label}-${columnIndex}`}
+                            className="px-4 py-3 align-top"
+                          >
                             <GalleryCell
                               image={column.images[index]}
                               draggable={Boolean(column.images[index])}
@@ -433,11 +616,14 @@ export function ProductImageCopyGalleryModal({
                             mine
                             draggable={Boolean(draft.mineImages[index])}
                             onDragStart={() =>
-                              setDraggedImage({ columnIndex: -1, imageIndex: index })
+                              setDraggedImage({
+                                columnIndex: -1,
+                                imageIndex: index,
+                              })
                             }
                             onDragOver={(event) => event.preventDefault()}
                             onDrop={() =>
-                                draggedImage
+                              draggedImage
                                 ? handleDrop(
                                     -1,
                                     draggedImage.columnIndex,
@@ -455,6 +641,135 @@ export function ProductImageCopyGalleryModal({
                         </td>
                       </tr>
                     ))}
+
+                    {infoRows.map((row) => (
+                      <tr key={row.label}>
+                        <td className="sticky left-0 z-[1] bg-white px-3 py-3 align-middle text-sm font-black text-foreground">
+                          {row.label}
+                        </td>
+                        {draft.competitorColumns.map((column, columnIndex) => {
+                          const bulletIndex = "bulletIndex" in row ? row.bulletIndex : undefined;
+                          const isBulletRow = typeof bulletIndex === "number";
+                          const value =
+                            isBulletRow
+                              ? getBulletLine(column.info.bullets, bulletIndex)
+                              : column.info[row.key];
+                          return (
+                            <td
+                              key={`${column.label}-${columnIndex}`}
+                              className="px-4 py-3 align-top"
+                            >
+                              {row.asin ? (
+                                <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
+                                  <input
+                                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+                                    value={value}
+                                    onChange={(event) =>
+                                      updateCompetitorInfo(
+                                        columnIndex,
+                                        row.key,
+                                        event.target.value,
+                                      )
+                                    }
+                                  />
+                                  <AmazonLinkButton asin={value} />
+                                </div>
+                              ) : (
+                                <textarea
+                                  className={`w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 ${row.multiline ? "min-h-24 resize-y" : "min-h-10 resize-none"} ${row.tall ? "min-h-36" : ""}`}
+                                  value={value}
+                                  onChange={(event) =>
+                                    isBulletRow
+                                      ? updateCompetitorInfo(
+                                          columnIndex,
+                                          "bullets",
+                                          updateBulletLine(
+                                            column.info.bullets,
+                                            bulletIndex,
+                                            event.target.value,
+                                          ),
+                                        )
+                                      : updateCompetitorInfo(
+                                          columnIndex,
+                                          row.key,
+                                          event.target.value,
+                                        )
+                                  }
+                                />
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-3 align-top">
+                          {row.asin ? (
+                            <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
+                              <input
+                                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+                                value={draft.mineInfo[row.key]}
+                                onChange={(event) =>
+                                  updateMineInfo(row.key, event.target.value)
+                                }
+                              />
+                              <AmazonLinkButton asin={draft.mineInfo[row.key]} />
+                            </div>
+                          ) : (
+                            <textarea
+                              className={`w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 ${row.multiline ? "min-h-24 resize-y" : "min-h-10 resize-none"} ${row.tall ? "min-h-36" : ""}`}
+                              value={
+                                "bulletIndex" in row && row.key === "bullets"
+                                  ? getBulletLine(draft.mineInfo.bullets, row.bulletIndex)
+                                  : draft.mineInfo[row.key]
+                              }
+                              onChange={(event) =>
+                                "bulletIndex" in row && row.key === "bullets"
+                                  ? updateMineInfo(
+                                      "bullets",
+                                      updateBulletLine(
+                                        draft.mineInfo.bullets,
+                                        row.bulletIndex,
+                                        event.target.value,
+                                      ),
+                                    )
+                                  : updateMineInfo(row.key, event.target.value)
+                              }
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+
+                    <tr>
+                      <td className="sticky left-0 z-[1] bg-white px-3 py-3 align-middle text-sm font-black text-foreground">
+                        A+
+                      </td>
+                      {draft.competitorColumns.map((column, columnIndex) => (
+                        <td
+                          key={`${column.label}-${columnIndex}-aplus`}
+                          className="px-4 py-3 align-top"
+                        >
+                          <textarea
+                            className="w-full min-h-24 resize-y rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+                            value={column.info.aplus}
+                            onChange={(event) =>
+                              updateCompetitorInfo(
+                                columnIndex,
+                                "aplus",
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 align-top">
+                        <textarea
+                          className="w-full min-h-24 resize-y rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+                          value={draft.mineInfo.aplus}
+                          onChange={(event) =>
+                            updateMineInfo("aplus", event.target.value)
+                          }
+                        />
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>

@@ -13,6 +13,7 @@ const contentTypes: Record<string, string> = {
   ".gif": "image/gif",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".pdf": "application/pdf",
   ".png": "image/png",
   ".webp": "image/webp",
 };

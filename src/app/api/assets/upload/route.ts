@@ -1,21 +1,24 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-const supportedImageTypes = new Set([
+const supportedAssetTypes = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
   "image/avif",
+  "application/pdf",
 ]);
-const supportedImageExtensions = new Set([".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp"]);
+const supportedAssetExtensions = new Set([".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp", ".pdf"]);
 const maxAssetSize = 50 * 1024 * 1024;
 
 function createAssetKey(fileName: string) {
@@ -29,12 +32,20 @@ function createAssetUrl(key: string) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission(request, "listingAi", "create");
+    const user = await getCurrentUser(request);
 
-    if (!permission.ok) {
-      return permission.response;
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
-    const { user } = permission;
+
+    const permissions = await getOrganizationRolePermissions(user.organizationId);
+    const canUploadAsset =
+      roleCanPerformAction(user.role, "listingAi", "create", permissions) ||
+      roleCanPerformAction(user.role, "products", "edit", permissions);
+
+    if (!canUploadAsset) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    }
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -50,8 +61,8 @@ export async function POST(request: Request) {
 
     const extension = path.extname(file.name).toLowerCase();
 
-    if (!supportedImageExtensions.has(extension) || (file.type && !supportedImageTypes.has(file.type))) {
-      return NextResponse.json({ error: "Only image files are supported." }, { status: 400 });
+    if (!supportedAssetExtensions.has(extension) || (file.type && !supportedAssetTypes.has(file.type))) {
+      return NextResponse.json({ error: "Only image or PDF files are supported." }, { status: 400 });
     }
 
     if (file.size > maxAssetSize) {

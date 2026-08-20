@@ -1,11 +1,11 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, LoaderCircle, PackagePlus, RotateCcw, Save, X } from "lucide-react";
+import { ArrowRight, Bell, ChevronDown, FileDown, FileUp, History, ImagePlus, LoaderCircle, PackagePlus, RotateCcw, Save, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { newProductStatusOptions, productStatusOptions } from "@/data/products";
+import { newProductStatusOptions, productStatusLabels, productStatusOptions } from "@/data/products";
 import {
   accountsToTeamMembers,
   type AccountRoleId,
@@ -14,7 +14,7 @@ import {
   type TeamAccountRecord,
   type TeamMember,
 } from "@/lib/accounts/team-roster";
-import type { Product, ProductDraft, ProductStatus, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
+import type { Product, ProductDraft, ProductStatus, ProductWorkflowEvent, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
 import {
   buildWorkflowEvent,
   createWorkflowDueAt,
@@ -56,7 +56,6 @@ import { ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallText
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
 import { ProductOperationsProgress } from "./product-operations-progress";
 import {
-  buildAmazonLink,
   calculateTrialPricing,
   formatDateTime,
   isOverdueProduct,
@@ -408,7 +407,6 @@ export function ProductWorkbench() {
             value={designInProgressProducts.length.toLocaleString("zh-CN")}
             tone="blue"
             active={filters.status === "design_in_progress"}
-            detail={formatSkuPreview(designInProgressProducts)}
             onClick={() => setFilters((current) => ({ ...current, status: "design_in_progress" }))}
           />
           <SummaryTile
@@ -416,7 +414,6 @@ export function ProductWorkbench() {
             value={operationsProgressProducts.length.toLocaleString("zh-CN")}
             tone="amber"
             active={filters.status === "operations_progress"}
-            detail={formatSkuPreview(operationsProgressProducts)}
             onClick={() => setFilters((current) => ({ ...current, status: "operations_progress" }))}
           />
           <SummaryTile
@@ -526,7 +523,84 @@ type ProductVersionRecord = {
   summary?: string | null;
   createdAt: string;
   userId?: string | null;
+  payload?: Product;
 };
+
+const trialPricingHeaders = [
+  { label: "品名", widthClass: "w-[140px] min-w-[140px] max-w-[140px]" },
+  { label: <>长<br />（cm）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: <>宽<br />（cm）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: <>高<br />（cm）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: <>实际重<br />（Kg）</>, widthClass: "w-[70px] min-w-[70px] max-w-[70px]" },
+  { label: <>材积重<br />（Kg）</>, widthClass: "w-[68px] min-w-[68px] max-w-[68px]" },
+  { label: "建议售价(USD)", widthClass: "w-[78px] min-w-[78px] max-w-[78px]" },
+  { label: "采购成本(RMB)", widthClass: "w-[82px] min-w-[82px] max-w-[82px]" },
+  { label: <>FBA配送费<br />(USD)</>, widthClass: "w-[68px] min-w-[68px] max-w-[68px]" },
+  { label: <>3.5%燃油<br />附加费（USD)</>, widthClass: "w-[35px] min-w-[35px] max-w-[35px]" },
+  { label: <>海运价<br />（RMB）</>, widthClass: "w-[45px] min-w-[45px] max-w-[45px]" },
+  { label: "海运头程(RMB)", widthClass: "w-[86px] min-w-[86px] max-w-[86px]" },
+  { label: <>佣金<br />(USD)</>, widthClass: "w-[68px] min-w-[68px] max-w-[68px]" },
+  { label: "月仓储费(USD)", widthClass: "w-[82px] min-w-[82px] max-w-[82px]" },
+  { label: "汇率", widthClass: "w-[62px] min-w-[62px] max-w-[62px]" },
+  { label: <>保本价<br />(USD)</>, widthClass: "w-[80px] min-w-[80px] max-w-[80px]" },
+  { label: "海运毛利(USD)", widthClass: "w-[92px] min-w-[92px] max-w-[92px]" },
+  { label: "海运毛利率", widthClass: "w-[82px] min-w-[82px] max-w-[82px]" },
+  { label: "体积重量/", widthClass: "w-[78px] min-w-[78px] max-w-[78px]" },
+  { label: "重量/", widthClass: "w-[70px] min-w-[70px] max-w-[70px]" },
+];
+
+const trialPricingDimensionCellClass = "w-[45px] min-w-[45px] max-w-[45px] px-1 py-2 [&_input]:w-[45px] [&_input]:min-w-[45px] [&_input]:px-1";
+const trialPricingOceanPriceCellClass = "w-[45px] min-w-[45px] max-w-[45px] px-1 py-2 [&_input]:w-[45px] [&_input]:min-w-[45px] [&_input]:px-1";
+
+type ProductVersionDiffRow = {
+  key: string;
+  label: string;
+  currentValue: string;
+  versionValue: string;
+  changed: boolean;
+};
+
+const productVersionFieldLabels: Record<string, string> = {
+  sku: "SKU",
+  chineseName: "中文名",
+  englishName: "英文名",
+  asin: "ASIN",
+  developer: "开发",
+  purchasePrice: "采购价格",
+  status: "状态",
+  supplierName: "供应商名称",
+  supplierUrl: "供应商链接",
+  specs: "规格",
+  purchaseLeadTime: "采购周期",
+  createdAt: "创建日期",
+  keywords: "选品关键词",
+  note: "备注",
+  cancelReason: "取消原因",
+  hsCode: "HSCODE",
+  images: "图片",
+  competitorAsins: "竞品 ASIN",
+  productWeightG: "产品重量(g)",
+  packageWeightG: "包装重量(g)",
+  productSizeCm: "产品尺寸(cm)",
+  packageSizeCm: "包装尺寸(cm)",
+  selectionOwner: "选品负责人",
+  opsAssignee: "运营",
+  opsAssignees: "运营",
+  designerAssignee: "美工",
+  designerAssignees: "美工",
+  editableBy: "可编辑人",
+  viewableBy: "可查看人",
+  workflowStage: "流程阶段",
+  workflowStartedAt: "流程开始",
+  workflowDueAt: "流程截止",
+  workflowUpdatedAt: "流程更新",
+  workflowReminderAt: "流程提醒",
+  workflowHistory: "流程记录",
+  operationsProgress: "运营进程",
+  sourceWorkbook: "导入源文件",
+};
+
+const productVersionFieldOrder = Object.keys(productVersionFieldLabels);
 
 function ProductVersionModal({
   product,
@@ -541,6 +615,7 @@ function ProductVersionModal({
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
+  const [selectedVersion, setSelectedVersion] = useState<ProductVersionRecord | null>(null);
 
   const loadVersions = useCallback(async () => {
     setLoading(true);
@@ -568,10 +643,6 @@ function ProductVersionModal({
   }, [product.sku]);
 
   async function restoreVersion(version: ProductVersionRecord) {
-    if (!window.confirm(`确定恢复 ${product.sku} 到版本 ${version.version} 吗？`)) {
-      return;
-    }
-
     setBusyId(version.id);
     setError("");
 
@@ -588,6 +659,7 @@ function ProductVersionModal({
       }
 
       onRestored();
+      setSelectedVersion(null);
       await loadVersions();
     } catch (restoreError) {
       setError(restoreError instanceof Error ? restoreError.message : "版本恢复失败。");
@@ -599,6 +671,12 @@ function ProductVersionModal({
   useEffect(() => {
     void loadVersions();
   }, [loadVersions]);
+
+  const selectedDiffRows = useMemo(
+    () => (selectedVersion?.payload ? buildProductVersionDiffRows(product, selectedVersion.payload) : []),
+    [product, selectedVersion],
+  );
+  const changedDiffRows = selectedDiffRows.filter((row) => row.changed);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
@@ -619,12 +697,13 @@ function ProductVersionModal({
           {versions.map((version) => (
             <div key={version.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-muted px-3 py-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground">版本 {version.version} · {version.action}</p>
+                <button type="button" className="block max-w-full text-left text-sm font-bold text-brand hover:text-brand-dark" onClick={() => setSelectedVersion(version)}>
+                  版本 {version.version} · {version.action}
+                </button>
                 <p className="mt-1 truncate text-xs font-medium text-muted">{version.summary || "无摘要"} · {new Date(version.createdAt).toLocaleString("zh-CN", { hour12: false })}</p>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => void restoreVersion(version)} disabled={Boolean(busyId)}>
-                <RotateCcw className="h-4 w-4" />
-                {busyId === version.id ? "恢复中" : "恢复"}
+              <Button size="sm" variant="secondary" onClick={() => setSelectedVersion(version)} disabled={Boolean(busyId)}>
+                查看详情
               </Button>
             </div>
           ))}
@@ -633,8 +712,144 @@ function ProductVersionModal({
           ) : null}
         </div>
       </div>
+      {selectedVersion ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/45 p-6 backdrop-blur-sm">
+          <div className="flex max-h-[86vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">版本 {selectedVersion.version} · {selectedVersion.action}</h3>
+                <p className="mt-1 text-xs font-semibold text-muted">
+                  {selectedVersion.summary || "无摘要"} · {new Date(selectedVersion.createdAt).toLocaleString("zh-CN", { hour12: false })}
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setSelectedVersion(null)}>
+                <X className="h-4 w-4" />
+                关闭
+              </Button>
+            </div>
+            <div className="thin-scrollbar flex-1 overflow-auto p-5">
+              {selectedVersion.payload ? (
+                <div className="space-y-4">
+                  <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">
+                    当前商品与该版本快照共有 {changedDiffRows.length} 个字段不同。恢复后会用该版本快照覆盖当前商品资料。
+                  </div>
+                  <table className="w-full table-fixed text-left text-sm">
+                    <thead className="bg-surface-muted text-xs text-muted">
+                      <tr>
+                        <th className="w-[160px] px-3 py-2">字段</th>
+                        <th className="px-3 py-2">当前值</th>
+                        <th className="px-3 py-2">版本值</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(changedDiffRows.length ? changedDiffRows : selectedDiffRows).map((row) => (
+                        <tr key={row.key} className="border-t border-border align-top">
+                          <td className="px-3 py-3 font-bold text-foreground">{row.label}</td>
+                          <td className="px-3 py-3 text-muted">
+                            <pre className="whitespace-pre-wrap break-words font-sans">{row.currentValue}</pre>
+                          </td>
+                          <td className="px-3 py-3 text-foreground">
+                            <pre className="whitespace-pre-wrap break-words font-sans">{row.versionValue}</pre>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {changedDiffRows.length === 0 ? (
+                    <p className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm font-medium text-muted">这个版本和当前商品没有可展示差异。</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm font-medium text-muted">这个版本没有可读取的快照内容。</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
+              <Button variant="secondary" size="sm" onClick={() => setSelectedVersion(null)}>
+                取消
+              </Button>
+              <Button size="sm" onClick={() => void restoreVersion(selectedVersion)} disabled={Boolean(busyId) || !selectedVersion.payload}>
+                <RotateCcw className="h-4 w-4" />
+                {busyId === selectedVersion.id ? "恢复中" : "恢复到此版本"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function buildProductVersionDiffRows(currentProduct: Product, versionProduct: Product): ProductVersionDiffRow[] {
+  const extraKeys = Object.keys(versionProduct).filter((key) => !productVersionFieldLabels[key]);
+  const keys = [...productVersionFieldOrder, ...extraKeys].filter((key) => key in currentProduct || key in versionProduct);
+
+  return keys.map((key) => {
+    const currentValue = (currentProduct as unknown as Record<string, unknown>)[key];
+    const versionValue = (versionProduct as unknown as Record<string, unknown>)[key];
+
+    return {
+      key,
+      label: productVersionFieldLabels[key] ?? key,
+      currentValue: formatProductVersionValue(key, currentValue),
+      versionValue: formatProductVersionValue(key, versionValue),
+      changed: stableProductVersionValue(currentValue) !== stableProductVersionValue(versionValue),
+    };
+  });
+}
+
+function formatProductVersionValue(key: string, value: unknown): string {
+  if (value === undefined || value === null || value === "") {
+    return "--";
+  }
+
+  if (key === "status" && typeof value === "string" && value in productStatusLabels) {
+    return productStatusLabels[value as ProductStatus];
+  }
+
+  if (key === "workflowStage" && typeof value === "string" && value in productWorkflowStageLabels) {
+    return productWorkflowStageLabels[value as ProductWorkflowStage];
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => formatProductVersionNestedValue(item)).join("\n") : "--";
+  }
+
+  if (typeof value === "object") {
+    if (key === "sourceWorkbook" && "importedFileName" in value && typeof value.importedFileName === "string") {
+      return value.importedFileName;
+    }
+
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
+}
+
+function formatProductVersionNestedValue(value: unknown): string {
+  if (value === undefined || value === null || value === "") {
+    return "--";
+  }
+
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
+function stableProductVersionValue(value: unknown): string {
+  if (value === undefined || value === null || value === "") {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableProductVersionValue(item)).join(",")}]`;
+  }
+
+  if (typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+      .map(([key, nestedValue]) => `${JSON.stringify(key)}:${stableProductVersionValue(nestedValue)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
 }
 
 function TrialProductEditor({
@@ -671,7 +886,7 @@ function TrialProductEditor({
     }));
   }
 
-  function updateImprovement(field: Exclude<keyof TrialImprovement, "rows">, value: string) {
+  function updateImprovement(field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) {
     setDraft((current) => ({
       ...current,
       improvement: { ...current.improvement, [field]: value },
@@ -740,12 +955,17 @@ function TrialProductEditor({
               <CardTitle>区域 1：利润试算</CardTitle>
             </CardHeader>
             <CardContent className="thin-scrollbar overflow-auto">
-              <table className="min-w-[1760px] text-left text-xs">
+              <table className="w-max table-fixed text-left text-xs">
+                <colgroup>
+                  {trialPricingHeaders.map((header, index) => (
+                    <col key={index} className={header.widthClass} />
+                  ))}
+                </colgroup>
                 <thead className="bg-surface-muted text-muted">
                   <tr>
-                    {["品名", "长 cm", "宽 cm", "高 cm", "实际重量 g", "材积重量 g", "建议售价(USD)", "采购成本(RMB)", "FBA配送费$", "3.5% 燃油及物流附加费(USD)", "海运单价(RMB)", "海运头程(RMB)", "佣金(USD)", "月仓储费(USD)", "汇率", "保本价(USD)", "海运毛利(USD)", "海运毛利率", "体积重量/", "重量/"].map((label) => (
-                      <th key={label} className="px-2 py-2 font-bold">
-                        {label}
+                    {trialPricingHeaders.map((header, index) => (
+                      <th key={index} className="px-1 py-2 text-center font-bold leading-tight">
+                        {header.label}
                       </th>
                     ))}
                   </tr>
@@ -756,16 +976,16 @@ function TrialProductEditor({
                     return (
                       <tr key={index} className="border-t border-border align-top">
                         <td className="px-2 py-2"><SmallInput value={row.name} onChange={(value) => updatePricingRow(index, "name", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.lengthCm} onChange={(value) => updatePricingRow(index, "lengthCm", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.widthCm} onChange={(value) => updatePricingRow(index, "widthCm", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.heightCm} onChange={(value) => updatePricingRow(index, "heightCm", value)} /></td>
+                        <td className={trialPricingDimensionCellClass}><SmallInput compact type="number" value={row.lengthCm} onChange={(value) => updatePricingRow(index, "lengthCm", value)} /></td>
+                        <td className={trialPricingDimensionCellClass}><SmallInput compact type="number" value={row.widthCm} onChange={(value) => updatePricingRow(index, "widthCm", value)} /></td>
+                        <td className={trialPricingDimensionCellClass}><SmallInput compact type="number" value={row.heightCm} onChange={(value) => updatePricingRow(index, "heightCm", value)} /></td>
                         <td className="px-2 py-2"><SmallInput compact type="number" value={row.actualWeightKg} onChange={(value) => updatePricingRow(index, "actualWeightKg", value)} /></td>
                         <ReadonlyMetric value={calc.volumeWeightKg} />
                         <td className="px-2 py-2"><SmallInput compact type="number" value={row.suggestedPrice} onChange={(value) => updatePricingRow(index, "suggestedPrice", value)} /></td>
                         <td className="px-2 py-2"><SmallInput compact type="number" value={row.purchaseCost} onChange={(value) => updatePricingRow(index, "purchaseCost", value)} /></td>
                         <td className="px-2 py-2"><SmallInput compact type="number" value={row.fbaFee} onChange={(value) => updatePricingRow(index, "fbaFee", value)} /></td>
-                        <ReadonlyMetric value={calc.fuelFee} />
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.oceanFreightUnitPrice} onChange={(value) => updatePricingRow(index, "oceanFreightUnitPrice", value)} /></td>
+                        <ReadonlyMetric value={calc.fuelFee} className="w-[35px] min-w-[35px] max-w-[35px] px-1 text-center" />
+                        <td className={trialPricingOceanPriceCellClass}><SmallInput compact type="number" value={row.oceanFreightUnitPrice} onChange={(value) => updatePricingRow(index, "oceanFreightUnitPrice", value)} /></td>
                         <ReadonlyMetric value={calc.oceanFreight} />
                         <ReadonlyMetric value={calc.commission} />
                         <ReadonlyMetric value={calc.monthlyStorageFee} />
@@ -854,10 +1074,12 @@ function TrialProductEditor({
             <CardHeader>
               <CardTitle>区域 4：产品改进点</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {scalarImprovementFields.map((field) => (
-                <LabeledInput key={field} label={trialImprovementLabels[field]} value={draft.improvement[field]} onChange={(value) => updateImprovement(field, value)} />
-              ))}
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {scalarImprovementFields.map((field) => (
+                  <LabeledInput key={field} label={trialImprovementLabels[field]} value={draft.improvement[field]} onChange={(value) => updateImprovement(field, value)} />
+                ))}
+              </div>
             </CardContent>
           </Card>
 
@@ -926,7 +1148,6 @@ function ProductEditor({
   const [imageCopyGalleryOpen, setImageCopyGalleryOpen] = useState(false);
 
   const isEditing = Boolean(product);
-  const mainAmazonLink = buildAmazonLink(draft.asin);
   const workbookDetail = draft.workbookDetail;
   const workflowStage = getProductWorkflowStage(draft);
   const workflowAssignee = getCurrentWorkflowAssignee(draft);
@@ -934,7 +1155,12 @@ function ProductEditor({
   const selectionOwner = draft.selectionOwner || (isEditing ? product?.selectionOwner : creatorName) || creatorName;
   const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
   const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
-  const showListingActions = draft.status === "listing_confirming" || draft.status === "listed";
+  const showListingActions =
+    draft.status === "listing_confirming" ||
+    draft.status === "listed" ||
+    draft.status === "design_in_progress" ||
+    draft.status === "delisted" ||
+    draft.status === "patent_risk";
   const statusOptions = isEditing ? productStatusOptions : newProductStatusOptions;
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
@@ -981,7 +1207,7 @@ function ProductEditor({
     setDraft((current) => {
       const event = buildWorkflowEvent({
         stage,
-        actorName: current.selectionOwner || creatorName,
+        actorName: getCurrentWorkflowAssignee(current) || current.selectionOwner || creatorName,
         assigneeName,
         note,
         createdAt: now,
@@ -1155,8 +1381,15 @@ function ProductEditor({
     }));
   }
 
-  function updateWorkbookImprovement(field: Exclude<keyof TrialImprovement, "rows">, value: string) {
+  function updateWorkbookImprovement(field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) {
     setWorkbookDetail((current) => ({ ...current, improvement: { ...current.improvement, [field]: value } }));
+  }
+
+  function updateWorkbookPeakSeasonWeights(value: number[]) {
+    setWorkbookDetail((current) => ({
+      ...current,
+      improvement: { ...current.improvement, peakSeasonWeights: value },
+    }));
   }
 
   function updateWorkbookImprovementRow(index: number, field: TrialImprovementCellKey, value: string) {
@@ -1354,7 +1587,6 @@ function ProductEditor({
                   <ReadonlyField label="SKU（系统生成）" value={draft.sku} />
                   <LabeledInput label="中文名（必填）" value={draft.chineseName} onChange={(value) => setField("chineseName", value)} />
                   <LabeledInput label="英文名（必填）" value={draft.englishName} onChange={(value) => setField("englishName", value)} />
-                  <LabeledInput label="主 ASIN" value={draft.asin} onChange={(value) => setField("asin", value)} />
                   <label className="text-xs font-semibold text-muted">
                     状态
                     <select
@@ -1381,15 +1613,16 @@ function ProductEditor({
                   <MultiSelectField label="运营" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
                   <MultiSelectField label="美工" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
                   <ReadonlyField label="当前负责人" value={workflowAssignee || "--"} />
-                  <ReadonlyField label="流程截止" value={formatWorkflowDate(draft.workflowDueAt)} />
-                  <ReadonlyField label="创建日期（保存时生成）" value={draft.createdAt || "保存后自动生成"} />
                   <LabeledInput label="采购价格 CNY" type="number" value={String(draft.purchasePrice)} onChange={(value) => setField("purchasePrice", Number(value) || 0)} />
                   <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-foreground">业务流转</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold text-foreground">业务流转</p>
+                          <Badge tone={productWorkflowStageTones[workflowStage]}>{productWorkflowStageLabels[workflowStage]}</Badge>
+                        </div>
                         <p className="mt-1 text-xs text-muted">
-                          {workflowOverdue ? "已超 3 天未处理，需要提醒当前负责人。" : "每次流转会自动生成 3 天处理期限。"}
+                          当前负责人：{workflowAssignee || "未分配"}；流程截止：{formatWorkflowDate(draft.workflowDueAt)}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1397,7 +1630,7 @@ function ProductEditor({
                           size="sm"
                           variant="secondary"
                           disabled={selectedOps.length === 0}
-                          onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "选品提交给运营确认。")} 
+                          onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "选品提交给运营确认。")}
                         >
                           <ArrowRight className="h-4 w-4" />
                           交给运营
@@ -1406,18 +1639,18 @@ function ProductEditor({
                           size="sm"
                           variant="secondary"
                           disabled={selectedDesigners.length === 0}
-                          onClick={() => moveWorkflow("design_in_progress", formatAssigneeList(selectedDesigners), "运营转交给美工处理。")} 
+                          onClick={() => moveWorkflow("design_in_progress", formatAssigneeList(selectedDesigners), "运营转交给美工处理。")}
                         >
                           <ArrowRight className="h-4 w-4" />
                           交给美工
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", workflowAssignee, "当前流程已完成。")}>
                         {workflowStage === "design_in_progress" || workflowStage === "design_review" ? (
                           <Button size="sm" variant="secondary" disabled={selectedOps.length === 0} onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "美工完成后转回运营。")}>
                             <ArrowRight className="h-4 w-4" />
                             转回运营
                           </Button>
                         ) : null}
+                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", workflowAssignee, "当前流程已完成。")}>
                           <Save className="h-4 w-4" />
                           标记完成
                         </Button>
@@ -1429,17 +1662,16 @@ function ProductEditor({
                         当前阶段已超时，负责人：{workflowAssignee || "未分配"}
                       </div>
                     ) : null}
-                  </div>
-                  <div className="flex items-end">
-                    <a
-                      className={`inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold ${mainAmazonLink ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
-                      href={mainAmazonLink || "#"}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      打开主 ASIN
-                    </a>
+                    <div className="mt-2 space-y-1.5">
+                      {(draft.workflowHistory ?? []).slice(0, 5).map((event) => (
+                        <WorkflowHistoryItem key={event.id} event={event} />
+                      ))}
+                      {(draft.workflowHistory ?? []).length === 0 ? (
+                        <div className="rounded-md border border-border bg-white px-3 py-3 text-center text-sm text-muted">
+                          暂无流程记录，保存或点击流转按钮后会生成记录。
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   </div>
                 </div>
@@ -1457,6 +1689,7 @@ function ProductEditor({
               onSupplierAdd={addWorkbookSupplier}
               onSupplierRemove={removeWorkbookSupplier}
               onImprovementChange={updateWorkbookImprovement}
+              onPeakSeasonWeightsChange={updateWorkbookPeakSeasonWeights}
               onImprovementRowChange={updateWorkbookImprovementRow}
               onKeywordChange={updateWorkbookKeyword}
               onKeywordsReplace={replaceWorkbookKeywords}
@@ -1464,32 +1697,6 @@ function ProductEditor({
               onRemarkImagesChange={updateWorkbookRemarkImages}
             />
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>流程记录</CardTitle>
-                <Badge tone={productWorkflowStageTones[workflowStage]}>{productWorkflowStageLabels[workflowStage]}</Badge>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {(draft.workflowHistory ?? []).slice(0, 5).map((event) => (
-                  <div key={event.id} className="rounded-md border border-border bg-white px-3 py-2 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-bold text-foreground">{event.stageLabel}</p>
-                      <span className="text-xs text-muted">{formatWorkflowDate(event.createdAt)}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted">
-                      {event.actorName ? `${event.actorName} 操作` : "系统记录"}
-                      {event.assigneeName ? `，负责人 ${event.assigneeName}` : ""}
-                      {event.note ? `。${event.note}` : ""}
-                    </p>
-                  </div>
-                ))}
-                {(draft.workflowHistory ?? []).length === 0 ? (
-                  <div className="rounded-md border border-border bg-surface-muted px-3 py-4 text-center text-sm text-muted">
-                    暂无流程记录，保存或点击流转按钮后会生成记录。
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
           </section>
         </div>
       </div>
@@ -1510,11 +1717,39 @@ function ProductEditor({
         <ProductImageCopyGalleryModal
           sku={draft.sku}
           productName={draft.chineseName}
+          initialMineInfo={{ asin: draft.asin }}
           onClose={() => setImageCopyGalleryOpen(false)}
         />
       ) : null}
     </div>
   );
+}
+
+function WorkflowHistoryItem({ event }: { event: ProductWorkflowEvent }) {
+  const noteText = event.note ? `；${event.note}` : "";
+
+  return (
+    <div className="flex min-h-9 items-center justify-between gap-3 rounded-md border border-border bg-white px-3 py-1.5 text-xs">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0 font-bold text-foreground">{event.stageLabel}</span>
+        <span className="truncate text-muted">
+          {formatWorkflowTransferText(event)}
+          {noteText}
+        </span>
+      </div>
+      <span className="shrink-0 text-muted">{formatWorkflowDate(event.createdAt)}</span>
+    </div>
+  );
+}
+
+function formatWorkflowTransferText(event: ProductWorkflowEvent) {
+  const actor = event.actorName || "系统";
+
+  if (event.assigneeName) {
+    return `${actor} 交给 ${event.assigneeName}`;
+  }
+
+  return `${actor} 记录流程变更`;
 }
 
 function SummaryTile({
@@ -1555,13 +1790,6 @@ function SummaryTile({
   );
 }
 
-function formatSkuPreview(products: Product[], limit = 4) {
-  const skus = products.map((product) => product.sku).filter(Boolean);
-  if (!skus.length) return "暂无对应 SKU";
-
-  const visible = skus.slice(0, limit).join("、");
-  return skus.length > limit ? `SKU ${visible} 等 ${skus.length} 个` : `SKU ${visible}`;
-}
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-xs font-semibold text-muted">
@@ -1584,32 +1812,146 @@ function MultiSelectField({
   options: string[];
   onChange: (value: string[]) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [pendingValue, setPendingValue] = useState<string[]>(value);
+  const availableOptions = useMemo(() => Array.from(new Set([...value, ...options].filter(Boolean))), [options, value]);
+  const filteredOptions = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) return availableOptions;
+
+    return availableOptions.filter((option) => option.toLowerCase().includes(keyword));
+  }, [availableOptions, search]);
+  const selectedVisibleCount = filteredOptions.filter((option) => pendingValue.includes(option)).length;
+  const allVisibleSelected = filteredOptions.length > 0 && selectedVisibleCount === filteredOptions.length;
+  const summary = value.length ? `${value.slice(0, 2).join("、")}${value.length > 2 ? ` +${value.length - 2}` : ""}` : `请选择${label}`;
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setPendingValue(value);
+        setSearch("");
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open, value]);
+
   function toggle(option: string) {
-    onChange(value.includes(option) ? value.filter((item) => item !== option) : [...value, option]);
+    setPendingValue((current) => (current.includes(option) ? current.filter((item) => item !== option) : [...current, option]));
+  }
+
+  function toggleAllVisible() {
+    if (allVisibleSelected) {
+      setPendingValue((current) => current.filter((item) => !filteredOptions.includes(item)));
+      return;
+    }
+
+    setPendingValue((current) => Array.from(new Set([...current, ...filteredOptions])));
+  }
+
+  function cancel() {
+    setPendingValue(value);
+    setSearch("");
+    setOpen(false);
+  }
+
+  function confirm() {
+    onChange(pendingValue);
+    setSearch("");
+    setOpen(false);
   }
 
   return (
-    <div className="text-xs font-semibold text-muted">
+    <div ref={containerRef} className="relative text-xs font-semibold text-muted">
       <p>{label}</p>
-      <div className="mt-1 min-h-10 rounded-md border border-border bg-white px-2 py-2">
-        {options.length ? (
-          <div className="flex flex-wrap gap-2">
-            {options.map((option) => {
-              const checked = value.includes(option);
-
-              return (
-                <label key={option} className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs ${checked ? "border-brand bg-brand/10 text-brand" : "border-border text-muted"}`}>
-                  <input checked={checked} className="h-3.5 w-3.5 accent-brand" type="checkbox" onChange={() => toggle(option)} />
-                  {option}
-                </label>
-              );
-            })}
+      <button
+        type="button"
+        className={`mt-1 flex h-10 w-full items-center justify-between gap-2 rounded-md border bg-white px-3 text-left text-sm font-semibold outline-none transition-colors ${
+          open ? "border-brand ring-2 ring-brand/15" : "border-border hover:border-brand"
+        }`}
+        onClick={() => {
+          setPendingValue(value);
+          setOpen((current) => !current);
+        }}
+      >
+        <span className={value.length ? "truncate text-foreground" : "truncate text-muted"}>{summary}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-40 mt-1 flex w-full min-w-[320px] flex-col overflow-hidden rounded-md border border-border bg-white shadow-xl">
+          <div className="flex h-11 items-center gap-2 border-b border-border px-3">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="搜索"
+              className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted"
+            />
+            <Search className="h-4 w-4 text-muted" />
           </div>
-        ) : (
-          <p className="py-1 text-xs text-muted">暂无可选账号，请先到账号管理创建对应角色。</p>
-        )}
-      </div>
+          <div className="max-h-64 overflow-y-auto py-1">
+            {availableOptions.length ? (
+              <>
+                <button
+                  type="button"
+                  className="flex h-11 w-full items-center gap-3 px-3 text-left text-sm font-semibold text-foreground hover:bg-surface-muted"
+                  onClick={toggleAllVisible}
+                >
+                  <CheckboxIndicator checked={allVisibleSelected} />
+                  <span>全选</span>
+                </button>
+                {filteredOptions.map((option) => {
+                  const checked = pendingValue.includes(option);
+
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`flex h-11 w-full items-center gap-3 px-3 text-left text-sm font-semibold ${
+                        checked ? "bg-brand/10 text-brand" : "text-foreground hover:bg-surface-muted"
+                      }`}
+                      onClick={() => toggle(option)}
+                    >
+                      <CheckboxIndicator checked={checked} />
+                      <span className="truncate">{option}</span>
+                    </button>
+                  );
+                })}
+                {!filteredOptions.length ? <p className="px-3 py-6 text-center text-sm text-muted">没有匹配的账号</p> : null}
+              </>
+            ) : (
+              <p className="px-3 py-6 text-center text-sm text-muted">暂无可选账号，请先到账号管理创建对应角色。</p>
+            )}
+          </div>
+          <div className="flex items-center justify-between border-t border-border bg-surface-muted px-3 py-3">
+            <span className="text-xs font-semibold text-muted">已选 {pendingValue.length} 项</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={cancel}>
+                取消
+              </Button>
+              <Button size="sm" onClick={confirm}>
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function CheckboxIndicator({ checked }: { checked: boolean }) {
+  return (
+    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? "border-brand bg-brand text-white" : "border-border bg-white"}`}>
+      {checked ? <span className="text-xs leading-none">✓</span> : null}
+    </span>
   );
 }
 

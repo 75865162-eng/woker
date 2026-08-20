@@ -31,9 +31,9 @@ export function LabeledInput({
   );
 }
 
-export function ReadonlyMetric({ value }: { value: string | number }) {
+export function ReadonlyMetric({ value, className = "" }: { value: string | number; className?: string }) {
   const text = typeof value === "number" ? value.toFixed(2) : value;
-  return <td className="px-2 py-2 font-semibold text-muted metric-tabular">{text}</td>;
+  return <td className={`px-2 py-2 font-semibold text-muted metric-tabular ${className}`}>{text}</td>;
 }
 
 export function SmallInput({
