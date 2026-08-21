@@ -66,7 +66,11 @@ export function calculateForecastMonthlyRevenue(progress: ProductOperationProgre
 }
 
 export function hasIncompleteOperationsProgress(progress?: ProductOperationProgress) {
-  return Boolean(progress?.stages?.length && progress.stages.some((stage) => stage.status !== "completed"));
+  return !isOperationsProgressComplete(progress);
+}
+
+export function isOperationsProgressComplete(progress?: ProductOperationProgress) {
+  return Boolean(progress?.stages?.length && progress.stages.every((stage) => stage.status === "completed"));
 }
 
 export function summarizeOperationsProgressChanges(before: ProductOperationProgress, after: ProductOperationProgress) {

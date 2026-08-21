@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, History, X } from "lucide-react";
+import { Check, CheckSquare, History, Square, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +9,7 @@ import {
   normalizeOperationsProgress,
   operationStageDefinitions,
   operationStageStatusOptions,
+  isOperationsProgressComplete,
   summarizeOperationsProgressChanges,
 } from "@/lib/products/operations-progress";
 import type { ProductOperationProgress, ProductOperationStage, ProductOperationStageStatus } from "@/lib/products/types";
@@ -34,6 +35,7 @@ export function ProductOperationsProgress({
   const [draft, setDraft] = useState(initialValue);
   const revenue = calculateForecastMonthlyRevenue(draft);
   const completedCount = draft.stages.filter((stage) => stage.status === "completed").length;
+  const isComplete = isOperationsProgressComplete(draft);
 
   function setNumber(field: "orderQuantity" | "dailyAdBudget" | "forecastMonthlySales" | "forecastPrice", value: string) {
     setDraft((current) => ({ ...current, [field]: Number(value) || 0 }));
@@ -53,6 +55,11 @@ export function ProductOperationsProgress({
       status,
       completedAt: status === "completed" ? stage.completedAt || toDateInput(new Date()) : "",
     });
+  }
+
+  function toggleStageCompletion(index: number) {
+    const stage = draft.stages[index];
+    updateStageStatus(index, stage.status === "completed" ? "not_started" : "completed");
   }
 
   function applyChanges() {
@@ -76,7 +83,7 @@ export function ProductOperationsProgress({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-foreground">运营进度</h2>
-              <Badge tone={completedCount === draft.stages.length ? "green" : "amber"}>
+              <Badge tone={isComplete ? "green" : "amber"}>
                 {completedCount}/{draft.stages.length} 阶段完成
               </Badge>
             </div>
@@ -144,6 +151,7 @@ export function ProductOperationsProgress({
               <table className="w-full min-w-[1180px] text-left text-xs">
                 <thead className="bg-surface-muted text-muted">
                   <tr>
+                    <th className="px-3 py-2">选择</th>
                     <th className="px-3 py-2">阶段</th>
                     <th className="px-3 py-2">状态</th>
                     <th className="px-3 py-2">负责人</th>
@@ -156,8 +164,23 @@ export function ProductOperationsProgress({
                 <tbody>
                   {operationStageDefinitions.map((definition, index) => {
                     const stage = draft.stages[index];
+                    const isChecked = stage.status === "completed";
                     return (
                       <tr key={definition.id} className="border-t border-border align-top">
+                        <td className="px-2 py-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={isChecked ? "text-brand hover:text-brand-dark" : ""}
+                            aria-label={isChecked ? "取消勾选" : "勾选完成"}
+                            title={isChecked ? "取消勾选" : "勾选完成"}
+                            aria-pressed={isChecked}
+                            onClick={() => toggleStageCompletion(index)}
+                          >
+                            {isChecked ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                          </Button>
+                        </td>
                         <td className="whitespace-nowrap px-3 py-2 font-bold text-foreground">{definition.label}</td>
                         <td className="w-32 px-2 py-2">
                           <select className={inputClass} value={stage.status} onChange={(event) => updateStageStatus(index, event.target.value as ProductOperationStageStatus)}>
