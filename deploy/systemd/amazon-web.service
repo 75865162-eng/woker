@@ -1,0 +1,22 @@
+[Unit]
+Description=Amazon Bulk Ad Next.js web
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/amazon-ad-bulk-current
+EnvironmentFile=/opt/amazon-ad-bulk-operation/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+Environment=NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/npm run start:standalone
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+User=root
+
+[Install]
+WantedBy=multi-user.target
