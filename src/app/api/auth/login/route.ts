@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthDriver, getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
+import {
+  getAuthDriver,
+  getBootstrapAdminEmail,
+  getBootstrapSuperAdminCredentials,
+  isBootstrapAdminEmail,
+} from "@/lib/auth/constants";
 import { createLocalSession, createSession } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db/prisma";
@@ -20,15 +25,18 @@ export async function POST(request: Request) {
     if (getAuthDriver() === "local") {
       const configuredEmail = getBootstrapAdminEmail();
       const configuredPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || "1";
+      const superAdminCredentials = getBootstrapSuperAdminCredentials();
+      const isPrimaryAdmin = email === configuredEmail && password === configuredPassword;
+      const isExtraAdmin = Boolean(superAdminCredentials && email === superAdminCredentials.email && password === superAdminCredentials.password);
 
-      if (email !== configuredEmail || password !== configuredPassword) {
+      if (!isPrimaryAdmin && !isExtraAdmin) {
         return NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 });
       }
 
       const user = {
-        id: "local-admin",
-        email: configuredEmail,
-        name: "Local Admin",
+        id: isExtraAdmin ? "local-super-admin" : "local-admin",
+        email: isExtraAdmin && superAdminCredentials ? superAdminCredentials.email : configuredEmail,
+        name: isExtraAdmin ? "Local Super Admin" : "Local Admin",
         role: "owner",
         organizationId: "local-organization",
         organizationName: process.env.BOOTSTRAP_ORG_NAME || "Local Organization",

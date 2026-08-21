@@ -19,3 +19,14 @@ export function getBootstrapAdminEmail() {
 export function isBootstrapAdminEmail(email?: string | null) {
   return Boolean(email && email.trim().toLowerCase() === getBootstrapAdminEmail());
 }
+
+export function getBootstrapSuperAdminCredentials() {
+  const email = process.env.BOOTSTRAP_SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.BOOTSTRAP_SUPER_ADMIN_PASSWORD;
+
+  if (!email || !password) {
+    return undefined;
+  }
+
+  return { email, password };
+}
