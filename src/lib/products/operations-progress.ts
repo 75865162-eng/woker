@@ -7,9 +7,7 @@
 
 export const operationStageDefinitions: Array<{ id: ProductOperationStageId; label: string }> = [
   { id: "selection_data", label: "竞品分析" },
-  { id: "sample_confirmation", label: "样品确认" },
   { id: "backend_upload", label: "赛狐上传" },
-  { id: "system_entry", label: "系统录入" },
   { id: "order", label: "下单" },
   { id: "image_request", label: "图片需求" },
   { id: "copywriting", label: "文案编写" },
@@ -21,18 +19,26 @@ export const operationStageDefinitions: Array<{ id: ProductOperationStageId; lab
 ];
 
 export const operationStageEvidenceRequirements: Partial<
-  Record<ProductOperationStageId, { label: string; accept: string; helper: string; kind: "image" | "excel" }>
+  Record<ProductOperationStageId, { label: string; accept: string; kind: "image" | "excel" }>
 > = {
+  image_request: {
+    label: "图片需求表",
+    accept: "image/*",
+    kind: "image",
+  },
+  copywriting: {
+    label: "文案表",
+    accept: ".xlsx,.xls,.csv",
+    kind: "excel",
+  },
   final_sample_confirmation: {
     label: "样品确认单",
     accept: "image/*",
-    helper: "上传样品确认单图片后才能勾选完成",
     kind: "image",
   },
   keyword_research: {
     label: "关键词调研表",
     accept: ".xlsx,.xls,.csv",
-    helper: "上传 Excel 表后才能勾选完成",
     kind: "excel",
   },
 };
