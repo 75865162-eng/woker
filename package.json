@@ -6,6 +6,7 @@
     "dev": "node scripts/next-run.mjs .next-dev dev --turbopack",
     "build": "node scripts/next-run.mjs .next-build build",
     "start": "node scripts/next-run.mjs .next-build start",
+    "start:standalone": "node .next-build/standalone/server.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
