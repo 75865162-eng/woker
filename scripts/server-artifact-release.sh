@@ -89,6 +89,7 @@ fi
 
 cp "$extract_dir/package.json" "$APP_DIR/package.json"
 cp "$extract_dir/package-lock.json" "$APP_DIR/package-lock.json"
+cp "$extract_dir/prisma.config.ts" "$APP_DIR/prisma.config.ts"
 rm -rf "$APP_DIR/prisma" "$APP_DIR/scripts" "$APP_DIR/deploy"
 cp -a "$extract_dir/prisma" "$APP_DIR/prisma"
 cp -a "$extract_dir/scripts" "$APP_DIR/scripts"
