@@ -28,6 +28,13 @@ import {
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
 import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
+import {
+  canChangeDelistedProductStatus,
+  canEditOperationsConfirmingProduct,
+  getOperationsConfirmingEditors,
+  getProductEditRestriction,
+  type ProductEditUser,
+} from "@/lib/products/product-edit-access";
 import { addWorkspaceScopeToFormData, scopedFetch } from "@/lib/workspace/scoped-fetch";
 
 import {
@@ -97,6 +104,7 @@ export function ProductWorkbench() {
   const [importStatus, setImportStatus] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
+  const [currentUser, setCurrentUser] = useState<ProductEditUser | null>(null);
   const [creatorName, setCreatorName] = useState("当前创建人");
   const teamMembers = useMemo(() => accountsToTeamMembers(teamAccounts), [teamAccounts]);
   const opsOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["operations_supervisor", "operations"]), [teamMembers]);
@@ -109,7 +117,8 @@ export function ProductWorkbench() {
   useEffect(() => {
     fetch("/api/auth/me")
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { user?: { name?: string } } | null) => {
+      .then((data: { user?: ProductEditUser } | null) => {
+        setCurrentUser(data?.user ?? null);
         if (data?.user?.name) {
           setCreatorName(data.user.name);
         }
@@ -498,6 +507,7 @@ export function ProductWorkbench() {
             product={activeProduct}
             products={products}
             creatorName={creatorName}
+            currentUser={currentUser}
             opsOptions={opsOptions}
             designerOptions={designerOptions}
             onClose={() => setIsEditorOpen(false)}
@@ -1130,6 +1140,7 @@ function ProductEditor({
   product,
   products,
   creatorName,
+  currentUser,
   opsOptions,
   designerOptions,
   onClose,
@@ -1138,6 +1149,7 @@ function ProductEditor({
   product: Product | null;
   products: Product[];
   creatorName: string;
+  currentUser: ProductEditUser | null;
   opsOptions: string[];
   designerOptions: string[];
   onClose: () => void;
@@ -1155,6 +1167,12 @@ function ProductEditor({
   const selectionOwner = draft.selectionOwner || (isEditing ? product?.selectionOwner : creatorName) || creatorName;
   const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
   const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
+  const canEditOpsConfirming = !product || product.status !== "ops_review" || canEditOperationsConfirmingProduct(product, currentUser);
+  const statusChangeLocked = Boolean(product?.status === "delisted" && !canChangeDelistedProductStatus(currentUser));
+  const opsConfirmingEditors = product?.status === "ops_review" ? getOperationsConfirmingEditors(product) : [];
+  const editorRestrictionMessage = !canEditOpsConfirming
+    ? `运营确认中的商品只能由 ${opsConfirmingEditors.join("、") || "当前转交运营"}、主管或管理员编辑。`
+    : "";
   const showListingActions =
     draft.status === "listing_confirming" ||
     draft.status === "listed" ||
@@ -1168,6 +1186,11 @@ function ProductEditor({
   }
 
   function updateStatus(status: ProductStatus) {
+    if (statusChangeLocked) {
+      window.alert("已下架 SKU 的状态只能由主管或管理员更改。");
+      return;
+    }
+
     const nextStage =
       status === "ops_review"
         ? "ops_confirming"
@@ -1455,6 +1478,13 @@ function ProductEditor({
   }
 
   function handleSubmit() {
+    const editRestriction = product ? getProductEditRestriction(product, draft as Product, currentUser) : "";
+
+    if (editRestriction) {
+      window.alert(editRestriction);
+      return;
+    }
+
     if (!draft.chineseName.trim() || !draft.englishName.trim()) {
       window.alert("中文名和英文名为必填项。");
       return;
@@ -1531,6 +1561,8 @@ function ProductEditor({
           <div>
             <h2 className="text-lg font-bold text-foreground">{isEditing ? `商品详情 ${draft.sku}` : "新增商品"}</h2>
             <p className="mt-1 text-xs font-medium text-muted">保存后会回到产品列表，SKU 页面与新增页面使用同一套字段。</p>
+            {editorRestrictionMessage ? <p className="mt-1 text-xs font-semibold text-danger">{editorRestrictionMessage}</p> : null}
+            {statusChangeLocked ? <p className="mt-1 text-xs font-semibold text-amber-700">已下架 SKU 的状态只能由主管或管理员更改。</p> : null}
           </div>
           <div className="flex gap-2">
             {showListingActions ? (
@@ -1547,7 +1579,7 @@ function ProductEditor({
               <X className="h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" onClick={handleSubmit}>
+            <Button size="sm" disabled={!canEditOpsConfirming} onClick={handleSubmit}>
               <Save className="h-4 w-4" />
               保存
             </Button>
@@ -1592,6 +1624,7 @@ function ProductEditor({
                     <select
                       className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
                       value={draft.status}
+                      disabled={statusChangeLocked}
                       onChange={(event) => updateStatus(event.target.value as ProductStatus)}
                     >
                       {statusOptions.map((option) => (
