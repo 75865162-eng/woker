@@ -7,6 +7,7 @@
     "build": "node scripts/next-run.mjs .next-build build",
     "start": "node scripts/next-run.mjs .next-build start",
     "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "worker": "tsx scripts/import-worker.ts",
