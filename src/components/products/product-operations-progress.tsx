@@ -1,18 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, CheckSquare, History, Square, X } from "lucide-react";
+import { Check, CheckSquare, FileSpreadsheet, History, ImagePlus, Square, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   calculateForecastMonthlyRevenue,
+  isOperationStageComplete,
   normalizeOperationsProgress,
+  operationStageEvidenceRequirements,
   operationStageDefinitions,
   operationStageStatusOptions,
   isOperationsProgressComplete,
   summarizeOperationsProgressChanges,
 } from "@/lib/products/operations-progress";
-import type { ProductOperationProgress, ProductOperationStage, ProductOperationStageStatus } from "@/lib/products/types";
+import type { ProductOperationProgress, ProductOperationStage, ProductOperationStageEvidence, ProductOperationStageStatus } from "@/lib/products/types";
 
 const inputClass = "h-9 w-full rounded-md border border-border bg-white px-2 text-sm text-foreground outline-none focus:border-brand";
 
@@ -34,7 +36,7 @@ export function ProductOperationsProgress({
   const initialValue = useMemo(() => normalizeOperationsProgress(value, defaultOwner), [defaultOwner, value]);
   const [draft, setDraft] = useState(initialValue);
   const revenue = calculateForecastMonthlyRevenue(draft);
-  const completedCount = draft.stages.filter((stage) => stage.status === "completed").length;
+  const completedCount = draft.stages.filter(isOperationStageComplete).length;
   const isComplete = isOperationsProgressComplete(draft);
 
   function setNumber(field: "orderQuantity" | "dailyAdBudget" | "forecastMonthlySales" | "forecastPrice", value: string) {
@@ -51,6 +53,12 @@ export function ProductOperationsProgress({
 
   function updateStageStatus(index: number, status: ProductOperationStageStatus) {
     const stage = draft.stages[index];
+    const requirement = operationStageEvidenceRequirements[stage.id];
+    if (status === "completed" && requirement && !stage.evidenceFile?.fileName) {
+      window.alert(requirement.helper);
+      return;
+    }
+
     updateStage(index, {
       status,
       completedAt: status === "completed" ? stage.completedAt || toDateInput(new Date()) : "",
@@ -60,6 +68,36 @@ export function ProductOperationsProgress({
   function toggleStageCompletion(index: number) {
     const stage = draft.stages[index];
     updateStageStatus(index, stage.status === "completed" ? "not_started" : "completed");
+  }
+
+  function updateStageEvidence(index: number, evidenceFile: ProductOperationStageEvidence) {
+    updateStage(index, { evidenceFile });
+  }
+
+  function handleEvidenceUpload(index: number, file: File | null) {
+    if (!file) return;
+
+    const stage = draft.stages[index];
+    const requirement = operationStageEvidenceRequirements[stage.id];
+    if (requirement?.kind === "image" && !file.type.startsWith("image/")) {
+      window.alert("请上传样品确认单图片。");
+      return;
+    }
+    if (requirement?.kind === "excel" && !/\.(xlsx|xls|csv)$/iu.test(file.name)) {
+      window.alert("请上传 Excel 表（.xlsx、.xls 或 .csv）。");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateStageEvidence(index, {
+        fileName: file.name,
+        fileType: file.type,
+        fileDataUrl: String(reader.result),
+        uploadedAt: new Date().toISOString(),
+      });
+    };
+    reader.readAsDataURL(file);
   }
 
   function applyChanges() {
@@ -104,18 +142,12 @@ export function ProductOperationsProgress({
         <div className="thin-scrollbar flex-1 overflow-auto">
           <section className="border-b border-border bg-surface-muted px-5 py-4">
             <h3 className="text-sm font-bold text-foreground">关键经营数据</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
               <ProgressField label="产品名称">
                 <input className={inputClass} value={productName} readOnly />
               </ProgressField>
-              <ProgressField label="入选日期">
-                <input className={inputClass} type="date" value={draft.selectionDate} onChange={(event) => setDraft({ ...draft, selectionDate: event.target.value })} />
-              </ProgressField>
               <ProgressField label="下单数量">
                 <input className={inputClass} type="number" min="0" value={draft.orderQuantity || ""} onChange={(event) => setNumber("orderQuantity", event.target.value)} />
-              </ProgressField>
-              <ProgressField label="下单日期">
-                <input className={inputClass} type="date" value={draft.orderDate} onChange={(event) => setDraft({ ...draft, orderDate: event.target.value })} />
               </ProgressField>
               <ProgressField label="出货日期">
                 <input className={inputClass} type="date" value={draft.shipDate} onChange={(event) => setDraft({ ...draft, shipDate: event.target.value })} />
@@ -148,7 +180,7 @@ export function ProductOperationsProgress({
               {draft.updatedAt ? <p className="text-xs text-muted">最近更新：{formatDateTime(draft.updatedAt)} · {draft.updatedBy || "未知"}</p> : null}
             </div>
             <div className="mt-3 overflow-x-auto rounded-md border border-border">
-              <table className="w-full min-w-[1180px] text-left text-xs">
+              <table className="w-full min-w-[1320px] text-left text-xs">
                 <thead className="bg-surface-muted text-muted">
                   <tr>
                     <th className="px-3 py-2">选择</th>
@@ -157,6 +189,7 @@ export function ProductOperationsProgress({
                     <th className="px-3 py-2">负责人</th>
                     <th className="px-3 py-2">计划日期</th>
                     <th className="px-3 py-2">实际完成</th>
+                    <th className="px-3 py-2">附件</th>
                     <th className="px-3 py-2">备注 / 阻塞原因</th>
                     <th className="px-3 py-2">最后更新</th>
                   </tr>
@@ -164,7 +197,8 @@ export function ProductOperationsProgress({
                 <tbody>
                   {operationStageDefinitions.map((definition, index) => {
                     const stage = draft.stages[index];
-                    const isChecked = stage.status === "completed";
+                    const isChecked = isOperationStageComplete(stage);
+                    const evidenceRequirement = operationStageEvidenceRequirements[stage.id];
                     return (
                       <tr key={definition.id} className="border-t border-border align-top">
                         <td className="px-2 py-2">
@@ -199,6 +233,20 @@ export function ProductOperationsProgress({
                         </td>
                         <td className="w-40 px-2 py-2">
                           <input className={inputClass} type="date" value={stage.completedAt} onChange={(event) => updateStage(index, { completedAt: event.target.value })} />
+                        </td>
+                        <td className="w-52 px-2 py-2">
+                          {evidenceRequirement ? (
+                            <EvidenceUpload
+                              accept={evidenceRequirement.accept}
+                              fileName={stage.evidenceFile?.fileName}
+                              helper={evidenceRequirement.helper}
+                              label={evidenceRequirement.label}
+                              kind={evidenceRequirement.kind}
+                              onChange={(file) => handleEvidenceUpload(index, file)}
+                            />
+                          ) : (
+                            <span className="text-muted">--</span>
+                          )}
                         </td>
                         <td className="min-w-64 px-2 py-2">
                           <input
@@ -244,6 +292,35 @@ function ProgressField({ label, children }: { label: string; children: React.Rea
       {label}
       <div className="mt-1">{children}</div>
     </label>
+  );
+}
+
+function EvidenceUpload({
+  accept,
+  fileName,
+  helper,
+  label,
+  kind,
+  onChange,
+}: {
+  accept: string;
+  fileName?: string;
+  helper: string;
+  label: string;
+  kind: "image" | "excel";
+  onChange: (file: File | null) => void;
+}) {
+  const Icon = kind === "excel" ? FileSpreadsheet : ImagePlus;
+
+  return (
+    <div className="space-y-1">
+      <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted">
+        <Icon className="h-4 w-4 text-brand" />
+        {fileName ? "重新上传" : `上传${label}`}
+        <input className="hidden" type="file" accept={accept} onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
+      </label>
+      {fileName ? <p className="max-w-44 truncate text-xs font-semibold text-foreground">{fileName}</p> : <p className="text-xs text-muted">{helper}</p>}
+    </div>
   );
 }
 

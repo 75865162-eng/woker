@@ -76,6 +76,13 @@ export type ProductOperationStageId =
 
 export type ProductOperationStageStatus = "not_started" | "in_progress" | "completed" | "blocked";
 
+export type ProductOperationStageEvidence = {
+  fileName: string;
+  fileType: string;
+  fileDataUrl: string;
+  uploadedAt: string;
+};
+
 export type ProductOperationStage = {
   id: ProductOperationStageId;
   status: ProductOperationStageStatus;
@@ -84,6 +91,7 @@ export type ProductOperationStage = {
   completedAt: string;
   note: string;
   updatedAt: string;
+  evidenceFile?: ProductOperationStageEvidence;
 };
 
 export type ProductOperationProgressEvent = {
