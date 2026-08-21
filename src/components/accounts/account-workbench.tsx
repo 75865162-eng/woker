@@ -480,7 +480,7 @@ export function AccountWorkbench() {
   const filteredAccounts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return visibleAccounts.filter((account) => {
-      const statusMatched = statusFilter === "all" || account.status === statusFilter;
+      const statusMatched = statusFilter === "all" ? account.status !== "disabled" : account.status === statusFilter;
       const keywordMatched =
         !keyword ||
         account.name.toLowerCase().includes(keyword) ||
