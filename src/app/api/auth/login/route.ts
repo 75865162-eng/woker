@@ -15,10 +15,11 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { email?: string; password?: string };
-    const email = body.email?.trim().toLowerCase();
+    const loginName = body.email?.trim();
+    const normalizedLoginName = loginName?.toLowerCase();
     const password = body.password ?? "";
 
-    if (!email || !password) {
+    if (!loginName || !normalizedLoginName || !password) {
       return NextResponse.json({ error: "请输入账号和密码。" }, { status: 400 });
     }
 
@@ -26,8 +27,8 @@ export async function POST(request: Request) {
       const configuredEmail = getBootstrapAdminEmail();
       const configuredPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || "1";
       const superAdminCredentials = getBootstrapSuperAdminCredentials();
-      const isPrimaryAdmin = email === configuredEmail && password === configuredPassword;
-      const isExtraAdmin = Boolean(superAdminCredentials && email === superAdminCredentials.email && password === superAdminCredentials.password);
+      const isPrimaryAdmin = normalizedLoginName === configuredEmail && password === configuredPassword;
+      const isExtraAdmin = Boolean(superAdminCredentials && normalizedLoginName === superAdminCredentials.email && password === superAdminCredentials.password);
 
       if (!isPrimaryAdmin && !isExtraAdmin) {
         return NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 });
@@ -48,12 +49,52 @@ export async function POST(request: Request) {
       return response;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const userByLoginName = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: loginName,
+          mode: "insensitive",
+        },
+      },
       include: {
         memberships: true,
       },
     });
+    const rosterMemberByLoginName = userByLoginName
+      ? null
+      : await prisma.teamRosterMember.findFirst({
+          where: {
+            OR: [
+              { id: loginName },
+              {
+                username: {
+                  equals: loginName,
+                  mode: "insensitive",
+                },
+              },
+              {
+                email: {
+                  equals: loginName,
+                  mode: "insensitive",
+                },
+              },
+            ],
+          },
+          select: {
+            id: true,
+          },
+          orderBy: {
+            updatedAt: "desc",
+          },
+        });
+    const user = userByLoginName ?? (rosterMemberByLoginName
+      ? await prisma.user.findUnique({
+          where: { id: rosterMemberByLoginName.id },
+          include: {
+            memberships: true,
+          },
+        })
+      : null);
 
     if (!user || user.status !== "active" || !verifyPassword(password, user.passwordHash)) {
       return NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 });

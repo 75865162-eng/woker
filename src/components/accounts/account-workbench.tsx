@@ -876,10 +876,27 @@ export function AccountWorkbench() {
       ) : null}
 
       <section className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        <MetricCard title="账号总数" value={visibleAccounts.length} note={`在线 ${activeAccounts}`} icon={UsersRound} tone="blue" />
-        <MetricCard title="业务部门" value={departments.length} note={departments.slice(0, 2).join(" / ")} icon={Building2} tone="green" />
-        <MetricCard title="待激活账号" value={pendingAccounts} note="新建后首次登录改密" icon={Mail} tone="amber" />
-        <MetricCard title="停用账号" value={disabledAccounts} note="保留审计记录" icon={LockKeyhole} tone="gray" />
+        <MetricCard title="账号总数" value={visibleAccounts.length} note={`在线 ${activeAccounts}`} icon={UsersRound} tone="blue" onClick={() => setStatusFilter("all")} />
+        <MetricCard
+          title="业务部门"
+          value={departments.length}
+          note={departments.slice(0, 2).join(" / ")}
+          icon={Building2}
+          tone="green"
+          onClick={() => {
+            setQuery("");
+            setStatusFilter("all");
+          }}
+        />
+        <MetricCard title="待激活账号" value={pendingAccounts} note="新建后首次登录改密" icon={Mail} tone="amber" onClick={() => setStatusFilter("pending")} />
+        <MetricCard
+          title="停用账号"
+          value={disabledAccounts}
+          note="保留审计记录"
+          icon={LockKeyhole}
+          tone="gray"
+          onClick={() => setStatusFilter("disabled")}
+        />
       </section>
 
       <section>
@@ -1232,12 +1249,14 @@ function MetricCard({
   note,
   icon: Icon,
   tone,
+  onClick,
 }: {
   title: string;
   value: number;
   note: string;
   icon: typeof UsersRound;
   tone: "blue" | "green" | "amber" | "gray";
+  onClick?: () => void;
 }) {
   const colorClass = {
     blue: "border-t-blue-500 text-blue-700",
@@ -1248,7 +1267,12 @@ function MetricCard({
 
   return (
     <Card className={`border-t-4 ${colorClass}`}>
-      <CardContent className="flex items-center justify-between p-4">
+      <CardContent className="p-0">
+        <button
+          type="button"
+          className={`flex w-full items-center justify-between p-4 text-left ${onClick ? "cursor-pointer transition hover:bg-surface-muted/60" : ""}`}
+          onClick={onClick}
+        >
         <div>
           <p className="text-xs font-bold text-muted">{title}</p>
           <p className="mt-1 text-2xl font-black text-foreground">{value}</p>
@@ -1257,6 +1281,7 @@ function MetricCard({
         <div className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-muted">
           <Icon className={`h-5 w-5 ${colorClass}`} />
         </div>
+        </button>
       </CardContent>
     </Card>
   );
