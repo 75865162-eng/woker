@@ -167,7 +167,18 @@ ls node_modules/next/dist/docs
 - 小盘服务器上如果历史 Docker build cache 占用过高，可在服务启动并验证通过后运行 `docker builder prune -af`；不要清理 Docker volumes。
 - 每次部署后必须检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker`、`journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
 
-推荐更新流程：
+推荐更新流程（优先 CI artifact 发布）：
+
+```bash
+npm run lint
+npm run build
+bash scripts/package-ci-artifact.sh
+bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
+```
+
+这条路径由 CI 或本机先完成 build，服务器只解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。
+
+服务器源码构建发布仍保留为 fallback：
 
 ```bash
 npm run lint

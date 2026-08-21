@@ -1,0 +1,84 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      deploy_production:
+        description: Deploy the CI-built artifact to production
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Package release artifact
+        run: bash scripts/package-ci-artifact.sh
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: amazon-ad-bulk-operation-release
+          path: dist/amazon-ad-bulk-operation-release.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy-production:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_production
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: amazon-ad-bulk-operation-release
+          path: dist
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.PRODUCTION_SERVER_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy artifact
+        env:
+          SERVER_HOST: ${{ secrets.PRODUCTION_SERVER_HOST }}
+          SERVER_USER: ${{ secrets.PRODUCTION_SERVER_USER }}
+          SERVER_DIR: ${{ secrets.PRODUCTION_SERVER_DIR }}
+          SSH_OPTS: -o StrictHostKeyChecking=yes
+          INSTALL_DEPS_ON_SERVER: "true"
+          RUN_BOOTSTRAP_SEED: "false"
+          SOURCE_BRANCH: ${{ github.ref_name }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
