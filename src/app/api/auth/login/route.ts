@@ -3,6 +3,7 @@ import {
   getAuthDriver,
   getBootstrapAdminEmail,
   getBootstrapSuperAdminCredentials,
+  getBootstrapTemporaryLoginCredentials,
   isBootstrapAdminEmail,
 } from "@/lib/auth/constants";
 import { createLocalSession, createSession } from "@/lib/auth/session";
@@ -27,17 +28,28 @@ export async function POST(request: Request) {
       const configuredEmail = getBootstrapAdminEmail();
       const configuredPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || "1";
       const superAdminCredentials = getBootstrapSuperAdminCredentials();
+      const temporaryLoginCredentials = getBootstrapTemporaryLoginCredentials();
       const isPrimaryAdmin = normalizedLoginName === configuredEmail && password === configuredPassword;
       const isExtraAdmin = Boolean(superAdminCredentials && normalizedLoginName === superAdminCredentials.email && password === superAdminCredentials.password);
+      const isTemporaryLogin = Boolean(
+        temporaryLoginCredentials &&
+          normalizedLoginName === temporaryLoginCredentials.email &&
+          password === temporaryLoginCredentials.password,
+      );
 
-      if (!isPrimaryAdmin && !isExtraAdmin) {
+      if (!isPrimaryAdmin && !isExtraAdmin && !isTemporaryLogin) {
         return NextResponse.json({ error: "账号或密码不正确。" }, { status: 401 });
       }
 
       const user = {
-        id: isExtraAdmin ? "local-super-admin" : "local-admin",
-        email: isExtraAdmin && superAdminCredentials ? superAdminCredentials.email : configuredEmail,
-        name: isExtraAdmin ? "Local Super Admin" : "Local Admin",
+        id: isExtraAdmin ? "local-super-admin" : isTemporaryLogin ? "local-temp-login" : "local-admin",
+        email:
+          isExtraAdmin && superAdminCredentials
+            ? superAdminCredentials.email
+            : isTemporaryLogin && temporaryLoginCredentials
+              ? temporaryLoginCredentials.email
+              : configuredEmail,
+        name: isExtraAdmin ? "Local Super Admin" : isTemporaryLogin ? "Local Temp Login" : "Local Admin",
         role: "owner",
         organizationId: "local-organization",
         organizationName: process.env.BOOTSTRAP_ORG_NAME || "Local Organization",

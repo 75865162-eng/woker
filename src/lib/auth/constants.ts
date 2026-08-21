@@ -30,3 +30,14 @@ export function getBootstrapSuperAdminCredentials() {
 
   return { email, password };
 }
+
+export function getBootstrapTemporaryLoginCredentials() {
+  const email = process.env.BOOTSTRAP_TEMP_LOGIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.BOOTSTRAP_TEMP_LOGIN_PASSWORD;
+
+  if (!email || !password) {
+    return undefined;
+  }
+
+  return { email, password };
+}
