@@ -55,6 +55,7 @@ jobs:
     needs: build
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_production
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment: production
     steps:
       - name: Checkout

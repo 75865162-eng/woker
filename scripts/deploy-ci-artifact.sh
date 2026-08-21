@@ -38,7 +38,7 @@ scp ${SSH_OPTS} "$ARTIFACT_PATH" "${SERVER_USER}@${SERVER_HOST}:${REMOTE_ARTIFAC
 remote_release_command="cd ${SERVER_DIR} && SOURCE_BRANCH=${quoted_source_branch} SOURCE_COMMIT=${quoted_source_commit} INSTALL_DEPS_ON_SERVER=${quoted_install_deps} RUN_BOOTSTRAP_SEED=${quoted_run_bootstrap_seed} bash scripts/server-artifact-release.sh ${quoted_remote_artifact}"
 
 if [ "$SERVER_USER" != "root" ]; then
-  remote_release_command="cd ${SERVER_DIR} && sudo env SOURCE_BRANCH=${quoted_source_branch} SOURCE_COMMIT=${quoted_source_commit} INSTALL_DEPS_ON_SERVER=${quoted_install_deps} RUN_BOOTSTRAP_SEED=${quoted_run_bootstrap_seed} bash scripts/server-artifact-release.sh ${quoted_remote_artifact}"
+  remote_release_command="cd ${SERVER_DIR} && sudo -n env SOURCE_BRANCH=${quoted_source_branch} SOURCE_COMMIT=${quoted_source_commit} INSTALL_DEPS_ON_SERVER=${quoted_install_deps} RUN_BOOTSTRAP_SEED=${quoted_run_bootstrap_seed} bash scripts/server-artifact-release.sh ${quoted_remote_artifact}"
 fi
 
 ssh ${SSH_OPTS} "${SERVER_USER}@${SERVER_HOST}" "$remote_release_command"
