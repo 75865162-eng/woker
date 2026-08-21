@@ -6,7 +6,7 @@ aecob.com, www.aecob.com {
 	}
 }
 
-http://159-75-203-221.sslip.io {
+http://159.75.203.221, http://159-75-203-221.sslip.io {
 	encode zstd gzip
 
 	reverse_proxy 127.0.0.1:3000 {
