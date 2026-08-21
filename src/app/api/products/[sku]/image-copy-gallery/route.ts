@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
+import { getProductEditRestrictionMessage } from "@/lib/products/product-edit-access";
+import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import {
   createPersistableProductImageCopyGallery,
@@ -59,6 +61,22 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sku:
     const normalizedSku = normalizeSku(sku);
     const body = (await request.json()) as { gallery?: Partial<ProductImageCopyGalleryDraft>; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
     const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
+    const productRecord = await prisma.productRecord.findUnique({
+      where: {
+        organizationId_workspaceId_sku: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          sku: normalizedSku,
+        },
+      },
+    });
+    const product = productRecord?.payload as unknown as Product | undefined;
+    const editRestriction = product ? getProductEditRestrictionMessage(product, user, "edit_listing") : "";
+
+    if (editRestriction) {
+      return NextResponse.json({ error: editRestriction }, { status: 403 });
+    }
+
     const gallery = createPersistableProductImageCopyGallery(
       normalizeProductImageCopyGallery(body.gallery, 3),
     );

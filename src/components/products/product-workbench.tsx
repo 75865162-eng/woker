@@ -29,8 +29,7 @@ import {
 } from "@/lib/products/workflow";
 import { hasIncompleteOperationsProgress, isOperationsProgressComplete } from "@/lib/products/operations-progress";
 import {
-  canChangeDelistedProductStatus,
-  canEditOperationsConfirmingProduct,
+  canEditProduct,
   getOperationsConfirmingEditors,
   getProductEditRestriction,
   type ProductEditUser,
@@ -1168,10 +1167,10 @@ function ProductEditor({
   const selectionOwner = draft.selectionOwner || (isEditing ? product?.selectionOwner : creatorName) || creatorName;
   const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
   const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
-  const canEditOpsConfirming = !product || product.status !== "ops_review" || canEditOperationsConfirmingProduct(product, currentUser);
-  const statusChangeLocked = Boolean(product?.status === "delisted" && !canChangeDelistedProductStatus(currentUser));
+  const canEditBasic = !product || canEditProduct(product, currentUser, "edit_basic");
+  const statusChangeLocked = Boolean(product && !canEditProduct(product, currentUser, "change_status"));
   const opsConfirmingEditors = product?.status === "ops_review" ? getOperationsConfirmingEditors(product) : [];
-  const editorRestrictionMessage = !canEditOpsConfirming
+  const editorRestrictionMessage = !canEditBasic
     ? `运营确认中的商品只能由 ${opsConfirmingEditors.join("、") || "当前转交运营"}、主管或管理员编辑。`
     : "";
   const showListingActions =
@@ -1580,7 +1579,7 @@ function ProductEditor({
               <X className="h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" disabled={!canEditOpsConfirming} onClick={handleSubmit}>
+            <Button size="sm" disabled={!canEditBasic} onClick={handleSubmit}>
               <Save className="h-4 w-4" />
               保存
             </Button>

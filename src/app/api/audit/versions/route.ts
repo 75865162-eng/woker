@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { recordDataChangeVersion, type VersionedEntityType } from "@/lib/audit/versioning";
 import { prisma } from "@/lib/db/prisma";
+import { getProductEditRestriction } from "@/lib/products/product-edit-access";
 import { buildProductRecordIndex } from "@/lib/products/product-record-index";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -127,6 +128,22 @@ export async function POST(request: Request) {
 
     if (version.entityType === "product") {
       const product = version.payload as unknown as Product;
+      const existingRecord = await prisma.productRecord.findUnique({
+        where: {
+          organizationId_workspaceId_sku: {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            sku: product.sku,
+          },
+        },
+      });
+      const existingProduct = existingRecord?.payload as unknown as Product | undefined;
+      const editRestriction = getProductEditRestriction(existingProduct, product, user, "restore_version");
+
+      if (editRestriction) {
+        return NextResponse.json({ error: editRestriction }, { status: 403 });
+      }
+
       const productIndex = buildProductRecordIndex(product);
 
       await prisma.productRecord.upsert({

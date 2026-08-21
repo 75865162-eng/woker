@@ -3,6 +3,8 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
+import { getProductEditRestrictionMessage } from "@/lib/products/product-edit-access";
+import type { Product } from "@/lib/products/types";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
@@ -60,6 +62,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing valid image url or SKU." }, { status: 400 });
     }
 
+    const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
+    const productRecord = await prisma.productRecord.findUnique({
+      where: {
+        organizationId_workspaceId_sku: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          sku,
+        },
+      },
+    });
+    const product = productRecord?.payload as unknown as Product | undefined;
+    const editRestriction = product ? getProductEditRestrictionMessage(product, user, "edit_design") : "";
+
+    if (editRestriction) {
+      return NextResponse.json({ error: editRestriction }, { status: 403 });
+    }
+
     const response = await fetch(remoteUrl, {
       headers: {
         "User-Agent": "AmazonBulkAdWorkbench/1.0",
@@ -90,7 +109,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "图片不能超过 50MB。" }, { status: 400 });
     }
 
-    const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
     const key = createAssetKey(sku, remoteUrl, contentType);
     const storedObject = await getStorageDriver().putBuffer({ key, buffer, contentType });
 

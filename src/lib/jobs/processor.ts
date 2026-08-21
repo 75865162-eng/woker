@@ -10,8 +10,11 @@ import {
   toPerformanceRow,
   type ParseDiagnostics,
 } from "@/lib/bulk/workspace-builders";
+import { normalizeAccountRoleId } from "@/lib/accounts/team-roster";
+import { isBootstrapAdminEmail } from "@/lib/auth/constants";
 import { prisma } from "@/lib/db/prisma";
 import { importCommodityWorkbook } from "@/lib/products/commodity-import";
+import type { ProductEditUser } from "@/lib/products/product-edit-access";
 import { getStorageDriver } from "@/lib/storage";
 import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
 
@@ -35,6 +38,35 @@ type ProcessImportJobOptions = {
   returnAfterDataset?: boolean;
   continueAfterDataset?: boolean;
 };
+
+async function getProductEditUserForJob(job: Pick<ImportJobWithFile, "organizationId" | "userId">): Promise<ProductEditUser> {
+  const user = await prisma.user.findUnique({
+    where: { id: job.userId },
+    select: {
+      email: true,
+      name: true,
+      memberships: {
+        where: { organizationId: job.organizationId },
+        select: { role: true },
+        take: 1,
+      },
+    },
+  });
+  const rosterMember = await prisma.teamRosterMember.findUnique({
+    where: {
+      organizationId_id: {
+        organizationId: job.organizationId,
+        id: job.userId,
+      },
+    },
+    select: { roleId: true },
+  });
+
+  return {
+    name: user?.name,
+    role: isBootstrapAdminEmail(user?.email) ? "owner" : normalizeAccountRoleId(rosterMember?.roleId ?? user?.memberships[0]?.role),
+  };
+}
 
 function createResultKey(jobId: string) {
   return `results/${new Date().toISOString().slice(0, 10)}/${jobId}.xlsx`;
@@ -497,6 +529,7 @@ async function processProductCommodityImportJob(job: ImportJobWithFile) {
     marketplace: job.marketplace,
     fileName: job.file.originalName,
     workbookBuffer: arrayBuffer,
+    user: await getProductEditUserForJob(job),
     onProgress: async (progress) => {
       await prisma.importJob.update({
         where: { id: job.id },
@@ -510,7 +543,7 @@ async function processProductCommodityImportJob(job: ImportJobWithFile) {
     data: {
       status: "done",
       progress: 100,
-      error: `已导入 ${result.importedCount} 个商品；主图下载 ${result.imageDownloadedCount} 个，失败 ${result.imageFailedCount} 个，跳过 ${result.skippedRowCount} 行。`,
+      error: `已导入 ${result.importedCount} 个商品；主图下载 ${result.imageDownloadedCount} 个，失败 ${result.imageFailedCount} 个，跳过 ${result.skippedRowCount} 行${result.permissionSkippedCount ? `，其中权限限制 ${result.permissionSkippedCount} 行` : ""}。`,
       file: {
         update: {
           status: "done",

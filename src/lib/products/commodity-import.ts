@@ -3,6 +3,7 @@ import path from "node:path";
 import { Prisma } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/db/prisma";
+import { getProductEditRestriction, type ProductEditUser } from "@/lib/products/product-edit-access";
 import { buildProductRecordIndex } from "@/lib/products/product-record-index";
 import { isIgnoredProductSku } from "@/lib/products/sku-utils";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
@@ -22,11 +23,13 @@ type CommodityImportResult = {
   imageDownloadedCount: number;
   imageFailedCount: number;
   skippedRowCount: number;
+  permissionSkippedCount: number;
 };
 
 type CommodityImportOptions = CommodityImportScope & {
   fileName: string;
   workbookBuffer: ArrayBuffer;
+  user: ProductEditUser;
   onProgress?: (progress: number) => Promise<void>;
 };
 
@@ -138,6 +141,7 @@ export async function importCommodityWorkbook(options: CommodityImportOptions): 
   let skippedRowCount = 0;
   let imageDownloadedCount = 0;
   let imageFailedCount = 0;
+  let permissionSkippedCount = 0;
   const rows = commodityRows.slice(1).filter((row) => row.some((cell) => cleanText(cell)));
 
   await options.onProgress?.(20);
@@ -165,6 +169,25 @@ export async function importCommodityWorkbook(options: CommodityImportOptions): 
 
     const sourceWorkbook = buildSourceWorkbook(options.fileName, sku, headersBySheet, rowsBySkuBySheet, record);
     const product = buildProductFromCommodityRecord(record, sourceWorkbook);
+    const existingRecord = await prisma.productRecord.findUnique({
+      where: {
+        organizationId_workspaceId_sku: {
+          organizationId: options.organizationId,
+          workspaceId: options.workspaceId,
+          sku: product.sku,
+        },
+      },
+    });
+    const existingProduct = existingRecord?.payload as unknown as Product | undefined;
+    const editRestriction = getProductEditRestriction(existingProduct, product, options.user, "import_update");
+
+    if (editRestriction) {
+      permissionSkippedCount += 1;
+      skippedRowCount += 1;
+      await reportRowCompleted();
+      return;
+    }
+
     const productWithImage = await hydrateProductMainImage(product, options);
     const productIndex = buildProductRecordIndex(productWithImage);
     const imageAsset = productWithImage.sourceWorkbook?.imageAssets?.at(-1);
@@ -226,6 +249,7 @@ export async function importCommodityWorkbook(options: CommodityImportOptions): 
     imageDownloadedCount,
     imageFailedCount,
     skippedRowCount,
+    permissionSkippedCount,
   };
 }
 

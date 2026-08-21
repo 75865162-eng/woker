@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { getProductEditRestriction, type ProductEditUser } from "@/lib/products/product-edit-access";
 import { buildProductRecordIndex } from "@/lib/products/product-record-index";
 import type { Product } from "@/lib/products/types";
 import { sellfoxPost } from "@/lib/sellfox/client";
@@ -103,7 +104,7 @@ async function syncStores(organizationId: string, workspaceId: string) {
   return synced;
 }
 
-async function syncProducts(organizationId: string, userId: string, scope: WorkspaceScopeInput) {
+async function syncProducts(organizationId: string, userId: string, user: ProductEditUser, scope: WorkspaceScopeInput) {
   let synced = 0;
   const pageSize = 100;
 
@@ -114,6 +115,14 @@ async function syncProducts(organizationId: string, userId: string, scope: Works
     for (const row of rows) {
       const product = productFromSellfox(row);
       if (!product) continue;
+      const existingRecord = await prisma.productRecord.findUnique({
+        where: { organizationId_workspaceId_sku: { organizationId, workspaceId: scope.workspaceId, sku: product.sku } },
+      });
+      const existingProduct = existingRecord?.payload as unknown as Product | undefined;
+      const editRestriction = getProductEditRestriction(existingProduct, product, user, "import_update");
+
+      if (editRestriction) continue;
+
       const index = buildProductRecordIndex(product);
       await prisma.productRecord.upsert({
         where: { organizationId_workspaceId_sku: { organizationId, workspaceId: scope.workspaceId, sku: product.sku } },
@@ -191,7 +200,7 @@ export async function POST(request: Request) {
       storeExternalId: typeof body.storeExternalId === "string" ? body.storeExternalId : undefined,
       reportDate: typeof body.reportDate === "string" ? body.reportDate : defaultSellfoxReportDate(),
     }) : null;
-    const count = performance?.synced ?? (resource === "stores" ? await syncStores(permission.user.organizationId, scope.workspaceId) : resource === "products" ? await syncProducts(permission.user.organizationId, permission.user.id, scope) : await syncHourly(permission.user.organizationId, scope.workspaceId, storeOffset, storeLimit));
+    const count = performance?.synced ?? (resource === "stores" ? await syncStores(permission.user.organizationId, scope.workspaceId) : resource === "products" ? await syncProducts(permission.user.organizationId, permission.user.id, permission.user, scope) : await syncHourly(permission.user.organizationId, scope.workspaceId, storeOffset, storeLimit));
     const summary = resource === "performance" ? { count, reportDate: performance?.reportDate, storeCount: performance?.storeCount } : resource === "hourly" ? { count, storeOffset, storeLimit } : { count };
     await prisma.sellfoxSyncRun.update({ where: { id: run.id }, data: { status: "done", summary, finishedAt: new Date() } });
     return NextResponse.json({ runId: run.id, ...summary });

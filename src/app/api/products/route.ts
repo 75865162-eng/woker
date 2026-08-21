@@ -260,7 +260,7 @@ export async function POST(request: Request) {
       },
     });
     const existingProduct = existingRecord?.payload as unknown as Product | undefined;
-    const editRestriction = getProductEditRestriction(existingProduct, product, user);
+    const editRestriction = getProductEditRestriction(existingProduct, product, user, "edit_basic");
 
     if (editRestriction) {
       return NextResponse.json({ error: editRestriction }, { status: 403 });
