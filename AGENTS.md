@@ -137,6 +137,79 @@ npm run lint
 - 当前可以使用 local storage 和 inline processor，但接口边界应兼容未来替换为 R2/S3 和 queue worker。
 - 所有未来需要多人使用的数据模型，应预留 `orgId` / `userId` / ownership 边界。
 
+## 服务器部署与更新规则
+
+本节是生产服务器部署与更新的唯一仓库内记录。新开窗口接手服务器更新时，先读本节；不要依赖散落在其他文档或聊天记录里的部署规则。
+
+生产服务器当前资源较紧，部署时必须先按磁盘空间规划，避免把本地开发产物、旧修复目录或 Docker 构建缓存带上服务器。
+
+- 服务器 IP：`159.75.203.221`。
+- SSH 用户：`ubuntu`。
+- 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
+- 正式访问地址：`https://aecob.com`。
+- 服务器系统：Ubuntu 24.04 LTS x64。
+- 生产架构：PostgreSQL 和 Redis 使用 Docker；Next web 和 worker 使用服务器本机 Node.js + systemd；Caddy 使用 Docker 反代到本机 web。
+- Docker Compose 只管理 infra：`postgres`、`redis`。不要再为普通代码更新执行 `docker compose up -d --build web worker`。
+- systemd 服务：`amazon-web`、`amazon-worker`。
+- UFW 必须允许 `22/tcp`、`80/tcp`、`443/tcp`；`3000`、`5432`、`6379` 不开放公网。
+- Caddy 证书和配置使用 Docker volumes `amazon-caddy-data`、`amazon-caddy-config` 持久化；不要无备份删除这些 volumes。
+- 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
+- 管理员登录信息保存位置：`/root/amazon-ad-bulk-credentials.txt`。不要把密码写入仓库文档。
+- 生产服务器默认文件存储：Cloudflare R2，`STORAGE_DRIVER=r2`，bucket 为 `amazon-bulk-uploads`。R2/S3 密钥只允许写在服务器 `.env` 或受控密钥管理中，不要提交到仓库或写入文档。
+- 本地开发可继续使用 `STORAGE_DRIVER=local` 和 `uploads/`。更新生产系统时，不要把本地 local uploads 覆盖到服务器，也不要把生产 R2 设置改回 local。
+- 部署同步必须排除大目录和历史产物：`.git`、`node_modules`、`node_modules.*`、`.next`、`.next-*`、`uploads`、`coverage`、`out`、`build`。
+- 项目目录里曾出现过 `node_modules.broken-audit-fix-*`、`.next-build.broken-*`、`.next-build-stale-*` 等历史目录；这些目录绝不能同步到服务器。
+- 不要使用会把整个本地工作区无差别覆盖到服务器的命令。同步前先确认排除规则；优先使用带 `--exclude` 的 `rsync`。
+- 服务器上的 `.env`、Docker volumes、`uploads` 属于运行态数据；除非用户明确要求，不要删除或覆盖。
+- PostgreSQL 和 Redis 只绑定 `127.0.0.1:5432`、`127.0.0.1:6379`，不要暴露公网端口。
+- 生产 `.env` 中 `DATABASE_URL` 应指向 `127.0.0.1:5432`，`REDIS_URL` 应指向 `127.0.0.1:6379`。
+- 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
+- worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
+- 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
+- 服务器发布脚本负责启动 Docker infra、Prisma generate、Prisma migrate deploy、bootstrap admin seed、Next standalone build、生成 release 目录、切换 current symlink、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器。
+- 发布产物目录：`/opt/amazon-ad-bulk-releases/<timestamp>-<branch>-<commit>`。
+- 当前线上版本软链接：`/opt/amazon-ad-bulk-current`。`amazon-web` 和 `amazon-worker` 都从该 symlink 启动，保证 web/worker 版本一致。
+- 发布记录文件：`/opt/amazon-ad-bulk-release-log.jsonl`。每次部署和回滚都应追加记录。
+- release 目录只保存运行所需的 standalone、源码、脚本、Prisma 和 public；`node_modules` 通过 symlink 共享 `/opt/amazon-ad-bulk-operation/node_modules`，避免复制大依赖。
+- 默认只保留最近 5 个 release。可通过服务器环境变量 `KEEP_RELEASES` 临时调整；不要为了省空间删除当前 release 或 Docker volumes。
+- 小盘服务器上如果历史 Docker build cache 占用过高，可在服务启动并验证通过后运行 `docker builder prune -af`；不要清理 Docker volumes。
+- 每次部署后必须检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker`、`journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
+
+推荐更新流程（优先 CI artifact 发布）：
+
+```bash
+npm run lint
+npm run build
+bash scripts/package-ci-artifact.sh
+bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
+```
+
+这条路径由 CI 或本机先完成 build，服务器只解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。
+
+服务器源码构建发布仍保留为 fallback：
+
+```bash
+npm run lint
+npm run build
+
+bash scripts/deploy-native-server.sh
+```
+
+如果包含 Prisma migration，部署后要确认迁移执行成功：
+
+```bash
+cd /opt/amazon-ad-bulk-operation
+npm run db:migrate
+```
+
+服务器侧快速手动发布流程：
+
+```bash
+cd /opt/amazon-ad-bulk-operation
+bash scripts/server-native-release.sh
+```
+
+
 ## UI 与交互约定
 
 - 整体是工具型 SaaS，不是营销落地页。优先信息密度、可扫描性、稳定布局和明确操作。
