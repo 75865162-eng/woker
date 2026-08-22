@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Building2,
   Check,
+  Download,
   Eye,
   EyeOff,
   Filter,
@@ -12,10 +13,11 @@ import {
   LockKeyhole,
   Mail,
   Pencil,
-  Plus,
   Search,
   ShieldCheck,
+  Upload,
   UserCog,
+  UserPlus,
   UsersRound,
   X,
 } from "lucide-react";
@@ -31,6 +33,7 @@ import {
   type PermissionAction,
   type RolePermissionMap,
 } from "@/lib/accounts/permissions";
+import { exportAccountWorkbook, parseAccountWorkbookFile } from "@/lib/accounts/account-workbook";
 import { normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
 
 type AccountStatus = "active" | "pending" | "disabled";
@@ -38,14 +41,22 @@ type RoleId = AccountRoleId;
 
 type Account = {
   id: string;
+  username?: string;
   name: string;
   email: string;
   password?: string;
+  passwordDirty?: boolean;
   department: string;
   title: string;
   roleId: RoleId;
   status: AccountStatus;
   lastActiveAt: string;
+  amazonStorePermissions?: string;
+  multiPlatformStorePermissions?: string;
+  phone?: string;
+  lastLoginIp?: string;
+  lastLoginAt?: string;
+  sourceCreatedAt?: string;
 };
 
 type Role = {
@@ -163,21 +174,50 @@ const fieldClass =
 const teamMembersApiPath = "/api/accounts/team-members";
 const rolePermissionsApiPath = "/api/accounts/role-permissions";
 
-function getFallbackPassword(accountId: string) {
-  return accountId === "local-admin" ? "1" : "12345678";
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
-function withAccountPassword(account: Account): Account {
+function isDefaultSuperAccount(account: { id?: string; email?: string; username?: string } | string) {
+  const identity = typeof account === "string" ? { id: account } : account;
+
+  return identity.id === "local-admin" || identity.email?.trim().toLowerCase() === "1" || identity.username?.trim().toLowerCase() === "1";
+}
+
+function getFallbackPassword(account: { id?: string; email?: string; username?: string } | string) {
+  return isDefaultSuperAccount(account) ? "1" : "12345678";
+}
+
+function canManageRole(roleId: RoleId) {
+  return roleId !== "owner";
+}
+
+function canManageAccount(account: Account) {
+  return !isDefaultSuperAccount(account) && account.roleId !== "owner";
+}
+
+function withLoadedAccountState(account: Account): Account {
   return {
     ...account,
-    password: account.password || getFallbackPassword(account.id),
+    password: undefined,
+    passwordDirty: false,
   };
 }
 
-function stripAccountPasswords(accounts: Account[]) {
+function serializeAccountsForApi(accounts: Account[]) {
   return accounts.map((account) => {
     const record = { ...account };
-    delete record.password;
+    if (!record.passwordDirty) {
+      delete record.password;
+    }
+    delete record.passwordDirty;
     return record;
   });
 }
@@ -189,9 +229,17 @@ async function loadAccountsFromApi() {
 
     const payload = (await response.json()) as { accounts?: unknown; revision?: unknown };
     return {
-      accounts: normalizeTeamAccounts(payload.accounts).map((account) => withAccountPassword({
+      accounts: normalizeTeamAccounts(payload.accounts).map((account) => withLoadedAccountState({
         ...account,
         lastActiveAt: account.lastActiveAt ?? "未记录",
+        username: account.username ?? "",
+        password: undefined,
+        amazonStorePermissions: account.amazonStorePermissions ?? "",
+        multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
+        phone: account.phone ?? "",
+        lastLoginIp: account.lastLoginIp ?? "",
+        lastLoginAt: account.lastLoginAt ?? "",
+        sourceCreatedAt: account.sourceCreatedAt ?? "",
       })) as Account[],
       revision: typeof payload.revision === "string" ? payload.revision : "",
     };
@@ -207,7 +255,7 @@ async function saveAccountsToApi(accounts: Account[], revision: string) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ accounts: stripAccountPasswords(accounts), revision }),
+      body: JSON.stringify({ accounts: serializeAccountsForApi(accounts), revision }),
     });
     const payload = (await response.json()) as { accounts?: unknown; revision?: unknown; error?: string };
 
@@ -221,9 +269,17 @@ async function saveAccountsToApi(accounts: Account[], revision: string) {
 
     return {
       ok: true as const,
-      accounts: normalizeTeamAccounts(payload.accounts).map((account) => withAccountPassword({
+      accounts: normalizeTeamAccounts(payload.accounts).map((account) => withLoadedAccountState({
         ...account,
         lastActiveAt: account.lastActiveAt ?? "未记录",
+        username: account.username ?? "",
+        password: undefined,
+        amazonStorePermissions: account.amazonStorePermissions ?? "",
+        multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
+        phone: account.phone ?? "",
+        lastLoginIp: account.lastLoginIp ?? "",
+        lastLoginAt: account.lastLoginAt ?? "",
+        sourceCreatedAt: account.sourceCreatedAt ?? "",
       })) as Account[],
       revision: typeof payload.revision === "string" ? payload.revision : "",
     };
@@ -272,6 +328,10 @@ export function AccountWorkbench() {
   const [passwordAccount, setPasswordAccount] = useState<Account | null>(null);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [permissionSavedAt, setPermissionSavedAt] = useState("");
+  const [accountImportMessage, setAccountImportMessage] = useState("");
+  const [accountImporting, setAccountImporting] = useState(false);
+  const accountImportInputRef = useRef<HTMLInputElement | null>(null);
+  const visibleAccounts = useMemo(() => accounts, [accounts]);
   const visibleRoles = useMemo(
     () =>
       roles.map((role) => ({
@@ -372,7 +432,8 @@ export function AccountWorkbench() {
     const nextAccount: Account = {
       ...payload,
       id,
-      password: payload.password || getFallbackPassword(id),
+      password: payload.password || getFallbackPassword({ ...payload, id }),
+      passwordDirty: true,
       status: "pending",
       lastActiveAt: "待首次登录",
     };
@@ -384,20 +445,20 @@ export function AccountWorkbench() {
   function updateAccountRole(accountId: string, roleId: RoleId) {
     commitAccounts((current) =>
       current.map((account) => {
-        if (account.id !== accountId || account.roleId === roleId) return account;
+        if (account.id !== accountId || account.roleId === roleId || !canManageAccount(account)) return account;
         return { ...account, roleId };
       }),
     );
   }
 
   function saveAccount(account: Account) {
-    commitAccounts((current) => current.map((item) => (item.id === account.id ? account : item)));
+    commitAccounts((current) => current.map((item) => (item.id === account.id && canManageAccount(item) ? account : item)));
     setEditAccount(null);
   }
 
   function saveAccountPassword(accountId: string, password: string) {
     commitAccounts((current) =>
-      current.map((account) => (account.id === accountId ? { ...account, password } : account)),
+      current.map((account) => (account.id === accountId && canManageAccount(account) ? { ...account, password, passwordDirty: true } : account)),
     );
     setPasswordAccount(null);
   }
@@ -405,11 +466,121 @@ export function AccountWorkbench() {
   function toggleAccountStatus(accountId: string) {
     commitAccounts((current) =>
       current.map((account) =>
-        account.id === accountId ? { ...account, status: account.status === "disabled" ? "active" : "disabled" } : account,
+        account.id === accountId && canManageAccount(account)
+          ? { ...account, status: account.status === "disabled" ? "active" : "disabled" }
+          : account,
       ),
     );
   }
 
+  const roleLabels = useMemo(
+    () => Object.fromEntries(roles.map((role) => [role.id, role.name])) as Record<RoleId, string>,
+    [roles],
+  );
+
+  async function exportAccounts() {
+    const blob = await exportAccountWorkbook(visibleAccounts, roleLabels);
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    downloadBlob(blob, `账号列表-${stamp}.xlsx`);
+  }
+
+  async function importAccounts(file: File) {
+    setAccountImportMessage("");
+    setAccountSaveError("");
+    setAccountImporting(true);
+
+    try {
+      const { accounts: importedAccounts, errors } = await parseAccountWorkbookFile(file, roleLabels);
+      if (!importedAccounts.length) {
+        throw new Error(errors[0] ?? "文件中没有可导入的有效账号。");
+      }
+
+      let createdCount = 0;
+      let updatedCount = 0;
+      let skippedCount = errors.length;
+      commitAccounts((current) => {
+        const next = [...current];
+
+        importedAccounts.forEach((imported, index) => {
+          const existingIndex = next.findIndex(
+            (account) =>
+              account.id === imported.id ||
+              (Boolean(imported.username) && account.username === imported.username) ||
+              (Boolean(imported.email) && account.email.trim().toLowerCase() === imported.email?.toLowerCase()),
+          );
+          if (existingIndex >= 0) {
+            const existing = next[existingIndex];
+            if (!canManageAccount(existing) || !canManageRole(imported.roleId)) {
+              skippedCount += 1;
+              return;
+            }
+            next[existingIndex] = {
+              ...existing,
+              id: existing.id,
+              username: imported.username || existing.username,
+              name: imported.name,
+              email: imported.email || existing.email,
+              department: imported.department || existing.department,
+              title: imported.title || existing.title,
+              roleId: imported.roleId,
+              status: imported.status,
+              password: existing.password,
+              passwordDirty: existing.passwordDirty ?? false,
+              lastActiveAt: imported.lastActiveAt || existing.lastActiveAt,
+              amazonStorePermissions: imported.amazonStorePermissions || existing.amazonStorePermissions,
+              multiPlatformStorePermissions: imported.multiPlatformStorePermissions || existing.multiPlatformStorePermissions,
+              phone: imported.phone || existing.phone,
+              lastLoginIp: imported.lastLoginIp || existing.lastLoginIp,
+              lastLoginAt: imported.lastLoginAt || existing.lastLoginAt,
+              sourceCreatedAt: imported.sourceCreatedAt || existing.sourceCreatedAt,
+            };
+            updatedCount += 1;
+            return;
+          }
+
+          if (isDefaultSuperAccount(imported)) {
+            skippedCount += 1;
+            return;
+          }
+
+          if (!canManageRole(imported.roleId)) {
+            skippedCount += 1;
+            return;
+          }
+          const id = `u-${Date.now()}-${index + 1}`;
+          const nextAccount: Account = {
+            id,
+            username: imported.username ?? "",
+            name: imported.name,
+            email: imported.email ?? "",
+            department: imported.department,
+            title: imported.title,
+            roleId: imported.roleId,
+            status: imported.status,
+            password: getFallbackPassword({ id, email: imported.email ?? "", username: imported.username ?? "" }),
+            passwordDirty: true,
+            lastActiveAt: imported.lastActiveAt || "待首次登录",
+            amazonStorePermissions: imported.amazonStorePermissions ?? "",
+            multiPlatformStorePermissions: imported.multiPlatformStorePermissions ?? "",
+            phone: imported.phone ?? "",
+            lastLoginIp: imported.lastLoginIp ?? "",
+            lastLoginAt: imported.lastLoginAt ?? "",
+            sourceCreatedAt: imported.sourceCreatedAt ?? "",
+          };
+          next.unshift(nextAccount);
+          createdCount += 1;
+        });
+
+        return next;
+      });
+      setAccountImportMessage(`已导入：新增 ${createdCount} 个，更新 ${updatedCount} 个${skippedCount ? `，跳过 ${skippedCount} 行` : ""}。`);
+    } catch (error) {
+      setAccountSaveError(error instanceof Error ? error.message : "账号列表导入失败。");
+    } finally {
+      setAccountImporting(false);
+      if (accountImportInputRef.current) accountImportInputRef.current.value = "";
+    }
+  }
   function togglePermission(moduleId: string, action: PermissionAction) {
     setRoles((current) =>
       current.map((role) => {
@@ -468,8 +639,27 @@ export function AccountWorkbench() {
             <Building2 className="h-4 w-4" />
             组织架构
           </Button>
+          <input
+            ref={accountImportInputRef}
+            accept=".xlsx,.xls,.csv"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importAccounts(file);
+              event.currentTarget.value = "";
+            }}
+            type="file"
+          />
+          <Button variant="secondary" disabled={accountImporting} onClick={() => accountImportInputRef.current?.click()}>
+            <Upload className="h-4 w-4" />
+            {accountImporting ? "导入中" : "导入"}
+          </Button>
+          <Button variant="secondary" onClick={() => void exportAccounts()}>
+            <Download className="h-4 w-4" />
+            导出
+          </Button>
           <Button onClick={() => setNewAccountOpen(true)}>
-            <Plus className="h-4 w-4" />
+            <UserPlus className="h-4 w-4" />
             新建同事账号
           </Button>
         </div>
@@ -477,6 +667,11 @@ export function AccountWorkbench() {
       {accountSaveError ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {accountSaveError}
+        </div>
+      ) : null}
+      {accountImportMessage ? (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+          {accountImportMessage}
         </div>
       ) : null}
 
@@ -885,18 +1080,19 @@ function PasswordDialog({
   onClose: () => void;
   onSubmit: (accountId: string, password: string) => void;
 }) {
-  const currentPassword = account.password || getFallbackPassword(account.id);
+  const currentPassword = account.password || getFallbackPassword(account);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState(currentPassword);
   const [confirmPassword, setConfirmPassword] = useState(currentPassword);
   const matched = password.length >= 1 && password === confirmPassword;
+  const loginName = account.email || account.username || account.id;
 
   return (
     <Modal title={`账密：${account.name}`} onClose={onClose}>
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="账号">
-            <input className={fieldClass} readOnly value={account.email || account.id} />
+          <Field label="登录账号">
+            <input className={fieldClass} readOnly value={loginName} />
           </Field>
           <Field label="当前密码">
             <div className="flex rounded-md border border-border bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">

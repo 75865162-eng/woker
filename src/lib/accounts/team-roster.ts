@@ -18,6 +18,7 @@ export type AccountRoleId =
 
 export type TeamAccountRecord = {
   id: string;
+  username?: string;
   name: string;
   email: string;
   password?: string;
@@ -26,6 +27,12 @@ export type TeamAccountRecord = {
   roleId: AccountRoleId;
   status: TeamMemberStatus;
   lastActiveAt?: string;
+  amazonStorePermissions?: string;
+  multiPlatformStorePermissions?: string;
+  phone?: string;
+  lastLoginIp?: string;
+  lastLoginAt?: string;
+  sourceCreatedAt?: string;
 };
 
 export type TeamMember = {
@@ -62,6 +69,29 @@ const legacyRoleMap: Record<string, AccountRoleId> = {
   logistics_operator: "warehouse",
 };
 
+const knownRoleIds = new Set<AccountRoleId>([
+  "owner",
+  "database_admin",
+  "operations_supervisor",
+  "operations",
+  "operations_assistant",
+  "developer",
+  "designer",
+  "warehouse",
+  "warehouse_supervisor",
+  "finance",
+  "procurement",
+  "viewer",
+]);
+
+export function normalizeAccountRoleId(roleId: string | null | undefined): AccountRoleId {
+  const normalized = String(roleId ?? "").trim();
+
+  if (!normalized) return "viewer";
+
+  return legacyRoleMap[normalized] ?? (knownRoleIds.has(normalized as AccountRoleId) ? (normalized as AccountRoleId) : "viewer");
+}
+
 export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
   if (!Array.isArray(value)) return [];
 
@@ -73,14 +103,21 @@ export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
 
       return {
         id: String(account.id),
+        username: typeof account.username === "string" ? account.username : undefined,
         name: String(account.name),
         email: String(account.email ?? ""),
         password: typeof account.password === "string" ? account.password : undefined,
         department: String(account.department ?? ""),
         title: String(account.title ?? ""),
-        roleId: legacyRoleMap[String(account.roleId)] ?? (account.roleId as AccountRoleId),
+        roleId: normalizeAccountRoleId(String(account.roleId)),
         status: account.status === "disabled" || account.status === "pending" ? account.status : "active",
         lastActiveAt: account.lastActiveAt,
+        amazonStorePermissions: typeof account.amazonStorePermissions === "string" ? account.amazonStorePermissions : undefined,
+        multiPlatformStorePermissions: typeof account.multiPlatformStorePermissions === "string" ? account.multiPlatformStorePermissions : undefined,
+        phone: typeof account.phone === "string" ? account.phone : undefined,
+        lastLoginIp: typeof account.lastLoginIp === "string" ? account.lastLoginIp : undefined,
+        lastLoginAt: typeof account.lastLoginAt === "string" ? account.lastLoginAt : undefined,
+        sourceCreatedAt: typeof account.sourceCreatedAt === "string" ? account.sourceCreatedAt : undefined,
       } satisfies TeamAccountRecord;
     });
 }

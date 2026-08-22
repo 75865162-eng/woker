@@ -67,17 +67,28 @@ import {
   trialImprovementLabels,
 } from "./product-workbench-data";
 
+type ProductWorkbenchCache = {
+  products: Product[];
+  filters: ProductFilters;
+  page: number;
+  pageSize: number;
+  totalCount: number;
+};
+
+let productWorkbenchCache: ProductWorkbenchCache | null = null;
+
 export function ProductWorkbench() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => productWorkbenchCache?.products ?? []);
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
-  const [filters, setFilters] = useState<ProductFilters>(initialFilters);
+  const [filters, setFilters] = useState<ProductFilters>(() => productWorkbenchCache?.filters ?? initialFilters);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [versionProduct, setVersionProduct] = useState<Product | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(() => productWorkbenchCache?.page ?? 1);
+  const [pageSize, setPageSize] = useState(() => productWorkbenchCache?.pageSize ?? 20);
+  const [productsTotalCount, setProductsTotalCount] = useState(() => productWorkbenchCache?.totalCount ?? 0);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState("");
@@ -129,14 +140,25 @@ export function ProductWorkbench() {
 
       try {
         const response = await fetch("/api/products", { cache: "no-store" });
-        const data = (await response.json()) as { products?: Product[]; error?: string };
+        const data = (await response.json()) as { products?: Product[]; pagination?: { total?: number; pageCount?: number }; error?: string };
 
         if (!response.ok) {
           throw new Error(data.error || "商品数据读取失败");
         }
 
         if (!canceled) {
-          setProducts(Array.isArray(data.products) ? data.products : []);
+          const nextProducts = Array.isArray(data.products) ? data.products : [];
+          const nextTotalCount = data.pagination?.total ?? 0;
+
+          setProducts(nextProducts);
+          setProductsTotalCount(nextTotalCount);
+          productWorkbenchCache = {
+            products: nextProducts,
+            filters,
+            page,
+            pageSize,
+            totalCount: nextTotalCount,
+          };
           setActivityLog((current) => ["已从数据库读取商品数据", ...current].slice(0, 8));
         }
       } catch (error) {
@@ -157,7 +179,7 @@ export function ProductWorkbench() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [filters, page, pageSize]);
 
   async function reloadProducts() {
     setProductsLoading(true);
@@ -165,13 +187,24 @@ export function ProductWorkbench() {
 
     try {
       const response = await fetch("/api/products", { cache: "no-store" });
-      const data = (await response.json()) as { products?: Product[]; error?: string };
+      const data = (await response.json()) as { products?: Product[]; pagination?: { total?: number; pageCount?: number }; error?: string };
 
       if (!response.ok) {
         throw new Error(data.error || "商品数据读取失败");
       }
 
-      setProducts(Array.isArray(data.products) ? data.products : []);
+      const nextProducts = Array.isArray(data.products) ? data.products : [];
+      const nextTotalCount = data.pagination?.total ?? 0;
+
+      setProducts(nextProducts);
+      setProductsTotalCount(nextTotalCount);
+      productWorkbenchCache = {
+        products: nextProducts,
+        filters,
+        page,
+        pageSize,
+        totalCount: nextTotalCount,
+      };
     } catch (error) {
       setProductsError(error instanceof Error ? error.message : "商品数据读取失败");
     } finally {
@@ -242,7 +275,7 @@ export function ProductWorkbench() {
   const opsReviewCount = products.filter((product) => product.status === "ops_review").length;
   const designInProgressProducts = products.filter((product) => product.status === "design_in_progress");
   const operationsProgressProducts = products.filter((product) => hasIncompleteOperationsProgress(product.operationsProgress));
-  const overdueCount = products.filter(isOverdueProduct).length;
+  const overdueCount = products.filter((product) => isOverdueProduct(product) || isProductWorkflowOverdue(product)).length;
   const workflowOverdueCount = products.filter((product) => isProductWorkflowOverdue(product)).length;
 
   function openNewProduct() {
@@ -284,12 +317,23 @@ export function ProductWorkbench() {
     try {
       const savedProduct = await persistProduct(nextProduct);
       setProducts((current) => {
-        if (existing) {
-          return current.map((product) => (product.id === existing.id ? savedProduct : product));
-        }
+        const nextProducts = existing
+          ? current.map((product) => (product.id === existing.id ? savedProduct : product))
+          : [savedProduct, ...current];
 
-        return [savedProduct, ...current];
+        productWorkbenchCache = {
+          products: nextProducts,
+          filters,
+          page,
+          pageSize,
+          totalCount: existing ? productsTotalCount : productsTotalCount + 1,
+        };
+
+        return nextProducts;
       });
+      if (!existing) {
+        setProductsTotalCount((current) => current + 1);
+      }
       setActiveProductId(savedProduct.id);
       setIsEditorOpen(false);
       setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
@@ -443,7 +487,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               onChange={setFilters}
               onReset={() => setFilters(initialFilters)}
             />
-            <ProductTable products={visibleProducts} totalCount={filteredProducts.length} onOpenProduct={openProduct} onOpenHistory={setVersionProduct} />
+            <ProductTable products={visibleProducts} totalCount={productsTotalCount} loading={productsLoading} onOpenProduct={openProduct} onOpenHistory={setVersionProduct} />
             <Pagination page={page} pageCount={pageCount} pageSize={pageSize} pageSizeOptions={pageSizeOptions} onPageChange={setPage} onPageSizeChange={setPageSize} />
           </CardContent>
         </Card>

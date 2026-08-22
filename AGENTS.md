@@ -186,6 +186,8 @@ bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
 
 这条路径由 CI 或本机先完成 build，服务器只解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。
 
+三端对齐、预发和生产只要走正式发布流程，默认都沿用这条 CI artifact 链路，不再把 build 放回服务器；只有明确的 fallback 或应急修复才走源码发布脚本。
+
 服务器源码构建发布仍保留为 fallback：
 
 ```bash
