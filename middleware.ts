@@ -81,7 +81,7 @@ export async function middleware(request: NextRequest) {
 
   if (validSession) {
     if (pathname === "/login") {
-      return NextResponse.redirect("/");
+      return NextResponse.redirect(new URL("/", request.url));
     }
 
     if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
@@ -112,7 +112,7 @@ export async function middleware(request: NextRequest) {
   const loginUrl = new URL("/login", request.url);
   loginUrl.searchParams.set("next", pathname);
 
-  return NextResponse.redirect(loginUrl.pathname + loginUrl.search);
+  return NextResponse.redirect(new URL(loginUrl.pathname + loginUrl.search, request.url));
 }
 
 export const config = {
