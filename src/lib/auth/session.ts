@@ -24,6 +24,18 @@ export type CurrentUser = {
   organizationName: string;
 };
 
+export type AuthCookie = {
+  name: string;
+  value: string;
+  options: {
+    httpOnly?: boolean;
+    sameSite?: "lax" | "strict" | "none";
+    secure?: boolean;
+    maxAge?: number;
+    path?: string;
+  };
+};
+
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
 
@@ -85,28 +97,36 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
     sessionUser,
   } satisfies SessionPayload);
   const signedCookie = `${payload}.${signPayload(payload)}`;
-  const cookieStore = await cookies();
-
-  cookieStore.set(sessionCookieName, signedCookie, {
+  const sessionCookieOptions: AuthCookie["options"] = {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     maxAge: sessionMaxAgeSeconds,
     path: "/",
-  });
+  };
+  const sessionCookie: AuthCookie = {
+    name: sessionCookieName,
+    value: signedCookie,
+    options: sessionCookieOptions,
+  };
 
+  let rolePermissionsCookie: AuthCookie | undefined;
   if (sessionUser?.organizationId) {
     const rolePermissions = await getOrganizationRolePermissions(sessionUser.organizationId);
 
-    cookieStore.set(rolePermissionsCookieName, encodeURIComponent(JSON.stringify(rolePermissions)), {
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 365,
-      path: "/",
-    });
+    rolePermissionsCookie = {
+      name: rolePermissionsCookieName,
+      value: encodeURIComponent(JSON.stringify(rolePermissions)),
+      options: {
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 365,
+        path: "/",
+      },
+    };
   }
 
-  return session;
+  return { session, sessionCookie, rolePermissionsCookie };
 }
 
 export async function createLocalSession(user: CurrentUser) {
@@ -120,15 +140,20 @@ export async function createLocalSession(user: CurrentUser) {
     expiresAt: expiresAt.toISOString(),
     localUser: user,
   } satisfies SessionPayload);
-  const cookieStore = await cookies();
-
-  cookieStore.set(sessionCookieName, `${payload}.${signPayload(payload)}`, {
+  const sessionCookieOptions: AuthCookie["options"] = {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     maxAge: sessionMaxAgeSeconds,
     path: "/",
-  });
+  };
+  return {
+    sessionCookie: {
+      name: sessionCookieName,
+      value: `${payload}.${signPayload(payload)}`,
+      options: sessionCookieOptions,
+    },
+  };
 }
 
 export async function destroyCurrentSession() {

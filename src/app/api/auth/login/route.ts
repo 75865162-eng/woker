@@ -33,9 +33,11 @@ export async function POST(request: Request) {
         organizationName: process.env.BOOTSTRAP_ORG_NAME || "Local Organization",
       };
 
-      await createLocalSession(user);
+      const { sessionCookie } = await createLocalSession(user);
+      const response = NextResponse.json({ user });
+      response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
 
-      return NextResponse.json({ user });
+      return response;
     }
 
     const user = await prisma.user.findUnique({
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
 
     const membership = user.memberships[0];
 
-    await createSession(user.id, {
+    const { sessionCookie, rolePermissionsCookie } = await createSession(user.id, {
       id: user.id,
       email: user.email,
       name: user.name,
@@ -68,13 +70,20 @@ export async function POST(request: Request) {
       data: { lastLoginAt: new Date() },
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
       },
     });
+    response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
+
+    if (rolePermissionsCookie) {
+      response.cookies.set(rolePermissionsCookie.name, rolePermissionsCookie.value, rolePermissionsCookie.options);
+    }
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "登录失败。";
     return NextResponse.json({ error: message }, { status: 500 });
