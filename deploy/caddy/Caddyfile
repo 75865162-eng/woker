@@ -13,3 +13,12 @@ http://159.75.203.221, http://159-75-203-221.sslip.io {
 		header_up Host {host}
 	}
 }
+
+https://159.75.203.221, https://159-75-203-221.sslip.io {
+	tls internal
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+	}
+}
