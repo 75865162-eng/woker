@@ -28,6 +28,15 @@ async function verifySignature(payload: string, signature: string) {
   return crypto.subtle.verify("HMAC", key, base64UrlToBytes(signature), new TextEncoder().encode(payload));
 }
 
+function getPublicOrigin(request: NextRequest) {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.split(",")[0]?.trim() || request.nextUrl.host;
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || request.nextUrl.protocol.replace(":", "");
+
+  return `${protocol}://${host}`;
+}
+
 async function hasValidSessionCookie(request: NextRequest) {
   const cookie = request.cookies.get(sessionCookieName)?.value;
 
@@ -70,6 +79,7 @@ function parseSessionRole(request: NextRequest) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const publicOrigin = getPublicOrigin(request);
   const isPublicRoute = publicRoutes.includes(pathname);
   const isPublicApi = publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
 
@@ -81,7 +91,7 @@ export async function middleware(request: NextRequest) {
 
   if (validSession) {
     if (pathname === "/login") {
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL("/", publicOrigin));
     }
 
     if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
@@ -91,7 +101,7 @@ export async function middleware(request: NextRequest) {
       const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, rolePermissions);
 
       if (!canOpenRequestedPage) {
-        return NextResponse.redirect(new URL("/forbidden", request.url));
+        return NextResponse.redirect(new URL("/forbidden", publicOrigin));
       }
     }
 
@@ -109,10 +119,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = new URL("/login", publicOrigin);
   loginUrl.searchParams.set("next", pathname);
 
-  return NextResponse.redirect(new URL(loginUrl.pathname + loginUrl.search, request.url));
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
