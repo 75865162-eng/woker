@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthDriver } from "@/lib/auth/constants";
-import { createLocalSession, createSession } from "@/lib/auth/session";
+import { createLocalSession, createSession, isSecureRequest } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db/prisma";
 
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         organizationName: process.env.BOOTSTRAP_ORG_NAME || "Local Organization",
       };
 
-      const { sessionCookie } = await createLocalSession(user);
+      const { sessionCookie } = await createLocalSession(user, isSecureRequest(request));
       const response = NextResponse.json({ user });
       response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
 
@@ -57,14 +57,18 @@ export async function POST(request: Request) {
 
     const membership = user.memberships[0];
 
-    const { sessionCookie, rolePermissionsCookie } = await createSession(user.id, {
+    const { sessionCookie, rolePermissionsCookie } = await createSession(
+      user.id,
+      {
       id: user.id,
       email: user.email,
       name: user.name,
       role: membership.role,
       organizationId: membership.organizationId,
       organizationName: "",
-    });
+      },
+      isSecureRequest(request),
+    );
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },

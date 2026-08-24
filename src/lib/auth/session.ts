@@ -36,6 +36,29 @@ export type AuthCookie = {
   };
 };
 
+export function isSecureRequest(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const hostname = url.hostname;
+    const isTemporaryIpHost =
+      /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.endsWith(".sslip.io") || hostname === "localhost" || hostname === "127.0.0.1";
+
+    if (isTemporaryIpHost) {
+      return false;
+    }
+
+    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+
+    if (forwardedProto) {
+      return forwardedProto === "https";
+    }
+
+    return url.protocol === "https:";
+  } catch {
+    return process.env.NODE_ENV === "production";
+  }
+}
+
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
 
@@ -78,7 +101,7 @@ function parseSessionCookie(value?: string): SessionPayload | undefined {
   }
 }
 
-export async function createSession(userId: string, sessionUser?: CurrentUser) {
+export async function createSession(userId: string, sessionUser?: CurrentUser, secureCookie = process.env.NODE_ENV === "production") {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   const session = await prisma.userSession.create({
@@ -100,7 +123,7 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
   const sessionCookieOptions: AuthCookie["options"] = {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookie,
     maxAge: sessionMaxAgeSeconds,
     path: "/",
   };
@@ -119,7 +142,7 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
       value: encodeURIComponent(JSON.stringify(rolePermissions)),
       options: {
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        secure: secureCookie,
         maxAge: 60 * 60 * 24 * 365,
         path: "/",
       },
@@ -129,7 +152,7 @@ export async function createSession(userId: string, sessionUser?: CurrentUser) {
   return { session, sessionCookie, rolePermissionsCookie };
 }
 
-export async function createLocalSession(user: CurrentUser) {
+export async function createLocalSession(user: CurrentUser, secureCookie = process.env.NODE_ENV === "production") {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   const payload = base64UrlJson({
@@ -143,7 +166,7 @@ export async function createLocalSession(user: CurrentUser) {
   const sessionCookieOptions: AuthCookie["options"] = {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookie,
     maxAge: sessionMaxAgeSeconds,
     path: "/",
   };

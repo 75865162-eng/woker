@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth/password";
-import { createSession } from "@/lib/auth/session";
+import { createSession, isSecureRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -137,14 +137,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
 
-    const { sessionCookie, rolePermissionsCookie } = await createSession(result.user.id, {
+    const { sessionCookie, rolePermissionsCookie } = await createSession(
+      result.user.id,
+      {
       id: result.user.id,
       email: result.user.email,
       name: result.user.name,
       role: result.membership.role,
       organizationId: result.organization.id,
       organizationName: result.organization.name,
-    });
+      },
+      isSecureRequest(request),
+    );
 
     const response = NextResponse.json({
       user: {
