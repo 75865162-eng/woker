@@ -101,6 +101,75 @@ function parseSessionCookie(value?: string): SessionPayload | undefined {
   }
 }
 
+function getRequestCookie(request: Request, name: string) {
+  const cookieHeader = request.headers.get("cookie");
+
+  if (!cookieHeader) {
+    return undefined;
+  }
+
+  return cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+}
+
+async function getCurrentUserFromPayload(payload: SessionPayload): Promise<CurrentUser | undefined> {
+  if (new Date(payload.expiresAt).getTime() <= Date.now()) {
+    return undefined;
+  }
+
+  if (payload.driver !== getAuthDriver()) {
+    return undefined;
+  }
+
+  if (payload.driver === "local") {
+    return payload.localUser;
+  }
+
+  const session = await prisma.userSession.findFirst({
+    where: {
+      id: payload.sessionId,
+      userId: payload.userId,
+      tokenHash: hashToken(payload.token),
+      expiresAt: {
+        gt: new Date(),
+      },
+    },
+    include: {
+      user: {
+        include: {
+          memberships: {
+            include: {
+              organization: true,
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  const membership = session?.user.memberships[0];
+
+  if (!session || session.user.status !== "active" || !membership) {
+    return undefined;
+  }
+
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    role: membership.role,
+    organizationId: membership.organizationId,
+    organizationName: membership.organization.name,
+  };
+}
+
 export async function createSession(userId: string, sessionUser?: CurrentUser, secureCookie = process.env.NODE_ENV === "production") {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
@@ -200,58 +269,21 @@ export async function getCurrentUser(): Promise<CurrentUser | undefined> {
   const cookieStore = await cookies();
   const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
 
-  if (!payload || new Date(payload.expiresAt).getTime() <= Date.now()) {
+  if (!payload) {
     return undefined;
   }
 
-  if (payload.driver !== getAuthDriver()) {
+  return getCurrentUserFromPayload(payload);
+}
+
+export async function getCurrentUserFromRequest(request: Request): Promise<CurrentUser | undefined> {
+  const payload = parseSessionCookie(getRequestCookie(request, sessionCookieName));
+
+  if (!payload) {
     return undefined;
   }
 
-  if (payload.driver === "local") {
-    return payload.localUser;
-  }
-
-  const session = await prisma.userSession.findFirst({
-    where: {
-      id: payload.sessionId,
-      userId: payload.userId,
-      tokenHash: hashToken(payload.token),
-      expiresAt: {
-        gt: new Date(),
-      },
-    },
-    include: {
-      user: {
-        include: {
-          memberships: {
-            include: {
-              organization: true,
-            },
-            orderBy: {
-              createdAt: "asc",
-            },
-            take: 1,
-          },
-        },
-      },
-    },
-  });
-
-  const membership = session?.user.memberships[0];
-
-  if (!session || session.user.status !== "active" || !membership) {
-    return undefined;
-  }
-
-  return {
-    id: session.user.id,
-    email: session.user.email,
-    name: session.user.name,
-    role: membership.role,
-    organizationId: membership.organizationId,
-    organizationName: membership.organization.name,
-  };
+  return getCurrentUserFromPayload(payload);
 }
 
 export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | undefined> {
