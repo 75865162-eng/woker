@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { CurrentUser } from "@/lib/auth/session";
+import { ensureOrganization } from "@/lib/organizations/organization-server";
 import { normalizeWorkspaceScope, type WorkspaceScopeInput } from "@/lib/workspace/scope";
 
 export type VersionedEntityType = "product" | "listing_ai_workspace" | "ppc_workspace_snapshot" | "rule_config";
@@ -17,6 +18,8 @@ type RecordVersionInput = {
 
 export async function ensureWorkspaceScope(user: CurrentUser, scope?: Partial<WorkspaceScopeInput>) {
   const normalized = normalizeWorkspaceScope(scope);
+
+  await ensureOrganization(user.organizationId, user.organizationName);
 
   await prisma.workspaceScope.upsert({
     where: {
@@ -92,4 +95,3 @@ export async function recordDataChangeVersion(input: RecordVersionInput) {
 
   return version;
 }
-

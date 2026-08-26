@@ -120,12 +120,12 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
     return undefined;
   }
 
-  if (payload.driver !== getAuthDriver()) {
-    return undefined;
-  }
-
   if (payload.driver === "local") {
     return payload.localUser;
+  }
+
+  if (payload.driver !== getAuthDriver()) {
+    return undefined;
   }
 
   const session = await prisma.userSession.findFirst({
@@ -294,12 +294,12 @@ export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | un
     return undefined;
   }
 
-  if (payload.driver !== getAuthDriver()) {
-    return undefined;
-  }
-
   if (payload.driver === "local") {
     return payload.localUser;
+  }
+
+  if (payload.driver !== getAuthDriver()) {
+    return undefined;
   }
 
   if (!payload.sessionUser) {

@@ -306,7 +306,7 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as ImageGeneratorRequest;
     const scope = workspaceScopeFromRequest(request);
-    const settings = resolveAiSettings(body.aiSettings);
+    const settings = resolveAiSettings(body.aiSettings, "image");
     const prompt = body.prompt?.trim();
     const referenceImages = await flattenImages(body, user);
 

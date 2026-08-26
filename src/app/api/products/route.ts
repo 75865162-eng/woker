@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -56,19 +57,40 @@ export async function GET(request: Request) {
           }
         : {}),
     };
-    const [total, records] = await Promise.all([
-      prisma.productRecord.count({ where }),
-      prisma.productRecord.findMany({
-      where: {
-          ...where,
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
+    let total = 0;
+    let records: Array<{ payload: Prisma.JsonValue }> = [];
+
+    try {
+      [total, records] = await Promise.all([
+        prisma.productRecord.count({ where }),
+        prisma.productRecord.findMany({
+          where,
+          orderBy: {
+            updatedAt: "desc",
+          },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+    } catch (error) {
+      if (!isDatabaseUnavailableError(error)) {
+        throw error;
+      }
+
+      return NextResponse.json(
+        {
+          products: [],
+          pagination: {
+            page,
+            pageSize,
+            total: 0,
+            pageCount: 1,
+          },
+          error: "数据库暂时不可用，商品列表已切换为空数据。",
+        },
+        { status: 503 },
+      );
+    }
 
     return NextResponse.json({
       products: records.map((record) => record.payload as unknown as Product),

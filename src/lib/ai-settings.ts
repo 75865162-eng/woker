@@ -1,4 +1,4 @@
-export type AiProviderPreset = "deepseek" | "openrouter" | "openai" | "gemini" | "zhipu" | "kimi" | "qwen" | "aigocode" | "volcengine" | "custom";
+export type AiProviderPreset = "deepseek" | "openrouter" | "openai" | "gemini" | "zhipu" | "kimi" | "qwen" | "aigocode" | "togoapi" | "volcengine" | "custom";
 export type AiWireApi = "chat_completions" | "responses" | "image_generations";
 
 export interface AiModelSettings {
@@ -23,13 +23,21 @@ export interface AiModelSettingsPublic {
 
 export interface SavedAiModelProfile {
   id: string;
+  bundleId: string;
+  kind: "system" | "image";
   name: string;
   createdAt: string;
   updatedAt: string;
   settings: AiModelSettings;
 }
 
+export interface AiSettingsBundle {
+  text: AiModelSettings;
+  image: AiModelSettings;
+}
+
 export const aiSettingsStorageKey = "amazon-ad-ai-model-settings";
+export const aiImageSettingsStorageKey = "amazon-ad-ai-image-model-settings";
 export const aiSettingsProfilesStorageKey = "amazon-ad-ai-model-setting-profiles";
 
 export interface AiProviderOption {
@@ -119,6 +127,16 @@ export const aiProviderOptions: AiProviderOption[] = [
     wireApi: "responses",
   },
   {
+    id: "togoapi",
+    label: "TogoAPI",
+    shortLabel: "TG",
+    accentClass: "bg-cyan-50 text-cyan-700",
+    baseUrl: "https://api.togoapi.com/v1",
+    model: "gpt-5.4",
+    wireApi: "responses",
+    recommended: true,
+  },
+  {
     id: "volcengine",
     label: "火山方舟",
     shortLabel: "Ark",
@@ -138,13 +156,25 @@ export const aiProviderOptions: AiProviderOption[] = [
   },
 ];
 
+const defaultAiProvider = aiProviderOptions.find((option) => option.id === "togoapi") ?? aiProviderOptions[0];
+
 export const defaultAiModelSettings: AiModelSettings = {
   enabled: true,
-  provider: aiProviderOptions[0].id,
-  apiKey: aiProviderOptions[0].apiKey ?? "",
-  baseUrl: aiProviderOptions[0].baseUrl,
-  model: aiProviderOptions[0].model,
-  wireApi: aiProviderOptions[0].wireApi,
+  provider: defaultAiProvider.id,
+  apiKey: "",
+  baseUrl: defaultAiProvider.baseUrl,
+  model: defaultAiProvider.model,
+  wireApi: defaultAiProvider.wireApi,
+  timeoutSeconds: 90,
+};
+
+export const defaultAiImageModelSettings: AiModelSettings = {
+  enabled: true,
+  provider: defaultAiProvider.id,
+  apiKey: "",
+  baseUrl: defaultAiProvider.baseUrl,
+  model: defaultAiProvider.model,
+  wireApi: "responses",
   timeoutSeconds: 90,
 };
 
@@ -167,6 +197,30 @@ export function normalizeAiSettings(value: Partial<AiModelSettings> | null | und
   };
 }
 
+export function normalizeAiSettingsBundle(
+  value: Partial<AiSettingsBundle> | Partial<AiModelSettings> | null | undefined,
+): AiSettingsBundle {
+  if (!value || "text" in value || "image" in value) {
+    return {
+      text: normalizeAiSettings((value as Partial<AiSettingsBundle> | null | undefined)?.text),
+      image: normalizeAiSettings((value as Partial<AiSettingsBundle> | null | undefined)?.image),
+    };
+  }
+
+  const legacy = normalizeAiSettings(value as Partial<AiModelSettings>);
+  return {
+    text: legacy,
+    image: defaultAiImageModelSettings,
+  };
+}
+
+export function createDefaultAiSettingsBundle(): AiSettingsBundle {
+  return {
+    text: defaultAiModelSettings,
+    image: defaultAiImageModelSettings,
+  };
+}
+
 export function toPublicAiSettings(settings: AiModelSettings): AiModelSettingsPublic {
   return {
     enabled: settings.enabled,
@@ -185,4 +239,108 @@ export function getProviderLabel(provider: AiProviderPreset) {
 
 export function createAiProfileName(settings: AiModelSettings) {
   return `${getProviderLabel(settings.provider)} · ${settings.model}`;
+}
+
+export function createAiImageProfileName(name: string) {
+  return `${name} · 生图`;
+}
+
+export function createSavedAiModelProfilePair(
+  settings: AiModelSettings,
+  imageSettings: AiModelSettings,
+  name: string,
+  timestamp = new Date().toISOString(),
+): SavedAiModelProfile[] {
+  const bundleId = `${settings.provider}-${settings.model}-${Date.now()}`;
+  const systemProfileId = bundleId;
+  const imageProfileId = `${bundleId}::image`;
+
+  return [
+    {
+      id: systemProfileId,
+      bundleId,
+      kind: "system",
+      name,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      settings,
+    },
+    {
+      id: imageProfileId,
+      bundleId,
+      kind: "image",
+      name: createAiImageProfileName(name),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      settings: imageSettings,
+    },
+  ];
+}
+
+function normalizeSavedAiModelProfile(
+  value: Record<string, unknown>,
+  fallbackKind: "system" | "image",
+  fallbackBundleId: string,
+  fallbackName: string,
+) {
+  const settings = normalizeAiSettings((value.settings as Partial<AiModelSettings> | undefined) ?? (value as Partial<AiModelSettings>));
+  const now = new Date().toISOString();
+  const kind = value.kind === "image" ? "image" : value.kind === "system" ? "system" : fallbackKind;
+  const bundleId = typeof value.bundleId === "string" && value.bundleId ? value.bundleId : fallbackBundleId;
+
+  return {
+    id: typeof value.id === "string" && value.id ? value.id : `${bundleId}${kind === "image" ? "::image" : ""}`,
+    bundleId,
+    kind,
+    name: typeof value.name === "string" && value.name ? value.name : fallbackName,
+    createdAt: typeof value.createdAt === "string" && value.createdAt ? value.createdAt : now,
+    updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : now,
+    settings,
+  } satisfies SavedAiModelProfile;
+}
+
+export function normalizeSavedAiModelProfiles(value: unknown): SavedAiModelProfile[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((profile): profile is Record<string, unknown> => Boolean(profile && typeof profile === "object" && !Array.isArray(profile)))
+    .flatMap((profile) => {
+      if (profile.kind === "system" || profile.kind === "image") {
+        const bundleId = typeof profile.bundleId === "string" && profile.bundleId ? profile.bundleId : typeof profile.id === "string" ? profile.id.replace(/::image$/, "") : `${Date.now()}`;
+        const fallbackName = typeof profile.name === "string" && profile.name ? profile.name : "AI 配置";
+        return [normalizeSavedAiModelProfile(profile, profile.kind, bundleId, fallbackName)];
+      }
+
+      const settings = normalizeAiSettings(profile.settings as Partial<AiModelSettings> | undefined);
+      const imageSettingsRaw = profile.imageSettings as Partial<AiModelSettings> | undefined;
+      const fallbackName = typeof profile.name === "string" && profile.name ? profile.name : createAiProfileName(settings);
+      const bundleId = typeof profile.id === "string" && profile.id ? profile.id : `${settings.provider}-${settings.model}-${Date.now()}`;
+      const systemProfile = normalizeSavedAiModelProfile(
+        { ...profile, id: typeof profile.id === "string" && profile.id ? profile.id : bundleId, kind: "system", bundleId, name: fallbackName, settings },
+        "system",
+        bundleId,
+        fallbackName,
+      );
+
+      if (!imageSettingsRaw) {
+        return [systemProfile];
+      }
+
+      const imageProfile = normalizeSavedAiModelProfile(
+        {
+          ...profile,
+          id: `${bundleId}::image`,
+          kind: "image",
+          bundleId,
+          name: createAiImageProfileName(fallbackName),
+          settings: imageSettingsRaw,
+        },
+        "image",
+        bundleId,
+        createAiImageProfileName(fallbackName),
+      );
+
+      return [systemProfile, imageProfile];
+    })
+    .slice(0, 20);
 }

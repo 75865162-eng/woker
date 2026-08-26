@@ -81,7 +81,7 @@ const initialRoles: Role[] = [
     description: "维护账号、权限、系统设置和数据治理，不默认拥有业务审批权",
     memberCount: 0,
     permissions: createPermissions(
-      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules", "accounts", "settings"],
+      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "accounts", "settings"],
       ["view", "create", "edit", "export"],
     ),
   },

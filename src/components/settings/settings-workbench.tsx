@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bot,
-  Check,
   ChevronDown,
-  Clipboard,
   FolderOpen,
   Eye,
   EyeOff,
@@ -24,13 +22,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WeComNotificationSettingsPanel } from "@/components/settings/wecom-notification-settings";
 import {
   aiSettingsStorageKey,
+  aiImageSettingsStorageKey,
   aiSettingsProfilesStorageKey,
   aiProviderOptions,
   createAiProfileName,
+  createSavedAiModelProfilePair,
+  defaultAiImageModelSettings,
   defaultAiModelSettings,
-  getProviderLabel,
   normalizeAiSettings,
-  toPublicAiSettings,
+  normalizeSavedAiModelProfiles,
   type AiModelSettings,
   type SavedAiModelProfile,
 } from "@/lib/ai-settings";
@@ -41,10 +41,14 @@ const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
 
 export function SettingsWorkbench() {
   const [settings, setSettings] = useState<AiModelSettings>(defaultAiModelSettings);
+  const [imageSettings, setImageSettings] = useState<AiModelSettings>(defaultAiImageModelSettings);
+  const [profileName, setProfileName] = useState(createAiProfileName(defaultAiModelSettings));
   const [showSecret, setShowSecret] = useState(false);
+  const [showImageSecret, setShowImageSecret] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showImageAdvanced, setShowImageAdvanced] = useState(false);
   const [savedAt, setSavedAt] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [imageSavedAt, setImageSavedAt] = useState("");
   const [chatInput, setChatInput] = useState("请用一句话回复：AI 大模型配置测试成功。");
   const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
     { role: "assistant", content: "保存配置后，可以在这里发送一条测试消息验证连接。" },
@@ -55,6 +59,7 @@ export function SettingsWorkbench() {
   const [activeProfileId, setActiveProfileId] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState("");
+  const [imageSettingsError, setImageSettingsError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -69,42 +74,67 @@ export function SettingsWorkbench() {
 
         const data = (await response.json()) as {
           settings?: Partial<AiModelSettings> | null;
+          imageSettings?: Partial<AiModelSettings> | null;
           profiles?: SavedAiModelProfile[];
           activeProfileId?: string;
         };
         const localSettings = readLocalAiSettings();
+        const localImageSettings = readLocalAiImageSettings();
         const localProfiles = readLocalAiProfiles();
-        const databaseProfiles = normalizeProfiles(data.profiles);
+        const databaseProfiles = normalizeSavedAiModelProfiles(data.profiles);
 
         if (data.settings) {
           const normalized = normalizeBeforeSave(data.settings as AiModelSettings);
-          const nextProfiles = databaseProfiles.length ? databaseProfiles : [createProfile(normalized)];
+          const normalizedImage = normalizeImageBeforeSave(
+            data.imageSettings as AiModelSettings | null | undefined,
+          );
+          const nextProfiles = databaseProfiles.length
+            ? databaseProfiles
+            : createSavedAiModelProfilePair(normalized, normalizedImage, createAiProfileName(normalized));
+          const nextProfileName =
+            nextProfiles.find((profile) => profile.kind === "system" && profile.id === data.activeProfileId)?.name ||
+            nextProfiles.find((profile) => profile.kind === "system")?.name ||
+            createAiProfileName(normalized);
 
           if (cancelled) return;
           setSettings(normalized);
+          setImageSettings(normalizedImage);
+          setProfileName(nextProfileName);
           setProfiles(nextProfiles);
-          setActiveProfileId(data.activeProfileId || nextProfiles[0]?.id || "");
+          setActiveProfileId(data.activeProfileId || nextProfiles.find((profile) => profile.kind === "system")?.id || "");
           cacheAiSettings(normalized, nextProfiles);
+          cacheAiImageSettings(normalizedImage);
           return;
         }
 
         const migratedSettings = localSettings ?? defaultAiModelSettings;
-        const migratedProfiles = localProfiles.length ? localProfiles : [createProfile(migratedSettings)];
-        const migratedActiveProfileId = migratedProfiles[0]?.id ?? "";
+        const migratedImageSettings = localImageSettings ?? defaultAiImageModelSettings;
+        const migratedProfiles = localProfiles.length
+          ? localProfiles
+          : createSavedAiModelProfilePair(migratedSettings, migratedImageSettings, createAiProfileName(migratedSettings));
+        const migratedActiveProfileId = migratedProfiles.find((profile) => profile.kind === "system")?.id ?? "";
+        const migratedProfileName = migratedProfiles.find((profile) => profile.kind === "system")?.name || createAiProfileName(migratedSettings);
 
-        await persistSettings(migratedSettings, migratedProfiles, migratedActiveProfileId);
+        await persistSettings(migratedSettings, migratedImageSettings, migratedProfiles, migratedActiveProfileId);
 
         if (cancelled) return;
         setSettings(migratedSettings);
+        setImageSettings(migratedImageSettings);
+        setProfileName(migratedProfileName);
         setProfiles(migratedProfiles);
         setActiveProfileId(migratedActiveProfileId);
       } catch (error) {
         const localSettings = readLocalAiSettings();
+        const localImageSettings = readLocalAiImageSettings();
         const localProfiles = readLocalAiProfiles();
 
         if (cancelled) return;
         if (localSettings) setSettings(localSettings);
-        if (localProfiles.length) setProfiles(localProfiles);
+        if (localImageSettings) setImageSettings(localImageSettings);
+        if (localProfiles.length) {
+          setProfileName(localProfiles.find((profile) => profile.kind === "system")?.name || createAiProfileName(localSettings ?? defaultAiModelSettings));
+          setProfiles(localProfiles);
+        }
         setSettingsError(error instanceof Error ? error.message : "AI 配置加载失败。");
       } finally {
         if (!cancelled) setSettingsLoading(false);
@@ -118,8 +148,8 @@ export function SettingsWorkbench() {
     };
   }, []);
 
-  const publicSettings = useMemo(() => toPublicAiSettings(normalizeAiSettings(settings)), [settings]);
   const ready = settings.enabled && settings.apiKey.trim().length > 0 && settings.baseUrl.trim().startsWith("http") && settings.model.trim().length > 0;
+  const imageReady = imageSettings.enabled && imageSettings.apiKey.trim().length > 0 && imageSettings.baseUrl.trim().startsWith("http") && imageSettings.model.trim().length > 0;
 
   function applyDeepseekPreset() {
     applyProviderPreset("deepseek");
@@ -170,12 +200,32 @@ export function SettingsWorkbench() {
     };
   }
 
-  async function persistSettings(nextSettings: AiModelSettings, nextProfiles: SavedAiModelProfile[], nextActiveProfileId: string) {
+  function normalizeImageBeforeSave(value: AiModelSettings | null | undefined): AiModelSettings {
+    if (!value) return defaultAiImageModelSettings;
+
+    if (value.provider !== "custom") return normalizeAiSettings({ ...value, wireApi: value.wireApi === "image_generations" ? value.wireApi : "responses" });
+
+    return {
+      ...value,
+      baseUrl: value.baseUrl.replace(/\/+$/, ""),
+      model: value.model,
+      wireApi: value.wireApi === "image_generations" ? value.wireApi : "responses",
+      timeoutSeconds: Math.max(10, Math.min(240, Number(value.timeoutSeconds) || defaultAiImageModelSettings.timeoutSeconds)),
+    };
+  }
+
+  async function persistSettings(
+    nextSettings: AiModelSettings,
+    nextImageSettings: AiModelSettings,
+    nextProfiles: SavedAiModelProfile[],
+    nextActiveProfileId: string,
+  ) {
     const response = await fetch("/api/ai-settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         settings: nextSettings,
+        imageSettings: nextImageSettings,
         profiles: nextProfiles,
         activeProfileId: nextActiveProfileId,
       }),
@@ -187,28 +237,48 @@ export function SettingsWorkbench() {
     }
 
     cacheAiSettings(nextSettings, nextProfiles);
+    cacheAiImageSettings(nextImageSettings);
   }
 
   async function saveSettings() {
     const normalized = normalizeBeforeSave(settings);
+    const normalizedImage = normalizeImageBeforeSave(imageSettings);
     const now = new Date().toISOString();
-    const existingProfileId = activeProfileId || profiles.find((profile) => profile.settings.provider === normalized.provider)?.id || "";
-    const nextProfile = existingProfileId
-      ? {
-          id: existingProfileId,
-          name: createAiProfileName(normalized),
-          createdAt: profiles.find((profile) => profile.id === existingProfileId)?.createdAt ?? now,
-          updatedAt: now,
-          settings: normalized,
-        }
-      : createProfile(normalized, now);
-    const nextProfiles = [nextProfile, ...profiles.filter((profile) => profile.id !== nextProfile.id)].slice(0, 20);
+    const existingSystemProfile = profiles.find((profile) => profile.kind === "system" && profile.id === activeProfileId) ??
+      profiles.find((profile) => profile.kind === "system" && profile.bundleId === profiles.find((candidate) => candidate.id === activeProfileId)?.bundleId);
+    const nextProfileName = profileName.trim() || createAiProfileName(normalized);
+    const bundleId = existingSystemProfile?.bundleId ?? existingSystemProfile?.id ?? `${normalized.provider}-${normalized.model}-${Date.now()}`;
+    const systemProfileId = existingSystemProfile?.id ?? bundleId;
+    const imageProfileId = `${bundleId}::image`;
+    const nextProfiles = [
+      {
+        id: systemProfileId,
+        bundleId,
+        kind: "system" as const,
+        name: nextProfileName,
+        createdAt: existingSystemProfile?.createdAt ?? now,
+        updatedAt: now,
+        settings: normalized,
+      },
+      {
+        id: imageProfileId,
+        bundleId,
+        kind: "image" as const,
+        name: `${nextProfileName} · 生图`,
+        createdAt: profiles.find((profile) => profile.id === imageProfileId)?.createdAt ?? now,
+        updatedAt: now,
+        settings: normalizedImage,
+      },
+      ...profiles.filter((profile) => profile.bundleId !== bundleId),
+    ].slice(0, 20);
 
     try {
-      await persistSettings(normalized, nextProfiles, nextProfile.id);
+      await persistSettings(normalized, normalizedImage, nextProfiles, systemProfileId);
       setSettings(normalized);
+      setImageSettings(normalizedImage);
+      setProfileName(nextProfileName);
       setProfiles(nextProfiles);
-      setActiveProfileId(nextProfile.id);
+      setActiveProfileId(systemProfileId);
       setSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
       setSettingsError("");
     } catch (error) {
@@ -216,15 +286,53 @@ export function SettingsWorkbench() {
     }
   }
 
-  async function resetSettings() {
-    window.localStorage.removeItem(aiSettingsStorageKey);
-    const builtInProfile = createProfile(defaultAiModelSettings);
+  async function saveImageSettings() {
+    const normalized = normalizeImageBeforeSave(imageSettings);
+    const now = new Date().toISOString();
+    const activeSystemProfile = profiles.find((profile) => profile.kind === "system" && profile.id === activeProfileId) ??
+      profiles.find((profile) => profile.kind === "system" && profile.bundleId === profiles.find((candidate) => candidate.id === activeProfileId)?.bundleId);
+    const bundleId =
+      activeSystemProfile?.bundleId ??
+      profiles.find((profile) => profile.kind === "image")?.bundleId ??
+      (activeProfileId || `${settings.provider}-${settings.model}-${Date.now()}`);
+    const systemProfile = activeSystemProfile;
+    const imageProfileId = `${bundleId}::image`;
+    const nextProfiles = [
+      ...(systemProfile ? [systemProfile] : []),
+      {
+        id: imageProfileId,
+        bundleId,
+        kind: "image" as const,
+        name: `${profileName.trim() || createAiProfileName(settings)} · 生图`,
+        createdAt: profiles.find((profile) => profile.id === imageProfileId)?.createdAt ?? now,
+        updatedAt: now,
+        settings: normalized,
+      },
+      ...profiles.filter((profile) => profile.bundleId !== bundleId && profile.id !== imageProfileId),
+    ].slice(0, 20);
 
     try {
-      await persistSettings(defaultAiModelSettings, [builtInProfile], builtInProfile.id);
+      await persistSettings(settings, normalized, nextProfiles, activeSystemProfile?.id ?? activeProfileId);
+      setImageSettings(normalized);
+      setProfiles(nextProfiles);
+      setImageSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+      setImageSettingsError("");
+    } catch (error) {
+      setImageSettingsError(error instanceof Error ? error.message : "生图配置保存失败。");
+    }
+  }
+
+  async function resetSettings() {
+    window.localStorage.removeItem(aiSettingsStorageKey);
+    const nextProfileName = createAiProfileName(defaultAiModelSettings);
+    const builtInProfiles = createSavedAiModelProfilePair(defaultAiModelSettings, imageSettings, nextProfileName);
+
+    try {
+      await persistSettings(defaultAiModelSettings, imageSettings, builtInProfiles, builtInProfiles[0]?.id ?? "");
       setSettings(defaultAiModelSettings);
-      setProfiles([builtInProfile]);
-      setActiveProfileId(builtInProfile.id);
+      setProfileName(nextProfileName);
+      setProfiles(builtInProfiles);
+      setActiveProfileId(builtInProfiles[0]?.id ?? "");
       setSavedAt("");
       setSettingsError("");
     } catch (error) {
@@ -232,13 +340,63 @@ export function SettingsWorkbench() {
     }
   }
 
-  async function loadProfile(profile: SavedAiModelProfile) {
-    const normalized = profile.settings.provider === "custom" ? normalizeBeforeSave(profile.settings) : normalizeAiSettings(profile.settings);
+  async function resetImageSettings() {
+    window.localStorage.removeItem(aiImageSettingsStorageKey);
 
     try {
-      await persistSettings(normalized, profiles, profile.id);
-      setSettings(normalized);
-      setActiveProfileId(profile.id);
+      const now = new Date().toISOString();
+      const activeSystemProfile =
+        profiles.find((profile) => profile.kind === "system" && profile.id === activeProfileId) ??
+        profiles.find((profile) => profile.kind === "system" && profile.bundleId === profiles.find((candidate) => candidate.id === activeProfileId)?.bundleId);
+      const bundleId =
+        activeSystemProfile?.bundleId ??
+        profiles.find((profile) => profile.kind === "image")?.bundleId ??
+        (activeProfileId || `${settings.provider}-${settings.model}-${Date.now()}`);
+      const nextProfiles = [
+        ...(activeSystemProfile ? [activeSystemProfile] : []),
+        {
+          id: `${bundleId}::image`,
+          bundleId,
+          kind: "image" as const,
+          name: `${profileName.trim() || createAiProfileName(settings)} · 生图`,
+          createdAt: profiles.find((profile) => profile.id === `${bundleId}::image`)?.createdAt ?? now,
+          updatedAt: now,
+          settings: defaultAiImageModelSettings,
+        },
+        ...profiles.filter((profile) => profile.bundleId !== bundleId && profile.id !== `${bundleId}::image`),
+      ].slice(0, 20);
+      await persistSettings(settings, defaultAiImageModelSettings, nextProfiles, activeSystemProfile?.id ?? activeProfileId);
+      setImageSettings(defaultAiImageModelSettings);
+      setProfiles(nextProfiles);
+      setImageSavedAt("");
+      setImageSettingsError("");
+    } catch (error) {
+      setImageSettingsError(error instanceof Error ? error.message : "生图配置重置失败。");
+    }
+  }
+
+  async function loadProfile(profile: SavedAiModelProfile) {
+    const pairedSystemProfile = profiles.find((candidate) => candidate.kind === "system" && candidate.bundleId === profile.bundleId);
+    const pairedImageProfile = profiles.find((candidate) => candidate.kind === "image" && candidate.bundleId === profile.bundleId);
+    const normalizedSystem =
+      profile.kind === "image" && pairedSystemProfile
+        ? normalizeAiSettings(pairedSystemProfile.settings)
+        : profile.settings.provider === "custom"
+          ? normalizeBeforeSave(profile.settings)
+          : normalizeAiSettings(profile.settings);
+    const normalizedImage = normalizeImageBeforeSave(pairedImageProfile?.settings ?? (profile.kind === "image" ? profile.settings : imageSettings));
+
+    try {
+      await persistSettings(
+        normalizedSystem,
+        normalizedImage,
+        profiles,
+        pairedSystemProfile?.id ?? activeProfileId,
+      );
+      setSettings(normalizedSystem);
+      setImageSettings(normalizedImage);
+      setProfileName(pairedSystemProfile?.name || profile.name.replace(/ · 生图$/, ""));
+      setActiveProfileId(pairedSystemProfile?.id ?? activeProfileId);
       setSavedAt("");
       setChatError("");
       setSettingsError("");
@@ -248,23 +406,19 @@ export function SettingsWorkbench() {
   }
 
   async function deleteProfile(profileId: string) {
-    const nextProfiles = profiles.filter((profile) => profile.id !== profileId);
-    const nextActiveProfileId = activeProfileId === profileId ? "" : activeProfileId;
+    const targetProfile = profiles.find((profile) => profile.id === profileId);
+    const bundleId = targetProfile?.bundleId ?? profileId;
+    const nextProfiles = profiles.filter((profile) => profile.bundleId !== bundleId);
+    const nextActiveProfileId = activeProfileId === profileId || activeProfileId === `${bundleId}::image` ? "" : activeProfileId;
 
     try {
-      await persistSettings(settings, nextProfiles, nextActiveProfileId);
+      await persistSettings(settings, imageSettings, nextProfiles, nextActiveProfileId);
       setProfiles(nextProfiles);
       setActiveProfileId(nextActiveProfileId);
       setSettingsError("");
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : "AI 配置删除失败。");
     }
-  }
-
-  async function copyPublicSettings() {
-    await navigator.clipboard.writeText(JSON.stringify(publicSettings, null, 2));
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
   }
 
   async function sendTestChat() {
@@ -311,43 +465,7 @@ export function SettingsWorkbench() {
   return (
     <>
       <div className="space-y-3">
-        <section className="grid grid-cols-1 gap-3 2xl:grid-cols-[220px_minmax(0,1fr)_300px]">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-brand" />
-                <CardTitle className="text-sm">已保存配置</CardTitle>
-              </div>
-              <Badge tone="gray">{profiles.length} 个</Badge>
-            </CardHeader>
-            <CardContent className="space-y-2 p-3">
-              {profiles.length ? (
-                profiles.map((profile) => {
-                  const active = profile.id === activeProfileId;
-
-                  return (
-                    <div key={profile.id} className={`rounded-md border p-2.5 ${active ? "border-brand bg-brand/5" : "border-border bg-white"}`}>
-                      <button className="w-full text-left" onClick={() => void loadProfile(profile)} type="button">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-bold text-foreground">{profile.name}</p>
-                          {active ? <Badge tone="green">当前</Badge> : null}
-                        </div>
-                        <p className="mt-1 truncate text-xs text-muted">{profile.settings.baseUrl}</p>
-                        <p className="mt-1 text-xs text-muted">{profile.settings.wireApi}</p>
-                      </button>
-                      <Button className="mt-2 w-full" size="sm" variant="secondary" onClick={() => void deleteProfile(profile.id)}>
-                        <Trash2 className="h-4 w-4" />
-                        删除
-                      </Button>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm leading-6 text-muted">{settingsLoading ? "正在读取数据库配置..." : "暂无保存配置。点击保存配置后会出现在这里。"}</p>
-              )}
-            </CardContent>
-          </Card>
-
+        <section className="grid grid-cols-1 gap-3">
           <Card>
             <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2">
@@ -400,7 +518,15 @@ export function SettingsWorkbench() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[0.9fr_1.2fr_0.8fr]">
+                <Field label="名称">
+                  <input
+                    className={fieldClass}
+                    value={profileName}
+                    onChange={(event) => setProfileName(event.target.value)}
+                    placeholder="例如：TogoAPI 系统配置"
+                  />
+                </Field>
                 <Field label="API Key">
                   <div className="relative">
                     <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -485,81 +611,216 @@ export function SettingsWorkbench() {
                   </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between px-3 py-2.5">
-              <CardTitle className="text-sm">调用摘要</CardTitle>
-              <Badge tone={publicSettings.hasApiKey ? "green" : "gray"}>{publicSettings.hasApiKey ? "Key 已就绪" : "未填 Key"}</Badge>
-            </CardHeader>
-            <CardContent className="space-y-3 p-3">
-              <div className="grid grid-cols-2 gap-2">
-                <StatusItem label="供应商" value={getProviderLabel(publicSettings.provider)} />
-                <StatusItem label="协议" value={publicSettings.wireApi} />
-                <StatusItem label="模型" value={publicSettings.model} />
-                <StatusItem label="状态" value={ready ? "ready" : "setup"} />
+              <div className="border-t border-border pt-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">生图预设</p>
+                    <p className="mt-0.5 text-xs text-muted">它只是已保存配置里的一个预装 API，Image Plan 直接读取这个预设。</p>
+                  </div>
+                  <Badge tone={imageReady ? "green" : "amber"}>{imageReady ? "可调用" : "待完善"}</Badge>
+                </div>
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+                  <Field label="API Key">
+                    <div className="relative">
+                      <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      <input
+                        className={`${fieldClass} pl-9 pr-11 font-mono`}
+                        type={showImageSecret ? "text" : "password"}
+                        value={imageSettings.apiKey}
+                        onChange={(event) => setImageSettings((current) => ({ ...current, apiKey: event.target.value }))}
+                        placeholder="sk-..."
+                      />
+                      <button
+                        className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-foreground"
+                        onClick={() => setShowImageSecret((current) => !current)}
+                        title={showImageSecret ? "隐藏密钥" : "显示密钥"}
+                        type="button"
+                      >
+                        {showImageSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </Field>
+                  <Field label="默认模型">
+                    <input
+                      className={fieldClass}
+                      value={imageSettings.model}
+                      onChange={(event) => setImageSettings((current) => ({ ...current, model: event.target.value }))}
+                    />
+                  </Field>
+                </div>
+
+                <button
+                  className="mt-3 flex w-full items-center justify-between rounded-md border border-border px-3 py-2 text-left transition hover:bg-surface-muted"
+                  onClick={() => setShowImageAdvanced((current) => !current)}
+                  type="button"
+                >
+                  <div className="flex items-center gap-3">
+                    <SlidersHorizontal className="h-4 w-4 text-brand" />
+                    <div>
+                      <p className="text-sm font-bold text-foreground">高级连接参数</p>
+                      <p className="mt-0.5 text-xs text-muted">仅当图片接口地址或协议不同于系统配置时修改。</p>
+                    </div>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-muted transition ${showImageAdvanced ? "rotate-180" : ""}`} />
+                </button>
+
+                {showImageAdvanced ? (
+                  <div className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border bg-surface-muted p-3 xl:grid-cols-3">
+                    <Field label="Base URL">
+                      <div className="relative">
+                        <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                        <input
+                          className={`${fieldClass} pl-9`}
+                          value={imageSettings.baseUrl}
+                          onChange={(event) => setImageSettings((current) => ({ ...current, baseUrl: event.target.value }))}
+                        />
+                      </div>
+                    </Field>
+                    <Field label="协议">
+                      <select
+                        className={fieldClass}
+                        value={imageSettings.wireApi}
+                        onChange={(event) =>
+                          setImageSettings((current) => ({
+                            ...current,
+                            wireApi: event.target.value as AiModelSettings["wireApi"],
+                          }))
+                        }
+                      >
+                        <option value="responses">Responses API</option>
+                        <option value="image_generations">Images Generations API</option>
+                      </select>
+                    </Field>
+                    <Field label="超时秒数">
+                      <input
+                        className={fieldClass}
+                        min={10}
+                        max={240}
+                        inputMode="decimal"
+                        type="text"
+                        value={imageSettings.timeoutSeconds}
+                        onChange={(event) =>
+                          setImageSettings((current) => ({
+                            ...current,
+                            timeoutSeconds: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </Field>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-muted">
+                    {imageSettingsError ? <span className="text-red-600">{imageSettingsError}</span> : imageSavedAt ? <span>已保存：{imageSavedAt}</span> : <span>填写生图 API Key 后点击保存，Image Plan 会使用这个预设。</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => void resetImageSettings()}>
+                      <RotateCcw className="h-4 w-4" />
+                      重置生图
+                    </Button>
+                    <Button onClick={() => void saveImageSettings()} disabled={!imageSettings.apiKey.trim()}>
+                      <Save className="h-4 w-4" />
+                      保存生图配置
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <pre className="max-h-40 overflow-auto rounded-md border border-border bg-surface-muted p-2.5 text-xs leading-5 text-foreground thin-scrollbar">
-                {JSON.stringify(publicSettings, null, 2)}
-              </pre>
-              <Button className="w-full" variant="secondary" onClick={copyPublicSettings}>
-                {copied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
-                {copied ? "已复制" : "复制调用摘要"}
-              </Button>
             </CardContent>
           </Card>
         </section>
 
-        <Card>
-          <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
-                <Bot className="h-4 w-4" />
+        <section className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,320px)_minmax(0,1fr)]">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-brand" />
+                <CardTitle className="text-sm">已保存配置</CardTitle>
               </div>
-              <div>
-                <CardTitle className="text-sm">测试聊天</CardTitle>
-                <p className="mt-0.5 text-xs text-muted">发送一条短消息，验证 API Key、Base URL、模型和 Responses 协议是否可用。</p>
-              </div>
-            </div>
-            <Badge tone={testingChat ? "amber" : ready ? "green" : "gray"}>{testingChat ? "测试中" : ready ? "可测试" : "待配置"}</Badge>
-          </CardHeader>
-          <CardContent className="space-y-3 p-3">
-            <div className="max-h-56 space-y-2 overflow-auto rounded-md border border-border bg-surface-muted p-3 thin-scrollbar">
-              {chatMessages.map((message, index) => (
-                <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[78%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm leading-5 ${
-                      message.role === "user" ? "bg-brand text-white" : "border border-border bg-white text-foreground"
-                    }`}
-                  >
-                    {message.content}
-                  </div>
+              <Badge tone="gray">{profiles.length} 个</Badge>
+            </CardHeader>
+            <CardContent className="space-y-2 p-3">
+              {profiles.length ? (
+                profiles.map((profile) => {
+                  const active = profile.id === activeProfileId;
+
+                return (
+                  <div key={profile.id} className={`rounded-md border p-2.5 ${active ? "border-brand bg-brand/5" : "border-border bg-white"}`}>
+                    <button className="w-full text-left" onClick={() => void loadProfile(profile)} type="button">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-sm font-bold text-foreground">{profile.name}</p>
+                          <Badge tone={profile.kind === "image" ? "amber" : "gray"}>{profile.kind === "image" ? "生图" : "系统"}</Badge>
+                        </div>
+                        {active && profile.kind === "system" ? <Badge tone="green">当前</Badge> : null}
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted">{profile.settings.baseUrl}</p>
+                      <p className="mt-1 text-xs text-muted">{profile.settings.wireApi}</p>
+                      </button>
+                      <Button className="mt-2 w-full" size="sm" variant="secondary" onClick={() => void deleteProfile(profile.id)}>
+                        <Trash2 className="h-4 w-4" />
+                        删除
+                      </Button>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm leading-6 text-muted">{settingsLoading ? "正在读取数据库配置..." : "暂无保存配置。点击保存配置后会出现在这里。"}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
+                  <Bot className="h-4 w-4" />
                 </div>
-              ))}
-            </div>
+                <div>
+                  <CardTitle className="text-sm">测试聊天</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted">发送一条短消息，验证 API Key、Base URL、模型和 Responses 协议是否可用。</p>
+                </div>
+              </div>
+              <Badge tone={testingChat ? "amber" : ready ? "green" : "gray"}>{testingChat ? "测试中" : ready ? "可测试" : "待配置"}</Badge>
+            </CardHeader>
+            <CardContent className="space-y-3 p-3">
+              <div className="max-h-56 space-y-2 overflow-auto rounded-md border border-border bg-surface-muted p-3 thin-scrollbar">
+                {chatMessages.map((message, index) => (
+                  <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[78%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm leading-5 ${
+                        message.role === "user" ? "bg-brand text-white" : "border border-border bg-white text-foreground"
+                      }`}
+                    >
+                      {message.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-            {chatError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{chatError}</div> : null}
+              {chatError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{chatError}</div> : null}
 
-            <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_130px]">
-              <textarea
-                className={`${fieldClass} min-h-16 resize-y py-2`}
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                    void sendTestChat();
-                  }
-                }}
-                placeholder="输入测试消息"
-              />
-              <Button className="h-auto min-h-16" disabled={!chatInput.trim() || testingChat} onClick={sendTestChat}>
-                <Send className="h-4 w-4" />
-                {testingChat ? "发送中" : "发送测试"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_130px]">
+                <textarea
+                  className={`${fieldClass} min-h-16 resize-y py-2`}
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      void sendTestChat();
+                    }
+                  }}
+                  placeholder="输入测试消息"
+                />
+                <Button className="h-auto min-h-16" disabled={!chatInput.trim() || testingChat} onClick={sendTestChat}>
+                  <Send className="h-4 w-4" />
+                  {testingChat ? "发送中" : "发送测试"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
         <WeComNotificationSettingsPanel />
 
@@ -577,18 +838,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function StatusItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border px-2.5 py-2">
-      <p className="text-xs font-bold text-muted">{label}</p>
-      <p className="mt-1 truncate text-sm font-bold text-foreground">{value}</p>
-    </div>
-  );
-}
-
 function readLocalAiSettings() {
   try {
     const saved = window.localStorage.getItem(aiSettingsStorageKey);
+
+    return saved ? normalizeAiSettings(JSON.parse(saved) as Partial<AiModelSettings>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readLocalAiImageSettings() {
+  try {
+    const saved = window.localStorage.getItem(aiImageSettingsStorageKey);
 
     return saved ? normalizeAiSettings(JSON.parse(saved) as Partial<AiModelSettings>) : null;
   } catch {
@@ -600,22 +862,10 @@ function readLocalAiProfiles() {
   try {
     const savedProfiles = window.localStorage.getItem(aiSettingsProfilesStorageKey);
 
-    return savedProfiles ? normalizeProfiles(JSON.parse(savedProfiles) as SavedAiModelProfile[]) : [];
+    return savedProfiles ? normalizeSavedAiModelProfiles(JSON.parse(savedProfiles) as SavedAiModelProfile[]) : [];
   } catch {
     return [];
   }
-}
-
-function normalizeProfiles(value: unknown) {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .filter((profile): profile is SavedAiModelProfile => Boolean(profile && typeof profile === "object" && "settings" in profile))
-    .map((profile) => ({
-      ...profile,
-      settings: profile.settings.provider === "custom" ? normalizeAiSettings(profile.settings) : normalizeAiSettings(profile.settings),
-    }))
-    .slice(0, 20);
 }
 
 function cacheAiSettings(settings: AiModelSettings, profiles: SavedAiModelProfile[]) {
@@ -623,14 +873,6 @@ function cacheAiSettings(settings: AiModelSettings, profiles: SavedAiModelProfil
   window.localStorage.setItem(aiSettingsProfilesStorageKey, JSON.stringify(profiles));
 }
 
-function createProfile(settings: AiModelSettings, timestamp = new Date().toISOString()): SavedAiModelProfile {
-  const normalized = normalizeAiSettings(settings);
-
-  return {
-    id: `${normalized.provider}-${normalized.model}-${Date.now()}`,
-    name: createAiProfileName(normalized),
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    settings: normalized,
-  };
+function cacheAiImageSettings(settings: AiModelSettings) {
+  window.localStorage.setItem(aiImageSettingsStorageKey, JSON.stringify(settings));
 }

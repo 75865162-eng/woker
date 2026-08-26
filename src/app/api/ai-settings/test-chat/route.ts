@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as TestChatRequest;
-    const settings = resolveAiSettings(body.aiSettings);
+    const settings = resolveAiSettings(body.aiSettings, "text");
     const message = body.message?.trim() || "请用一句中文回复：模型配置连接成功。";
 
     if (!settings.apiKey?.trim()) {

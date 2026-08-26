@@ -1,7 +1,7 @@
 import { buildListingOptimizationPrompt } from "./prompt";
-import { normalizeAiSettings, type AiModelSettings } from "@/lib/ai-settings";
+import { type AiModelSettings } from "@/lib/ai-settings";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
-import { buildAiTextEndpoint } from "@/lib/server/ai-runtime";
+import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
 import type { ListingOptimizationRequest, ListingOptimizationResult } from "./types";
 
 export interface ResponsesApiOutput {
@@ -103,12 +103,12 @@ function parseJsonResult(text: string): ListingOptimizationResult {
 }
 
 export async function optimizeListing(input: ListingOptimizationRequest, aiSettings?: Partial<AiModelSettings>) {
-  const requestSettings = aiSettings?.apiKey ? normalizeAiSettings(aiSettings) : null;
-  const apiKey = requestSettings?.apiKey || process.env.OPENROUTER_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.AIGOCODE_API_KEY || process.env.OPENAI_API_KEY;
-  const baseUrl = requestSettings?.baseUrl || process.env.OPENROUTER_BASE_URL || process.env.DEEPSEEK_BASE_URL || process.env.AIGOCODE_BASE_URL || "https://api.deepseek.com";
-  const model = requestSettings?.model || process.env.OPENROUTER_MODEL || process.env.DEEPSEEK_MODEL || process.env.AIGOCODE_MODEL || "deepseek-v4-flash";
-  const timeoutSeconds = requestSettings?.timeoutSeconds || 90;
-  const provider = requestSettings?.provider || (process.env.OPENROUTER_API_KEY ? "openrouter" : undefined);
+  const requestSettings = resolveAiSettings(aiSettings, "text");
+  const apiKey = requestSettings.apiKey;
+  const baseUrl = requestSettings.baseUrl;
+  const model = requestSettings.model;
+  const timeoutSeconds = requestSettings.timeoutSeconds;
+  const provider = requestSettings.provider;
 
   if (!apiKey) {
     throw new Error("缺少 AI API Key。请先在 Settings 页面保存大模型配置。");

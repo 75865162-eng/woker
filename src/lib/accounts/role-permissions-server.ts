@@ -1,5 +1,6 @@
 import { defaultRolePermissionMap, type PermissionAction, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { prisma } from "@/lib/db/prisma";
+import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 
 const validActions = new Set<PermissionAction>(["view", "create", "edit", "approve", "export"]);
 
@@ -31,11 +32,20 @@ export function normalizeRolePermissionMap(value: unknown): RolePermissionMap {
 export async function getOrganizationRolePermissions(organizationId: string): Promise<RolePermissionMap> {
   if (!process.env.DATABASE_URL) return defaultRolePermissionMap;
 
-  const saved = await prisma.organizationRolePermission.findUnique({
-    where: { organizationId },
-  });
+  try {
+    const saved = await prisma.organizationRolePermission.findUnique({
+      where: { organizationId },
+    });
 
-  return normalizeRolePermissionMap(saved?.permissions);
+    return normalizeRolePermissionMap(saved?.permissions);
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      console.warn(`[role-permissions] Falling back to default permissions for ${organizationId}:`, error);
+      return defaultRolePermissionMap;
+    }
+
+    throw error;
+  }
 }
 
 export async function saveOrganizationRolePermissions(organizationId: string, permissions: unknown) {

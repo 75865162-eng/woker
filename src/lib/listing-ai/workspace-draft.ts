@@ -91,6 +91,8 @@ export type TitleGeneratorFieldKey =
   | "competitorTitle2"
   | "competitorTitle3";
 
+export type TitleGeneratorMode = "old" | "new";
+
 export interface TitleGeneratorField {
   key: TitleGeneratorFieldKey;
   label: string;
@@ -98,16 +100,25 @@ export interface TitleGeneratorField {
   value: string;
 }
 
+export interface TitleGeneratorModeDraft {
+  fields: TitleGeneratorField[];
+  results: string[];
+  history: TitleGeneratorHistoryRecord[];
+}
+
 export interface TitleGeneratorDraft {
+  mode: TitleGeneratorMode;
   fields: TitleGeneratorField[];
   prompt: string;
   results: string[];
   history: TitleGeneratorHistoryRecord[];
+  modes: Record<TitleGeneratorMode, TitleGeneratorModeDraft>;
 }
 
 export interface TitleGeneratorHistoryRecord {
   id: string;
   createdAt: string;
+  mode: TitleGeneratorMode;
   fields: TitleGeneratorField[];
   prompt: string;
   results: string[];
@@ -227,6 +238,10 @@ export const titleGeneratorPrompt = `你现在是深耕亚马逊跨境电商5年
 竞品标题2
 竞品标题3
 
+【模式说明】
+老品优化：产品已经在售，优先参考现有产品标题、广告数据和竞品标题，在保留原有搜索意图的前提下优化标题。
+新品编写：产品尚未成型或需要重新起标题，优先参考中文名称、产品特点、核心广告词、相关关键词整理和竞品标题，从零生成可上架标题。新品模式下忽略现有产品标题，ASIN 仅作记录，不作为强制输入。
+
 【权重优先级规则（必须严格遵守）】
 参考页面输入的权重优先级。
 执行硬性约束：
@@ -250,24 +265,42 @@ export const titleGeneratorPrompt = `你现在是深耕亚马逊跨境电商5年
 • 大小写：Title Case（实词首字母大写，介词 in/for/with、冠词 a/an/the 小写），禁止全大写
 • 标点仅允许英文符号
 • 绝对禁止写入其他产品商标词
-• 全部内容语义通顺，适配亚马逊 A9 搜索与 Rufus AI 问答抓取，无重复关键词堆砌。`;
+• 全部内容语义通顺，适配亚马逊 A9 搜索与 Rufus AI 问答抓取，无重复关键词堆砌。
+• 针对不同场景尺寸必须从公制转换成美国当地常用尺寸，如 in, oz, lbs 等。`;
+
+export const titleGeneratorFields: TitleGeneratorField[] = [
+  { key: "productChineseName", label: "中文名称", weight: 0, value: "" },
+  { key: "asin", label: "ASIN", weight: 0, value: "" },
+  { key: "currentProductTitle", label: "现有产品标题", weight: 0, value: "" },
+  { key: "productFeatures", label: "我的产品特点", weight: 10, value: "" },
+  { key: "coreAdWords", label: "核心广告词", weight: 30, value: "" },
+  { key: "relatedKeywords", label: "相关关键词整理", weight: 20, value: "" },
+  { key: "adData", label: "广告数据", weight: 10, value: "" },
+  { key: "competitorTitle1", label: "竞品标题1", weight: 10, value: "" },
+  { key: "competitorTitle2", label: "竞品标题2", weight: 10, value: "" },
+  { key: "competitorTitle3", label: "竞品标题3", weight: 10, value: "" },
+];
+
+export function createTitleGeneratorModeDraft(
+  fields: TitleGeneratorField[] = titleGeneratorFields,
+): TitleGeneratorModeDraft {
+  return {
+    fields: fields.map((field) => ({ ...field })),
+    results: [],
+    history: [],
+  };
+}
 
 export const initialTitleGenerator: TitleGeneratorDraft = {
+  mode: "old",
   prompt: titleGeneratorPrompt,
   results: [],
   history: [],
-  fields: [
-    { key: "productChineseName", label: "中文名称", weight: 0, value: "" },
-    { key: "asin", label: "ASIN", weight: 0, value: "" },
-    { key: "currentProductTitle", label: "现有产品标题", weight: 0, value: "" },
-    { key: "productFeatures", label: "我的产品特点", weight: 10, value: "" },
-    { key: "coreAdWords", label: "核心广告词", weight: 30, value: "" },
-    { key: "relatedKeywords", label: "相关关键词整理", weight: 20, value: "" },
-    { key: "adData", label: "广告数据", weight: 10, value: "" },
-    { key: "competitorTitle1", label: "竞品标题1", weight: 10, value: "" },
-    { key: "competitorTitle2", label: "竞品标题2", weight: 10, value: "" },
-    { key: "competitorTitle3", label: "竞品标题3", weight: 10, value: "" },
-  ],
+  fields: titleGeneratorFields.map((field) => ({ ...field })),
+  modes: {
+    old: createTitleGeneratorModeDraft(),
+    new: createTitleGeneratorModeDraft(),
+  },
 };
 
 export const imageGeneratorViews: Array<{ key: ImageGeneratorViewKey; label: string }> =

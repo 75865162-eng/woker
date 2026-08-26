@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, FileSpreadsheet, X } from "lucide-react";
 import { AdjustmentTable } from "@/components/workspace/adjustment-table";
@@ -158,13 +157,12 @@ export function WorkspacePanel() {
               </div>
               <div className="flex flex-wrap gap-2">
               {activeRules.slice(0, 4).map((rule) => (
-                  <Link
+                  <span
                     key={rule.id}
-                    href={`/rules?lifecycle=${activeLifecycleGroup?.id ?? rule.lifecycleGroupId}`}
-                    className="rounded-md border border-border bg-white px-2 py-1 text-xs font-semibold text-muted transition-colors hover:border-brand hover:text-foreground"
+                    className="rounded-md border border-border bg-white px-2 py-1 text-xs font-semibold text-muted"
                   >
                     {rule.name}
-                  </Link>
+                  </span>
                 ))}
                 {workspaceMode === "workspace-unit" && activeWorkspaceUnit && (
                   <Button

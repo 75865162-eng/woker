@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
@@ -464,12 +463,13 @@ export function RulesEditorShell({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/rules?lifecycle=${activeLifecycleGroup.id}&rule=${rule.id}#rule-editor`}
+                    <button
+                      type="button"
+                      onClick={() => navigateToRule(activeLifecycleGroup.id, rule.id)}
                       className="text-sm font-bold text-foreground"
                     >
                       {rule.name}
-                    </Link>
+                    </button>
                     <Badge tone={rule.enabled ? "green" : "gray"}>{rule.enabled ? "开启" : "关闭"}</Badge>
                     <span className="text-xs font-semibold text-muted">Priority {rule.priority}</span>
                   </div>
@@ -551,7 +551,13 @@ export function RulesEditorShell({
                     <tr key={rule.id} className={rule.id === activeRule?.id ? "bg-blue-50/60" : undefined}>
                       <td className="px-4 py-3 font-bold">{rule.priority}</td>
                       <td className="px-4 py-3 font-semibold">
-                        <Link href={`/rules?lifecycle=${activeLifecycleGroup.id}&rule=${rule.id}#rule-editor`}>{rule.name}</Link>
+                        <button
+                          type="button"
+                          onClick={() => navigateToRule(activeLifecycleGroup.id, rule.id)}
+                          className="text-left hover:text-brand"
+                        >
+                          {rule.name}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-muted">{rule.lifecycleGroupId}</td>
                       <td className="px-4 py-3">

@@ -6,6 +6,7 @@ import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { normalizeAccountRoleId, normalizeTeamAccounts, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 import { syncRosterLoginUsers } from "@/lib/accounts/roster-auth-sync";
+import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -239,14 +240,31 @@ export async function GET() {
       return NextResponse.json({ accounts: [] });
     }
 
-    let members: RosterAccountRow[] = await prisma.teamRosterMember.findMany({
-      where: {
-        organizationId: user.organizationId,
-      },
-      orderBy: {
-        sortOrder: "asc",
-      },
-    });
+    let members: RosterAccountRow[];
+
+    try {
+      members = await prisma.teamRosterMember.findMany({
+        where: {
+          organizationId: user.organizationId,
+        },
+        orderBy: {
+          sortOrder: "asc",
+        },
+      });
+    } catch (error) {
+      if (isDatabaseUnavailableError(error)) {
+        return NextResponse.json(
+          {
+            accounts: [],
+            revision: "database-unavailable",
+            error: "数据库暂时不可用，账号列表已切换为空数据。",
+          },
+          { status: 503 },
+        );
+      }
+
+      throw error;
+    }
 
     const existingRosterIds = new Set(members.map((member) => member.id));
     const userMemberships = (await prisma.organizationMember.findMany({

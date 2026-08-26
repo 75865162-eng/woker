@@ -1,7 +1,8 @@
-import { AlertTriangle, CheckCircle2, Database, FileArchive, ListChecks, UsersRound } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, FileArchive, ListChecks, ServerCog, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAuthDriver } from "@/lib/auth/constants";
+import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
 
 type StatusMetric = {
@@ -38,7 +39,7 @@ export async function SystemDataStatusPanel() {
     try {
       metrics = await loadDatabaseMetrics();
     } catch (error) {
-      databaseError = error instanceof Error ? error.message : "数据库状态读取失败";
+      databaseError = isDatabaseUnavailableError(error) ? "数据库暂时不可用" : error instanceof Error ? error.message : "数据库状态读取失败";
     }
   }
 
@@ -46,54 +47,61 @@ export async function SystemDataStatusPanel() {
     {
       label: "组织",
       value: metrics ? metrics.organizations.toLocaleString("zh-CN") : "-",
-      detail: "Organization",
+      detail: "组织边界",
       icon: Database,
     },
     {
-      label: "用户",
+      label: "账号",
       value: metrics ? metrics.users.toLocaleString("zh-CN") : "-",
-      detail: "User / Session",
+      detail: "登录与会话",
       icon: UsersRound,
     },
     {
       label: "团队成员",
       value: metrics ? metrics.teamMembers.toLocaleString("zh-CN") : "-",
-      detail: "TeamRosterMember",
+      detail: "协作成员",
       icon: UsersRound,
     },
     {
       label: "商品",
       value: metrics ? metrics.products.toLocaleString("zh-CN") : "-",
-      detail: "ProductRecord",
+      detail: "共享商品资产",
       icon: Database,
     },
     {
       label: "图片文案",
       value: metrics ? metrics.imageCopyGalleries.toLocaleString("zh-CN") : "-",
-      detail: "ImageCopyGallery",
+      detail: "图片与文案草稿",
       icon: FileArchive,
     },
     {
       label: "文件记录",
       value: metrics ? metrics.files.toLocaleString("zh-CN") : "-",
-      detail: "FileObject",
+      detail: "原始文件资产",
       icon: FileArchive,
     },
     {
       label: "处理任务",
       value: metrics ? metrics.jobs.toLocaleString("zh-CN") : "-",
-      detail: "ImportJob",
+      detail: "导入与后台处理",
       icon: ListChecks,
     },
     {
       label: "导出记录",
       value: metrics ? metrics.exports.toLocaleString("zh-CN") : "-",
-      detail: "ExportRecord",
+      detail: "可追溯导出",
       icon: FileArchive,
     },
   ];
 
   const healthy = Boolean(metrics && !databaseError);
+  const storageIsLocal = storageDriver === "local";
+  const queueIsInline = queueDriver === "inline";
+  const productionGaps = [
+    !hasDatabaseUrl ? "未配置 DATABASE_URL" : "",
+    storageIsLocal ? "文件仍在本地" : "",
+    queueIsInline ? "任务仍为同步执行" : "",
+  ].filter(Boolean);
 
   return (
     <Card>
@@ -104,13 +112,13 @@ export async function SystemDataStatusPanel() {
           </div>
           <div>
             <CardTitle className="text-sm">数据库接入状态</CardTitle>
-            <p className="mt-0.5 text-xs font-medium text-muted">用于判断哪些页面已经具备多人共享的数据边界。</p>
+            <p className="mt-0.5 text-xs font-medium text-muted">用于判断哪些数据已经进入后端共享边界，哪些仍是本地草稿。</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Badge tone={authDriver === "database" ? "green" : "amber"}>{authDriver === "database" ? "数据库鉴权" : "本地鉴权"}</Badge>
-          <Badge tone={storageDriver === "local" ? "amber" : "green"}>文件：{storageDriver === "local" ? "本地" : storageDriver.toUpperCase()}</Badge>
-          <Badge tone={queueDriver === "inline" ? "amber" : "green"}>任务：{queueDriver === "inline" ? "同步处理" : queueDriver}</Badge>
+          <Badge tone={storageIsLocal ? "amber" : "green"}>文件：{storageIsLocal ? "本地未共享" : storageDriver.toUpperCase()}</Badge>
+          <Badge tone={queueIsInline ? "amber" : "green"}>任务：{queueIsInline ? "同步执行" : queueDriver}</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 p-3">
@@ -122,7 +130,13 @@ export async function SystemDataStatusPanel() {
 
         {!hasDatabaseUrl ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
-            当前没有配置 DATABASE_URL，系统只能使用本地兼容模式。
+            当前没有配置 DATABASE_URL，系统只能停留在本地兼容模式，无法作为多人共享后端使用。
+          </div>
+        ) : null}
+
+        {productionGaps.length ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+            仍需补齐的生产边界：{productionGaps.join("、")}。
           </div>
         ) : null}
 
@@ -145,16 +159,25 @@ export async function SystemDataStatusPanel() {
 
         <div className="grid gap-2 text-xs font-medium leading-4 text-muted lg:grid-cols-3">
           <div className="rounded-md border border-border bg-white p-2.5">
-            <p className="font-bold text-foreground">已接后端边界</p>
-            <p className="mt-0.5">账号、组织、团队成员、商品清单、图片文案、文件对象、处理任务、导出记录。</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-bold text-foreground">已接后端边界</p>
+              <Badge tone="green">共享</Badge>
+            </div>
+            <p className="mt-1">账号、组织、团队成员、商品、图片文案、文件对象、处理任务、导出记录都在数据库里，适合多人共用。</p>
           </div>
           <div className="rounded-md border border-border bg-white p-2.5">
-            <p className="font-bold text-foreground">仍在本地草稿</p>
-            <p className="mt-0.5">PPC 工作区、Listing AI 历史、搜索词合并历史、物流当次处理状态。</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-bold text-foreground">仍在本地草稿</p>
+              <Badge tone="amber">待迁移</Badge>
+            </div>
+            <p className="mt-1">PPC 工作区、Listing AI 历史、搜索词合并历史、物流当次处理状态仍依赖浏览器本地存储。</p>
           </div>
           <div className="rounded-md border border-border bg-white p-2.5">
-            <p className="font-bold text-foreground">下一步建议</p>
-            <p className="mt-0.5">下一步把商品试算草稿绑定 SKU，再迁 PPC workspace snapshot。</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-bold text-foreground">下一步建议</p>
+              <ServerCog className="h-4 w-4 text-brand" />
+            </div>
+            <p className="mt-1">优先把文件资产迁到对象存储，再把 PPC workspace snapshot 和其他协作草稿迁到组织级表结构。</p>
           </div>
         </div>
       </CardContent>

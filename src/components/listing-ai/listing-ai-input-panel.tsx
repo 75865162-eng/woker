@@ -6,26 +6,27 @@ import type {
   TitleGeneratorDraft,
   TitleGeneratorField,
   TitleGeneratorFieldKey,
+  TitleGeneratorMode,
   TitleGeneratorHistoryRecord,
 } from "@/lib/listing-ai/workspace-draft";
 
 export function ListingAiInputPanel({
-  productFactsCount,
   titleGenerator,
   titleGenerating,
   titleGeneratorError,
   titlePromptOpen,
+  updateTitleGeneratorMode,
   updateTitleGeneratorField,
   setTitleGenerator,
   setTitlePromptOpen,
   onGenerateTitles,
   onLoadTitleGeneratorHistory,
 }: {
-  productFactsCount: number;
   titleGenerator: TitleGeneratorDraft;
   titleGenerating: boolean;
   titleGeneratorError: string;
   titlePromptOpen: boolean;
+  updateTitleGeneratorMode: (mode: TitleGeneratorMode) => void;
   updateTitleGeneratorField: (
     key: TitleGeneratorFieldKey,
     patch: Partial<Pick<TitleGeneratorField, "value" | "weight">>,
@@ -42,7 +43,7 @@ export function ListingAiInputPanel({
         loading={titleGenerating}
         error={titleGeneratorError}
         promptOpen={titlePromptOpen}
-        productFactsCount={productFactsCount}
+        onModeChange={updateTitleGeneratorMode}
         onFieldChange={updateTitleGeneratorField}
         onGeneratorChange={setTitleGenerator}
         onPromptOpenChange={setTitlePromptOpen}

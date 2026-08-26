@@ -21,7 +21,6 @@ export const permissionModules = [
   { id: "listingAi", name: "Listing AI", paths: ["/listing-ai"] },
   { id: "imageUpscale", name: "Image Upscale", paths: ["/image-upscale"] },
   { id: "logistics", name: "Logistics", paths: ["/logistics"] },
-  { id: "rules", name: "Rule Center", paths: ["/rules"] },
   { id: "accounts", name: "Accounts", paths: ["/accounts"] },
   { id: "settings", name: "Settings", paths: ["/settings", "/versions"] },
 ];
@@ -36,11 +35,11 @@ export const routeModuleIds = permissionModules.flatMap((module) =>
 export const defaultRolePermissionMap: RolePermissionMap = {
   owner: createFullPermissions(),
   database_admin: createPermissions(
-    ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules", "accounts", "settings"],
+    ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "accounts", "settings"],
     ["view", "create", "edit", "export"],
   ),
-  admin: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
-  operations_manager: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
+  admin: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics"], allActions()),
+  operations_manager: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics"], allActions()),
   operations_supervisor: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
   operations: createPermissions(["products", "listingAi"], ["view", "create", "edit", "export"]),
   operations_assistant: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
@@ -51,8 +50,8 @@ export const defaultRolePermissionMap: RolePermissionMap = {
   procurement: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
   selection: createPermissions(["products"], ["view", "create", "edit"]),
   designer: createPermissions(["products", "listingAi", "imageUpscale"], ["view"]),
-  ppc_specialist: createPermissions(["workspace", "searchMerge", "rules"], ["view", "create", "edit", "export"]),
-  ppc_manager: createPermissions(["workspace", "searchMerge", "rules"], ["view", "create", "edit", "export"]),
+  ppc_specialist: createPermissions(["workspace", "searchMerge"], ["view", "create", "edit", "export"]),
+  ppc_manager: createPermissions(["workspace", "searchMerge"], ["view", "create", "edit", "export"]),
   listing_specialist: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
   listing_operator: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
   logistics_specialist: createPermissions(["logistics"], ["view", "create", "edit", "export"]),

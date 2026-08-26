@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
 import {
-  normalizeAiSettings,
+  createDefaultAiSettingsBundle,
+  createAiImageProfileName,
+  createAiProfileName,
+  normalizeAiSettingsBundle,
+  normalizeSavedAiModelProfiles,
   type AiModelSettings,
+  type AiSettingsBundle,
   type SavedAiModelProfile,
 } from "@/lib/ai-settings";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { resolveAiSettings } from "@/lib/server/ai-runtime";
 
 export const runtime = "nodejs";
 
 type AiSettingsPayload = {
   settings?: unknown;
+  imageSettings?: unknown;
   profiles?: unknown;
   activeProfileId?: unknown;
   workspaceId?: unknown;
@@ -24,32 +32,68 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function parseSettings(value: unknown): AiModelSettings {
+function parseSettings(value: unknown): AiSettingsBundle {
+  if (value == null) {
+    return createDefaultAiSettingsBundle();
+  }
+
   if (!isRecord(value)) {
     throw new Error("Invalid AI settings payload.");
   }
 
-  return normalizeAiSettings(value as Partial<AiModelSettings>);
+  return normalizeAiSettingsBundle(value as Partial<AiSettingsBundle> | Partial<AiModelSettings>);
 }
 
-function parseProfiles(value: unknown): SavedAiModelProfile[] {
-  if (!Array.isArray(value)) return [];
+function pairProfiles(
+  settings: AiSettingsBundle,
+  profiles: SavedAiModelProfile[],
+): SavedAiModelProfile[] {
+  const systemProfile = profiles.find((profile) => profile.kind === "system");
+  const imageProfile = profiles.find((profile) => profile.kind === "image");
 
-  return value
-    .filter(isRecord)
-    .map((profile) => {
-      const settings = parseSettings(profile.settings);
-      const now = new Date().toISOString();
+  if (systemProfile && imageProfile) return profiles;
 
-      return {
-        id: typeof profile.id === "string" && profile.id ? profile.id : `${settings.provider}-${settings.model}-${Date.now()}`,
-        name: typeof profile.name === "string" && profile.name ? profile.name : `${settings.provider} · ${settings.model}`,
-        createdAt: typeof profile.createdAt === "string" && profile.createdAt ? profile.createdAt : now,
-        updatedAt: typeof profile.updatedAt === "string" && profile.updatedAt ? profile.updatedAt : now,
-        settings,
-      } satisfies SavedAiModelProfile;
-    })
-    .slice(0, 20);
+  if (systemProfile) {
+    const bundleId = systemProfile.bundleId || systemProfile.id;
+    const systemName = systemProfile.name || createAiProfileName(settings.text);
+
+    return [
+      { ...systemProfile, bundleId, name: systemName },
+      {
+        id: `${bundleId}::image`,
+        bundleId,
+        kind: "image",
+        name: createAiImageProfileName(systemName),
+        createdAt: systemProfile.createdAt,
+        updatedAt: systemProfile.updatedAt,
+        settings: settings.image,
+      },
+    ];
+  }
+
+  const fallbackName = createAiProfileName(settings.text);
+  const bundleId = `${settings.text.provider}-${settings.text.model}-${Date.now()}`;
+
+  return [
+    {
+      id: bundleId,
+      bundleId,
+      kind: "system",
+      name: fallbackName,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      settings: settings.text,
+    },
+    {
+      id: `${bundleId}::image`,
+      bundleId,
+      kind: "image",
+      name: createAiImageProfileName(fallbackName),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      settings: settings.image,
+    },
+  ];
 }
 
 export async function GET(request: Request) {
@@ -73,12 +117,21 @@ export async function GET(request: Request) {
     });
 
     if (!record) {
-      return NextResponse.json({ settings: null, profiles: [], activeProfileId: "" });
+      return NextResponse.json({
+        settings: resolveAiSettings(undefined, "text"),
+        imageSettings: resolveAiSettings(undefined, "image"),
+        profiles: [],
+        activeProfileId: "",
+      });
     }
 
+    const normalized = parseSettings(record.settings);
+    const nextProfiles = pairProfiles(normalized, normalizeSavedAiModelProfiles(record.profiles));
+
     return NextResponse.json({
-      settings: normalizeAiSettings(record.settings as Partial<AiModelSettings>),
-      profiles: parseProfiles(record.profiles),
+      settings: normalized.text,
+      imageSettings: normalized.image,
+      profiles: nextProfiles,
       activeProfileId: record.activeProfileId ?? "",
     });
   } catch (error) {
@@ -98,9 +151,14 @@ export async function PUT(request: Request) {
 
     const body = (await request.json()) as AiSettingsPayload;
     const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
-    const settings = parseSettings(body.settings);
-    const profiles = parseProfiles(body.profiles);
+    const settings = parseSettings({
+      text: body.settings,
+      image: body.imageSettings,
+    });
+    const nextProfiles = pairProfiles(settings, normalizeSavedAiModelProfiles(body.profiles));
     const activeProfileId = typeof body.activeProfileId === "string" ? body.activeProfileId : "";
+
+    await ensureCurrentUserRecord(user);
 
     await prisma.aiModelSetting.upsert({
       where: {
@@ -118,7 +176,7 @@ export async function PUT(request: Request) {
         marketplace: scope.marketplace,
         activeProfileId,
         settings: settings as unknown as Prisma.InputJsonValue,
-        profiles: profiles as unknown as Prisma.InputJsonValue,
+        profiles: nextProfiles as unknown as Prisma.InputJsonValue,
       },
       update: {
         organizationId: user.organizationId,
@@ -126,11 +184,11 @@ export async function PUT(request: Request) {
         marketplace: scope.marketplace,
         activeProfileId,
         settings: settings as unknown as Prisma.InputJsonValue,
-        profiles: profiles as unknown as Prisma.InputJsonValue,
+        profiles: nextProfiles as unknown as Prisma.InputJsonValue,
       },
     });
 
-    return NextResponse.json({ settings, profiles, activeProfileId });
+    return NextResponse.json({ settings: settings.text, imageSettings: settings.image, profiles: nextProfiles, activeProfileId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save AI settings.";
     return NextResponse.json({ error: message }, { status: 500 });

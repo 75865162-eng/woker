@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { ensureOrganization } from "@/lib/organizations/organization-server";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -22,6 +23,8 @@ export async function GET() {
     });
 
     if (!scopes.some((scope) => scope.id === "default")) {
+      await ensureOrganization(user.organizationId, user.organizationName);
+
       const defaultScope = await prisma.workspaceScope.create({
         data: {
           organizationId: user.organizationId,

@@ -66,6 +66,11 @@ export function WorkerHealthPanel() {
   }, []);
 
   const counts = data?.queueCounts ?? {};
+  const waiting = Number(counts.waiting ?? 0);
+  const active = Number(counts.active ?? 0);
+  const failed = Number(counts.failed ?? 0);
+  const delayed = Number(counts.delayed ?? 0);
+  const queueModeTone = data?.driver === "redis" ? "green" : "amber";
 
   return (
     <Card>
@@ -76,17 +81,27 @@ export function WorkerHealthPanel() {
           </div>
           <div>
             <CardTitle className="text-sm">Redis Worker 运维</CardTitle>
-            <p className="mt-0.5 text-xs font-medium text-muted">队列积压、worker 心跳和近期异常任务。</p>
+            <p className="mt-0.5 text-xs font-medium text-muted">查看任务队列是否积压、worker 是否在线，以及失败任务是否需要人工介入。</p>
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => void loadHealth()} disabled={loading}>
-          <RefreshCw className="h-4 w-4" />
-          刷新
-        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge tone={queueModeTone}>{data?.driver ?? "-"}</Badge>
+          <Badge tone={failed > 0 ? "red" : "green"}>失败 {failed}</Badge>
+          <Badge tone={waiting + active + delayed > 0 ? "amber" : "green"}>待处理 {waiting + active + delayed}</Badge>
+          <Button variant="secondary" size="sm" onClick={() => void loadHealth()} disabled={loading}>
+            <RefreshCw className="h-4 w-4" />
+            刷新
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 p-3">
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
         {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取 worker 状态...</div> : null}
+        {!loading && data?.driver !== "redis" ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+            当前未启用 Redis 队列，任务将按同步模式执行，不适合高并发场景。
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-[repeat(auto-fit,104px)] justify-start gap-2">
           {["waiting", "active", "delayed", "failed", "completed", "paused"].map((key) => (

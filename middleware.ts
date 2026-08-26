@@ -53,7 +53,11 @@ async function hasValidSessionCookie(request: NextRequest) {
   try {
     const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as { driver?: "database" | "local"; expiresAt?: string };
 
-    return Boolean(parsed.driver === getAuthDriver() && parsed.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now());
+    return Boolean(
+      (parsed.driver === "local" || parsed.driver === getAuthDriver()) &&
+        parsed.expiresAt &&
+        new Date(parsed.expiresAt).getTime() > Date.now(),
+    );
   } catch {
     return false;
   }

@@ -25,6 +25,10 @@ export function WorkspaceScopePanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const totalWorkspaces = workspaces.length;
+  const defaultCount = workspaces.filter((workspace) => workspace.isDefault).length;
+  const incompleteCount = workspaces.filter((workspace) => !workspace.accountId || !workspace.marketplace).length;
+
   async function loadWorkspaces() {
     setLoading(true);
     setError("");
@@ -88,16 +92,26 @@ export function WorkspaceScopePanel() {
           </div>
           <div>
             <CardTitle className="text-sm">Workspace / 账号 / 站点</CardTitle>
-            <p className="mt-0.5 text-xs font-medium text-muted">为多 Amazon 账号和 marketplace 拆分数据边界。</p>
+            <p className="mt-0.5 text-xs font-medium text-muted">定义组织级数据边界，避免不同账号、站点和工作区混用同一份数据。</p>
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => void loadWorkspaces()} disabled={loading}>
-          <RefreshCw className="h-4 w-4" />
-          刷新
-        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge tone="blue">工作区 {totalWorkspaces}</Badge>
+          <Badge tone={defaultCount ? "green" : "amber"}>默认 {defaultCount}</Badge>
+          <Badge tone={incompleteCount ? "amber" : "green"}>待补齐 {incompleteCount}</Badge>
+          <Button variant="secondary" size="sm" onClick={() => void loadWorkspaces()} disabled={loading}>
+            <RefreshCw className="h-4 w-4" />
+            刷新
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 p-3">
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
+        {incompleteCount ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+            有 {incompleteCount} 个工作区缺少账号或站点信息，导入和归属时容易产生混淆。
+          </div>
+        ) : null}
         <div className="grid gap-2 lg:grid-cols-[1fr_1fr_1fr_96px_auto]">
           <input className={fieldClass} value={form.workspaceId} placeholder="workspaceId，例如 us-main" onChange={(event) => setForm((current) => ({ ...current, workspaceId: event.target.value }))} />
           <input className={fieldClass} value={form.name} placeholder="显示名称" onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
@@ -129,20 +143,25 @@ export function WorkspaceScopePanel() {
                   </td>
                   <td className="px-3 py-2">{workspace.accountId || "-"}</td>
                   <td className="px-3 py-2">{workspace.marketplace || "-"}</td>
-                  <td className="px-3 py-2"><Badge tone={workspace.isDefault ? "green" : "blue"}>{workspace.isDefault ? "默认" : "已启用"}</Badge></td>
+                  <td className="px-3 py-2">
+                    <Badge tone={workspace.isDefault ? "green" : "blue"}>{workspace.isDefault ? "默认" : "已启用"}</Badge>
+                  </td>
                   <td className="px-3 py-2 text-xs text-muted">{new Date(workspace.updatedAt).toLocaleString("zh-CN", { hour12: false })}</td>
                 </tr>
               ))}
               {!workspaces.length ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-sm font-medium text-muted">
-                    {loading ? "正在读取工作区..." : "暂无工作区。"}
+                    {loading ? "正在读取工作区..." : "暂无工作区，先建立一个默认 Workspace 作为组织边界。"}
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
         </div>
+        <p className="text-xs font-medium leading-4 text-muted">
+          每条记录建议保持 workspaceId、accountId、marketplace 的一一对应关系，后续导入、导出和草稿归属都按这个边界执行。
+        </p>
       </CardContent>
     </Card>
   );

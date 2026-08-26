@@ -5,11 +5,16 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import {
   createPersistableDraft,
+  createTitleGeneratorModeDraft,
   initialCompetitors,
   initialImageGenerator,
   initialInput,
   initialTitleGenerator,
   type SavedRecord,
+  type TitleGeneratorDraft,
+  type TitleGeneratorField,
+  type TitleGeneratorMode,
+  type TitleGeneratorModeDraft,
   type WorkspaceDraft,
 } from "@/lib/listing-ai/workspace-draft";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -23,6 +28,75 @@ type WorkspacePayload = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function mergeTitleGeneratorFields(fields: unknown): TitleGeneratorField[] {
+  const savedFields = Array.isArray(fields) ? fields.filter(isRecord) : [];
+
+  return initialTitleGenerator.fields.map((field) => ({
+    ...field,
+    ...savedFields.find((savedField) => savedField.key === field.key),
+  }));
+}
+
+function normalizeTitleGeneratorModeDraft(
+  value: unknown,
+  legacyDraft?: Partial<TitleGeneratorDraft>,
+): TitleGeneratorModeDraft {
+  const draft = isRecord(value) ? value : {};
+
+  return {
+    ...createTitleGeneratorModeDraft(),
+    fields: mergeTitleGeneratorFields(draft.fields ?? legacyDraft?.fields),
+    results: Array.isArray(draft.results)
+      ? draft.results.filter((item): item is string => typeof item === "string")
+      : Array.isArray(legacyDraft?.results)
+        ? legacyDraft.results
+        : [],
+    history: Array.isArray(draft.history)
+      ? draft.history.filter(isRecord).map((record) => ({
+          id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+          createdAt: typeof record.createdAt === "string" ? record.createdAt : new Date().toLocaleString("zh-CN", { hour12: false }),
+          mode: record.mode === "new" ? "new" : "old",
+          fields: mergeTitleGeneratorFields(record.fields),
+          prompt: typeof record.prompt === "string" ? record.prompt : initialTitleGenerator.prompt,
+          results: Array.isArray(record.results)
+            ? record.results.filter((item): item is string => typeof item === "string")
+            : [],
+        }))
+      : Array.isArray(legacyDraft?.history)
+        ? legacyDraft.history
+        : [],
+  };
+}
+
+function normalizeTitleGeneratorDraft(value: unknown): TitleGeneratorDraft {
+  const draft = isRecord(value) ? (value as Partial<TitleGeneratorDraft>) : {};
+  const mode: TitleGeneratorMode = draft.mode === "new" ? "new" : "old";
+  const modes: Record<string, unknown> = isRecord(draft.modes) ? draft.modes : {};
+  const oldDraft = normalizeTitleGeneratorModeDraft(
+    modes.old,
+    mode === "old" ? draft : undefined,
+  );
+  const newDraft = normalizeTitleGeneratorModeDraft(
+    modes.new,
+    mode === "new" ? draft : undefined,
+  );
+  const activeDraft = mode === "new" ? newDraft : oldDraft;
+
+  return {
+    ...initialTitleGenerator,
+    ...draft,
+    mode,
+    prompt: typeof draft.prompt === "string" && draft.prompt.trim() ? draft.prompt : initialTitleGenerator.prompt,
+    fields: activeDraft.fields,
+    results: activeDraft.results,
+    history: activeDraft.history,
+    modes: {
+      old: oldDraft,
+      new: newDraft,
+    },
+  };
 }
 
 function normalizeDraft(value: unknown): WorkspaceDraft {
@@ -48,16 +122,7 @@ function normalizeDraft(value: unknown): WorkspaceDraft {
       reviewCount: "",
       ...(isRecord(draft.ownImages) ? draft.ownImages : {}),
     },
-    titleGenerator: {
-      ...initialTitleGenerator,
-      ...(isRecord(draft.titleGenerator) ? draft.titleGenerator : {}),
-      fields: initialTitleGenerator.fields.map((field) => ({
-        ...field,
-        ...(isRecord(draft.titleGenerator) && Array.isArray(draft.titleGenerator.fields)
-          ? draft.titleGenerator.fields.find((savedField) => isRecord(savedField) && savedField.key === field.key)
-          : {}),
-      })),
-    },
+    titleGenerator: normalizeTitleGeneratorDraft(draft.titleGenerator),
     imageGenerator: {
       ...initialImageGenerator,
       ...(isRecord(draft.imageGenerator) ? draft.imageGenerator : {}),

@@ -38,11 +38,6 @@ import {
 } from "@/components/listing-ai/listing-ai-output-panels";
 import { ReviewHistorySection } from "@/components/listing-ai/review-history-section";
 import {
-  aiSettingsStorageKey,
-  normalizeAiSettings,
-  type AiModelSettings,
-} from "@/lib/ai-settings";
-import {
   blobToDataUrl,
   readListingAiImageAsset,
   saveListingAiImageAsset,
@@ -67,6 +62,7 @@ import {
   buildImageRequirements,
   createEmptyCompetitor,
   createPersistableDraft,
+  createTitleGeneratorModeDraft,
   defaultImageGeneratorPrompt,
   draftStorageKey,
   fieldClass,
@@ -88,12 +84,14 @@ import {
   type TitleGeneratorDraft,
   type TitleGeneratorField,
   type TitleGeneratorFieldKey,
+  type TitleGeneratorMode,
+  type TitleGeneratorModeDraft,
   type TitleGeneratorHistoryRecord,
   type WorkspaceDraft,
 } from "@/lib/listing-ai/workspace-draft";
 
 const tabs = [
-  { id: "input", label: "Title", icon: Search },
+  { id: "input", label: "标题描述", icon: Search },
   { id: "visual", label: "Images & A+", icon: ImageIcon },
   { id: "analysis", label: "AI Analysis", icon: BarChart3 },
   { id: "listing", label: "Listing", icon: Sparkles },
@@ -173,6 +171,61 @@ async function hydrateImageGeneratorDraft(draft: ImageGeneratorDraft) {
   };
 }
 
+function mergeTitleGeneratorFields(fields: TitleGeneratorField[] | undefined) {
+  return initialTitleGenerator.fields.map((field) => ({
+    ...field,
+    ...fields?.find((savedField) => savedField.key === field.key),
+  }));
+}
+
+function normalizeTitleGeneratorModeDraft(
+  draft: Partial<TitleGeneratorModeDraft> | undefined,
+  legacyDraft?: Partial<TitleGeneratorDraft>,
+): TitleGeneratorModeDraft {
+  return {
+    fields: mergeTitleGeneratorFields(draft?.fields ?? legacyDraft?.fields),
+    results: Array.isArray(draft?.results)
+      ? draft.results
+      : Array.isArray(legacyDraft?.results)
+        ? legacyDraft.results
+        : [],
+    history: Array.isArray(draft?.history)
+      ? draft.history
+      : Array.isArray(legacyDraft?.history)
+        ? legacyDraft.history
+        : [],
+  };
+}
+
+function normalizeTitleGeneratorDraft(
+  draft: Partial<TitleGeneratorDraft>,
+): TitleGeneratorDraft {
+  const mode: TitleGeneratorMode = draft.mode === "new" ? "new" : "old";
+  const oldDraft = normalizeTitleGeneratorModeDraft(
+    draft.modes?.old,
+    mode === "old" ? draft : undefined,
+  );
+  const newDraft = normalizeTitleGeneratorModeDraft(
+    draft.modes?.new,
+    mode === "new" ? draft : undefined,
+  );
+  const activeDraft = mode === "new" ? newDraft : oldDraft;
+
+  return {
+    ...initialTitleGenerator,
+    ...draft,
+    mode,
+    prompt: draft.prompt?.trim() ? draft.prompt : initialTitleGenerator.prompt,
+    fields: activeDraft.fields,
+    results: activeDraft.results,
+    history: activeDraft.history,
+    modes: {
+      old: oldDraft,
+      new: newDraft,
+    },
+  };
+}
+
 export function ListingAiWorkbench() {
   const searchParams = useSearchParams();
   const requestedTab = normalizeTabId(searchParams.get("tab"));
@@ -242,19 +295,7 @@ export function ListingAiWorkbench() {
         if (!cancelled) setOwnImages(restoredOwnImages);
       }
       if (draft.titleGenerator && !cancelled) {
-        setTitleGenerator({
-          ...initialTitleGenerator,
-          ...draft.titleGenerator,
-          fields: initialTitleGenerator.fields.map((field) => ({
-            ...field,
-            ...draft.titleGenerator?.fields?.find(
-              (savedField) => savedField.key === field.key,
-            ),
-          })),
-          history: Array.isArray(draft.titleGenerator.history)
-            ? draft.titleGenerator.history
-            : [],
-        });
+        setTitleGenerator(normalizeTitleGeneratorDraft(draft.titleGenerator));
       }
       if (draft.imageGenerator) {
         const restoredImageGenerator = await hydrateImageGeneratorDraft({
@@ -386,6 +427,15 @@ export function ListingAiWorkbench() {
     input.productEnglishName ||
     input.productChineseName ||
     "Untitled Product";
+  const activeTitleGeneratorModeDraft =
+    titleGenerator.modes[titleGenerator.mode] ??
+    createTitleGeneratorModeDraft();
+  const activeTitleGenerator: TitleGeneratorDraft = {
+    ...titleGenerator,
+    fields: activeTitleGeneratorModeDraft.fields,
+    results: activeTitleGeneratorModeDraft.results,
+    history: activeTitleGeneratorModeDraft.history,
+  };
   const productFactsCount = input.productFacts.trim().length;
   const canSubmit =
     input.asin.trim().length > 1 && productFactsCount >= 50 && !loading;
@@ -441,21 +491,50 @@ export function ListingAiWorkbench() {
   ) {
     setTitleGenerator((current) => ({
       ...current,
-      fields: current.fields.map((field) =>
+      fields: current.modes[current.mode].fields.map((field) =>
         field.key === key ? { ...field, ...patch } : field,
       ),
+      modes: {
+        ...current.modes,
+        [current.mode]: {
+          ...current.modes[current.mode],
+          fields: current.modes[current.mode].fields.map((field) =>
+            field.key === key ? { ...field, ...patch } : field,
+          ),
+        },
+      },
     }));
   }
 
-  function loadTitleGeneratorHistory(record: TitleGeneratorHistoryRecord) {
+  function updateTitleGeneratorMode(mode: TitleGeneratorMode) {
     setTitleGenerator((current) => ({
       ...current,
-      fields: initialTitleGenerator.fields.map((field) => ({
-        ...field,
-        ...record.fields.find((savedField) => savedField.key === field.key),
-      })),
+      mode,
+      fields: current.modes[mode].fields,
+      results: current.modes[mode].results,
+      history: current.modes[mode].history,
+    }));
+    setTitleGeneratorError("");
+  }
+
+  function loadTitleGeneratorHistory(record: TitleGeneratorHistoryRecord) {
+    const mode = record.mode === "new" ? "new" : "old";
+
+    setTitleGenerator((current) => ({
+      ...current,
+      mode,
+      fields: mergeTitleGeneratorFields(record.fields),
       prompt: record.prompt,
       results: record.results,
+      history: current.modes[mode].history,
+      modes: {
+        ...current.modes,
+        [mode]: {
+          ...current.modes[mode],
+          fields: mergeTitleGeneratorFields(record.fields),
+          results: record.results,
+        },
+      },
     }));
     setTitleGeneratorError("");
   }
@@ -464,20 +543,12 @@ export function ListingAiWorkbench() {
     setTitleGenerating(true);
     setTitleGeneratorError("");
 
-    const savedAiSettings = window.localStorage.getItem(aiSettingsStorageKey);
-    const aiSettings = savedAiSettings
-      ? normalizeAiSettings(
-          JSON.parse(savedAiSettings) as Partial<AiModelSettings>,
-        )
-      : null;
-
     try {
       const response = await fetch("/api/listing-ai/generate-title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...titleGenerator,
-          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
+          ...activeTitleGenerator,
         }),
       });
       const data = (await response.json()) as {
@@ -490,18 +561,30 @@ export function ListingAiWorkbench() {
 
       const nextResults = data.results!.slice(0, 3);
       setTitleGenerator((current) => {
+        const currentModeDraft = current.modes[current.mode];
         const record: TitleGeneratorHistoryRecord = {
           id: crypto.randomUUID(),
           createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-          fields: current.fields.map((field) => ({ ...field })),
+          mode: current.mode,
+          fields: currentModeDraft.fields.map((field) => ({ ...field })),
           prompt: current.prompt,
           results: nextResults,
+        };
+        const nextModeDraft = {
+          ...currentModeDraft,
+          results: nextResults,
+          history: [record, ...currentModeDraft.history].slice(0, 30),
         };
 
         return {
           ...current,
+          fields: nextModeDraft.fields,
           results: nextResults,
-          history: [record, ...current.history].slice(0, 30),
+          history: nextModeDraft.history,
+          modes: {
+            ...current.modes,
+            [current.mode]: nextModeDraft,
+          },
         };
       });
     } catch (err) {
@@ -517,13 +600,6 @@ export function ListingAiWorkbench() {
     setLoading(true);
     setError("");
 
-    const savedAiSettings = window.localStorage.getItem(aiSettingsStorageKey);
-    const aiSettings = savedAiSettings
-      ? normalizeAiSettings(
-          JSON.parse(savedAiSettings) as Partial<AiModelSettings>,
-        )
-      : null;
-
     const payload: ListingOptimizationRequest = {
       ...input,
       productType: input.productType || input.productEnglishName || input.asin,
@@ -537,7 +613,6 @@ export function ListingAiWorkbench() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
         } satisfies ListingOptimizationApiRequest),
       });
       const data = (await response.json()) as {
@@ -610,13 +685,6 @@ export function ListingAiWorkbench() {
       return;
     }
 
-    const savedAiSettings = window.localStorage.getItem(aiSettingsStorageKey);
-    const aiSettings = savedAiSettings
-      ? normalizeAiSettings(
-          JSON.parse(savedAiSettings) as Partial<AiModelSettings>,
-        )
-      : null;
-
     setImageGenerating(true);
     setImageGeneratorError("");
 
@@ -626,7 +694,6 @@ export function ListingAiWorkbench() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...imageGenerator,
-          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
         }),
       });
       const data = (await response.json()) as {
@@ -685,11 +752,11 @@ export function ListingAiWorkbench() {
       <main>
         {activeTab === "input" ? (
           <ListingAiInputPanel
-            productFactsCount={productFactsCount}
-            titleGenerator={titleGenerator}
+            titleGenerator={activeTitleGenerator}
             titleGenerating={titleGenerating}
             titleGeneratorError={titleGeneratorError}
             titlePromptOpen={titlePromptOpen}
+            updateTitleGeneratorMode={updateTitleGeneratorMode}
             updateTitleGeneratorField={updateTitleGeneratorField}
             setTitleGenerator={setTitleGenerator}
             setTitlePromptOpen={setTitlePromptOpen}
@@ -794,12 +861,7 @@ function normalizeWorkspaceDraft(draft?: Partial<WorkspaceDraft> | null): Worksp
       ...draft?.ownImages,
     },
     titleGenerator: {
-      ...initialTitleGenerator,
-      ...draft?.titleGenerator,
-      fields: initialTitleGenerator.fields.map((field) => ({
-        ...field,
-        ...draft?.titleGenerator?.fields?.find((savedField) => savedField.key === field.key),
-      })),
+      ...normalizeTitleGeneratorDraft(draft?.titleGenerator ?? {}),
     },
     imageGenerator: {
       ...initialImageGenerator,

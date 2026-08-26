@@ -2,7 +2,33 @@
 
 这份文件给 Codex、Claude Code 和其他代码 agent 使用。进入本仓库后先读这里，再改代码。
 系统要做“可迁移设计”。
-也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。等要多人使用时，再把存储层从浏览器 IndexedDB 换成后端数据库，而不是把整个系统重写
+也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。等要多人使用时，再把存储层从浏览器 IndexedDB 换成后端数据库，而不是把整个系统重写。
+
+## 最高优先级操作原则：两端对齐、同步闭环、生产级交付
+
+每接到一个任务，都要默认按“本地 + GitHub 两端对齐、同步闭环、生产级”的标准执行；服务器备份、发布和恢复只在你明确要求时纳入任务范围：
+
+- 两端对齐：本地开发工作区与 GitHub 仓库的代码、配置、文档和脚本保持一致；涉及发布、配置、数据库、存储、worker、定时任务或外部服务时，只在任务明确要求时再考虑服务器影响。
+- 同步闭环：任务不能只停留在代码修改；要同步必要的文档、脚本、配置、验证步骤和部署注意事项，确保下一个 agent 或人工接手时能继续执行。
+- 生产级交付：改动必须考虑构建、lint、兼容性、回滚、日志、错误处理、安全和数据保护；不能把临时方案当作最终生产方案。
+- 结果确认：每个任务结束前，要说明已完成什么、验证了什么、还剩什么风险或需要用户确认的事项。
+
+## 最小化处理和验证路线
+
+为了提高处理效率，每个任务默认走最小化处理和分级验证路线：
+
+- 先界定最小处理范围：只读取、分析和修改与当前任务直接相关的文件、模块、脚本和文档；不要展开无关重构、全局清理或大范围代码扫描。
+- 先找现有边界：优先复用当前模块、类型、store、repository、route、脚本和 UI 组件的既有模式；只有现有边界不足以完成任务时，才新增抽象。
+- 验证按风险分级：小改动优先运行最贴近改动的检查；涉及共享逻辑、构建链路、数据模型、导入导出、权限、安全、AI 请求或生产部署时，再升级到 `npm run lint`、`npm run build`、页面手动验证或服务器检查。
+- 避免重复验证：同一类验证不要机械重复；如果已有等价验证结果，要说明依据，把时间留给未覆盖风险。
+- 结尾给出验证路线：最终回复中简要说明本次选择了哪些验证、为什么足够、哪些更高成本验证未运行以及触发条件。
+
+## 更新分流
+
+- 代码量小、单点修补、纯逻辑改动：优先走 `ssh patch`，即通过 SSH 直接做小范围补丁。
+- 影响构建、依赖、Prisma、部署、worker、环境变量或生产数据结构：改走 CI。
+- 若用户明确只要求速度，默认先选最快且风险可控的路径，再按需要升级。
+
 # Development Principles
 
 1. Workspace First
@@ -15,6 +41,8 @@
 8. AI Assist Only
 9. Immutable Workbook
 10. Repository First
+11. Three-End Production Closure
+12. Minimum Scope Verification
 
 ## Minimum Change Principle
 
@@ -45,7 +73,7 @@ When introducing new functionality:
 这是一个本地优先的 Amazon 运营工作台，基于 Next.js 15、React 19、TypeScript、Tailwind CSS 4 构建。当前主要业务模块：
 
 - Amazon PPC Optimization Workspace：导入 Amazon Bulk workbook，按 Campaign / Ad Group / Lifecycle / Workspace Unit 组织优化工作流，生成可审阅的调整草稿。
-- Rule Center：维护 PPC 规则条件和动作，规则引擎输出 draft，不直接修改原始文件。
+- Workspace 内置规则中心：维护 PPC 规则条件和动作，规则引擎输出 draft，不直接修改原始文件。
 - Dashboard：展示广告指标、趋势和筛选。
 - Listing AI：根据商品、关键词、广告数据和竞品信息生成 Listing 优化建议、图片计划和 A+ 模块建议。
 - Logistics：处理物流相关 Excel / PDF 模板、箱规、货件对比和导出。
@@ -78,6 +106,8 @@ ls node_modules/next/dist/docs
 npm run dev
 npm run build
 npm run lint
+npm run test
+npm run check
 ```
 
 脚本说明：
@@ -85,6 +115,8 @@ npm run lint
 - `npm run dev` 使用 `.next-dev`，并启用 Turbopack。
 - `npm run build` 使用 `.next-build`，配置为 standalone 输出。
 - `npm run lint` 运行 ESLint flat config。
+- `npm run test` 运行不依赖数据库、外部服务或密钥的核心业务回归测试。
+- `npm run check` 依次运行测试、lint 和生产构建，适合作为每次更新后的完整本地健康检查。
 
 ## 目录地图
 
@@ -92,7 +124,7 @@ npm run lint
   - `page.tsx`：首页入口。
   - `dashboard/`：PPC 数据看板。
   - `workspace/`：Bulk 文件导入和广告优化工作台。
-  - `rules/`：规则编辑中心。
+  - `workspace/` 内已集成规则中心，不再保留独立 `/rules` 页面。
   - `listing-ai/`：Listing AI 工作台。
   - `logistics/`：物流文件处理工作台。
   - `settings/`：AI 模型配置等设置页。
@@ -186,7 +218,7 @@ bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
 
 这条路径由 CI 或本机先完成 build，服务器只解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。
 
-三端对齐、预发和生产只要走正式发布流程，默认都沿用这条 CI artifact 链路，不再把 build 放回服务器；只有明确的 fallback 或应急修复才走源码发布脚本。
+当任务明确需要发布到服务器时，默认沿用这条 CI artifact 链路，不再把 build 放回服务器；只有明确的 fallback 或应急修复才走源码发布脚本。
 
 服务器源码构建发布仍保留为 fallback：
 
@@ -263,7 +295,6 @@ npm run dev
 然后在浏览器检查对应页面：
 
 - `/workspace`
-- `/rules`
 - `/dashboard`
 - `/listing-ai`
 - `/logistics`

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { type AiModelSettings } from "@/lib/ai-settings";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
+import { type TitleGeneratorMode } from "@/lib/listing-ai/workspace-draft";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
 import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
 
@@ -15,9 +16,15 @@ interface TitleGeneratorField {
 }
 
 interface TitleGeneratorRequest {
+  mode: TitleGeneratorMode;
   fields: TitleGeneratorField[];
   prompt: string;
   aiSettings?: Partial<AiModelSettings>;
+}
+
+function getModeLabel(mode: TitleGeneratorMode) {
+  if (mode === "old") return "老品优化";
+  return "新品编写";
 }
 
 function buildAiHeaders(settings: AiModelSettings) {
@@ -35,12 +42,18 @@ function buildAiHeaders(settings: AiModelSettings) {
   return headers;
 }
 
-function buildUserInput(fields: TitleGeneratorField[]) {
-  const aiReferenceFields = fields.filter(
+function buildUserInput(mode: TitleGeneratorMode, fields: TitleGeneratorField[]) {
+  const visibleFields =
+    mode === "new"
+      ? fields.filter((field) => field.key !== "currentProductTitle")
+      : fields;
+  const aiReferenceFields = visibleFields.filter(
     (field) => field.key !== "productChineseName" && field.key !== "asin",
   );
   const weightedFields = aiReferenceFields.filter((field) => field.weight > 0);
-  const identityFields = aiReferenceFields.filter((field) => field.weight <= 0);
+  const identityFields = visibleFields.filter(
+    (field) => field.key === "productChineseName" || field.key === "asin",
+  );
   const weightLines = weightedFields.map((field) => `${field.label}: ${field.weight}%`).join("\n");
   const identityLines = identityFields
     .map((field) => `${field.label}:\n${field.value.trim() || "空"}`)
@@ -50,6 +63,9 @@ function buildUserInput(fields: TitleGeneratorField[]) {
     .join("\n\n");
 
   return `请严格按照系统提示词和以下页面输入生成标题。
+
+【当前模式】
+${getModeLabel(mode)}
 
 【参考页面输入的权重优先级】
 ${weightLines || "无"}
@@ -91,8 +107,9 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as TitleGeneratorRequest;
-    const settings = resolveAiSettings(body.aiSettings);
+    const settings = resolveAiSettings(body.aiSettings, "text");
     const prompt = body.prompt?.trim();
+    const mode = body.mode === "new" ? "new" : "old";
     const fields = Array.isArray(body.fields) ? body.fields : [];
 
     if (!settings.apiKey?.trim()) {
@@ -103,15 +120,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "提示词不能为空。" }, { status: 400 });
     }
 
-    const productChineseName = fields.find((field) => field.key === "productChineseName")?.value?.trim();
-    const asin = fields.find((field) => field.key === "asin")?.value?.trim();
+    const visibleFields =
+      mode === "new"
+        ? fields.filter((field) => field.key !== "currentProductTitle")
+        : fields;
+    const productChineseName = visibleFields.find((field) => field.key === "productChineseName")?.value?.trim();
+    const asin = visibleFields.find((field) => field.key === "asin")?.value?.trim();
 
-    if (!productChineseName || !asin) {
-      return NextResponse.json({ error: "中文名称和 ASIN 为必填项。" }, { status: 400 });
+    if (!productChineseName || (mode === "old" && !asin)) {
+      return NextResponse.json({
+        error: mode === "old" ? "中文名称和 ASIN 为必填项。" : "中文名称为必填项。",
+      }, { status: 400 });
     }
 
     if (
-      !fields.some(
+      !visibleFields.some(
         (field) =>
           field.key !== "productChineseName" &&
           field.key !== "asin" &&
@@ -137,14 +160,14 @@ export async function POST(request: Request) {
                 model: settings.model,
                 messages: [
                   { role: "system", content: prompt },
-                  { role: "user", content: buildUserInput(fields) },
+                  { role: "user", content: buildUserInput(mode, visibleFields) },
                 ],
               }
             : {
                 model: settings.model,
                 input: [
                   { role: "system", content: prompt },
-                  { role: "user", content: buildUserInput(fields) },
+                  { role: "user", content: buildUserInput(mode, visibleFields) },
                 ],
               },
         ),
