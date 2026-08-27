@@ -44,6 +44,8 @@ type OrganizationMembershipWithUser = {
 type RosterSaveAccount = TeamAccountRecord & { organizationId: string; sortOrder: number };
 
 const rosterSaveMaxAttempts = 3;
+const rosterSaveTransactionMaxWaitMs = 10_000;
+const rosterSaveTransactionTimeoutMs = 60_000;
 
 function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
   return {
@@ -205,7 +207,7 @@ function isPrismaWriteConflict(error: unknown) {
   const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: unknown }).code : undefined;
   const message = error instanceof Error ? error.message : "";
 
-  return code === "P2034" || /write conflict|deadlock/i.test(message);
+  return code === "P2034" || code === "P2028" || /write conflict|deadlock|transaction (not found|already closed)|closed transaction/i.test(message);
 }
 
 async function waitForRetry(attempt: number) {
@@ -462,6 +464,8 @@ export async function PUT(request: Request) {
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: rosterSaveTransactionMaxWaitMs,
+          timeout: rosterSaveTransactionTimeoutMs,
         },
       ),
     );

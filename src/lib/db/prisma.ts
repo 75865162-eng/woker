@@ -5,6 +5,12 @@ const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const value = Number(process.env[name]);
+
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
 function getPrismaClient() {
   if (globalForPrisma.prisma) {
     return globalForPrisma.prisma;
@@ -17,11 +23,15 @@ function getPrismaClient() {
   }
 
   const adapter = new PrismaPg({ connectionString });
-  const prismaClient = new PrismaClient({ adapter });
+  const prismaClient = new PrismaClient({
+    adapter,
+    transactionOptions: {
+      maxWait: readPositiveIntegerEnv("PRISMA_TRANSACTION_MAX_WAIT_MS", 10_000),
+      timeout: readPositiveIntegerEnv("PRISMA_TRANSACTION_TIMEOUT_MS", 30_000),
+    },
+  });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = prismaClient;
-  }
+  globalForPrisma.prisma = prismaClient;
 
   return prismaClient;
 }
