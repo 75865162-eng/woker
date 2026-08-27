@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Clock3,
   FileText,
   History,
   ImagePlus,
@@ -58,6 +59,26 @@ function truncate(value: string, maxLength = 28) {
   }
 
   return `${normalized.slice(0, maxLength)}…`;
+}
+
+function formatElapsedSeconds(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+
+  if (safeSeconds < 60) {
+    return `${safeSeconds}秒`;
+  }
+
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  if (minutes < 60) {
+    return `${minutes}分钟${seconds ? ` ${seconds}秒` : ""}`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return `${hours}小时${remainingMinutes ? ` ${remainingMinutes}分钟` : ""}${seconds ? ` ${seconds}秒` : ""}`;
 }
 
 function resolveChatMode(prompt: string, attachments: ChatAttachment[]) {
@@ -236,6 +257,7 @@ export function ListingAiChatPanel() {
   const [attachmentUploadState, setAttachmentUploadState] = useState<AttachmentUploadState | null>(null);
   const [responseStartedAt, setResponseStartedAt] = useState<number | null>(null);
   const [responseElapsedSeconds, setResponseElapsedSeconds] = useState(0);
+  const [lastResponseDurationSeconds, setLastResponseDurationSeconds] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -376,6 +398,7 @@ export function ListingAiChatPanel() {
     setAttachments([]);
     setError("");
     setForceImageGeneration(false);
+    setLastResponseDurationSeconds(null);
   }
 
   async function handleFilePick(files: FileList | null) {
@@ -460,6 +483,7 @@ export function ListingAiChatPanel() {
     setAttachments(message.attachments ?? []);
     setError("");
     setForceImageGeneration(false);
+    setLastResponseDurationSeconds(null);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
@@ -473,6 +497,7 @@ export function ListingAiChatPanel() {
     setLoading(true);
     setResponseStartedAt(startedAt);
     setResponseElapsedSeconds(0);
+    setLastResponseDurationSeconds(null);
     setError("");
 
     const requestMode = forceImageGeneration && attachments.some((attachment) => attachment.kind === "image")
@@ -595,6 +620,7 @@ export function ListingAiChatPanel() {
       setError(message);
     } finally {
       window.clearTimeout(timeout);
+      setLastResponseDurationSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
       setLoading(false);
       setResponseStartedAt(null);
       setResponseElapsedSeconds(0);
@@ -606,6 +632,7 @@ export function ListingAiChatPanel() {
     setError("");
     setAttachments([]);
     setInput("");
+    setLastResponseDurationSeconds(null);
   }
 
   function deleteConversation(conversationId: string) {
@@ -795,17 +822,19 @@ export function ListingAiChatPanel() {
               )}
             </div>
 
-            <div className="space-y-3 border-t border-border p-3">
-              {loading && responseStartedAt != null ? (
-                <div className="rounded-md border border-border bg-surface-muted/40 px-3 py-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted">
-                    <span>{responseElapsedSeconds >= 2 ? "处理中" : "正在思考"}</span>
-                    <span className="shrink-0">{`${responseElapsedSeconds}秒`}</span>
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
+            {(loading && responseStartedAt != null) || lastResponseDurationSeconds != null ? (
+              <div className="border-t border-border px-3 py-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-muted">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock3 className="h-4 w-4" />}
+                  <span>{loading ? (responseElapsedSeconds >= 1 ? "处理中" : "正在思考") : "已处理"}</span>
+                  <span className="shrink-0">
+                    {formatElapsedSeconds(loading ? responseElapsedSeconds : lastResponseDurationSeconds ?? 0)}
+                  </span>
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
+            <div className="space-y-3 border-t border-border p-3">
               {attachments.length ? (
                 <ChatAttachmentStrip attachments={attachments} onRemove={removeAttachment} />
               ) : null}
