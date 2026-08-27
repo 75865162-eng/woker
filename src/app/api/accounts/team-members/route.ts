@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma, type OrganizationRole } from "@prisma/client";
 import { getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { normalizeAccountRoleId, normalizeTeamAccounts, type TeamAccountRecord } from "@/lib/accounts/team-roster";
@@ -228,9 +228,9 @@ async function runRosterSaveTransaction<T>(operation: () => Promise<T>) {
   throw new Error("账号列表保存失败，请重试。");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUserFromRequest(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -332,7 +332,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUserFromRequest(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });

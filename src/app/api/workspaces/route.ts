@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ensureOrganization } from "@/lib/organizations/organization-server";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUserFromRequest(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });

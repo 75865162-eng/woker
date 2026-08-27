@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissions, saveOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -14,8 +14,8 @@ function buildPermissionsCookie(permissions: unknown) {
   return `${rolePermissionsCookieName}=${encodeURIComponent(JSON.stringify(permissions))}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
 }
 
-export async function GET() {
-  const user = await getCurrentUser();
+export async function GET(request: Request) {
+  const user = await getCurrentUserFromRequest(request);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -29,7 +29,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserFromRequest(request);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
