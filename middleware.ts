@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthDriver, publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
 import {
+  getAccessiblePathOrFallback,
   getModuleIdForPath,
   parseRolePermissionsCookie,
   roleCanAccessModule,
@@ -105,7 +106,7 @@ export async function middleware(request: NextRequest) {
       const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, rolePermissions);
 
       if (!canOpenRequestedPage) {
-        return NextResponse.redirect(new URL("/forbidden", publicOrigin));
+        return NextResponse.redirect(new URL(getAccessiblePathOrFallback(undefined, role, rolePermissions), publicOrigin));
       }
     }
 

@@ -4,8 +4,16 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, LogIn, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getAccessiblePathOrFallback, type RolePermissionMap } from "@/lib/accounts/permissions";
 
 type AuthMode = "login" | "register";
+type AuthResponse = {
+  error?: string;
+  user?: {
+    role?: string;
+  };
+  rolePermissions?: RolePermissionMap;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,7 +52,7 @@ export default function LoginPage() {
         },
         body: JSON.stringify(isRegister ? { email, name, password, confirmPassword } : { email, password }),
       });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as AuthResponse;
 
       if (!response.ok) {
         setError(payload.error ?? (isRegister ? "注册失败。" : "登录失败。"));
@@ -53,7 +61,7 @@ export default function LoginPage() {
 
       const nextPath = new URLSearchParams(window.location.search).get("next");
 
-      router.replace(nextPath || "/");
+      router.replace(getAccessiblePathOrFallback(nextPath, payload.user?.role, payload.rolePermissions));
       router.refresh();
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : isRegister ? "注册失败。" : "登录失败。");

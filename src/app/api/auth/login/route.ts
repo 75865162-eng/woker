@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthDriver } from "@/lib/auth/constants";
 import { createLocalSession, createSession, isSecureRequest } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/auth/password";
+import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
 
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
       }
 
       const membership = user.memberships[0];
+      const rolePermissions = await getOrganizationRolePermissions(membership.organizationId);
 
       const { sessionCookie, rolePermissionsCookie } = await createSession(
         user.id,
@@ -86,7 +88,9 @@ export async function POST(request: Request) {
           id: user.id,
           email: user.email,
           name: user.name,
+          role: membership.role,
         },
+        rolePermissions,
       });
       response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
 

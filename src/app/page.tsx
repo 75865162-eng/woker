@@ -11,6 +11,9 @@ import { AppShell } from "@/components/app-shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
+import { cookies } from "next/headers";
+import { getModuleIdForPath, parseRolePermissionsCookie, roleCanAccessModule, rolePermissionsCookieName } from "@/lib/accounts/permissions";
+import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
 
 const modules = [
   { href: "/workspace", title: "PPC 优化工作台", description: "Bulk 导入、Overall 匹配、规则草稿与导出", icon: UploadCloud },
@@ -20,7 +23,11 @@ const modules = [
   { href: "/logistics", title: "物流处理", description: "装箱表、箱唛 PDF、物流模板和对比表", icon: PackageSearch },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const [user, cookieStore] = await Promise.all([getCurrentUserFromSignedCookie(), cookies()]);
+  const rolePermissions = parseRolePermissionsCookie(cookieStore.get(rolePermissionsCookieName)?.value);
+  const visibleModules = modules.filter((module) => roleCanAccessModule(user?.role, getModuleIdForPath(module.href), rolePermissions));
+
   return (
     <AppShell title="运营工作台" subtitle="Amazon 业务系统总入口">
       <div className="space-y-5">
@@ -49,7 +56,7 @@ export default function Home() {
         </section>
 
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {modules.map((module) => {
+          {visibleModules.map((module) => {
             const Icon = module.icon;
 
             return (

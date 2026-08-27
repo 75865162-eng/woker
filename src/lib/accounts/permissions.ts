@@ -25,6 +25,19 @@ export const permissionModules = [
   { id: "settings", name: "Settings", paths: ["/settings", "/versions"] },
 ];
 
+export const defaultAccessiblePaths = [
+  { href: "/", moduleId: null },
+  { href: "/dashboard", moduleId: "products" },
+  { href: "/workspace", moduleId: "workspace" },
+  { href: "/saihu-search-merge", moduleId: "searchMerge" },
+  { href: "/listing-ai", moduleId: "listingAi" },
+  { href: "/logistics", moduleId: "logistics" },
+  { href: "/tasks", moduleId: "workspace" },
+  { href: "/versions", moduleId: "settings" },
+  { href: "/accounts", moduleId: "accounts" },
+  { href: "/settings", moduleId: "settings" },
+] as const;
+
 export const routeModuleIds = permissionModules.flatMap((module) =>
   module.paths.map((path) => ({
     moduleId: module.id,
@@ -111,6 +124,22 @@ export function roleHasAnyPage(role: string | undefined, permissions?: RolePermi
   const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
 
   return permissionModules.some((module) => (rolePermissions[module.id] ?? []).length > 0);
+}
+
+export function getFirstAccessiblePath(role: string | undefined, permissions?: RolePermissionMap | null) {
+  return defaultAccessiblePaths.find((item) => roleCanAccessModule(role, item.moduleId, permissions))?.href ?? "/";
+}
+
+export function getAccessiblePathOrFallback(pathname: string | null | undefined, role: string | undefined, permissions?: RolePermissionMap | null) {
+  if (pathname && pathname.startsWith("/") && !pathname.startsWith("//")) {
+    const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
+
+    if (roleCanAccessModule(role, moduleId, permissions)) {
+      return pathname;
+    }
+  }
+
+  return getFirstAccessiblePath(role, permissions);
 }
 
 export function parseRolePermissionsCookie(value?: string): RolePermissionMap | null {
