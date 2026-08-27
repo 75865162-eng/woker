@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FileText,
   History,
+  ImagePlus,
   Loader2,
   MessageSquarePlus,
+  Pencil,
   Send,
   Sparkles,
   Trash2,
@@ -24,6 +26,7 @@ import {
 import { fieldClass } from "@/lib/listing-ai/workspace-draft";
 import { createChatAttachment, type ChatAttachment } from "@/lib/listing-ai/chat-attachments";
 import type { ImagePreview } from "@/lib/listing-ai/workspace-draft";
+import { createBrowserId } from "@/lib/browser/random-id";
 const legacyConversationStorageKey = "listing-ai-chat-conversations-v1";
 const legacyActiveConversationStorageKey = "listing-ai-chat-active-v1";
 const chatHistoryEndpoint = "/api/listing-ai/chat-history";
@@ -201,7 +204,9 @@ export function ListingAiChatPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [forceImageGeneration, setForceImageGeneration] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -295,7 +300,9 @@ export function ListingAiChatPanel() {
 
   const activeMessages = activeConversation?.messages ?? [];
   const hasImageAttachment = attachments.some((attachment) => attachment.kind === "image");
-  const effectiveMode = resolveChatMode(input, attachments);
+  const effectiveMode = forceImageGeneration && hasImageAttachment
+    ? "image"
+    : resolveChatMode(input, attachments);
   const effectiveModeLabel = effectiveMode === "image" ? "图片生成" : hasImageAttachment ? "图片问答" : "文本对话";
 
   function upsertConversation(nextConversation: ChatConversation) {
@@ -309,7 +316,7 @@ export function ListingAiChatPanel() {
   function startNewConversation() {
     const now = new Date().toISOString();
     const nextConversation: ChatConversation = {
-      id: crypto.randomUUID(),
+      id: createBrowserId(),
       title: "新对话",
       createdAt: now,
       updatedAt: now,
@@ -321,6 +328,7 @@ export function ListingAiChatPanel() {
     setInput("");
     setAttachments([]);
     setError("");
+    setForceImageGeneration(false);
   }
 
   async function handleFilePick(files: FileList | null) {
@@ -344,8 +352,24 @@ export function ListingAiChatPanel() {
 
   function removeAttachment(id: string) {
     setAttachments((current) => {
-      return current.filter((item) => item.id !== id);
+      const next = current.filter((item) => item.id !== id);
+      if (!next.some((item) => item.kind === "image")) {
+        setForceImageGeneration(false);
+      }
+      return next;
     });
+  }
+
+  function editMessage(message: ChatMessage) {
+    if (message.role !== "user") {
+      return;
+    }
+
+    setInput(message.input ?? message.content);
+    setAttachments(message.attachments ?? []);
+    setError("");
+    setForceImageGeneration(false);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   async function sendMessage() {
@@ -357,13 +381,16 @@ export function ListingAiChatPanel() {
     setLoading(true);
     setError("");
 
-    const requestMode = resolveChatMode(prompt, attachments);
-    const nextConversationId = activeConversation?.id ?? crypto.randomUUID();
+    const requestMode = forceImageGeneration && attachments.some((attachment) => attachment.kind === "image")
+      ? "image"
+      : resolveChatMode(prompt, attachments);
+    const nextConversationId = activeConversation?.id ?? createBrowserId();
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: createBrowserId(),
       role: "user",
       content: buildPromptText(prompt, attachments, requestMode),
+      input: prompt,
       createdAt: now,
       attachments,
     };
@@ -386,6 +413,7 @@ export function ListingAiChatPanel() {
     upsertConversation(nextConversation);
     setInput("");
     setAttachments([]);
+    setForceImageGeneration(false);
 
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), chatRequestTimeoutMs);
@@ -422,7 +450,7 @@ export function ListingAiChatPanel() {
       }
 
       const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: createBrowserId(),
         role: "assistant",
         content:
           requestMode === "image"
@@ -453,7 +481,7 @@ export function ListingAiChatPanel() {
           ? sendError.message
           : "对话发送失败。";
       const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: createBrowserId(),
         role: "assistant",
         content: requestMode === "image" ? `图片生成失败：${message}` : `对话失败：${message}`,
         createdAt: new Date().toISOString(),
@@ -640,9 +668,21 @@ export function ListingAiChatPanel() {
                         </div>
                       ) : null}
 
-                      <p className="mt-2 text-[11px] font-semibold opacity-70">
-                        {formatTime(message.createdAt)}
-                      </p>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold opacity-70">
+                          {formatTime(message.createdAt)}
+                        </p>
+                        {message.role === "user" ? (
+                          <button
+                            type="button"
+                            className="rounded p-1 opacity-70 transition hover:bg-white/15 hover:opacity-100"
+                            onClick={() => editMessage(message)}
+                            title="编辑后重新发送"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 ))
@@ -672,6 +712,7 @@ export function ListingAiChatPanel() {
 
               <div className="space-y-2">
                 <textarea
+                  ref={inputRef}
                   className={`${fieldClass} min-h-24 resize-y py-2`}
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
@@ -696,6 +737,16 @@ export function ListingAiChatPanel() {
                     >
                       <Upload className="h-4 w-4" />
                       添加附件
+                    </Button>
+                    <Button
+                      variant={forceImageGeneration ? "primary" : "secondary"}
+                      size="sm"
+                      disabled={!hasImageAttachment}
+                      onClick={() => setForceImageGeneration((current) => !current)}
+                      title="强制使用生图 API"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      生图
                     </Button>
                     <input
                       ref={fileInputRef}

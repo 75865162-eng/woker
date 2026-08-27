@@ -33,6 +33,7 @@ import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
 import { ListingAiChatPanel } from "@/components/listing-ai/listing-ai-chat-panel";
 import { ListingAiAplusPanel } from "@/components/listing-ai/listing-ai-aplus-panel";
 import { ListingAiInputPanel } from "@/components/listing-ai/listing-ai-input-panel";
+import { createBrowserId } from "@/lib/browser/random-id";
 import {
   AnalysisSection,
   ImagePlanSection,
@@ -298,7 +299,7 @@ function normalizeDescriptionGeneratorDraft(
             Boolean(record && typeof record === "object"),
           )
           .map((record) => ({
-            id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+            id: typeof record.id === "string" ? record.id : createBrowserId(),
             createdAt:
               typeof record.createdAt === "string"
                 ? record.createdAt
@@ -735,7 +736,7 @@ export function ListingAiWorkbench() {
       setTitleGenerator((current) => {
         const currentModeDraft = current.modes[current.mode];
         const record: TitleGeneratorHistoryRecord = {
-          id: crypto.randomUUID(),
+          id: createBrowserId(),
           createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
           mode: current.mode,
           fields: currentModeDraft.fields.map((field) => ({ ...field })),
@@ -796,7 +797,7 @@ export function ListingAiWorkbench() {
       const nextResults = data.results!.slice(0, 5);
       setDescriptionGenerator((current) => {
         const record: DescriptionGeneratorHistoryRecord = {
-          id: crypto.randomUUID(),
+          id: createBrowserId(),
           createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
           mode: titleGenerator.mode,
           fields: current.fields.map((field) => ({ ...field })),
@@ -882,7 +883,7 @@ export function ListingAiWorkbench() {
       (records.filter((record) => record.productName === productName).length ||
         0) + 1;
     const record: SavedRecord = {
-      id: crypto.randomUUID(),
+      id: createBrowserId(),
       version,
       createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
       submitter: payload.submitter || "未填写",
@@ -969,7 +970,7 @@ export function ListingAiWorkbench() {
         ),
         history: [
           {
-            id: crypto.randomUUID(),
+            id: createBrowserId(),
             createdAt,
             prompt: current.prompt,
             ownViewCount: viewCount,

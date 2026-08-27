@@ -5,6 +5,8 @@ import {
   Activity,
   Building2,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   EyeOff,
@@ -173,6 +175,7 @@ const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const teamMembersApiPath = "/api/accounts/team-members";
 const rolePermissionsApiPath = "/api/accounts/role-permissions";
+const accountPageSize = 10;
 
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -330,6 +333,7 @@ export function AccountWorkbench() {
   const [permissionSavedAt, setPermissionSavedAt] = useState("");
   const [accountImportMessage, setAccountImportMessage] = useState("");
   const [accountImporting, setAccountImporting] = useState(false);
+  const [accountPage, setAccountPage] = useState(1);
   const accountImportInputRef = useRef<HTMLInputElement | null>(null);
   const visibleAccounts = useMemo(() => accounts, [accounts]);
   const visibleRoles = useMemo(
@@ -401,6 +405,21 @@ export function AccountWorkbench() {
   const disabledAccounts = accounts.filter((account) => account.status === "disabled").length;
   const departments = Array.from(new Set(accounts.map((account) => account.department)));
   const roleMemberCount = accounts.filter((account) => account.roleId === activeRole.id).length;
+  const accountPageCount = Math.max(1, Math.ceil(filteredAccounts.length / accountPageSize));
+  const currentAccountPage = Math.min(accountPage, accountPageCount);
+  const paginatedAccounts = filteredAccounts.slice((currentAccountPage - 1) * accountPageSize, currentAccountPage * accountPageSize);
+  const firstAccountIndex = filteredAccounts.length ? (currentAccountPage - 1) * accountPageSize + 1 : 0;
+  const lastAccountIndex = Math.min(currentAccountPage * accountPageSize, filteredAccounts.length);
+
+  useEffect(() => {
+    setAccountPage(1);
+  }, [query, statusFilter]);
+
+  useEffect(() => {
+    if (accountPage > accountPageCount) {
+      setAccountPage(accountPageCount);
+    }
+  }, [accountPage, accountPageCount]);
 
   function commitAccounts(updater: (current: Account[]) => Account[]) {
     setAccounts((current) => {
@@ -682,7 +701,7 @@ export function AccountWorkbench() {
         <MetricCard title="停用账号" value={disabledAccounts} note="保留审计记录" icon={LockKeyhole} tone="gray" />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(720px,780px)]">
         <Card>
           <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -720,7 +739,7 @@ export function AccountWorkbench() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAccounts.map((account) => (
+                  {paginatedAccounts.map((account) => (
                     <tr key={account.id} className="border-t border-border">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
@@ -772,73 +791,115 @@ export function AccountWorkbench() {
               </table>
             </div>
             {filteredAccounts.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">没有找到匹配账号。</p> : null}
+            <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
+              <p className="text-sm text-muted">
+                第 {currentAccountPage} / {accountPageCount} 页，显示 {firstAccountIndex}-{lastAccountIndex} / {filteredAccounts.length} 个账号
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={currentAccountPage <= 1}
+                  onClick={() => setAccountPage((page) => Math.max(1, page - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  上一页
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={currentAccountPage >= accountPageCount}
+                  onClick={() => setAccountPage((page) => Math.min(accountPageCount, page + 1))}
+                >
+                  下一页
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <div className="space-y-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
-              <div>
-                <CardTitle className="text-sm">角色权限</CardTitle>
-                <p className="mt-0.5 text-xs text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
-              </div>
-                <Badge className="shrink-0" tone="blue">{visibleRoles.length} 个角色</Badge>
-            </CardHeader>
-            <CardContent className="space-y-1.5 p-3">
-              {visibleRoles.map((role) => (
-                <button
-                  key={role.id}
-                  className={`w-full rounded-md border px-2.5 py-2 text-left transition ${
-                    activeRole.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
-                  }`}
-                  onClick={() => setActiveRoleId(role.id)}
-                  type="button"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-foreground">{role.name}</p>
-                    <Badge tone={activeRole.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
-                  </div>
-                  <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
-              <div>
-                <CardTitle className="text-sm">{activeRole.name} 权限矩阵</CardTitle>
-                <p className="mt-0.5 text-xs text-muted">当前实际绑定 {roleMemberCount} 个账号。</p>
-              </div>
-              <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={saveRolePermissions}>
-                <ShieldCheck className="h-3.5 w-3.5" />
-                保存权限
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-1.5 p-3">
-              {permissionSavedAt ? <p className="text-xs font-medium text-green-700">权限已保存：{permissionSavedAt}，页面正在刷新。</p> : null}
-              {permissionModules.map((module) => (
-                <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
-                  <p className="text-xs font-bold text-foreground">{module.name}</p>
-                  <div className="grid grid-cols-5 gap-1">
-                    {permissionActions.map((action) => {
-                      const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
-
-                      return (
-                        <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
-                          <input
-                            checked={checked}
-                            className="h-3.5 w-3.5 accent-brand"
-                            onChange={() => togglePermission(module.id, action.id)}
-                            type="checkbox"
-                          />
-                          {action.label}
-                        </label>
-                      );
-                    })}
-                  </div>
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.85fr)]">
+          <div className="space-y-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
+                <div>
+                  <CardTitle className="text-sm">角色权限</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
                 </div>
-              ))}
+                <Badge className="shrink-0" tone="blue">{visibleRoles.length} 个角色</Badge>
+              </CardHeader>
+              <CardContent className="space-y-1.5 p-3">
+                {visibleRoles.map((role) => (
+                  <button
+                    key={role.id}
+                    className={`w-full rounded-md border px-2.5 py-2 text-left transition ${
+                      activeRole.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
+                    }`}
+                    onClick={() => setActiveRoleId(role.id)}
+                    type="button"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-bold text-foreground">{role.name}</p>
+                      <Badge tone={activeRole.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
+                    </div>
+                    <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
+                <div>
+                  <CardTitle className="text-sm">{activeRole.name} 权限矩阵</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted">当前实际绑定 {roleMemberCount} 个账号。</p>
+                </div>
+                <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={saveRolePermissions}>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  保存权限
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-1.5 p-3">
+                {permissionSavedAt ? <p className="text-xs font-medium text-green-700">权限已保存：{permissionSavedAt}，页面正在刷新。</p> : null}
+                {permissionModules.map((module) => (
+                  <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
+                    <p className="text-xs font-bold text-foreground">{module.name}</p>
+                    <div className="grid grid-cols-5 gap-1">
+                      {permissionActions.map((action) => {
+                        const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
+
+                        return (
+                          <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                            <input
+                              checked={checked}
+                              className="h-3.5 w-3.5 accent-brand"
+                              onChange={() => togglePermission(module.id, action.id)}
+                              type="checkbox"
+                            />
+                            {action.label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
+              <CardTitle className="text-sm">人员分布</CardTitle>
+              <Badge tone="gray">按部门</Badge>
+            </CardHeader>
+            <CardContent className="space-y-2 p-4">
+              {departments.map((department) => {
+                const count = accounts.filter((account) => account.department === department).length;
+                const percent = accounts.length ? Math.round((count / accounts.length) * 100) : 0;
+
+                return <DepartmentBar key={department} name={department} count={count} percent={percent} />;
+              })}
             </CardContent>
           </Card>
         </div>
@@ -864,22 +925,7 @@ export function AccountWorkbench() {
         </CardContent>
       </Card>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
-            <CardTitle>人员分布</CardTitle>
-            <Badge tone="gray">按部门</Badge>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-2 p-4 md:grid-cols-2">
-            {departments.map((department) => {
-              const count = accounts.filter((account) => account.department === department).length;
-              const percent = Math.round((count / accounts.length) * 100);
-
-              return <DepartmentBar key={department} name={department} count={count} percent={percent} />;
-            })}
-          </CardContent>
-        </Card>
-
+      <section className="grid grid-cols-1 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
             <CardTitle>最近账号动态</CardTitle>

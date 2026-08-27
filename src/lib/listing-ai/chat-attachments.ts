@@ -1,5 +1,6 @@
 "use client";
 
+import { createBrowserId } from "@/lib/browser/random-id";
 import { saveListingAiImageAsset } from "@/lib/listing-ai/image-assets";
 
 type PdfTextItem = {
@@ -131,7 +132,7 @@ export async function createChatAttachment(file: File): Promise<ChatAttachment> 
     const asset = await saveListingAiImageAsset(file);
 
     return {
-      id: crypto.randomUUID(),
+      id: createBrowserId(),
       kind: "image",
       name: file.name,
       mimeType: file.type || "image/*",
@@ -151,7 +152,7 @@ export async function createChatAttachment(file: File): Promise<ChatAttachment> 
       : await extractSpreadsheetSummary(file);
 
   return {
-    id: crypto.randomUUID(),
+    id: createBrowserId(),
     kind: "document",
     name: file.name,
     mimeType: file.type || "application/octet-stream",
