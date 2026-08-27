@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   FileText,
   History,
@@ -205,7 +205,7 @@ export function ListingAiChatPanel() {
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [forceImageGeneration, setForceImageGeneration] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputId = useId();
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -730,14 +730,13 @@ export function ListingAiChatPanel() {
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
+                    <label
+                      className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted"
+                      htmlFor={fileInputId}
                     >
                       <Upload className="h-4 w-4" />
                       添加附件
-                    </Button>
+                    </label>
                     <Button
                       variant={forceImageGeneration ? "primary" : "secondary"}
                       size="sm"
@@ -749,8 +748,8 @@ export function ListingAiChatPanel() {
                       生图
                     </Button>
                     <input
-                      ref={fileInputRef}
-                      className="hidden"
+                      id={fileInputId}
+                      className="sr-only"
                       type="file"
                       multiple
                       accept="image/*,.pdf,.xls,.xlsx,.csv,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
