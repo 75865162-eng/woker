@@ -27,9 +27,9 @@ function isValidAssetKey(keyParts: string[]) {
   );
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   try {
-    const permission = await requireApiPermission("listingAi", "view");
+    const permission = await requireApiPermission("listingAi", "view", request);
 
     if (!permission.ok) {
       return permission.response;

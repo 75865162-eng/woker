@@ -122,7 +122,7 @@ function createDefaultSettingsBundle(): AiSettingsBundle {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view");
+    const permission = await requireApiPermission("settings", "view", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -184,7 +184,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "edit");
+    const permission = await requireApiPermission("settings", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

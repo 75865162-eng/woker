@@ -25,7 +25,7 @@ function normalizePayload(value: unknown): ChatHistoryState {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("listingAi", "view");
+    const permission = await requireApiPermission("listingAi", "view", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const permission = await requireApiPermission("listingAi", "edit");
+    const permission = await requireApiPermission("listingAi", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

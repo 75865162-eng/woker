@@ -5,9 +5,9 @@ import { getImportJobQueue, importJobQueueName } from "@/lib/queue/redis-queue";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view");
+    const permission = await requireApiPermission("settings", "view", request);
 
     if (!permission.ok) {
       return permission.response;

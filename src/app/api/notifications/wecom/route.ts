@@ -11,7 +11,7 @@ interface WeComWebhookResponse {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view");
+    const permission = await requireApiPermission("settings", "view", request);
 
     if (!permission.ok) {
       return permission.response;

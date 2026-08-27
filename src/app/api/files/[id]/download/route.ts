@@ -5,9 +5,9 @@ import { getStorageDriver } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const permission = await requireApiPermission("workspace", "export");
+    const permission = await requireApiPermission("workspace", "export", request);
 
     if (!permission.ok) {
       return permission.response;

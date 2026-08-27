@@ -14,7 +14,7 @@ const requiredFields: Array<keyof ListingOptimizationRequest> = [
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("listingAi", "create");
+    const permission = await requireApiPermission("listingAi", "create", request);
 
     if (!permission.ok) {
       return permission.response;

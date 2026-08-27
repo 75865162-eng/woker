@@ -5,9 +5,9 @@ import { enqueueImportJob } from "@/lib/queue";
 
 export const runtime = "nodejs";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const permission = await requireApiPermission("workspace", "edit");
+    const permission = await requireApiPermission("workspace", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

@@ -46,7 +46,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "edit");
+    const permission = await requireApiPermission("settings", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

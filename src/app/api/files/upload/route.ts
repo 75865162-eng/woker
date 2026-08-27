@@ -23,7 +23,7 @@ function createStorageKey(fileName: string) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("workspace", "create");
+    const permission = await requireApiPermission("workspace", "create", request);
 
     if (!permission.ok) {
       return permission.response;

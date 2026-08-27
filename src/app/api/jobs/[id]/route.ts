@@ -4,9 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const permission = await requireApiPermission("workspace", "view");
+    const permission = await requireApiPermission("workspace", "view", request);
 
     if (!permission.ok) {
       return permission.response;
