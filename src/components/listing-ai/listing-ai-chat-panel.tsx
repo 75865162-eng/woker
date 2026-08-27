@@ -717,16 +717,6 @@ export function ListingAiChatPanel() {
               ref={messagesScrollRef}
               className="thin-scrollbar max-h-[520px] space-y-3 overflow-auto p-3"
             >
-              {loading && responseStartedAt != null ? (
-                <div className="sticky top-0 z-10 -mx-3 border-b border-border bg-white/95 px-3 py-2 backdrop-blur">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted">
-                    <span>{responseElapsedSeconds >= 2 ? "处理中" : "正在思考"}</span>
-                    <span className="shrink-0">{responseElapsedSeconds > 0 ? `${responseElapsedSeconds}秒` : ""}</span>
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
-                </div>
-              ) : null}
-
               {activeMessages.length ? (
                 activeMessages.map((message) => (
                   <div
@@ -806,6 +796,16 @@ export function ListingAiChatPanel() {
             </div>
 
             <div className="space-y-3 border-t border-border p-3">
+              {loading && responseStartedAt != null ? (
+                <div className="rounded-md border border-border bg-surface-muted/40 px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted">
+                    <span>{responseElapsedSeconds >= 2 ? "处理中" : "正在思考"}</span>
+                    <span className="shrink-0">{`${responseElapsedSeconds}秒`}</span>
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                </div>
+              ) : null}
+
               {attachments.length ? (
                 <ChatAttachmentStrip attachments={attachments} onRemove={removeAttachment} />
               ) : null}
