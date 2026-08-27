@@ -234,6 +234,8 @@ export function ListingAiChatPanel() {
   const [hydrated, setHydrated] = useState(false);
   const [forceImageGeneration, setForceImageGeneration] = useState(false);
   const [attachmentUploadState, setAttachmentUploadState] = useState<AttachmentUploadState | null>(null);
+  const [responseStartedAt, setResponseStartedAt] = useState<number | null>(null);
+  const [responseElapsedSeconds, setResponseElapsedSeconds] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -320,6 +322,23 @@ export function ListingAiChatPanel() {
       container.scrollTop = container.scrollHeight;
     }
   }, [activeConversationId, conversations]);
+
+  useEffect(() => {
+    if (!loading || responseStartedAt == null) {
+      setResponseElapsedSeconds(0);
+      return;
+    }
+
+    const updateElapsedSeconds = () => {
+      const elapsedSeconds = Math.floor((Date.now() - responseStartedAt) / 1000);
+      setResponseElapsedSeconds(Math.max(0, elapsedSeconds));
+    };
+
+    updateElapsedSeconds();
+    const timer = window.setInterval(updateElapsedSeconds, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [loading, responseStartedAt]);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? null,
@@ -450,7 +469,10 @@ export function ListingAiChatPanel() {
       return;
     }
 
+    const startedAt = Date.now();
     setLoading(true);
+    setResponseStartedAt(startedAt);
+    setResponseElapsedSeconds(0);
     setError("");
 
     const requestMode = forceImageGeneration && attachments.some((attachment) => attachment.kind === "image")
@@ -574,6 +596,8 @@ export function ListingAiChatPanel() {
     } finally {
       window.clearTimeout(timeout);
       setLoading(false);
+      setResponseStartedAt(null);
+      setResponseElapsedSeconds(0);
     }
   }
 
@@ -693,6 +717,16 @@ export function ListingAiChatPanel() {
               ref={messagesScrollRef}
               className="thin-scrollbar max-h-[520px] space-y-3 overflow-auto p-3"
             >
+              {loading && responseStartedAt != null ? (
+                <div className="sticky top-0 z-10 -mx-3 border-b border-border bg-white/95 px-3 py-2 backdrop-blur">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted">
+                    <span>{responseElapsedSeconds >= 2 ? "处理中" : "正在思考"}</span>
+                    <span className="shrink-0">{responseElapsedSeconds > 0 ? `${responseElapsedSeconds}秒` : ""}</span>
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                </div>
+              ) : null}
+
               {activeMessages.length ? (
                 activeMessages.map((message) => (
                   <div
