@@ -29,6 +29,7 @@ async function main() {
         id: true,
         name: true,
         email: true,
+        phone: true,
         status: true,
         roleId: true,
       },
@@ -39,6 +40,7 @@ async function main() {
       accounts.map((account) => ({
         ...account,
         username: undefined,
+        phone: account.phone ?? undefined,
         roleId: normalizeAccountRoleId(account.roleId),
         organizationId,
       })),

@@ -1,6 +1,6 @@
 import { normalizeAccountRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 
-const workbookColumns = [
+export const accountWorkbookColumns = [
   "id",
   "username",
   "name",
@@ -32,6 +32,7 @@ function normalizeStatus(value: unknown): TeamAccountRecord["status"] {
   const status = trim(value).toLowerCase();
   if (status === "pending" || status === "待激活") return "pending";
   if (status === "disabled" || status === "停用" || status === "已停用") return "disabled";
+  if (status === "archived" || status === "归档" || status === "已归档") return "archived";
   return "active";
 }
 
@@ -77,9 +78,8 @@ function rowToAccount(row: Record<string, unknown>, index: number, roleLabels: R
   };
 }
 
-export async function exportAccountWorkbook(accounts: TeamAccountRecord[], roleLabels: Record<string, string>) {
-  const XLSX = await import("xlsx");
-  const rows = accounts.map((account) => ({
+export function createAccountWorkbookRows(accounts: TeamAccountRecord[], roleLabels: Record<string, string>) {
+  return accounts.map((account) => ({
     id: account.id,
     username: account.username ?? "",
     name: account.name,
@@ -98,7 +98,12 @@ export async function exportAccountWorkbook(accounts: TeamAccountRecord[], roleL
     lastLoginAt: account.lastLoginAt ?? "",
     sourceCreatedAt: account.sourceCreatedAt ?? "",
   }));
-  const worksheet = XLSX.utils.json_to_sheet(rows, { header: [...workbookColumns] });
+}
+
+export async function exportAccountWorkbook(accounts: TeamAccountRecord[], roleLabels: Record<string, string>) {
+  const XLSX = await import("xlsx");
+  const rows = createAccountWorkbookRows(accounts, roleLabels);
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: [...accountWorkbookColumns] });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "账号列表");
 

@@ -101,7 +101,7 @@ export default function LoginPage() {
         </div>
 
         <label className="mb-4 block text-sm font-semibold text-foreground">
-          账号
+          账号 / 手机号
           <input
             value={email}
             onChange={(event) => setEmail(event.target.value)}

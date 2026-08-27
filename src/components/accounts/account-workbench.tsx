@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Archive,
   Building2,
   Check,
   ChevronLeft,
@@ -13,7 +14,6 @@ import {
   Filter,
   KeyRound,
   LockKeyhole,
-  Mail,
   Pencil,
   Search,
   ShieldCheck,
@@ -35,10 +35,10 @@ import {
   type PermissionAction,
   type RolePermissionMap,
 } from "@/lib/accounts/permissions";
-import { exportAccountWorkbook, parseAccountWorkbookFile } from "@/lib/accounts/account-workbook";
+import { accountWorkbookColumns, createAccountWorkbookRows, exportAccountWorkbook, parseAccountWorkbookFile } from "@/lib/accounts/account-workbook";
 import { normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
 
-type AccountStatus = "active" | "pending" | "disabled";
+type AccountStatus = "active" | "pending" | "disabled" | "archived";
 type RoleId = AccountRoleId;
 
 type Account = {
@@ -163,12 +163,14 @@ const statusLabels: Record<AccountStatus, string> = {
   active: "在线",
   pending: "待激活",
   disabled: "已停用",
+  archived: "已归档",
 };
 
 const statusTones: Record<AccountStatus, "green" | "amber" | "gray"> = {
   active: "green",
   pending: "amber",
   disabled: "gray",
+  archived: "gray",
 };
 
 const fieldClass =
@@ -188,13 +190,18 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-function isDefaultSuperAccount(account: { id?: string; email?: string; username?: string } | string) {
+function isDefaultSuperAccount(account: { id?: string; email?: string; username?: string; phone?: string } | string) {
   const identity = typeof account === "string" ? { id: account } : account;
 
-  return identity.id === "local-admin" || identity.email?.trim().toLowerCase() === "1" || identity.username?.trim().toLowerCase() === "1";
+  return (
+    identity.id === "local-admin" ||
+    identity.email?.trim().toLowerCase() === "1" ||
+    identity.username?.trim().toLowerCase() === "1" ||
+    identity.phone?.trim().toLowerCase() === "1"
+  );
 }
 
-function getFallbackPassword(account: { id?: string; email?: string; username?: string } | string) {
+function getFallbackPassword(account: { id?: string; email?: string; username?: string; phone?: string } | string) {
   return isDefaultSuperAccount(account) ? "1" : "12345678";
 }
 
@@ -330,19 +337,20 @@ export function AccountWorkbench() {
   const [newAccountOpen, setNewAccountOpen] = useState(false);
   const [passwordAccount, setPasswordAccount] = useState<Account | null>(null);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
+  const [archivedAccountsOpen, setArchivedAccountsOpen] = useState(false);
   const [permissionSavedAt, setPermissionSavedAt] = useState("");
   const [accountImportMessage, setAccountImportMessage] = useState("");
   const [accountImporting, setAccountImporting] = useState(false);
   const [accountPage, setAccountPage] = useState(1);
   const accountImportInputRef = useRef<HTMLInputElement | null>(null);
-  const visibleAccounts = useMemo(() => accounts, [accounts]);
+  const visibleAccounts = useMemo(() => accounts.filter((account) => account.status !== "archived"), [accounts]);
   const visibleRoles = useMemo(
     () =>
       roles.map((role) => ({
         ...role,
-        memberCount: accounts.filter((account) => account.roleId === role.id).length,
+        memberCount: visibleAccounts.filter((account) => account.roleId === role.id).length,
       })),
-    [accounts, roles],
+    [roles, visibleAccounts],
   );
 
   useEffect(() => {
@@ -387,24 +395,27 @@ export function AccountWorkbench() {
 
   const filteredAccounts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return accounts.filter((account) => {
+    return visibleAccounts.filter((account) => {
       const statusMatched = statusFilter === "all" || account.status === statusFilter;
       const keywordMatched =
         !keyword ||
         account.name.toLowerCase().includes(keyword) ||
+        account.phone?.toLowerCase().includes(keyword) ||
         account.email.toLowerCase().includes(keyword) ||
+        account.username?.toLowerCase().includes(keyword) ||
         account.department.toLowerCase().includes(keyword) ||
-        account.title.toLowerCase().includes(keyword);
+        account.title.toLowerCase().includes(keyword) ||
+        account.id.toLowerCase().includes(keyword);
 
       return statusMatched && keywordMatched;
     });
-  }, [accounts, query, statusFilter]);
+  }, [query, statusFilter, visibleAccounts]);
 
-  const activeAccounts = accounts.filter((account) => account.status === "active").length;
-  const pendingAccounts = accounts.filter((account) => account.status === "pending").length;
-  const disabledAccounts = accounts.filter((account) => account.status === "disabled").length;
-  const departments = Array.from(new Set(accounts.map((account) => account.department)));
-  const roleMemberCount = accounts.filter((account) => account.roleId === activeRole.id).length;
+  const activeAccounts = visibleAccounts.filter((account) => account.status === "active").length;
+  const disabledAccounts = visibleAccounts.filter((account) => account.status === "disabled").length;
+  const archivedAccounts = accounts.filter((account) => account.status === "archived");
+  const departments = Array.from(new Set(visibleAccounts.map((account) => account.department)));
+  const roleMemberCount = visibleAccounts.filter((account) => account.roleId === activeRole.id).length;
   const accountPageCount = Math.max(1, Math.ceil(filteredAccounts.length / accountPageSize));
   const currentAccountPage = Math.min(accountPage, accountPageCount);
   const paginatedAccounts = filteredAccounts.slice((currentAccountPage - 1) * accountPageSize, currentAccountPage * accountPageSize);
@@ -492,10 +503,21 @@ export function AccountWorkbench() {
     );
   }
 
+  function archiveAccount(accountId: string) {
+    commitAccounts((current) =>
+      current.map((account) =>
+        account.id === accountId && canManageAccount(account)
+          ? { ...account, status: "archived", lastActiveAt: account.lastActiveAt || "已归档" }
+          : account,
+      ),
+    );
+  }
+
   const roleLabels = useMemo(
     () => Object.fromEntries(roles.map((role) => [role.id, role.name])) as Record<RoleId, string>,
     [roles],
   );
+  const archivedAccountRows = useMemo(() => createAccountWorkbookRows(archivedAccounts, roleLabels), [archivedAccounts, roleLabels]);
 
   async function exportAccounts() {
     const blob = await exportAccountWorkbook(visibleAccounts, roleLabels);
@@ -525,6 +547,7 @@ export function AccountWorkbench() {
             (account) =>
               account.id === imported.id ||
               (Boolean(imported.username) && account.username === imported.username) ||
+              (Boolean(imported.phone) && account.phone === imported.phone) ||
               (Boolean(imported.email) && account.email.trim().toLowerCase() === imported.email?.toLowerCase()),
           );
           if (existingIndex >= 0) {
@@ -694,11 +717,12 @@ export function AccountWorkbench() {
         </div>
       ) : null}
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="账号总数" value={accounts.length} note={`在线 ${activeAccounts}`} icon={UsersRound} tone="blue" />
-        <MetricCard title="业务部门" value={departments.length} note={departments.slice(0, 2).join(" / ")} icon={Building2} tone="green" />
-        <MetricCard title="待激活账号" value={pendingAccounts} note="新建后首次登录改密" icon={Mail} tone="amber" />
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <MetricCard title="账号总数" value={visibleAccounts.length} note={`在线 ${activeAccounts}`} icon={UsersRound} tone="blue" />
         <MetricCard title="停用账号" value={disabledAccounts} note="保留审计记录" icon={LockKeyhole} tone="gray" />
+        <button className="text-left" onClick={() => setArchivedAccountsOpen(true)} type="button">
+          <MetricCard title="归档" value={archivedAccounts.length} note="查看已归档员工" icon={Archive} tone="gray" />
+        </button>
       </section>
 
       <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(720px,780px)]">
@@ -715,7 +739,7 @@ export function AccountWorkbench() {
                   className={`${fieldClass} min-w-64 pl-9`}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索姓名、邮箱、部门"
+                  placeholder="搜索姓名、手机号、部门"
                 />
               </div>
               <Button variant="secondary">
@@ -730,7 +754,7 @@ export function AccountWorkbench() {
                 <thead className="bg-surface-muted text-xs font-bold text-muted">
                   <tr>
                     <th className="px-5 py-3 text-left">姓名</th>
-                    <th className="px-5 py-3 text-left">邮箱</th>
+                    <th className="px-5 py-3 text-left">手机号</th>
                     <th className="px-5 py-3 text-left">部门 / 岗位</th>
                     <th className="px-5 py-3 text-left">系统角色</th>
                     <th className="px-5 py-3 text-left">状态</th>
@@ -752,7 +776,7 @@ export function AccountWorkbench() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-muted">{account.email}</td>
+                      <td className="px-5 py-4 text-muted">{account.phone || account.username || account.email || "—"}</td>
                       <td className="px-5 py-4">
                         <p className="font-medium text-foreground">{account.department}</p>
                         <p className="text-xs text-muted">{account.title}</p>
@@ -782,6 +806,9 @@ export function AccountWorkbench() {
                           </Button>
                           <Button size="sm" variant={account.status === "disabled" ? "secondary" : "danger"} onClick={() => toggleAccountStatus(account.id)}>
                             {account.status === "disabled" ? "启用" : "停用"}
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => archiveAccount(account.id)}>
+                            归档
                           </Button>
                         </div>
                       </td>
@@ -956,6 +983,7 @@ export function AccountWorkbench() {
         <EditAccountDialog account={editAccount} roles={roles} onClose={() => setEditAccount(null)} onSubmit={saveAccount} />
       ) : null}
       {passwordAccount ? <PasswordDialog account={passwordAccount} onClose={() => setPasswordAccount(null)} onSubmit={saveAccountPassword} /> : null}
+      {archivedAccountsOpen ? <ArchivedAccountsDialog rows={archivedAccountRows} onClose={() => setArchivedAccountsOpen(false)} /> : null}
     </div>
   );
 }
@@ -1010,6 +1038,38 @@ function DepartmentBar({ name, count, percent }: { name: string; count: number; 
   );
 }
 
+function ArchivedAccountsDialog({ rows, onClose }: { rows: ReturnType<typeof createAccountWorkbookRows>; onClose: () => void }) {
+  return (
+    <Modal title="已归档员工信息" onClose={onClose} size="wide">
+      <div className="overflow-auto rounded-md border border-border">
+        <table className="w-full min-w-[1280px] border-collapse text-xs">
+          <thead className="bg-surface-muted font-bold text-muted">
+            <tr>
+              {accountWorkbookColumns.map((column) => (
+                <th key={column} className="whitespace-nowrap px-3 py-2 text-left">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t border-border">
+                {accountWorkbookColumns.map((column) => (
+                  <td key={column} className="whitespace-nowrap px-3 py-2 text-muted">
+                    {row[column]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {rows.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">暂无已归档员工。</p> : null}
+      </div>
+    </Modal>
+  );
+}
+
 function AccountDialog({
   roles,
   title,
@@ -1024,18 +1084,22 @@ function AccountDialog({
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     department: "广告中心",
     title: "运营专员",
     roleId: "operations" as RoleId,
   });
 
-  const ready = form.name.trim() && form.email.trim();
+  const ready = form.name.trim() && (form.phone.trim() || form.email.trim());
 
   return (
     <Modal title={title} onClose={onClose}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="姓名">
           <input className={fieldClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        </Field>
+        <Field label="手机号">
+          <input className={fieldClass} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
         </Field>
         <Field label="邮箱">
           <input className={fieldClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
@@ -1088,6 +1152,9 @@ function EditAccountDialog({
         <Field label="姓名">
           <input className={fieldClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
         </Field>
+        <Field label="手机号">
+          <input className={fieldClass} value={form.phone || ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+        </Field>
         <Field label="邮箱">
           <input className={fieldClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
         </Field>
@@ -1131,7 +1198,7 @@ function PasswordDialog({
   const [password, setPassword] = useState(currentPassword);
   const [confirmPassword, setConfirmPassword] = useState(currentPassword);
   const matched = password.length >= 1 && password === confirmPassword;
-  const loginName = account.email || account.username || account.id;
+  const loginName = account.phone || account.username || account.email || account.id;
 
   return (
     <Modal title={`账密：${account.name}`} onClose={onClose}>
@@ -1187,10 +1254,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function Modal({
+  title,
+  children,
+  onClose,
+  size = "default",
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  size?: "default" | "wide";
+}) {
+  const widthClass = size === "wide" ? "max-w-6xl" : "max-w-2xl";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl" onClick={(event) => event.stopPropagation()} role="dialog">
+      <div className={`w-full ${widthClass} rounded-lg bg-white shadow-xl`} onClick={(event) => event.stopPropagation()} role="dialog">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand text-white">

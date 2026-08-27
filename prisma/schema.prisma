@@ -15,6 +15,7 @@ enum TeamAccountStatus {
   active
   pending
   disabled
+  archived
 }
 
 enum OrganizationRole {

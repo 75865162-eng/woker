@@ -169,6 +169,10 @@ test("roster login names are normalized for case-insensitive sign in", () => {
     getRosterLoginName({ id: "user-1", email: "", username: " SF1785054571062888 " }),
     "sf1785054571062888",
   );
+  assert.equal(
+    getRosterLoginName({ id: "user-2", email: "person@example.com", phone: " 13800138000 " }),
+    "13800138000",
+  );
 });
 
 test("WeCom launch alerts validate the official webhook and prevent duplicate same-day notifications", () => {

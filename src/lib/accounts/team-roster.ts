@@ -1,6 +1,6 @@
 import type { ProductWorkflowRole } from "@/lib/products/types";
 
-export type TeamMemberStatus = "active" | "pending" | "disabled";
+export type TeamMemberStatus = "active" | "pending" | "disabled" | "archived";
 
 export type AccountRoleId =
   | "owner"
@@ -110,7 +110,7 @@ export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
         department: String(account.department ?? ""),
         title: String(account.title ?? ""),
         roleId: normalizeAccountRoleId(String(account.roleId)),
-        status: account.status === "disabled" || account.status === "pending" ? account.status : "active",
+        status: account.status === "disabled" || account.status === "pending" || account.status === "archived" ? account.status : "active",
         lastActiveAt: account.lastActiveAt,
         amazonStorePermissions: typeof account.amazonStorePermissions === "string" ? account.amazonStorePermissions : undefined,
         multiPlatformStorePermissions: typeof account.multiPlatformStorePermissions === "string" ? account.multiPlatformStorePermissions : undefined,
@@ -144,7 +144,7 @@ export function accountsToTeamMembers(accounts: TeamAccountRecord[]): TeamMember
 export function filterTeamMembersByRoles(members: TeamMember[], roles: ProductWorkflowRole[]) {
   const roleSet = new Set(roles);
 
-  return members.filter((member) => member.status !== "disabled" && roleSet.has(member.role));
+  return members.filter((member) => member.status !== "disabled" && member.status !== "archived" && roleSet.has(member.role));
 }
 
 export function getTeamMemberNameOptionsFromAccounts(accounts: TeamAccountRecord[], roles: ProductWorkflowRole[]) {

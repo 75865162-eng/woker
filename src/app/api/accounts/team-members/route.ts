@@ -56,7 +56,7 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
     department: member.department,
     title: member.title,
     roleId: normalizeAccountRoleId(member.roleId),
-    status: member.status === "disabled" || member.status === "pending" ? member.status : "active",
+    status: member.status === "disabled" || member.status === "pending" || member.status === "archived" ? member.status : "active",
     lastActiveAt: member.lastActiveAt ?? undefined,
     amazonStorePermissions: member.amazonStorePermissions ?? undefined,
     multiPlatformStorePermissions: member.multiPlatformStorePermissions ?? undefined,
@@ -68,6 +68,9 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
 }
 
 function toRosterWriteData(account: RosterSaveAccount) {
+  const status: "active" | "pending" | "disabled" | "archived" =
+    account.status === "pending" || account.status === "active" || account.status === "archived" ? account.status : "disabled";
+
   return {
     username: account.username ?? null,
     name: account.name,
@@ -75,7 +78,7 @@ function toRosterWriteData(account: RosterSaveAccount) {
     department: account.department,
     title: account.title,
     roleId: account.roleId,
-    status: account.status,
+    status,
     lastActiveAt: account.lastActiveAt ?? null,
     amazonStorePermissions: account.amazonStorePermissions ?? null,
     multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? null,
