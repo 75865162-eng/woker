@@ -22,6 +22,15 @@ enum OrganizationRole {
   admin
   database_admin
   operations_manager
+  operations_supervisor
+  operations
+  operations_assistant
+  developer
+  designer
+  warehouse
+  warehouse_supervisor
+  finance
+  procurement
   ppc_specialist
   listing_specialist
   logistics_specialist

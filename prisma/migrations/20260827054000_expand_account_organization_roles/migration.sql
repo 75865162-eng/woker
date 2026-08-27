@@ -1,0 +1,9 @@
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'operations_supervisor';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'operations';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'operations_assistant';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'developer';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'designer';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'warehouse';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'warehouse_supervisor';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'finance';
+ALTER TYPE "OrganizationRole" ADD VALUE IF NOT EXISTS 'procurement';
