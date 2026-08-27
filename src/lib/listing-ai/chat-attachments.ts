@@ -127,9 +127,14 @@ async function extractCsvSummary(file: File) {
   return limitText(`文件：${file.name}\n\n${text}`, 8000);
 }
 
-export async function createChatAttachment(file: File): Promise<ChatAttachment> {
+export async function createChatAttachment(
+  file: File,
+  options?: {
+    onUploadProgress?: (progress: number) => void;
+  },
+): Promise<ChatAttachment> {
   if (looksLikeImage(file)) {
-    const asset = await saveListingAiImageAsset(file);
+    const asset = await saveListingAiImageAsset(file, options);
 
     return {
       id: createBrowserId(),

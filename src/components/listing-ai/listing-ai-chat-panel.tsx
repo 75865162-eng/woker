@@ -101,6 +101,13 @@ function buildPromptText(prompt: string, attachments: ChatAttachment[], mode: "t
     .join("\n\n");
 }
 
+type AttachmentUploadState = {
+  total: number;
+  completed: number;
+  currentName: string;
+  currentProgress: number;
+};
+
 function readLegacyChatHistory(): ChatHistoryState | null {
   if (typeof window === "undefined") {
     return null;
@@ -205,6 +212,7 @@ export function ListingAiChatPanel() {
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [forceImageGeneration, setForceImageGeneration] = useState(false);
+  const [attachmentUploadState, setAttachmentUploadState] = useState<AttachmentUploadState | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -338,14 +346,58 @@ export function ListingAiChatPanel() {
     }
 
     setError("");
+    setAttachmentUploadState({
+      total: selected.length,
+      completed: 0,
+      currentName: selected[0]?.name ?? "",
+      currentProgress: 0,
+    });
 
     try {
-      const nextAttachments = await Promise.all(selected.map((file) => createChatAttachment(file)));
-      setAttachments((current) => {
-        return [...current, ...nextAttachments].slice(0, 8);
-      });
+      const nextAttachments: ChatAttachment[] = [];
+
+      for (const [index, file] of selected.entries()) {
+        setAttachmentUploadState((current) =>
+          current
+            ? {
+                ...current,
+                currentName: file.name,
+                currentProgress: 0,
+              }
+            : current,
+        );
+
+        const attachment = await createChatAttachment(file, {
+          onUploadProgress: (progress) => {
+            setAttachmentUploadState((current) =>
+              current
+                ? {
+                    ...current,
+                    currentName: file.name,
+                    currentProgress: progress,
+                  }
+                : current,
+            );
+          },
+        });
+        nextAttachments.push(attachment);
+
+        setAttachmentUploadState((current) =>
+          current
+            ? {
+                ...current,
+                completed: index + 1,
+                currentProgress: 1,
+              }
+            : current,
+        );
+      }
+
+      setAttachments((current) => [...current, ...nextAttachments].slice(0, 8));
     } catch (fileError) {
       setError(fileError instanceof Error ? fileError.message : "附件处理失败。");
+    } finally {
+      window.setTimeout(() => setAttachmentUploadState(null), 250);
     }
   }
 
@@ -703,6 +755,35 @@ export function ListingAiChatPanel() {
                 <ChatAttachmentStrip attachments={attachments} onRemove={removeAttachment} />
               ) : null}
 
+              {attachmentUploadState ? (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-muted">
+                    <span>正在添加附件</span>
+                    <span className="truncate">
+                      {attachmentUploadState.currentName} · {attachmentUploadState.completed}/
+                      {attachmentUploadState.total}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                    <div
+                      className="h-full rounded-full bg-brand transition-[width] duration-200"
+                      style={{
+                        width: `${Math.max(
+                          4,
+                          Math.min(
+                            100,
+                            ((attachmentUploadState.completed +
+                              attachmentUploadState.currentProgress) /
+                              attachmentUploadState.total) *
+                              100,
+                          ),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
               {error ? (
                 <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
                   {error}
@@ -730,15 +811,20 @@ export function ListingAiChatPanel() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <label
-                      className="relative inline-flex h-8 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted"
+                      className={`relative inline-flex h-8 items-center justify-center gap-2 overflow-hidden rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors ${
+                        attachmentUploadState
+                          ? "cursor-not-allowed opacity-70"
+                          : "cursor-pointer hover:bg-surface-muted"
+                      }`}
                     >
                       <Upload className="h-4 w-4" />
                       <span>添加附件</span>
                       <input
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                         type="file"
                         multiple
                         aria-label="添加附件"
+                        disabled={Boolean(attachmentUploadState)}
                         accept="image/*,.pdf,.xls,.xlsx,.csv,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         onChange={(event) => {
                           void handleFilePick(event.target.files);
@@ -765,7 +851,10 @@ export function ListingAiChatPanel() {
                     </Badge>
                   </div>
 
-                  <Button disabled={loading || (!input.trim() && !attachments.length)} onClick={sendMessage}>
+                  <Button
+                    disabled={loading || Boolean(attachmentUploadState) || (!input.trim() && !attachments.length)}
+                    onClick={sendMessage}
+                  >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     {loading ? "发送中" : "发送"}
                   </Button>
