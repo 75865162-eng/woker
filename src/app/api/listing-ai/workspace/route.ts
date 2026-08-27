@@ -5,12 +5,15 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import {
   createPersistableDraft,
+  initialDescriptionGenerator,
   createTitleGeneratorModeDraft,
   initialCompetitors,
   initialImageGenerator,
   initialInput,
   initialTitleGenerator,
   type SavedRecord,
+  type DescriptionGeneratorDraft,
+  type DescriptionGeneratorField,
   type TitleGeneratorDraft,
   type TitleGeneratorField,
   type TitleGeneratorMode,
@@ -34,6 +37,17 @@ function mergeTitleGeneratorFields(fields: unknown): TitleGeneratorField[] {
   const savedFields = Array.isArray(fields) ? fields.filter(isRecord) : [];
 
   return initialTitleGenerator.fields.map((field) => ({
+    ...field,
+    ...savedFields.find((savedField) => savedField.key === field.key),
+  }));
+}
+
+function mergeDescriptionGeneratorFields(
+  fields: unknown,
+): DescriptionGeneratorField[] {
+  const savedFields = Array.isArray(fields) ? fields.filter(isRecord) : [];
+
+  return initialDescriptionGenerator.fields.map((field) => ({
     ...field,
     ...savedFields.find((savedField) => savedField.key === field.key),
   }));
@@ -99,6 +113,43 @@ function normalizeTitleGeneratorDraft(value: unknown): TitleGeneratorDraft {
   };
 }
 
+function normalizeDescriptionGeneratorDraft(
+  value: unknown,
+): DescriptionGeneratorDraft {
+  const draft = isRecord(value) ? (value as Partial<DescriptionGeneratorDraft>) : {};
+
+  return {
+    ...initialDescriptionGenerator,
+    ...draft,
+    prompt:
+      typeof draft.prompt === "string" && draft.prompt.trim()
+        ? draft.prompt
+        : initialDescriptionGenerator.prompt,
+    fields: mergeDescriptionGeneratorFields(draft.fields),
+    results: Array.isArray(draft.results)
+      ? draft.results.filter((item): item is string => typeof item === "string")
+      : [],
+    history: Array.isArray(draft.history)
+      ? draft.history.filter(isRecord).map((record) => ({
+          id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+          createdAt:
+            typeof record.createdAt === "string"
+              ? record.createdAt
+              : new Date().toLocaleString("zh-CN", { hour12: false }),
+          mode: record.mode === "new" ? "new" : "old",
+          fields: mergeDescriptionGeneratorFields(record.fields),
+          prompt:
+            typeof record.prompt === "string"
+              ? record.prompt
+              : initialDescriptionGenerator.prompt,
+          results: Array.isArray(record.results)
+            ? record.results.filter((item): item is string => typeof item === "string")
+            : [],
+        }))
+      : [],
+  };
+}
+
 function normalizeDraft(value: unknown): WorkspaceDraft {
   const draft = isRecord(value) ? (value as Partial<WorkspaceDraft>) : {};
 
@@ -123,6 +174,9 @@ function normalizeDraft(value: unknown): WorkspaceDraft {
       ...(isRecord(draft.ownImages) ? draft.ownImages : {}),
     },
     titleGenerator: normalizeTitleGeneratorDraft(draft.titleGenerator),
+    descriptionGenerator: normalizeDescriptionGeneratorDraft(
+      draft.descriptionGenerator,
+    ),
     imageGenerator: {
       ...initialImageGenerator,
       ...(isRecord(draft.imageGenerator) ? draft.imageGenerator : {}),
@@ -131,7 +185,15 @@ function normalizeDraft(value: unknown): WorkspaceDraft {
         ...(isRecord(draft.imageGenerator) && isRecord(draft.imageGenerator.ownViews) ? draft.imageGenerator.ownViews : {}),
       },
     },
-    activeTab: draft.activeTab === "visual" || draft.activeTab === "analysis" || draft.activeTab === "listing" || draft.activeTab === "imagePlan" || draft.activeTab === "review" ? draft.activeTab : "input",
+    activeTab:
+      draft.activeTab === "visual" ||
+      draft.activeTab === "analysis" ||
+      draft.activeTab === "listing" ||
+      draft.activeTab === "imagePlan" ||
+      draft.activeTab === "chat" ||
+      draft.activeTab === "review"
+        ? draft.activeTab
+        : "input",
   });
 }
 

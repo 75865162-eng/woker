@@ -29,7 +29,6 @@ async function main() {
         id: true,
         name: true,
         email: true,
-        username: true,
         status: true,
         roleId: true,
       },
@@ -39,7 +38,7 @@ async function main() {
       prisma,
       accounts.map((account) => ({
         ...account,
-        username: account.username ?? undefined,
+        username: undefined,
         roleId: normalizeAccountRoleId(account.roleId),
         organizationId,
       })),

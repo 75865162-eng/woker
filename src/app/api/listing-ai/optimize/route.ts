@@ -5,7 +5,12 @@ import type { ListingOptimizationApiRequest, ListingOptimizationRequest } from "
 
 export const runtime = "nodejs";
 
-const requiredFields: Array<keyof ListingOptimizationRequest> = ["marketplace", "language", "tone", "asin", "productFacts"];
+const requiredFields: Array<keyof ListingOptimizationRequest> = [
+  "marketplace",
+  "language",
+  "tone",
+  "productFacts",
+];
 
 export async function POST(request: Request) {
   try {

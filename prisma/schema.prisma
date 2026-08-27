@@ -83,6 +83,7 @@ model User {
   auditLogs    AuditLog[]
   aiModelSettings AiModelSetting[]
   listingAiWorkspaces ListingAiWorkspace[]
+  listingAiChatHistories ListingAiChatHistory[]
   workspaceSnapshots WorkspaceSnapshot[]
   saihuSearchMergeHistory SaihuSearchMergeHistoryRecord[]
   dataChangeVersions DataChangeVersion[]
@@ -363,6 +364,25 @@ model ListingAiWorkspace {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, userId])
+  @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([userId, updatedAt])
+}
+
+model ListingAiChatHistory {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  userId             String
+  workspaceId        String   @default("default")
+  accountId          String   @default("")
+  marketplace        String   @default("")
+  activeConversationId String  @default("")
+  conversations      Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, workspaceId, userId])
   @@index([organizationId, updatedAt])

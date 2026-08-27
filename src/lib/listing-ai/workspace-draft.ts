@@ -124,6 +124,34 @@ export interface TitleGeneratorHistoryRecord {
   results: string[];
 }
 
+export type DescriptionGeneratorFieldKey =
+  | "competitorDescription1"
+  | "competitorDescription2"
+  | "competitorDescription3";
+
+export interface DescriptionGeneratorField {
+  key: DescriptionGeneratorFieldKey;
+  label: string;
+  weight: number;
+  value: string;
+}
+
+export interface DescriptionGeneratorHistoryRecord {
+  id: string;
+  createdAt: string;
+  mode: TitleGeneratorMode;
+  fields: DescriptionGeneratorField[];
+  prompt: string;
+  results: string[];
+}
+
+export interface DescriptionGeneratorDraft {
+  fields: DescriptionGeneratorField[];
+  prompt: string;
+  results: string[];
+  history: DescriptionGeneratorHistoryRecord[];
+}
+
 export type ImageGeneratorViewKey =
   | "front"
   | "left"
@@ -137,7 +165,17 @@ export interface ImageGeneratorDraft {
   competitorImages: ImagePreview[];
   prompt: string;
   generatedImages: ImagePreview[];
+  history: ImageGenerationHistoryRecord[];
   lastRunAt: string;
+}
+
+export interface ImageGenerationHistoryRecord {
+  id: string;
+  createdAt: string;
+  prompt: string;
+  ownViewCount: number;
+  competitorImageCount: number;
+  images: ImagePreview[];
 }
 
 export type TabId =
@@ -146,6 +184,7 @@ export type TabId =
   | "analysis"
   | "listing"
   | "imagePlan"
+  | "chat"
   | "review"
   | "upscale";
 
@@ -154,6 +193,7 @@ export interface WorkspaceDraft {
   competitors: CompetitorDraft[];
   ownImages: OwnImageDraft;
   titleGenerator: TitleGeneratorDraft;
+  descriptionGenerator: DescriptionGeneratorDraft;
   imageGenerator: ImageGeneratorDraft;
   activeTab: TabId;
 }
@@ -268,6 +308,67 @@ export const titleGeneratorPrompt = `你现在是深耕亚马逊跨境电商5年
 • 全部内容语义通顺，适配亚马逊 A9 搜索与 Rufus AI 问答抓取，无重复关键词堆砌。
 • 针对不同场景尺寸必须从公制转换成美国当地常用尺寸，如 in, oz, lbs 等。`;
 
+export const descriptionGeneratorPrompt = `亚马逊产品描述 AI 生成统一规格
+【参考资料】
+中文名称、ASIN（仅用于页面记录与历史复盘，不作为五点生成参考）
+我的产品特点
+核心广告词
+相关关键词整理
+广告数据
+竞品描述1
+竞品描述2
+竞品描述3 如果有权重说明，则参考，未填入的部分跳过。
+## 一、核心执行总则
+
+1. 权重优先级规则
+严格遵循输入素材的权重数值，权重越高采纳优先级越高；不同素材信息冲突时，直接舍弃低权重内容，以最高权重信息为准。
+可用素材池：核心广告词、相关关键词整理、广告数据、竞品描述 / 五点；空缺素材自动忽略，严禁编造不存在的关键词与卖点。
+2. 生成模式判定规则
+- 广告优先模式：广告数据权重 ≥ 70%
+选词全部取自广告高点击、高转化的真实搜索词根；仅借鉴竞品的卖点排布逻辑与句式结构，不照搬竞品具体词汇。
+- 类目模仿模式：竞品描述权重 ≥ 70%
+卖点顺序、句式表达完全贴合类目竞品的通用逻辑；仅将广告数据中表现优异的词汇少量、自然融入，符合平台自然收录规则。
+- 均衡融合模式：其余权重配比
+合理分配所有信息来源，广告好词均匀埋入，竞品结构做参考，全覆盖核心广告词。
+
+## 二、五点描述（Bullet Points）强制规范
+
+### 1. 格式硬性要求
+
+- 固定输出 5 条卖点，单条字符数控制在 150-250 字符，五点总字符≤1000 字符。
+- 每条以大写字母核心卖点短语开篇，后跟 1-2 句补充说明；加粗短语采用 Title Case（实词首字母大写），补充说明句首大写、句尾加句号。
+- 仅使用英文标点，禁止中文符号、特殊符号与 emoji。
+- 单位转换：所有公制单位必须转换为美国市场常用英制单位：长度用 inch/in、重量用 oz/lbs、容积用 fl oz/gal、温度用 °F。
+- 绝对禁止写入其他品牌商标词、竞品品牌名。
+- 禁止添加外部联系方式、网址、社交媒体账号、其他平台导流信息。
+- 禁止虚假承诺、误导性描述。
+- 无重复堆砌：同一关键词全文不重复堆砌，核心词自然分布在不同位置。
+
+
+
+### 2. 内容排布逻辑（默认优先级，可按类目特性调整）
+
+### 核心逻辑：前置核心卖点，后置细节参数，适配 A9 算法收录、Rufus AI 问答抓取、买家阅读习惯
+
+1. 首段（核心引流，重中之重）
+前 2 行聚焦核心功能、核心痛点解决方案、核心差异化优势，植入高权重精准搜索词根，适配平台搜索收录。
+2. 中段（产品细节 + 特点落地）
+逐条落地产品材质、尺寸、性能、使用场景、适配机型、核心优势，结合优质广告词根自然埋词，不堆砌、不生硬。
+3. 末段（附加值 + 信任背书）
+补充使用体验、耐用性、通用性、售后适配优势，提升转化，完善内容闭环。
+
+### 3. 埋词规则
+
+- 每点自然埋入 1-2 个高权重词根，全五点尽量覆盖全部核心广告词与 50% 以上高转化广告词。
+- 同一词根在五点中出现不超过 2 次，禁止关键词重复堆砌。
+
+## 4. 最终输出要求
+- 仅输出英文成品内容，不附带解释、分析、备注等多余文字。
+- 生成前自动校验字符数、大小写、单位、合规性四项指标，不符合规则自动修正。
+- 全文适配亚马逊 A9 搜索算法、Rufus AI 智能抓取规则。
+- 风格自然种草，兼顾搜索引擎收录 + 买家阅读体验，合规且高转化。
+- 严格匹配对应权重模式的创作逻辑，不偏离规则。`;
+
 export const titleGeneratorFields: TitleGeneratorField[] = [
   { key: "productChineseName", label: "中文名称", weight: 0, value: "" },
   { key: "asin", label: "ASIN", weight: 0, value: "" },
@@ -301,6 +402,19 @@ export const initialTitleGenerator: TitleGeneratorDraft = {
     old: createTitleGeneratorModeDraft(),
     new: createTitleGeneratorModeDraft(),
   },
+};
+
+export const descriptionGeneratorFields: DescriptionGeneratorField[] = [
+  { key: "competitorDescription1", label: "竞品描述1", weight: 10, value: "" },
+  { key: "competitorDescription2", label: "竞品描述2", weight: 10, value: "" },
+  { key: "competitorDescription3", label: "竞品描述3", weight: 10, value: "" },
+];
+
+export const initialDescriptionGenerator: DescriptionGeneratorDraft = {
+  prompt: descriptionGeneratorPrompt,
+  results: [],
+  history: [],
+  fields: descriptionGeneratorFields.map((field) => ({ ...field })),
 };
 
 export const imageGeneratorViews: Array<{ key: ImageGeneratorViewKey; label: string }> =
@@ -387,6 +501,7 @@ export const initialImageGenerator: ImageGeneratorDraft = {
   competitorImages: [],
   prompt: defaultImageGeneratorPrompt,
   generatedImages: [],
+  history: [],
   lastRunAt: "",
 };
 
@@ -435,6 +550,12 @@ export function createPersistableDraft(draft: WorkspaceDraft): WorkspaceDraft {
       ),
       competitorImages: stripLocalImages(draft.imageGenerator.competitorImages),
       generatedImages: stripLocalImages(draft.imageGenerator.generatedImages),
+      history: Array.isArray(draft.imageGenerator.history)
+        ? draft.imageGenerator.history.map((record) => ({
+            ...record,
+            images: stripLocalImages(record.images),
+          }))
+        : [],
     },
   };
 }

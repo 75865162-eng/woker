@@ -173,8 +173,8 @@ export const defaultAiImageModelSettings: AiModelSettings = {
   provider: defaultAiProvider.id,
   apiKey: "",
   baseUrl: defaultAiProvider.baseUrl,
-  model: defaultAiProvider.model,
-  wireApi: "responses",
+  model: "gpt-image-2",
+  wireApi: "image_generations",
   timeoutSeconds: 90,
 };
 
@@ -197,13 +197,28 @@ export function normalizeAiSettings(value: Partial<AiModelSettings> | null | und
   };
 }
 
+export function normalizeAiImageSettings(value: Partial<AiModelSettings> | null | undefined): AiModelSettings {
+  const base = {
+    ...defaultAiImageModelSettings,
+    ...value,
+  };
+
+  return {
+    ...base,
+    baseUrl: (value?.baseUrl || defaultAiImageModelSettings.baseUrl).replace(/\/+$/, ""),
+    model: value?.model || defaultAiImageModelSettings.model,
+    wireApi: value?.wireApi || defaultAiImageModelSettings.wireApi,
+    timeoutSeconds: Math.max(10, Math.min(240, Number(value?.timeoutSeconds) || defaultAiImageModelSettings.timeoutSeconds)),
+  };
+}
+
 export function normalizeAiSettingsBundle(
   value: Partial<AiSettingsBundle> | Partial<AiModelSettings> | null | undefined,
 ): AiSettingsBundle {
   if (!value || "text" in value || "image" in value) {
     return {
       text: normalizeAiSettings((value as Partial<AiSettingsBundle> | null | undefined)?.text),
-      image: normalizeAiSettings((value as Partial<AiSettingsBundle> | null | undefined)?.image),
+      image: normalizeAiImageSettings((value as Partial<AiSettingsBundle> | null | undefined)?.image),
     };
   }
 

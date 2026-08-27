@@ -12,6 +12,7 @@ import {
   Layers3,
   Loader2,
   Minus,
+  MessageSquarePlus,
   Plus,
   Search,
   Sparkles,
@@ -29,6 +30,7 @@ import {
   InfoField,
 } from "@/components/listing-ai/gallery-primitives";
 import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
+import { ListingAiChatPanel } from "@/components/listing-ai/listing-ai-chat-panel";
 import { ListingAiAplusPanel } from "@/components/listing-ai/listing-ai-aplus-panel";
 import { ListingAiInputPanel } from "@/components/listing-ai/listing-ai-input-panel";
 import {
@@ -64,6 +66,7 @@ import {
   createPersistableDraft,
   createTitleGeneratorModeDraft,
   defaultImageGeneratorPrompt,
+  initialDescriptionGenerator,
   draftStorageKey,
   fieldClass,
   galleryCellStylesStorageKey,
@@ -76,6 +79,10 @@ import {
   type CompetitorDraft,
   type GalleryCellStyle,
   type GalleryInfoRow,
+  type DescriptionGeneratorDraft,
+  type DescriptionGeneratorField,
+  type DescriptionGeneratorFieldKey,
+  type DescriptionGeneratorHistoryRecord,
   type ImageGeneratorDraft,
   type ImagePreview,
   type OwnImageDraft,
@@ -89,6 +96,12 @@ import {
   type TitleGeneratorHistoryRecord,
   type WorkspaceDraft,
 } from "@/lib/listing-ai/workspace-draft";
+import {
+  aiImageSettingsStorageKey,
+  aiSettingsStorageKey,
+  type AiModelSettings,
+  normalizeAiSettings,
+} from "@/lib/ai-settings";
 
 const tabs = [
   { id: "input", label: "标题描述", icon: Search },
@@ -96,6 +109,7 @@ const tabs = [
   { id: "analysis", label: "AI Analysis", icon: BarChart3 },
   { id: "listing", label: "Listing", icon: Sparkles },
   { id: "imagePlan", label: "Image Plan", icon: Layers3 },
+  { id: "chat", label: "对话", icon: MessageSquarePlus },
   { id: "review", label: "Review & History", icon: History },
   { id: "upscale", label: "图片放大", icon: ImageUp },
 ] as const;
@@ -137,6 +151,18 @@ async function hydrateImages(images: ImagePreview[] | undefined) {
   return hydratedImages.filter((image) => image.url);
 }
 
+function compactImageForRequest(image: ImagePreview): ImagePreview {
+  if (image.assetId) {
+    return {
+      name: image.name,
+      url: "",
+      assetId: image.assetId,
+    };
+  }
+
+  return image;
+}
+
 async function hydrateCompetitorDraft(competitor: CompetitorDraft) {
   return {
     ...competitor,
@@ -168,11 +194,41 @@ async function hydrateImageGeneratorDraft(draft: ImageGeneratorDraft) {
     ownViews,
     competitorImages: await hydrateImages(draft.competitorImages),
     generatedImages: await hydrateImages(draft.generatedImages),
+    history: await Promise.all(
+      (Array.isArray(draft.history) ? draft.history : []).map(async (record) => ({
+        ...record,
+        images: await hydrateImages(record.images),
+      })),
+    ),
   };
+}
+
+function readLocalAiSettings(storageKey: string) {
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+
+    if (!saved) return null;
+
+    const parsed = JSON.parse(saved) as Partial<AiModelSettings>;
+    return typeof parsed.apiKey === "string" && parsed.apiKey.trim()
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function mergeTitleGeneratorFields(fields: TitleGeneratorField[] | undefined) {
   return initialTitleGenerator.fields.map((field) => ({
+    ...field,
+    ...fields?.find((savedField) => savedField.key === field.key),
+  }));
+}
+
+function mergeDescriptionGeneratorFields(
+  fields: DescriptionGeneratorField[] | undefined,
+) {
+  return initialDescriptionGenerator.fields.map((field) => ({
     ...field,
     ...fields?.find((savedField) => savedField.key === field.key),
   }));
@@ -226,6 +282,43 @@ function normalizeTitleGeneratorDraft(
   };
 }
 
+function normalizeDescriptionGeneratorDraft(
+  draft: Partial<DescriptionGeneratorDraft>,
+): DescriptionGeneratorDraft {
+  return {
+    ...initialDescriptionGenerator,
+    ...draft,
+    prompt:
+      draft.prompt?.trim() ? draft.prompt : initialDescriptionGenerator.prompt,
+    fields: mergeDescriptionGeneratorFields(draft.fields),
+    results: Array.isArray(draft.results) ? draft.results : [],
+    history: Array.isArray(draft.history)
+      ? draft.history
+          .filter((record): record is DescriptionGeneratorHistoryRecord =>
+            Boolean(record && typeof record === "object"),
+          )
+          .map((record) => ({
+            id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+            createdAt:
+              typeof record.createdAt === "string"
+                ? record.createdAt
+                : new Date().toLocaleString("zh-CN", { hour12: false }),
+            mode: record.mode === "new" ? "new" : "old",
+            fields: mergeDescriptionGeneratorFields(record.fields),
+            prompt:
+              typeof record.prompt === "string"
+                ? record.prompt
+                : initialDescriptionGenerator.prompt,
+            results: Array.isArray(record.results)
+              ? record.results.filter(
+                  (item): item is string => typeof item === "string",
+                )
+              : [],
+          }))
+      : [],
+  };
+}
+
 export function ListingAiWorkbench() {
   const searchParams = useSearchParams();
   const requestedTab = normalizeTabId(searchParams.get("tab"));
@@ -246,12 +339,18 @@ export function ListingAiWorkbench() {
   const [titleGenerator, setTitleGenerator] = useState<TitleGeneratorDraft>(
     initialTitleGenerator,
   );
+  const [descriptionGenerator, setDescriptionGenerator] =
+    useState<DescriptionGeneratorDraft>(initialDescriptionGenerator);
   const [imageGenerator, setImageGenerator] = useState<ImageGeneratorDraft>(
     initialImageGenerator,
   );
   const [titlePromptOpen, setTitlePromptOpen] = useState(false);
+  const [descriptionPromptOpen, setDescriptionPromptOpen] = useState(false);
   const [titleGenerating, setTitleGenerating] = useState(false);
+  const [descriptionGenerating, setDescriptionGenerating] = useState(false);
   const [titleGeneratorError, setTitleGeneratorError] = useState("");
+  const [descriptionGeneratorError, setDescriptionGeneratorError] =
+    useState("");
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageGeneratorError, setImageGeneratorError] = useState("");
   const [result, setResult] = useState<ListingOptimizationResult | null>(null);
@@ -263,6 +362,29 @@ export function ListingAiWorkbench() {
 
   useEffect(() => {
     let cancelled = false;
+
+    async function syncAiSettingsCache() {
+      try {
+        const response = await fetch("/api/ai-settings", { cache: "no-store" });
+
+        if (!response.ok) return;
+
+        const data = (await response.json()) as {
+          settings?: Partial<AiModelSettings> | null;
+          imageSettings?: Partial<AiModelSettings> | null;
+        };
+
+        if (cancelled) return;
+        if (data.settings) {
+          window.localStorage.setItem(aiSettingsStorageKey, JSON.stringify(data.settings));
+        }
+        if (data.imageSettings) {
+          window.localStorage.setItem(aiImageSettingsStorageKey, JSON.stringify(data.imageSettings));
+        }
+      } catch (error) {
+        console.warn("Failed to sync Listing AI settings cache.", error);
+      }
+    }
 
     async function applyWorkspaceDraft(draft: Partial<WorkspaceDraft>) {
       if (draft.input && !cancelled) setInput({ ...initialInput, ...draft.input });
@@ -297,6 +419,11 @@ export function ListingAiWorkbench() {
       if (draft.titleGenerator && !cancelled) {
         setTitleGenerator(normalizeTitleGeneratorDraft(draft.titleGenerator));
       }
+      if (draft.descriptionGenerator && !cancelled) {
+        setDescriptionGenerator(
+          normalizeDescriptionGeneratorDraft(draft.descriptionGenerator),
+        );
+      }
       if (draft.imageGenerator) {
         const restoredImageGenerator = await hydrateImageGeneratorDraft({
           ...initialImageGenerator,
@@ -312,6 +439,9 @@ export function ListingAiWorkbench() {
             : [],
           generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
             ? draft.imageGenerator.generatedImages
+            : [],
+          history: Array.isArray(draft.imageGenerator.history)
+            ? draft.imageGenerator.history
             : [],
           prompt: draft.imageGenerator.prompt?.trim()
             ? draft.imageGenerator.prompt
@@ -376,6 +506,7 @@ export function ListingAiWorkbench() {
       setActiveTab(requestedTab);
     }
 
+    void syncAiSettingsCache();
     void restoreDraft();
 
     return () => {
@@ -390,6 +521,7 @@ export function ListingAiWorkbench() {
       competitors,
       ownImages,
       titleGenerator,
+      descriptionGenerator,
       imageGenerator,
       activeTab,
     };
@@ -419,6 +551,7 @@ export function ListingAiWorkbench() {
     input,
     ownImages,
     records,
+    descriptionGenerator,
     titleGenerator,
   ]);
 
@@ -436,9 +569,12 @@ export function ListingAiWorkbench() {
     results: activeTitleGeneratorModeDraft.results,
     history: activeTitleGeneratorModeDraft.history,
   };
-  const productFactsCount = input.productFacts.trim().length;
-  const canSubmit =
-    input.asin.trim().length > 1 && productFactsCount >= 50 && !loading;
+  const descriptionSharedFields = activeTitleGenerator.fields.filter((field) =>
+    ["productFeatures", "coreAdWords", "relatedKeywords", "adData"].includes(
+      field.key,
+    ),
+  );
+  const canSubmit = !loading;
   const competitorInfo = useMemo(
     () => buildCompetitorInfo(competitors, ownImages.structureNotes),
     [competitors, ownImages.structureNotes],
@@ -517,6 +653,18 @@ export function ListingAiWorkbench() {
     setTitleGeneratorError("");
   }
 
+  function updateDescriptionGeneratorField(
+    key: DescriptionGeneratorFieldKey,
+    value: string,
+  ) {
+    setDescriptionGenerator((current) => ({
+      ...current,
+      fields: current.fields.map((field) =>
+        field.key === key ? { ...field, value } : field,
+      ),
+    }));
+  }
+
   function loadTitleGeneratorHistory(record: TitleGeneratorHistoryRecord) {
     const mode = record.mode === "new" ? "new" : "old";
 
@@ -539,16 +687,40 @@ export function ListingAiWorkbench() {
     setTitleGeneratorError("");
   }
 
+  function loadDescriptionGeneratorHistory(
+    record: DescriptionGeneratorHistoryRecord,
+  ) {
+    if (titleGenerator.mode !== record.mode) {
+      updateTitleGeneratorMode(record.mode);
+    }
+    setDescriptionGenerator((current) => ({
+      ...current,
+      prompt: record.prompt,
+      fields: mergeDescriptionGeneratorFields(record.fields),
+      results: record.results,
+      history: [
+        {
+          ...record,
+          fields: mergeDescriptionGeneratorFields(record.fields),
+        },
+        ...current.history.filter((item) => item.id !== record.id),
+      ].slice(0, 30),
+    }));
+    setDescriptionGeneratorError("");
+  }
+
   async function handleGenerateTitles() {
     setTitleGenerating(true);
     setTitleGeneratorError("");
 
     try {
+      const aiSettings = readLocalAiSettings(aiSettingsStorageKey);
       const response = await fetch("/api/listing-ai/generate-title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...activeTitleGenerator,
+          aiSettings: aiSettings ?? undefined,
         }),
       });
       const data = (await response.json()) as {
@@ -596,13 +768,81 @@ export function ListingAiWorkbench() {
     }
   }
 
+  async function handleGenerateDescriptions() {
+    setDescriptionGenerating(true);
+    setDescriptionGeneratorError("");
+
+    try {
+      const aiSettings = readLocalAiSettings(aiSettingsStorageKey);
+      const response = await fetch("/api/listing-ai/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: titleGenerator.mode,
+          prompt: descriptionGenerator.prompt,
+          titleFields: activeTitleGenerator.fields,
+          descriptionFields: descriptionGenerator.fields,
+          aiSettings: aiSettings ?? undefined,
+        }),
+      });
+      const data = (await response.json()) as {
+        results?: string[];
+        error?: string;
+      };
+
+      if (!response.ok || !data.results?.length)
+        throw new Error(data.error || "五点描述生成失败");
+
+      const nextResults = data.results!.slice(0, 5);
+      setDescriptionGenerator((current) => {
+        const record: DescriptionGeneratorHistoryRecord = {
+          id: crypto.randomUUID(),
+          createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+          mode: titleGenerator.mode,
+          fields: current.fields.map((field) => ({ ...field })),
+          prompt: current.prompt,
+          results: nextResults,
+        };
+
+        return {
+          ...current,
+          results: nextResults,
+          history: [record, ...current.history].slice(0, 30),
+        };
+      });
+    } catch (err) {
+      setDescriptionGeneratorError(
+        err instanceof Error ? err.message : "五点描述生成失败",
+      );
+    } finally {
+      setDescriptionGenerating(false);
+    }
+  }
+
   async function handleOptimize() {
     setLoading(true);
     setError("");
+    const aiSettings = readLocalAiSettings(aiSettingsStorageKey);
+
+    const titleAsin =
+      activeTitleGenerator.fields
+        .find((field) => field.key === "asin")
+        ?.value.trim() ?? "";
+    const titleChineseName =
+      activeTitleGenerator.fields
+        .find((field) => field.key === "productChineseName")
+        ?.value.trim() ?? "";
+    const titleProductFacts =
+      activeTitleGenerator.fields
+        .find((field) => field.key === "productFeatures")
+        ?.value.trim() ?? "";
 
     const payload: ListingOptimizationRequest = {
       ...input,
-      productType: input.productType || input.productEnglishName || input.asin,
+      asin: input.asin.trim() || titleAsin,
+      productChineseName: input.productChineseName.trim() || titleChineseName,
+      productFacts: input.productFacts.trim() || titleProductFacts,
+      productType: input.productType || input.productEnglishName || titleAsin,
       competitorInfo,
       imageRequirements,
     };
@@ -613,6 +853,7 @@ export function ListingAiWorkbench() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
+          aiSettings: aiSettings ? normalizeAiSettings(aiSettings) : undefined,
         } satisfies ListingOptimizationApiRequest),
       });
       const data = (await response.json()) as {
@@ -689,11 +930,25 @@ export function ListingAiWorkbench() {
     setImageGeneratorError("");
 
     try {
+      const aiSettings = readLocalAiSettings(aiImageSettingsStorageKey);
       const response = await fetch("/api/listing-ai/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...imageGenerator,
+          prompt: imageGenerator.prompt,
+          ownViews: imageGeneratorViews.reduce(
+            (views, view) => ({
+              ...views,
+              [view.key]: imageGenerator.ownViews[view.key].map(
+                compactImageForRequest,
+              ),
+            }),
+            {} as ImageGeneratorDraft["ownViews"],
+          ),
+          competitorImages: imageGenerator.competitorImages.map(
+            compactImageForRequest,
+          ),
+          aiSettings: aiSettings ?? undefined,
         }),
       });
       const data = (await response.json()) as {
@@ -705,13 +960,25 @@ export function ListingAiWorkbench() {
         throw new Error(data.error || "图片生成失败，请检查模型是否支持图片生成。");
       }
 
+      const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
       setImageGenerator((current) => ({
         ...current,
         generatedImages: [...data.images!, ...current.generatedImages].slice(
           0,
           12,
         ),
-        lastRunAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+        history: [
+          {
+            id: crypto.randomUUID(),
+            createdAt,
+            prompt: current.prompt,
+            ownViewCount: viewCount,
+            competitorImageCount: current.competitorImages.length,
+            images: data.images!,
+          },
+          ...current.history,
+        ].slice(0, 30),
+        lastRunAt: createdAt,
       }));
     } catch (error) {
       setImageGeneratorError(
@@ -753,15 +1020,25 @@ export function ListingAiWorkbench() {
         {activeTab === "input" ? (
           <ListingAiInputPanel
             titleGenerator={activeTitleGenerator}
+            descriptionGenerator={descriptionGenerator}
+            descriptionSharedFields={descriptionSharedFields}
             titleGenerating={titleGenerating}
+            descriptionGenerating={descriptionGenerating}
             titleGeneratorError={titleGeneratorError}
+            descriptionGeneratorError={descriptionGeneratorError}
             titlePromptOpen={titlePromptOpen}
+            descriptionPromptOpen={descriptionPromptOpen}
             updateTitleGeneratorMode={updateTitleGeneratorMode}
             updateTitleGeneratorField={updateTitleGeneratorField}
+            updateDescriptionGeneratorField={updateDescriptionGeneratorField}
             setTitleGenerator={setTitleGenerator}
+            setDescriptionGenerator={setDescriptionGenerator}
             setTitlePromptOpen={setTitlePromptOpen}
+            setDescriptionPromptOpen={setDescriptionPromptOpen}
             onGenerateTitles={handleGenerateTitles}
+            onGenerateDescriptions={handleGenerateDescriptions}
             onLoadTitleGeneratorHistory={loadTitleGeneratorHistory}
+            onLoadDescriptionGeneratorHistory={loadDescriptionGeneratorHistory}
           />
         ) : null}
         {activeTab === "visual" ? (
@@ -805,6 +1082,7 @@ export function ListingAiWorkbench() {
             onRunImageGenerator={handleRunImageGenerator}
           />
         ) : null}
+        {activeTab === "chat" ? <ListingAiChatPanel /> : null}
         {activeTab === "review" ? (
           <ReviewHistorySection
             result={result}
@@ -862,6 +1140,9 @@ function normalizeWorkspaceDraft(draft?: Partial<WorkspaceDraft> | null): Worksp
     },
     titleGenerator: {
       ...normalizeTitleGeneratorDraft(draft?.titleGenerator ?? {}),
+    },
+    descriptionGenerator: {
+      ...normalizeDescriptionGeneratorDraft(draft?.descriptionGenerator ?? {}),
     },
     imageGenerator: {
       ...initialImageGenerator,
@@ -2419,7 +2700,7 @@ function MineColumn({
           </p>
         </InfoField>
 
-        <InfoField label="ASIN" className="overflow-hidden">
+        <InfoField label="ASIN（可选）" className="overflow-hidden">
           <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
             <input
               className={fieldClass}

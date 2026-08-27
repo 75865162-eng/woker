@@ -1,4 +1,4 @@
-import { Loader2, Wand2 } from "lucide-react";
+import { Clock3, Loader2, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,6 +148,50 @@ export function ImageGeneratorBoard({
                 </div>
               ) : null}
             </div>
+          </div>
+          <div className="p-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-foreground">生成历史</p>
+                <p className="mt-1 text-xs font-semibold text-muted">
+                  最近 30 次生成记录会随 Listing AI 工作区草稿保存。
+                </p>
+              </div>
+              <Badge tone={draft.history.length ? "blue" : "gray"}>
+                {draft.history.length} Records
+              </Badge>
+            </div>
+            {draft.history.length ? (
+              <div className="space-y-3">
+                {draft.history.map((record) => (
+                  <article
+                    key={record.id}
+                    className="grid grid-cols-[220px_1fr_minmax(260px,360px)] gap-3 rounded-md border border-border bg-white p-3"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                        <Clock3 className="h-4 w-4 text-brand" />
+                        {record.createdAt}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge tone="green">{record.ownViewCount}/6 Views</Badge>
+                        <Badge tone="gray">
+                          {record.competitorImageCount} Competitors
+                        </Badge>
+                      </div>
+                    </div>
+                    <p className="line-clamp-4 text-xs font-semibold leading-5 text-muted">
+                      {record.prompt}
+                    </p>
+                    <ImagePreviewGrid images={record.images} compact />
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted">
+                暂无生成历史
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

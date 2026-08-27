@@ -29,6 +29,7 @@ import {
   createSavedAiModelProfilePair,
   defaultAiImageModelSettings,
   defaultAiModelSettings,
+  normalizeAiImageSettings,
   normalizeAiSettings,
   normalizeSavedAiModelProfiles,
   type AiModelSettings,
@@ -38,6 +39,7 @@ import {
 const fieldClass =
   "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
+const imageGenerationModelPattern = /(image|seedream|dall|imagen|flux)/i;
 
 export function SettingsWorkbench() {
   const [settings, setSettings] = useState<AiModelSettings>(defaultAiModelSettings);
@@ -203,7 +205,7 @@ export function SettingsWorkbench() {
   function normalizeImageBeforeSave(value: AiModelSettings | null | undefined): AiModelSettings {
     if (!value) return defaultAiImageModelSettings;
 
-    if (value.provider !== "custom") return normalizeAiSettings({ ...value, wireApi: value.wireApi === "image_generations" ? value.wireApi : "responses" });
+    if (value.provider !== "custom") return normalizeAiImageSettings({ ...value, wireApi: value.wireApi === "image_generations" ? value.wireApi : "responses" });
 
     return {
       ...value,
@@ -215,8 +217,8 @@ export function SettingsWorkbench() {
   }
 
   async function persistSettings(
-    nextSettings: AiModelSettings,
-    nextImageSettings: AiModelSettings,
+    nextSettings: AiModelSettings | undefined,
+    nextImageSettings: AiModelSettings | undefined,
     nextProfiles: SavedAiModelProfile[],
     nextActiveProfileId: string,
   ) {
@@ -236,20 +238,18 @@ export function SettingsWorkbench() {
       throw new Error(data.error || "AI 配置保存失败。");
     }
 
-    cacheAiSettings(nextSettings, nextProfiles);
-    cacheAiImageSettings(nextImageSettings);
+    if (nextSettings) cacheAiSettings(nextSettings, nextProfiles);
+    if (nextImageSettings) cacheAiImageSettings(nextImageSettings);
   }
 
   async function saveSettings() {
     const normalized = normalizeBeforeSave(settings);
-    const normalizedImage = normalizeImageBeforeSave(imageSettings);
     const now = new Date().toISOString();
     const existingSystemProfile = profiles.find((profile) => profile.kind === "system" && profile.id === activeProfileId) ??
       profiles.find((profile) => profile.kind === "system" && profile.bundleId === profiles.find((candidate) => candidate.id === activeProfileId)?.bundleId);
     const nextProfileName = profileName.trim() || createAiProfileName(normalized);
     const bundleId = existingSystemProfile?.bundleId ?? existingSystemProfile?.id ?? `${normalized.provider}-${normalized.model}-${Date.now()}`;
     const systemProfileId = existingSystemProfile?.id ?? bundleId;
-    const imageProfileId = `${bundleId}::image`;
     const nextProfiles = [
       {
         id: systemProfileId,
@@ -260,22 +260,12 @@ export function SettingsWorkbench() {
         updatedAt: now,
         settings: normalized,
       },
-      {
-        id: imageProfileId,
-        bundleId,
-        kind: "image" as const,
-        name: `${nextProfileName} · 生图`,
-        createdAt: profiles.find((profile) => profile.id === imageProfileId)?.createdAt ?? now,
-        updatedAt: now,
-        settings: normalizedImage,
-      },
-      ...profiles.filter((profile) => profile.bundleId !== bundleId),
+      ...profiles.filter((profile) => profile.id !== systemProfileId),
     ].slice(0, 20);
 
     try {
-      await persistSettings(normalized, normalizedImage, nextProfiles, systemProfileId);
+      await persistSettings(normalized, undefined, nextProfiles, systemProfileId);
       setSettings(normalized);
-      setImageSettings(normalizedImage);
       setProfileName(nextProfileName);
       setProfiles(nextProfiles);
       setActiveProfileId(systemProfileId);
@@ -288,6 +278,12 @@ export function SettingsWorkbench() {
 
   async function saveImageSettings() {
     const normalized = normalizeImageBeforeSave(imageSettings);
+
+    if (normalized.wireApi === "image_generations" && !imageGenerationModelPattern.test(normalized.model)) {
+      setImageSettingsError("Images Generations API 需要图片模型，例如 gpt-image-2；gpt-5.4 / gpt-5.5 这类文本模型请用于系统配置。");
+      return;
+    }
+
     const now = new Date().toISOString();
     const activeSystemProfile = profiles.find((profile) => profile.kind === "system" && profile.id === activeProfileId) ??
       profiles.find((profile) => profile.kind === "system" && profile.bundleId === profiles.find((candidate) => candidate.id === activeProfileId)?.bundleId);
@@ -295,10 +291,8 @@ export function SettingsWorkbench() {
       activeSystemProfile?.bundleId ??
       profiles.find((profile) => profile.kind === "image")?.bundleId ??
       (activeProfileId || `${settings.provider}-${settings.model}-${Date.now()}`);
-    const systemProfile = activeSystemProfile;
     const imageProfileId = `${bundleId}::image`;
     const nextProfiles = [
-      ...(systemProfile ? [systemProfile] : []),
       {
         id: imageProfileId,
         bundleId,
@@ -308,11 +302,11 @@ export function SettingsWorkbench() {
         updatedAt: now,
         settings: normalized,
       },
-      ...profiles.filter((profile) => profile.bundleId !== bundleId && profile.id !== imageProfileId),
+      ...profiles.filter((profile) => profile.id !== imageProfileId),
     ].slice(0, 20);
 
     try {
-      await persistSettings(settings, normalized, nextProfiles, activeSystemProfile?.id ?? activeProfileId);
+      await persistSettings(undefined, normalized, nextProfiles, activeSystemProfile?.id ?? activeProfileId);
       setImageSettings(normalized);
       setProfiles(nextProfiles);
       setImageSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
@@ -325,10 +319,26 @@ export function SettingsWorkbench() {
   async function resetSettings() {
     window.localStorage.removeItem(aiSettingsStorageKey);
     const nextProfileName = createAiProfileName(defaultAiModelSettings);
-    const builtInProfiles = createSavedAiModelProfilePair(defaultAiModelSettings, imageSettings, nextProfileName);
+    const existingSystemProfile = profiles.find((profile) => profile.kind === "system" && profile.id === activeProfileId) ??
+      profiles.find((profile) => profile.kind === "system" && profile.bundleId === profiles.find((candidate) => candidate.id === activeProfileId)?.bundleId);
+    const bundleId = existingSystemProfile?.bundleId ?? existingSystemProfile?.id ?? `${defaultAiModelSettings.provider}-${defaultAiModelSettings.model}-${Date.now()}`;
+    const systemProfileId = existingSystemProfile?.id ?? bundleId;
+    const now = new Date().toISOString();
+    const builtInProfiles = [
+      {
+        id: systemProfileId,
+        bundleId,
+        kind: "system" as const,
+        name: nextProfileName,
+        createdAt: existingSystemProfile?.createdAt ?? now,
+        updatedAt: now,
+        settings: defaultAiModelSettings,
+      },
+      ...profiles.filter((profile) => profile.id !== systemProfileId),
+    ].slice(0, 20);
 
     try {
-      await persistSettings(defaultAiModelSettings, imageSettings, builtInProfiles, builtInProfiles[0]?.id ?? "");
+      await persistSettings(defaultAiModelSettings, undefined, builtInProfiles, systemProfileId);
       setSettings(defaultAiModelSettings);
       setProfileName(nextProfileName);
       setProfiles(builtInProfiles);
@@ -365,7 +375,7 @@ export function SettingsWorkbench() {
         },
         ...profiles.filter((profile) => profile.bundleId !== bundleId && profile.id !== `${bundleId}::image`),
       ].slice(0, 20);
-      await persistSettings(settings, defaultAiImageModelSettings, nextProfiles, activeSystemProfile?.id ?? activeProfileId);
+      await persistSettings(undefined, defaultAiImageModelSettings, nextProfiles, activeSystemProfile?.id ?? activeProfileId);
       setImageSettings(defaultAiImageModelSettings);
       setProfiles(nextProfiles);
       setImageSavedAt("");

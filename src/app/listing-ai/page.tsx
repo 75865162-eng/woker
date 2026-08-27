@@ -4,7 +4,7 @@ import { DataSourceBanner } from "@/components/ui/data-source-banner";
 
 export default function ListingAiPage() {
   return (
-    <AppShell title="Listing AI" subtitle="生成 Listing、主图附图、A+ 方案与美工自检清单">
+    <AppShell title="Listing AI" subtitle="生成 Listing、主图附图、A+ 方案与右侧对话助手">
       <div className="space-y-5">
         <DataSourceBanner
           tone="mixed"
