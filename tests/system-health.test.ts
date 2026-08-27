@@ -7,6 +7,7 @@ import {
   roleCanAccessModule,
   roleCanPerformAction,
 } from "@/lib/accounts/permissions";
+import { getRosterLoginName } from "@/lib/accounts/roster-auth-sync";
 import { parseCsv, readNumber } from "@/lib/bulk/row-utils";
 import { buildGroupsFromRows, toPerformanceRow } from "@/lib/bulk/workspace-builders";
 import { aggregateMetrics } from "@/lib/metrics";
@@ -158,6 +159,13 @@ test("permission checks map nested routes and reject malformed permission cookie
   assert.equal(roleCanPerformAction("ppc_specialist", "workspace", "export"), true);
   assert.equal(roleCanPerformAction("operations", "workspace", "view"), false);
   assert.equal(parseRolePermissionsCookie("%7Bbad-json"), null);
+});
+
+test("roster login names are normalized for case-insensitive sign in", () => {
+  assert.equal(
+    getRosterLoginName({ id: "user-1", email: "", username: " SF1785054571062888 " }),
+    "sf1785054571062888",
+  );
 });
 
 test("WeCom launch alerts validate the official webhook and prevent duplicate same-day notifications", () => {

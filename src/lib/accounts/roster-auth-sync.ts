@@ -14,7 +14,7 @@ function trimOrEmpty(value?: string | null) {
 }
 
 export function getRosterLoginName(account: Pick<RosterLoginAccount, "id" | "email" | "username">) {
-  return trimOrEmpty(account.email) || trimOrEmpty(account.username) || account.id;
+  return (trimOrEmpty(account.email) || trimOrEmpty(account.username) || account.id).toLowerCase();
 }
 
 export function isRosterBootstrapAccount(account: Pick<RosterLoginAccount, "id" | "email" | "username">) {
