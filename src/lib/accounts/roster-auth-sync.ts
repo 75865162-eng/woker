@@ -13,8 +13,21 @@ function trimOrEmpty(value?: string | null) {
   return value?.trim() ?? "";
 }
 
+function getRosterLoginCandidates(account: Pick<RosterLoginAccount, "id" | "email" | "username" | "phone">) {
+  return [trimOrEmpty(account.phone), trimOrEmpty(account.username), trimOrEmpty(account.email), trimOrEmpty(account.id)]
+    .map((value) => value.toLowerCase())
+    .filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+}
+
+function getRosterLoginPriority(account: Pick<RosterLoginAccount, "email" | "username" | "phone">) {
+  if (trimOrEmpty(account.phone)) return 3;
+  if (trimOrEmpty(account.username)) return 2;
+  if (trimOrEmpty(account.email)) return 1;
+  return 0;
+}
+
 export function getRosterLoginName(account: Pick<RosterLoginAccount, "id" | "email" | "username" | "phone">) {
-  return (trimOrEmpty(account.phone) || trimOrEmpty(account.username) || trimOrEmpty(account.email) || account.id).toLowerCase();
+  return getRosterLoginCandidates(account)[0] ?? account.id.toLowerCase();
 }
 
 export function isRosterBootstrapAccount(account: Pick<RosterLoginAccount, "id" | "email" | "username" | "phone">) {
@@ -35,8 +48,31 @@ export async function syncRosterLoginUsers(
   client: Prisma.TransactionClient | PrismaClient,
   accounts: RosterLoginAccountWithOrg[],
 ) {
-  for (const account of accounts) {
-    const loginName = getRosterLoginName(account);
+  const currentAccountIds = new Set(accounts.map((account) => account.id));
+  const existingUsers = await client.user.findMany({
+    select: {
+      id: true,
+      email: true,
+    },
+  });
+  const usedLoginNames = new Set(
+    existingUsers
+      .filter((user) => !currentAccountIds.has(user.id))
+      .map((user) => user.email.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const sortedAccounts = [...accounts].sort((left, right) => {
+    const leftScore = getRosterLoginPriority(left);
+    const rightScore = getRosterLoginPriority(right);
+
+    if (leftScore !== rightScore) return rightScore - leftScore;
+
+    return left.id.localeCompare(right.id);
+  });
+
+  for (const account of sortedAccounts) {
+    const loginName = getRosterLoginCandidates(account).find((candidate) => !usedLoginNames.has(candidate)) ?? account.id.toLowerCase();
+    usedLoginNames.add(loginName);
     const hasExplicitPassword = Boolean(account.password?.trim());
     const password = hasExplicitPassword ? account.password!.trim() : getRosterInitialPassword(account);
     const isBootstrapAccount = isRosterBootstrapAccount(account);

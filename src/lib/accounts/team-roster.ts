@@ -4,7 +4,9 @@ export type TeamMemberStatus = "active" | "pending" | "disabled" | "archived";
 
 export type AccountRoleId =
   | "owner"
+  | "admin"
   | "database_admin"
+  | "operations_manager"
   | "operations_supervisor"
   | "operations"
   | "operations_assistant"
@@ -14,6 +16,9 @@ export type AccountRoleId =
   | "warehouse_supervisor"
   | "finance"
   | "procurement"
+  | "ppc_specialist"
+  | "listing_specialist"
+  | "logistics_specialist"
   | "viewer";
 
 export type TeamAccountRecord = {
@@ -61,8 +66,6 @@ export const accountRoleToWorkflowRole: Partial<Record<AccountRoleId, ProductWor
 };
 
 const legacyRoleMap: Record<string, AccountRoleId> = {
-  admin: "operations_supervisor",
-  database_admin: "database_admin",
   selection: "procurement",
   ppc_manager: "operations",
   listing_operator: "operations",
@@ -71,7 +74,9 @@ const legacyRoleMap: Record<string, AccountRoleId> = {
 
 const knownRoleIds = new Set<AccountRoleId>([
   "owner",
+  "admin",
   "database_admin",
+  "operations_manager",
   "operations_supervisor",
   "operations",
   "operations_assistant",
@@ -81,6 +86,9 @@ const knownRoleIds = new Set<AccountRoleId>([
   "warehouse_supervisor",
   "finance",
   "procurement",
+  "ppc_specialist",
+  "listing_specialist",
+  "logistics_specialist",
   "viewer",
 ]);
 

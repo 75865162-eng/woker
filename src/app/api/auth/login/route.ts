@@ -8,6 +8,13 @@ import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 
+function getClientIp(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const realIp = request.headers.get("x-real-ip")?.trim();
+
+  return forwardedFor || realIp || "";
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { email?: string; password?: string };
@@ -65,6 +72,9 @@ export async function POST(request: Request) {
 
       const membership = user.memberships[0];
       const rolePermissions = await getOrganizationRolePermissions(membership.organizationId);
+      const loginAt = new Date();
+      const loginAtText = loginAt.toLocaleString("zh-CN", { hour12: false });
+      const clientIp = getClientIp(request);
 
       const { sessionCookie, rolePermissionsCookie } = await createSession(
         user.id,
@@ -80,7 +90,18 @@ export async function POST(request: Request) {
       );
       await prisma.user.update({
         where: { id: user.id },
-        data: { lastLoginAt: new Date() },
+        data: { lastLoginAt: loginAt },
+      });
+      await prisma.teamRosterMember.updateMany({
+        where: {
+          organizationId: membership.organizationId,
+          id: user.id,
+        },
+        data: {
+          lastActiveAt: loginAtText,
+          lastLoginAt: loginAtText,
+          ...(clientIp ? { lastLoginIp: clientIp } : {}),
+        },
       });
 
       const response = NextResponse.json({

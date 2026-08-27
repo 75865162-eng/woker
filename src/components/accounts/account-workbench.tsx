@@ -15,6 +15,7 @@ import {
   KeyRound,
   LockKeyhole,
   Pencil,
+  Plus,
   Search,
   ShieldCheck,
   Upload,
@@ -156,6 +157,51 @@ const initialRoles: Role[] = [
     description: "维护采购商品资料并协同物流处理",
     memberCount: 0,
     permissions: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
+  },
+];
+
+const roleCatalog: Role[] = [
+  ...initialRoles,
+  {
+    id: "admin",
+    name: "管理员",
+    description: "管理业务模块和基础运营配置",
+    memberCount: 0,
+    permissions: createPermissions(
+      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics"],
+      permissionActions.map((action) => action.id),
+    ),
+  },
+  {
+    id: "operations_manager",
+    name: "运营经理",
+    description: "统筹 PPC、商品、Listing AI 和物流业务流转",
+    memberCount: 0,
+    permissions: createPermissions(
+      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics"],
+      permissionActions.map((action) => action.id),
+    ),
+  },
+  {
+    id: "ppc_specialist",
+    name: "PPC 专员",
+    description: "维护广告工作台和搜索词合并相关任务",
+    memberCount: 0,
+    permissions: createPermissions(["workspace", "searchMerge"], ["view", "create", "edit", "export"]),
+  },
+  {
+    id: "listing_specialist",
+    name: "Listing 专员",
+    description: "维护商品资料、Listing AI 和图片放大任务",
+    memberCount: 0,
+    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
+  },
+  {
+    id: "logistics_specialist",
+    name: "物流专员",
+    description: "维护物流模板、箱规和货件导出",
+    memberCount: 0,
+    permissions: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
   },
 ];
 
@@ -335,6 +381,8 @@ export function AccountWorkbench() {
   const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
   const [query, setQuery] = useState("");
   const [newAccountOpen, setNewAccountOpen] = useState(false);
+  const [newRoleOpen, setNewRoleOpen] = useState(false);
+  const [roleMembersOpen, setRoleMembersOpen] = useState(false);
   const [passwordAccount, setPasswordAccount] = useState<Account | null>(null);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [archivedAccountsOpen, setArchivedAccountsOpen] = useState(false);
@@ -378,12 +426,19 @@ export function AccountWorkbench() {
     void loadRolePermissionsFromApi().then((savedRolePermissions) => {
       if (canceled || !savedRolePermissions) return;
 
-      setRoles((current) =>
-        current.map((role) => ({
+      setRoles((current) => {
+        const savedCatalogRoles = Object.keys(savedRolePermissions).flatMap((roleId) => {
+          if (current.some((role) => role.id === roleId)) return [];
+
+          const catalogRole = roleCatalog.find((role) => role.id === roleId);
+          return catalogRole ? [catalogRole] : [];
+        });
+
+        return [...current, ...savedCatalogRoles].map((role) => ({
           ...role,
           permissions: savedRolePermissions[role.id] ?? role.permissions,
-        })),
-      );
+        }));
+      });
     });
 
     return () => {
@@ -392,6 +447,14 @@ export function AccountWorkbench() {
   }, []);
 
   const activeRole = visibleRoles.find((role) => role.id === activeRoleId) ?? visibleRoles[0];
+  const activeRoleMembers = useMemo(
+    () => visibleAccounts.filter((account) => account.roleId === activeRole.id),
+    [activeRole.id, visibleAccounts],
+  );
+  const availableRoleTemplates = useMemo(
+    () => roleCatalog.filter((role) => !roles.some((item) => item.id === role.id) && canManageRole(role.id)),
+    [roles],
+  );
 
   const filteredAccounts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -654,6 +717,15 @@ export function AccountWorkbench() {
     window.setTimeout(() => window.location.reload(), 250);
   }
 
+  function addRole(roleId: RoleId) {
+    const role = roleCatalog.find((item) => item.id === roleId);
+    if (!role) return;
+
+    setRoles((current) => (current.some((item) => item.id === role.id) ? current : [...current, role]));
+    setActiveRoleId(role.id);
+    setNewRoleOpen(false);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -793,7 +865,10 @@ export function AccountWorkbench() {
                       <td className="px-5 py-4">
                         <Badge tone={statusTones[account.status]}>{statusLabels[account.status]}</Badge>
                       </td>
-                      <td className="px-5 py-4 text-muted">{account.lastActiveAt}</td>
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-foreground">{account.lastLoginIp || "IP 未记录"}</p>
+                        <p className="text-xs text-muted">{account.lastLoginAt || account.lastActiveAt || "时间未记录"}</p>
+                      </td>
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="secondary" onClick={() => setEditAccount(account)}>
@@ -846,7 +921,7 @@ export function AccountWorkbench() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.85fr)]">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1fr)_minmax(0,2fr)]">
           <div className="space-y-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
@@ -854,7 +929,13 @@ export function AccountWorkbench() {
                   <CardTitle className="text-sm">角色权限</CardTitle>
                   <p className="mt-0.5 text-xs text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
                 </div>
-                <Badge className="shrink-0" tone="blue">{visibleRoles.length} 个角色</Badge>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge tone="blue">{visibleRoles.length} 个角色</Badge>
+                  <Button className="h-8 px-2" size="sm" variant="secondary" onClick={() => setNewRoleOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" />
+                    添加
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-1.5 p-3">
                 {visibleRoles.map((role) => (
@@ -863,7 +944,10 @@ export function AccountWorkbench() {
                     className={`w-full rounded-md border px-2.5 py-2 text-left transition ${
                       activeRole.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
                     }`}
-                    onClick={() => setActiveRoleId(role.id)}
+                    onClick={() => {
+                      setActiveRoleId(role.id);
+                      setRoleMembersOpen(true);
+                    }}
                     type="button"
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -877,56 +961,56 @@ export function AccountWorkbench() {
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
-                <div>
-                  <CardTitle className="text-sm">{activeRole.name} 权限矩阵</CardTitle>
-                  <p className="mt-0.5 text-xs text-muted">当前实际绑定 {roleMemberCount} 个账号。</p>
-                </div>
-                <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={saveRolePermissions}>
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  保存权限
-                </Button>
+              <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
+                <CardTitle className="text-sm">人员分布</CardTitle>
+                <Badge tone="gray">按部门</Badge>
               </CardHeader>
-              <CardContent className="space-y-1.5 p-3">
-                {permissionSavedAt ? <p className="text-xs font-medium text-green-700">权限已保存：{permissionSavedAt}，页面正在刷新。</p> : null}
-                {permissionModules.map((module) => (
-                  <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
-                    <p className="text-xs font-bold text-foreground">{module.name}</p>
-                    <div className="grid grid-cols-5 gap-1">
-                      {permissionActions.map((action) => {
-                        const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
+              <CardContent className="space-y-2 p-4">
+                {departments.map((department) => {
+                  const count = visibleAccounts.filter((account) => account.department === department).length;
+                  const percent = visibleAccounts.length ? Math.round((count / visibleAccounts.length) * 100) : 0;
 
-                        return (
-                          <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
-                            <input
-                              checked={checked}
-                              className="h-3.5 w-3.5 accent-brand"
-                              onChange={() => togglePermission(module.id, action.id)}
-                              type="checkbox"
-                            />
-                            {action.label}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                  return <DepartmentBar key={department} name={department} count={count} percent={percent} />;
+                })}
               </CardContent>
             </Card>
           </div>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
-              <CardTitle className="text-sm">人员分布</CardTitle>
-              <Badge tone="gray">按部门</Badge>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
+              <div>
+                <CardTitle className="text-sm">权限管理</CardTitle>
+                <p className="mt-0.5 text-xs text-muted">{activeRole.name} 当前实际绑定 {roleMemberCount} 个账号。</p>
+              </div>
+              <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={saveRolePermissions}>
+                <ShieldCheck className="h-3.5 w-3.5" />
+                保存权限
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-2 p-4">
-              {departments.map((department) => {
-                const count = accounts.filter((account) => account.department === department).length;
-                const percent = accounts.length ? Math.round((count / accounts.length) * 100) : 0;
+            <CardContent className="space-y-1.5 p-3">
+              {permissionSavedAt ? <p className="text-xs font-medium text-green-700">权限已保存：{permissionSavedAt}，页面正在刷新。</p> : null}
+              {permissionModules.map((module) => (
+                <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
+                  <p className="text-xs font-bold text-foreground">{module.name}</p>
+                  <div className="grid grid-cols-5 gap-1">
+                    {permissionActions.map((action) => {
+                      const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
 
-                return <DepartmentBar key={department} name={department} count={count} percent={percent} />;
-              })}
+                      return (
+                        <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                          <input
+                            checked={checked}
+                            className="h-3.5 w-3.5 accent-brand"
+                            onChange={() => togglePermission(module.id, action.id)}
+                            type="checkbox"
+                          />
+                          {action.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
@@ -979,6 +1063,8 @@ export function AccountWorkbench() {
       </section>
 
       {newAccountOpen ? <AccountDialog roles={roles} title="新建同事账号" onClose={() => setNewAccountOpen(false)} onSubmit={createAccount} /> : null}
+      {newRoleOpen ? <RoleDialog roles={availableRoleTemplates} onClose={() => setNewRoleOpen(false)} onSubmit={addRole} /> : null}
+      {roleMembersOpen ? <RoleMembersDialog role={activeRole} accounts={activeRoleMembers} onClose={() => setRoleMembersOpen(false)} /> : null}
       {editAccount ? (
         <EditAccountDialog account={editAccount} roles={roles} onClose={() => setEditAccount(null)} onSubmit={saveAccount} />
       ) : null}
@@ -1065,6 +1151,108 @@ function ArchivedAccountsDialog({ rows, onClose }: { rows: ReturnType<typeof cre
           </tbody>
         </table>
         {rows.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">暂无已归档员工。</p> : null}
+      </div>
+    </Modal>
+  );
+}
+
+function RoleDialog({
+  roles,
+  onClose,
+  onSubmit,
+}: {
+  roles: Role[];
+  onClose: () => void;
+  onSubmit: (roleId: RoleId) => void;
+}) {
+  const [selectedRoleId, setSelectedRoleId] = useState<RoleId>(roles[0]?.id ?? "viewer");
+  const selectedRole = roles.find((role) => role.id === selectedRoleId);
+
+  return (
+    <Modal title="添加角色" onClose={onClose}>
+      {roles.length ? (
+        <div className="space-y-4">
+          <Field label="角色模板">
+            <select className={fieldClass} value={selectedRoleId} onChange={(event) => setSelectedRoleId(event.target.value as RoleId)}>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {selectedRole ? (
+            <div className="rounded-md border border-border bg-surface-muted px-3 py-2.5">
+              <p className="text-sm font-bold text-foreground">{selectedRole.name}</p>
+              <p className="mt-1 text-sm leading-5 text-muted">{selectedRole.description}</p>
+            </div>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>
+              取消
+            </Button>
+            <Button onClick={() => onSubmit(selectedRoleId)}>
+              <Plus className="h-4 w-4" />
+              添加角色
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm text-muted">暂无可添加的内置角色。</p>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={onClose}>
+              关闭
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function RoleMembersDialog({ role, accounts, onClose }: { role: Role; accounts: Account[]; onClose: () => void }) {
+  return (
+    <Modal title={`${role.name}成员`} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between rounded-md border border-border bg-surface-muted px-3 py-2.5">
+          <div>
+            <p className="text-sm font-bold text-foreground">{role.name}</p>
+            <p className="mt-0.5 text-xs text-muted">{role.description}</p>
+          </div>
+          <Badge tone="blue">{accounts.length} 人</Badge>
+        </div>
+        <div className="max-h-[420px] overflow-auto rounded-md border border-border">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
+            <thead className="bg-surface-muted text-xs font-bold text-muted">
+              <tr>
+                <th className="px-4 py-2.5 text-left">姓名</th>
+                <th className="px-4 py-2.5 text-left">手机号</th>
+                <th className="px-4 py-2.5 text-left">部门 / 岗位</th>
+                <th className="px-4 py-2.5 text-left">状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((account) => (
+                <tr key={account.id} className="border-t border-border">
+                  <td className="px-4 py-3">
+                    <p className="font-bold text-foreground">{account.name}</p>
+                    <p className="text-xs text-muted">{account.id}</p>
+                  </td>
+                  <td className="px-4 py-3 text-muted">{account.phone || account.username || account.email || "—"}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-foreground">{account.department}</p>
+                    <p className="text-xs text-muted">{account.title}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={statusTones[account.status]}>{statusLabels[account.status]}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {accounts.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">当前角色暂无绑定成员。</p> : null}
+        </div>
       </div>
     </Modal>
   );
