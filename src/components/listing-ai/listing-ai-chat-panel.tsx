@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FileText,
   History,
@@ -205,7 +205,6 @@ export function ListingAiChatPanel() {
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [forceImageGeneration, setForceImageGeneration] = useState(false);
-  const fileInputId = useId();
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -731,11 +730,21 @@ export function ListingAiChatPanel() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <label
-                      className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted"
-                      htmlFor={fileInputId}
+                      className="relative inline-flex h-8 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted"
                     >
                       <Upload className="h-4 w-4" />
-                      添加附件
+                      <span>添加附件</span>
+                      <input
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        type="file"
+                        multiple
+                        aria-label="添加附件"
+                        accept="image/*,.pdf,.xls,.xlsx,.csv,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        onChange={(event) => {
+                          void handleFilePick(event.target.files);
+                          event.currentTarget.value = "";
+                        }}
+                      />
                     </label>
                     <Button
                       variant={forceImageGeneration ? "primary" : "secondary"}
@@ -747,17 +756,6 @@ export function ListingAiChatPanel() {
                       <ImagePlus className="h-4 w-4" />
                       生图
                     </Button>
-                    <input
-                      id={fileInputId}
-                      className="sr-only"
-                      type="file"
-                      multiple
-                      accept="image/*,.pdf,.xls,.xlsx,.csv,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                      onChange={(event) => {
-                        void handleFilePick(event.target.files);
-                        event.currentTarget.value = "";
-                      }}
-                    />
                     <Badge tone={effectiveMode === "image" ? "amber" : "blue"}>
                       {effectiveMode === "image"
                         ? "图片附件 -> 图片生成"
