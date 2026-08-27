@@ -4,10 +4,11 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
 import {
-  createDefaultAiSettingsBundle,
   createAiImageProfileName,
   createAiProfileName,
   normalizeAiSettingsBundle,
+  normalizeAiImageSettings,
+  normalizeAiSettings,
   normalizeSavedAiModelProfiles,
   type AiModelSettings,
   type AiSettingsBundle,
@@ -34,7 +35,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseSettings(value: unknown): AiSettingsBundle {
   if (value == null) {
-    return createDefaultAiSettingsBundle();
+    return {
+      text: resolveAiSettings(undefined, "text"),
+      image: resolveAiSettings(undefined, "image"),
+    };
   }
 
   if (!isRecord(value)) {
@@ -42,6 +46,19 @@ function parseSettings(value: unknown): AiSettingsBundle {
   }
 
   return normalizeAiSettingsBundle(value as Partial<AiSettingsBundle> | Partial<AiModelSettings>);
+}
+
+function parsePartialSettings(value: unknown, fallback: AiModelSettings, kind: "text" | "image") {
+  if (value === undefined) return fallback;
+  if (value === null) return kind === "image" ? normalizeAiImageSettings(null) : normalizeAiSettings(null);
+
+  if (!isRecord(value)) {
+    throw new Error("Invalid AI settings payload.");
+  }
+
+  return kind === "image"
+    ? normalizeAiImageSettings(value as Partial<AiModelSettings>)
+    : normalizeAiSettings(value as Partial<AiModelSettings>);
 }
 
 function pairProfiles(
@@ -96,6 +113,13 @@ function pairProfiles(
   ];
 }
 
+function createDefaultSettingsBundle(): AiSettingsBundle {
+  return {
+    text: resolveAiSettings(undefined, "text"),
+    image: resolveAiSettings(undefined, "image"),
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const permission = await requireApiPermission("settings", "view");
@@ -117,11 +141,29 @@ export async function GET(request: Request) {
     });
 
     if (!record) {
+      const defaults = createDefaultSettingsBundle();
+      const nextProfiles = pairProfiles(defaults, []);
+      const activeProfileId = nextProfiles.find((profile) => profile.kind === "system")?.id || "";
+
+      await ensureCurrentUserRecord(user);
+      await prisma.aiModelSetting.create({
+        data: {
+          organizationId: user.organizationId,
+          userId: user.id,
+          workspaceId: scope.workspaceId,
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          activeProfileId,
+          settings: defaults as unknown as Prisma.InputJsonValue,
+          profiles: nextProfiles as unknown as Prisma.InputJsonValue,
+        },
+      });
+
       return NextResponse.json({
-        settings: resolveAiSettings(undefined, "text"),
-        imageSettings: resolveAiSettings(undefined, "image"),
-        profiles: [],
-        activeProfileId: "",
+        settings: defaults.text,
+        imageSettings: defaults.image,
+        profiles: nextProfiles,
+        activeProfileId,
       });
     }
 
@@ -151,11 +193,27 @@ export async function PUT(request: Request) {
 
     const body = (await request.json()) as AiSettingsPayload;
     const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
-    const settings = parseSettings({
-      text: body.settings,
-      image: body.imageSettings,
+    const existingRecord = await prisma.aiModelSetting.findUnique({
+      where: {
+        organizationId_workspaceId_userId: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          userId: user.id,
+        },
+      },
     });
-    const nextProfiles = pairProfiles(settings, normalizeSavedAiModelProfiles(body.profiles));
+    const existingSettings = existingRecord
+      ? parseSettings(existingRecord.settings)
+      : createDefaultSettingsBundle();
+    const settings = {
+      text: parsePartialSettings(body.settings, existingSettings.text, "text"),
+      image: parsePartialSettings(body.imageSettings, existingSettings.image, "image"),
+    } satisfies AiSettingsBundle;
+    const submittedProfiles =
+      body.profiles === undefined
+        ? normalizeSavedAiModelProfiles(existingRecord?.profiles)
+        : normalizeSavedAiModelProfiles(body.profiles);
+    const nextProfiles = pairProfiles(settings, submittedProfiles);
     const activeProfileId = typeof body.activeProfileId === "string" ? body.activeProfileId : "";
 
     await ensureCurrentUserRecord(user);
