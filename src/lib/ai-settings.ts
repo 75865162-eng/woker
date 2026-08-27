@@ -133,7 +133,7 @@ export const aiProviderOptions: AiProviderOption[] = [
     accentClass: "bg-cyan-50 text-cyan-700",
     baseUrl: "https://api.togoapi.com/v1",
     model: "gpt-5.4",
-    wireApi: "responses",
+    wireApi: "chat_completions",
     recommended: true,
   },
   {

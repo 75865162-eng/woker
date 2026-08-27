@@ -55,7 +55,7 @@ function resolveEnvAiSettings(purpose: AiSettingsPurpose) {
       "deepseek-v4-flash",
     wireApi:
       (process.env.TOGOAPI_WIRE_API as AiModelSettings["wireApi"] | undefined) ||
-      (process.env.TOGOAPI_API_KEY || process.env.AIGOCODE_API_KEY ? "responses" : "chat_completions"),
+      "chat_completions",
   } satisfies Partial<AiModelSettings>;
 }
 
