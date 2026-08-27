@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { generateListingAiChatReply, type ListingAiChatRequest } from "@/lib/listing-ai/chat";
-import { generateListingAiImages } from "@/lib/listing-ai/image-generation";
+import { generateListingAiImages, hydrateImagePreviews } from "@/lib/listing-ai/image-generation";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ interface ChatAttachmentPayload {
   assetId?: string;
 }
 
-interface ChatRequest extends ListingAiChatRequest {
+interface ChatRequest extends Omit<ListingAiChatRequest, "referenceImages"> {
   mode?: "text" | "image";
   referenceImages?: ChatAttachmentPayload[];
 }
@@ -29,15 +29,15 @@ export async function POST(request: Request) {
     const body = (await request.json()) as ChatRequest;
     const mode = body.mode === "image" ? "image" : "text";
     const scope = workspaceScopeFromRequest(request);
+    const referenceImages = Array.isArray(body.referenceImages)
+      ? body.referenceImages.filter(
+          (image): image is ChatAttachmentPayload =>
+            Boolean(image?.assetId || image?.url?.startsWith("data:image/")),
+        )
+      : [];
 
     if (mode === "image") {
       const prompt = body.prompt?.trim();
-      const referenceImages = Array.isArray(body.referenceImages)
-        ? body.referenceImages.filter(
-            (image): image is ChatAttachmentPayload =>
-              Boolean(image?.assetId || image?.url?.startsWith("data:image/")),
-          )
-        : [];
 
       if (!prompt) {
         return NextResponse.json({ error: "提示词不能为空。" }, { status: 400 });
@@ -63,7 +63,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ mode, images });
     }
 
-    const result = await generateListingAiChatReply(body);
+    const result = await generateListingAiChatReply({
+      ...body,
+      referenceImages: await hydrateImagePreviews(
+        referenceImages.map((image) => ({
+          name: image.name,
+          url: image.url || "",
+          assetId: image.assetId,
+        })),
+        user,
+      ),
+    });
     return NextResponse.json({ mode, reply: result.reply });
   } catch (error) {
     const message =

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, RotateCcw, Save, X } from "lucide-react";
+import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, RotateCcw, Save, Video, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +51,7 @@ import {
   getSupplierTextareaSize,
 } from "./product-workbook-detail-sections";
 import { ProductImageCopyGalleryModal } from "./product-image-copy-gallery-modal";
+import { ProductVideoPlanModal } from "./product-video-plan-modal";
 import { ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
 import { ProductOperationsProgress } from "./product-operations-progress";
@@ -238,7 +239,7 @@ export function ProductWorkbench() {
       if (selectionOwners.length && !matchesAnyName([productSelectionOwner], selectionOwners)) return false;
       if (designerAssignees.length && !matchesAnyName(productDesignerAssignees, designerAssignees)) return false;
       if (supplierName && !product.supplierName.toLowerCase().includes(supplierName)) return false;
-      if (filters.status === "overdue" && !isOverdueProduct(product)) return false;
+      if (filters.status === "overdue" && !isOverdueProduct(product) && !isProductWorkflowOverdue(product)) return false;
       if (filters.status === "design_in_progress" && product.status !== "design_in_progress") return false;
       if (filters.status === "operations_progress" && !hasIncompleteOperationsProgress(product.operationsProgress)) return false;
       if (
@@ -276,7 +277,6 @@ export function ProductWorkbench() {
   const designInProgressProducts = products.filter((product) => product.status === "design_in_progress");
   const operationsProgressProducts = products.filter((product) => hasIncompleteOperationsProgress(product.operationsProgress));
   const overdueCount = products.filter((product) => isOverdueProduct(product) || isProductWorkflowOverdue(product)).length;
-  const workflowOverdueCount = products.filter((product) => isProductWorkflowOverdue(product)).length;
 
   function openNewProduct() {
     setActiveProductId(null);
@@ -414,7 +414,6 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             value={designInProgressProducts.length.toLocaleString("zh-CN")}
             tone="blue"
             active={filters.status === "design_in_progress"}
-            detail={formatSkuPreview(designInProgressProducts)}
             onClick={() => setFilters((current) => ({ ...current, status: "design_in_progress" }))}
           />
           <SummaryTile
@@ -422,7 +421,6 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             value={operationsProgressProducts.length.toLocaleString("zh-CN")}
             tone="amber"
             active={filters.status === "operations_progress"}
-            detail={formatSkuPreview(operationsProgressProducts)}
             onClick={() => setFilters((current) => ({ ...current, status: "operations_progress" }))}
           />
           <SummaryTile
@@ -431,11 +429,6 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             tone="red"
             active={filters.status === "overdue"}
             onClick={() => setFilters((current) => ({ ...current, status: "overdue" }))}
-          />
-          <SummaryTile
-            label="流程超时提醒"
-            value={workflowOverdueCount.toLocaleString("zh-CN")}
-            tone="red"
           />
         </section>
 
@@ -935,6 +928,9 @@ function ProductEditor({
   const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products));
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
   const [imageCopyGalleryOpen, setImageCopyGalleryOpen] = useState(false);
+  const [videoPlanOpen, setVideoPlanOpen] = useState(false);
+  const [conclusionUploading, setConclusionUploading] = useState(false);
+  const conclusionInputRef = useRef<HTMLInputElement | null>(null);
 
   const isEditing = Boolean(product);
   const mainAmazonLink = buildAmazonLink(draft.asin);
@@ -945,8 +941,9 @@ function ProductEditor({
   const selectionOwner = draft.selectionOwner || (isEditing ? product?.selectionOwner : creatorName) || creatorName;
   const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
   const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
-  const showListingActions = draft.status === "listing_confirming" || draft.status === "listed";
+  const showListingActions = ["listing_confirming", "design_in_progress", "listed", "delisted"].includes(draft.status);
   const statusOptions = isEditing ? productStatusOptions : newProductStatusOptions;
+  const requiresConclusionExcel = draft.status === "canceled" || draft.status === "listed";
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -1232,31 +1229,61 @@ function ProductEditor({
     });
   }
 
-  function handleSubmit() {
-    if (!draft.chineseName.trim() || !draft.englishName.trim()) {
+  async function handleConclusionUpload(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    setConclusionUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/products/conclusion-files/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as { file?: Product["conclusionExcelFile"]; error?: string };
+
+      if (!response.ok || !data.file) {
+        throw new Error(data.error || "结论 Excel 上传失败。");
+      }
+
+      setDraft((current) => ({ ...current, conclusionExcelFile: data.file }));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "结论 Excel 上传失败。");
+    } finally {
+      setConclusionUploading(false);
+    }
+  }
+
+  function handleSubmit(override?: Partial<ProductDraft>) {
+    const nextDraft = { ...draft, ...override };
+
+    if (!nextDraft.chineseName.trim() || !nextDraft.englishName.trim()) {
       window.alert("中文名和英文名为必填项。");
       return;
     }
 
-    if (draft.status === "canceled" && !draft.cancelReason.trim()) {
-      window.alert("状态为已取消时，请填写取消原因。");
+    if ((nextDraft.status === "canceled" || nextDraft.status === "listed") && !nextDraft.conclusionExcelFile?.id) {
+      window.alert("状态为已取消或已上架时，请先上传结论 Excel 表。");
       return;
     }
 
-    if (draft.status === "ops_review" && selectedOps.length === 0) {
+    if (nextDraft.status === "ops_review" && selectedOps.length === 0) {
       window.alert("状态为运营确认时，请至少选择一位运营负责人。");
       return;
     }
 
-    if (draft.status === "design_in_progress" && selectedDesigners.length === 0) {
+    if (nextDraft.status === "design_in_progress" && selectedDesigners.length === 0) {
       window.alert("状态为美工处理中时，请至少选择一位美工负责人。");
       return;
     }
 
     const now = new Date();
-    const normalizedStage = getProductWorkflowStage(draft);
-    const workflowHistory = draft.workflowHistory?.length
-      ? draft.workflowHistory
+    const normalizedStage = getProductWorkflowStage(nextDraft);
+    const workflowHistory = nextDraft.workflowHistory?.length
+      ? nextDraft.workflowHistory
       : [
           buildWorkflowEvent({
             stage: normalizedStage,
@@ -1273,12 +1300,12 @@ function ProductEditor({
         ];
 
     onSave({
-      ...draft,
-      sku: draft.sku.trim(),
-      chineseName: draft.chineseName.trim(),
-      englishName: draft.englishName.trim(),
-      asin: draft.asin.trim().toUpperCase(),
-      cancelReason: draft.cancelReason.trim(),
+      ...nextDraft,
+      sku: nextDraft.sku.trim(),
+      chineseName: nextDraft.chineseName.trim(),
+      englishName: nextDraft.englishName.trim(),
+      asin: nextDraft.asin.trim().toUpperCase(),
+      cancelReason: nextDraft.cancelReason.trim(),
       competitorAsins: workbookDetail.competitors.map((competitor) => competitor.asin.trim().toUpperCase()).filter(Boolean),
       developer: "",
       selectionOwner,
@@ -1292,12 +1319,12 @@ function ProductEditor({
           : [],
       viewableBy: [...selectedOps, ...selectedDesigners],
       workflowStage: normalizedStage,
-      workflowStartedAt: draft.workflowStartedAt || now.toISOString(),
+      workflowStartedAt: nextDraft.workflowStartedAt || now.toISOString(),
       workflowUpdatedAt: now.toISOString(),
       workflowDueAt:
         normalizedStage === "done" || normalizedStage === "blocked"
           ? ""
-          : draft.workflowDueAt || createWorkflowDueAt(now),
+          : nextDraft.workflowDueAt || createWorkflowDueAt(now),
       workflowHistory,
     });
   }
@@ -1311,13 +1338,31 @@ function ProductEditor({
             <p className="mt-1 text-xs font-medium text-muted">保存后会回到产品列表，SKU 页面与新增页面使用同一套字段。</p>
           </div>
           <div className="flex gap-2">
+            <input
+              ref={conclusionInputRef}
+              className="hidden"
+              type="file"
+              accept=".xlsx,.xls,.xlsm"
+              onChange={(event) => {
+                void handleConclusionUpload(event.target.files?.[0]);
+                event.currentTarget.value = "";
+              }}
+            />
             {showListingActions ? (
               <>
+                <Button variant={requiresConclusionExcel && !draft.conclusionExcelFile ? "secondary" : "ghost"} size="sm" onClick={() => conclusionInputRef.current?.click()} disabled={conclusionUploading}>
+                  <FileUp className="h-4 w-4" />
+                  {conclusionUploading ? "上传中" : "结论 Excel（必传）"}
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => setOperationsProgressOpen(true)}>
                   运营进度
                 </Button>
                 <Button variant="secondary" size="sm" onClick={() => setImageCopyGalleryOpen(true)}>
                   图片文案
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setVideoPlanOpen(true)}>
+                  <Video className="h-4 w-4" />
+                  视频
                 </Button>
               </>
             ) : null}
@@ -1325,7 +1370,7 @@ function ProductEditor({
               <X className="h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" onClick={handleSubmit}>
+            <Button size="sm" onClick={() => handleSubmit()}>
               <Save className="h-4 w-4" />
               保存
             </Button>
@@ -1381,11 +1426,10 @@ function ProductEditor({
                     </select>
                   </label>
                   {draft.status === "canceled" ? (
-                    <LabeledInput
-                      label="取消原因（必填）"
-                      value={draft.cancelReason}
-                      placeholder="例如：供应商无法供货、利润不达标、合规风险等"
-                      onChange={(value) => setField("cancelReason", value)}
+                    <ConclusionExcelField
+                      file={draft.conclusionExcelFile}
+                      uploading={conclusionUploading}
+                      onUpload={() => conclusionInputRef.current?.click()}
                     />
                   ) : null}
                   <ReadonlyField label="选品负责人" value={selectionOwner || "--"} />
@@ -1422,13 +1466,13 @@ function ProductEditor({
                           <ArrowRight className="h-4 w-4" />
                           交给美工
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", workflowAssignee, "当前流程已完成。")}>
                         {workflowStage === "design_in_progress" || workflowStage === "design_review" ? (
                           <Button size="sm" variant="secondary" disabled={selectedOps.length === 0} onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "美工完成后转回运营。")}>
                             <ArrowRight className="h-4 w-4" />
                             转回运营
                           </Button>
                         ) : null}
+                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", workflowAssignee, "当前流程已完成。")}>
                           <Save className="h-4 w-4" />
                           标记完成
                         </Button>
@@ -1524,6 +1568,13 @@ function ProductEditor({
           onClose={() => setImageCopyGalleryOpen(false)}
         />
       ) : null}
+      {videoPlanOpen ? (
+        <ProductVideoPlanModal
+          sku={draft.sku}
+          productName={draft.chineseName}
+          onClose={() => setVideoPlanOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1566,13 +1617,49 @@ function SummaryTile({
   );
 }
 
-function formatSkuPreview(products: Product[], limit = 4) {
-  const skus = products.map((product) => product.sku).filter(Boolean);
-  if (!skus.length) return "暂无对应 SKU";
-
-  const visible = skus.slice(0, limit).join("、");
-  return skus.length > limit ? `SKU ${visible} 等 ${skus.length} 个` : `SKU ${visible}`;
+function ConclusionExcelField({
+  file,
+  uploading,
+  onUpload,
+}: {
+  file?: Product["conclusionExcelFile"];
+  uploading: boolean;
+  onUpload: () => void;
+}) {
+  return (
+    <div className="text-xs font-semibold text-muted">
+      <p>结论 Excel 表（必传）</p>
+      <div className="mt-1 flex min-h-10 items-center justify-between gap-2 rounded-md border border-border bg-white px-3 py-2">
+        <div className="min-w-0">
+          <p className={`truncate text-sm font-semibold ${file ? "text-foreground" : "text-danger"}`}>
+            {file?.name || "未上传"}
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted">
+            {file ? `${formatFileSize(file.size)} · ${file.storageType}` : "已取消或确认上架前必须上传"}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {file?.downloadUrl ? (
+            <a className="text-xs font-bold text-brand hover:underline" href={file.downloadUrl}>
+              下载
+            </a>
+          ) : null}
+          <Button size="sm" variant="secondary" onClick={onUpload} disabled={uploading}>
+            <FileUp className="h-4 w-4" />
+            {uploading ? "上传中" : file ? "替换" : "上传"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-xs font-semibold text-muted">

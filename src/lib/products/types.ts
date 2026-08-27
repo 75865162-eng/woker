@@ -1,3 +1,5 @@
+import type { ProductVideoPlanDraft } from "@/lib/products/video-plan";
+
 export type ProductStatus =
   | "pending"
   | "developing"
@@ -82,6 +84,16 @@ export type ProductOperationProgress = {
   history: ProductOperationProgressEvent[];
 };
 
+export type ProductFileAsset = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  storageType: "local" | "s3" | "r2";
+  uploadedAt: string;
+  downloadUrl: string;
+};
+
 export type Product = {
   id: string;
   sku: string;
@@ -120,6 +132,8 @@ export type Product = {
   workflowReminderAt?: string;
   workflowHistory?: ProductWorkflowEvent[];
   operationsProgress?: ProductOperationProgress;
+  conclusionExcelFile?: ProductFileAsset;
+  videoPlan?: ProductVideoPlanDraft;
 };
 
 export type ProductDraft = Omit<Product, "id"> & {

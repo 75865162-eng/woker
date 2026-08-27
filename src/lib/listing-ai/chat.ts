@@ -2,6 +2,7 @@ import { type AiModelSettings } from "@/lib/ai-settings";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
 import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
+import type { ImagePreviewPayload } from "@/lib/listing-ai/image-generation";
 
 export interface ListingAiChatMessage {
   role: "user" | "assistant";
@@ -11,6 +12,7 @@ export interface ListingAiChatMessage {
 export interface ListingAiChatRequest {
   prompt?: string;
   messages?: ListingAiChatMessage[];
+  referenceImages?: ImagePreviewPayload[];
   aiSettings?: Partial<AiModelSettings>;
 }
 
@@ -75,7 +77,17 @@ export async function generateListingAiChatReply(
     { role: "system", content: buildListingAiChatSystemPrompt() },
     ...messages,
   ];
-  if (prompt) {
+  const referenceImages = Array.isArray(body.referenceImages)
+    ? body.referenceImages.filter((image) => image.url?.startsWith("data:image/"))
+    : [];
+  const lastMessage = messages.at(-1);
+  const imagePrompt =
+    prompt || (lastMessage?.role === "user" ? lastMessage.content : "") || "请识别并分析这张图片。";
+  const requestMessagesWithoutImagePrompt =
+    referenceImages.length && lastMessage?.role === "user"
+      ? requestMessages.slice(0, -1)
+      : requestMessages;
+  if (prompt && !referenceImages.length) {
     requestMessages.push({ role: "user", content: prompt });
   }
 
@@ -94,11 +106,39 @@ export async function generateListingAiChatReply(
           isChatCompletions
             ? {
                 model: settings.model,
-                messages: requestMessages,
+                messages: referenceImages.length
+                  ? [
+                      ...requestMessagesWithoutImagePrompt,
+                      {
+                        role: "user",
+                        content: [
+                          { type: "text", text: imagePrompt },
+                          ...referenceImages.slice(0, 8).map((image) => ({
+                            type: "image_url",
+                            image_url: { url: image.url },
+                          })),
+                        ],
+                      },
+                    ]
+                  : requestMessages,
               }
             : {
                 model: settings.model,
-                input: requestMessages,
+                input: referenceImages.length
+                  ? [
+                      ...requestMessagesWithoutImagePrompt,
+                      {
+                        role: "user",
+                        content: [
+                          { type: "input_text", text: imagePrompt },
+                          ...referenceImages.slice(0, 8).map((image) => ({
+                            type: "input_image",
+                            image_url: image.url,
+                          })),
+                        ],
+                      },
+                    ]
+                  : requestMessages,
               },
         ),
       },

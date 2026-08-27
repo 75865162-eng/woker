@@ -97,20 +97,10 @@ async function imageAssetToDataUrl(assetId: string, user: CurrentUser) {
   return `data:${getImageContentType(assetId)};base64,${buffer.toString("base64")}`;
 }
 
-async function flattenImages(body: ImageGeneratorRequest, user: CurrentUser) {
-  const ownViews = Object.entries(body.ownViews ?? {}).flatMap(
-    ([view, images]) =>
-      (Array.isArray(images) ? images : []).map((image) => ({
-        ...image,
-        role: `own ${view} view`,
-      })),
-  );
-  const competitorImages = (body.competitorImages ?? []).map((image) => ({
-    ...image,
-    role: "competitor reference",
-  }));
-
-  const images = [...ownViews, ...competitorImages];
+export async function hydrateImagePreviews(
+  images: ImagePreviewPayload[],
+  user: CurrentUser,
+) {
   const hydratedImages = await Promise.all(
     images.map(async (image) => {
       if (image.url?.startsWith("data:image/")) {
@@ -129,6 +119,23 @@ async function flattenImages(body: ImageGeneratorRequest, user: CurrentUser) {
   );
 
   return hydratedImages.filter((image) => image.url?.startsWith("data:image/"));
+}
+
+async function flattenImages(body: ImageGeneratorRequest, user: CurrentUser) {
+  const ownViews = Object.entries(body.ownViews ?? {}).flatMap(
+    ([view, images]) =>
+      (Array.isArray(images) ? images : []).map((image) => ({
+        ...image,
+        role: `own ${view} view`,
+      })),
+  );
+  const competitorImages = (body.competitorImages ?? []).map((image) => ({
+    ...image,
+    role: "competitor reference",
+  }));
+
+  const images = [...ownViews, ...competitorImages];
+  return hydrateImagePreviews(images, user);
 }
 
 function buildImagePrompt(prompt: string) {

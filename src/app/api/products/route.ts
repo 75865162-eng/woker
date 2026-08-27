@@ -26,6 +26,10 @@ function normalizeProduct(product: Product): Product {
   };
 }
 
+function requiresConclusionExcel(product: Product) {
+  return product.status === "canceled" || product.status === "listed";
+}
+
 function clampPageSize(value: string | null) {
   const pageSize = Number(value) || 50;
   return Math.min(Math.max(pageSize, 1), 200);
@@ -124,8 +128,7 @@ export async function POST(request: Request) {
 
     const product = normalizeProduct(body.product);
     const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
-
-    await prisma.productRecord.upsert({
+    const existingRecord = await prisma.productRecord.findUnique({
       where: {
         organizationId_workspaceId_sku: {
           organizationId: user.organizationId,
@@ -133,34 +136,53 @@ export async function POST(request: Request) {
           sku: product.sku,
         },
       },
+    });
+    const existingProduct = existingRecord?.payload as Partial<Product> | undefined;
+    const productToSave: Product = {
+      ...product,
+      videoPlan: product.videoPlan ?? existingProduct?.videoPlan,
+    };
+
+    if (requiresConclusionExcel(productToSave) && !productToSave.conclusionExcelFile?.id) {
+      return NextResponse.json({ error: "状态为已取消或已上架时，请先上传结论 Excel 表。" }, { status: 400 });
+    }
+
+    await prisma.productRecord.upsert({
+      where: {
+        organizationId_workspaceId_sku: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          sku: productToSave.sku,
+        },
+      },
       create: {
-        id: product.id,
+        id: productToSave.id,
         organizationId: user.organizationId,
         userId: user.id,
         workspaceId: scope.workspaceId,
         accountId: scope.accountId,
         marketplace: scope.marketplace,
-        sku: product.sku,
-        payload: product as unknown as Prisma.InputJsonValue,
+        sku: productToSave.sku,
+        payload: productToSave as unknown as Prisma.InputJsonValue,
       },
       update: {
         userId: user.id,
         accountId: scope.accountId,
         marketplace: scope.marketplace,
-        payload: product as unknown as Prisma.InputJsonValue,
+        payload: productToSave as unknown as Prisma.InputJsonValue,
       },
     });
     await recordDataChangeVersion({
       user,
       entityType: "product",
-      entityId: product.sku,
+      entityId: productToSave.sku,
       action: "product_save",
-      summary: `${product.sku} ${product.chineseName}`,
-      payload: product as unknown as Prisma.InputJsonValue,
+      summary: `${productToSave.sku} ${productToSave.chineseName}`,
+      payload: productToSave as unknown as Prisma.InputJsonValue,
       scope,
     });
 
-    return NextResponse.json({ product });
+    return NextResponse.json({ product: productToSave });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save product.";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -17,7 +17,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type ChatConversation,
   type ChatHistoryState,
-  type ChatMode,
   type ChatMessage,
   initialChatHistory,
   normalizeChatHistory,
@@ -28,6 +27,12 @@ import type { ImagePreview } from "@/lib/listing-ai/workspace-draft";
 const legacyConversationStorageKey = "listing-ai-chat-conversations-v1";
 const legacyActiveConversationStorageKey = "listing-ai-chat-active-v1";
 const chatHistoryEndpoint = "/api/listing-ai/chat-history";
+const chatRequestTimeoutMs = 245_000;
+const defaultImagePrompt =
+  "请根据上传的参考图片生成一张优化后的 Amazon Listing 商品图片，保持产品主体清晰，优化构图、卖点表达和电商视觉质感。";
+const defaultImageQuestionPrompt = "请识别并分析这张图片，说明图中产品、主要元素和可优化方向。";
+const imageGenerationIntentPattern =
+  /(生成|生图|出图|画一张|做一张|设计一张|重绘|改图|修图|换背景|去背景|抠图|添加背景|生成图片|生成主图|生成副图|generate|create|render|redraw|make an image)/i;
 
 function formatTime(value: string) {
   try {
@@ -52,11 +57,21 @@ function truncate(value: string, maxLength = 28) {
   return `${normalized.slice(0, maxLength)}…`;
 }
 
-function buildConversationTitle(prompt: string, attachments: ChatAttachment[]) {
+function resolveChatMode(prompt: string, attachments: ChatAttachment[]) {
+  const hasImage = attachments.some((item) => item.kind === "image");
+
+  if (!hasImage) {
+    return "text";
+  }
+
+  return !prompt.trim() || imageGenerationIntentPattern.test(prompt) ? "image" : "text";
+}
+
+function buildConversationTitle(prompt: string, attachments: ChatAttachment[], mode: "text" | "image") {
   const firstImage = attachments.find((item) => item.kind === "image");
   const firstDocument = attachments.find((item) => item.kind === "document");
   if (firstImage) {
-    return `图片生成 · ${truncate(prompt || firstImage.name) || "新对话"}`;
+    return `${mode === "image" ? "图片生成" : "图片对话"} · ${truncate(prompt || firstImage.name) || "新对话"}`;
   }
   if (firstDocument) {
     return `文档对话 · ${truncate(prompt || firstDocument.name) || "新对话"}`;
@@ -65,13 +80,22 @@ function buildConversationTitle(prompt: string, attachments: ChatAttachment[]) {
   return truncate(prompt, 20) || "新对话";
 }
 
-function buildPromptText(prompt: string, attachments: ChatAttachment[]) {
+function buildPromptText(prompt: string, attachments: ChatAttachment[], mode: "text" | "image") {
+  const hasImage = attachments.some((item) => item.kind === "image");
   const documentBlocks = attachments
     .filter((item) => item.kind === "document")
     .map((item) => `【${item.name}】\n${item.summary || "无摘要"}`)
     .join("\n\n");
 
-  return [prompt.trim(), documentBlocks].filter(Boolean).join("\n\n");
+  const fallbackPrompt = hasImage
+    ? mode === "image"
+      ? defaultImagePrompt
+      : defaultImageQuestionPrompt
+    : "";
+
+  return [prompt.trim() || fallbackPrompt, documentBlocks]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function readLegacyChatHistory(): ChatHistoryState | null {
@@ -170,7 +194,6 @@ function AttachmentPreview({
 }
 
 export function ListingAiChatPanel() {
-  const [mode, setMode] = useState<ChatMode>("text");
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -271,9 +294,9 @@ export function ListingAiChatPanel() {
   );
 
   const activeMessages = activeConversation?.messages ?? [];
-  const effectiveMode = attachments.some((attachment) => attachment.kind === "image")
-    ? "image"
-    : mode;
+  const hasImageAttachment = attachments.some((attachment) => attachment.kind === "image");
+  const effectiveMode = resolveChatMode(input, attachments);
+  const effectiveModeLabel = effectiveMode === "image" ? "图片生成" : hasImageAttachment ? "图片问答" : "文本对话";
 
   function upsertConversation(nextConversation: ChatConversation) {
     setConversations((current) => {
@@ -291,7 +314,7 @@ export function ListingAiChatPanel() {
       createdAt: now,
       updatedAt: now,
       messages: [],
-      mode,
+      mode: "text",
     };
 
     upsertConversation(nextConversation);
@@ -312,9 +335,7 @@ export function ListingAiChatPanel() {
     try {
       const nextAttachments = await Promise.all(selected.map((file) => createChatAttachment(file)));
       setAttachments((current) => {
-        const merged = [...current, ...nextAttachments].slice(0, 8);
-        setMode(merged.some((item) => item.kind === "image") ? "image" : "text");
-        return merged;
+        return [...current, ...nextAttachments].slice(0, 8);
       });
     } catch (fileError) {
       setError(fileError instanceof Error ? fileError.message : "附件处理失败。");
@@ -323,9 +344,7 @@ export function ListingAiChatPanel() {
 
   function removeAttachment(id: string) {
     setAttachments((current) => {
-      const next = current.filter((item) => item.id !== id);
-      setMode(next.some((item) => item.kind === "image") ? "image" : "text");
-      return next;
+      return current.filter((item) => item.id !== id);
     });
   }
 
@@ -338,28 +357,29 @@ export function ListingAiChatPanel() {
     setLoading(true);
     setError("");
 
+    const requestMode = resolveChatMode(prompt, attachments);
     const nextConversationId = activeConversation?.id ?? crypto.randomUUID();
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      content: buildPromptText(prompt, attachments),
+      content: buildPromptText(prompt, attachments, requestMode),
       createdAt: now,
       attachments,
     };
     const baseConversation: ChatConversation = activeConversation ?? {
       id: nextConversationId,
-      title: buildConversationTitle(prompt, attachments),
+      title: buildConversationTitle(prompt, attachments, requestMode),
       createdAt: now,
       updatedAt: now,
       messages: [],
-      mode: effectiveMode,
+      mode: requestMode,
     };
     const nextConversation: ChatConversation = {
       ...baseConversation,
-      title: baseConversation.messages.length ? baseConversation.title : buildConversationTitle(prompt, attachments),
+      title: baseConversation.messages.length ? baseConversation.title : buildConversationTitle(prompt, attachments, requestMode),
       updatedAt: now,
-      mode: effectiveMode,
+      mode: requestMode,
       messages: [...baseConversation.messages, userMessage],
     };
 
@@ -367,13 +387,17 @@ export function ListingAiChatPanel() {
     setInput("");
     setAttachments([]);
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), chatRequestTimeoutMs);
+
     try {
       const response = await fetch("/api/listing-ai/chat", {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode: effectiveMode,
-          prompt: effectiveMode === "image" ? userMessage.content : undefined,
+          mode: requestMode,
+          prompt: requestMode === "image" ? userMessage.content : undefined,
           messages: nextConversation.messages.map((message) => ({
             role: message.role,
             content: message.content,
@@ -401,7 +425,7 @@ export function ListingAiChatPanel() {
         id: crypto.randomUUID(),
         role: "assistant",
         content:
-          effectiveMode === "image"
+          requestMode === "image"
             ? data.images?.length
               ? `已生成 ${data.images.length} 张图片。`
               : data.reply || "图片结果已返回。"
@@ -422,16 +446,39 @@ export function ListingAiChatPanel() {
         ),
       );
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "对话发送失败。");
+      const isAbortError = sendError instanceof Error && sendError.name === "AbortError";
+      const message = isAbortError
+        ? "请求超时：模型接口长时间没有返回，请检查 Settings 里的模型配置后重试。"
+        : sendError instanceof Error
+          ? sendError.message
+          : "对话发送失败。";
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: requestMode === "image" ? `图片生成失败：${message}` : `对话失败：${message}`,
+        createdAt: new Date().toISOString(),
+      };
+
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === nextConversation.id
+            ? {
+                ...conversation,
+                updatedAt: assistantMessage.createdAt,
+                messages: [...conversation.messages, assistantMessage],
+              }
+            : conversation,
+        ),
+      );
+      setError(message);
     } finally {
+      window.clearTimeout(timeout);
       setLoading(false);
     }
   }
 
   function selectConversation(conversationId: string) {
-    const selected = conversations.find((conversation) => conversation.id === conversationId);
     setActiveConversationId(conversationId);
-    setMode(selected?.mode ?? "text");
     setError("");
     setAttachments([]);
     setInput("");
@@ -454,33 +501,17 @@ export function ListingAiChatPanel() {
           <div>
             <CardTitle>对话</CardTitle>
             <p className="mt-1 text-xs font-semibold text-muted">
-              文本和文档走系统 API，图片生成走图片生成 API。
+              上传图片后可识别分析；明确提出生成、重绘或换背景时才会生图。
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Badge tone={effectiveMode === "image" ? "amber" : "blue"}>
-              {effectiveMode === "image" ? "图片生成 API" : "系统 API"}
+              {effectiveModeLabel}
             </Badge>
             <Button variant="secondary" size="icon" onClick={startNewConversation} title="新对话">
               <MessageSquarePlus className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant={mode === "text" ? "primary" : "secondary"}
-            size="sm"
-            onClick={() => setMode("text")}
-          >
-            系统 API
-          </Button>
-          <Button
-            variant={mode === "image" ? "primary" : "secondary"}
-            size="sm"
-            onClick={() => setMode("image")}
-          >
-            图片生成 API
-          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 p-3">
@@ -554,7 +585,7 @@ export function ListingAiChatPanel() {
                 </p>
               </div>
               <Badge tone={effectiveMode === "image" ? "amber" : "blue"}>
-                {effectiveMode === "image" ? "图片生成" : "文本对话"}
+                {effectiveModeLabel}
               </Badge>
             </div>
 
@@ -621,7 +652,7 @@ export function ListingAiChatPanel() {
                     <Sparkles className="mx-auto h-8 w-8 text-muted" />
                     <p className="mt-3 text-sm font-bold text-foreground">开始一个 Listing 对话</p>
                     <p className="mt-1 text-xs leading-5 text-muted">
-                      可直接聊标题、文案、A+，也可以切到图片生成模式上传参考图。
+                      可直接聊标题、文案、A+；上传图片可问答分析，明确要求生成时才会出图。
                     </p>
                   </div>
                 </div>
@@ -678,7 +709,11 @@ export function ListingAiChatPanel() {
                       }}
                     />
                     <Badge tone={effectiveMode === "image" ? "amber" : "blue"}>
-                      {effectiveMode === "image" ? "图片附件 -> 图片生成" : "文档附件 -> 系统"}
+                      {effectiveMode === "image"
+                        ? "图片附件 -> 图片生成"
+                        : hasImageAttachment
+                          ? "图片附件 -> 图片问答"
+                          : "文档附件 -> 系统"}
                     </Badge>
                   </div>
 

@@ -349,6 +349,7 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
     return {
       ...product,
       cancelReason: product.cancelReason ?? "",
+      conclusionExcelFile: product.conclusionExcelFile,
       competitorAsins: product.competitorAsins.length ? product.competitorAsins : [""],
       opsAssignees: normalizeAssigneeList(product.opsAssignee, product.opsAssignees),
       designerAssignees: normalizeAssigneeList(product.designerAssignee, product.designerAssignees),
@@ -378,6 +379,7 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
     keywords: "",
     note: "",
     cancelReason: "",
+    conclusionExcelFile: undefined,
     hsCode: "",
     images: [],
     competitorAsins: ["", ""],
