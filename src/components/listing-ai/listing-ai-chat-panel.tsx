@@ -147,13 +147,34 @@ function ChatAttachmentStrip({
       {attachments.map((attachment) => (
         <div
           key={attachment.id}
-          className="flex max-w-[260px] items-start gap-2 rounded-md border border-border bg-surface-muted px-2 py-1.5"
+          className={`flex max-w-[260px] items-start gap-2 rounded-md border border-border bg-surface-muted px-2 py-1.5 ${
+            attachment.kind === "image" ? "min-w-[152px]" : ""
+          }`}
         >
+          {attachment.kind === "image" ? (
+            <div className="flex w-[56px] shrink-0 flex-col gap-1">
+              <div className="h-14 w-14 overflow-hidden rounded border border-border bg-white">
+                {attachment.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={attachment.url}
+                    alt={attachment.name}
+                    className="h-full w-full object-contain p-1"
+                  />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-semibold text-foreground">{attachment.name}</p>
             <p className="mt-0.5 text-[11px] text-muted">
               {attachment.kind === "image" ? "图片附件" : "文档附件"}
             </p>
+            {attachment.kind === "document" ? (
+              <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-muted thin-scrollbar">
+                {attachment.summary || "无摘要"}
+              </pre>
+            ) : null}
           </div>
           <button
             type="button"
