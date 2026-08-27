@@ -23,10 +23,16 @@ export function normalizeRolePermissionMap(value: unknown): RolePermissionMap {
     }
   }
 
-  return {
-    ...defaultRolePermissionMap,
-    ...result,
-  };
+  const merged = { ...defaultRolePermissionMap };
+
+  for (const [roleId, rolePermissions] of Object.entries(result)) {
+    merged[roleId] = {
+      ...(defaultRolePermissionMap[roleId] ?? {}),
+      ...rolePermissions,
+    };
+  }
+
+  return merged;
 }
 
 export async function getOrganizationRolePermissions(organizationId: string): Promise<RolePermissionMap> {

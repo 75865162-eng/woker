@@ -9,15 +9,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Eye,
-  EyeOff,
   Filter,
-  KeyRound,
   LockKeyhole,
   Pencil,
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
   Upload,
   UserCog,
   UserPlus,
@@ -84,7 +82,7 @@ const initialRoles: Role[] = [
     description: "维护账号、权限、系统设置和数据治理，不默认拥有业务审批权",
     memberCount: 0,
     permissions: createPermissions(
-      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "accounts", "settings"],
+      ["products", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history", "versions", "accounts", "settings"],
       ["view", "create", "edit", "export"],
     ),
   },
@@ -93,7 +91,7 @@ const initialRoles: Role[] = [
     name: "主管",
     description: "管理业务流转、成员分工和审批",
     memberCount: 1,
-    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
+    permissions: createPermissions(["products", "listingAi", "imageUpscale", "tasks"], ["view", "create", "edit", "approve", "export"]),
   },
   {
     id: "operations",
@@ -135,7 +133,7 @@ const initialRoles: Role[] = [
     name: "财务",
     description: "查看业务数据并导出财务所需资料",
     memberCount: 0,
-    permissions: createPermissions(["workspace", "products", "logistics"], ["view", "export"]),
+    permissions: createPermissions(["products", "workspace", "logistics", "history"], ["view", "export"]),
   },
   {
     id: "warehouse_supervisor",
@@ -149,7 +147,7 @@ const initialRoles: Role[] = [
     name: "查看者",
     description: "只查看工作台、商品、Listing AI 和物流基础数据",
     memberCount: 0,
-    permissions: createPermissions(["workspace", "products", "listingAi", "logistics"], ["view"]),
+    permissions: createPermissions(["products", "workspace", "listingAi", "logistics"], ["view"]),
   },
   {
     id: "procurement",
@@ -168,7 +166,7 @@ const roleCatalog: Role[] = [
     description: "管理业务模块和基础运营配置",
     memberCount: 0,
     permissions: createPermissions(
-      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics"],
+      ["products", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history"],
       permissionActions.map((action) => action.id),
     ),
   },
@@ -178,7 +176,7 @@ const roleCatalog: Role[] = [
     description: "统筹 PPC、商品、Listing AI 和物流业务流转",
     memberCount: 0,
     permissions: createPermissions(
-      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics"],
+      ["products", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history"],
       permissionActions.map((action) => action.id),
     ),
   },
@@ -262,7 +260,6 @@ function canManageAccount(account: Account) {
 function withLoadedAccountState(account: Account): Account {
   return {
     ...account,
-    password: undefined,
     passwordDirty: false,
   };
 }
@@ -270,9 +267,6 @@ function withLoadedAccountState(account: Account): Account {
 function serializeAccountsForApi(accounts: Account[]) {
   return accounts.map((account) => {
     const record = { ...account };
-    if (!record.passwordDirty) {
-      delete record.password;
-    }
     delete record.passwordDirty;
     return record;
   });
@@ -289,7 +283,7 @@ async function loadAccountsFromApi() {
         ...account,
         lastActiveAt: account.lastActiveAt ?? "未记录",
         username: account.username ?? "",
-        password: undefined,
+        password: account.password ?? undefined,
         amazonStorePermissions: account.amazonStorePermissions ?? "",
         multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
         phone: account.phone ?? "",
@@ -329,7 +323,7 @@ async function saveAccountsToApi(accounts: Account[], revision: string) {
         ...account,
         lastActiveAt: account.lastActiveAt ?? "未记录",
         username: account.username ?? "",
-        password: undefined,
+        password: account.password ?? undefined,
         amazonStorePermissions: account.amazonStorePermissions ?? "",
         multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
         phone: account.phone ?? "",
@@ -383,7 +377,7 @@ export function AccountWorkbench() {
   const [newAccountOpen, setNewAccountOpen] = useState(false);
   const [newRoleOpen, setNewRoleOpen] = useState(false);
   const [roleMembersOpen, setRoleMembersOpen] = useState(false);
-  const [passwordAccount, setPasswordAccount] = useState<Account | null>(null);
+  const [roleManageMode, setRoleManageMode] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [archivedAccountsOpen, setArchivedAccountsOpen] = useState(false);
   const [permissionSavedAt, setPermissionSavedAt] = useState("");
@@ -549,13 +543,6 @@ export function AccountWorkbench() {
     setEditAccount(null);
   }
 
-  function saveAccountPassword(accountId: string, password: string) {
-    commitAccounts((current) =>
-      current.map((account) => (account.id === accountId && canManageAccount(account) ? { ...account, password, passwordDirty: true } : account)),
-    );
-    setPasswordAccount(null);
-  }
-
   function toggleAccountStatus(accountId: string) {
     commitAccounts((current) =>
       current.map((account) =>
@@ -707,6 +694,25 @@ export function AccountWorkbench() {
     );
   }
 
+  function toggleModulePermissions(moduleId: string) {
+    setRoles((current) =>
+      current.map((role) => {
+        if (role.id !== activeRole.id) return role;
+
+        const currentActions = role.permissions[moduleId] ?? [];
+        const allSelected = permissionActions.every((action) => currentActions.includes(action.id));
+
+        return {
+          ...role,
+          permissions: {
+            ...role.permissions,
+            [moduleId]: allSelected ? [] : permissionActions.map((action) => action.id),
+          },
+        };
+      }),
+    );
+  }
+
   async function saveRolePermissions() {
     const rolePermissionMap = Object.fromEntries(roles.map((role) => [role.id, role.permissions])) as RolePermissionMap;
     const serialized = JSON.stringify(rolePermissionMap);
@@ -724,6 +730,25 @@ export function AccountWorkbench() {
     setRoles((current) => (current.some((item) => item.id === role.id) ? current : [...current, role]));
     setActiveRoleId(role.id);
     setNewRoleOpen(false);
+  }
+
+  function deleteRole(roleId: RoleId) {
+    const role = visibleRoles.find((item) => item.id === roleId);
+    if (!role || role.memberCount > 0 || !canManageRole(role.id)) return;
+
+    const nextRoles = roles.filter((item) => item.id !== roleId);
+    const nextActiveRoleId = activeRoleId === roleId ? nextRoles[0]?.id : activeRoleId;
+    const rolePermissionMap = Object.fromEntries(nextRoles.map((item) => [item.id, item.permissions])) as RolePermissionMap;
+
+    setRoles(nextRoles);
+    if (nextActiveRoleId) {
+      setActiveRoleId(nextActiveRoleId);
+    }
+    setRoleMembersOpen(false);
+    document.cookie = `${rolePermissionsCookieName}=${encodeURIComponent(JSON.stringify(rolePermissionMap))}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+    void saveRolePermissionsToApi(rolePermissionMap).then((savedToApi) => {
+      setPermissionSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi ? "" : "（仅本机）"}`);
+    });
   }
 
   return (
@@ -875,10 +900,6 @@ export function AccountWorkbench() {
                             <Pencil className="h-4 w-4" />
                             编辑
                           </Button>
-                          <Button size="sm" variant="secondary" onClick={() => setPasswordAccount(account)}>
-                            <KeyRound className="h-4 w-4" />
-                            账密
-                          </Button>
                           <Button size="sm" variant={account.status === "disabled" ? "secondary" : "danger"} onClick={() => toggleAccountStatus(account.id)}>
                             {account.status === "disabled" ? "启用" : "停用"}
                           </Button>
@@ -935,27 +956,46 @@ export function AccountWorkbench() {
                     <Plus className="h-3.5 w-3.5" />
                     添加
                   </Button>
+                  <Button className="h-8 px-2" size="sm" variant="secondary" onClick={() => setRoleManageMode((value) => !value)}>
+                    {roleManageMode ? "完成" : "管理"}
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-1.5 p-3">
                 {visibleRoles.map((role) => (
-                  <button
+                  <div
                     key={role.id}
-                    className={`w-full rounded-md border px-2.5 py-2 text-left transition ${
+                    className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-2 transition ${
                       activeRole.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
                     }`}
-                    onClick={() => {
-                      setActiveRoleId(role.id);
-                      setRoleMembersOpen(true);
-                    }}
-                    type="button"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-bold text-foreground">{role.name}</p>
-                      <Badge tone={activeRole.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
-                    </div>
-                    <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
-                  </button>
+                    <button
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => {
+                        setActiveRoleId(role.id);
+                        setRoleMembersOpen(true);
+                      }}
+                      type="button"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-foreground">{role.name}</p>
+                        <Badge tone={activeRole.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
+                      </div>
+                      <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
+                    </button>
+                    {roleManageMode ? (
+                      <button
+                        aria-label={`删除${role.name}`}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted"
+                        disabled={role.memberCount > 0 || !canManageRole(role.id)}
+                        onClick={() => deleteRole(role.id)}
+                        title={role.memberCount > 0 ? "已有成员的角色不能删除" : "删除角色"}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
                 ))}
               </CardContent>
             </Card>
@@ -992,7 +1032,16 @@ export function AccountWorkbench() {
               {permissionModules.map((module) => (
                 <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
                   <p className="text-xs font-bold text-foreground">{module.name}</p>
-                  <div className="grid grid-cols-5 gap-1">
+                  <div className="grid grid-cols-6 gap-1">
+                    <label className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                      <input
+                        checked={permissionActions.every((action) => activeRole.permissions[module.id]?.includes(action.id))}
+                        className="h-3.5 w-3.5 accent-brand"
+                        onChange={() => toggleModulePermissions(module.id)}
+                        type="checkbox"
+                      />
+                      全选
+                    </label>
                     {permissionActions.map((action) => {
                       const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
 
@@ -1068,7 +1117,6 @@ export function AccountWorkbench() {
       {editAccount ? (
         <EditAccountDialog account={editAccount} roles={roles} onClose={() => setEditAccount(null)} onSubmit={saveAccount} />
       ) : null}
-      {passwordAccount ? <PasswordDialog account={passwordAccount} onClose={() => setPasswordAccount(null)} onSubmit={saveAccountPassword} /> : null}
       {archivedAccountsOpen ? <ArchivedAccountsDialog rows={archivedAccountRows} onClose={() => setArchivedAccountsOpen(false)} /> : null}
     </div>
   );
@@ -1333,6 +1381,11 @@ function EditAccountDialog({
   onSubmit: (account: Account) => void;
 }) {
   const [form, setForm] = useState(account);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const passwordChanged = password.trim().length > 0;
+  const passwordReady = !passwordChanged || (password === confirmPassword && password.trim().length > 0);
+  const submitDisabled = passwordChanged ? !passwordReady : false;
 
   return (
     <Modal title="编辑账号资料" onClose={onClose}>
@@ -1359,75 +1412,39 @@ function EditAccountDialog({
           </select>
         </Field>
       </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose}>
-          取消
-        </Button>
-        <Button onClick={() => onSubmit(form)}>
-          <Check className="h-4 w-4" />
-          保存修改
-        </Button>
-      </div>
-    </Modal>
-  );
-}
-
-function PasswordDialog({
-  account,
-  onClose,
-  onSubmit,
-}: {
-  account: Account;
-  onClose: () => void;
-  onSubmit: (accountId: string, password: string) => void;
-}) {
-  const currentPassword = account.password || getFallbackPassword(account);
-  const [showPassword, setShowPassword] = useState(false);
-  const [password, setPassword] = useState(currentPassword);
-  const [confirmPassword, setConfirmPassword] = useState(currentPassword);
-  const matched = password.length >= 1 && password === confirmPassword;
-  const loginName = account.phone || account.username || account.email || account.id;
-
-  return (
-    <Modal title={`账密：${account.name}`} onClose={onClose}>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="登录账号">
-            <input className={fieldClass} readOnly value={loginName} />
+      <div className="mt-5 rounded-md border border-border bg-surface-muted px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-foreground">账号密码</p>
+            <p className="mt-0.5 text-xs text-muted">留空则不修改密码。</p>
+          </div>
+          <div className="text-xs text-muted">登录账号：{form.phone || form.username || form.email || form.id}</div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="新密码">
+            <input className={fieldClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
-          <Field label="当前密码">
-            <div className="flex rounded-md border border-border bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
-              <input
-                className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm text-foreground outline-none"
-                readOnly
-                type={showPassword ? "text" : "password"}
-                value={currentPassword}
-              />
-              <button
-                aria-label={showPassword ? "隐藏密码" : "显示密码"}
-                className="flex h-9 w-9 items-center justify-center rounded-r-md text-muted hover:bg-surface-muted hover:text-foreground"
-                onClick={() => setShowPassword((value) => !value)}
-                type="button"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+          <Field label="确认密码">
+            <input className={fieldClass} type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
           </Field>
         </div>
-        <Field label="新密码">
-          <input className={fieldClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </Field>
-        <Field label="确认密码">
-          <input className={fieldClass} type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
-        </Field>
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           取消
         </Button>
-        <Button disabled={!matched} onClick={() => onSubmit(account.id, password)}>
-          <KeyRound className="h-4 w-4" />
-          保存密码
+        <Button
+          disabled={submitDisabled}
+          onClick={() =>
+            onSubmit({
+              ...form,
+              password: passwordChanged ? password : account.password,
+              passwordDirty: passwordChanged || account.passwordDirty,
+            })
+          }
+        >
+          <Check className="h-4 w-4" />
+          保存修改
         </Button>
       </div>
     </Modal>

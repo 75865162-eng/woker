@@ -136,6 +136,7 @@ model TeamRosterMember {
   username       String?
   name           String
   email          String
+  password       String?
   department     String
   title          String
   roleId         String

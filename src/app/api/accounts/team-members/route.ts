@@ -16,6 +16,7 @@ type RosterAccountRow = {
   username?: string | null;
   name: string;
   email: string;
+  password?: string | null;
   department: string;
   title: string;
   roleId: string;
@@ -53,6 +54,7 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
     username: member.username ?? undefined,
     name: member.name,
     email: member.email,
+    password: member.password ?? undefined,
     department: member.department,
     title: member.title,
     roleId: normalizeAccountRoleId(member.roleId),
@@ -75,6 +77,7 @@ function toRosterWriteData(account: RosterSaveAccount) {
     username: account.username ?? null,
     name: account.name,
     email: account.email,
+    ...(typeof account.password === "string" && account.password.trim() ? { password: account.password.trim() } : {}),
     department: account.department,
     title: account.title,
     roleId: account.roleId,

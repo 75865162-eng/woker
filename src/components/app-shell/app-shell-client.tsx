@@ -21,8 +21,8 @@ const navItems = [
 ];
 
 const accountMenuItems = [
-  { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "workspace" },
-  { href: "/versions", label: "版本审计", icon: History, moduleId: "settings" },
+  { href: "/tasks", label: "任务中心", icon: ListChecks, moduleId: "tasks" },
+  { href: "/versions", label: "版本审计", icon: History, moduleId: "versions" },
   { href: "/accounts", label: "账号权限", icon: UsersRound, moduleId: "accounts" },
   { href: "/settings", label: "系统设置", icon: Settings, moduleId: "settings" },
 ];

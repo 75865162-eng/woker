@@ -1729,7 +1729,10 @@ function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[
 
 function getAccountNameOptionsByRoleIds(accounts: TeamAccountRecord[], roleIds: AccountRoleId[]) {
   const roleSet = new Set<AccountRoleId>(roleIds);
-  const names = accounts.filter((account) => account.status !== "disabled" && roleSet.has(account.roleId)).map((account) => account.name.trim()).filter(Boolean);
+  const names = accounts
+    .filter((account) => account.status !== "disabled" && account.status !== "archived" && roleSet.has(account.roleId))
+    .map((account) => account.name.trim())
+    .filter(Boolean);
 
   return Array.from(new Set(names));
 }
