@@ -123,6 +123,7 @@ model OrganizationMember {
 model TeamRosterMember {
   organizationId String
   id             String
+  username       String?
   name           String
   email          String
   department     String
@@ -130,6 +131,12 @@ model TeamRosterMember {
   roleId         String
   status         TeamAccountStatus @default(active)
   lastActiveAt   String?
+  amazonStorePermissions        String?
+  multiPlatformStorePermissions String?
+  phone                         String?
+  lastLoginIp                   String?
+  lastLoginAt                   String?
+  sourceCreatedAt               String?
   sortOrder      Int               @default(0)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
