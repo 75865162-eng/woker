@@ -121,29 +121,67 @@ async function createWorkflowNotifications(input: {
   const title = stage === "ops_confirming" ? "新的运营处理任务" : "新的美工处理任务";
   const productName = input.product.chineseName || input.product.englishName || input.product.sku;
   const message = `${input.user.name} 已将 ${input.product.sku} ${productName} 流转到${productWorkflowStageLabels[stage]}，处理期限：${new Date(dueAt).toLocaleString("zh-CN", { hour12: false })}。`;
+  const notifications: Prisma.UserNotificationCreateManyInput[] = members
+    .filter((member) => recipientIds.has(member.id))
+    .map((member) => ({
+      organizationId: input.user.organizationId,
+      recipientUserId: member.id,
+      actorUserId: input.user.id,
+      type: "product_workflow",
+      title,
+      message,
+      entityType: "product",
+      entityId: input.product.sku,
+      metadata: {
+        productId: input.product.id,
+        sku: input.product.sku,
+        stage,
+        stageLabel: productWorkflowStageLabels[stage],
+        dueAt,
+        assigneeName: member.name,
+      },
+    }));
 
-  await prisma.userNotification.createMany({
-    data: members
-      .filter((member) => recipientIds.has(member.id))
-      .map((member) => ({
-        organizationId: input.user.organizationId,
-        recipientUserId: member.id,
-        actorUserId: input.user.id,
-        type: "product_workflow",
-        title,
-        message,
-        entityType: "product",
-        entityId: input.product.sku,
-        metadata: {
-          productId: input.product.id,
-          sku: input.product.sku,
-          stage,
-          stageLabel: productWorkflowStageLabels[stage],
-          dueAt,
-          assigneeName: member.name,
-        },
-      })),
-  });
+  if (!notifications.length) {
+    return;
+  }
+
+  const userNotificationDelegate = prisma.userNotification as unknown as
+    | {
+        createMany?: (args: { data: Prisma.UserNotificationCreateManyInput[] }) => Promise<unknown>;
+      }
+    | undefined;
+
+  if (typeof userNotificationDelegate?.createMany === "function") {
+    await userNotificationDelegate.createMany({ data: notifications });
+    return;
+  }
+
+  for (const notification of notifications) {
+    await prisma.$executeRaw`
+      INSERT INTO "UserNotification" (
+        "organizationId",
+        "recipientUserId",
+        "actorUserId",
+        "type",
+        "title",
+        "message",
+        "entityType",
+        "entityId",
+        "metadata"
+      ) VALUES (
+        ${notification.organizationId},
+        ${notification.recipientUserId},
+        ${notification.actorUserId ?? null},
+        ${notification.type},
+        ${notification.title},
+        ${notification.message},
+        ${notification.entityType ?? null},
+        ${notification.entityId ?? null},
+        ${JSON.stringify(notification.metadata ?? null)}::jsonb
+      )
+    `;
+  }
 }
 
 export async function GET(request: Request) {
