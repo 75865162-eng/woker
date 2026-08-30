@@ -30,6 +30,8 @@ export function UserNotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [popup, setPopup] = useState<UserNotification | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const popupPanelRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
   const shownIdsRef = useRef<Set<string>>(new Set());
 
@@ -67,7 +69,39 @@ export function UserNotificationCenter() {
     return () => window.clearInterval(timer);
   }, [loadNotifications]);
 
-  async function markRead(ids: string[]) {
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+
+      if (popup && target && !popupPanelRef.current?.contains(target)) {
+        closePopup();
+        return;
+      }
+
+      if (open && target && !menuRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (popup) {
+          closePopup();
+        }
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, popup, closePopup]);
+
+  const markRead = useCallback(async (ids: string[]) => {
     if (!ids.length) return;
 
     const unreadIds = new Set(notifications.filter((item) => ids.includes(item.id) && !item.readAt).map((item) => item.id));
@@ -79,7 +113,7 @@ export function UserNotificationCenter() {
     }).catch(() => undefined);
     setNotifications((current) => current.map((item) => (ids.includes(item.id) ? { ...item, readAt: new Date().toISOString() } : item)));
     setUnreadCount((current) => Math.max(0, current - unreadIds.size));
-  }
+  }, [notifications]);
 
   async function markAllRead() {
     await fetch("/api/notifications/user", {
@@ -91,17 +125,17 @@ export function UserNotificationCenter() {
     setUnreadCount(0);
   }
 
-  function closePopup() {
+  const closePopup = useCallback(() => {
     const currentPopup = popup;
     setPopup(null);
     if (currentPopup) {
       void markRead([currentPopup.id]);
     }
-  }
+  }, [markRead, popup]);
 
   return (
     <>
-      <div className="relative">
+      <div ref={menuRef} className="relative">
         <button
           type="button"
           className={cn(
@@ -152,8 +186,15 @@ export function UserNotificationCenter() {
         ) : null}
       </div>
       {popup ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-lg border border-border bg-white shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 px-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closePopup();
+            }
+          }}
+        >
+          <div ref={popupPanelRef} className="w-full max-w-xl rounded-lg border border-border bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div>
                 <p className="text-sm font-bold text-foreground">业务流转提醒</p>
