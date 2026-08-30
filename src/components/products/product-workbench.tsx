@@ -78,6 +78,8 @@ type ProductWorkbenchCache = {
 };
 
 let productWorkbenchCache: ProductWorkbenchCache | null = null;
+const compactToolbarButtonClass =
+  "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
 
 export function ProductWorkbench() {
   const [products, setProducts] = useState<Product[]>(() => productWorkbenchCache?.products ?? []);
@@ -984,41 +986,129 @@ function ProductEditor({
     }));
   }
 
-  function moveWorkflow(stage: ProductWorkflowStage, assigneeName: string, note: string) {
+  function buildWorkflowDraft(stage: ProductWorkflowStage, note: string) {
     const now = new Date();
+    const assigneeName =
+      stage === "ops_confirming"
+        ? formatAssigneeList(selectedOps)
+        : stage === "design_in_progress" || stage === "design_review"
+          ? formatAssigneeList(selectedDesigners)
+          : workflowAssignee;
 
-    setDraft((current) => {
-      const event = buildWorkflowEvent({
-        stage,
-        actorName: current.selectionOwner || creatorName,
-        assigneeName,
-        note,
-        createdAt: now,
-      });
+    const event = buildWorkflowEvent({
+      stage,
+      actorName: draft.selectionOwner || creatorName,
+      assigneeName,
+      note,
+      createdAt: now,
+    });
 
-      return {
-        ...current,
-        status:
-          stage === "ops_confirming"
-            ? "ops_review"
-            : stage === "design_in_progress" || stage === "design_review"
-              ? "design_in_progress"
-              : stage === "done"
-                ? "listed"
-                : current.status,
-        workflowStage: stage,
-        workflowStartedAt: now.toISOString(),
-        workflowUpdatedAt: now.toISOString(),
-        workflowDueAt: stage === "done" || stage === "blocked" ? "" : createWorkflowDueAt(now),
+    return {
+      ...draft,
+      status:
+        stage === "ops_confirming"
+          ? "ops_review"
+          : stage === "design_in_progress" || stage === "design_review"
+            ? "design_in_progress"
+            : stage === "done"
+              ? "listed"
+              : draft.status,
+      workflowStage: stage,
+      workflowStartedAt: now.toISOString(),
+      workflowUpdatedAt: now.toISOString(),
+      workflowDueAt: stage === "done" || stage === "blocked" ? "" : createWorkflowDueAt(now),
+      opsAssignees: selectedOps,
+      opsAssignee: formatAssigneeList(selectedOps),
+      designerAssignees: selectedDesigners,
+      designerAssignee: formatAssigneeList(selectedDesigners),
+      editableBy: stage === "ops_confirming" || stage === "design_in_progress" || stage === "design_review" ? selectedOps : [],
+      viewableBy: [...selectedOps, ...selectedDesigners],
+      workflowHistory: [event, ...(draft.workflowHistory ?? [])].slice(0, 20),
+    };
+  }
+
+  async function saveDraft(nextDraft: ProductEditorDraft) {
+    const normalizedStage = getProductWorkflowStage(nextDraft);
+    const now = new Date();
+    const workflowHistory = nextDraft.workflowHistory?.length
+      ? nextDraft.workflowHistory
+      : [
+          buildWorkflowEvent({
+            stage: normalizedStage,
+            actorName: selectionOwner,
+            assigneeName:
+              normalizedStage === "ops_confirming"
+                ? formatAssigneeList(selectedOps)
+                : normalizedStage === "design_in_progress" || normalizedStage === "design_review"
+                  ? formatAssigneeList(selectedDesigners)
+                  : selectionOwner,
+            note: "创建商品并进入业务流程。",
+            createdAt: now,
+          }),
+        ];
+
+    await Promise.resolve(
+      onSave({
+        ...nextDraft,
+        sku: nextDraft.sku.trim(),
+        chineseName: nextDraft.chineseName.trim(),
+        englishName: nextDraft.englishName.trim(),
+        asin: nextDraft.asin.trim().toUpperCase(),
+        cancelReason: nextDraft.cancelReason.trim(),
+        competitorAsins: workbookDetail.competitors.map((competitor) => competitor.asin.trim().toUpperCase()).filter(Boolean),
+        developer: "",
+        selectionOwner,
         opsAssignees: selectedOps,
         opsAssignee: formatAssigneeList(selectedOps),
         designerAssignees: selectedDesigners,
         designerAssignee: formatAssigneeList(selectedDesigners),
-        editableBy: stage === "ops_confirming" || stage === "design_in_progress" || stage === "design_review" ? selectedOps : [],
+        editableBy:
+          normalizedStage === "ops_confirming" || normalizedStage === "design_in_progress" || normalizedStage === "design_review"
+            ? selectedOps
+            : [],
         viewableBy: [...selectedOps, ...selectedDesigners],
-        workflowHistory: [event, ...(current.workflowHistory ?? [])].slice(0, 20),
-      };
-    });
+        workflowStage: normalizedStage,
+        workflowStartedAt: nextDraft.workflowStartedAt || now.toISOString(),
+        workflowUpdatedAt: now.toISOString(),
+        workflowDueAt:
+          normalizedStage === "done" || normalizedStage === "blocked"
+            ? ""
+            : nextDraft.workflowDueAt || createWorkflowDueAt(now),
+        workflowHistory,
+      }),
+    );
+  }
+
+  async function handleSubmit(override?: Partial<ProductEditorDraft>) {
+    const nextDraft = { ...draft, ...override };
+
+    if (!nextDraft.chineseName.trim() || !nextDraft.englishName.trim()) {
+      window.alert("中文名和英文名为必填项。");
+      return;
+    }
+
+    if ((nextDraft.status === "canceled" || nextDraft.status === "listed") && !nextDraft.conclusionExcelFile?.id) {
+      window.alert("状态为已取消或已上架时，请先上传结论 Excel 表。");
+      return;
+    }
+
+    if (nextDraft.status === "ops_review" && selectedOps.length === 0) {
+      window.alert("状态为运营确认时，请至少选择一位运营负责人。");
+      return;
+    }
+
+    if (nextDraft.status === "design_in_progress" && selectedDesigners.length === 0) {
+      window.alert("状态为美工处理中时，请至少选择一位美工负责人。");
+      return;
+    }
+
+    await saveDraft(nextDraft);
+  }
+
+  function moveWorkflow(stage: ProductWorkflowStage, note: string) {
+    const nextDraft = buildWorkflowDraft(stage, note);
+    setDraft(nextDraft);
+    void saveDraft(nextDraft);
   }
 
   function setWorkbookDetail(updater: (current: TrialProductDraft) => TrialProductDraft) {
@@ -1258,78 +1348,6 @@ function ProductEditor({
     }
   }
 
-  function handleSubmit(override?: Partial<ProductDraft>) {
-    const nextDraft = { ...draft, ...override };
-
-    if (!nextDraft.chineseName.trim() || !nextDraft.englishName.trim()) {
-      window.alert("中文名和英文名为必填项。");
-      return;
-    }
-
-    if ((nextDraft.status === "canceled" || nextDraft.status === "listed") && !nextDraft.conclusionExcelFile?.id) {
-      window.alert("状态为已取消或已上架时，请先上传结论 Excel 表。");
-      return;
-    }
-
-    if (nextDraft.status === "ops_review" && selectedOps.length === 0) {
-      window.alert("状态为运营确认时，请至少选择一位运营负责人。");
-      return;
-    }
-
-    if (nextDraft.status === "design_in_progress" && selectedDesigners.length === 0) {
-      window.alert("状态为美工处理中时，请至少选择一位美工负责人。");
-      return;
-    }
-
-    const now = new Date();
-    const normalizedStage = getProductWorkflowStage(nextDraft);
-    const workflowHistory = nextDraft.workflowHistory?.length
-      ? nextDraft.workflowHistory
-      : [
-          buildWorkflowEvent({
-            stage: normalizedStage,
-            actorName: selectionOwner,
-            assigneeName:
-              normalizedStage === "ops_confirming"
-                ? formatAssigneeList(selectedOps)
-                : normalizedStage === "design_in_progress" || normalizedStage === "design_review"
-                  ? formatAssigneeList(selectedDesigners)
-                  : selectionOwner,
-      note: "创建商品并进入业务流程。",
-            createdAt: now,
-          }),
-        ];
-
-    onSave({
-      ...nextDraft,
-      sku: nextDraft.sku.trim(),
-      chineseName: nextDraft.chineseName.trim(),
-      englishName: nextDraft.englishName.trim(),
-      asin: nextDraft.asin.trim().toUpperCase(),
-      cancelReason: nextDraft.cancelReason.trim(),
-      competitorAsins: workbookDetail.competitors.map((competitor) => competitor.asin.trim().toUpperCase()).filter(Boolean),
-      developer: "",
-      selectionOwner,
-      opsAssignees: selectedOps,
-      opsAssignee: formatAssigneeList(selectedOps),
-      designerAssignees: selectedDesigners,
-      designerAssignee: formatAssigneeList(selectedDesigners),
-      editableBy:
-        normalizedStage === "ops_confirming" || normalizedStage === "design_in_progress" || normalizedStage === "design_review"
-          ? selectedOps
-          : [],
-      viewableBy: [...selectedOps, ...selectedDesigners],
-      workflowStage: normalizedStage,
-      workflowStartedAt: nextDraft.workflowStartedAt || now.toISOString(),
-      workflowUpdatedAt: now.toISOString(),
-      workflowDueAt:
-        normalizedStage === "done" || normalizedStage === "blocked"
-          ? ""
-          : nextDraft.workflowDueAt || createWorkflowDueAt(now),
-      workflowHistory,
-    });
-  }
-
   return (
     <div className="fixed inset-0 z-30 bg-foreground/35 p-4 backdrop-blur-sm">
       <div className="mx-auto flex h-full w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
@@ -1338,7 +1356,7 @@ function ProductEditor({
             <h2 className="text-lg font-bold text-foreground">{isEditing ? `商品详情 ${draft.sku}` : "新增商品"}</h2>
             <p className="mt-1 text-xs font-medium text-muted">保存后会回到产品列表，SKU 页面与新增页面使用同一套字段。</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <input
               ref={conclusionInputRef}
               className="hidden"
@@ -1351,27 +1369,33 @@ function ProductEditor({
             />
             {showListingActions ? (
               <>
-                <Button variant={requiresConclusionExcel && !draft.conclusionExcelFile ? "secondary" : "ghost"} size="sm" onClick={() => conclusionInputRef.current?.click()} disabled={conclusionUploading}>
+                <Button
+                  variant={requiresConclusionExcel && !draft.conclusionExcelFile ? "secondary" : "ghost"}
+                  size="sm"
+                  className={compactToolbarButtonClass}
+                  onClick={() => conclusionInputRef.current?.click()}
+                  disabled={conclusionUploading}
+                >
                   <FileUp className="h-4 w-4" />
                   {conclusionUploading ? "上传中" : "结论 Excel（必传）"}
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setOperationsProgressOpen(true)}>
+                <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setOperationsProgressOpen(true)}>
                   运营进度
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setImageCopyGalleryOpen(true)}>
+                <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setImageCopyGalleryOpen(true)}>
                   图片文案
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setVideoPlanOpen(true)}>
+                <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setVideoPlanOpen(true)}>
                   <Video className="h-4 w-4" />
                   视频
                 </Button>
               </>
             ) : null}
-            <Button variant="secondary" size="sm" onClick={onClose}>
+            <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={onClose}>
               <X className="h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" onClick={() => handleSubmit()}>
+            <Button size="sm" className={compactToolbarButtonClass} onClick={() => handleSubmit()}>
               <Save className="h-4 w-4" />
               保存
             </Button>
@@ -1453,7 +1477,7 @@ function ProductEditor({
                           size="sm"
                           variant="secondary"
                           disabled={selectedOps.length === 0}
-                          onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "选品提交给运营确认。")} 
+                          onClick={() => moveWorkflow("ops_confirming", "选品提交给运营确认。")} 
                         >
                           <ArrowRight className="h-4 w-4" />
                           交给运营
@@ -1462,18 +1486,18 @@ function ProductEditor({
                           size="sm"
                           variant="secondary"
                           disabled={selectedDesigners.length === 0}
-                          onClick={() => moveWorkflow("design_in_progress", formatAssigneeList(selectedDesigners), "运营转交给美工处理。")} 
+                          onClick={() => moveWorkflow("design_in_progress", "运营转交给美工处理。")} 
                         >
                           <ArrowRight className="h-4 w-4" />
                           交给美工
                         </Button>
                         {workflowStage === "design_in_progress" || workflowStage === "design_review" ? (
-                          <Button size="sm" variant="secondary" disabled={selectedOps.length === 0} onClick={() => moveWorkflow("ops_confirming", formatAssigneeList(selectedOps), "美工完成后转回运营。")}>
+                          <Button size="sm" variant="secondary" disabled={selectedOps.length === 0} onClick={() => moveWorkflow("ops_confirming", "美工完成后转回运营。")}>
                             <ArrowRight className="h-4 w-4" />
                             转回运营
                           </Button>
                         ) : null}
-                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", workflowAssignee, "当前流程已完成。")}>
+                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", "当前流程已完成。")}>
                           <Save className="h-4 w-4" />
                           标记完成
                         </Button>
