@@ -69,38 +69,6 @@ export function UserNotificationCenter() {
     return () => window.clearInterval(timer);
   }, [loadNotifications]);
 
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target as Node | null;
-
-      if (popup && target && !popupPanelRef.current?.contains(target)) {
-        closePopup();
-        return;
-      }
-
-      if (open && target && !menuRef.current?.contains(target)) {
-        setOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        if (popup) {
-          closePopup();
-        }
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open, popup, closePopup]);
-
   const markRead = useCallback(async (ids: string[]) => {
     if (!ids.length) return;
 
@@ -132,6 +100,38 @@ export function UserNotificationCenter() {
       void markRead([currentPopup.id]);
     }
   }, [markRead, popup]);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+
+      if (popup && target && !popupPanelRef.current?.contains(target)) {
+        closePopup();
+        return;
+      }
+
+      if (open && target && !menuRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (popup) {
+          closePopup();
+        }
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, popup, closePopup]);
 
   return (
     <>
