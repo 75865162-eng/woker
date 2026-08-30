@@ -312,6 +312,8 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 只改和任务直接相关的文件。
 
+执行任何 `git stash`、`git stash push`、`git stash pop`、`git stash apply`、`git stash drop`、`git stash clear` 或等价暂存/恢复操作前，必须先向用户说明原因、影响范围和准备执行的命令，并获得用户明确同意；不得为了切分任务、部署、同步或清理工作区而擅自 stash 用户改动。
+
 ## 文档维护
 
 - `CLAUDE.md` 目前只包含 `@AGENTS.md`，用于让 Claude Code 复用本文件。除非确有需要，不要复制一份独立规则。

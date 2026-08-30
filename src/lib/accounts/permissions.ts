@@ -1,3 +1,5 @@
+import { buildRoleDefinitions } from "@/lib/accounts/role-definitions";
+
 export type PermissionAction = "view" | "create" | "edit" | "approve" | "export";
 
 export type RolePermissions = Record<string, PermissionAction[]>;
@@ -49,32 +51,12 @@ export const routeModuleIds = permissionModules.flatMap((module) =>
   })),
 );
 
-export const defaultRolePermissionMap: RolePermissionMap = {
-  owner: createFullPermissions(),
-  database_admin: createPermissions(
-    ["products", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history", "versions", "accounts", "settings"],
-    ["view", "create", "edit", "export"],
-  ),
-  admin: createPermissions(["products", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history"], allActions()),
-  operations_manager: createPermissions(["products", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history"], allActions()),
-  operations_supervisor: createPermissions(["products", "listingAi", "imageUpscale", "tasks"], ["view", "create", "edit", "approve", "export"]),
-  operations: createPermissions(["products", "listingAi"], ["view", "create", "edit", "export"]),
-  operations_assistant: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
-  developer: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
-  warehouse: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  warehouse_supervisor: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]),
-  finance: createPermissions(["products", "workspace", "logistics", "history"], ["view", "export"]),
-  procurement: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
-  selection: createPermissions(["products"], ["view", "create", "edit"]),
-  designer: createPermissions(["products", "listingAi", "imageUpscale"], ["view"]),
-  ppc_specialist: createPermissions(["workspace", "searchMerge"], ["view", "create", "edit", "export"]),
-  ppc_manager: createPermissions(["workspace", "searchMerge"], ["view", "create", "edit", "export"]),
-  listing_specialist: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
-  listing_operator: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
-  logistics_specialist: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  logistics_operator: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  viewer: {},
-};
+export const defaultRolePermissionMap: RolePermissionMap = Object.fromEntries(
+  buildRoleDefinitions(permissionActions.map((action) => action.id), permissionModules.map((module) => module.id)).map((role) => [
+    role.id,
+    role.permissions,
+  ]),
+);
 
 export function allActions() {
   return permissionActions.map((action) => action.id);

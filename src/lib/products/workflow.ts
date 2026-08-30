@@ -63,7 +63,7 @@ export function getCurrentWorkflowAssignee(product: ProductWorkflowLike) {
 }
 
 export function normalizeAssigneeList(primary?: string, list?: string[]) {
-  const values = [...(list ?? []), ...(primary ? primary.split(/[，,]/u) : [])]
+  const values = [...(list ?? []), ...(primary ? primary.split(/[，,、；;]/u) : [])]
     .map((value) => value.trim())
     .filter(Boolean);
 
@@ -72,6 +72,17 @@ export function normalizeAssigneeList(primary?: string, list?: string[]) {
 
 export function formatAssigneeList(values?: string[]) {
   return (values ?? []).filter(Boolean).join("、");
+}
+
+export function formatAssigneePreview(value?: string | string[], maxItems = 3) {
+  const items = Array.isArray(value) ? value : normalizeAssigneeList(value);
+  const visible = items.slice(0, maxItems);
+
+  if (!visible.length) {
+    return "";
+  }
+
+  return items.length > maxItems ? `${visible.join("、")}…` : visible.join("、");
 }
 
 export function createWorkflowDueAt(startedAt = new Date(), days = productWorkflowSlaDays) {

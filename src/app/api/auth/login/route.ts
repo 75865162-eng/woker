@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthDriver } from "@/lib/auth/constants";
 import { createLocalSession, createSession, isSecureRequest } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/auth/password";
-import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
+import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
 
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       }
 
       const membership = user.memberships[0];
-      const rolePermissions = await getOrganizationRolePermissions(membership.organizationId);
+      const rolePermissionsSnapshot = await getOrganizationRolePermissionsSnapshot(membership.organizationId);
       const loginAt = new Date();
       const loginAtText = loginAt.toLocaleString("zh-CN", { hour12: false });
       const clientIp = getClientIp(request);
@@ -87,6 +87,7 @@ export async function POST(request: Request) {
           organizationName: "",
         },
         isSecureRequest(request),
+        rolePermissionsSnapshot,
       );
       await prisma.user.update({
         where: { id: user.id },
@@ -111,7 +112,8 @@ export async function POST(request: Request) {
           name: user.name,
           role: membership.role,
         },
-        rolePermissions,
+        rolePermissions: rolePermissionsSnapshot.permissions,
+        rolePermissionsRevision: rolePermissionsSnapshot.revision,
       });
       response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
 

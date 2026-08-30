@@ -11,8 +11,8 @@ import { AppShell } from "@/components/app-shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataSourceBanner } from "@/components/ui/data-source-banner";
-import { cookies } from "next/headers";
-import { getModuleIdForPath, parseRolePermissionsCookie, roleCanAccessModule, rolePermissionsCookieName } from "@/lib/accounts/permissions";
+import { getModuleIdForPath, roleCanAccessModule } from "@/lib/accounts/permissions";
+import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
 
 const modules = [
@@ -24,9 +24,11 @@ const modules = [
 ];
 
 export default async function Home() {
-  const [user, cookieStore] = await Promise.all([getCurrentUserFromSignedCookie(), cookies()]);
-  const rolePermissions = parseRolePermissionsCookie(cookieStore.get(rolePermissionsCookieName)?.value);
-  const visibleModules = modules.filter((module) => roleCanAccessModule(user?.role, getModuleIdForPath(module.href), rolePermissions));
+  const user = await getCurrentUserFromSignedCookie();
+  const rolePermissionsSnapshot = user?.organizationId ? await getOrganizationRolePermissionsSnapshot(user.organizationId) : null;
+  const visibleModules = modules.filter((module) =>
+    roleCanAccessModule(user?.role, getModuleIdForPath(module.href), rolePermissionsSnapshot?.permissions),
+  );
 
   return (
     <AppShell title="运营工作台" subtitle="Amazon 业务系统总入口">

@@ -34,7 +34,7 @@ function toInputJsonValue(value: Prisma.JsonValue): Prisma.InputJsonValue {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view", request);
+    const permission = await requireApiPermission("versions", "view", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "edit", request);
+    const permission = await requireApiPermission("versions", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

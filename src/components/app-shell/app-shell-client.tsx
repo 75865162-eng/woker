@@ -4,8 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, UploadCloud, UsersRound } from "lucide-react";
+import { UserNotificationCenter } from "@/components/notifications/user-notification-center";
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
@@ -36,8 +36,6 @@ export function AppShellClient({
   userRole,
   organizationName,
   rolePermissions,
-  authDriver,
-  storageDriver,
 }: {
   children: React.ReactNode;
   title: string;
@@ -47,8 +45,6 @@ export function AppShellClient({
   userRole?: string;
   organizationName?: string;
   rolePermissions?: RolePermissionMap | null;
-  authDriver?: "database" | "local";
-  storageDriver?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -105,11 +101,8 @@ export function AppShellClient({
           </div>
           <div className="flex items-center gap-3">
             <WorkspaceScopeSelector />
+            <UserNotificationCenter />
             <div className="hidden items-center gap-2 lg:flex">
-              <Badge tone={authDriver === "database" ? "green" : "amber"}>
-                {authDriver === "database" ? "数据库模式" : "本地登录"}
-              </Badge>
-              <Badge tone="blue">存储：{storageDriver === "s3" || storageDriver === "r2" ? storageDriver.toUpperCase() : "本地文件"}</Badge>
               {organizationName ? <span className="max-w-[180px] truncate text-xs font-semibold text-muted">{organizationName}</span> : null}
             </div>
             <div className="group relative">

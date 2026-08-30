@@ -195,20 +195,6 @@ function buildRosterRevision(members: Pick<RosterAccountRow, "id" | "updatedAt">
   return `${members.length}:${latestUpdatedAt}:${members.map((member) => member.id).sort().join(",")}`;
 }
 
-async function getRosterRevision(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
-  const members = await client.teamRosterMember.findMany({
-    where: {
-      organizationId,
-    },
-    select: {
-      id: true,
-      updatedAt: true,
-    },
-  });
-
-  return buildRosterRevision(members);
-}
-
 function isPrismaWriteConflict(error: unknown) {
   const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: unknown }).code : undefined;
   const message = error instanceof Error ? error.message : "";
@@ -352,9 +338,8 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
 
-    const body = (await request.json()) as { accounts?: unknown; members?: unknown; revision?: unknown };
+    const body = (await request.json()) as { accounts?: unknown; members?: unknown };
     const input = body.accounts ?? body.members;
-    const expectedRevision = typeof body.revision === "string" ? body.revision : "";
     const normalized = normalizeTeamAccounts(input).map((account, index) => ({
       ...account,
       organizationId: user.organizationId,
@@ -378,7 +363,6 @@ export async function PUT(request: Request) {
         async (tx) => {
           await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${user.organizationId} FOR UPDATE`;
 
-          const currentRevision = await getRosterRevision(tx, user.organizationId);
           const currentMembers = (
             await tx.teamRosterMember.findMany({
               where: {
@@ -390,13 +374,7 @@ export async function PUT(request: Request) {
             })
           ).map(toAccountRecord);
           const defaultSuperAccountIds = await getDefaultSuperAccountIds(tx, user.organizationId);
-
-          if (!expectedRevision || expectedRevision !== currentRevision) {
-            return {
-              conflict: true as const,
-              revision: currentRevision,
-            };
-          }
+          const currentRoleByAccountId = new Map(currentMembers.map((account) => [account.id, account.roleId]));
 
           const scopedAccounts = mergeProtectedAccounts(user, user.organizationId, normalized, currentMembers, defaultSuperAccountIds);
           const scopedAccountIds = scopedAccounts.map((account) => account.id);
@@ -453,6 +431,44 @@ export async function PUT(request: Request) {
             })),
           );
 
+          const roleChanges = scopedAccounts
+            .map((account) => {
+              const before = currentRoleByAccountId.get(account.id);
+              return before && before !== account.roleId
+                ? {
+                    accountId: account.id,
+                    accountName: account.name,
+                    before,
+                    after: account.roleId,
+                  }
+                : null;
+            })
+            .filter(
+              (
+                item,
+              ): item is {
+                accountId: string;
+                accountName: string;
+                before: TeamAccountRecord["roleId"];
+                after: TeamAccountRecord["roleId"];
+              } => Boolean(item),
+            );
+
+          if (roleChanges.length) {
+            await tx.auditLog.create({
+              data: {
+                organizationId: user.organizationId,
+                userId: user.id,
+                action: "update_team_member_roles",
+                entityType: "TeamRosterMember",
+                entityId: user.id,
+                metadata: {
+                  changes: roleChanges,
+                },
+              },
+            });
+          }
+
           const members = await tx.teamRosterMember.findMany({
             where: {
               organizationId: user.organizationId,
@@ -463,7 +479,6 @@ export async function PUT(request: Request) {
           });
 
           return {
-            conflict: false as const,
             accounts: members.map(toAccountRecord).map((account) => lockDefaultSuperAccount(account, defaultSuperAccountIds)),
             revision: buildRosterRevision(members),
           };
@@ -475,13 +490,6 @@ export async function PUT(request: Request) {
         },
       ),
     );
-
-    if (result.conflict) {
-      return NextResponse.json(
-        { error: "账号列表已被其他人更新，请刷新后重试。", revision: result.revision },
-        { status: 409 },
-      );
-    }
 
     return NextResponse.json({
       accounts: result.accounts,

@@ -4,6 +4,11 @@ import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-err
 
 const validActions = new Set<PermissionAction>(["view", "create", "edit", "approve", "export"]);
 
+export type RolePermissionsSnapshot = {
+  permissions: RolePermissionMap;
+  revision: string;
+};
+
 export function normalizeRolePermissionMap(value: unknown): RolePermissionMap {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return defaultRolePermissionMap;
@@ -35,29 +40,38 @@ export function normalizeRolePermissionMap(value: unknown): RolePermissionMap {
   return merged;
 }
 
-export async function getOrganizationRolePermissions(organizationId: string): Promise<RolePermissionMap> {
-  if (!process.env.DATABASE_URL) return defaultRolePermissionMap;
+function buildRolePermissionsSnapshot(permissions: RolePermissionMap, revision: string): RolePermissionsSnapshot {
+  return { permissions, revision };
+}
+
+export async function getOrganizationRolePermissionsSnapshot(organizationId: string): Promise<RolePermissionsSnapshot> {
+  if (!process.env.DATABASE_URL) return buildRolePermissionsSnapshot(defaultRolePermissionMap, "local-default");
 
   try {
     const saved = await prisma.organizationRolePermission.findUnique({
       where: { organizationId },
     });
 
-    return normalizeRolePermissionMap(saved?.permissions);
+    return buildRolePermissionsSnapshot(normalizeRolePermissionMap(saved?.permissions), saved?.updatedAt.toISOString() ?? "default");
   } catch (error) {
     if (isDatabaseUnavailableError(error)) {
       console.warn(`[role-permissions] Falling back to default permissions for ${organizationId}:`, error);
-      return defaultRolePermissionMap;
+      return buildRolePermissionsSnapshot(defaultRolePermissionMap, "database-unavailable");
     }
 
     throw error;
   }
 }
 
-export async function saveOrganizationRolePermissions(organizationId: string, permissions: unknown) {
+export async function getOrganizationRolePermissions(organizationId: string): Promise<RolePermissionMap> {
+  const snapshot = await getOrganizationRolePermissionsSnapshot(organizationId);
+  return snapshot.permissions;
+}
+
+export async function saveOrganizationRolePermissions(organizationId: string, permissions: unknown): Promise<RolePermissionsSnapshot> {
   const normalized = normalizeRolePermissionMap(permissions);
 
-  await prisma.organizationRolePermission.upsert({
+  const saved = await prisma.organizationRolePermission.upsert({
     where: { organizationId },
     update: { permissions: normalized },
     create: {
@@ -66,5 +80,5 @@ export async function saveOrganizationRolePermissions(organizationId: string, pe
     },
   });
 
-  return normalized;
+  return buildRolePermissionsSnapshot(normalized, saved.updatedAt.toISOString());
 }

@@ -6,6 +6,7 @@ import { getProductListImage } from "@/lib/products/image-assets";
 import type { Product } from "@/lib/products/types";
 import {
   formatAssigneeList,
+  formatAssigneePreview,
   formatWorkflowDate,
   getCurrentWorkflowAssignee,
   isProductWorkflowOverdue,
@@ -157,7 +158,7 @@ export function ProductTable({
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
       <div className="thin-scrollbar overflow-auto">
-        <table className="w-[1876px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:break-words [&_tbody_td]:whitespace-normal [&_tbody_tr]:h-[61px]">
+        <table className="w-[1876px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px]">
           <colgroup>
             <col className="w-[84px]" />
             <col className="w-[96px]" />
@@ -226,40 +227,40 @@ export function ProductTable({
                   <td className="px-3 font-mono text-xs">
                     <p className="break-all" title={product.asin || "--"}>{product.asin || "--"}</p>
                   </td>
-                  <td className="px-3 font-semibold metric-tabular">CNY {product.purchasePrice.toFixed(2)}</td>
+                  <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
                   <td className="px-3">
                     <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
                     {isProductWorkflowOverdue(product) ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
                   </td>
                   <td className="px-3">
-                    <p className="break-words" title={getCurrentWorkflowAssignee(product) || "--"}>{getCurrentWorkflowAssignee(product) || "--"}</p>
+                    <p className="truncate" title={getCurrentWorkflowAssignee(product) || "--"}>{formatAssigneePreview(getCurrentWorkflowAssignee(product)) || "--"}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-words" title={formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</p>
+                    <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-words" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
+                    <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
                   </td>
                   <td className="px-3 text-xs">
-                    <p className="break-words" title={formatWorkflowDate(product.workflowDueAt)}>{formatWorkflowDate(product.workflowDueAt)}</p>
+                    <p className="truncate" title={formatWorkflowDate(product.workflowDueAt)}>{formatWorkflowDate(product.workflowDueAt)}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-all" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
+                    <p className="truncate" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-all text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
+                    <p className="truncate text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-words" title={product.purchaseLeadTime || "--"}>{product.purchaseLeadTime || "--"}</p>
+                    <p className="truncate" title={product.purchaseLeadTime || "--"}>{product.purchaseLeadTime || "--"}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-words" title={product.createdAt}>{product.createdAt}</p>
+                    <p className="truncate" title={product.createdAt}>{product.createdAt}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-all text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
+                    <p className="truncate text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
                   </td>
                   <td className="px-3">
-                    <p className="break-all text-xs" title={product.note || "--"}>{product.note || "--"}</p>
+                    <p className="truncate text-xs" title={product.note || "--"}>{product.note || "--"}</p>
                   </td>
                   <td className="px-3 text-right">
                     <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>

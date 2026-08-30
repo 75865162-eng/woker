@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import { getAuthDriver, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/auth/constants";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
-import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
+import { getOrganizationRolePermissionsSnapshot, type RolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 
 type SessionPayload = {
   driver?: "database" | "local";
@@ -170,7 +170,12 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
   };
 }
 
-export async function createSession(userId: string, sessionUser?: CurrentUser, secureCookie = process.env.NODE_ENV === "production") {
+export async function createSession(
+  userId: string,
+  sessionUser?: CurrentUser,
+  secureCookie = process.env.NODE_ENV === "production",
+  rolePermissionsSnapshot?: RolePermissionsSnapshot,
+) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds * 1000);
   const session = await prisma.userSession.create({
@@ -204,11 +209,13 @@ export async function createSession(userId: string, sessionUser?: CurrentUser, s
 
   let rolePermissionsCookie: AuthCookie | undefined;
   if (sessionUser?.organizationId) {
-    const rolePermissions = await getOrganizationRolePermissions(sessionUser.organizationId);
+    const snapshot =
+      rolePermissionsSnapshot ??
+      (await getOrganizationRolePermissionsSnapshot(sessionUser.organizationId));
 
     rolePermissionsCookie = {
       name: rolePermissionsCookieName,
-      value: encodeURIComponent(JSON.stringify(rolePermissions)),
+      value: encodeURIComponent(JSON.stringify(snapshot.permissions)),
       options: {
         sameSite: "lax",
         secure: secureCookie,
@@ -290,28 +297,9 @@ export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | un
   const cookieStore = await cookies();
   const payload = parseSessionCookie(cookieStore.get(sessionCookieName)?.value);
 
-  if (!payload || new Date(payload.expiresAt).getTime() <= Date.now()) {
+  if (!payload) {
     return undefined;
   }
 
-  if (payload.driver === "local") {
-    return payload.localUser;
-  }
-
-  if (payload.driver !== getAuthDriver()) {
-    return undefined;
-  }
-
-  if (!payload.sessionUser) {
-    return undefined;
-  }
-
-  return {
-    id: payload.sessionUser.id,
-    email: payload.sessionUser.email,
-    name: payload.sessionUser.name,
-    role: payload.sessionUser.role,
-    organizationId: payload.sessionUser.organizationId,
-    organizationName: payload.sessionUser.organizationName,
-  };
+  return getCurrentUserFromPayload(payload);
 }

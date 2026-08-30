@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthDriver, publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
-import {
-  getAccessiblePathOrFallback,
-  getModuleIdForPath,
-  parseRolePermissionsCookie,
-  roleCanAccessModule,
-  rolePermissionsCookieName,
-} from "@/lib/accounts/permissions";
 
 function base64UrlToBytes(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -64,24 +57,6 @@ async function hasValidSessionCookie(request: NextRequest) {
   }
 }
 
-function parseSessionRole(request: NextRequest) {
-  const cookie = request.cookies.get(sessionCookieName)?.value;
-  const [payload] = cookie?.split(".") ?? [];
-
-  if (!payload) return undefined;
-
-  try {
-    const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as {
-      localUser?: { role?: string };
-      sessionUser?: { role?: string };
-    };
-
-    return parsed.localUser?.role ?? parsed.sessionUser?.role;
-  } catch {
-    return undefined;
-  }
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const publicOrigin = getPublicOrigin(request);
@@ -97,17 +72,6 @@ export async function middleware(request: NextRequest) {
   if (validSession) {
     if (pathname === "/login") {
       return NextResponse.redirect(new URL("/", publicOrigin));
-    }
-
-    if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
-      const role = parseSessionRole(request);
-      const rolePermissions = parseRolePermissionsCookie(request.cookies.get(rolePermissionsCookieName)?.value);
-      const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
-      const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, rolePermissions);
-
-      if (!canOpenRequestedPage) {
-        return NextResponse.redirect(new URL(getAccessiblePathOrFallback(undefined, role, rolePermissions), publicOrigin));
-      }
     }
 
     const requestHeaders = new Headers(request.headers);
