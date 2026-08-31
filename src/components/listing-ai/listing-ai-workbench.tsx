@@ -68,15 +68,12 @@ import {
   createTitleGeneratorModeDraft,
   defaultImageGeneratorPrompt,
   initialDescriptionGenerator,
-  draftStorageKey,
   fieldClass,
-  galleryCellStylesStorageKey,
   imageGeneratorViews,
   initialCompetitors,
   initialImageGenerator,
   initialInput,
   initialTitleGenerator,
-  storageKey,
   type CompetitorDraft,
   type GalleryCellStyle,
   type GalleryInfoRow,
@@ -345,6 +342,7 @@ export function ListingAiWorkbench() {
   const [imageGenerator, setImageGenerator] = useState<ImageGeneratorDraft>(
     initialImageGenerator,
   );
+  const [cellStyles, setCellStyles] = useState<Record<string, GalleryCellStyle>>({});
   const [titlePromptOpen, setTitlePromptOpen] = useState(false);
   const [descriptionPromptOpen, setDescriptionPromptOpen] = useState(false);
   const [titleGenerating, setTitleGenerating] = useState(false);
@@ -450,6 +448,9 @@ export function ListingAiWorkbench() {
         });
         if (!cancelled) setImageGenerator(restoredImageGenerator);
       }
+      if (draft.galleryCellStyles && !cancelled) {
+        setCellStyles(draft.galleryCellStyles);
+      }
       if (draft.activeTab && !cancelled && !requestedTab) {
         setActiveTab(draft.activeTab);
       }
@@ -470,34 +471,14 @@ export function ListingAiWorkbench() {
 
         if (data.records?.length && !cancelled) {
           setRecords(data.records);
-          window.localStorage.setItem(storageKey, JSON.stringify(data.records));
         }
 
         if (data.draft) {
           await applyWorkspaceDraft(data.draft);
-          window.localStorage.setItem(draftStorageKey, JSON.stringify(data.draft));
           return;
-        }
-
-        const localRecords = readLocalListingAiRecords();
-        const localDraft = readLocalListingAiDraft();
-
-        if (localRecords.length && !cancelled) setRecords(localRecords);
-        if (localDraft) await applyWorkspaceDraft(localDraft);
-
-        if (localDraft || localRecords.length) {
-          await saveListingAiWorkspace(
-            normalizeWorkspaceDraft(localDraft),
-            localRecords,
-          );
         }
       } catch (storageError) {
         console.warn("Failed to restore Listing AI draft.", storageError);
-        const localRecords = readLocalListingAiRecords();
-        const localDraft = readLocalListingAiDraft();
-
-        if (localRecords.length && !cancelled) setRecords(localRecords);
-        if (localDraft) await applyWorkspaceDraft(localDraft);
       } finally {
         if (!cancelled) setDraftReady(true);
       }
@@ -524,12 +505,11 @@ export function ListingAiWorkbench() {
       titleGenerator,
       descriptionGenerator,
       imageGenerator,
+      galleryCellStyles: cellStyles,
       activeTab,
     };
     try {
       const persistableDraft = createPersistableDraft(draft);
-      window.localStorage.setItem(draftStorageKey, JSON.stringify(persistableDraft));
-      window.localStorage.setItem(storageKey, JSON.stringify(records));
       const timeout = window.setTimeout(() => {
         void saveListingAiWorkspace(persistableDraft, records).then(
           undefined,
@@ -542,19 +522,8 @@ export function ListingAiWorkbench() {
       return () => window.clearTimeout(timeout);
     } catch (storageError) {
       console.warn("Failed to persist Listing AI draft.", storageError);
-      window.localStorage.removeItem(draftStorageKey);
     }
-  }, [
-    activeTab,
-    competitors,
-    draftReady,
-    imageGenerator,
-    input,
-    ownImages,
-    records,
-    descriptionGenerator,
-    titleGenerator,
-  ]);
+  }, [activeTab, cellStyles, competitors, draftReady, imageGenerator, input, ownImages, records, descriptionGenerator, titleGenerator]);
 
   const productName =
     input.asin ||
@@ -1048,6 +1017,8 @@ export function ListingAiWorkbench() {
             ownImages={ownImages}
             setCompetitors={setCompetitors}
             setOwnImages={setOwnImages}
+            cellStyles={cellStyles}
+            setCellStyles={setCellStyles}
             input={input}
             update={update}
             error={error}
@@ -1095,66 +1066,6 @@ export function ListingAiWorkbench() {
       </main>
     </div>
   );
-}
-
-function readLocalListingAiRecords() {
-  try {
-    const saved = window.localStorage.getItem(storageKey);
-
-    return saved ? (JSON.parse(saved) as SavedRecord[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function readLocalListingAiDraft() {
-  try {
-    const draft = window.localStorage.getItem(draftStorageKey);
-
-    return draft ? (JSON.parse(draft) as Partial<WorkspaceDraft>) : null;
-  } catch {
-    window.localStorage.removeItem(draftStorageKey);
-    return null;
-  }
-}
-
-function normalizeWorkspaceDraft(draft?: Partial<WorkspaceDraft> | null): WorkspaceDraft {
-  return createPersistableDraft({
-    input: {
-      ...initialInput,
-      ...draft?.input,
-    },
-    competitors: initialCompetitors.map((competitor, index) => ({
-      ...competitor,
-      ...draft?.competitors?.[index],
-    })),
-    ownImages: {
-      structureNotes: "",
-      mainImage: [],
-      images: [],
-      imageNotes: [],
-      sales: "",
-      price: "",
-      rating: "",
-      reviewCount: "",
-      ...draft?.ownImages,
-    },
-    titleGenerator: {
-      ...normalizeTitleGeneratorDraft(draft?.titleGenerator ?? {}),
-    },
-    descriptionGenerator: {
-      ...normalizeDescriptionGeneratorDraft(draft?.descriptionGenerator ?? {}),
-    },
-    imageGenerator: {
-      ...initialImageGenerator,
-      ...draft?.imageGenerator,
-      ownViews: {
-        ...initialImageGenerator.ownViews,
-        ...draft?.imageGenerator?.ownViews,
-      },
-    },
-    activeTab: draft?.activeTab ?? "input",
-  });
 }
 
 async function saveListingAiWorkspace(draft: WorkspaceDraft, records: SavedRecord[]) {
@@ -1277,6 +1188,8 @@ function ImagesSection({
   ownImages,
   setCompetitors,
   setOwnImages,
+  cellStyles,
+  setCellStyles,
   input,
   update,
   handleImageUpload,
@@ -1285,6 +1198,8 @@ function ImagesSection({
   ownImages: OwnImageDraft;
   setCompetitors: React.Dispatch<React.SetStateAction<CompetitorDraft[]>>;
   setOwnImages: React.Dispatch<React.SetStateAction<OwnImageDraft>>;
+  cellStyles: Record<string, GalleryCellStyle>;
+  setCellStyles: React.Dispatch<React.SetStateAction<Record<string, GalleryCellStyle>>>;
   input: ListingOptimizationRequest;
   update: <K extends keyof ListingOptimizationRequest>(
     key: K,
@@ -1306,7 +1221,6 @@ function ImagesSection({
   const [excelError, setExcelError] = useState("");
   const [excelNotice, setExcelNotice] = useState("");
   const [focusedCellKey, setFocusedCellKey] = useState("");
-  const [cellStyles, setCellStyles] = useState<Record<string, GalleryCellStyle>>({});
   const selectedTextRangeRef = useRef<{
     styleKey: string;
     range: { start: number; end: number };
@@ -1332,21 +1246,6 @@ function ImagesSection({
   };
   const imageColumns = [...competitorColumns, mineColumn];
   const tableWidth = 144 + competitorColumns.length * 260 + 260;
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(galleryCellStylesStorageKey);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as Record<string, GalleryCellStyle>;
-      if (parsed && typeof parsed === "object") setCellStyles(parsed);
-    } catch {
-      window.localStorage.removeItem(galleryCellStylesStorageKey);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(galleryCellStylesStorageKey, JSON.stringify(cellStyles));
-  }, [cellStyles]);
 
   function toggleFocusedCellStyle(styleKey: keyof GalleryCellStyle) {
     if (!focusedCellKey) return;
@@ -2433,6 +2332,8 @@ function VisualAplusSection({
   ownImages,
   setCompetitors,
   setOwnImages,
+  cellStyles,
+  setCellStyles,
   input,
   update,
   error,
@@ -2446,6 +2347,8 @@ function VisualAplusSection({
   ownImages: OwnImageDraft;
   setCompetitors: React.Dispatch<React.SetStateAction<CompetitorDraft[]>>;
   setOwnImages: React.Dispatch<React.SetStateAction<OwnImageDraft>>;
+  cellStyles: Record<string, GalleryCellStyle>;
+  setCellStyles: React.Dispatch<React.SetStateAction<Record<string, GalleryCellStyle>>>;
   input: ListingOptimizationRequest;
   update: <K extends keyof ListingOptimizationRequest>(
     key: K,
@@ -2468,6 +2371,8 @@ function VisualAplusSection({
         ownImages={ownImages}
         setCompetitors={setCompetitors}
         setOwnImages={setOwnImages}
+        cellStyles={cellStyles}
+        setCellStyles={setCellStyles}
         input={input}
         update={update}
         handleImageUpload={handleImageUpload}

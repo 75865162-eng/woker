@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Prisma, type OrganizationRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
 import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
@@ -98,7 +98,37 @@ function mapOrganizationRoleToAccountRole(role: string): TeamAccountRecord["role
 }
 
 function mapAccountRoleToOrganizationRole(roleId: TeamAccountRecord["roleId"]) {
-  return normalizeAccountRoleId(roleId) as OrganizationRole;
+  switch (normalizeAccountRoleId(roleId)) {
+    case "owner":
+      return "owner";
+    case "database_admin":
+    case "admin":
+      return "database_admin";
+    case "operations_manager":
+    case "operations_supervisor":
+      return "operations_supervisor";
+    case "operations":
+    case "operations_assistant":
+    case "ppc_specialist":
+    case "listing_specialist":
+      return "operations";
+    case "developer":
+      return "developer";
+    case "designer":
+      return "designer";
+    case "warehouse":
+    case "logistics_specialist":
+      return "warehouse";
+    case "warehouse_supervisor":
+      return "warehouse_supervisor";
+    case "finance":
+      return "finance";
+    case "procurement":
+      return "procurement";
+    case "viewer":
+    default:
+      return "viewer";
+  }
 }
 
 function isDefaultSuperAccount(

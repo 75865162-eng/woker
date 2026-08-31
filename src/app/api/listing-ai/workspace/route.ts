@@ -18,6 +18,7 @@ import {
   type TitleGeneratorField,
   type TitleGeneratorMode,
   type TitleGeneratorModeDraft,
+  type GalleryCellStyle,
   type WorkspaceDraft,
 } from "@/lib/listing-ai/workspace-draft";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -31,6 +32,32 @@ type WorkspacePayload = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizeGalleryCellStyles(value: unknown): Record<string, GalleryCellStyle> {
+  if (!isRecord(value)) return {};
+
+  return Object.entries(value).reduce<Record<string, GalleryCellStyle>>((acc, [key, style]) => {
+    if (!isRecord(style)) return acc;
+
+    const redRanges = Array.isArray(style.redRanges)
+      ? style.redRanges.filter(isRecord).map((range) => ({
+          start: Number(range.start) || 0,
+          end: Number(range.end) || 0,
+        }))
+      : undefined;
+    const nextStyle: GalleryCellStyle = {};
+
+    if (style.redText) nextStyle.redText = Boolean(style.redText);
+    if (style.yellowBg) nextStyle.yellowBg = Boolean(style.yellowBg);
+    if (redRanges?.length) nextStyle.redRanges = redRanges;
+
+    if (nextStyle.redText || nextStyle.yellowBg || nextStyle.redRanges?.length) {
+      acc[key] = nextStyle;
+    }
+
+    return acc;
+  }, {});
 }
 
 function mergeTitleGeneratorFields(fields: unknown): TitleGeneratorField[] {
@@ -185,6 +212,7 @@ function normalizeDraft(value: unknown): WorkspaceDraft {
         ...(isRecord(draft.imageGenerator) && isRecord(draft.imageGenerator.ownViews) ? draft.imageGenerator.ownViews : {}),
       },
     },
+    galleryCellStyles: normalizeGalleryCellStyles(draft.galleryCellStyles),
     activeTab:
       draft.activeTab === "visual" ||
       draft.activeTab === "analysis" ||

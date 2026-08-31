@@ -196,6 +196,7 @@ export interface WorkspaceDraft {
   descriptionGenerator: DescriptionGeneratorDraft;
   imageGenerator: ImageGeneratorDraft;
   activeTab: TabId;
+  galleryCellStyles: Record<string, GalleryCellStyle>;
 }
 
 export const storageKey = "listing-ai-workspace-records";

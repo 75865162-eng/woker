@@ -13,7 +13,7 @@ type StatusMetric = {
 };
 
 async function loadDatabaseMetrics() {
-  const [organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, exports] = await Promise.all([
+  const [organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, exports, wecomSettings] = await Promise.all([
     prisma.organization.count(),
     prisma.user.count(),
     prisma.teamRosterMember.count(),
@@ -22,9 +22,10 @@ async function loadDatabaseMetrics() {
     prisma.fileObject.count(),
     prisma.importJob.count(),
     prisma.exportRecord.count(),
+    prisma.weComNotificationSetting.count(),
   ]);
 
-  return { organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, exports };
+  return { organizations, users, teamMembers, products, imageCopyGalleries, files, jobs, exports, wecomSettings };
 }
 
 export async function SystemDataStatusPanel() {
@@ -91,6 +92,12 @@ export async function SystemDataStatusPanel() {
       value: metrics ? metrics.exports.toLocaleString("zh-CN") : "-",
       detail: "可追溯导出",
       icon: FileArchive,
+    },
+    {
+      label: "WeCom 设置",
+      value: metrics ? metrics.wecomSettings.toLocaleString("zh-CN") : "-",
+      detail: "通知偏好",
+      icon: ServerCog,
     },
   ];
 

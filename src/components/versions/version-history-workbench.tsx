@@ -33,7 +33,17 @@ const entityTypes = [
   { value: "listing_ai_workspace", label: "Listing 草稿" },
   { value: "ppc_workspace_snapshot", label: "PPC 草稿" },
   { value: "rule_config", label: "规则配置" },
+  { value: "file_object", label: "文件资产" },
+  { value: "import_job", label: "导入任务" },
+  { value: "export_record", label: "导出记录" },
 ];
+
+const restorableEntityTypes = new Set([
+  "product",
+  "listing_ai_workspace",
+  "ppc_workspace_snapshot",
+  "rule_config",
+]);
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
@@ -183,9 +193,15 @@ export function VersionHistoryWorkbench() {
                     <td className="max-w-md px-3 py-2 text-xs font-medium text-muted">{version.summary || "无说明"}</td>
                     <td className="px-3 py-2 text-xs font-semibold text-muted">{formatDate(version.createdAt)}</td>
                     <td className="px-3 py-2 text-right">
-                      <Button type="button" size="sm" variant="ghost" disabled={restoringId === version.id} onClick={() => restoreVersion(version.id)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={restoringId === version.id || !restorableEntityTypes.has(version.entityType)}
+                        onClick={() => restoreVersion(version.id)}
+                      >
                         <RotateCcw className="h-4 w-4" />
-                        恢复
+                        {restorableEntityTypes.has(version.entityType) ? "恢复" : "审计"}
                       </Button>
                     </td>
                   </tr>

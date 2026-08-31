@@ -16,6 +16,8 @@ model Organization {
   dataChangeVersions DataChangeVersion[]
   members            OrganizationMember[]
   notifications      UserNotification[]
+  rosterRoles        OrganizationRosterRole[]
+  wecomNotificationSettings WeComNotificationSetting[]
   rolePermissions    OrganizationRolePermission?
   teamRoster         TeamRosterMember[]
   workerHeartbeats   WorkerHeartbeat[]
@@ -37,6 +39,7 @@ model User {
   DraftRun                DraftRun[]
   listingAiChatHistories  ListingAiChatHistory[]
   listingAiWorkspaces     ListingAiWorkspace[]
+  wecomNotificationSettings WeComNotificationSetting[]
   memberships             OrganizationMember[]
   notifications           UserNotification[]
   saihuSearchMergeHistory SaihuSearchMergeHistoryRecord[]
@@ -124,6 +127,24 @@ model OrganizationRosterRole {
 
   @@id([organizationId, id])
   @@index([organizationId, sortOrder])
+}
+
+model WeComNotificationSetting {
+  organizationId String
+  userId         String
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
+  settings       Json
+  sentRecords    Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, userId])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([userId, updatedAt])
 }
 
 model UserSession {

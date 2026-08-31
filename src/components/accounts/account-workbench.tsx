@@ -655,6 +655,11 @@ export function AccountWorkbench() {
       setRoleSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi.ok ? "" : "（保存失败）"}`);
       if (savedToApi.ok) {
         setRoles(savedToApi.roles ?? nextRoles);
+      } else {
+        void loadRolesFromApi().then((payload) => {
+          if (!payload) return;
+          setRoles(payload.roles.length ? payload.roles : initialRoles);
+        });
       }
     });
   }
@@ -1132,7 +1137,7 @@ function RoleDialog({
   onClose,
   onSubmit,
 }: {
-  roles: Role[];
+  roles: RoleCatalogItem[];
   onClose: () => void;
   onSubmit: (roleId: RoleId) => void;
 }) {

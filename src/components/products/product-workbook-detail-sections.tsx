@@ -288,6 +288,7 @@ export function ProductWorkbookDetailSections({
             onChange={onImprovementChange}
             onPeakSeasonWeightsChange={onPeakSeasonWeightsChange}
             onRowChange={onImprovementRowChange}
+            onRemarkImagesChange={onRemarkImagesChange}
           />
         </CardContent>
       </Card>
@@ -375,7 +376,7 @@ function ImageUploadSquare({
       const nextImage =
         allowPdf && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))
           ? await fileToDataUrl(file)
-          : await uploadProductImageAsset(file);
+          : await fileToDataUrl(file);
 
       onChange(nextImage);
       setPreviewOpen(false);
@@ -468,7 +469,7 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
         selected.map(async (file) =>
           file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
             ? fileToDataUrl(file)
-            : uploadProductImageAsset(file),
+            : fileToDataUrl(file),
         ),
       );
       const nextImages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
@@ -698,94 +699,159 @@ function ImprovementTable({
   onChange,
   onPeakSeasonWeightsChange,
   onRowChange,
+  onRemarkImagesChange,
 }: {
   detail: TrialProductDraft;
   improvement: TrialImprovement;
   onChange: (field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) => void;
   onPeakSeasonWeightsChange: (value: number[]) => void;
   onRowChange: (index: number, field: TrialImprovementCellKey, value: string) => void;
+  onRemarkImagesChange: (images: string[]) => void;
 }) {
   const painRows = buildImprovementPainRows(detail);
   const visiblePainRows = painRows.length ? painRows : [{ summary: "", count: "" }];
   const improvementColumnWidths = improvementColumns.map((column) => getImprovementColumnWidth(improvement, visiblePainRows.length, column.field));
   const tableWidth = 412 + improvementColumnWidths.reduce((total, width) => total + width, 0);
+  const remarkUploadRef = useRef<HTMLInputElement | null>(null);
+  const [remarkUploading, setRemarkUploading] = useState(false);
+  const [remarkUploadError, setRemarkUploadError] = useState("");
+
+  async function handleRemarkUpload(files: FileList | null) {
+    const selected = Array.from(files ?? []);
+    if (!selected.length) {
+      return;
+    }
+
+    setRemarkUploading(true);
+    setRemarkUploadError("");
+
+    try {
+      const results = await Promise.allSettled(selected.map((file) => uploadProductImageAsset(file)));
+      const nextImages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const firstError = results.find((result) => result.status === "rejected");
+
+      if (nextImages.length) {
+        onRemarkImagesChange([...detail.remarkImages, ...nextImages]);
+      }
+
+      if (firstError && firstError.status === "rejected") {
+        setRemarkUploadError(firstError.reason instanceof Error ? firstError.reason.message : "图片上传失败。");
+      }
+    } finally {
+      setRemarkUploading(false);
+    }
+  }
 
   return (
-    <table className="table-fixed overflow-hidden rounded-md border border-border text-left text-xs" style={{ width: tableWidth }}>
-      <colgroup>
-        <col style={{ width: 120 }} />
-        <col style={{ width: 220 }} />
-        <col style={{ width: 72 }} />
-        {improvementColumns.map((column, index) => (
-          <col key={column.field} style={{ width: improvementColumnWidths[index] }} />
-        ))}
-      </colgroup>
-      <tbody>
-        <tr>
-          <ImprovementHeader colSpan={3}>使用人群</ImprovementHeader>
-          <ImprovementHeader colSpan={3}>主要适用场景</ImprovementHeader>
-          <ImprovementHeader colSpan={2}>目标销量</ImprovementHeader>
-          <ImprovementHeader colSpan={2}>头部旺季平均销量</ImprovementHeader>
-          <ImprovementHeader colSpan={2}>头部淡季平均销量</ImprovementHeader>
-        </tr>
-        <tr>
-          <ImprovementCell colSpan={3}>
-            <ImprovementInput value={improvement.audience} placeholder="填空格" onChange={(value) => onChange("audience", value)} />
-          </ImprovementCell>
-          <ImprovementCell colSpan={3}>
-            <ImprovementInput value={improvement.scenario} placeholder="填空格" onChange={(value) => onChange("scenario", value)} />
-          </ImprovementCell>
-          <ImprovementCell colSpan={2} className="font-bold">
-            <ImprovementInput value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
-          </ImprovementCell>
-          <ImprovementCell colSpan={2}>
-            <ImprovementInput value={improvement.peakSales} onChange={(value) => onChange("peakSales", value)} />
-          </ImprovementCell>
-          <ImprovementCell colSpan={2}>
-            <ImprovementInput value={improvement.offSeasonSales} onChange={(value) => onChange("offSeasonSales", value)} />
-          </ImprovementCell>
-        </tr>
-        <tr>
-          <td colSpan={12} className="border-b border-r border-border bg-white px-1 py-1 first:border-l">
-            <PeakSeasonWeightMatrix
-              value={improvement.peakSeasonWeights}
-              onChange={onPeakSeasonWeightsChange}
-              onReset={() => onPeakSeasonWeightsChange(createDefaultPeakSeasonWeights())}
-            />
-          </td>
-        </tr>
-        <tr>
-          <ImprovementSubHeader>产品改进点</ImprovementSubHeader>
-          <ImprovementSubHeader>差评</ImprovementSubHeader>
-          <ImprovementSubHeader>数量</ImprovementSubHeader>
+    <div className="relative">
+      <input
+        ref={remarkUploadRef}
+        className="hidden"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(event) => {
+          void handleRemarkUpload(event.target.files);
+          event.currentTarget.value = "";
+        }}
+      />
+      <table className="table-fixed overflow-hidden rounded-md border border-border text-left text-xs" style={{ width: tableWidth }}>
+        <colgroup>
+          <col style={{ width: 120 }} />
+          <col style={{ width: 220 }} />
+          <col style={{ width: 72 }} />
           {improvementColumns.map((column, index) => (
-            <ImprovementSubHeader key={column.field} style={{ width: improvementColumnWidths[index], maxWidth: 300 }}>
-              {column.label}
-            </ImprovementSubHeader>
+            <col key={column.field} style={{ width: improvementColumnWidths[index] }} />
           ))}
-        </tr>
-        {visiblePainRows.map((pain, index) => {
-          const improvementRow = getImprovementRow(improvement, index);
-          return (
-            <tr key={index}>
-              <ImprovementCell className="text-center font-bold">差评点{index + 1}</ImprovementCell>
-              <ImprovementCell>{pain?.summary ?? ""}</ImprovementCell>
-              <ImprovementCell>{pain?.count ?? ""}</ImprovementCell>
-              {improvementColumns.map((column, columnIndex) => (
-                <ImprovementCell key={column.field} style={{ width: improvementColumnWidths[columnIndex], maxWidth: 300 }}>
-                  <ImprovementInput
-                    multiline
-                    width={improvementColumnWidths[columnIndex] - 16}
-                    value={improvementRow[column.field]}
-                    onChange={(value) => onRowChange(index, column.field, value)}
-                  />
-                </ImprovementCell>
-              ))}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+        </colgroup>
+        <tbody>
+          <tr>
+            <ImprovementHeader colSpan={3}>使用人群</ImprovementHeader>
+            <ImprovementHeader colSpan={3}>主要适用场景</ImprovementHeader>
+            <ImprovementHeader colSpan={2}>目标销量</ImprovementHeader>
+            <ImprovementHeader colSpan={2}>头部旺季平均销量</ImprovementHeader>
+            <ImprovementHeader colSpan={2}>头部淡季平均销量</ImprovementHeader>
+          </tr>
+          <tr>
+            <ImprovementCell colSpan={3}>
+              <ImprovementInput value={improvement.audience} placeholder="填空格" onChange={(value) => onChange("audience", value)} />
+            </ImprovementCell>
+            <ImprovementCell colSpan={3}>
+              <ImprovementInput value={improvement.scenario} placeholder="填空格" onChange={(value) => onChange("scenario", value)} />
+            </ImprovementCell>
+            <ImprovementCell colSpan={2} className="font-bold">
+              <ImprovementInput value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
+            </ImprovementCell>
+            <ImprovementCell colSpan={2}>
+              <ImprovementInput value={improvement.peakSales} onChange={(value) => onChange("peakSales", value)} />
+            </ImprovementCell>
+            <ImprovementCell colSpan={2}>
+              <ImprovementInput value={improvement.offSeasonSales} onChange={(value) => onChange("offSeasonSales", value)} />
+            </ImprovementCell>
+          </tr>
+          <tr>
+            <td colSpan={12} className="border-b border-r border-border bg-white px-1 py-1 first:border-l">
+              <PeakSeasonWeightMatrix
+                value={improvement.peakSeasonWeights}
+                onChange={onPeakSeasonWeightsChange}
+                onReset={() => onPeakSeasonWeightsChange(createDefaultPeakSeasonWeights())}
+              />
+            </td>
+          </tr>
+          <tr>
+            <ImprovementSubHeader>产品改进点</ImprovementSubHeader>
+            <ImprovementSubHeader>差评</ImprovementSubHeader>
+            <ImprovementSubHeader>数量</ImprovementSubHeader>
+            {improvementColumns.map((column, index) => (
+              <ImprovementSubHeader key={column.field} style={{ width: improvementColumnWidths[index], maxWidth: 300 }}>
+                {column.field === "certification" ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{column.label}</span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-6 shrink-0 px-2 text-[11px]"
+                        disabled={remarkUploading}
+                        onClick={() => remarkUploadRef.current?.click()}
+                      >
+                        <ImagePlus className="h-3.5 w-3.5" />
+                        {remarkUploading ? "上传中" : "批量上传"}
+                      </Button>
+                    </div>
+                    {remarkUploadError ? <p className="text-[10px] font-semibold text-danger">{remarkUploadError}</p> : null}
+                  </div>
+                ) : (
+                  column.label
+                )}
+              </ImprovementSubHeader>
+            ))}
+          </tr>
+          {visiblePainRows.map((pain, index) => {
+            const improvementRow = getImprovementRow(improvement, index);
+
+            return (
+              <tr key={index}>
+                <ImprovementCell className="text-center font-bold">差评点{index + 1}</ImprovementCell>
+                <ImprovementCell>{pain?.summary ?? ""}</ImprovementCell>
+                <ImprovementCell>{pain?.count ?? ""}</ImprovementCell>
+                {improvementColumns.map((column, columnIndex) => (
+                  <ImprovementCell key={column.field} style={{ width: improvementColumnWidths[columnIndex], maxWidth: 300 }}>
+                    <ImprovementInput
+                      multiline
+                      width={improvementColumnWidths[columnIndex] - 16}
+                      value={improvementRow[column.field]}
+                      onChange={(value) => onRowChange(index, column.field, value)}
+                    />
+                  </ImprovementCell>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

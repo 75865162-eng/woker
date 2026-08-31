@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { getOrganizationRoleCatalogSnapshot, saveOrganizationRoleCatalog } from "@/lib/accounts/role-catalog-server";
 import { prisma } from "@/lib/db/prisma";
@@ -76,9 +77,9 @@ export async function PUT(request: Request) {
   }
 
   const body = (await request.json()) as { roles?: unknown };
-  const nextRoles = Array.isArray(body.roles) ? body.roles : [];
+  const nextRoles = Array.isArray(body.roles) ? (body.roles as RoleCatalogItem[]) : [];
   const before = await getOrganizationRoleCatalogSnapshot(user.organizationId);
-  const saved = await saveOrganizationRoleCatalog(user.organizationId, nextRoles as never[]);
+  const saved = await saveOrganizationRoleCatalog(user.organizationId, nextRoles);
   const changes = diffRoles(before.roles, saved.roles);
 
   if (changes.length) {
@@ -91,7 +92,7 @@ export async function PUT(request: Request) {
         entityId: user.organizationId,
         metadata: {
           revision: saved.revision,
-          changes,
+          changes: JSON.parse(JSON.stringify(changes)),
         },
       },
     });

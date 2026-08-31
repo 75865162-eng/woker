@@ -2,7 +2,7 @@ import { type Prisma } from "@prisma/client";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
-import { normalizeRolePermissionMap } from "@/lib/accounts/role-permissions-utils";
+import { normalizeRolePermissionMap, normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 
 export type RoleCatalogSnapshot = {
   roles: RoleCatalogItem[];
@@ -27,7 +27,7 @@ function buildRevision(rows: Pick<RoleRow, "id" | "updatedAt">[]) {
 }
 
 function normalizeRoleRow(row: RoleRow): RoleCatalogItem {
-  const permissions = normalizeRolePermissionMap(row.permissions);
+  const permissions = normalizeRolePermissions(row.permissions);
 
   return {
     id: row.id,
@@ -119,9 +119,13 @@ export async function saveOrganizationRoleCatalog(organizationId: string, roles:
       id: role.id.trim(),
       name: role.name.trim(),
       description: role.description.trim(),
-      permissions: normalizeRolePermissionMap(role.permissions),
+      permissions: normalizeRolePermissions(role.permissions),
       sortOrder: Number.isFinite(role.sortOrder) ? role.sortOrder : index,
     }));
+
+  if (!normalizedRoles.length) {
+    throw new Error("至少保留一个角色。");
+  }
 
   const saved = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;

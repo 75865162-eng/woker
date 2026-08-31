@@ -1438,59 +1438,61 @@ function ProductEditor({
 
                 <div>
                   <h3 className="text-lg font-bold text-foreground">基础信息</h3>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <ReadonlyField label="SKU（系统生成）" value={draft.sku} />
-                  <LabeledInput label="中文名（必填）" value={draft.chineseName} onChange={(value) => setField("chineseName", value)} />
-                  <LabeledInput label="英文名（必填）" value={draft.englishName} onChange={(value) => setField("englishName", value)} />
-                  <div className="space-y-1 text-xs font-semibold text-muted">
-                    主 ASIN
-                    <div className="flex items-end gap-2">
-                      <input
-                        className="h-8 w-full max-w-[220px] rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
-                        value={draft.asin}
-                        onChange={(event) => setField("asin", event.target.value)}
-                      />
-                      <a
-                        className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border px-2.5 text-xs font-semibold ${mainAmazonLink ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
-                        href={mainAmazonLink || "#"}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        打开主 ASIN
-                      </a>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <ReadonlyField label="SKU（系统生成）" value={draft.sku} />
+                    <LabeledInput label="中文名（必填）" value={draft.chineseName} onChange={(value) => setField("chineseName", value)} />
+                    <LabeledInput label="英文名（必填）" value={draft.englishName} onChange={(value) => setField("englishName", value)} />
+                    <div className="space-y-1 text-xs font-semibold text-muted">
+                      主 ASIN
+                      <div className="flex items-end gap-2">
+                        <input
+                          className="h-8 w-full max-w-[220px] rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+                          value={draft.asin}
+                          onChange={(event) => setField("asin", event.target.value)}
+                        />
+                        <a
+                          className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border px-2.5 text-xs font-semibold ${mainAmazonLink ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
+                          href={mainAmazonLink || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          打开主 ASIN
+                        </a>
+                      </div>
                     </div>
-                  </div>
-                  <label className="text-xs font-semibold text-muted">
-                    状态
-                    <select
-                      className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
-                      value={draft.status}
-                      onChange={(event) => updateStatus(event.target.value as ProductStatus)}
-                    >
-                      {statusOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {draft.status === "canceled" ? (
-                    <ConclusionExcelField
-                      file={draft.conclusionExcelFile}
-                      uploading={conclusionUploading}
-                      onUpload={() => conclusionInputRef.current?.click()}
-                    />
-                  ) : null}
-                  <ReadonlyField label="选品负责人" value={selectionOwner || "--"} />
-                  <MultiSelectField label="运营负责人" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
-                  <MultiSelectField label="美工负责人" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
-                  <ReadonlyField label="当前负责人" value={formatAssigneePreview(workflowAssignee) || "--"} title={workflowAssignee || "--"} />
-                  <ReadonlyField label="流程截止" value={formatWorkflowDate(draft.workflowDueAt)} />
-                  <ReadonlyField label="创建日期（保存时生成）" value={draft.createdAt || "保存后自动生成"} />
-                  <LabeledInput label="采购价格 CNY" type="number" value={String(draft.purchasePrice)} onChange={(value) => setField("purchasePrice", Number(value) || 0)} />
-                  <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <LabeledInput label="采购价格 CNY" type="number" value={String(draft.purchasePrice)} onChange={(value) => setField("purchasePrice", Number(value) || 0)} />
+                      <label className="text-xs font-semibold text-muted">
+                        状态
+                        <select
+                          className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+                          value={draft.status}
+                          onChange={(event) => updateStatus(event.target.value as ProductStatus)}
+                        >
+                          {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {draft.status === "canceled" ? (
+                      <ConclusionExcelField
+                        file={draft.conclusionExcelFile}
+                        uploading={conclusionUploading}
+                        onUpload={() => conclusionInputRef.current?.click()}
+                      />
+                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <ReadonlyField label="选品负责人" value={selectionOwner || "--"} />
+                      <ReadonlyField label="当前负责人" value={formatAssigneePreview(workflowAssignee) || "--"} title={workflowAssignee || "--"} />
+                    </div>
+                    <MultiSelectField label="运营负责人" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
+                    <MultiSelectField label="美工负责人" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
+                    <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-bold text-foreground">业务流转</p>

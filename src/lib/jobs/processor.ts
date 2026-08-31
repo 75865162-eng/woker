@@ -1,4 +1,5 @@
 import { defaultRules } from "@/data/default-rules";
+import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { exportBulkDrafts } from "@/lib/bulk/export";
 import { runBulkOptimizationForCampaignGroup } from "@/lib/bulk/optimization";
 import { parseBulkWorkbook } from "@/lib/bulk/workbook-parser";
@@ -9,9 +10,11 @@ import {
   toPerformanceRow,
   type ParseDiagnostics,
 } from "@/lib/bulk/workspace-builders";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver } from "@/lib/storage";
 import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
+import type { CurrentUser } from "@/lib/auth/session";
 
 function createResultKey(jobId: string) {
   return `results/${new Date().toISOString().slice(0, 10)}/${jobId}.xlsx`;
@@ -38,6 +41,57 @@ function createEmptyDiagnostics(): ParseDiagnostics {
     sampleHeaders: [],
     sampleEntities: [],
   };
+}
+
+async function getAuditUserForJob(job: {
+  userId: string;
+  organizationId: string;
+}): Promise<CurrentUser | undefined> {
+  const user = await prisma.user.findUnique({
+    where: { id: job.userId },
+    include: {
+      memberships: {
+        where: {
+          organizationId: job.organizationId,
+        },
+        include: {
+          organization: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+        take: 1,
+      },
+    },
+  });
+
+  const membership = user?.memberships[0];
+
+  if (!user || user.status !== "active" || !membership) {
+    return undefined;
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: membership.role,
+    organizationId: membership.organizationId,
+    organizationName: membership.organization.name,
+  };
+}
+
+async function recordJobVersion(
+  input: Parameters<typeof recordDataChangeVersion>[0] | undefined,
+) {
+  if (!input) return;
+
+  try {
+    await recordDataChangeVersion(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to record job version.";
+    console.warn(message);
+  }
 }
 
 function buildImportedData(input: ReturnType<typeof parseBulkWorkbook>, batchId: string) {
@@ -114,8 +168,34 @@ export async function processImportJob(jobId: string) {
     },
     include: { file: true },
   });
+  const auditUser = await getAuditUserForJob(job);
 
   try {
+    if (auditUser) {
+      await recordJobVersion({
+        user: auditUser,
+        entityType: "import_job",
+        entityId: job.id,
+        action: "import_job_start",
+        summary: `${job.file.originalName} 开始处理`,
+        payload: {
+          id: job.id,
+          fileId: job.fileId,
+          type: job.type,
+          status: "running",
+          progress: 10,
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        } as unknown as Prisma.InputJsonValue,
+        scope: {
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        },
+      });
+    }
+
     const storage = getStorageDriver();
     const fileBuffer = await storage.getBuffer(job.file.storageKey);
     const arrayBuffer = new Uint8Array(fileBuffer).buffer;
@@ -194,6 +274,31 @@ export async function processImportJob(jobId: string) {
         },
       },
     });
+    if (auditUser) {
+      await recordJobVersion({
+        user: auditUser,
+        entityType: "import_job",
+        entityId: job.id,
+        action: "import_job_done",
+        summary: `${job.file.originalName} 处理完成`,
+        payload: {
+          id: job.id,
+          fileId: job.fileId,
+          type: job.type,
+          status: "done",
+          progress: 100,
+          resultKey,
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        } as unknown as Prisma.InputJsonValue,
+        scope: {
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        },
+      });
+    }
 
     await prisma.exportRecord.upsert({
       where: {
@@ -221,6 +326,30 @@ export async function processImportJob(jobId: string) {
         size: exportResult.data.byteLength,
       },
     });
+    if (auditUser) {
+      await recordJobVersion({
+        user: auditUser,
+        entityType: "export_record",
+        entityId: `${job.id}:${resultKey}`,
+        action: "export_record_save",
+        summary: exportFileName,
+        payload: {
+          jobId,
+          fileId: job.fileId,
+          resultKey,
+          fileName: exportFileName,
+          size: exportResult.data.byteLength,
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        } as unknown as Prisma.InputJsonValue,
+        scope: {
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        },
+      });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Job processing failed.";
     await prisma.importJob.update({
@@ -235,5 +364,30 @@ export async function processImportJob(jobId: string) {
         },
       },
     });
+    if (auditUser) {
+      await recordJobVersion({
+        user: auditUser,
+        entityType: "import_job",
+        entityId: job.id,
+        action: "import_job_failed",
+        summary: message,
+        payload: {
+          id: job.id,
+          fileId: job.fileId,
+          type: job.type,
+          status: "failed",
+          progress: 0,
+          error: message,
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        } as unknown as Prisma.InputJsonValue,
+        scope: {
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        },
+      });
+    }
   }
 }

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { enqueueImportJob } from "@/lib/queue";
@@ -19,6 +21,15 @@ function isSupportedFile(fileName: string) {
 function createStorageKey(fileName: string) {
   const extension = path.extname(fileName).toLowerCase();
   return `original/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extension}`;
+}
+
+async function recordVersionSafely(input: Parameters<typeof recordDataChangeVersion>[0]) {
+  try {
+    await recordDataChangeVersion(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to record upload version.";
+    console.warn(message);
+  }
 }
 
 export async function POST(request: Request) {
@@ -69,7 +80,6 @@ export async function POST(request: Request) {
         storageType: getStorageType(),
       },
     });
-
     const job = await prisma.importJob.create({
       data: {
         organizationId: user.organizationId,
@@ -80,6 +90,43 @@ export async function POST(request: Request) {
         fileId: fileObject.id,
         type: jobType,
       },
+    });
+    await recordVersionSafely({
+      user,
+      entityType: "file_object",
+      entityId: fileObject.id,
+      action: "file_object_upload",
+      summary: file.name,
+      payload: {
+        id: fileObject.id,
+        originalName: fileObject.originalName,
+        mimeType: fileObject.mimeType,
+        size: fileObject.size,
+        storageKey: fileObject.storageKey,
+        storageType: fileObject.storageType,
+        workspaceId: fileObject.workspaceId,
+        accountId: fileObject.accountId,
+        marketplace: fileObject.marketplace,
+      } as unknown as Prisma.InputJsonValue,
+      scope,
+    });
+    await recordVersionSafely({
+      user,
+      entityType: "import_job",
+      entityId: job.id,
+      action: "import_job_queue",
+      summary: `${jobType} 已排队`,
+      payload: {
+        id: job.id,
+        fileId: fileObject.id,
+        type: job.type,
+        status: job.status,
+        progress: job.progress,
+        workspaceId: job.workspaceId,
+        accountId: job.accountId,
+        marketplace: job.marketplace,
+      } as unknown as Prisma.InputJsonValue,
+      scope,
     });
 
     await enqueueImportJob(job.id);

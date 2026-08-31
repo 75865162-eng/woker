@@ -4,7 +4,15 @@ import type { CurrentUser } from "@/lib/auth/session";
 import { ensureOrganization } from "@/lib/organizations/organization-server";
 import { normalizeWorkspaceScope, type WorkspaceScopeInput } from "@/lib/workspace/scope";
 
-export type VersionedEntityType = "product" | "listing_ai_workspace" | "ppc_workspace_snapshot" | "rule_config";
+export type VersionedEntityType =
+  | "product"
+  | "listing_ai_workspace"
+  | "ai_model_setting"
+  | "ppc_workspace_snapshot"
+  | "rule_config"
+  | "file_object"
+  | "import_job"
+  | "export_record";
 
 type RecordVersionInput = {
   user: CurrentUser;

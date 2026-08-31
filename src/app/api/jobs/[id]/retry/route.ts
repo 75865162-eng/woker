@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { enqueueImportJob } from "@/lib/queue";
 
 export const runtime = "nodejs";
+
+async function recordVersionSafely(input: Parameters<typeof recordDataChangeVersion>[0]) {
+  try {
+    await recordDataChangeVersion(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to record retry version.";
+    console.warn(message);
+  }
+}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,6 +49,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         error: null,
       },
       include: { file: true },
+    });
+    await recordVersionSafely({
+      user,
+      entityType: "import_job",
+      entityId: job.id,
+      action: "import_job_retry",
+      summary: `${job.file.originalName} 重新排队`,
+      payload: {
+        id: job.id,
+        fileId: job.fileId,
+        type: job.type,
+        status: job.status,
+        progress: job.progress,
+        workspaceId: job.workspaceId,
+        accountId: job.accountId,
+        marketplace: job.marketplace,
+      } as unknown as Prisma.InputJsonValue,
+      scope: {
+        workspaceId: job.workspaceId,
+        accountId: job.accountId,
+        marketplace: job.marketplace,
+      },
     });
 
     await enqueueImportJob(job.id);

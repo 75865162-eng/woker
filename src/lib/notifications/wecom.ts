@@ -55,6 +55,19 @@ export function normalizeWeComNotificationSettings(
   };
 }
 
+export function normalizeWeComNotificationSentRecords(value: unknown): WeComNotificationSentRecord[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      campaignGroupId: typeof item.campaignGroupId === "string" ? item.campaignGroupId : "",
+      sentDate: typeof item.sentDate === "string" ? item.sentDate : "",
+      sentAt: typeof item.sentAt === "string" ? item.sentAt : "",
+    }))
+    .filter((item) => Boolean(item.campaignGroupId) && Boolean(item.sentDate) && Boolean(item.sentAt));
+}
+
 export function validateWeComWebhookUrl(webhookUrl: string) {
   try {
     const url = new URL(webhookUrl);

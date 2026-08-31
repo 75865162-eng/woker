@@ -11,6 +11,7 @@ import {
   createSentRecords,
   defaultWeComNotificationSettings,
   normalizeWeComNotificationSettings,
+  normalizeWeComNotificationSentRecords,
   validateWeComWebhookUrl,
   wecomNotificationSentStorageKey,
   wecomNotificationSettingsStorageKey,
@@ -22,6 +23,7 @@ import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 const fieldClass =
   "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
+const wecomSettingsApiPath = "/api/notifications/wecom/settings";
 
 export function WeComNotificationSettingsPanel() {
   const campaignGroups = useWorkspaceStore((state) => state.campaignGroups);
@@ -33,11 +35,39 @@ export function WeComNotificationSettingsPanel() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(wecomNotificationSettingsStorageKey);
+    let canceled = false;
 
-    if (saved) {
-      setSettings(normalizeWeComNotificationSettings(JSON.parse(saved) as Partial<WeComNotificationSettings>));
+    async function loadSettings() {
+      try {
+        const response = await fetch(wecomSettingsApiPath, { cache: "no-store" });
+        if (!response.ok) throw new Error("无法从数据库读取企业微信通知设置。");
+
+        const data = (await response.json()) as {
+          settings?: Partial<WeComNotificationSettings>;
+          sentRecords?: WeComNotificationSentRecord[];
+          updatedAt?: string;
+        };
+        const normalized = normalizeWeComNotificationSettings(data.settings ?? null);
+        const sentRecords = normalizeWeComNotificationSentRecords(data.sentRecords);
+
+        if (canceled) return;
+        setSettings(normalized);
+        cacheSettings(normalized);
+        cacheSentRecords(sentRecords);
+        if (data.updatedAt) setSavedAt(new Date(data.updatedAt).toLocaleString("zh-CN", { hour12: false }));
+      } catch {
+        const saved = readCachedSettings();
+
+        if (canceled) return;
+        if (saved) setSettings(saved);
+      }
     }
+
+    void loadSettings();
+
+    return () => {
+      canceled = true;
+    };
   }, []);
 
   const webhookReady = validateWeComWebhookUrl(settings.webhookUrl);
@@ -62,19 +92,27 @@ export function WeComNotificationSettingsPanel() {
   function saveSettings() {
     const normalized = normalizeWeComNotificationSettings(settings);
 
-    window.localStorage.setItem(wecomNotificationSettingsStorageKey, JSON.stringify(normalized));
-    setSettings(normalized);
-    setSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
-    setStatus("企业微信通知设置已保存。");
-    setError("");
+    void persistSettings(normalized, readSentRecords()).then((ok) => {
+      if (!ok) return;
+
+      setSettings(normalized);
+      setSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+      setStatus("企业微信通知设置已保存。");
+      setError("");
+    });
   }
 
   function resetSettings() {
-    window.localStorage.removeItem(wecomNotificationSettingsStorageKey);
-    setSettings(defaultWeComNotificationSettings);
-    setSavedAt("");
-    setStatus("企业微信通知设置已重置。");
-    setError("");
+    void persistSettings(defaultWeComNotificationSettings, []).then((ok) => {
+      if (!ok) return;
+
+      window.localStorage.removeItem(wecomNotificationSettingsStorageKey);
+      window.localStorage.removeItem(wecomNotificationSentStorageKey);
+      setSettings(defaultWeComNotificationSettings);
+      setSavedAt("");
+      setStatus("企业微信通知设置已重置。");
+      setError("");
+    });
   }
 
   async function sendTestMessage() {
@@ -127,8 +165,7 @@ export function WeComNotificationSettingsPanel() {
           ),
           ...readSentRecords(),
         ].slice(0, 300);
-
-        window.localStorage.setItem(wecomNotificationSentStorageKey, JSON.stringify(sentRecords));
+        await persistSettings(normalizeWeComNotificationSettings(settings), sentRecords);
       }
 
       setStatus(sentCampaignGroupIds.length ? `已发送 ${sentCampaignGroupIds.length} 条新品超期提醒。` : "测试消息已发送。");
@@ -213,10 +250,10 @@ export function WeComNotificationSettingsPanel() {
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</div> : null}
 
         <div className="flex flex-col gap-2 border-t border-border pt-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 text-sm text-muted">
-            <ShieldCheck className="h-4 w-4" />
-            {savedAt ? <span>已保存：{savedAt}</span> : <span>Webhook 保存在本机浏览器，不写入代码。</span>}
-          </div>
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <ShieldCheck className="h-4 w-4" />
+          {savedAt ? <span>已保存：{savedAt}</span> : <span>配置优先保存在数据库，本机仅作缓存。</span>}
+        </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={resetSettings}>
               <RotateCcw className="h-4 w-4" />
@@ -247,9 +284,56 @@ function readSentRecords(): WeComNotificationSentRecord[] {
   try {
     const saved = window.localStorage.getItem(wecomNotificationSentStorageKey);
 
-    return saved ? (JSON.parse(saved) as WeComNotificationSentRecord[]) : [];
+    return saved ? normalizeWeComNotificationSentRecords(JSON.parse(saved)) : [];
   } catch {
     return [];
+  }
+}
+
+function readCachedSettings() {
+  try {
+    const saved = window.localStorage.getItem(wecomNotificationSettingsStorageKey);
+
+    return saved ? normalizeWeComNotificationSettings(JSON.parse(saved) as Partial<WeComNotificationSettings>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheSettings(settings: WeComNotificationSettings) {
+  window.localStorage.setItem(wecomNotificationSettingsStorageKey, JSON.stringify(settings));
+}
+
+function cacheSentRecords(sentRecords: WeComNotificationSentRecord[]) {
+  window.localStorage.setItem(wecomNotificationSentStorageKey, JSON.stringify(sentRecords));
+}
+
+async function persistSettings(settings: WeComNotificationSettings, sentRecords: WeComNotificationSentRecord[]) {
+  try {
+    const response = await fetch(wecomSettingsApiPath, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings, sentRecords }),
+    });
+
+    if (!response.ok) {
+      throw new Error("企业微信通知设置保存失败。");
+    }
+
+    const data = (await response.json().catch(() => ({}))) as {
+      settings?: Partial<WeComNotificationSettings>;
+      sentRecords?: WeComNotificationSentRecord[];
+    };
+    const normalized = normalizeWeComNotificationSettings(data.settings ?? settings);
+    const normalizedSentRecords = normalizeWeComNotificationSentRecords(data.sentRecords ?? sentRecords);
+
+    cacheSettings(normalized);
+    cacheSentRecords(normalizedSentRecords);
+    return true;
+  } catch {
+    cacheSettings(settings);
+    cacheSentRecords(sentRecords);
+    return false;
   }
 }
 

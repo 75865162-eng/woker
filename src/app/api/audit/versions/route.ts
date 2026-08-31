@@ -8,15 +8,22 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-const restorableEntityTypes = new Set<VersionedEntityType>([
+const visibleEntityTypes = new Set<VersionedEntityType>([
   "product",
   "listing_ai_workspace",
   "ppc_workspace_snapshot",
   "rule_config",
+  "file_object",
+  "import_job",
+  "export_record",
 ]);
 
 function isVersionedEntityType(value: string | null): value is VersionedEntityType {
-  return Boolean(value && restorableEntityTypes.has(value as VersionedEntityType));
+  return Boolean(value && visibleEntityTypes.has(value as VersionedEntityType));
+}
+
+function isRestorableEntityType(value: VersionedEntityType) {
+  return value === "product" || value === "listing_ai_workspace" || value === "ppc_workspace_snapshot" || value === "rule_config";
 }
 
 function clampPageSize(value: string | null) {
@@ -103,6 +110,10 @@ export async function POST(request: Request) {
 
     if (!version || !isVersionedEntityType(version.entityType)) {
       return NextResponse.json({ error: "Version not found." }, { status: 404 });
+    }
+
+    if (!isRestorableEntityType(version.entityType)) {
+      return NextResponse.json({ error: "This version type is audit-only and cannot be restored." }, { status: 400 });
     }
 
     const scope = workspaceScopeFromRequest(request, {

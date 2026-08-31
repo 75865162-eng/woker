@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
 import {
+  createSavedAiModelProfilePair,
   createAiImageProfileName,
   createAiProfileName,
   normalizeAiSettingsBundle,
@@ -31,6 +33,15 @@ type AiSettingsPayload = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+async function recordVersionSafely(input: Parameters<typeof recordDataChangeVersion>[0]) {
+  try {
+    await recordDataChangeVersion(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to record AI settings version.";
+    console.warn(message);
+  }
 }
 
 function parseSettings(value: unknown): AiSettingsBundle {
@@ -244,6 +255,20 @@ export async function PUT(request: Request) {
         settings: settings as unknown as Prisma.InputJsonValue,
         profiles: nextProfiles as unknown as Prisma.InputJsonValue,
       },
+    });
+    await recordVersionSafely({
+      user,
+      entityType: "ai_model_setting",
+      entityId: `${scope.workspaceId}:${user.id}`,
+      action: "ai_model_setting_save",
+      summary: activeProfileId || createAiProfileName(settings.text),
+      payload: {
+        settings: settings.text,
+        imageSettings: settings.image,
+        profiles: nextProfiles,
+        activeProfileId,
+      } as unknown as Prisma.InputJsonValue,
+      scope,
     });
 
     return NextResponse.json({ settings: settings.text, imageSettings: settings.image, profiles: nextProfiles, activeProfileId });
