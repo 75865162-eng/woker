@@ -99,10 +99,13 @@ async function readRemoteWorkspaceSnapshot<T>(): Promise<WorkspaceSnapshotApiRec
       return undefined;
     }
 
+    const snapshot = decodeSnapshotFromJson(data.snapshot);
+    const hydratedSnapshot = await hydrateWorkspaceSnapshotBuffer(snapshot);
+
     return {
       version: data.version ?? 1,
       savedAt: data.savedAt ?? new Date().toISOString(),
-      snapshot: decodeSnapshotFromJson(data.snapshot),
+      snapshot: hydratedSnapshot,
     };
   } catch {
     return undefined;
@@ -142,4 +145,25 @@ async function deleteRemoteWorkspaceSnapshot() {
     const data = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "删除数据库 Workspace Snapshot 失败。");
   }
+}
+
+async function hydrateWorkspaceSnapshotBuffer<T>(snapshot: T): Promise<T> {
+  if (!snapshot || typeof snapshot !== "object") {
+    return snapshot;
+  }
+
+  const record = { ...(snapshot as Record<string, unknown>) };
+
+  if (!(record.originalWorkbookBuffer instanceof ArrayBuffer) && typeof record.originalWorkbookFileId === "string" && record.originalWorkbookFileId) {
+    try {
+      const response = await fetch(`/api/workspace/workbook-files/${encodeURIComponent(record.originalWorkbookFileId)}/download`);
+      if (response.ok) {
+        record.originalWorkbookBuffer = await response.arrayBuffer();
+      }
+    } catch {
+      // fall back to a snapshot without workbook bytes
+    }
+  }
+
+  return record as T;
 }

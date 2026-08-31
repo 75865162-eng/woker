@@ -10,7 +10,6 @@ import {
 import { AppShell } from "@/components/app-shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { DataSourceBanner } from "@/components/ui/data-source-banner";
 import { getModuleIdForPath, roleCanAccessModule } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
@@ -33,12 +32,6 @@ export default async function Home() {
   return (
     <AppShell title="运营工作台" subtitle="Amazon 业务系统总入口">
       <div className="space-y-5">
-        <DataSourceBanner
-          tone="mixed"
-          title="数据库已接入，当前正在迁移业务数据边界"
-          description="账号、权限、文件记录和任务模型已具备后端边界；PPC、商品、Listing AI、物流等工作区会继续保留本地草稿能力，并逐步接入数据库。"
-        />
-
         <section className="flex flex-col gap-4 rounded-lg border border-border bg-white px-6 py-6 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-black text-foreground">今天要处理什么？</h1>

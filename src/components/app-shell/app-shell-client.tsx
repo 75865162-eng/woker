@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, UploadCloud, UsersRound } from "lucide-react";
+import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
 import { UserNotificationCenter } from "@/components/notifications/user-notification-center";
 import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { WorkspaceScopeSelector } from "./workspace-scope-selector";
 const navItems = [
   { href: "/", label: "工作台首页", icon: Home, moduleId: null },
   { href: "/dashboard", label: "产品管理", icon: Boxes, moduleId: "products" },
+  { href: "/sellfox", label: "Sellfox", icon: Store, moduleId: "products" },
   { href: "/workspace", label: "PPC 优化", icon: UploadCloud, moduleId: "workspace" },
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
   { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },

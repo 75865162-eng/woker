@@ -34,6 +34,8 @@ export type WorkspaceSnapshot = {
   parseStatus: ParseJobStatus;
   parseProgress: number;
   uploadedFileName?: string;
+  originalWorkbookFileId?: string;
+  originalWorkbookFileName?: string;
   originalWorkbookBuffer?: ArrayBuffer;
   activeBatchId?: string;
   parsedRowCount: number;
@@ -78,7 +80,8 @@ export function takeWorkspaceSnapshot(state: WorkspaceSnapshot): WorkspaceSnapsh
     parseStatus: state.parseStatus,
     parseProgress: state.parseProgress,
     uploadedFileName: state.uploadedFileName,
-    originalWorkbookBuffer: state.originalWorkbookBuffer,
+    originalWorkbookFileId: state.originalWorkbookFileId,
+    originalWorkbookFileName: state.originalWorkbookFileName,
     activeBatchId: state.activeBatchId,
     parsedRowCount: state.parsedRowCount,
     parsedSheets: state.parsedSheets,

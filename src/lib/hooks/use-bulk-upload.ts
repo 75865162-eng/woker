@@ -42,7 +42,8 @@ export function useBulkUpload() {
 
     try {
       const buffer = await file.arrayBuffer();
-      setParseStarted(file.name, buffer.slice(0));
+      const workbookFile = await uploadWorkbookFile(file);
+      setParseStarted(file.name, buffer.slice(0), workbookFile.id);
       const worker = new Worker(new URL("../../workers/excel-parser.worker.ts", import.meta.url), { type: "module" });
 
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
@@ -89,4 +90,21 @@ export function useBulkUpload() {
     fileInputRef,
     handleFileSelected,
   };
+}
+
+async function uploadWorkbookFile(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch("/api/workspace/workbook-files/upload", {
+    method: "POST",
+    body: formData,
+  });
+  const data = (await response.json()) as { file?: { id?: string }; error?: string };
+
+  if (!response.ok || !data.file?.id) {
+    throw new Error(data.error || "工作簿文件上传失败。");
+  }
+
+  return data.file;
 }

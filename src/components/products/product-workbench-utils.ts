@@ -89,7 +89,7 @@ export function isOverdueProduct(product: Product) {
   return elapsedDays > overdueThresholdDays;
 }
 
-export function nextSku(products: Product[]) {
+export function nextSku(products: Array<Pick<Product, "sku">>) {
   const max = products.reduce((currentMax, product) => {
     const numeric = Number(product.sku);
     return Number.isFinite(numeric) ? Math.max(currentMax, numeric) : currentMax;

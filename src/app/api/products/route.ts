@@ -5,6 +5,14 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
 import type { Product } from "@/lib/products/types";
+import {
+  applyProductSourceFilter,
+  createProductListItem,
+  createProductListWhere,
+  isProductOperationsProgressIncomplete,
+  splitMultiValue,
+  type ProductListSource,
+} from "@/lib/products/list-query";
 import { createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList, productWorkflowStageLabels } from "@/lib/products/workflow";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
@@ -34,6 +42,33 @@ function requiresConclusionExcel(product: Product) {
 function clampPageSize(value: string | null) {
   const pageSize = Number(value) || 50;
   return Math.min(Math.max(pageSize, 1), 200);
+}
+
+function normalizeProductListSource(value: string | null): ProductListSource {
+  return value === "sellfox" || value === "all" ? value : "dashboard";
+}
+
+function createProductRecordData(product: Product, user: { id: string; organizationId: string }, scope: { workspaceId: string; accountId: string; marketplace: string }) {
+  const workflowStage = getProductWorkflowStage(product);
+
+  return {
+    userId: user.id,
+    accountId: scope.accountId,
+    marketplace: scope.marketplace,
+    payload: product as unknown as Prisma.InputJsonValue,
+    chineseName: product.chineseName,
+    englishName: product.englishName,
+    asin: product.asin,
+    status: product.status,
+    supplierName: product.supplierName,
+    purchasePrice: product.purchasePrice,
+    selectionOwner: product.selectionOwner || product.developer || "",
+    opsAssignee: product.opsAssignee || normalizeAssigneeList(undefined, product.opsAssignees).join("、"),
+    designerAssignee: product.designerAssignee || normalizeAssigneeList(undefined, product.designerAssignees).join("、"),
+    workflowStage,
+    workflowDueAt: product.workflowDueAt ? new Date(product.workflowDueAt) : null,
+    operationsProgressIncomplete: isProductOperationsProgressIncomplete(product),
+  };
 }
 
 function getWorkflowNotificationAssignees(product: Product) {
@@ -195,29 +230,50 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const scope = workspaceScopeFromRequest(request);
+    const source = normalizeProductListSource(url.searchParams.get("source"));
     const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
     const pageSize = clampPageSize(url.searchParams.get("pageSize"));
     const search = url.searchParams.get("search")?.trim();
-    const where: Prisma.ProductRecordWhereInput = {
-      organizationId: user.organizationId,
+    const status = url.searchParams.get("status");
+    const minPrice = Number(url.searchParams.get("minPrice"));
+    const maxPrice = Number(url.searchParams.get("maxPrice"));
+    const detail = url.searchParams.get("detail") === "full";
+    const where = createProductListWhere({
+      user,
       workspaceId: scope.workspaceId,
-      ...(search
-        ? {
-            OR: [
-              { sku: { contains: search, mode: "insensitive" } },
-              { id: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    };
+      source,
+      search,
+      asin: url.searchParams.get("asin")?.trim(),
+      status: status === "all" ? "" : status,
+      supplierName: url.searchParams.get("supplierName")?.trim(),
+      opsAssignees: splitMultiValue(url.searchParams.get("opsAssignees")),
+      selectionOwners: splitMultiValue(url.searchParams.get("selectionOwners")),
+      designerAssignees: splitMultiValue(url.searchParams.get("designerAssignees")),
+      minPrice,
+      maxPrice,
+    });
     let total = 0;
-    let records: Array<{ payload: Prisma.JsonValue }> = [];
+    let records: Awaited<ReturnType<typeof prisma.productRecord.findMany>> = [];
 
     try {
       [total, records] = await Promise.all([
         prisma.productRecord.count({ where }),
         prisma.productRecord.findMany({
           where,
+          select: detail
+            ? undefined
+            : {
+                id: true,
+                sku: true,
+                chineseName: true,
+                englishName: true,
+                status: true,
+                selectionOwner: true,
+                opsAssignee: true,
+                designerAssignee: true,
+                workflowStage: true,
+                updatedAt: true,
+              },
           orderBy: {
             updatedAt: "desc",
           },
@@ -245,13 +301,41 @@ export async function GET(request: Request) {
       );
     }
 
+    const summaryWhere: Prisma.ProductRecordWhereInput = applyProductSourceFilter({
+      organizationId: user.organizationId,
+      workspaceId: scope.workspaceId,
+    }, source);
+    const now = new Date();
+    const staleCreatedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const [developingCount, opsReviewCount, designInProgressCount, operationsProgressCount, overdueCount] = await Promise.all([
+      prisma.productRecord.count({ where: { ...summaryWhere, status: "developing" } }),
+      prisma.productRecord.count({ where: { ...summaryWhere, status: "ops_review" } }),
+      prisma.productRecord.count({ where: { ...summaryWhere, status: "design_in_progress" } }),
+      prisma.productRecord.count({ where: { ...summaryWhere, operationsProgressIncomplete: true } }),
+      prisma.productRecord.count({
+        where: {
+          ...summaryWhere,
+          status: { notIn: ["listed", "canceled", "delisted", "patent_risk"] },
+          OR: [{ workflowDueAt: { lt: now } }, { createdAt: { lt: staleCreatedAt } }],
+        },
+      }),
+    ]);
+
     return NextResponse.json({
-      products: records.map((record) => record.payload as unknown as Product),
+      products: records.map((record) => (detail ? (record.payload as unknown as Product) : createProductListItem(record))),
       pagination: {
         page,
         pageSize,
         total,
         pageCount: Math.max(1, Math.ceil(total / pageSize)),
+      },
+      summary: {
+        total,
+        developing: developingCount,
+        opsReview: opsReviewCount,
+        designInProgress: designInProgressCount,
+        operationsProgress: operationsProgressCount,
+        overdue: overdueCount,
       },
     });
   } catch (error) {
@@ -307,19 +391,11 @@ export async function POST(request: Request) {
       create: {
         id: productToSave.id,
         organizationId: user.organizationId,
-        userId: user.id,
         workspaceId: scope.workspaceId,
-        accountId: scope.accountId,
-        marketplace: scope.marketplace,
         sku: productToSave.sku,
-        payload: productToSave as unknown as Prisma.InputJsonValue,
+        ...createProductRecordData(productToSave, user, scope),
       },
-      update: {
-        userId: user.id,
-        accountId: scope.accountId,
-        marketplace: scope.marketplace,
-        payload: productToSave as unknown as Prisma.InputJsonValue,
-      },
+      update: createProductRecordData(productToSave, user, scope),
     });
     await createWorkflowNotifications({
       user,

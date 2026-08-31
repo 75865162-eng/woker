@@ -22,6 +22,7 @@ export function ProductFiltersBar({
   designerAssigneeOptions,
   onChange,
   onReset,
+  onSearch,
 }: {
   filters: ProductFilters;
   opsAssigneeOptions: string[];
@@ -29,6 +30,7 @@ export function ProductFiltersBar({
   designerAssigneeOptions: string[];
   onChange: (filters: ProductFilters) => void;
   onReset: () => void;
+  onSearch?: () => void;
 }) {
   const statusOptions = [
     { value: "all", label: "全部状态" },
@@ -71,7 +73,7 @@ export function ProductFiltersBar({
           <LabeledInput label="到" type="number" value={filters.maxPrice} placeholder="10" onChange={(value) => onChange({ ...filters, maxPrice: value })} />
         </div>
         <div className="flex items-end gap-2">
-          <Button className="h-10" size="icon" title="搜索" onClick={() => onChange({ ...filters })}>
+          <Button className="h-10" size="icon" title="搜索" onClick={onSearch ?? (() => onChange({ ...filters }))}>
             <Search className="h-4 w-4" />
           </Button>
           <Button className="h-10" size="icon" title="重置" variant="secondary" onClick={onReset}>
@@ -148,7 +150,7 @@ export function ProductTable({
   products: Product[];
   totalCount: number;
   loading?: boolean;
-  onOpenProduct: (productId: string) => void;
+  onOpenProduct: (sku: string) => void;
   onOpenHistory: (product: Product) => void;
 }) {
   return (
@@ -216,7 +218,7 @@ export function ProductTable({
                     </div>
                   </td>
                   <td className="px-3">
-                    <button className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark" title={product.sku} onClick={() => onOpenProduct(product.id)}>
+                    <button className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark" title={product.sku} onClick={() => onOpenProduct(product.sku)}>
                       {product.sku}
                     </button>
                   </td>

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, ChevronDown, ExternalLink, FileDown, FileUp, History, ImagePlus, PackagePlus, RotateCcw, Save, Search, Video, X } from "lucide-react";
+import { ArrowRight, Bell, ChevronDown, ExternalLink, FileDown, FileUp, History, ImagePlus, Minus, PackagePlus, RotateCcw, Save, Search, Video, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,6 @@ import {
   productWorkflowStageLabels,
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
-import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
 
 import {
   initialFilters,
@@ -60,7 +59,6 @@ import {
   buildAmazonLink,
   calculateTrialPricing,
   formatDateTime,
-  isOverdueProduct,
 } from "./product-workbench-utils";
 import {
   createTrialProductDraft,
@@ -75,17 +73,37 @@ type ProductWorkbenchCache = {
   page: number;
   pageSize: number;
   totalCount: number;
+  summary: ProductListSummary;
 };
 
 let productWorkbenchCache: ProductWorkbenchCache | null = null;
 const compactToolbarButtonClass =
   "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
 
+type ProductListSummary = {
+  total: number;
+  developing: number;
+  opsReview: number;
+  designInProgress: number;
+  operationsProgress: number;
+  overdue: number;
+};
+
+const emptyProductListSummary: ProductListSummary = {
+  total: 0,
+  developing: 0,
+  opsReview: 0,
+  designInProgress: 0,
+  operationsProgress: 0,
+  overdue: 0,
+};
+
 export function ProductWorkbench() {
   const [products, setProducts] = useState<Product[]>(() => productWorkbenchCache?.products ?? []);
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
   const [filters, setFilters] = useState<ProductFilters>(() => productWorkbenchCache?.filters ?? initialFilters);
-  const [activeProductId, setActiveProductId] = useState<string | null>(null);
+  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
@@ -93,6 +111,7 @@ export function ProductWorkbench() {
   const [page, setPage] = useState(() => productWorkbenchCache?.page ?? 1);
   const [pageSize, setPageSize] = useState(() => productWorkbenchCache?.pageSize ?? 20);
   const [productsTotalCount, setProductsTotalCount] = useState(() => productWorkbenchCache?.totalCount ?? 0);
+  const [listSummary, setListSummary] = useState<ProductListSummary>(() => productWorkbenchCache?.summary ?? emptyProductListSummary);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState("");
@@ -143,25 +162,27 @@ export function ProductWorkbench() {
       setProductsError("");
 
       try {
-        const response = await fetch("/api/products", { cache: "no-store" });
-        const data = (await response.json()) as { products?: Product[]; pagination?: { total?: number; pageCount?: number }; error?: string };
-
-        if (!response.ok) {
-          throw new Error(data.error || "商品数据读取失败");
-        }
+        const data = await fetchProducts({
+          filters,
+          page,
+          pageSize,
+        });
 
         if (!canceled) {
           const nextProducts = Array.isArray(data.products) ? data.products : [];
           const nextTotalCount = data.pagination?.total ?? 0;
+          const nextSummary = data.summary ?? emptyProductListSummary;
 
           setProducts(nextProducts);
           setProductsTotalCount(nextTotalCount);
+          setListSummary(nextSummary);
           productWorkbenchCache = {
             products: nextProducts,
             filters,
             page,
             pageSize,
             totalCount: nextTotalCount,
+            summary: nextSummary,
           };
           setActivityLog((current) => ["已从数据库读取商品数据", ...current].slice(0, 8));
         }
@@ -185,29 +206,58 @@ export function ProductWorkbench() {
     };
   }, [filters, page, pageSize]);
 
+  async function fetchProducts(input: { filters: ProductFilters; page: number; pageSize: number }) {
+    const params = new URLSearchParams({
+      page: String(input.page),
+      pageSize: String(input.pageSize),
+      detail: "full",
+    });
+
+    if (input.filters.keyword.trim()) params.set("search", input.filters.keyword.trim());
+    if (input.filters.asin.trim()) params.set("asin", input.filters.asin.trim());
+    if (input.filters.supplierName.trim()) params.set("supplierName", input.filters.supplierName.trim());
+    if (input.filters.status !== "all") params.set("status", input.filters.status);
+    if (input.filters.opsAssignees.length) params.set("opsAssignees", input.filters.opsAssignees.join(","));
+    if (input.filters.selectionOwners.length) params.set("selectionOwners", input.filters.selectionOwners.join(","));
+    if (input.filters.designerAssignees.length) params.set("designerAssignees", input.filters.designerAssignees.join(","));
+    if (input.filters.minPrice.trim()) params.set("minPrice", input.filters.minPrice.trim());
+    if (input.filters.maxPrice.trim()) params.set("maxPrice", input.filters.maxPrice.trim());
+
+    const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
+    const data = (await response.json()) as {
+      products?: Product[];
+      pagination?: { total?: number; pageCount?: number };
+      summary?: ProductListSummary;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(data.error || "商品数据读取失败");
+    }
+
+    return data;
+  }
+
   async function reloadProducts() {
     setProductsLoading(true);
     setProductsError("");
 
     try {
-      const response = await fetch("/api/products", { cache: "no-store" });
-      const data = (await response.json()) as { products?: Product[]; pagination?: { total?: number; pageCount?: number }; error?: string };
-
-      if (!response.ok) {
-        throw new Error(data.error || "商品数据读取失败");
-      }
-
+      const data = await fetchProducts({ filters, page, pageSize });
       const nextProducts = Array.isArray(data.products) ? data.products : [];
       const nextTotalCount = data.pagination?.total ?? 0;
+      const nextSummary = data.summary ?? emptyProductListSummary;
 
       setProducts(nextProducts);
       setProductsTotalCount(nextTotalCount);
+      setListSummary(nextSummary);
       productWorkbenchCache = {
         products: nextProducts,
         filters,
         page,
         pageSize,
         totalCount: nextTotalCount,
+        summary: nextSummary,
       };
     } catch (error) {
       setProductsError(error instanceof Error ? error.message : "商品数据读取失败");
@@ -216,58 +266,7 @@ export function ProductWorkbench() {
     }
   }
 
-  const filteredProducts = useMemo(() => {
-    const minPrice = Number(filters.minPrice);
-    const maxPrice = Number(filters.maxPrice);
-    const hasMinPrice = filters.minPrice.trim() !== "" && Number.isFinite(minPrice);
-    const hasMaxPrice = filters.maxPrice.trim() !== "" && Number.isFinite(maxPrice);
-    const keyword = filters.keyword.trim().toLowerCase();
-    const asin = filters.asin.trim().toLowerCase();
-    const opsAssignees = normalizeFilterNames(filters.opsAssignees);
-    const selectionOwners = normalizeFilterNames(filters.selectionOwners);
-    const designerAssignees = normalizeFilterNames(filters.designerAssignees);
-    const supplierName = filters.supplierName.trim().toLowerCase();
-
-    return products.filter((product) => {
-      const searchable = [product.sku, product.chineseName, product.englishName, product.keywords, product.note]
-        .join(" ")
-        .toLowerCase();
-      const productOpsAssignees = normalizeAssigneeList(product.opsAssignee, product.opsAssignees).map((item) => item.toLowerCase());
-      const productSelectionOwner = (product.selectionOwner || product.developer).toLowerCase();
-      const productDesignerAssignees = normalizeAssigneeList(product.designerAssignee, product.designerAssignees).map((item) => item.toLowerCase());
-
-      if (keyword && !searchable.includes(keyword)) return false;
-      if (asin && !product.asin.toLowerCase().includes(asin) && !product.competitorAsins.join(" ").toLowerCase().includes(asin)) return false;
-      if (opsAssignees.length && !matchesAnyName(productOpsAssignees, opsAssignees)) return false;
-      if (selectionOwners.length && !matchesAnyName([productSelectionOwner], selectionOwners)) return false;
-      if (designerAssignees.length && !matchesAnyName(productDesignerAssignees, designerAssignees)) return false;
-      if (supplierName && !product.supplierName.toLowerCase().includes(supplierName)) return false;
-      if (filters.status === "overdue" && !isOverdueProduct(product) && !isProductWorkflowOverdue(product)) return false;
-      if (filters.status === "design_in_progress" && product.status !== "design_in_progress") return false;
-      if (filters.status === "operations_progress" && !hasIncompleteOperationsProgress(product.operationsProgress)) return false;
-      if (
-        filters.status !== "all" &&
-        filters.status !== "overdue" &&
-        filters.status !== "design_in_progress" &&
-        filters.status !== "operations_progress" &&
-        product.status !== filters.status
-      ) {
-        return false;
-      }
-      if (hasMinPrice && product.purchasePrice < minPrice) return false;
-      if (hasMaxPrice && product.purchasePrice > maxPrice) return false;
-
-      return true;
-    });
-  }, [filters, products]);
-
-  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
-  const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
-  const activeProduct = products.find((product) => product.id === activeProductId) ?? null;
-
-  useEffect(() => {
-    setPage(1);
-  }, [filters, pageSize]);
+  const pageCount = Math.max(1, Math.ceil(productsTotalCount / pageSize));
 
   useEffect(() => {
     if (page > pageCount) {
@@ -275,20 +274,48 @@ export function ProductWorkbench() {
     }
   }, [page, pageCount]);
 
-  const developingCount = products.filter((product) => product.status === "developing").length;
-  const opsReviewCount = products.filter((product) => product.status === "ops_review").length;
-  const designInProgressProducts = products.filter((product) => product.status === "design_in_progress");
-  const operationsProgressProducts = products.filter((product) => hasIncompleteOperationsProgress(product.operationsProgress));
-  const overdueCount = products.filter((product) => isOverdueProduct(product) || isProductWorkflowOverdue(product)).length;
+  function applyFilters(nextFilters: ProductFilters) {
+    setPage(1);
+    setFilters(nextFilters);
+  }
+
+  function patchFilters(updater: (current: ProductFilters) => ProductFilters) {
+    setPage(1);
+    setFilters((current) => updater(current));
+  }
+
+  const developingCount = listSummary.developing;
+  const opsReviewCount = listSummary.opsReview;
+  const designInProgressCount = listSummary.designInProgress;
+  const operationsProgressCount = listSummary.operationsProgress;
+  const overdueCount = listSummary.overdue;
 
   function openNewProduct() {
-    setActiveProductId(null);
+    setActiveProduct(null);
     setIsEditorOpen(true);
   }
 
-  function openProduct(productId: string) {
-    setActiveProductId(productId);
-    setIsEditorOpen(true);
+  async function openProduct(sku: string) {
+    setDetailLoading(true);
+    setProductsError("");
+
+    try {
+      const response = await fetch(`/api/products/${encodeURIComponent(sku)}`, { cache: "no-store" });
+      const data = (await response.json()) as { product?: Product; error?: string };
+
+      if (!response.ok || !data.product) {
+        throw new Error(data.error || "商品详情读取失败");
+      }
+
+      setActiveProduct(data.product);
+      setIsEditorOpen(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "商品详情读取失败";
+      setProductsError(message);
+      setActivityLog((current) => [`商品详情读取失败：${message}`, ...current].slice(0, 8));
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   async function persistProduct(product: Product) {
@@ -307,7 +334,7 @@ export function ProductWorkbench() {
   }
 
   async function handleSaveProduct(draft: ProductDraft) {
-    const existing = draft.id ? products.find((product) => product.id === draft.id) : null;
+    const existing = activeProduct;
     const normalizedStatus = existing || newProductStatusValues.has(draft.status) ? draft.status : "pending";
     const nextProduct: Product = {
       ...draft,
@@ -319,26 +346,9 @@ export function ProductWorkbench() {
 
     try {
       const savedProduct = await persistProduct(nextProduct);
-      setProducts((current) => {
-        const nextProducts = existing
-          ? current.map((product) => (product.id === existing.id ? savedProduct : product))
-          : [savedProduct, ...current];
-
-        productWorkbenchCache = {
-          products: nextProducts,
-          filters,
-          page,
-          pageSize,
-          totalCount: existing ? productsTotalCount : productsTotalCount + 1,
-        };
-
-        return nextProducts;
-      });
-      if (!existing) {
-        setProductsTotalCount((current) => current + 1);
-      }
-      setActiveProductId(savedProduct.id);
+      setActiveProduct(savedProduct);
       setIsEditorOpen(false);
+      await reloadProducts();
       setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品保存失败";
@@ -370,15 +380,48 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         selectionOwner: creatorName,
         developer: "",
       };
-      const savedProduct = await persistProduct(importedWithOwner);
-      setProducts((current) => [savedProduct, ...current.filter((product) => product.sku !== savedProduct.sku)]);
-      setActiveProductId(savedProduct.id);
+      const importedWithAssets = await uploadEmbeddedProductImages(importedWithOwner);
+      const savedProduct = await persistProduct(importedWithAssets);
+      setActiveProduct(savedProduct);
       setIsEditorOpen(true);
+      await reloadProducts();
       setActivityLog((current) => [`已导入 ${file.name} 并保存到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "导入失败";
       window.alert(message);
       setActivityLog((current) => [`导入失败：${message}`, ...current].slice(0, 8));
+    }
+  }
+
+  async function handleExportProducts() {
+    try {
+      const params = new URLSearchParams({
+        search: filters.keyword.trim(),
+        asin: filters.asin.trim(),
+        supplierName: filters.supplierName.trim(),
+        status: filters.status,
+        opsAssignees: filters.opsAssignees.join(","),
+        selectionOwners: filters.selectionOwners.join(","),
+        designerAssignees: filters.designerAssignees.join(","),
+        minPrice: filters.minPrice.trim(),
+        maxPrice: filters.maxPrice.trim(),
+      });
+      const response = await fetch(`/api/products/export?${params.toString()}`, { method: "POST" });
+      const data = (await response.json()) as { file?: { downloadUrl?: string; name?: string }; rowCount?: number; error?: string };
+
+      if (!response.ok || !data.file?.downloadUrl) {
+        throw new Error(data.error || "商品导出失败");
+      }
+
+      const anchor = document.createElement("a");
+      anchor.href = data.file.downloadUrl;
+      anchor.download = data.file.name ?? "products.csv";
+      anchor.click();
+      setActivityLog((current) => [`已导出 ${data.rowCount ?? 0} 条商品到数据库文件`, ...current].slice(0, 8));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "商品导出失败";
+      setActivityLog((current) => [`商品导出失败：${message}`, ...current].slice(0, 8));
+      window.alert(message);
     }
   }
 
@@ -391,47 +434,50 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         {productsLoading ? (
           <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
         ) : null}
+        {detailLoading ? (
+          <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品详情...</div>
+        ) : null}
         <section className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           <SummaryTile
             label="全部商品"
             value={productsTotalCount.toLocaleString("zh-CN")}
             active={filters.status === "all"}
-            onClick={() => setFilters((current) => ({ ...current, status: "all" }))}
+            onClick={() => patchFilters((current) => ({ ...current, status: "all" }))}
           />
           <SummaryTile
             label="开发中"
             value={developingCount.toLocaleString("zh-CN")}
             tone="blue"
             active={filters.status === "developing"}
-            onClick={() => setFilters((current) => ({ ...current, status: "developing" }))}
+            onClick={() => patchFilters((current) => ({ ...current, status: "developing" }))}
           />
           <SummaryTile
             label="运营确认中"
             value={opsReviewCount.toLocaleString("zh-CN")}
             tone="amber"
             active={filters.status === "ops_review"}
-            onClick={() => setFilters((current) => ({ ...current, status: "ops_review" }))}
+            onClick={() => patchFilters((current) => ({ ...current, status: "ops_review" }))}
           />
           <SummaryTile
             label="美工处理中"
-            value={designInProgressProducts.length.toLocaleString("zh-CN")}
+            value={designInProgressCount.toLocaleString("zh-CN")}
             tone="blue"
             active={filters.status === "design_in_progress"}
-            onClick={() => setFilters((current) => ({ ...current, status: "design_in_progress" }))}
+            onClick={() => patchFilters((current) => ({ ...current, status: "design_in_progress" }))}
           />
           <SummaryTile
             label="运营进程"
-            value={operationsProgressProducts.length.toLocaleString("zh-CN")}
+            value={operationsProgressCount.toLocaleString("zh-CN")}
             tone="amber"
             active={filters.status === "operations_progress"}
-            onClick={() => setFilters((current) => ({ ...current, status: "operations_progress" }))}
+            onClick={() => patchFilters((current) => ({ ...current, status: "operations_progress" }))}
           />
           <SummaryTile
             label="超期处理"
             value={overdueCount.toLocaleString("zh-CN")}
             tone="red"
             active={filters.status === "overdue"}
-            onClick={() => setFilters((current) => ({ ...current, status: "overdue" }))}
+            onClick={() => patchFilters((current) => ({ ...current, status: "overdue" }))}
           />
         </section>
 
@@ -456,7 +502,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
                 <FileUp className="h-4 w-4" />
                 导入数据
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setActivityLog((current) => ["导出功能待接入 Excel 模板", ...current].slice(0, 8))}>
+              <Button variant="secondary" size="sm" onClick={() => void handleExportProducts()}>
                 <FileDown className="h-4 w-4" />
                 导出数据
               </Button>
@@ -480,11 +526,22 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               opsAssigneeOptions={opsFilterOptions}
               selectionOwnerOptions={selectionOwnerFilterOptions}
               designerAssigneeOptions={designerFilterOptions}
-              onChange={setFilters}
-              onReset={() => setFilters(initialFilters)}
+              onChange={applyFilters}
+              onReset={() => applyFilters(initialFilters)}
+              onSearch={() => void reloadProducts()}
             />
-            <ProductTable products={visibleProducts} totalCount={productsTotalCount} loading={productsLoading} onOpenProduct={openProduct} onOpenHistory={setVersionProduct} />
-            <Pagination page={page} pageCount={pageCount} pageSize={pageSize} pageSizeOptions={pageSizeOptions} onPageChange={setPage} onPageSizeChange={setPageSize} />
+            <ProductTable products={products} totalCount={productsTotalCount} loading={productsLoading} onOpenProduct={(sku) => void openProduct(sku)} onOpenHistory={setVersionProduct} />
+            <Pagination
+              page={page}
+              pageCount={pageCount}
+              pageSize={pageSize}
+              pageSizeOptions={pageSizeOptions}
+              onPageChange={setPage}
+              onPageSizeChange={(nextPageSize) => {
+                setPage(1);
+                setPageSize(nextPageSize);
+              }}
+            />
           </CardContent>
         </Card>
 
@@ -933,6 +990,7 @@ function ProductEditor({
   const [imageCopyGalleryOpen, setImageCopyGalleryOpen] = useState(false);
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
   const [conclusionUploading, setConclusionUploading] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const conclusionInputRef = useRef<HTMLInputElement | null>(null);
 
   const isEditing = Boolean(product);
@@ -1313,18 +1371,17 @@ function ProductEditor({
       return;
     }
 
-    const readers = selected.map(
-      (file) =>
-        new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.readAsDataURL(file);
-        }),
-    );
+    void Promise.all(selected.map(uploadProductImageFile))
+      .then((images) => {
+        setDraft((current) => ({ ...current, images: [...current.images, ...images].slice(0, 10) }));
+      })
+      .catch((error) => {
+        window.alert(error instanceof Error ? error.message : "商品图片上传失败。");
+      });
+  }
 
-    void Promise.all(readers).then((images) => {
-      setDraft((current) => ({ ...current, images: [...current.images, ...images].slice(0, 10) }));
-    });
+  function removeImage(index: number) {
+    setDraft((current) => ({ ...current, images: current.images.filter((_, imageIndex) => imageIndex !== index) }));
   }
 
   async function handleConclusionUpload(file: File | undefined) {
@@ -1415,24 +1472,57 @@ function ProductEditor({
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <div>
                   <h3 className="text-lg font-bold text-foreground">图片</h3>
-                  <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
-                    <ImagePlus className="h-8 w-8 text-brand" />
-                    <span className="mt-2 text-sm font-semibold text-foreground">上传图片</span>
-                    <span className="mt-1 text-xs text-muted">可上传 5-10 张，列表默认显示第一张。</span>
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
-                  </label>
-                  <div className="mt-3 grid grid-cols-5 gap-2">
-                    {draft.images.map((image, index) => (
-                      <button
-                        key={`${image.slice(0, 24)}-${index}`}
-                        className="relative aspect-square overflow-hidden rounded-md border border-border bg-surface-muted"
-                        onClick={() => setDraft((current) => ({ ...current, images: current.images.filter((_, imageIndex) => imageIndex !== index) }))}
-                        title="点击移除"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={image} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
-                      </button>
-                    ))}
+                  {draft.images[0] ? (
+                    <button
+                      type="button"
+                      className="mt-4 flex aspect-square w-full overflow-hidden rounded-lg border border-border bg-surface-muted transition-colors hover:border-brand hover:bg-white"
+                      onClick={() => setPreviewImage(draft.images[0])}
+                      title="点击查看大图"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={draft.images[0]} alt="商品主图预览" className="h-full w-full object-contain p-2" />
+                    </button>
+                  ) : (
+                    <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
+                      <ImagePlus className="h-8 w-8 text-brand" />
+                      <span className="mt-2 text-sm font-semibold text-foreground">上传图片</span>
+                      <span className="mt-1 text-xs text-muted">可上传 5-10 张，第一张会显示为主图。</span>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
+                    </label>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
+                      <div className="flex flex-col items-center justify-center">
+                        <ImagePlus className="h-4 w-4 text-brand" />
+                        <span className="mt-1 text-[10px] font-semibold text-foreground">上传</span>
+                      </div>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
+                    </label>
+                    <div className="thin-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">
+                      {draft.images.map((image, index) => (
+                        <div key={`${image.slice(0, 24)}-${index}`} className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted"
+                            onClick={() => setPreviewImage(image)}
+                            title="点击查看大图"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={image} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
+                          </button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            title="删除图片"
+                            onClick={() => removeImage(index)}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1612,6 +1702,26 @@ function ProductEditor({
           productName={draft.chineseName}
           onClose={() => setVideoPlanOpen(false)}
         />
+      ) : null}
+      {previewImage ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
+          <div className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">图片预览</h3>
+                <p className="mt-1 text-xs font-semibold text-muted">点击空白处或关闭按钮返回。</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setPreviewImage(null)}>
+                <X className="h-4 w-4" />
+                关闭
+              </Button>
+            </div>
+            <div className="flex flex-1 items-center justify-center overflow-auto p-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewImage} alt="商品图片大图" className="max-h-[78vh] max-w-full object-contain" />
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -1936,6 +2046,64 @@ async function loadTeamAccountsFromApi() {
   }
 }
 
+async function uploadProductImageFile(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch("/api/products/image-assets/upload", {
+    method: "POST",
+    body: formData,
+  });
+  const data = (await response.json()) as { asset?: { url?: string }; error?: string };
+
+  if (!response.ok || !data.asset?.url) {
+    throw new Error(data.error || "商品图片上传失败。");
+  }
+
+  return data.asset.url;
+}
+
+async function uploadEmbeddedProductImages(product: Product) {
+  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+  const uploadedImages = await Promise.all(product.images.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-${index + 1}.png`)));
+  const workbookDetail = productWithWorkbook.workbookDetail
+    ? {
+        ...productWithWorkbook.workbookDetail,
+        remarkImages: await Promise.all(
+          productWithWorkbook.workbookDetail.remarkImages.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-remark-${index + 1}.png`)),
+        ),
+        competitors: await Promise.all(
+          productWithWorkbook.workbookDetail.competitors.map(async (competitor, index) => ({
+            ...competitor,
+            hotVariantImage: await uploadDataUrlImage(competitor.hotVariantImage, `${product.sku || "product"}-competitor-${index + 1}.png`),
+            noteImage: await uploadDataUrlImage(competitor.noteImage, `${product.sku || "product"}-competitor-note-${index + 1}.png`),
+          })),
+        ),
+      }
+    : undefined;
+
+  return {
+    ...product,
+    images: uploadedImages,
+    ...(workbookDetail ? { workbookDetail } : {}),
+  };
+}
+
+async function uploadDataUrlImage(value: string, name: string) {
+  if (!value.startsWith("data:")) {
+    return value;
+  }
+
+  const response = await fetch(value);
+  const blob = await response.blob();
+  const extension = blob.type === "image/jpeg" ? ".jpg" : blob.type === "image/webp" ? ".webp" : ".png";
+  const file = new File([blob], name.replace(/\.[a-z0-9]+$/i, extension), {
+    type: blob.type || "image/png",
+  });
+
+  return uploadProductImageFile(file);
+}
+
 function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[]) {
   return Array.from(new Set(filterTeamMembersByRoles(members, roles).map((member) => member.name.trim()).filter(Boolean)));
 }
@@ -1948,14 +2116,6 @@ function getAccountNameOptionsByRoleIds(accounts: TeamAccountRecord[], roleIds: 
     .filter(Boolean);
 
   return Array.from(new Set(names));
-}
-
-function normalizeFilterNames(values: string[]) {
-  return values.map((value) => value.trim().toLowerCase()).filter(Boolean);
-}
-
-function matchesAnyName(productNames: string[], selectedNames: string[]) {
-  return selectedNames.some((selectedName) => productNames.some((productName) => productName.includes(selectedName)));
 }
 
 function Pagination({

@@ -83,6 +83,8 @@ interface WorkspaceState {
   parseStatus: ParseJobStatus;
   parseProgress: number;
   uploadedFileName?: string;
+  originalWorkbookFileId?: string;
+  originalWorkbookFileName?: string;
   originalWorkbookBuffer?: ArrayBuffer;
   activeBatchId?: string;
   parsedRowCount: number;
@@ -127,7 +129,7 @@ interface WorkspaceState {
   clearDraftSelection: () => void;
   removePendingDraftsForCampaignGroup: (campaignGroupId: string) => void;
   clearPendingAdjustmentDrafts: () => void;
-  setParseStarted: (fileName: string, originalWorkbookBuffer: ArrayBuffer) => void;
+  setParseStarted: (fileName: string, originalWorkbookBuffer: ArrayBuffer, originalWorkbookFileId?: string) => void;
   setParseProgress: (progress: number, sheets?: string[]) => void;
   ingestParsedRows: (sheetName: string, rows: SheetRow[], startRowIndex: number) => void;
   setParseCompleted: (rowCount: number, sheets: string[]) => void;
@@ -185,6 +187,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   parseStatus: "idle",
   parseProgress: 0,
   uploadedFileName: undefined,
+  originalWorkbookFileId: undefined,
+  originalWorkbookFileName: undefined,
   originalWorkbookBuffer: undefined,
   activeBatchId: undefined,
   parsedRowCount: 0,
@@ -841,7 +845,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ),
     })),
   clearPendingAdjustmentDrafts: () => set({ pendingAdjustmentDrafts: [] }),
-  setParseStarted: (fileName, originalWorkbookBuffer) => {
+  setParseStarted: (fileName, originalWorkbookBuffer, originalWorkbookFileId) => {
     const batchId = `batch-${Date.now()}`;
     set({
       campaignGroups: [],
@@ -860,6 +864,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       parseStatus: "parsing",
       parseProgress: 0,
       uploadedFileName: fileName,
+      originalWorkbookFileId,
+      originalWorkbookFileName: fileName,
       originalWorkbookBuffer,
       activeBatchId: batchId,
       parsedRowCount: 0,
@@ -1197,6 +1203,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         parseStatus: "idle",
         parseProgress: 0,
         uploadedFileName: undefined,
+        originalWorkbookFileId: undefined,
+        originalWorkbookFileName: undefined,
         originalWorkbookBuffer: undefined,
         activeBatchId: undefined,
         parsedRowCount: 0,
@@ -1252,6 +1260,8 @@ if (typeof window !== "undefined") {
       state.parseStatus !== previousState.parseStatus ||
       state.parseProgress !== previousState.parseProgress ||
       state.uploadedFileName !== previousState.uploadedFileName ||
+      state.originalWorkbookFileId !== previousState.originalWorkbookFileId ||
+      state.originalWorkbookFileName !== previousState.originalWorkbookFileName ||
       state.originalWorkbookBuffer !== previousState.originalWorkbookBuffer ||
       state.activeBatchId !== previousState.activeBatchId ||
       state.parsedRowCount !== previousState.parsedRowCount ||
@@ -1293,4 +1303,3 @@ if (typeof window !== "undefined") {
     }, 500);
   });
 }
-

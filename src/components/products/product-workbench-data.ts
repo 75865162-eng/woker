@@ -1,4 +1,4 @@
-import type { Product } from "@/lib/products/types";
+import type { Product, ProductListItem } from "@/lib/products/types";
 import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
@@ -16,7 +16,7 @@ import {
 } from "./product-workbench-model";
 import { formatDateTime, nextSku } from "./product-workbench-utils";
 
-export async function parseProductWorkbookFile(file: File, products: Product[]): Promise<Product> {
+export async function parseProductWorkbookFile(file: File, products: Array<Pick<Product, "sku">>): Promise<Product> {
   const buffer = await file.arrayBuffer();
   const [XLSXModule, JSZipModule] = await Promise.all([import("xlsx"), import("jszip")]);
   const XLSX = XLSXModule;
@@ -345,7 +345,7 @@ function extractDeveloperName(fileName: string) {
 }
 
 
-export function productToDraft(product: Product | null, products: Product[]): ProductEditorDraft {
+export function productToDraft(product: Product | null, products: Array<Pick<ProductListItem, "sku">>): ProductEditorDraft {
   if (product) {
     const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
     return {
@@ -393,7 +393,7 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
     opsAssignees: [],
     designerAssignees: [],
     workflowHistory: [],
-    workbookDetail: createEspressoMirrorDetail(),
+    workbookDetail: createBlankWorkbookDetail(),
   };
 }
 
@@ -803,5 +803,93 @@ function createEspressoMirrorDetail(): TrialProductDraft {
       { keyword: "espresso shot mirror", cpc: 0.63, monthlySearches: 488, abaRank: 1756622 },
       { keyword: "espresso mirror", cpc: 0.49, monthlySearches: 1539, abaRank: 1155349 },
     ],
+  };
+}
+
+function createBlankWorkbookDetail(): TrialProductDraft {
+  const blankPriceRow: TrialPriceRow = {
+    name: "",
+    lengthCm: 0,
+    widthCm: 0,
+    heightCm: 0,
+    actualWeightKg: 0,
+    suggestedPrice: 0,
+    purchaseCost: 0,
+    oceanFreightUnitPrice: 12,
+    fbaFee: 0,
+    exchangeRate: 6.9,
+  };
+
+  const blankCompetitorRow: TrialCompetitorRow = {
+    type: "",
+    hotVariantImage: "",
+    asin: "",
+    sales30Days: "",
+    variantCount: "",
+    variantType: "",
+    hotVariantSpec: "",
+    hotVariantPrice: "",
+    fbaFee: "",
+    priceChangeNote: "",
+    reviewCount: "",
+    rating: "",
+    negativePoint1: "",
+    negativePoint2: "",
+    negativePoint3: "",
+    negativePoint4: "",
+    negativePoint5: "",
+    packageSize: "",
+    note: "",
+    noteImage: "",
+  };
+
+  const blankSupplierRow: TrialSupplierRow = {
+    productUrl: "",
+    factoryName: "",
+    configuration: "",
+    moq: "",
+    leadTime: "",
+    domesticFreightIncluded: "",
+    certifications: "",
+    patentCountry: "",
+    packagingMethod: "",
+    cost100: 0,
+    cost300: 0,
+    taxPoint: "",
+    invoiceName: "",
+    invoiceSpecUnit: "",
+    invoiceRegion: "",
+  };
+
+  return {
+    title: "",
+    pricingRows: [blankPriceRow],
+    competitors: [blankCompetitorRow],
+    suppliers: [blankSupplierRow],
+    improvement: {
+      audience: "",
+      scenario: "",
+      painPoint1: "",
+      painPoint2: "",
+      painPoint3: "",
+      material: "",
+      size: "",
+      functionImprovement: "",
+      appearance: "",
+      accessories: "",
+      packaging: "",
+      manual: "",
+      imageCopySuggestion: "",
+      peakSeasonWeights: createDefaultPeakSeasonWeights(),
+      peakSales: "",
+      offSeasonSales: "",
+      targetSales: "",
+      infringement: "",
+      certification: "",
+      rows: [createEmptyImprovementRow()],
+    },
+    remark: "",
+    remarkImages: [],
+    keywords: [],
   };
 }

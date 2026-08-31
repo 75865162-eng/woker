@@ -4,7 +4,6 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Check, Download, EyeOff, History, List
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { RulesEditorShell } from "@/components/app-shell/lazy-workbenches";
 import { Button } from "@/components/ui/button";
-import { DataSourceBanner } from "@/components/ui/data-source-banner";
 import { OperationProgress } from "@/components/ui/operation-progress";
 import { defaultRules, lifecycleGroups } from "@/data/mock-data";
 import { useBulkUpload } from "@/lib/hooks/use-bulk-upload";
@@ -917,12 +916,6 @@ export function CampaignGridHome() {
               </button>
             </header>
             <div className="thin-scrollbar flex-1 space-y-3 overflow-auto p-4">
-              <DataSourceBanner
-                className="rounded-md px-3 py-2"
-                tone="local"
-                title="规则仓库当前同步到本地工作区"
-                description="规则会驱动 PPC 草稿生成，不直接覆盖原始文件；当前保存到浏览器 IndexedDB。"
-              />
               <RulesEditorShell lifecycleGroups={lifecycleGroups} initialLifecycleId={activeLifecycleGroupId ?? lifecycleGroups[0].id} />
             </div>
           </section>

@@ -108,14 +108,14 @@ export function WorkspacePanel() {
   const overallCpc = overallTotals.clicks > 0 ? overallTotals.spend / overallTotals.clicks : undefined;
   const persistenceLabel =
     persistenceStatus === "loading"
-      ? "正在恢复本地工作区"
+      ? "正在恢复数据库工作区"
       : persistenceStatus === "saving"
-        ? "正在自动保存"
+        ? "正在自动保存到数据库"
         : persistenceStatus === "saved"
-          ? "已自动保存"
+          ? "已保存到数据库"
           : persistenceStatus === "failed"
             ? "自动保存异常"
-            : "本地保存已就绪";
+            : "数据库保存已就绪";
 
   return (
     <div id={workspacePanelAnchorId} className="min-w-0 flex-1 scroll-mt-24 space-y-5">
@@ -136,7 +136,7 @@ export function WorkspacePanel() {
                 }
               }}
             >
-              清空本地保存
+              清空数据库保存
             </Button>
           </div>
           <div className="rounded-lg border border-border bg-surface-muted p-4">

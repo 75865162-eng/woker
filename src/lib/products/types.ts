@@ -139,3 +139,22 @@ export type Product = {
 export type ProductDraft = Omit<Product, "id"> & {
   id?: string;
 };
+
+export type ProductListItem = {
+  id: string;
+  sku: string;
+  chineseName: string;
+  englishName: string;
+  status: ProductStatus;
+  currentOwner: string;
+  updatedAt: string;
+};
+
+export type ProductListSummary = {
+  total: number;
+  developing: number;
+  opsReview: number;
+  designInProgress: number;
+  operationsProgress: number;
+  overdue: number;
+};

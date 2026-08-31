@@ -32,7 +32,11 @@ export function PendingDraftQueue() {
     pendingAdjustmentDrafts,
     campaignGroups,
     originalWorkbookBuffer,
+    originalWorkbookFileId,
     uploadedFileName,
+    rules,
+    overallAdDataRows,
+    overallAdDataMatchSummary,
     removePendingDraftsForCampaignGroup,
     clearPendingAdjustmentDrafts,
     recordExportHistory,
@@ -53,9 +57,13 @@ export function PendingDraftQueue() {
       };
     });
   }, [campaignGroups, pendingAdjustmentDrafts]);
+  const campaignGroupNamesById = useMemo(
+    () => new Map(campaignGroups.map((group) => [group.id, group.campaignName])),
+    [campaignGroups],
+  );
 
   async function exportAllPendingDrafts() {
-    if (!originalWorkbookBuffer || pendingAdjustmentDrafts.length === 0) {
+    if (pendingAdjustmentDrafts.length === 0) {
       return;
     }
 
@@ -68,8 +76,14 @@ export function PendingDraftQueue() {
       setExportProgress({ label: "写回全部待处理草稿", progress: 55 });
       await waitForPaint();
       const { exportSelectedDrafts } = await import("@/lib/excel/bulk-export");
+      const workbookBuffer = originalWorkbookBuffer ?? (originalWorkbookFileId ? await loadWorkbookBuffer(originalWorkbookFileId) : null);
+
+      if (!workbookBuffer) {
+        throw new Error("未找到原始 Bulk 文件，请重新上传后再导出。");
+      }
+
       const result = await exportSelectedDrafts({
-        workbookBuffer: originalWorkbookBuffer,
+        workbookBuffer,
         drafts,
         fileName: `已修改-全部待处理-${uploadedFileName ?? "bulk-operations.xlsx"}`,
       });
@@ -83,6 +97,16 @@ export function PendingDraftQueue() {
       setExportProgress({ label: "下载导出文件", progress: 90 });
       downloadArrayBuffer(result.data, result.fileName);
       recordExportHistory(result.fileName, drafts);
+      await saveDraftRun({
+        exportFileName: result.fileName,
+        selectedDraftIds: drafts.map((draft) => draft.id),
+        drafts,
+        campaignGroupIds: Array.from(new Set(drafts.map((draft) => draft.campaignGroupId))),
+        campaignGroupNamesById,
+        rules,
+        overallAdDataRows,
+        overallAdDataMatchSummary,
+      });
       setExportProgress({ label: "导出完成", progress: 100 });
       window.setTimeout(() => setExportProgress(null), 1200);
     } catch (error) {
@@ -116,7 +140,10 @@ export function PendingDraftQueue() {
             <Trash2 className="h-4 w-4" />
             清空
           </Button>
-          <Button onClick={() => void exportAllPendingDrafts()} disabled={!originalWorkbookBuffer || pendingAdjustmentDrafts.length === 0 || exporting}>
+          <Button
+            onClick={() => void exportAllPendingDrafts()}
+            disabled={(!originalWorkbookBuffer && !originalWorkbookFileId) || pendingAdjustmentDrafts.length === 0 || exporting}
+          >
             <Download className="h-4 w-4" />
             {exporting ? "导出中..." : "合并导出 Bulk"}
           </Button>
@@ -163,4 +190,55 @@ export function PendingDraftQueue() {
       </div>
     </section>
   );
+}
+
+async function loadWorkbookBuffer(fileId: string) {
+  try {
+    const response = await fetch(`/api/workspace/workbook-files/${encodeURIComponent(fileId)}/download`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
+async function saveDraftRun(input: {
+  exportFileName: string;
+  selectedDraftIds: string[];
+  drafts: Array<{ campaignGroupId: string } & Record<string, unknown>>;
+  campaignGroupIds: string[];
+  campaignGroupNamesById: Map<string, string>;
+  rules: unknown;
+  overallAdDataRows: unknown;
+  overallAdDataMatchSummary: unknown;
+}) {
+  const campaignGroupNames = input.campaignGroupIds.map((campaignGroupId) => input.campaignGroupNamesById.get(campaignGroupId) ?? campaignGroupId);
+  const response = await fetch("/api/workspace/draft-runs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      scopeType: "campaign",
+      exportFileName: input.exportFileName,
+      exportedAt: new Date().toISOString(),
+      campaignGroupIds: input.campaignGroupIds,
+      campaignGroupNames,
+      rulesSnapshot: input.rules,
+      overallAdDataRows: input.overallAdDataRows,
+      overallAdDataMatchSummary: input.overallAdDataMatchSummary,
+      drafts: input.drafts,
+      selectedDraftIds: input.selectedDraftIds,
+      summary: {
+        draftCount: input.drafts.length,
+        campaignGroupCount: input.campaignGroupIds.length,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "保存草稿运行记录失败。");
+  }
 }

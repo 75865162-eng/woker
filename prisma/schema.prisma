@@ -305,6 +305,49 @@ model ProductRecord {
   @@index([organizationId, workspaceId, workflowStage])
 }
 
+model SellfoxProductRecord {
+  id                           String    @id
+  organizationId               String
+  userId                       String
+  sku                          String
+  payload                      Json
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  workspaceId                  String    @default("default")
+  accountId                    String    @default("")
+  marketplace                  String    @default("")
+  chineseName                  String    @default("")
+  englishName                  String    @default("")
+  asin                         String    @default("")
+  status                       String    @default("")
+  supplierName                 String    @default("")
+  purchasePrice                Float     @default(0)
+  selectionOwner               String    @default("")
+  opsAssignee                  String    @default("")
+  designerAssignee             String    @default("")
+  workflowStage                String    @default("")
+  workflowDueAt                DateTime?
+  operationsProgressIncomplete Boolean   @default(false)
+
+  @@unique([organizationId, workspaceId, sku])
+  @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([organizationId, sku])
+  @@index([userId, updatedAt])
+  @@index([organizationId, accountId, marketplace, updatedAt], map: "SellfoxProductRecord_organizationId_accountId_marketplace_upda")
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, chineseName])
+  @@index([organizationId, workspaceId, designerAssignee])
+  @@index([organizationId, workspaceId, operationsProgressIncomplete], map: "SellfoxProductRecord_organizationId_workspaceId_operationsPro")
+  @@index([organizationId, workspaceId, opsAssignee])
+  @@index([organizationId, workspaceId, purchasePrice])
+  @@index([organizationId, workspaceId, selectionOwner])
+  @@index([organizationId, workspaceId, status])
+  @@index([organizationId, workspaceId, supplierName])
+  @@index([organizationId, workspaceId, workflowDueAt])
+  @@index([organizationId, workspaceId, workflowStage])
+}
+
 model UserNotification {
   id              String       @id @default(cuid())
   organizationId  String
