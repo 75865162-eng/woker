@@ -5,9 +5,10 @@ import { recordDataChangeVersion, type VersionedEntityType } from "@/lib/audit/v
 import {
   createAiProfileName,
   createSavedAiModelProfilePair,
-  normalizeAiSettingsBundle,
+  normalizeAiImageSettings,
+  normalizeAiSettings,
   normalizeSavedAiModelProfiles,
-  type AiSettingsBundle,
+  type AiModelSettings,
 } from "@/lib/ai-settings";
 import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
@@ -196,7 +197,10 @@ export async function POST(request: Request) {
     }
 
     if (version.entityType === "ai_model_setting" && isRecord(version.payload)) {
-      const settings = normalizeAiSettingsBundle(version.payload as Partial<AiSettingsBundle>);
+      const settings = {
+        text: normalizeAiSettings(version.payload.settings as Partial<AiModelSettings> | undefined),
+        image: normalizeAiImageSettings(version.payload.imageSettings as Partial<AiModelSettings> | undefined),
+      };
       const profiles = normalizeSavedAiModelProfiles(version.payload.profiles);
       const nextProfiles = profiles.length
         ? profiles

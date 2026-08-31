@@ -28,8 +28,6 @@ import { fieldClass } from "@/lib/listing-ai/workspace-draft";
 import { createChatAttachment, type ChatAttachment } from "@/lib/listing-ai/chat-attachments";
 import type { ImagePreview } from "@/lib/listing-ai/workspace-draft";
 import { createBrowserId } from "@/lib/browser/random-id";
-const legacyConversationStorageKey = "listing-ai-chat-conversations-v1";
-const legacyActiveConversationStorageKey = "listing-ai-chat-active-v1";
 const chatHistoryEndpoint = "/api/listing-ai/chat-history";
 const chatRequestTimeoutMs = 245_000;
 const defaultImagePrompt =
@@ -128,29 +126,6 @@ type AttachmentUploadState = {
   currentName: string;
   currentProgress: number;
 };
-
-function readLegacyChatHistory(): ChatHistoryState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const savedConversations = window.localStorage.getItem(legacyConversationStorageKey);
-    if (!savedConversations) {
-      return null;
-    }
-
-    const conversations = JSON.parse(savedConversations) as ChatConversation[];
-    const activeConversationId = window.localStorage.getItem(legacyActiveConversationStorageKey) ?? "";
-
-    return normalizeChatHistory({
-      conversations,
-      activeConversationId,
-    });
-  } catch {
-    return null;
-  }
-}
 
 function ChatAttachmentStrip({
   attachments,
@@ -283,23 +258,11 @@ export function ListingAiChatPanel() {
           setHydrated(true);
         }
 
-        if (!nextHistory.conversations.length) {
-          const legacyHistory = readLegacyChatHistory();
-          if (legacyHistory && !cancelled) {
-            setConversations(legacyHistory.conversations);
-            setActiveConversationId(
-              legacyHistory.activeConversationId || legacyHistory.conversations[0]?.id || "",
-            );
-          }
-        }
       } catch (historyError) {
         console.warn("Failed to load Listing AI chat history.", historyError);
-        const legacyHistory = readLegacyChatHistory();
         if (!cancelled) {
-          setConversations(legacyHistory?.conversations ?? initialChatHistory.conversations);
-          setActiveConversationId(
-            legacyHistory?.activeConversationId || legacyHistory?.conversations[0]?.id || "",
-          );
+          setConversations(initialChatHistory.conversations);
+          setActiveConversationId(initialChatHistory.activeConversationId);
           setHydrated(true);
         }
       }
