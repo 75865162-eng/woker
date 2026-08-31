@@ -28,6 +28,19 @@ function waitForPaint() {
   });
 }
 
+async function loadWorkbookBuffer(fileId: string) {
+  try {
+    const response = await fetch(`/api/workspace/workbook-files/${encodeURIComponent(fileId)}/download`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
 function normalizeMatchValue(value: string | undefined) {
   return (value ?? "")
     .trim()
