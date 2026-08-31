@@ -204,6 +204,7 @@ export function AdjustmentTable() {
     performanceRows,
     overallAdDataRows,
     originalWorkbookBuffer,
+    originalWorkbookFileId,
     uploadedFileName,
     workspaceMode,
     overallAdDataStatus,
@@ -533,7 +534,7 @@ export function AdjustmentTable() {
       return;
     }
 
-    if (!originalWorkbookBuffer) {
+    if (!originalWorkbookBuffer && !originalWorkbookFileId) {
       window.alert("请先上传原始 Bulk Operations 文件，再导出修改版。");
       return;
     }
@@ -546,8 +547,14 @@ export function AdjustmentTable() {
       setOperationProgress({ label: "写回勾选草稿", progress: 55 });
       await waitForPaint();
       const { exportSelectedDrafts } = await import("@/lib/excel/bulk-export");
+      const workbookBuffer = originalWorkbookBuffer ?? (originalWorkbookFileId ? await loadWorkbookBuffer(originalWorkbookFileId) : null);
+
+      if (!workbookBuffer) {
+        throw new Error("未找到原始 Bulk 文件，请重新上传后再导出。");
+      }
+
       const result = await exportSelectedDrafts({
-        workbookBuffer: originalWorkbookBuffer,
+        workbookBuffer,
         drafts: adjustmentDrafts,
         fileName: `已修改-${uploadedFileName ?? "bulk-operations.xlsx"}`,
       });

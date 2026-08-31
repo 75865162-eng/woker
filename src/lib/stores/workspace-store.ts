@@ -4,7 +4,9 @@ import { create } from "zustand";
 import { campaignGroups, dataBatches, defaultRules, performanceRows as mockPerformanceRows } from "@/data/mock-data";
 import {
   deleteWorkspaceSnapshot,
+  readWorkspaceDraftRunHistory,
   readWorkspaceSnapshot,
+  writeWorkspaceDraftRun,
   writeWorkspaceSnapshot,
 } from "@/lib/repositories/workspace-repository";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
@@ -170,6 +172,42 @@ function countMatchedOverallRowsForCampaignGroups(rows: OverallAdDataRow[], camp
   const scopeIds = new Set(campaignGroupIds);
 
   return rows.filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId && scopeIds.has(row.campaignGroupId)).length;
+}
+
+function persistRuleRunHistoryRecords(records: RuleRunHistoryRecord[], rules: Rule[]) {
+  if (!records.length) {
+    return;
+  }
+
+  void Promise.all(records.map((record) => writeWorkspaceDraftRun({ record, rules }))).catch((error) => {
+    console.warn("Failed to persist workspace draft runs.", error);
+  });
+}
+
+function persistExportedRuleRunRecords(input: {
+  records: RuleRunHistoryRecord[];
+  rules: Rule[];
+  fileName: string;
+  exportedAt: string;
+  selectedDraftIdsByRecordId: Map<string, string[]>;
+}) {
+  if (!input.records.length) {
+    return;
+  }
+
+  void Promise.all(
+    input.records.map((record) =>
+      writeWorkspaceDraftRun({
+        record: { ...record, exportedAt: input.exportedAt, exportFileName: input.fileName },
+        rules: input.rules,
+        selectedDraftIds: input.selectedDraftIdsByRecordId.get(record.id) ?? [],
+        exportFileName: input.fileName,
+        exportedAt: input.exportedAt,
+      }),
+    ),
+  ).catch((error) => {
+    console.warn("Failed to persist exported workspace draft runs.", error);
+  });
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -532,6 +570,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -601,6 +640,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -689,6 +729,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -776,6 +817,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -1045,6 +1087,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         sourceDrafts.flatMap((draft) => draft.runHistoryId ? [draft.runHistoryId] : []),
       );
       const exportedAt = new Date().toISOString();
+      const selectedDraftIdsByRecordId = sourceDrafts.reduce<Map<string, string[]>>((map, draft) => {
+        if (!draft.runHistoryId) {
+          return map;
+        }
+
+        map.set(draft.runHistoryId, [...(map.get(draft.runHistoryId) ?? []), draft.id]);
+        return map;
+      }, new Map());
       const records: ExportHistoryRecord[] = campaignGroupIds.map((campaignGroupId) => {
         const campaignGroup = state.campaignGroups.find((group) => group.id === campaignGroupId);
         const groupDrafts = sourceDrafts.filter((draft) => draft.campaignGroupId === campaignGroupId);
@@ -1079,6 +1129,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         };
       });
       const exportedGroupIds = new Set(campaignGroupIds);
+      persistExportedRuleRunRecords({
+        records: state.ruleRunHistoryRecords.filter((runRecord) => exportedRunHistoryIds.has(runRecord.id)),
+        rules: state.rules,
+        fileName,
+        exportedAt,
+        selectedDraftIdsByRecordId,
+      });
 
       return {
         exportHistoryRecords: [...records, ...state.exportHistoryRecords].slice(0, 100),
@@ -1147,10 +1204,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }),
   hydratePersistedWorkspace: async () => {
     try {
-      const persisted = await readWorkspaceSnapshot<LegacyWorkspaceSnapshot>();
+      const [persisted, draftRunHistory] = await Promise.all([
+        readWorkspaceSnapshot<LegacyWorkspaceSnapshot>(),
+        readWorkspaceDraftRunHistory(),
+      ]);
 
       if (!persisted?.snapshot) {
-        set({ persistenceStatus: "ready", persistenceError: undefined });
+        set({
+          exportHistoryRecords: draftRunHistory.exportHistoryRecords,
+          ruleRunHistoryRecords: draftRunHistory.ruleRunHistoryRecords,
+          persistenceStatus: "ready",
+          persistenceError: undefined,
+        });
         return;
       }
 
@@ -1171,6 +1236,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         campaignSheetGroups: buildSheetGroups(snapshot.campaignGroups),
         overallAdDataRows: overallMatch?.rows ?? snapshot.overallAdDataRows,
         overallAdDataMatchSummary: overallMatch?.summary ?? snapshot.overallAdDataMatchSummary,
+        exportHistoryRecords: draftRunHistory.exportHistoryRecords.length
+          ? draftRunHistory.exportHistoryRecords
+          : snapshot.exportHistoryRecords,
+        ruleRunHistoryRecords: draftRunHistory.ruleRunHistoryRecords.length
+          ? draftRunHistory.ruleRunHistoryRecords
+          : snapshot.ruleRunHistoryRecords,
         persistenceStatus: "ready",
         persistenceError: undefined,
       });

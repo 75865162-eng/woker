@@ -28,6 +28,7 @@ import {
   productWorkflowStageLabels,
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
+import { isOperationsProgressComplete } from "@/lib/products/operations-progress";
 
 import {
   initialFilters,
@@ -999,6 +1000,7 @@ function ProductEditor({
   const workflowStage = getProductWorkflowStage(draft);
   const workflowAssignee = getCurrentWorkflowAssignee(draft);
   const workflowOverdue = isProductWorkflowOverdue(draft);
+  const canMarkWorkflowDone = isOperationsProgressComplete(draft.operationsProgress);
   const selectionOwner = draft.selectionOwner || (isEditing ? product?.selectionOwner : creatorName) || creatorName;
   const selectedOps = normalizeAssigneeList(draft.opsAssignee, draft.opsAssignees);
   const selectedDesigners = normalizeAssigneeList(draft.designerAssignee, draft.designerAssignees);
@@ -1617,12 +1619,13 @@ function ProductEditor({
                             转回运营
                           </Button>
                         ) : null}
-                        <Button size="sm" variant="secondary" onClick={() => moveWorkflow("done", "当前流程已完成。")}>
+                        <Button size="sm" variant="secondary" disabled={!canMarkWorkflowDone} onClick={() => moveWorkflow("done", "当前流程已完成。")}>
                           <Save className="h-4 w-4" />
                           标记完成
                         </Button>
                       </div>
                     </div>
+                    {!canMarkWorkflowDone ? <p className="mt-2 text-xs text-muted">请先在“运营进度”里完成必填项，再标记业务流转完成。</p> : null}
                     {workflowOverdue ? (
                       <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
                         <Bell className="h-4 w-4" />

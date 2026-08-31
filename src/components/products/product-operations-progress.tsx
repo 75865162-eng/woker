@@ -1,17 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, History, X } from "lucide-react";
+import { Check, CheckSquare, FileSpreadsheet, History, ImagePlus, Square, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   calculateForecastMonthlyRevenue,
+  isOperationStageComplete,
+  isOperationsProgressComplete,
   normalizeOperationsProgress,
+  operationStageEvidenceRequirements,
   operationStageDefinitions,
   operationStageStatusOptions,
   summarizeOperationsProgressChanges,
 } from "@/lib/products/operations-progress";
-import type { ProductOperationProgress, ProductOperationStage, ProductOperationStageStatus } from "@/lib/products/types";
+import type {
+  ProductOperationProgress,
+  ProductOperationStage,
+  ProductOperationStageEvidence,
+  ProductOperationStageStatus,
+} from "@/lib/products/types";
 
 const inputClass = "h-9 w-full rounded-md border border-border bg-white px-2 text-sm text-foreground outline-none focus:border-brand";
 
@@ -33,7 +41,8 @@ export function ProductOperationsProgress({
   const initialValue = useMemo(() => normalizeOperationsProgress(value, defaultOwner), [defaultOwner, value]);
   const [draft, setDraft] = useState(initialValue);
   const revenue = calculateForecastMonthlyRevenue(draft);
-  const completedCount = draft.stages.filter((stage) => stage.status === "completed").length;
+  const completedCount = draft.stages.filter(isOperationStageComplete).length;
+  const isComplete = isOperationsProgressComplete(draft);
 
   function setNumber(field: "orderQuantity" | "dailyAdBudget" | "forecastMonthlySales" | "forecastPrice", value: string) {
     setDraft((current) => ({ ...current, [field]: Number(value) || 0 }));
@@ -49,10 +58,51 @@ export function ProductOperationsProgress({
 
   function updateStageStatus(index: number, status: ProductOperationStageStatus) {
     const stage = draft.stages[index];
+    const requirement = operationStageEvidenceRequirements[stage.id];
+    if (status === "completed" && requirement && !stage.evidenceFile?.fileName) {
+      window.alert(requirement.helper);
+      return;
+    }
+
     updateStage(index, {
       status,
       completedAt: status === "completed" ? stage.completedAt || toDateInput(new Date()) : "",
     });
+  }
+
+  function toggleStageCompletion(index: number) {
+    const stage = draft.stages[index];
+    updateStageStatus(index, stage.status === "completed" ? "not_started" : "completed");
+  }
+
+  function updateStageEvidence(index: number, evidenceFile: ProductOperationStageEvidence) {
+    updateStage(index, { evidenceFile });
+  }
+
+  function handleEvidenceUpload(index: number, file: File | null) {
+    if (!file) return;
+
+    const stage = draft.stages[index];
+    const requirement = operationStageEvidenceRequirements[stage.id];
+    if (requirement?.kind === "image" && !file.type.startsWith("image/")) {
+      window.alert("请上传图片文件。");
+      return;
+    }
+    if (requirement?.kind === "excel" && !/\.(xlsx|xls|csv)$/iu.test(file.name)) {
+      window.alert("请上传 Excel 表。");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateStageEvidence(index, {
+        fileName: file.name,
+        fileType: file.type,
+        fileDataUrl: String(reader.result),
+        uploadedAt: new Date().toISOString(),
+      });
+    };
+    reader.readAsDataURL(file);
   }
 
   function applyChanges() {
@@ -76,7 +126,7 @@ export function ProductOperationsProgress({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-foreground">运营进度</h2>
-              <Badge tone={completedCount === draft.stages.length ? "green" : "amber"}>
+              <Badge tone={isComplete ? "green" : "amber"}>
                 {completedCount}/{draft.stages.length} 阶段完成
               </Badge>
             </div>
@@ -141,14 +191,16 @@ export function ProductOperationsProgress({
               {draft.updatedAt ? <p className="text-xs text-muted">最近更新：{formatDateTime(draft.updatedAt)} · {draft.updatedBy || "未知"}</p> : null}
             </div>
             <div className="mt-3 overflow-x-auto rounded-md border border-border">
-              <table className="w-full min-w-[1180px] text-left text-xs">
+              <table className="w-full min-w-[1320px] text-left text-xs">
                 <thead className="bg-surface-muted text-muted">
                   <tr>
+                    <th className="px-3 py-2">选择</th>
                     <th className="px-3 py-2">阶段</th>
                     <th className="px-3 py-2">状态</th>
                     <th className="px-3 py-2">负责人</th>
                     <th className="px-3 py-2">计划日期</th>
                     <th className="px-3 py-2">实际完成</th>
+                    <th className="px-3 py-2">附件</th>
                     <th className="px-3 py-2">备注 / 阻塞原因</th>
                     <th className="px-3 py-2">最后更新</th>
                   </tr>
@@ -156,8 +208,24 @@ export function ProductOperationsProgress({
                 <tbody>
                   {operationStageDefinitions.map((definition, index) => {
                     const stage = draft.stages[index];
+                    const isChecked = isOperationStageComplete(stage);
+                    const evidenceRequirement = operationStageEvidenceRequirements[stage.id];
                     return (
                       <tr key={definition.id} className="border-t border-border align-top">
+                        <td className="px-2 py-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={isChecked ? "text-brand hover:text-brand-dark" : ""}
+                            aria-label={isChecked ? "取消勾选" : "勾选完成"}
+                            title={isChecked ? "取消勾选" : "勾选完成"}
+                            aria-pressed={isChecked}
+                            onClick={() => toggleStageCompletion(index)}
+                          >
+                            {isChecked ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                          </Button>
+                        </td>
                         <td className="whitespace-nowrap px-3 py-2 font-bold text-foreground">{definition.label}</td>
                         <td className="w-32 px-2 py-2">
                           <select className={inputClass} value={stage.status} onChange={(event) => updateStageStatus(index, event.target.value as ProductOperationStageStatus)}>
@@ -176,6 +244,20 @@ export function ProductOperationsProgress({
                         </td>
                         <td className="w-40 px-2 py-2">
                           <input className={inputClass} type="date" value={stage.completedAt} onChange={(event) => updateStage(index, { completedAt: event.target.value })} />
+                        </td>
+                        <td className="w-52 px-2 py-2">
+                          {evidenceRequirement ? (
+                            <EvidenceUpload
+                              accept={evidenceRequirement.accept}
+                              fileName={stage.evidenceFile?.fileName}
+                              helper={evidenceRequirement.helper}
+                              label={evidenceRequirement.label}
+                              kind={evidenceRequirement.kind}
+                              onChange={(file) => handleEvidenceUpload(index, file)}
+                            />
+                          ) : (
+                            <span className="text-muted">--</span>
+                          )}
                         </td>
                         <td className="min-w-64 px-2 py-2">
                           <input
@@ -221,6 +303,35 @@ function ProgressField({ label, children }: { label: string; children: React.Rea
       {label}
       <div className="mt-1">{children}</div>
     </label>
+  );
+}
+
+function EvidenceUpload({
+  accept,
+  fileName,
+  helper,
+  label,
+  kind,
+  onChange,
+}: {
+  accept: string;
+  fileName?: string;
+  helper: string;
+  label: string;
+  kind: "image" | "excel";
+  onChange: (file: File | null) => void;
+}) {
+  const Icon = kind === "excel" ? FileSpreadsheet : ImagePlus;
+
+  return (
+    <div className="space-y-1">
+      <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted">
+        <Icon className="h-4 w-4 text-brand" />
+        {fileName ? "重新上传" : `上传${label}`}
+        <input className="hidden" type="file" accept={accept} onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
+      </label>
+      {fileName ? <p className="max-w-44 truncate text-xs font-semibold text-foreground">{fileName}</p> : <p className="text-xs text-muted">{helper}</p>}
+    </div>
   );
 }
 

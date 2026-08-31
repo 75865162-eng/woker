@@ -20,6 +20,23 @@ export const operationStageDefinitions: Array<{ id: ProductOperationStageId; lab
   { id: "listing", label: "上架" },
 ];
 
+export const operationStageEvidenceRequirements: Partial<
+  Record<ProductOperationStageId, { label: string; accept: string; helper: string; kind: "image" | "excel" }>
+> = {
+  final_sample_confirmation: {
+    label: "样品确认单",
+    accept: "image/*",
+    helper: "上传样品确认单图片后才能勾选完成",
+    kind: "image",
+  },
+  keyword_research: {
+    label: "关键词调研表",
+    accept: ".xlsx,.xls,.csv",
+    helper: "上传 Excel 表后才能勾选完成",
+    kind: "excel",
+  },
+};
+
 export const operationStageStatusOptions: Array<{ value: ProductOperationStageStatus; label: string }> = [
   { value: "not_started", label: "未开始" },
   { value: "in_progress", label: "进行中" },
@@ -66,7 +83,18 @@ export function calculateForecastMonthlyRevenue(progress: ProductOperationProgre
 }
 
 export function hasIncompleteOperationsProgress(progress?: ProductOperationProgress) {
-  return Boolean(progress?.stages?.length && progress.stages.some((stage) => stage.status !== "completed"));
+  return !isOperationsProgressComplete(progress);
+}
+
+export function isOperationsProgressComplete(progress?: ProductOperationProgress) {
+  return Boolean(progress?.stages?.length && progress.stages.every(isOperationStageComplete));
+}
+
+export function isOperationStageComplete(stage: ProductOperationStage) {
+  if (stage.status !== "completed") return false;
+
+  const requirement = operationStageEvidenceRequirements[stage.id];
+  return !requirement || Boolean(stage.evidenceFile?.fileName);
 }
 
 export function summarizeOperationsProgressChanges(before: ProductOperationProgress, after: ProductOperationProgress) {
