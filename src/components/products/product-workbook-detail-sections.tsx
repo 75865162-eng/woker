@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { uploadProductImageAsset } from "@/lib/products/image-assets";
 import {
   compactCompetitorFields,
   competitorTextFields,
@@ -358,22 +359,34 @@ function ImageUploadSquare({
   allowPdf?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  function handleFile(file: File | undefined) {
+  async function handleFile(file: File | undefined) {
     if (!file) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      onChange(String(reader.result));
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const nextImage =
+        allowPdf && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))
+          ? await fileToDataUrl(file)
+          : await uploadProductImageAsset(file);
+
+      onChange(nextImage);
       setPreviewOpen(false);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "图片上传失败。");
+    } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-    };
-    reader.readAsDataURL(file);
+      setIsUploading(false);
+    }
   }
 
   return (
@@ -399,20 +412,22 @@ function ImageUploadSquare({
         <button
           type="button"
           className="flex h-[130px] w-[130px] items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center text-xs font-semibold text-muted transition-colors hover:border-brand hover:bg-white"
+          disabled={isUploading}
           onClick={() => fileInputRef.current?.click()}
         >
-          上传图片
+          {isUploading ? "上传中" : "上传图片"}
         </button>
       )}
-      <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => handleFile(event.target.files?.[0])} />
+      {uploadError ? <p className="text-[11px] font-semibold text-danger">{uploadError}</p> : null}
+      <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => void handleFile(event.target.files?.[0])} />
 
       {previewOpen && image ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70 p-6">
           <div className="relative flex max-h-full max-w-5xl items-center justify-center">
             <div className="absolute right-0 top-0 z-10 flex translate-y-[-120%] gap-2">
-              <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <Button variant="secondary" size="sm" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
                 <ImagePlus className="h-4 w-4" />
-                {allowPdf ? "替换文件" : "替换图片"}
+                {isUploading ? "上传中" : allowPdf ? "替换文件" : "替换图片"}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
                 <X className="h-4 w-4" />
@@ -436,6 +451,8 @@ function ImageUploadSquare({
 
 function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange: (images: string[]) => void }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   async function handleFiles(files: FileList | null) {
     const selected = Array.from(files ?? []);
@@ -443,19 +460,42 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
       return;
     }
 
-    const nextImages = await Promise.all(selected.map(fileToDataUrl));
-    onChange([...images, ...nextImages]);
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const results = await Promise.allSettled(
+        selected.map(async (file) =>
+          file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+            ? fileToDataUrl(file)
+            : uploadProductImageAsset(file),
+        ),
+      );
+      const nextImages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const firstError = results.find((result) => result.status === "rejected");
+
+      if (nextImages.length) {
+        onChange([...images, ...nextImages]);
+      }
+
+      if (firstError && firstError.status === "rejected") {
+        setUploadError(firstError.reason instanceof Error ? firstError.reason.message : "图片上传失败。");
+      }
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   return (
     <div className="rounded-md border border-border bg-surface-muted p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-bold text-muted">备注图片</p>
-        <Button variant="secondary" size="sm" onClick={() => inputRef.current?.click()}>
-          <ImagePlus className="h-4 w-4" />
-          批量上传图片 / PDF
+        <Button variant="secondary" size="sm" disabled={isUploading} onClick={() => inputRef.current?.click()}>
+          {isUploading ? <Save className="h-4 w-4 animate-pulse" /> : <ImagePlus className="h-4 w-4" />}
+          {isUploading ? "上传中" : "批量上传图片 / PDF"}
         </Button>
       </div>
+      {uploadError ? <p className="mt-2 text-xs font-semibold text-danger">{uploadError}</p> : null}
       <input
         ref={inputRef}
         className="hidden"
