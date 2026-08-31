@@ -29,6 +29,7 @@ type Pagination = {
 
 const entityTypes = [
   { value: "", label: "全部类型" },
+  { value: "ai_model_setting", label: "AI 配置" },
   { value: "product", label: "产品资料" },
   { value: "listing_ai_workspace", label: "Listing 草稿" },
   { value: "ppc_workspace_snapshot", label: "PPC 草稿" },
@@ -39,6 +40,7 @@ const entityTypes = [
 ];
 
 const restorableEntityTypes = new Set([
+  "ai_model_setting",
   "product",
   "listing_ai_workspace",
   "ppc_workspace_snapshot",

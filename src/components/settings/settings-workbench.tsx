@@ -80,9 +80,6 @@ export function SettingsWorkbench() {
           profiles?: SavedAiModelProfile[];
           activeProfileId?: string;
         };
-        const localSettings = readLocalAiSettings();
-        const localImageSettings = readLocalAiImageSettings();
-        const localProfiles = readLocalAiProfiles();
         const databaseProfiles = normalizeSavedAiModelProfiles(data.profiles);
 
         if (data.settings) {
@@ -109,34 +106,29 @@ export function SettingsWorkbench() {
           return;
         }
 
-        const migratedSettings = localSettings ?? defaultAiModelSettings;
-        const migratedImageSettings = localImageSettings ?? defaultAiImageModelSettings;
-        const migratedProfiles = localProfiles.length
-          ? localProfiles
-          : createSavedAiModelProfilePair(migratedSettings, migratedImageSettings, createAiProfileName(migratedSettings));
-        const migratedActiveProfileId = migratedProfiles.find((profile) => profile.kind === "system")?.id ?? "";
-        const migratedProfileName = migratedProfiles.find((profile) => profile.kind === "system")?.name || createAiProfileName(migratedSettings);
-
-        await persistSettings(migratedSettings, migratedImageSettings, migratedProfiles, migratedActiveProfileId);
-
         if (cancelled) return;
-        setSettings(migratedSettings);
-        setImageSettings(migratedImageSettings);
-        setProfileName(migratedProfileName);
-        setProfiles(migratedProfiles);
-        setActiveProfileId(migratedActiveProfileId);
+        const defaults = createSavedAiModelProfilePair(
+          defaultAiModelSettings,
+          defaultAiImageModelSettings,
+          createAiProfileName(defaultAiModelSettings),
+        );
+        setSettings(defaultAiModelSettings);
+        setImageSettings(defaultAiImageModelSettings);
+        setProfileName(createAiProfileName(defaultAiModelSettings));
+        setProfiles(defaults);
+        setActiveProfileId(defaults.find((profile) => profile.kind === "system")?.id ?? "");
       } catch (error) {
-        const localSettings = readLocalAiSettings();
-        const localImageSettings = readLocalAiImageSettings();
-        const localProfiles = readLocalAiProfiles();
-
         if (cancelled) return;
-        if (localSettings) setSettings(localSettings);
-        if (localImageSettings) setImageSettings(localImageSettings);
-        if (localProfiles.length) {
-          setProfileName(localProfiles.find((profile) => profile.kind === "system")?.name || createAiProfileName(localSettings ?? defaultAiModelSettings));
-          setProfiles(localProfiles);
-        }
+        const defaults = createSavedAiModelProfilePair(
+          defaultAiModelSettings,
+          defaultAiImageModelSettings,
+          createAiProfileName(defaultAiModelSettings),
+        );
+        setSettings(defaultAiModelSettings);
+        setImageSettings(defaultAiImageModelSettings);
+        setProfileName(createAiProfileName(defaultAiModelSettings));
+        setProfiles(defaults);
+        setActiveProfileId(defaults.find((profile) => profile.kind === "system")?.id ?? "");
         setSettingsError(error instanceof Error ? error.message : "AI 配置加载失败。");
       } finally {
         if (!cancelled) setSettingsLoading(false);
@@ -846,36 +838,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   );
-}
-
-function readLocalAiSettings() {
-  try {
-    const saved = window.localStorage.getItem(aiSettingsStorageKey);
-
-    return saved ? normalizeAiSettings(JSON.parse(saved) as Partial<AiModelSettings>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function readLocalAiImageSettings() {
-  try {
-    const saved = window.localStorage.getItem(aiImageSettingsStorageKey);
-
-    return saved ? normalizeAiSettings(JSON.parse(saved) as Partial<AiModelSettings>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function readLocalAiProfiles() {
-  try {
-    const savedProfiles = window.localStorage.getItem(aiSettingsProfilesStorageKey);
-
-    return savedProfiles ? normalizeSavedAiModelProfiles(JSON.parse(savedProfiles) as SavedAiModelProfile[]) : [];
-  } catch {
-    return [];
-  }
 }
 
 function cacheAiSettings(settings: AiModelSettings, profiles: SavedAiModelProfile[]) {

@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { recordDataChangeVersion, type VersionedEntityType } from "@/lib/audit/versioning";
+import {
+  createAiProfileName,
+  createSavedAiModelProfilePair,
+  normalizeAiSettingsBundle,
+  normalizeSavedAiModelProfiles,
+  type AiSettingsBundle,
+} from "@/lib/ai-settings";
+import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -9,6 +17,7 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 export const runtime = "nodejs";
 
 const visibleEntityTypes = new Set<VersionedEntityType>([
+  "ai_model_setting",
   "product",
   "listing_ai_workspace",
   "ppc_workspace_snapshot",
@@ -23,7 +32,13 @@ function isVersionedEntityType(value: string | null): value is VersionedEntityTy
 }
 
 function isRestorableEntityType(value: VersionedEntityType) {
-  return value === "product" || value === "listing_ai_workspace" || value === "ppc_workspace_snapshot" || value === "rule_config";
+  return (
+    value === "ai_model_setting" ||
+    value === "product" ||
+    value === "listing_ai_workspace" ||
+    value === "ppc_workspace_snapshot" ||
+    value === "rule_config"
+  );
 }
 
 function clampPageSize(value: string | null) {
@@ -176,6 +191,46 @@ export async function POST(request: Request) {
           marketplace: scope.marketplace,
           draft: (version.payload.draft ?? {}) as Prisma.InputJsonValue,
           records: (version.payload.records ?? []) as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    if (version.entityType === "ai_model_setting" && isRecord(version.payload)) {
+      const settings = normalizeAiSettingsBundle(version.payload as Partial<AiSettingsBundle>);
+      const profiles = normalizeSavedAiModelProfiles(version.payload.profiles);
+      const nextProfiles = profiles.length
+        ? profiles
+        : createSavedAiModelProfilePair(settings.text, settings.image, createAiProfileName(settings.text));
+      const activeProfileId =
+        typeof version.payload.activeProfileId === "string"
+          ? version.payload.activeProfileId
+          : nextProfiles.find((profile) => profile.kind === "system")?.id || "";
+
+      await ensureCurrentUserRecord(user);
+      await prisma.aiModelSetting.upsert({
+        where: {
+          organizationId_workspaceId_userId: {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            userId: user.id,
+          },
+        },
+        create: {
+          organizationId: user.organizationId,
+          userId: user.id,
+          workspaceId: scope.workspaceId,
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          activeProfileId,
+          settings: settings as unknown as Prisma.InputJsonValue,
+          profiles: nextProfiles as unknown as Prisma.InputJsonValue,
+        },
+        update: {
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          activeProfileId,
+          settings: settings as unknown as Prisma.InputJsonValue,
+          profiles: nextProfiles as unknown as Prisma.InputJsonValue,
         },
       });
     }

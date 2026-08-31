@@ -5,7 +5,6 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
 import {
-  createSavedAiModelProfilePair,
   createAiImageProfileName,
   createAiProfileName,
   normalizeAiSettingsBundle,
