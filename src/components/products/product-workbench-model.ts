@@ -89,7 +89,7 @@ export type TrialImprovement = {
   packaging: string;
   manual: string;
   imageCopySuggestion: string;
-  peakSeason: string;
+  peakSeasonWeights: number[];
   peakSales: string;
   offSeasonSales: string;
   targetSales: string;
@@ -210,7 +210,7 @@ export const improvementColumns: Array<{ field: TrialImprovementCellKey; label: 
   { field: "imageCopySuggestion", label: "文案/主图附图建议" },
   { field: "certification", label: "备注" },
 ];
-export const scalarImprovementFields: Array<Exclude<keyof TrialImprovement, "rows">> = [
+export const scalarImprovementFields: Array<Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">> = [
   "audience",
   "scenario",
   "painPoint1",
@@ -224,19 +224,59 @@ export const scalarImprovementFields: Array<Exclude<keyof TrialImprovement, "row
   "packaging",
   "manual",
   "imageCopySuggestion",
-  "peakSeason",
   "peakSales",
   "offSeasonSales",
   "targetSales",
   "infringement",
   "certification",
 ];
-export const peakSeasonLevels = [
-  "bg-transparent text-muted hover:bg-surface-muted",
-  "bg-yellow-100 text-yellow-900",
-  "bg-yellow-300 text-yellow-950",
-  "bg-amber-400 text-amber-950",
-  "bg-orange-500 text-white",
-  "bg-red-600 text-white",
-];
+export const peakSeasonMonths = Array.from({ length: 12 }, (_, index) => index + 1);
+export const peakSeasonWeightLevels = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10];
 
+export function createDefaultPeakSeasonWeights() {
+  return Array.from({ length: 12 }, () => 10);
+}
+
+export function normalizePeakSeasonWeights(value: unknown) {
+  if (Array.isArray(value)) {
+    return normalizePeakSeasonWeightList(value);
+  }
+
+  if (typeof value === "string") {
+    const parts = value
+      .split(",")
+      .map((part) => Number(part.trim()))
+      .filter((part) => Number.isFinite(part));
+
+    if (parts.length === 12) {
+      return normalizePeakSeasonWeightList(parts);
+    }
+  }
+
+  return createDefaultPeakSeasonWeights();
+}
+
+export function getPeakSeasonWeightMultiplier(weight: number) {
+  return Math.max(0, weight) / 20;
+}
+
+function normalizePeakSeasonWeightList(values: number[]) {
+  const next = values.slice(0, 12).map((value) => {
+    const rounded = Math.round(Number(value) || 0);
+    if (rounded >= 10) {
+      return Math.max(10, Math.min(100, rounded - (rounded % 10 || 0)));
+    }
+
+    if (rounded <= 5) {
+      return Math.max(10, Math.min(100, rounded * 20));
+    }
+
+    return 10;
+  });
+
+  while (next.length < 12) {
+    next.push(10);
+  }
+
+  return next;
+}

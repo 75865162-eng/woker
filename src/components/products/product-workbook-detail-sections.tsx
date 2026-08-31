@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,11 +6,13 @@ import {
   compactCompetitorFields,
   competitorTextFields,
   competitorTypeOptions,
+  createDefaultPeakSeasonWeights,
   extraWideSupplierFields,
   improvementColumns,
   mediumSupplierFields,
   negativeCompetitorFields,
-  peakSeasonLevels,
+  peakSeasonMonths,
+  peakSeasonWeightLevels,
   supplierFields,
   wideSupplierFields,
   type TrialCompetitorRow,
@@ -48,6 +50,7 @@ export function ProductWorkbookDetailSections({
   onSupplierAdd,
   onSupplierRemove,
   onImprovementChange,
+  onPeakSeasonWeightsChange,
   onImprovementRowChange,
   onKeywordChange,
   onKeywordsReplace,
@@ -64,7 +67,8 @@ export function ProductWorkbookDetailSections({
   onSupplierChange: (index: number, field: keyof TrialSupplierRow, value: string) => void;
   onSupplierAdd: () => void;
   onSupplierRemove: () => void;
-  onImprovementChange: (field: Exclude<keyof TrialImprovement, "rows">, value: string) => void;
+  onImprovementChange: (field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) => void;
+  onPeakSeasonWeightsChange: (value: number[]) => void;
   onImprovementRowChange: (index: number, field: TrialImprovementCellKey, value: string) => void;
   onKeywordChange: (index: number, field: keyof TrialKeywordRow, value: string) => void;
   onKeywordsReplace: (keywords: TrialKeywordRow[]) => void;
@@ -281,6 +285,7 @@ export function ProductWorkbookDetailSections({
             detail={detail}
             improvement={detail.improvement}
             onChange={onImprovementChange}
+            onPeakSeasonWeightsChange={onPeakSeasonWeightsChange}
             onRowChange={onImprovementRowChange}
           />
         </CardContent>
@@ -651,64 +656,72 @@ function ImprovementTable({
   detail,
   improvement,
   onChange,
+  onPeakSeasonWeightsChange,
   onRowChange,
 }: {
   detail: TrialProductDraft;
   improvement: TrialImprovement;
-  onChange: (field: Exclude<keyof TrialImprovement, "rows">, value: string) => void;
+  onChange: (field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) => void;
+  onPeakSeasonWeightsChange: (value: number[]) => void;
   onRowChange: (index: number, field: TrialImprovementCellKey, value: string) => void;
 }) {
   const painRows = buildImprovementPainRows(detail);
   const visiblePainRows = painRows.length ? painRows : [{ summary: "", count: "" }];
+  const improvementColumnWidths = improvementColumns.map((column) => getImprovementColumnWidth(improvement, visiblePainRows.length, column.field));
+  const tableWidth = 412 + improvementColumnWidths.reduce((total, width) => total + width, 0);
 
   return (
-    <table className="min-w-[1980px] table-fixed overflow-hidden rounded-md border border-border text-left text-xs">
+    <table className="table-fixed overflow-hidden rounded-md border border-border text-left text-xs" style={{ width: tableWidth }}>
+      <colgroup>
+        <col style={{ width: 120 }} />
+        <col style={{ width: 220 }} />
+        <col style={{ width: 72 }} />
+        {improvementColumns.map((column, index) => (
+          <col key={column.field} style={{ width: improvementColumnWidths[index] }} />
+        ))}
+      </colgroup>
       <tbody>
         <tr>
-          <ImprovementHeader colSpan={2}>使用人群</ImprovementHeader>
-          <ImprovementHeader colSpan={2} className="w-[350px]">主要适用场景</ImprovementHeader>
-          <ImprovementHeader className="w-[120px]">目标销量</ImprovementHeader>
-          <ImprovementHeader className="w-[120px]">头部旺季平均销量</ImprovementHeader>
-          <ImprovementHeader className="w-[120px]">头部淡季平均销量</ImprovementHeader>
-          <ImprovementHeader colSpan={4}>
-            <div className="flex items-center gap-2">
-              <span>旺季月份</span>
-              <button
-                type="button"
-                className="rounded border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-muted hover:border-brand hover:text-brand"
-                onClick={() => onChange("peakSeason", "")}
-              >
-                清除
-              </button>
-            </div>
-          </ImprovementHeader>
+          <ImprovementHeader colSpan={3}>使用人群</ImprovementHeader>
+          <ImprovementHeader colSpan={3}>主要适用场景</ImprovementHeader>
+          <ImprovementHeader colSpan={2}>目标销量</ImprovementHeader>
+          <ImprovementHeader colSpan={2}>头部旺季平均销量</ImprovementHeader>
+          <ImprovementHeader colSpan={2}>头部淡季平均销量</ImprovementHeader>
         </tr>
         <tr>
-          <ImprovementCell colSpan={2}>
+          <ImprovementCell colSpan={3}>
             <ImprovementInput value={improvement.audience} placeholder="填空格" onChange={(value) => onChange("audience", value)} />
           </ImprovementCell>
-          <ImprovementCell colSpan={2} className="w-[350px]">
-            <ImprovementInput className="w-[350px]" value={improvement.scenario} placeholder="填空格" onChange={(value) => onChange("scenario", value)} />
+          <ImprovementCell colSpan={3}>
+            <ImprovementInput value={improvement.scenario} placeholder="填空格" onChange={(value) => onChange("scenario", value)} />
           </ImprovementCell>
-          <ImprovementCell className="w-[120px] font-bold">
-            <ImprovementInput className="w-[120px]" value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
+          <ImprovementCell colSpan={2} className="font-bold">
+            <ImprovementInput value={improvement.targetSales} onChange={(value) => onChange("targetSales", value)} />
           </ImprovementCell>
-          <ImprovementCell className="w-[120px]">
-            <ImprovementInput className="w-[120px]" value={improvement.peakSales} onChange={(value) => onChange("peakSales", value)} />
+          <ImprovementCell colSpan={2}>
+            <ImprovementInput value={improvement.peakSales} onChange={(value) => onChange("peakSales", value)} />
           </ImprovementCell>
-          <ImprovementCell className="w-[120px]">
-            <ImprovementInput className="w-[120px]" value={improvement.offSeasonSales} onChange={(value) => onChange("offSeasonSales", value)} />
+          <ImprovementCell colSpan={2}>
+            <ImprovementInput value={improvement.offSeasonSales} onChange={(value) => onChange("offSeasonSales", value)} />
           </ImprovementCell>
-          <ImprovementCell colSpan={4}>
-            <PeakSeasonSelector value={improvement.peakSeason} onChange={(value) => onChange("peakSeason", value)} />
-          </ImprovementCell>
+        </tr>
+        <tr>
+          <td colSpan={12} className="border-b border-r border-border bg-white px-1 py-1 first:border-l">
+            <PeakSeasonWeightMatrix
+              value={improvement.peakSeasonWeights}
+              onChange={onPeakSeasonWeightsChange}
+              onReset={() => onPeakSeasonWeightsChange(createDefaultPeakSeasonWeights())}
+            />
+          </td>
         </tr>
         <tr>
           <ImprovementSubHeader>产品改进点</ImprovementSubHeader>
           <ImprovementSubHeader>差评</ImprovementSubHeader>
           <ImprovementSubHeader>数量</ImprovementSubHeader>
-          {improvementColumns.map((column) => (
-            <ImprovementSubHeader key={column.field}>{column.label}</ImprovementSubHeader>
+          {improvementColumns.map((column, index) => (
+            <ImprovementSubHeader key={column.field} style={{ width: improvementColumnWidths[index], maxWidth: 300 }}>
+              {column.label}
+            </ImprovementSubHeader>
           ))}
         </tr>
         {visiblePainRows.map((pain, index) => {
@@ -718,9 +731,14 @@ function ImprovementTable({
               <ImprovementCell className="text-center font-bold">差评点{index + 1}</ImprovementCell>
               <ImprovementCell>{pain?.summary ?? ""}</ImprovementCell>
               <ImprovementCell>{pain?.count ?? ""}</ImprovementCell>
-              {improvementColumns.map((column) => (
-                <ImprovementCell key={column.field}>
-                  <ImprovementInput value={improvementRow[column.field]} onChange={(value) => onRowChange(index, column.field, value)} />
+              {improvementColumns.map((column, columnIndex) => (
+                <ImprovementCell key={column.field} style={{ width: improvementColumnWidths[columnIndex], maxWidth: 300 }}>
+                  <ImprovementInput
+                    multiline
+                    width={improvementColumnWidths[columnIndex] - 16}
+                    value={improvementRow[column.field]}
+                    onChange={(value) => onRowChange(index, column.field, value)}
+                  />
                 </ImprovementCell>
               ))}
             </tr>
@@ -731,32 +749,73 @@ function ImprovementTable({
   );
 }
 
+function getImprovementColumnWidth(improvement: TrialImprovement, rowCount: number, field: TrialImprovementCellKey) {
+  const values = Array.from({ length: rowCount }, (_, index) => getImprovementRow(improvement, index)[field]);
+  const longestLineLength = Math.max(
+    0,
+    ...values.flatMap((value) => value.split(/\r?\n/).map((line) => Array.from(line.trim()).length)),
+  );
+
+  if (longestLineLength === 0) {
+    return 100;
+  }
+
+  return Math.min(300, Math.max(100, longestLineLength * 12 + 28));
+}
+
 function ImprovementHeader({
   children,
   className = "",
   colSpan,
+  style,
 }: {
   children: ReactNode;
   className?: string;
   colSpan?: number;
+  style?: CSSProperties;
 }) {
-  return <th colSpan={colSpan} className={`border-b border-r border-border bg-surface-muted px-2 py-2 font-bold text-muted first:border-l ${className}`}>{children}</th>;
+  return (
+    <th
+      colSpan={colSpan}
+      style={style}
+      className={`whitespace-normal break-words border-b border-r border-border bg-surface-muted px-2 py-2 font-bold leading-5 text-muted first:border-l ${className}`}
+    >
+      {children}
+    </th>
+  );
 }
 
-function ImprovementSubHeader({ children }: { children: ReactNode }) {
-  return <td className="border-b border-r border-border bg-surface-muted px-2 py-2 font-bold text-muted first:border-l">{children}</td>;
+function ImprovementSubHeader({
+  children,
+  className = "",
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <td
+      style={style}
+      className={`whitespace-normal break-words border-b border-r border-border bg-surface-muted px-2 py-2 font-bold leading-5 text-muted first:border-l ${className}`}
+    >
+      {children}
+    </td>
+  );
 }
 
 function ImprovementCell({
   children,
   className = "",
   colSpan,
+  style,
 }: {
   children?: ReactNode;
   className?: string;
   colSpan?: number;
+  style?: CSSProperties;
 }) {
-  return <td colSpan={colSpan} className={`h-9 border-b border-r border-border bg-white px-2 py-1 align-top text-foreground first:border-l ${className}`}>{children}</td>;
+  return <td colSpan={colSpan} style={style} className={`h-9 border-b border-r border-border bg-white px-2 py-1 align-top text-foreground first:border-l ${className}`}>{children}</td>;
 }
 
 function ImprovementInput({
@@ -764,12 +823,41 @@ function ImprovementInput({
   onChange,
   placeholder,
   className = "w-full",
+  multiline = false,
+  width,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  multiline?: boolean;
+  width?: number;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!multiline || !textareaRef.current) {
+      return;
+    }
+
+    textareaRef.current.style.height = "32px";
+    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+  }, [multiline, value]);
+
+  if (multiline) {
+    return (
+      <textarea
+        ref={textareaRef}
+        style={width ? { width } : undefined}
+        className={`min-h-8 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-white px-2 py-2 text-xs font-semibold leading-5 text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
+        value={value}
+        placeholder={placeholder}
+        rows={1}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  }
+
   return (
     <input
       className={`h-8 rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground outline-none placeholder:text-muted focus:border-brand ${className}`}
@@ -780,45 +868,101 @@ function ImprovementInput({
   );
 }
 
-function PeakSeasonSelector({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const levels = parsePeakSeasonLevels(value);
+export function PeakSeasonWeightMatrix({
+  value,
+  onChange,
+  onReset,
+}: {
+  value: number[];
+  onChange: (value: number[]) => void;
+  onReset: () => void;
+}) {
+  const weights = peakSeasonMonths.map((_, index) => normalizePeakSeasonWeight(value[index] ?? 10));
 
-  function updateMonth(index: number) {
-    const next = [...levels];
-    next[index] = (next[index] + 1) % peakSeasonLevels.length;
-    onChange(formatPeakSeasonLevels(next));
+  function updateMonth(index: number, weight: number) {
+    const next = [...weights];
+    next[index] = weight;
+    onChange(next);
   }
 
   return (
-    <div className="rounded-md border border-border bg-white p-2">
-      <div className="grid grid-cols-12 gap-1">
-        {levels.map((level, index) => (
-          <button
-            key={index}
-            type="button"
-            className={`h-7 rounded border border-border text-[11px] font-bold transition-colors ${peakSeasonLevels[level]}`}
-            onClick={() => updateMonth(index)}
-            title={`${index + 1}月`}
-          >
-            {index + 1}
-          </button>
-        ))}
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-muted">旺季月份</div>
+        <button
+          type="button"
+          className="rounded border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-muted hover:border-brand hover:text-brand"
+          onClick={onReset}
+        >
+          清除
+        </button>
+      </div>
+      <div className="overflow-auto rounded-md border border-border">
+        <table className="w-max table-fixed border-collapse text-center text-xs">
+          <colgroup>
+            <col className="w-[50px]" />
+            {peakSeasonMonths.map((month) => (
+              <col key={month} className="w-[50px]" />
+            ))}
+          </colgroup>
+          <tbody>
+            {peakSeasonWeightLevels.map((weight) => (
+              <tr key={weight}>
+                <td className="h-8 border-r border-b border-border bg-surface-muted px-1 text-[11px] font-semibold text-muted">
+                  {weight}
+                </td>
+                {weights.map((monthWeight, monthIndex) => {
+                  const active = monthWeight >= weight;
+                  const selected = monthWeight === weight;
+                  return (
+                    <td key={`${monthIndex}-${weight}`} className="border-r border-b border-border p-0 last:border-r-0">
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        title={`${monthIndex + 1}月：${weight}`}
+                        className={[
+                          "flex h-8 w-full items-center justify-center border-0 text-[11px] font-semibold transition-colors",
+                          active
+                            ? selected
+                              ? "bg-orange-500 text-white"
+                              : "bg-orange-100 text-orange-900"
+                            : "bg-white text-transparent hover:bg-surface-muted",
+                        ].join(" ")}
+                        onClick={() => updateMonth(monthIndex, weight)}
+                      >
+                        {selected ? weight : ""}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr>
+              <td className="h-8 border-r border-border bg-surface-muted px-1 text-[11px] font-semibold text-muted">权重</td>
+              {peakSeasonMonths.map((month) => (
+                <td key={`bottom-${month}`} className="h-8 border-r border-border bg-surface-muted px-1 text-[11px] font-semibold text-foreground last:border-r-0">
+                  {month}月
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function parsePeakSeasonLevels(value: string) {
-  const parts = value.split(",").map((part) => Number(part));
-  if (parts.length !== 12 || parts.some((part) => !Number.isInteger(part))) {
-    return Array.from({ length: 12 }, () => 0);
+function normalizePeakSeasonWeight(value: number) {
+  const rounded = Math.round(Number(value) || 0);
+  if (rounded >= 10) {
+    return Math.max(10, Math.min(100, rounded - (rounded % 10 || 0)));
   }
 
-  return parts.map((part) => Math.max(0, Math.min(part, peakSeasonLevels.length - 1)));
-}
+  if (rounded <= 5) {
+    return Math.max(10, Math.min(100, rounded * 20));
+  }
 
-function formatPeakSeasonLevels(levels: number[]) {
-  return levels.some(Boolean) ? levels.join(",") : "";
+  return 10;
 }
 
 function KeywordBulkInput({ onApply }: { onApply: (keywords: TrialKeywordRow[]) => void }) {

@@ -28,9 +28,8 @@ import {
   permissionActions,
   permissionModules,
   type PermissionAction,
-  type RolePermissionMap,
 } from "@/lib/accounts/permissions";
-import { buildRoleDefinitions } from "@/lib/accounts/role-definitions";
+import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { accountWorkbookColumns, createAccountWorkbookRows, exportAccountWorkbook, parseAccountWorkbookFile } from "@/lib/accounts/account-workbook";
 import { normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
 
@@ -63,31 +62,20 @@ type Role = {
   description: string;
   memberCount: number;
   permissions: Record<string, PermissionAction[]>;
+  sortOrder: number;
 };
 
-const sharedRoleDefinitions = buildRoleDefinitions(permissionActions.map((action) => action.id), permissionModules.map((module) => module.id));
-const initialRoles: Role[] = sharedRoleDefinitions
-  .filter((role) => role.availableByDefault)
-  .map((role) => ({
-    id: role.id as RoleId,
-    name: role.name,
-    description: role.description,
-    memberCount: 0,
-    permissions: role.permissions,
-  }));
-
-const roleCatalog: Role[] = sharedRoleDefinitions.map((role) => ({
+const defaultRoleCatalog = buildDefaultRoleCatalog();
+const initialRoles: Role[] = defaultRoleCatalog.map((role) => ({
+  ...role,
   id: role.id as RoleId,
-  name: role.name,
-  description: role.description,
   memberCount: 0,
-  permissions: role.permissions,
 }));
 
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const teamMembersApiPath = "/api/accounts/team-members";
-const rolePermissionsApiPath = "/api/accounts/role-permissions";
+const rolesApiPath = "/api/accounts/roles";
 const accountPageSize = 10;
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -122,6 +110,34 @@ function canManageRole(roleId: RoleId) {
 
 function canManageAccount(account: Account) {
   return !isDefaultSuperAccount(account) && account.roleId !== "owner";
+}
+
+function normalizeRoleCatalogItem(role: RoleCatalogItem): Role {
+  return {
+    ...role,
+    id: role.id as RoleId,
+    memberCount: 0,
+  };
+}
+
+function normalizeRoleCatalogResponse(value: unknown): Role[] {
+  if (!Array.isArray(value)) return initialRoles;
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item, index) => {
+      const role = item as Partial<RoleCatalogItem> & { id?: string; name?: string; description?: string; permissions?: Record<string, PermissionAction[]> };
+
+      return {
+        id: String(role.id ?? `role-${index + 1}`) as RoleId,
+        name: String(role.name ?? "未命名角色"),
+        description: String(role.description ?? ""),
+        memberCount: 0,
+        permissions: role.permissions ?? {},
+        sortOrder: Number.isFinite(role.sortOrder) ? Number(role.sortOrder) : index,
+      };
+    })
+    .filter((role) => Boolean(role.id.trim()));
 }
 
 function withLoadedAccountState(account: Account): Account {
@@ -209,14 +225,14 @@ async function saveAccountsToApi(accounts: Account[]) {
   }
 }
 
-async function loadRolePermissionsFromApi() {
+async function loadRolesFromApi() {
   try {
-    const response = await fetch(rolePermissionsApiPath, { cache: "no-store" });
+    const response = await fetch(rolesApiPath, { cache: "no-store" });
     if (!response.ok) return null;
 
-    const payload = (await response.json()) as { permissions?: RolePermissionMap; revision?: string };
+    const payload = (await response.json()) as { roles?: unknown; revision?: string };
     return {
-      permissions: payload.permissions ?? null,
+      roles: normalizeRoleCatalogResponse(payload.roles),
       revision: typeof payload.revision === "string" ? payload.revision : "",
     };
   } catch {
@@ -224,14 +240,14 @@ async function loadRolePermissionsFromApi() {
   }
 }
 
-async function saveRolePermissionsToApi(permissions: RolePermissionMap) {
+async function saveRolesToApi(roles: Role[]) {
   try {
-    const response = await fetch(rolePermissionsApiPath, {
+    const response = await fetch(rolesApiPath, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ permissions }),
+      body: JSON.stringify({ roles }),
     });
 
     if (!response.ok) {
@@ -241,10 +257,11 @@ async function saveRolePermissionsToApi(permissions: RolePermissionMap) {
       };
     }
 
-    const payload = (await response.json()) as { revision?: string };
+    const payload = (await response.json()) as { revision?: string; roles?: unknown };
     return {
       ok: true as const,
       revision: typeof payload.revision === "string" ? payload.revision : "",
+      roles: normalizeRoleCatalogResponse(payload.roles),
     };
   } catch {
     return {
@@ -266,8 +283,8 @@ export function AccountWorkbench() {
   const [roleManageMode, setRoleManageMode] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [archivedAccountsOpen, setArchivedAccountsOpen] = useState(false);
-  const [permissionSavedAt, setPermissionSavedAt] = useState("");
-  const [permissionRevision, setPermissionRevision] = useState("");
+  const [roleSavedAt, setRoleSavedAt] = useState("");
+  const [roleRevision, setRoleRevision] = useState("");
   const [accountImportMessage, setAccountImportMessage] = useState("");
   const [accountImporting, setAccountImporting] = useState(false);
   const [accountPage, setAccountPage] = useState(1);
@@ -303,23 +320,10 @@ export function AccountWorkbench() {
   useEffect(() => {
     let canceled = false;
 
-    void loadRolePermissionsFromApi().then((savedRolePermissions) => {
-      if (canceled || !savedRolePermissions) return;
-      setPermissionRevision(savedRolePermissions.revision);
-
-      setRoles((current) => {
-        const savedCatalogRoles = Object.keys(savedRolePermissions.permissions ?? {}).flatMap((roleId) => {
-          if (current.some((role) => role.id === roleId)) return [];
-
-          const catalogRole = roleCatalog.find((role) => role.id === roleId);
-          return catalogRole ? [catalogRole] : [];
-        });
-
-        return [...current, ...savedCatalogRoles].map((role) => ({
-          ...role,
-          permissions: savedRolePermissions.permissions?.[role.id] ?? role.permissions,
-        }));
-      });
+    void loadRolesFromApi().then((savedRoles) => {
+      if (canceled || !savedRoles) return;
+      setRoleRevision(savedRoles.revision);
+      setRoles(savedRoles.roles.length ? savedRoles.roles : initialRoles);
     });
 
     return () => {
@@ -329,11 +333,11 @@ export function AccountWorkbench() {
 
   const activeRole = visibleRoles.find((role) => role.id === activeRoleId) ?? visibleRoles[0];
   const activeRoleMembers = useMemo(
-    () => visibleAccounts.filter((account) => account.roleId === activeRole.id),
-    [activeRole.id, visibleAccounts],
+    () => (activeRole ? visibleAccounts.filter((account) => account.roleId === activeRole.id) : []),
+    [activeRole, visibleAccounts],
   );
   const availableRoleTemplates = useMemo(
-    () => roleCatalog.filter((role) => !roles.some((item) => item.id === role.id) && canManageRole(role.id)),
+    () => defaultRoleCatalog.filter((role) => !roles.some((item) => item.id === role.id) && canManageRole(role.id)),
     [roles],
   );
 
@@ -357,7 +361,7 @@ export function AccountWorkbench() {
   const disabledAccounts = visibleAccounts.filter((account) => account.status === "disabled");
   const archivedAccounts = accounts.filter((account) => account.status === "archived");
   const departments = Array.from(new Set(visibleAccounts.map((account) => account.department)));
-  const roleMemberCount = visibleAccounts.filter((account) => account.roleId === activeRole.id).length;
+  const roleMemberCount = activeRole ? visibleAccounts.filter((account) => account.roleId === activeRole.id).length : 0;
   const accountPageCount = Math.max(1, Math.ceil(filteredAccounts.length / accountPageSize));
   const currentAccountPage = Math.min(accountPage, accountPageCount);
   const paginatedAccounts = filteredAccounts.slice((currentAccountPage - 1) * accountPageSize, currentAccountPage * accountPageSize);
@@ -556,9 +560,11 @@ export function AccountWorkbench() {
     }
   }
   function togglePermission(moduleId: string, action: PermissionAction) {
+    if (!activeRole) return;
+
     setRoles((current) =>
-      current.map((role) => {
-        if (role.id !== activeRole.id) return role;
+    current.map((role) => {
+        if (!activeRole || role.id !== activeRole.id) return role;
 
         const currentActions = role.permissions[moduleId] ?? [];
         const nextActions = currentActions.includes(action)
@@ -577,9 +583,11 @@ export function AccountWorkbench() {
   }
 
   function toggleModulePermissions(moduleId: string) {
+    if (!activeRole) return;
+
     setRoles((current) =>
-      current.map((role) => {
-        if (role.id !== activeRole.id) return role;
+    current.map((role) => {
+        if (!activeRole || role.id !== activeRole.id) return role;
 
         const currentActions = role.permissions[moduleId] ?? [];
         const allSelected = permissionActions.every((action) => currentActions.includes(action.id));
@@ -595,20 +603,37 @@ export function AccountWorkbench() {
     );
   }
 
-  async function saveRolePermissions() {
-    const rolePermissionMap = Object.fromEntries(roles.map((role) => [role.id, role.permissions])) as RolePermissionMap;
-    const savedToApi = await saveRolePermissionsToApi(rolePermissionMap);
+  function updateActiveRole(field: "name" | "description" | "sortOrder", value: string) {
+    if (!activeRole) return;
 
-    setPermissionRevision(savedToApi.revision);
-    setPermissionSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi.ok ? "" : "（保存失败）"}`);
-    window.setTimeout(() => window.location.reload(), 250);
+    setRoles((current) =>
+      current.map((role) => {
+        if (!activeRole || role.id !== activeRole.id) return role;
+
+        return {
+          ...role,
+          [field]: field === "sortOrder" ? Number(value) || 0 : value,
+        };
+      }),
+    );
+  }
+
+  async function saveRoles() {
+    const savedToApi = await saveRolesToApi(roles);
+
+    setRoleRevision(savedToApi.revision);
+    setRoleSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi.ok ? "" : "（保存失败）"}`);
+    if (savedToApi.ok) {
+      setRoles(savedToApi.roles ?? roles);
+      window.setTimeout(() => window.location.reload(), 250);
+    }
   }
 
   function addRole(roleId: RoleId) {
-    const role = roleCatalog.find((item) => item.id === roleId);
+    const role = defaultRoleCatalog.find((item) => item.id === roleId);
     if (!role) return;
 
-    setRoles((current) => (current.some((item) => item.id === role.id) ? current : [...current, role]));
+    setRoles((current) => (current.some((item) => item.id === role.id) ? current : [...current, normalizeRoleCatalogItem(role)]));
     setActiveRoleId(role.id);
     setNewRoleOpen(false);
   }
@@ -619,16 +644,18 @@ export function AccountWorkbench() {
 
     const nextRoles = roles.filter((item) => item.id !== roleId);
     const nextActiveRoleId = activeRoleId === roleId ? nextRoles[0]?.id : activeRoleId;
-    const rolePermissionMap = Object.fromEntries(nextRoles.map((item) => [item.id, item.permissions])) as RolePermissionMap;
 
     setRoles(nextRoles);
     if (nextActiveRoleId) {
       setActiveRoleId(nextActiveRoleId);
     }
     setRoleMembersOpen(false);
-    void saveRolePermissionsToApi(rolePermissionMap).then((savedToApi) => {
-      setPermissionRevision(savedToApi.revision);
-      setPermissionSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi.ok ? "" : "（保存失败）"}`);
+    void saveRolesToApi(nextRoles).then((savedToApi) => {
+      setRoleRevision(savedToApi.revision);
+      setRoleSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi.ok ? "" : "（保存失败）"}`);
+      if (savedToApi.ok) {
+        setRoles(savedToApi.roles ?? nextRoles);
+      }
     });
   }
 
@@ -825,7 +852,7 @@ export function AccountWorkbench() {
                     <div
                       key={role.id}
                       className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-2 transition ${
-                        activeRole.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
+                        activeRole?.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
                       }`}
                     >
                       <button
@@ -838,7 +865,7 @@ export function AccountWorkbench() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-bold text-foreground">{role.name}</p>
-                          <Badge tone={activeRole.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
+                          <Badge tone={activeRole?.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
                         </div>
                         <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
                       </button>
@@ -876,54 +903,87 @@ export function AccountWorkbench() {
             </div>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
-                <div>
-                  <CardTitle className="text-sm">权限管理</CardTitle>
-                  <p className="mt-0.5 text-xs text-muted">
-                    {activeRole.name} 当前实际绑定 {roleMemberCount} 个账号。
-                    {permissionRevision ? ` 版本 ${permissionRevision}` : ""}
-                  </p>
-                </div>
-                <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={saveRolePermissions}>
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  保存权限
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-1.5 p-3">
-                {permissionSavedAt ? <p className="text-xs font-medium text-green-700">权限已保存：{permissionSavedAt}，页面正在刷新。</p> : null}
-                {permissionModules.map((module) => (
-                  <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
-                    <p className="text-xs font-bold text-foreground">{module.name}</p>
-                    <div className="grid grid-cols-6 gap-1">
-                      <label className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
-                        <input
-                          checked={permissionActions.every((action) => activeRole.permissions[module.id]?.includes(action.id))}
-                          className="h-3.5 w-3.5 accent-brand"
-                          onChange={() => toggleModulePermissions(module.id)}
-                          type="checkbox"
+                <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
+                  <div>
+                    <CardTitle className="text-sm">权限管理</CardTitle>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {activeRole ? `${activeRole.name} 当前实际绑定 ${roleMemberCount} 个账号。` : "暂无可编辑角色。"}
+                      {roleRevision ? ` 版本 ${roleRevision}` : ""}
+                    </p>
+                  </div>
+                  <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={() => void saveRoles()}>
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    保存角色
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-1.5 p-3">
+                  {roleSavedAt ? <p className="text-xs font-medium text-green-700">角色已保存：{roleSavedAt}，页面正在刷新。</p> : null}
+                  {activeRole ? (
+                    <div className="space-y-3 rounded-md border border-border bg-surface-muted p-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="角色名称">
+                          <input
+                            className={fieldClass}
+                            value={activeRole.name}
+                            onChange={(event) => updateActiveRole("name", event.target.value)}
+                          />
+                        </Field>
+                        <Field label="排序">
+                          <input
+                            className={fieldClass}
+                            inputMode="numeric"
+                            type="number"
+                            value={activeRole.sortOrder}
+                            onChange={(event) => updateActiveRole("sortOrder", event.target.value)}
+                          />
+                        </Field>
+                      </div>
+                      <Field label="角色说明">
+                        <textarea
+                          className={`${fieldClass} min-h-20 resize-y`}
+                          value={activeRole.description}
+                          onChange={(event) => updateActiveRole("description", event.target.value)}
                         />
-                        全选
-                      </label>
-                      {permissionActions.map((action) => {
-                        const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
-
-                        return (
-                          <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                      </Field>
+                    </div>
+                  ) : null}
+                  {activeRole ? (
+                    permissionModules.map((module) => (
+                      <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
+                        <p className="text-xs font-bold text-foreground">{module.name}</p>
+                        <div className="grid grid-cols-6 gap-1">
+                          <label className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
                             <input
-                              checked={checked}
+                              checked={permissionActions.every((action) => activeRole.permissions[module.id]?.includes(action.id))}
                               className="h-3.5 w-3.5 accent-brand"
-                              onChange={() => togglePermission(module.id, action.id)}
+                              onChange={() => toggleModulePermissions(module.id)}
                               type="checkbox"
                             />
-                            {action.label}
+                            全选
                           </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                          {permissionActions.map((action) => {
+                            const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
+
+                            return (
+                              <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                                <input
+                                  checked={checked}
+                                  className="h-3.5 w-3.5 accent-brand"
+                                  onChange={() => togglePermission(module.id, action.id)}
+                                  type="checkbox"
+                                />
+                                {action.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-md border border-border bg-white px-3 py-8 text-center text-sm text-muted">没有可编辑的角色。</p>
+                  )}
+                </CardContent>
+              </Card>
           </div>
         </div>
       </section>

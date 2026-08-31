@@ -2,24 +2,7 @@ import type { ProductWorkflowRole } from "@/lib/products/types";
 
 export type TeamMemberStatus = "active" | "pending" | "disabled" | "archived";
 
-export type AccountRoleId =
-  | "owner"
-  | "admin"
-  | "database_admin"
-  | "operations_manager"
-  | "operations_supervisor"
-  | "operations"
-  | "operations_assistant"
-  | "developer"
-  | "designer"
-  | "warehouse"
-  | "warehouse_supervisor"
-  | "finance"
-  | "procurement"
-  | "ppc_specialist"
-  | "listing_specialist"
-  | "logistics_specialist"
-  | "viewer";
+export type AccountRoleId = string;
 
 export type TeamAccountRecord = {
   id: string;
@@ -57,7 +40,7 @@ export const teamRoleLabels: Record<ProductWorkflowRole, string> = {
   designer: "美工",
 };
 
-export const accountRoleToWorkflowRole: Partial<Record<AccountRoleId, ProductWorkflowRole>> = {
+export const accountRoleToWorkflowRole: Partial<Record<string, ProductWorkflowRole>> = {
   operations_supervisor: "operations_supervisor",
   operations: "operations",
   operations_assistant: "operations",
@@ -72,32 +55,12 @@ const legacyRoleMap: Record<string, AccountRoleId> = {
   logistics_operator: "warehouse",
 };
 
-const knownRoleIds = new Set<AccountRoleId>([
-  "owner",
-  "admin",
-  "database_admin",
-  "operations_manager",
-  "operations_supervisor",
-  "operations",
-  "operations_assistant",
-  "developer",
-  "designer",
-  "warehouse",
-  "warehouse_supervisor",
-  "finance",
-  "procurement",
-  "ppc_specialist",
-  "listing_specialist",
-  "logistics_specialist",
-  "viewer",
-]);
-
 export function normalizeAccountRoleId(roleId: string | null | undefined): AccountRoleId {
   const normalized = String(roleId ?? "").trim();
 
   if (!normalized) return "viewer";
 
-  return legacyRoleMap[normalized] ?? (knownRoleIds.has(normalized as AccountRoleId) ? (normalized as AccountRoleId) : "viewer");
+  return legacyRoleMap[normalized] ?? normalized;
 }
 
 export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {

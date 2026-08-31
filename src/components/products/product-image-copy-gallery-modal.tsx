@@ -16,6 +16,9 @@ import {
   type ProductImageCopyGalleryDraft,
 } from "@/lib/products/image-copy-gallery";
 
+const compactToolbarButtonClass =
+  "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
+
 async function readFilesAsPreviews(files: FileList | null) {
   const selected = Array.from(files ?? []).slice(0, 12);
 
@@ -306,14 +309,15 @@ export function ProductImageCopyGalleryModal({
             </p>
             {error ? <p className="mt-1 text-xs font-semibold text-danger">{error}</p> : null}
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={addCompetitorColumn}>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={addCompetitorColumn}>
               <Plus className="h-4 w-4" />
               新增竞品列
             </Button>
             <Button
               variant="secondary"
               size="sm"
+              className={compactToolbarButtonClass}
               disabled={draft.competitorColumns.length <= 1}
               onClick={removeCompetitorColumn}
             >

@@ -678,7 +678,7 @@ function TrialProductEditor({
     }));
   }
 
-  function updateImprovement(field: Exclude<keyof TrialImprovement, "rows">, value: string) {
+  function updateImprovement(field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) {
     setDraft((current) => ({
       ...current,
       improvement: { ...current.improvement, [field]: value },
@@ -1254,8 +1254,15 @@ function ProductEditor({
     }));
   }
 
-  function updateWorkbookImprovement(field: Exclude<keyof TrialImprovement, "rows">, value: string) {
+  function updateWorkbookImprovement(field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) {
     setWorkbookDetail((current) => ({ ...current, improvement: { ...current.improvement, [field]: value } }));
+  }
+
+  function updateWorkbookPeakSeasonWeights(value: number[]) {
+    setWorkbookDetail((current) => ({
+      ...current,
+      improvement: { ...current.improvement, peakSeasonWeights: value },
+    }));
   }
 
   function updateWorkbookImprovementRow(index: number, field: TrialImprovementCellKey, value: string) {
@@ -1435,7 +1442,25 @@ function ProductEditor({
                   <ReadonlyField label="SKU（系统生成）" value={draft.sku} />
                   <LabeledInput label="中文名（必填）" value={draft.chineseName} onChange={(value) => setField("chineseName", value)} />
                   <LabeledInput label="英文名（必填）" value={draft.englishName} onChange={(value) => setField("englishName", value)} />
-                  <LabeledInput label="主 ASIN" value={draft.asin} onChange={(value) => setField("asin", value)} />
+                  <div className="space-y-1 text-xs font-semibold text-muted">
+                    主 ASIN
+                    <div className="flex items-end gap-2">
+                      <input
+                        className="h-8 w-full max-w-[220px] rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+                        value={draft.asin}
+                        onChange={(event) => setField("asin", event.target.value)}
+                      />
+                      <a
+                        className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border px-2.5 text-xs font-semibold ${mainAmazonLink ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
+                        href={mainAmazonLink || "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        打开主 ASIN
+                      </a>
+                    </div>
+                  </div>
                   <label className="text-xs font-semibold text-muted">
                     状态
                     <select
@@ -1467,7 +1492,10 @@ function ProductEditor({
                   <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-foreground">业务流转</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold text-foreground">业务流转</p>
+                          <Badge tone={productWorkflowStageTones[workflowStage]}>{productWorkflowStageLabels[workflowStage]}</Badge>
+                        </div>
                         <p className="mt-1 text-xs text-muted">
                           {workflowOverdue ? "已超 3 天未处理，需要提醒当前负责人。" : "每次流转会自动生成 3 天处理期限。"}
                         </p>
@@ -1509,17 +1537,26 @@ function ProductEditor({
                         当前阶段已超时，负责人：{workflowAssignee || "未分配"}
                       </div>
                     ) : null}
-                  </div>
-                  <div className="flex items-end">
-                    <a
-                      className={`inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold ${mainAmazonLink ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
-                      href={mainAmazonLink || "#"}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      打开主 ASIN
-                    </a>
+                    <div className="mt-3 space-y-2">
+                      {(draft.workflowHistory ?? []).slice(0, 5).map((event) => (
+                        <div key={event.id} className="rounded-md border border-border bg-white px-3 py-2 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-bold text-foreground">{event.stageLabel}</p>
+                            <span className="text-muted">{formatWorkflowDate(event.createdAt)}</span>
+                          </div>
+                          <p className="mt-1 text-muted">
+                            操作人：{event.actorName || "系统"}
+                            {event.assigneeName ? `；负责人：${event.assigneeName}` : ""}
+                            {event.note ? `；${event.note}` : ""}
+                          </p>
+                        </div>
+                      ))}
+                      {(draft.workflowHistory ?? []).length === 0 ? (
+                        <div className="rounded-md border border-border bg-white px-3 py-2 text-xs text-muted">
+                          暂无流程记录，保存或点击流转按钮后会生成操作时间和人物。
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   </div>
                 </div>
@@ -1537,39 +1574,13 @@ function ProductEditor({
               onSupplierAdd={addWorkbookSupplier}
               onSupplierRemove={removeWorkbookSupplier}
               onImprovementChange={updateWorkbookImprovement}
+              onPeakSeasonWeightsChange={updateWorkbookPeakSeasonWeights}
               onImprovementRowChange={updateWorkbookImprovementRow}
               onKeywordChange={updateWorkbookKeyword}
               onKeywordsReplace={replaceWorkbookKeywords}
               onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
               onRemarkImagesChange={updateWorkbookRemarkImages}
             />
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>流程记录</CardTitle>
-                <Badge tone={productWorkflowStageTones[workflowStage]}>{productWorkflowStageLabels[workflowStage]}</Badge>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {(draft.workflowHistory ?? []).slice(0, 5).map((event) => (
-                  <div key={event.id} className="rounded-md border border-border bg-white px-3 py-2 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-bold text-foreground">{event.stageLabel}</p>
-                      <span className="text-xs text-muted">{formatWorkflowDate(event.createdAt)}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted">
-                      {event.actorName ? `${event.actorName} 操作` : "系统记录"}
-                      {event.assigneeName ? `，负责人 ${event.assigneeName}` : ""}
-                      {event.note ? `。${event.note}` : ""}
-                    </p>
-                  </div>
-                ))}
-                {(draft.workflowHistory ?? []).length === 0 ? (
-                  <div className="rounded-md border border-border bg-surface-muted px-3 py-4 text-center text-sm text-muted">
-                    暂无流程记录，保存或点击流转按钮后会生成记录。
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
           </section>
         </div>
       </div>

@@ -7,20 +7,23 @@ export function LabeledInput({
   onChange,
   placeholder,
   type = "text",
+  size = "default",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
+  size?: "default" | "compact";
 }) {
   const isNumberInput = type === "number";
+  const heightClass = size === "compact" ? "h-8" : "h-10";
 
   return (
     <label className="text-xs font-semibold text-muted">
       {label}
       <input
-        className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+        className={`mt-1 ${heightClass} w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand`}
         type={isNumberInput ? "text" : type}
         inputMode={isNumberInput ? "decimal" : undefined}
         value={value}

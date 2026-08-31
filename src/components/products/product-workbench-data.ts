@@ -4,6 +4,8 @@ import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, norma
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
 import {
   emptySize,
+  createDefaultPeakSeasonWeights,
+  normalizePeakSeasonWeights,
   type ProductEditorDraft,
   type TrialCompetitorRow,
   type TrialImprovement,
@@ -199,7 +201,7 @@ function parseImprovementRows(rows: string[][], headerIndex: number): TrialImpro
     packaging: read("包装改进"),
     manual: read("说明书"),
     imageCopySuggestion: read("文案"),
-    peakSeason: read("旺季月份"),
+    peakSeasonWeights: normalizePeakSeasonWeights(read("旺季月份")),
     peakSales: read("头部旺季平均销量"),
     offSeasonSales: read("头部淡季平均销量"),
     targetSales: read("目标销量"),
@@ -431,6 +433,9 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
     return fallback;
   }
 
+  const fallbackImprovement = createTrialProductDraft().improvement;
+  const sourceImprovement = detail.improvement ?? fallbackImprovement;
+
   return {
     ...fallback,
     ...detail,
@@ -448,11 +453,15 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
       : fallback.competitors,
     suppliers: detail.suppliers?.length ? detail.suppliers : fallback.suppliers,
     improvement: {
-      ...fallback.improvement,
-      ...detail.improvement,
-      rows: detail.improvement?.rows?.length
-        ? detail.improvement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
-        : fallback.improvement.rows,
+      ...fallbackImprovement,
+      ...sourceImprovement,
+      peakSeasonWeights: normalizePeakSeasonWeights(
+        (sourceImprovement as TrialImprovement & { peakSeason?: unknown }).peakSeasonWeights
+          ?? (sourceImprovement as TrialImprovement & { peakSeason?: unknown }).peakSeason,
+      ),
+      rows: sourceImprovement.rows?.length
+        ? sourceImprovement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
+        : fallbackImprovement.rows,
     },
     remarkImages: detail.remarkImages ?? fallback.remarkImages ?? [],
     keywords: detail.keywords?.length ? detail.keywords : fallback.keywords,
@@ -473,7 +482,7 @@ export const trialImprovementLabels: Record<Exclude<keyof TrialImprovement, "row
   packaging: "包装改进",
   manual: "说明书",
   imageCopySuggestion: "文案/主/附图片建议",
-  peakSeason: "旺季月份",
+  peakSeasonWeights: "旺季月份",
   peakSales: "头部旺季平均销量",
   offSeasonSales: "头部淡季平均销量",
   targetSales: "目标销量",
@@ -510,7 +519,7 @@ export function createTrialProductDraft(): TrialProductDraft {
       packaging: "前期先牛皮纸盒，后期看有没有必要加彩盒",
       manual: "简单产品介绍显得专业",
       imageCopySuggestion: "",
-      peakSeason: "产品较新",
+      peakSeasonWeights: createDefaultPeakSeasonWeights(),
       peakSales: "400-500",
       offSeasonSales: "",
       targetSales: "100",
@@ -768,7 +777,7 @@ function createEspressoMirrorDetail(): TrialProductDraft {
       packaging: "飞机盒",
       manual: "做使用说明书",
       imageCopySuggestion: "",
-      peakSeason: "",
+      peakSeasonWeights: createDefaultPeakSeasonWeights(),
       peakSales: "",
       offSeasonSales: "500",
       targetSales: "150",
