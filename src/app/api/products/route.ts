@@ -4,7 +4,6 @@ import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
-import { getProductListImage } from "@/lib/products/image-assets";
 import type { Product, ProductListItem } from "@/lib/products/types";
 import {
   createProductListItem,
@@ -84,6 +83,144 @@ function parseOptionalNumber(value: string | null) {
 
   const number = Number(normalized);
   return Number.isFinite(number) ? number : undefined;
+}
+
+function buildProductListWhereSql(input: {
+  organizationId: string;
+  workspaceId: string;
+  source: ProductListSource;
+  search?: string;
+  asin?: string;
+  status?: string | null;
+  supplierName?: string;
+  opsAssignees: string[];
+  selectionOwners: string[];
+  designerAssignees: string[];
+  mySkuOwner?: string;
+  minPrice?: number;
+  maxPrice?: number;
+}) {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`"organizationId" = ${input.organizationId}`,
+    Prisma.sql`"workspaceId" = ${input.workspaceId}`,
+  ];
+
+  if (input.source === "dashboard" || input.source === "sellfox") {
+    conditions.push(Prisma.sql`"source" = ${input.source}`);
+  }
+
+  if (input.search) {
+    const search = `%${input.search}%`;
+    conditions.push(Prisma.sql`
+      (
+        "sku" ILIKE ${search}
+        OR "id" ILIKE ${search}
+        OR "chineseName" ILIKE ${search}
+        OR "englishName" ILIKE ${search}
+      )
+    `);
+  }
+
+  if (input.asin) {
+    conditions.push(Prisma.sql`"asin" ILIKE ${`%${input.asin}%`}`);
+  }
+
+  if (input.supplierName) {
+    conditions.push(Prisma.sql`"supplierName" ILIKE ${`%${input.supplierName}%`}`);
+  }
+
+  if (input.opsAssignees.length) {
+    conditions.push(Prisma.sql`"opsAssignee" IN (${Prisma.join(input.opsAssignees)})`);
+  }
+
+  if (input.selectionOwners.length) {
+    conditions.push(Prisma.sql`"selectionOwner" IN (${Prisma.join(input.selectionOwners)})`);
+  }
+
+  if (input.designerAssignees.length) {
+    conditions.push(Prisma.sql`"designerAssignee" IN (${Prisma.join(input.designerAssignees)})`);
+  }
+
+  if (input.mySkuOwner) {
+    const ownerSearch = `%${input.mySkuOwner}%`;
+    conditions.push(Prisma.sql`
+      (
+        "selectionOwner" ILIKE ${ownerSearch}
+        OR "currentOwner" ILIKE ${ownerSearch}
+        OR "opsAssignee" ILIKE ${ownerSearch}
+        OR "designerAssignee" ILIKE ${ownerSearch}
+      )
+    `);
+  }
+
+  if (Number.isFinite(input.minPrice) || Number.isFinite(input.maxPrice)) {
+    conditions.push(
+      Prisma.sql`"purchasePrice" >= ${Number.isFinite(input.minPrice) ? input.minPrice : 0}`,
+      Prisma.sql`"purchasePrice" <= ${Number.isFinite(input.maxPrice) ? input.maxPrice : Number.MAX_SAFE_INTEGER}`,
+    );
+  }
+
+  if (input.status === "operations_progress") {
+    conditions.push(Prisma.sql`"operationsProgressIncomplete" = true`);
+  } else if (input.status === "overdue") {
+    conditions.push(Prisma.sql`"status" NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')`);
+    conditions.push(Prisma.sql`"isOverdue" = true`);
+  } else if (input.status && input.status !== "all") {
+    conditions.push(Prisma.sql`"status" = ${input.status}`);
+  }
+
+  return Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`;
+}
+
+function toOptionalString(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function toOptionalDate(value: unknown) {
+  if (value == null) return undefined;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function toOptionalNumber(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : undefined;
+  }
+
+  return undefined;
+}
+
+function mapProductListRow(record: Record<string, unknown>): ProductListItem {
+  return createProductListItem({
+    id: String(record.id ?? ""),
+    sku: String(record.sku ?? ""),
+    chineseName: String(record.chineseName ?? ""),
+    englishName: String(record.englishName ?? ""),
+    image: toOptionalString(record.image),
+    asin: toOptionalString(record.asin),
+    status: String(record.status ?? "pending"),
+    selectionOwner: toOptionalString(record.selectionOwner) ?? "",
+    opsAssignee: toOptionalString(record.opsAssignee) ?? "",
+    designerAssignee: toOptionalString(record.designerAssignee) ?? "",
+    currentOwner: toOptionalString(record.currentOwner) ?? "",
+    workflowStage: toOptionalString(record.workflowStage) ?? "",
+    createdAt: toOptionalDate(record.createdAt),
+    updatedAt: toOptionalDate(record.updatedAt) ?? new Date(),
+    purchasePrice: toOptionalNumber(record.purchasePrice),
+    supplierName: toOptionalString(record.supplierName),
+    specs: toOptionalString(record.specs),
+    keywords: toOptionalString(record.keywords),
+    note: toOptionalString(record.note),
+    workflowDueAt: toOptionalDate(record.workflowDueAt),
+    isOverdue: Boolean(record.isOverdue),
+  });
 }
 
 function normalizeProductListSource(value: string | null): ProductListSource {
@@ -394,7 +531,6 @@ export async function GET(request: Request) {
       maxPrice,
     });
     let total = 0;
-    let records: Awaited<ReturnType<typeof prisma.productRecord.findMany>> = [];
     const resolveSummary = async () => {
       const cachedSummary = getCachedProductListSummary(scopeKey);
       if (cachedSummary) {
@@ -425,36 +561,66 @@ export async function GET(request: Request) {
     }
 
     try {
-      const recordsPromise = measure("records", prisma.productRecord.findMany({
-        where,
-        select: detail
-          ? undefined
-            : {
-              id: true,
-              sku: true,
-              chineseName: true,
-              englishName: true,
-              asin: true,
-              status: true,
-              selectionOwner: true,
-              opsAssignee: true,
-              designerAssignee: true,
-              currentOwner: true,
-              workflowStage: true,
-              createdAt: true,
-              updatedAt: true,
-              purchasePrice: true,
-              supplierName: true,
-              workflowDueAt: true,
-              isOverdue: true,
-              payload: true,
-            },
-        orderBy: {
-          updatedAt: "desc",
-        },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }));
+      const listWhereSql = buildProductListWhereSql({
+        organizationId: user.organizationId,
+        workspaceId: scope.workspaceId,
+        source,
+        search,
+        asin: url.searchParams.get("asin")?.trim(),
+        status: status === "all" ? "" : status,
+        supplierName: url.searchParams.get("supplierName")?.trim(),
+        opsAssignees,
+        selectionOwners,
+        designerAssignees,
+        mySkuOwner,
+        minPrice,
+        maxPrice,
+      });
+      const listOffset = (page - 1) * pageSize;
+      const recordsPromise = detail
+        ? measure(
+            "records",
+            prisma.productRecord.findMany({
+              where,
+              orderBy: {
+                updatedAt: "desc",
+              },
+              skip: listOffset,
+              take: pageSize,
+            }),
+          )
+        : measure(
+            "records",
+            prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+              SELECT
+                "id",
+                "sku",
+                "chineseName",
+                "englishName",
+                "asin",
+                "status",
+                "selectionOwner",
+                "opsAssignee",
+                "designerAssignee",
+                "currentOwner",
+                "workflowStage",
+                "createdAt",
+                "updatedAt",
+                "purchasePrice",
+                "supplierName",
+                "workflowDueAt",
+                "isOverdue",
+                COALESCE(NULLIF("payload"->>'specs', ''), '') AS "specs",
+                COALESCE(NULLIF("payload"->>'keywords', ''), '') AS "keywords",
+                COALESCE(NULLIF("payload"->>'note', ''), '') AS "note",
+                COALESCE(NULLIF("payload"->'images'->>0, ''), '') AS "image"
+              FROM "ProductRecord"
+              ${listWhereSql}
+              ORDER BY "updatedAt" DESC
+              OFFSET ${listOffset}
+              LIMIT ${pageSize}
+            `),
+          );
       const summaryPromise = includeSummary ? measure("summary", resolveSummary()) : Promise.resolve(null);
 
       if (hasListFilters) {
@@ -464,20 +630,12 @@ export async function GET(request: Request) {
           summaryPromise,
         ]);
         total = countResult;
-        records = recordsResult;
+        const products = detail
+          ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => record.payload as unknown as Product)
+          : (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
 
         const responsePayload: ProductListResponse = {
-          products: records.map((record) => {
-            if (detail) {
-              return record.payload as unknown as Product;
-            }
-
-            const { payload, ...listRecord } = record;
-            return createProductListItem({
-              ...listRecord,
-              image: getProductListImage((payload as Partial<Product> | undefined) ?? {}),
-            });
-          }),
+          products,
           pagination: {
             page,
             pageSize,
@@ -506,22 +664,14 @@ export async function GET(request: Request) {
       }
 
       const [recordsResult, summaryResult] = await Promise.all([recordsPromise, summaryPromise]);
-      records = recordsResult;
       const summary = summaryResult ?? (await resolveSummary());
       total = summary.total;
+      const products = detail
+        ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => record.payload as unknown as Product)
+        : (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
 
       const responsePayload: ProductListResponse = {
-        products: records.map((record) => {
-          if (detail) {
-            return record.payload as unknown as Product;
-          }
-
-          const { payload, ...listRecord } = record;
-          return createProductListItem({
-            ...listRecord,
-            image: getProductListImage((payload as Partial<Product> | undefined) ?? {}),
-          });
-        }),
+        products,
         pagination: {
           page,
           pageSize,

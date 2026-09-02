@@ -160,6 +160,9 @@ export type ProductListItem = {
   createdAt?: string;
   purchasePrice?: number;
   supplierName?: string;
+  specs?: string;
+  keywords?: string;
+  note?: string;
   selectionOwner?: string;
   opsAssignee?: string;
   designerAssignee?: string;

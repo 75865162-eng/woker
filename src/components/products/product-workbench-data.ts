@@ -16,6 +16,9 @@ import {
 } from "./product-workbench-model";
 import { formatDateTime, nextSku } from "./product-workbench-utils";
 
+type ProductListPreview = Pick<ProductListItem, "id" | "sku" | "chineseName" | "englishName" | "status"> &
+  Partial<Omit<ProductListItem, "id" | "sku" | "chineseName" | "englishName" | "status">>;
+
 export async function parseProductWorkbookFile(file: File, products: Array<Pick<Product, "sku">>, preferredSku?: string): Promise<Product> {
   const buffer = await file.arrayBuffer();
   const [XLSXModule, JSZipModule] = await Promise.all([import("xlsx"), import("jszip")]);
@@ -115,6 +118,46 @@ export async function parseProductWorkbookFile(file: File, products: Array<Pick<
     ],
     workbookDetail: detail,
   } as Product;
+}
+
+export function createProductShellFromListItem(product: ProductListPreview): Product {
+  return {
+    id: product.id,
+    sku: product.sku,
+    chineseName: product.chineseName,
+    englishName: product.englishName,
+    asin: product.asin ?? "",
+    developer: "",
+    purchasePrice: product.purchasePrice ?? 0,
+    status: product.status,
+    supplierName: product.supplierName ?? "",
+    supplierUrl: "",
+    specs: product.specs ?? "",
+    purchaseLeadTime: "",
+    createdAt: product.createdAt ?? formatDateTime(new Date()),
+    keywords: product.keywords ?? "",
+    note: product.note ?? "",
+    cancelReason: "",
+    hsCode: "",
+    images: product.image ? [product.image] : [],
+    competitorAsins: [],
+    productWeightG: 0,
+    packageWeightG: 0,
+    productSizeCm: emptySize,
+    packageSizeCm: emptySize,
+    selectionOwner: product.selectionOwner ?? "",
+    opsAssignee: product.opsAssignee ?? "",
+    opsAssignees: [],
+    designerAssignee: product.designerAssignee ?? "",
+    designerAssignees: [],
+    editableBy: [],
+    viewableBy: [],
+    workflowStage: product.workflowStage,
+    workflowDueAt: product.workflowDueAt,
+    workflowHistory: [],
+    currentOwner: product.currentOwner ?? "",
+    isOverdue: product.isOverdue,
+  };
 }
 
 function parsePricingRows(rows: string[][], headerIndex: number, endIndex: number): TrialPriceRow[] {

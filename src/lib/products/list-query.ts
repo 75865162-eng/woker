@@ -168,6 +168,9 @@ export function createProductListItem(record: {
   updatedAt: Date;
   purchasePrice?: number;
   supplierName?: string;
+  specs?: string;
+  keywords?: string;
+  note?: string;
   workflowDueAt?: Date | null;
   isOverdue?: boolean;
 }): ProductListItem {
@@ -188,6 +191,9 @@ export function createProductListItem(record: {
     createdAt: record.createdAt?.toISOString(),
     purchasePrice: record.purchasePrice,
     supplierName: record.supplierName,
+    specs: record.specs,
+    keywords: record.keywords,
+    note: record.note,
     selectionOwner: record.selectionOwner,
     opsAssignee: record.opsAssignee,
     designerAssignee: record.designerAssignee,

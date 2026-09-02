@@ -14,7 +14,7 @@ import {
   type TeamAccountRecord,
   type TeamMember,
 } from "@/lib/accounts/team-roster";
-import type { Product, ProductDraft, ProductStatus, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
+import type { Product, ProductDraft, ProductListItem, ProductStatus, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
 import {
   buildWorkflowEvent,
   createWorkflowDueAt,
@@ -64,6 +64,7 @@ import {
 } from "./product-workbench-utils";
 import {
   createTrialProductDraft,
+  createProductShellFromListItem,
   parseProductWorkbookFile,
   productToDraft,
   trialImprovementLabels,
@@ -208,6 +209,7 @@ export function ProductWorkbench() {
   const [filters, setFilters] = useState<ProductFilters>(() => normalizeProductFilters(initialCachedWorkbench?.filters));
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailReady, setDetailReady] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
@@ -225,6 +227,7 @@ export function ProductWorkbench() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const productsRequestSeq = useRef(0);
   const summaryRequestSeq = useRef(0);
+  const productDetailRequestSeq = useRef(0);
   const productsRef = useRef(products);
   const filtersRef = useRef(filters);
   const pageRef = useRef(page);
@@ -322,7 +325,7 @@ export function ProductWorkbench() {
 
     const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store", signal: input.signal });
     const data = (await response.json()) as {
-      products?: Product[];
+      products?: ProductListItem[];
       pagination?: { total?: number; pageCount?: number };
       summary?: ProductListSummary;
       error?: string;
@@ -446,7 +449,9 @@ export function ProductWorkbench() {
             return;
           }
 
-          const nextProducts = Array.isArray(data.products) ? data.products : [];
+          const nextProducts = Array.isArray(data.products)
+            ? data.products.map((product) => createProductShellFromListItem(product))
+            : [];
           const nextTotalCount = data.pagination?.total ?? 0;
 
           setProducts(nextProducts);
@@ -548,7 +553,9 @@ export function ProductWorkbench() {
         detail: false,
         signal: controller.signal,
       });
-      const nextProducts = Array.isArray(data.products) ? data.products : [];
+      const nextProducts = Array.isArray(data.products)
+        ? data.products.map((product) => createProductShellFromListItem(product))
+        : [];
       const nextTotalCount = data.pagination?.total ?? 0;
       const nextSummary = data.summary ?? listSummary;
 
@@ -612,25 +619,66 @@ export function ProductWorkbench() {
   const mySkuValue = mySkuReady ? mySkuCount.toLocaleString("zh-CN") : "…";
 
   function openNewProduct() {
+    productDetailRequestSeq.current += 1;
     setActiveProduct(null);
+    setDetailReady(true);
+    setDetailLoading(false);
     setIsEditorOpen(true);
+  }
+
+  function closeProductEditor() {
+    productDetailRequestSeq.current += 1;
+    setIsEditorOpen(false);
+    setDetailLoading(false);
   }
 
   async function openProduct(sku: string) {
     const normalizedSku = sku.trim();
-    setDetailLoading(true);
+    const workspaceId = readCurrentWorkspaceId();
+    const cacheKey = getProductDetailCacheKey(workspaceId, normalizedSku);
+    const requestId = ++productDetailRequestSeq.current;
+    const cachedDetail = productDetailCache.get(cacheKey);
+    const preview = products.find((product) => product.sku.trim() === normalizedSku);
+
     setProductsError("");
+
+    if (cachedDetail && hasFullProductDetail(cachedDetail)) {
+      setActiveProduct(cachedDetail);
+      setDetailReady(true);
+      setIsEditorOpen(true);
+      setDetailLoading(false);
+      return;
+    }
+
+    if (preview) {
+      setActiveProduct(createProductShellFromListItem(preview));
+      setDetailReady(false);
+      setIsEditorOpen(true);
+      setDetailLoading(true);
+    } else {
+      setDetailReady(false);
+      setDetailLoading(true);
+    }
 
     try {
       const product = await loadProductDetail(normalizedSku);
+      if (requestId !== productDetailRequestSeq.current) {
+        return;
+      }
       setActiveProduct(product);
+      setDetailReady(true);
       setIsEditorOpen(true);
     } catch (error) {
+      if (requestId !== productDetailRequestSeq.current) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "商品详情读取失败";
       setProductsError(message);
       setActivityLog((current) => [`商品详情读取失败：${message}`, ...current].slice(0, 8));
     } finally {
-      setDetailLoading(false);
+      if (requestId === productDetailRequestSeq.current) {
+        setDetailLoading(false);
+      }
     }
   }
 
@@ -650,6 +698,7 @@ export function ProductWorkbench() {
   }
 
   async function handleSaveProduct(draft: ProductDraft) {
+    productDetailRequestSeq.current += 1;
     const existing = activeProduct;
     const normalizedStatus = existing || newProductStatusValues.has(draft.status) ? draft.status : "pending";
     const nextProduct: Product = {
@@ -663,10 +712,11 @@ export function ProductWorkbench() {
     try {
       const savedProduct = await persistProduct(nextProduct);
       setActiveProduct(savedProduct);
+      setDetailReady(true);
       if (!existing) {
         setPage(1);
       }
-      setIsEditorOpen(false);
+      closeProductEditor();
       await reloadProducts({ page: existing ? page : 1 });
       setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
     } catch (error) {
@@ -693,6 +743,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
     }
 
     try {
+      productDetailRequestSeq.current += 1;
       const imported = await parseProductWorkbookFile(file, products, getNextSku(products));
       const importedWithOwner = {
         ...imported,
@@ -702,6 +753,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
       const importedWithAssets = await uploadEmbeddedProductImages(importedWithOwner);
       const savedProduct = await persistProduct(importedWithAssets);
       setActiveProduct(savedProduct);
+      setDetailReady(true);
       setIsEditorOpen(true);
       await reloadProducts({ page: 1 });
       setActivityLog((current) => [`已导入 ${file.name} 并保存到数据库`, ...current].slice(0, 8));
@@ -915,14 +967,15 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         ) : null}
 
         {isEditorOpen ? (
-            <ProductEditor
+          <ProductEditor
               product={activeProduct}
               products={products}
               nextSku={getNextSku(products)}
               creatorName={creatorName}
+              detailReady={detailReady}
             opsOptions={opsOptions}
             designerOptions={designerOptions}
-            onClose={() => setIsEditorOpen(false)}
+            onClose={closeProductEditor}
             onSave={handleSaveProduct}
           />
         ) : null}
@@ -1340,6 +1393,7 @@ function ProductEditor({
   products,
   nextSku,
   creatorName,
+  detailReady,
   opsOptions,
   designerOptions,
   onClose,
@@ -1349,6 +1403,7 @@ function ProductEditor({
   products: Product[];
   nextSku: string;
   creatorName: string;
+  detailReady: boolean;
   opsOptions: string[];
   designerOptions: string[];
   onClose: () => void;
@@ -1361,8 +1416,12 @@ function ProductEditor({
   const [conclusionUploading, setConclusionUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const conclusionInputRef = useRef<HTMLInputElement | null>(null);
+  const productRef = useRef(product);
+  const productsRef = useRef(products);
+  const nextSkuRef = useRef(nextSku);
 
   const isEditing = Boolean(product);
+  const showHeavyDetail = !isEditing || detailReady;
   const mainAmazonLink = buildAmazonLink(draft.asin);
   const workbookDetail = draft.workbookDetail;
   const workflowStage = getProductWorkflowStage(draft);
@@ -1375,6 +1434,22 @@ function ProductEditor({
   const showListingActions = ["listing_confirming", "design_in_progress", "listed", "delisted"].includes(draft.status);
   const statusOptions = isEditing ? productStatusOptions : newProductStatusOptions;
   const requiresConclusionExcel = draft.status === "canceled" || draft.status === "listed";
+
+  useEffect(() => {
+    productRef.current = product;
+  }, [product]);
+
+  useEffect(() => {
+    productsRef.current = products;
+  }, [products]);
+
+  useEffect(() => {
+    nextSkuRef.current = nextSku;
+  }, [nextSku]);
+
+  useEffect(() => {
+    setDraft(productToDraft(productRef.current, productsRef.current, nextSkuRef.current));
+  }, [detailReady]);
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -1830,13 +1905,17 @@ function ProductEditor({
                 <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setOperationsProgressOpen(true)}>
                   运营进度
                 </Button>
-                <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setImageCopyGalleryOpen(true)}>
-                  图片文案
-                </Button>
-                <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setVideoPlanOpen(true)}>
-                  <Video className="h-4 w-4" />
-                  视频
-                </Button>
+                {showHeavyDetail ? (
+                  <>
+                    <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setImageCopyGalleryOpen(true)}>
+                      图片文案
+                    </Button>
+                    <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setVideoPlanOpen(true)}>
+                      <Video className="h-4 w-4" />
+                      视频
+                    </Button>
+                  </>
+                ) : null}
               </>
             ) : null}
             <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={onClose}>
@@ -2044,25 +2123,29 @@ function ProductEditor({
                 </div>
               </CardContent>
             </Card>
-            <ProductWorkbookDetailSections
-              detail={workbookDetail}
-              onPricingChange={updateWorkbookPricingRow}
-              onPricingAdd={addWorkbookPricingRow}
-              onPricingRemove={removeWorkbookPricingRow}
-              onCompetitorChange={updateWorkbookCompetitor}
-              onCompetitorAdd={addWorkbookCompetitor}
-              onCompetitorRemove={removeWorkbookCompetitor}
-              onSupplierChange={updateWorkbookSupplier}
-              onSupplierAdd={addWorkbookSupplier}
-              onSupplierRemove={removeWorkbookSupplier}
-              onImprovementChange={updateWorkbookImprovement}
-              onPeakSeasonWeightsChange={updateWorkbookPeakSeasonWeights}
-              onImprovementRowChange={updateWorkbookImprovementRow}
-              onKeywordChange={updateWorkbookKeyword}
-              onKeywordsReplace={replaceWorkbookKeywords}
-              onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
-              onRemarkImagesChange={updateWorkbookRemarkImages}
-            />
+            {showHeavyDetail ? (
+              <ProductWorkbookDetailSections
+                detail={workbookDetail}
+                onPricingChange={updateWorkbookPricingRow}
+                onPricingAdd={addWorkbookPricingRow}
+                onPricingRemove={removeWorkbookPricingRow}
+                onCompetitorChange={updateWorkbookCompetitor}
+                onCompetitorAdd={addWorkbookCompetitor}
+                onCompetitorRemove={removeWorkbookCompetitor}
+                onSupplierChange={updateWorkbookSupplier}
+                onSupplierAdd={addWorkbookSupplier}
+                onSupplierRemove={removeWorkbookSupplier}
+                onImprovementChange={updateWorkbookImprovement}
+                onPeakSeasonWeightsChange={updateWorkbookPeakSeasonWeights}
+                onImprovementRowChange={updateWorkbookImprovementRow}
+                onKeywordChange={updateWorkbookKeyword}
+                onKeywordsReplace={replaceWorkbookKeywords}
+                onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
+                onRemarkImagesChange={updateWorkbookRemarkImages}
+              />
+            ) : (
+              <DetailLoadingPlaceholder />
+            )}
           </section>
         </div>
       </div>
@@ -2114,6 +2197,23 @@ function ProductEditor({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function DetailLoadingPlaceholder() {
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-5">
+        <div className="h-5 w-48 rounded bg-surface-muted" />
+        <div className="h-4 w-72 rounded bg-surface-muted" />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div key={index} className="h-10 rounded-md bg-surface-muted" />
+          ))}
+        </div>
+        <p className="text-xs font-semibold text-muted">正在加载完整商品内容，列表和基础信息已可使用。</p>
+      </CardContent>
+    </Card>
   );
 }
 
