@@ -14,12 +14,7 @@ import {
   operationStageStatusOptions,
   summarizeOperationsProgressChanges,
 } from "@/lib/products/operations-progress";
-import type {
-  ProductOperationProgress,
-  ProductOperationStage,
-  ProductOperationStageEvidence,
-  ProductOperationStageStatus,
-} from "@/lib/products/types";
+import type { ProductOperationProgress, ProductOperationStage, ProductOperationStageEvidence, ProductOperationStageStatus } from "@/lib/products/types";
 
 const inputClass = "h-9 w-full rounded-md border border-border bg-white px-2 text-sm text-foreground outline-none focus:border-brand";
 
@@ -44,7 +39,7 @@ export function ProductOperationsProgress({
   const completedCount = draft.stages.filter(isOperationStageComplete).length;
   const isComplete = isOperationsProgressComplete(draft);
 
-  function setNumber(field: "orderQuantity" | "dailyAdBudget" | "forecastMonthlySales" | "forecastPrice", value: string) {
+  function setNumber(field: "orderQuantity" | "forecastMonthlySales" | "forecastPrice", value: string) {
     setDraft((current) => ({ ...current, [field]: Number(value) || 0 }));
   }
 
@@ -60,7 +55,7 @@ export function ProductOperationsProgress({
     const stage = draft.stages[index];
     const requirement = operationStageEvidenceRequirements[stage.id];
     if (status === "completed" && requirement && !stage.evidenceFile?.fileName) {
-      window.alert(requirement.helper);
+      window.alert(requirement.kind === "image" ? "请先上传图片。" : "请先上传 Excel 表。");
       return;
     }
 
@@ -147,24 +142,15 @@ export function ProductOperationsProgress({
         <div className="thin-scrollbar flex-1 overflow-auto">
           <section className="border-b border-border bg-surface-muted px-5 py-4">
             <h3 className="text-sm font-bold text-foreground">关键经营数据</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
               <ProgressField label="产品名称">
                 <input className={inputClass} value={productName} readOnly />
-              </ProgressField>
-              <ProgressField label="入选日期">
-                <input className={inputClass} type="date" value={draft.selectionDate} onChange={(event) => setDraft({ ...draft, selectionDate: event.target.value })} />
               </ProgressField>
               <ProgressField label="下单数量">
                 <input className={inputClass} type="number" min="0" value={draft.orderQuantity || ""} onChange={(event) => setNumber("orderQuantity", event.target.value)} />
               </ProgressField>
-              <ProgressField label="下单日期">
-                <input className={inputClass} type="date" value={draft.orderDate} onChange={(event) => setDraft({ ...draft, orderDate: event.target.value })} />
-              </ProgressField>
               <ProgressField label="出货日期">
                 <input className={inputClass} type="date" value={draft.shipDate} onChange={(event) => setDraft({ ...draft, shipDate: event.target.value })} />
-              </ProgressField>
-              <ProgressField label="广告日预算 USD">
-                <input className={inputClass} type="number" min="0" step="0.01" value={draft.dailyAdBudget || ""} onChange={(event) => setNumber("dailyAdBudget", event.target.value)} />
               </ProgressField>
               <ProgressField label="预估月销">
                 <input className={inputClass} type="number" min="0" value={draft.forecastMonthlySales || ""} onChange={(event) => setNumber("forecastMonthlySales", event.target.value)} />
@@ -186,22 +172,21 @@ export function ProductOperationsProgress({
             <div className="flex items-end justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-foreground">阶段追踪</h3>
-                <p className="mt-1 text-xs text-muted">计划日期用于排期，实际完成日期用于复盘；受阻时请在备注写明原因。</p>
+                <p className="mt-1 text-xs text-muted">受阻时请在备注写明原因。</p>
               </div>
               {draft.updatedAt ? <p className="text-xs text-muted">最近更新：{formatDateTime(draft.updatedAt)} · {draft.updatedBy || "未知"}</p> : null}
             </div>
             <div className="mt-3 overflow-x-auto rounded-md border border-border">
-              <table className="w-full min-w-[1320px] text-left text-xs">
+              <table className="w-full min-w-[1240px] text-left text-xs">
                 <thead className="bg-surface-muted text-muted">
                   <tr>
                     <th className="px-3 py-2">选择</th>
                     <th className="px-3 py-2">阶段</th>
                     <th className="px-3 py-2">状态</th>
                     <th className="px-3 py-2">负责人</th>
-                    <th className="px-3 py-2">计划日期</th>
-                    <th className="px-3 py-2">实际完成</th>
+                    <th className="px-3 py-2">开始日期</th>
                     <th className="px-3 py-2">附件</th>
-                    <th className="px-3 py-2">备注 / 阻塞原因</th>
+                    <th className="px-3 py-2">备注</th>
                     <th className="px-3 py-2">最后更新</th>
                   </tr>
                 </thead>
@@ -242,15 +227,11 @@ export function ProductOperationsProgress({
                         <td className="w-40 px-2 py-2">
                           <input className={inputClass} type="date" value={stage.plannedAt} onChange={(event) => updateStage(index, { plannedAt: event.target.value })} />
                         </td>
-                        <td className="w-40 px-2 py-2">
-                          <input className={inputClass} type="date" value={stage.completedAt} onChange={(event) => updateStage(index, { completedAt: event.target.value })} />
-                        </td>
                         <td className="w-52 px-2 py-2">
                           {evidenceRequirement ? (
                             <EvidenceUpload
                               accept={evidenceRequirement.accept}
                               fileName={stage.evidenceFile?.fileName}
-                              helper={evidenceRequirement.helper}
                               label={evidenceRequirement.label}
                               kind={evidenceRequirement.kind}
                               onChange={(file) => handleEvidenceUpload(index, file)}
@@ -263,7 +244,7 @@ export function ProductOperationsProgress({
                           <input
                             className={inputClass}
                             value={stage.note}
-                            placeholder={stage.status === "blocked" ? "必填：阻塞原因和下一步" : "补充交付物或说明"}
+                            placeholder={stage.status === "blocked" ? "必填：阻塞原因和下一步" : "补充说明"}
                             onChange={(event) => updateStage(index, { note: event.target.value })}
                           />
                         </td>
@@ -285,7 +266,9 @@ export function ProductOperationsProgress({
               {draft.history.slice(0, 8).map((event) => (
                 <div key={event.id} className="flex flex-wrap justify-between gap-2 border-b border-border pb-2 text-xs">
                   <span className="font-semibold text-foreground">{event.summary}</span>
-                  <span className="text-muted">{event.changedBy} · {formatDateTime(event.changedAt)}</span>
+                  <span className="text-muted">
+                    {event.changedBy} · {formatDateTime(event.changedAt)}
+                  </span>
                 </div>
               ))}
               {!draft.history.length ? <p className="text-sm text-muted">首次应用后开始记录修改人、时间和变更摘要。</p> : null}
@@ -309,14 +292,12 @@ function ProgressField({ label, children }: { label: string; children: React.Rea
 function EvidenceUpload({
   accept,
   fileName,
-  helper,
   label,
   kind,
   onChange,
 }: {
   accept: string;
   fileName?: string;
-  helper: string;
   label: string;
   kind: "image" | "excel";
   onChange: (file: File | null) => void;
@@ -330,7 +311,7 @@ function EvidenceUpload({
         {fileName ? "重新上传" : `上传${label}`}
         <input className="hidden" type="file" accept={accept} onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
       </label>
-      {fileName ? <p className="max-w-44 truncate text-xs font-semibold text-foreground">{fileName}</p> : <p className="text-xs text-muted">{helper}</p>}
+      {fileName ? <p className="max-w-44 truncate text-xs font-semibold text-foreground">{fileName}</p> : null}
     </div>
   );
 }

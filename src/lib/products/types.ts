@@ -39,9 +39,7 @@ export type ProductWorkflowEvent = {
 
 export type ProductOperationStageId =
   | "selection_data"
-  | "sample_confirmation"
   | "backend_upload"
-  | "system_entry"
   | "order"
   | "image_request"
   | "copywriting"
@@ -79,11 +77,8 @@ export type ProductOperationProgressEvent = {
 };
 
 export type ProductOperationProgress = {
-  selectionDate: string;
   orderQuantity: number;
-  orderDate: string;
   shipDate: string;
-  dailyAdBudget: number;
   forecastMonthlySales: number;
   forecastPrice: number;
   stages: ProductOperationStage[];
@@ -111,6 +106,7 @@ export type Product = {
   developer: string;
   purchasePrice: number;
   status: ProductStatus;
+  source?: "dashboard" | "sellfox";
   supplierName: string;
   supplierUrl: string;
   specs: string;
@@ -139,6 +135,8 @@ export type Product = {
   workflowUpdatedAt?: string;
   workflowReminderAt?: string;
   workflowHistory?: ProductWorkflowEvent[];
+  currentOwner?: string;
+  isOverdue?: boolean;
   operationsProgress?: ProductOperationProgress;
   conclusionExcelFile?: ProductFileAsset;
   videoPlan?: ProductVideoPlanDraft;
@@ -153,9 +151,19 @@ export type ProductListItem = {
   sku: string;
   chineseName: string;
   englishName: string;
+  asin?: string;
   status: ProductStatus;
   currentOwner: string;
+  isOverdue?: boolean;
   updatedAt: string;
+  createdAt?: string;
+  purchasePrice?: number;
+  supplierName?: string;
+  selectionOwner?: string;
+  opsAssignee?: string;
+  designerAssignee?: string;
+  workflowStage?: ProductWorkflowStage;
+  workflowDueAt?: string;
 };
 
 export type ProductListSummary = {

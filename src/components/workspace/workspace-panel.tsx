@@ -7,7 +7,7 @@ import { PendingDraftQueue } from "@/components/workspace/pending-draft-queue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { defaultRules, lifecycleGroups } from "@/data/mock-data";
+import { defaultRules, lifecycleGroups } from "@/data/default-rules";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import type { OverallAdDataRow } from "@/lib/types";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";
@@ -131,7 +131,7 @@ export function WorkspacePanel() {
               variant="secondary"
               size="sm"
               onClick={() => {
-                if (window.confirm("确定清空本地保存并恢复默认演示数据吗？")) {
+                if (window.confirm("确定清空当前工作区保存的数据吗？清空后会回到空工作区。")) {
                   void clearPersistedWorkspace();
                 }
               }}

@@ -5,7 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { RulesEditorShell } from "@/components/app-shell/lazy-workbenches";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
-import { defaultRules, lifecycleGroups } from "@/data/mock-data";
+import { defaultRules, lifecycleGroups } from "@/data/default-rules";
 import { useBulkUpload } from "@/lib/hooks/use-bulk-upload";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";

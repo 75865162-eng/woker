@@ -109,6 +109,7 @@ npm run build
 npm run lint
 npm run test
 npm run check
+npm run products:refresh-derived
 ```
 
 脚本说明：
@@ -118,6 +119,7 @@ npm run check
 - `npm run lint` 运行 ESLint flat config。
 - `npm run test` 运行不依赖数据库、外部服务或密钥的核心业务回归测试。
 - `npm run check` 依次运行测试、lint 和生产构建，适合作为每次更新后的完整本地健康检查。
+- `npm run products:refresh-derived` 刷新商品列表派生字段、重建商品摘要表并清理过期商品列表缓存；涉及商品状态、负责人、超期逻辑或生产定时维护时使用。
 
 ## 目录地图
 

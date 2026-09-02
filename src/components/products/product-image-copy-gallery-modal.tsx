@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Minus, Plus, X } from "lucide-react";
+import { Minus, Plus, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -9,7 +9,7 @@ import {
   ImagePreviewModal,
 } from "@/components/listing-ai/gallery-primitives";
 import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
-import type { ImagePreview } from "@/lib/listing-ai/workspace-draft";
+import { fieldClass, labelClass, type ImagePreview } from "@/lib/listing-ai/workspace-draft";
 import {
   createEmptyProductImageCopyGallery,
   normalizeProductImageCopyGallery,
@@ -57,6 +57,7 @@ export function ProductImageCopyGalleryModal({
   const [ready, setReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [error, setError] = useState("");
+  const [generatingAplus, setGeneratingAplus] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +136,66 @@ export function ProductImageCopyGalleryModal({
       return { ...current, imageNotes };
     });
   }
+
+  function updateField<K extends keyof ProductImageCopyGalleryDraft>(
+    field: K,
+    value: ProductImageCopyGalleryDraft[K],
+  ) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateBullet(index: number, value: string) {
+    setDraft((current) => {
+      const bullets = [...current.bullets];
+      bullets[index] = value;
+      return { ...current, bullets };
+    });
+  }
+
+  function generateAplusRequirements() {
+    setGeneratingAplus(true);
+    try {
+      const bulletLines = draft.bullets.filter((line) => line.trim());
+      const summary = [
+        draft.asin ? `ASIN: ${draft.asin}` : "",
+        draft.productFeatures ? `产品卖点: ${draft.productFeatures}` : "",
+        draft.sales ? `销量: ${draft.sales}` : "",
+        draft.price ? `价格: ${draft.price}` : "",
+        draft.variation ? `变体: ${draft.variation}` : "",
+        draft.rating ? `星级: ${draft.rating}` : "",
+        draft.reviewCount ? `评论数: ${draft.reviewCount}` : "",
+        draft.title ? `标题: ${draft.title}` : "",
+        bulletLines.length ? `5点: ${bulletLines.join(" / ")}` : "",
+        draft.structureNotes ? `图片结构: ${draft.structureNotes}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const generated = [
+        "主图与附图需突出核心卖点，优先展示差异化结构、使用场景和购买理由。",
+        draft.productFeatures ? `重点强化: ${draft.productFeatures}` : "",
+        draft.structureNotes ? `现有图片结构: ${draft.structureNotes}` : "",
+        summary ? `参考信息:\n${summary}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      setDraft((current) => ({ ...current, aplusRequirements: generated }));
+    } finally {
+      setGeneratingAplus(false);
+    }
+  }
+
+  const detailRows = [
+    { label: "ASIN", value: draft.asin, onChange: (value: string) => updateField("asin", value) },
+    { label: "产品卖点", value: draft.productFeatures, onChange: (value: string) => updateField("productFeatures", value) },
+    { label: "销量", value: draft.sales, onChange: (value: string) => updateField("sales", value) },
+    { label: "价格", value: draft.price, onChange: (value: string) => updateField("price", value) },
+    { label: "变体", value: draft.variation, onChange: (value: string) => updateField("variation", value) },
+    { label: "星级", value: draft.rating, onChange: (value: string) => updateField("rating", value) },
+    { label: "评论数", value: draft.reviewCount, onChange: (value: string) => updateField("reviewCount", value) },
+    { label: "标题", value: draft.title, onChange: (value: string) => updateField("title", value) },
+  ];
 
   function addCompetitorColumn() {
     setDraft((current) => ({
@@ -465,21 +526,66 @@ export function ProductImageCopyGalleryModal({
           </Card>
 
           <Card className="mt-4">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle>Image Assets Notes</CardTitle>
+              <p className="text-xs font-semibold text-muted">记录自身图片结构、差距、希望 AI 策划强化的方向</p>
             </CardHeader>
-            <CardContent>
-              <textarea
-                className="min-h-32 w-full resize-y rounded-md border border-border px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
-                value={draft.structureNotes}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    structureNotes: event.target.value,
-                  }))
-                }
-                placeholder="记录结构、差异点、主图策略和文案提示。"
-              />
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {detailRows.map((row) => (
+                  <label key={row.label} className="text-xs font-bold text-muted">
+                    {row.label}
+                    <input
+                      className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+                      value={row.value}
+                      onChange={(event) => row.onChange(event.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div className="rounded-md border border-border bg-surface-muted p-4">
+                <p className={labelClass}>Image Assets Notes</p>
+                <textarea
+                  className={`${fieldClass} mt-3 min-h-32 resize-y`}
+                  value={draft.structureNotes}
+                  onChange={(event) => updateField("structureNotes", event.target.value)}
+                  placeholder="记录自身图片结构、差距、希望 AI 策划强化的方向"
+                />
+              </div>
+
+              <div className="rounded-md border border-border bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className={labelClass}>A+ Requirements</p>
+                  <Button variant="secondary" size="sm" onClick={() => generateAplusRequirements()} disabled={generatingAplus}>
+                    <RefreshCw className={`h-4 w-4 ${generatingAplus ? "animate-spin" : ""}`} />
+                    Generate / Regenerate
+                  </Button>
+                </div>
+                <textarea
+                  className={`${fieldClass} mt-3 min-h-32 resize-y`}
+                  value={draft.aplusRequirements}
+                  onChange={(event) => updateField("aplusRequirements", event.target.value)}
+                  placeholder="填写 A+ 版面、模块顺序、文案重点和视觉要求。"
+                />
+              </div>
+
+              <div className="rounded-md border border-border bg-white p-4">
+                <p className={labelClass}>5点描述</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <label key={index} className="text-xs font-bold text-muted">
+                      5点{index + 1}
+                      <textarea
+                        className={`${fieldClass} mt-1 min-h-20 resize-y`}
+                        value={draft.bullets[index] ?? ""}
+                        onChange={(event) => updateBullet(index, event.target.value)}
+                        placeholder={`填写 5点${index + 1}`}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

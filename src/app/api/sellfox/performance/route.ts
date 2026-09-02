@@ -6,6 +6,16 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
+function parseOptionalNumber(value: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : undefined;
+}
+
 export async function GET(request: Request) {
   try {
     const permission = await requireApiPermission("products", "view", request);
@@ -13,8 +23,8 @@ export async function GET(request: Request) {
 
     const scope = workspaceScopeFromRequest(request);
     const url = new URL(request.url);
-    const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
-    const pageSize = Math.min(Math.max(Number(url.searchParams.get("pageSize")) || 50, 1), 200);
+    const page = Math.max(parseOptionalNumber(url.searchParams.get("page")) ?? 1, 1);
+    const pageSize = Math.min(Math.max(parseOptionalNumber(url.searchParams.get("pageSize")) ?? 50, 1), 200);
     const where = performanceQuery(url, permission.user.organizationId, scope.workspaceId);
     const [total, rows, summary] = await Promise.all([
       prisma.sellfoxProductDailySnapshot.count({ where }),

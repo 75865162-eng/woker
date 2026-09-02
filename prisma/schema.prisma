@@ -16,8 +16,10 @@ model Organization {
   dataChangeVersions DataChangeVersion[]
   members            OrganizationMember[]
   notifications      UserNotification[]
+  productListCacheRecords ProductListCacheRecord[]
   rosterRoles        OrganizationRosterRole[]
   wecomNotificationSettings WeComNotificationSetting[]
+  productListSummaryRecords ProductListSummaryRecord[]
   rolePermissions    OrganizationRolePermission?
   teamRoster         TeamRosterMember[]
   workerHeartbeats   WorkerHeartbeat[]
@@ -277,18 +279,25 @@ model ProductRecord {
   englishName                  String    @default("")
   asin                         String    @default("")
   status                       String    @default("")
+  source                       String    @default("dashboard")
   supplierName                 String    @default("")
   purchasePrice                Float     @default(0)
   selectionOwner               String    @default("")
   opsAssignee                  String    @default("")
   designerAssignee             String    @default("")
+  currentOwner                 String    @default("")
   workflowStage                String    @default("")
   workflowDueAt                DateTime?
+  isOverdue                    Boolean   @default(false)
   operationsProgressIncomplete Boolean   @default(false)
 
   @@unique([organizationId, workspaceId, sku])
   @@index([organizationId, updatedAt])
   @@index([organizationId, workspaceId, updatedAt])
+  @@index([organizationId, workspaceId, source, updatedAt])
+  @@index([organizationId, workspaceId, source, status, updatedAt], map: "ProductRecord_organizationId_workspaceId_source_status_updated")
+  @@index([organizationId, workspaceId, source, currentOwner, updatedAt], map: "ProductRecord_organizationId_workspaceId_source_owner_updated")
+  @@index([organizationId, workspaceId, source, isOverdue, updatedAt], map: "ProductRecord_organizationId_workspaceId_source_overdue_updat")
   @@index([organizationId, sku])
   @@index([userId, updatedAt])
   @@index([organizationId, accountId, marketplace, updatedAt], map: "ProductRecord_organizationId_accountId_marketplace_updatedAt_id")
@@ -303,6 +312,39 @@ model ProductRecord {
   @@index([organizationId, workspaceId, supplierName])
   @@index([organizationId, workspaceId, workflowDueAt])
   @@index([organizationId, workspaceId, workflowStage])
+}
+
+model ProductListSummaryRecord {
+  organizationId     String
+  workspaceId        String
+  source             String
+  total              Int       @default(0)
+  developing         Int       @default(0)
+  opsReview          Int       @default(0)
+  designInProgress    Int       @default(0)
+  operationsProgress  Int       @default(0)
+  overdue            Int       @default(0)
+  updatedAt          DateTime  @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, workspaceId, source])
+  @@index([organizationId, workspaceId, updatedAt])
+}
+
+model ProductListCacheRecord {
+  cacheKey       String    @id
+  organizationId String
+  workspaceId    String
+  scopeKey       String
+  payload        Json
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([scopeKey, expiresAt])
+  @@index([expiresAt])
 }
 
 model SellfoxProductRecord {

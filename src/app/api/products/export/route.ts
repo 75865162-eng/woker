@@ -37,6 +37,16 @@ function createDownloadUrl(fileId: string) {
   return `/api/files/${encodeURIComponent(fileId)}/download`;
 }
 
+function parseOptionalNumber(value: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : undefined;
+}
+
 export async function POST(request: Request) {
   try {
     const permission = await requireApiPermission("products", "export", request);
@@ -58,8 +68,8 @@ export async function POST(request: Request) {
       opsAssignees: splitMultiValue(url.searchParams.get("opsAssignees")),
       selectionOwners: splitMultiValue(url.searchParams.get("selectionOwners")),
       designerAssignees: splitMultiValue(url.searchParams.get("designerAssignees")),
-      minPrice: Number(url.searchParams.get("minPrice")),
-      maxPrice: Number(url.searchParams.get("maxPrice")),
+      minPrice: parseOptionalNumber(url.searchParams.get("minPrice")),
+      maxPrice: parseOptionalNumber(url.searchParams.get("maxPrice")),
     });
 
     const records = await prisma.productRecord.findMany({

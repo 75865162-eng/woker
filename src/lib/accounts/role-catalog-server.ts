@@ -2,7 +2,7 @@ import { type Prisma } from "@prisma/client";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
-import { normalizeRolePermissionMap, normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 
 export type RoleCatalogSnapshot = {
   roles: RoleCatalogItem[];
@@ -38,37 +38,6 @@ function normalizeRoleRow(row: RoleRow): RoleCatalogItem {
   };
 }
 
-async function readLegacyPermissions(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
-  const legacy = await client.organizationRolePermission.findUnique({
-    where: { organizationId },
-  });
-
-  return normalizeRolePermissionMap(legacy?.permissions);
-}
-
-async function seedOrganizationRoles(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
-  const existingCount = await client.organizationRosterRole.count({
-    where: { organizationId },
-  });
-
-  if (existingCount > 0) return;
-
-  const legacyPermissions = await readLegacyPermissions(client, organizationId);
-  const mergedRoles = defaultRoleCatalog.map((role) => ({
-    organizationId,
-    id: role.id,
-    name: role.name,
-    description: role.description,
-    permissions: legacyPermissions[role.id] ?? role.permissions,
-    sortOrder: role.sortOrder,
-  }));
-
-  await client.organizationRosterRole.createMany({
-    data: mergedRoles,
-    skipDuplicates: true,
-  });
-}
-
 export async function getOrganizationRoleCatalogSnapshot(organizationId: string): Promise<RoleCatalogSnapshot> {
   if (!process.env.DATABASE_URL) {
     return {
@@ -78,10 +47,6 @@ export async function getOrganizationRoleCatalogSnapshot(organizationId: string)
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      await seedOrganizationRoles(tx, organizationId);
-    });
-
     const roles = (await prisma.organizationRosterRole.findMany({
       where: { organizationId },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
@@ -123,27 +88,8 @@ export async function saveOrganizationRoleCatalog(organizationId: string, roles:
       sortOrder: Number.isFinite(role.sortOrder) ? role.sortOrder : index,
     }));
 
-  if (!normalizedRoles.length) {
-    throw new Error("至少保留一个角色。");
-  }
-
   const saved = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
-
-    const currentAccounts = await tx.teamRosterMember.findMany({
-      where: { organizationId },
-      select: { roleId: true },
-    });
-    const protectedRoleIds = new Set(currentAccounts.map((account) => account.roleId));
-    const nextRoleIds = new Set(normalizedRoles.map((role) => role.id));
-    const deletedRoleIds = Array.from(protectedRoleIds).filter((roleId) => !nextRoleIds.has(roleId));
-
-    if (deletedRoleIds.length) {
-      const blockedRole = currentAccounts.find((account) => deletedRoleIds.includes(account.roleId));
-      if (blockedRole) {
-        throw new Error("已有成员绑定的角色不能删除。");
-      }
-    }
 
     await tx.organizationRosterRole.deleteMany({
       where: {

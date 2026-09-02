@@ -17,9 +17,11 @@ import {
   createSentRecords,
   validateWeComWebhookUrl,
 } from "@/lib/notifications/wecom";
+import { productToDraft } from "@/components/products/product-workbench-data";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
 import { normalizeWorkspaceScope, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import type { CampaignGroup, PerformanceRow, Rule } from "@/lib/types";
+import type { Product } from "@/lib/products/types";
 
 function createPerformanceRow(overrides: Partial<PerformanceRow> = {}): PerformanceRow {
   return {
@@ -200,4 +202,36 @@ test("WeCom launch alerts validate the official webhook and prevent duplicate sa
     sentRecords: createSentRecords(alerts, now),
   });
   assert.equal(duplicateAlerts.length, 0);
+});
+
+test("productToDraft tolerates legacy products with missing array fields", () => {
+  const product = {
+    id: "prod-1",
+    sku: "SKU-1",
+    chineseName: "Test",
+    englishName: "",
+    asin: "",
+    developer: "",
+    purchasePrice: 0,
+    status: "pending",
+    supplierName: "",
+    supplierUrl: "",
+    specs: "",
+    purchaseLeadTime: "",
+    createdAt: "2026-09-02T00:00:00.000Z",
+    keywords: "",
+    note: "",
+    cancelReason: "",
+    hsCode: "",
+    productWeightG: 0,
+    packageWeightG: 0,
+    productSizeCm: { length: 0, width: 0, height: 0 },
+    packageSizeCm: { length: 0, width: 0, height: 0 },
+  } as Product;
+
+  const draft = productToDraft(product, [{ sku: "SKU-2" }]);
+
+  assert.deepEqual(draft.images, []);
+  assert.deepEqual(draft.competitorAsins, [""]);
+  assert.deepEqual(draft.workflowHistory, []);
 });

@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:seed-admin": "node --env-file=.env scripts/seed-admin.mjs",
     "db:sync-roster-users": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sync-roster-login-users.ts",
+    "products:refresh-derived": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/refresh-product-derived-fields.ts",
     "worker": "tsx scripts/import-worker.ts",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "lint": "eslint",

@@ -13,6 +13,11 @@ export const runtime = "nodejs";
 type RecordLike = Record<string, unknown>;
 type SyncResource = "stores" | "products" | "hourly" | "performance";
 
+function parseOptionalNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
 function asRecord(value: unknown): RecordLike | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordLike) : null;
 }
@@ -191,8 +196,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请选择同步资源。" }, { status: 400 });
   }
 
-  const storeOffset = Math.max(0, Number(body.storeOffset) || 0);
-  const storeLimit = Math.min(Math.max(Number(body.storeLimit) || 1, 1), 1);
+  const storeOffset = Math.max(0, parseOptionalNumber(body.storeOffset) || 0);
+  const storeLimit = Math.min(Math.max(parseOptionalNumber(body.storeLimit) || 1, 1), 20);
   const scope = workspaceScopeFromRequest(request);
   const run = await prisma.sellfoxSyncRun.create({
     data: {

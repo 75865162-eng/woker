@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
 import type { Product, ProductListItem, ProductListSummary, ProductStatus, ProductWorkflowStage } from "@/lib/products/types";
-import { getProductWorkflowStage } from "@/lib/products/workflow";
+import { getCurrentWorkflowAssignee, isProductWorkflowOverdue } from "@/lib/products/workflow";
 
 export type ProductListSource = "dashboard" | "sellfox" | "all";
 
@@ -13,36 +13,41 @@ export function splitMultiValue(value: string | null) {
 }
 
 export const sellfoxProductSourceWhere: Prisma.ProductRecordWhereInput = {
-  OR: [
-    { id: { startsWith: "sellfox-", mode: "insensitive" } },
-    {
-      payload: {
-        path: ["note"],
-        string_contains: "赛狐在线产品 API",
-        mode: "insensitive",
-      },
-    },
-  ],
+  source: "sellfox",
 };
 
 export function applyProductSourceFilter(where: Prisma.ProductRecordWhereInput, source?: ProductListSource | null) {
-  const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
-
   if (source === "sellfox") {
     return {
       ...where,
-      AND: [...existingAnd, sellfoxProductSourceWhere],
+      source: "sellfox",
     };
   }
 
   if (source === "dashboard") {
     return {
       ...where,
-      AND: [...existingAnd, { NOT: sellfoxProductSourceWhere }],
+      source: "dashboard",
     };
   }
 
   return where;
+}
+
+export function getProductRecordSource(product: { id?: string | null; note?: string | null; source?: string | null }): Exclude<ProductListSource, "all"> {
+  if (product.source === "sellfox" || (product.id ?? "").toLowerCase().startsWith("sellfox-") || (product.note ?? "").toLowerCase().includes("赛狐在线产品 api")) {
+    return "sellfox";
+  }
+
+  return "dashboard";
+}
+
+export function getProductRecordCurrentOwner(product: Product) {
+  return getCurrentWorkflowAssignee(product);
+}
+
+export function getProductRecordIsOverdue(product: Product) {
+  return isProductWorkflowOverdue(product);
 }
 
 export function hasStandardProductStatus(value: string | null): value is ProductStatus {
@@ -110,12 +115,7 @@ export function createProductListWhere(input: {
     where.operationsProgressIncomplete = true;
   } else if (input.status === "overdue") {
     where.status = { notIn: closedStatuses };
-    and.push({
-      OR: [
-        { workflowDueAt: { lt: new Date() } },
-        { createdAt: { lt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) } },
-      ],
-    });
+    where.isOverdue = true;
   } else {
     const standardStatus = input.status ?? null;
     if (hasStandardProductStatus(standardStatus)) {
@@ -145,38 +145,41 @@ export function createProductListItem(record: {
   sku: string;
   chineseName: string;
   englishName: string;
+  asin?: string;
   status: string;
   selectionOwner: string;
   opsAssignee: string;
   designerAssignee: string;
+  currentOwner?: string;
   workflowStage: string;
+  createdAt?: Date;
   updatedAt: Date;
+  purchasePrice?: number;
+  supplierName?: string;
+  workflowDueAt?: Date | null;
+  isOverdue?: boolean;
 }): ProductListItem {
   const status = normalizeProductStatus(record.status);
   const workflowStage = normalizeWorkflowStage(record.workflowStage);
-  const currentStage = getProductWorkflowStage({
-    status,
-    developer: "",
-    selectionOwner: record.selectionOwner,
-    opsAssignee: record.opsAssignee,
-    designerAssignee: record.designerAssignee,
-    workflowStage,
-  });
-  const currentOwner =
-    currentStage === "ops_confirming"
-      ? record.opsAssignee
-      : currentStage === "design_in_progress" || currentStage === "design_review"
-        ? record.designerAssignee
-        : record.selectionOwner;
 
   return {
     id: record.id,
     sku: record.sku,
     chineseName: record.chineseName,
     englishName: record.englishName,
+    asin: record.asin,
     status,
-    currentOwner,
+    currentOwner: record.currentOwner ?? "",
+    isOverdue: record.isOverdue,
     updatedAt: record.updatedAt.toISOString(),
+    createdAt: record.createdAt?.toISOString(),
+    purchasePrice: record.purchasePrice,
+    supplierName: record.supplierName,
+    selectionOwner: record.selectionOwner,
+    opsAssignee: record.opsAssignee,
+    designerAssignee: record.designerAssignee,
+    workflowStage,
+    workflowDueAt: record.workflowDueAt?.toISOString(),
   };
 }
 

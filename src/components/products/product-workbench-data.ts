@@ -16,7 +16,7 @@ import {
 } from "./product-workbench-model";
 import { formatDateTime, nextSku } from "./product-workbench-utils";
 
-export async function parseProductWorkbookFile(file: File, products: Array<Pick<Product, "sku">>): Promise<Product> {
+export async function parseProductWorkbookFile(file: File, products: Array<Pick<Product, "sku">>, preferredSku?: string): Promise<Product> {
   const buffer = await file.arrayBuffer();
   const [XLSXModule, JSZipModule] = await Promise.all([import("xlsx"), import("jszip")]);
   const XLSX = XLSXModule;
@@ -63,7 +63,7 @@ export async function parseProductWorkbookFile(file: File, products: Array<Pick<
     detail.remarkImages.push(image.dataUrl);
   });
 
-  const sku = nextSku(products);
+  const sku = preferredSku || nextSku(products);
   const now = new Date();
   const developer = extractDeveloperName(file.name);
 
@@ -345,18 +345,20 @@ function extractDeveloperName(fileName: string) {
 }
 
 
-export function productToDraft(product: Product | null, products: Array<Pick<ProductListItem, "sku">>): ProductEditorDraft {
+export function productToDraft(product: Product | null, products: Array<Pick<ProductListItem, "sku">>, preferredSku?: string): ProductEditorDraft {
   if (product) {
     const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+    const competitorAsins = Array.isArray(product.competitorAsins) ? product.competitorAsins : [];
     return {
       ...product,
       cancelReason: product.cancelReason ?? "",
       conclusionExcelFile: product.conclusionExcelFile,
-      competitorAsins: product.competitorAsins.length ? product.competitorAsins : [""],
+      images: Array.isArray(product.images) ? product.images : [],
+      competitorAsins: competitorAsins.length ? competitorAsins : [""],
       opsAssignees: normalizeAssigneeList(product.opsAssignee, product.opsAssignees),
       designerAssignees: normalizeAssigneeList(product.designerAssignee, product.designerAssignees),
       workflowStage: getProductWorkflowStage(product),
-      workflowHistory: product.workflowHistory ?? [],
+      workflowHistory: Array.isArray(product.workflowHistory) ? product.workflowHistory : [],
       operationsProgress: normalizeOperationsProgress(product.operationsProgress, product.opsAssignee || product.selectionOwner || ""),
       workbookDetail: normalizeWorkbookDetail(
         productWithWorkbook.workbookDetail,
@@ -366,7 +368,7 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
   }
 
   return {
-    sku: nextSku(products),
+    sku: preferredSku || nextSku(products),
     chineseName: "",
     englishName: "",
     asin: "",

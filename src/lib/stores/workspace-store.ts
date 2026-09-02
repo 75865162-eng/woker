@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { campaignGroups, dataBatches, defaultRules, performanceRows as mockPerformanceRows } from "@/data/mock-data";
+import { defaultRules } from "@/data/default-rules";
 import {
   deleteWorkspaceSnapshot,
   readWorkspaceDraftRunHistory,
@@ -146,7 +146,9 @@ interface WorkspaceState {
   clearPersistedWorkspace: () => Promise<void>;
 }
 
-const initialActiveId = campaignGroups[0]?.id ?? "";
+const initialCampaignGroups: CampaignGroup[] = [];
+const initialPerformanceRows: PerformanceRow[] = [];
+const initialActiveId = "";
 
 const emptyDiagnostics: ParseDiagnostics = {
   totalRows: 0,
@@ -212,15 +214,15 @@ function persistExportedRuleRunRecords(input: {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rules: defaultRules,
-  campaignGroups,
-  campaignSheetGroups: buildSheetGroups(campaignGroups),
+  campaignGroups: initialCampaignGroups,
+  campaignSheetGroups: buildSheetGroups(initialCampaignGroups),
   workspaceUnits: [],
-  performanceRows: mockPerformanceRows,
+  performanceRows: initialPerformanceRows,
   activeCampaignGroupId: initialActiveId,
   activeWorkspaceUnitId: undefined,
   activeLifecycleGroupId: undefined,
   workspaceMode: "campaign",
-  openTabIds: campaignGroups.slice(0, 4).map((group) => group.id),
+  openTabIds: initialCampaignGroups.slice(0, 4).map((group) => group.id),
   selectedDraftIds: [],
   parseStatus: "idle",
   parseProgress: 0,
@@ -525,10 +527,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         getRunnableRowsForCampaignGroup({
           performanceRows: state.performanceRows,
           activeBatchId: state.activeBatchId,
-          mockBatchIds: dataBatches
-            .filter((batch) => batch.campaignGroupId === group.id)
-            .slice(-1)
-            .map((batch) => batch.id),
+          mockBatchIds: [],
           campaignGroupId: group.id,
         }),
       ]),
@@ -595,10 +594,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         getRunnableRowsForCampaignGroup({
           performanceRows: state.performanceRows,
           activeBatchId: state.activeBatchId,
-          mockBatchIds: dataBatches
-            .filter((batch) => batch.campaignGroupId === group.id)
-            .slice(-1)
-            .map((batch) => batch.id),
+          mockBatchIds: [],
           campaignGroupId: group.id,
         }),
       ]),
@@ -690,10 +686,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const rows = getRunnableRowsForCampaignGroup({
         performanceRows: state.performanceRows,
         activeBatchId: state.activeBatchId,
-        mockBatchIds: dataBatches
-          .filter((batch) => batch.campaignGroupId === campaignGroup.id)
-          .slice(-1)
-          .map((batch) => batch.id),
+        mockBatchIds: [],
         campaignGroupId: campaignGroup.id,
       });
       runnableRowCount += rows.length;
@@ -778,10 +771,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const rows = getRunnableRowsForCampaignGroup({
         performanceRows: state.performanceRows,
         activeBatchId: state.activeBatchId,
-        mockBatchIds: dataBatches
-          .filter((batch) => batch.campaignGroupId === campaignGroup.id)
-          .slice(-1)
-          .map((batch) => batch.id),
+        mockBatchIds: [],
         campaignGroupId: campaignGroup.id,
       });
 
@@ -1260,16 +1250,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
       await deleteWorkspaceSnapshot();
       set({
-        campaignGroups,
-        campaignSheetGroups: buildSheetGroups(campaignGroups),
+        campaignGroups: initialCampaignGroups,
+        campaignSheetGroups: buildSheetGroups(initialCampaignGroups),
         workspaceUnits: [],
         rules: defaultRules,
-        performanceRows: mockPerformanceRows,
+        performanceRows: initialPerformanceRows,
         activeCampaignGroupId: initialActiveId,
         activeWorkspaceUnitId: undefined,
         activeLifecycleGroupId: undefined,
         workspaceMode: "campaign",
-        openTabIds: campaignGroups.slice(0, 4).map((group) => group.id),
+        openTabIds: [],
         selectedDraftIds: [],
         parseStatus: "idle",
         parseProgress: 0,

@@ -146,12 +146,14 @@ export function ProductTable({
   loading,
   onOpenProduct,
   onOpenHistory,
+  onPrefetchProduct,
 }: {
   products: Product[];
   totalCount: number;
   loading?: boolean;
   onOpenProduct: (sku: string) => void;
   onOpenHistory: (product: Product) => void;
+  onPrefetchProduct?: (sku: string) => void;
 }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
@@ -204,6 +206,7 @@ export function ProductTable({
           <tbody>
             {products.map((product) => {
               const listImage = getProductListImage(product);
+              const overdue = product.isOverdue ?? isProductWorkflowOverdue(product);
 
               return (
                 <tr key={product.id} className="border-t border-border/70 align-middle hover:bg-surface-muted/60">
@@ -211,14 +214,20 @@ export function ProductTable({
                     <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
                       {listImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={listImage} alt={product.chineseName} className="h-full w-full object-contain" />
+                        <img src={listImage} alt={product.chineseName} loading="lazy" decoding="async" className="h-full w-full object-contain" />
                       ) : (
                         <ImagePlus className="h-5 w-5 text-muted" />
                       )}
                     </div>
                   </td>
                   <td className="px-3">
-                    <button className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark" title={product.sku} onClick={() => onOpenProduct(product.sku)}>
+                    <button
+                      className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark"
+                      title={product.sku}
+                      onClick={() => onOpenProduct(product.sku)}
+                      onFocus={() => onPrefetchProduct?.(product.sku)}
+                      onMouseEnter={() => onPrefetchProduct?.(product.sku)}
+                    >
                       {product.sku}
                     </button>
                   </td>
@@ -232,7 +241,7 @@ export function ProductTable({
                   <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
                   <td className="px-3">
                     <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
-                    {isProductWorkflowOverdue(product) ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
+                    {overdue ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
                   </td>
                   <td className="px-3">
                     <p className="truncate" title={getCurrentWorkflowAssignee(product) || "--"}>{formatAssigneePreview(getCurrentWorkflowAssignee(product)) || "--"}</p>

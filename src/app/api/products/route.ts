@@ -4,19 +4,50 @@ import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
-import type { Product } from "@/lib/products/types";
+import type { Product, ProductListItem } from "@/lib/products/types";
 import {
-  applyProductSourceFilter,
   createProductListItem,
   createProductListWhere,
+  getProductRecordCurrentOwner,
+  getProductRecordIsOverdue,
+  getProductRecordSource,
   isProductOperationsProgressIncomplete,
   splitMultiValue,
   type ProductListSource,
 } from "@/lib/products/list-query";
+import {
+  createProductListResponseCacheKey,
+  createProductListScopeKey,
+  getCachedProductListResponse,
+  getCachedProductListSummary,
+  invalidateProductListResponseCaches,
+  setCachedProductListResponse,
+  setCachedProductListSummary,
+  updateCachedProductListSummariesForProductChange,
+} from "@/lib/products/product-list-cache";
+import { applyProductListSummaryChange, loadProductListSummaryBundle } from "@/lib/products/product-list-summary";
 import { createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList, productWorkflowStageLabels } from "@/lib/products/workflow";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
+
+type ProductListResponse = {
+  products: Array<Product | ProductListItem>;
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    pageCount: number;
+  };
+  summary?: {
+    total: number;
+    developing: number;
+    opsReview: number;
+    designInProgress: number;
+    operationsProgress: number;
+    overdue: number;
+  };
+};
 
 function isProduct(value: unknown): value is Product {
   if (!value || typeof value !== "object") return false;
@@ -44,8 +75,29 @@ function clampPageSize(value: string | null) {
   return Math.min(Math.max(pageSize, 1), 200);
 }
 
+function parseOptionalNumber(value: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : undefined;
+}
+
 function normalizeProductListSource(value: string | null): ProductListSource {
   return value === "sellfox" || value === "all" ? value : "dashboard";
+}
+
+function roundDuration(ms: number) {
+  return Math.round(ms * 10) / 10;
+}
+
+function createServerTimingHeader(timings: Record<string, number>, totalMs: number) {
+  return [
+    ...Object.entries(timings).map(([name, duration]) => `${name};dur=${duration}`),
+    `total;dur=${totalMs}`,
+  ].join(", ");
 }
 
 function createProductRecordData(product: Product, user: { id: string; organizationId: string }, scope: { workspaceId: string; accountId: string; marketplace: string }) {
@@ -60,13 +112,16 @@ function createProductRecordData(product: Product, user: { id: string; organizat
     englishName: product.englishName,
     asin: product.asin,
     status: product.status,
+    source: getProductRecordSource(product),
     supplierName: product.supplierName,
     purchasePrice: product.purchasePrice,
     selectionOwner: product.selectionOwner || product.developer || "",
     opsAssignee: product.opsAssignee || normalizeAssigneeList(undefined, product.opsAssignees).join("、"),
     designerAssignee: product.designerAssignee || normalizeAssigneeList(undefined, product.designerAssignees).join("、"),
+    currentOwner: getProductRecordCurrentOwner(product),
     workflowStage,
     workflowDueAt: product.workflowDueAt ? new Date(product.workflowDueAt) : null,
+    isOverdue: getProductRecordIsOverdue(product),
     operationsProgressIncomplete: isProductOperationsProgressIncomplete(product),
   };
 }
@@ -220,6 +275,9 @@ async function createWorkflowNotifications(input: {
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+
   try {
     const permission = await requireApiPermission("products", "view", request);
 
@@ -229,15 +287,93 @@ export async function GET(request: Request) {
     const { user } = permission;
 
     const url = new URL(request.url);
+    const debugTiming = url.searchParams.get("debugTiming") === "true";
     const scope = workspaceScopeFromRequest(request);
     const source = normalizeProductListSource(url.searchParams.get("source"));
     const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
     const pageSize = clampPageSize(url.searchParams.get("pageSize"));
     const search = url.searchParams.get("search")?.trim();
     const status = url.searchParams.get("status");
-    const minPrice = Number(url.searchParams.get("minPrice"));
-    const maxPrice = Number(url.searchParams.get("maxPrice"));
+    const minPrice = parseOptionalNumber(url.searchParams.get("minPrice"));
+    const maxPrice = parseOptionalNumber(url.searchParams.get("maxPrice"));
     const detail = url.searchParams.get("detail") === "full";
+    const includeSummary = url.searchParams.get("includeSummary") !== "false";
+    const summaryOnly = url.searchParams.get("summaryOnly") === "true";
+    const opsAssignees = splitMultiValue(url.searchParams.get("opsAssignees"));
+    const selectionOwners = splitMultiValue(url.searchParams.get("selectionOwners"));
+    const designerAssignees = splitMultiValue(url.searchParams.get("designerAssignees"));
+    const hasListFilters =
+      Boolean(search) ||
+      Boolean(url.searchParams.get("asin")?.trim()) ||
+      Boolean(url.searchParams.get("supplierName")?.trim()) ||
+      opsAssignees.length > 0 ||
+      selectionOwners.length > 0 ||
+      designerAssignees.length > 0 ||
+      Number.isFinite(minPrice) ||
+      Number.isFinite(maxPrice) ||
+      (status !== null && status !== "all");
+    const scopeKey = createProductListScopeKey({
+      organizationId: user.organizationId,
+      workspaceId: scope.workspaceId,
+      source,
+    });
+    const cacheKey = createProductListResponseCacheKey({
+      scopeKey,
+      page,
+      pageSize,
+      search,
+      asin: url.searchParams.get("asin")?.trim() || undefined,
+      status: status === "all" ? "" : status,
+      supplierName: url.searchParams.get("supplierName")?.trim() || undefined,
+      opsAssignees,
+      selectionOwners,
+      designerAssignees,
+      minPrice,
+      maxPrice,
+      detail,
+      includeSummary,
+    });
+    const createTimedResponse = (payload: unknown, result: "cache-hit" | "ok" | "unavailable", init?: ResponseInit) => {
+      const totalMs = roundDuration(performance.now() - startedAt);
+      if (!debugTiming && totalMs < 500) {
+        const response = NextResponse.json(payload, init);
+        response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
+        response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
+        return response;
+      }
+
+      console.info("[api/products]", {
+        result,
+        totalMs,
+        timings,
+        page,
+        pageSize,
+        source,
+        detail,
+        includeSummary,
+        summaryOnly,
+        hasListFilters,
+      });
+      const response = NextResponse.json(payload, init);
+      response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
+      response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
+      return response;
+    };
+    const measure = async <T>(name: string, promise: Promise<T>) => {
+      const sectionStartedAt = performance.now();
+      try {
+        return await promise;
+      } finally {
+        timings[name] = roundDuration(performance.now() - sectionStartedAt);
+      }
+    };
+
+    if (!detail && !summaryOnly) {
+      const cached = await getCachedProductListResponse<ProductListResponse>(cacheKey);
+      if (cached) {
+        return createTimedResponse(cached, "cache-hit");
+      }
+    }
     const where = createProductListWhere({
       user,
       workspaceId: scope.workspaceId,
@@ -246,47 +382,151 @@ export async function GET(request: Request) {
       asin: url.searchParams.get("asin")?.trim(),
       status: status === "all" ? "" : status,
       supplierName: url.searchParams.get("supplierName")?.trim(),
-      opsAssignees: splitMultiValue(url.searchParams.get("opsAssignees")),
-      selectionOwners: splitMultiValue(url.searchParams.get("selectionOwners")),
-      designerAssignees: splitMultiValue(url.searchParams.get("designerAssignees")),
+      opsAssignees,
+      selectionOwners,
+      designerAssignees,
       minPrice,
       maxPrice,
     });
     let total = 0;
     let records: Awaited<ReturnType<typeof prisma.productRecord.findMany>> = [];
+    const resolveSummary = async () => {
+      const cachedSummary = getCachedProductListSummary(scopeKey);
+      if (cachedSummary) {
+        return cachedSummary;
+      }
+
+      const summaryBundle = await loadProductListSummaryBundle({
+        organizationId: user.organizationId,
+        workspaceId: scope.workspaceId,
+      });
+      for (const summarySource of ["all", "dashboard", "sellfox"] as const) {
+        setCachedProductListSummary(
+          createProductListScopeKey({
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            source: summarySource,
+          }),
+          summaryBundle[summarySource],
+        );
+      }
+
+      return summaryBundle[source];
+    };
+
+    if (summaryOnly) {
+      const summary = await measure("summary", resolveSummary());
+      return createTimedResponse({ summary }, "ok");
+    }
 
     try {
-      [total, records] = await Promise.all([
-        prisma.productRecord.count({ where }),
-        prisma.productRecord.findMany({
-          where,
-          select: detail
-            ? undefined
+      const recordsPromise = measure("records", prisma.productRecord.findMany({
+        where,
+        select: detail
+          ? undefined
             : {
-                id: true,
-                sku: true,
-                chineseName: true,
-                englishName: true,
-                status: true,
-                selectionOwner: true,
-                opsAssignee: true,
-                designerAssignee: true,
-                workflowStage: true,
-                updatedAt: true,
-              },
-          orderBy: {
-            updatedAt: "desc",
+              id: true,
+              sku: true,
+              chineseName: true,
+              englishName: true,
+              asin: true,
+              status: true,
+              selectionOwner: true,
+              opsAssignee: true,
+              designerAssignee: true,
+              currentOwner: true,
+              workflowStage: true,
+              createdAt: true,
+              updatedAt: true,
+              purchasePrice: true,
+              supplierName: true,
+              workflowDueAt: true,
+              isOverdue: true,
+            },
+        orderBy: {
+          updatedAt: "desc",
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }));
+      const summaryPromise = includeSummary ? measure("summary", resolveSummary()) : Promise.resolve(null);
+
+      if (hasListFilters) {
+        const [countResult, recordsResult, summaryResult] = await Promise.all([
+          measure("count", prisma.productRecord.count({ where })),
+          recordsPromise,
+          summaryPromise,
+        ]);
+        total = countResult;
+        records = recordsResult;
+
+        const responsePayload: ProductListResponse = {
+          products: records.map((record) => (detail ? (record.payload as unknown as Product) : createProductListItem(record))),
+          pagination: {
+            page,
+            pageSize,
+            total,
+            pageCount: Math.max(1, Math.ceil(total / pageSize)),
           },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-      ]);
+        };
+
+        if (summaryResult) {
+          responsePayload.summary = summaryResult;
+        }
+
+        if (!detail) {
+          await setCachedProductListResponse(
+            cacheKey,
+            {
+              organizationId: user.organizationId,
+              workspaceId: scope.workspaceId,
+              scopeKey,
+            },
+            responsePayload,
+          );
+        }
+
+        return createTimedResponse(responsePayload, "ok");
+      }
+
+      const [recordsResult, summaryResult] = await Promise.all([recordsPromise, summaryPromise]);
+      records = recordsResult;
+      const summary = summaryResult ?? (await resolveSummary());
+      total = summary.total;
+
+      const responsePayload: ProductListResponse = {
+        products: records.map((record) => (detail ? (record.payload as unknown as Product) : createProductListItem(record))),
+        pagination: {
+          page,
+          pageSize,
+          total,
+          pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        },
+      };
+
+      if (summaryResult) {
+        responsePayload.summary = summaryResult;
+      }
+
+      if (!detail) {
+        await setCachedProductListResponse(
+          cacheKey,
+          {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            scopeKey,
+          },
+          responsePayload,
+        );
+      }
+
+      return createTimedResponse(responsePayload, "ok");
     } catch (error) {
       if (!isDatabaseUnavailableError(error)) {
         throw error;
       }
 
-      return NextResponse.json(
+      return createTimedResponse(
         {
           products: [],
           pagination: {
@@ -297,49 +537,18 @@ export async function GET(request: Request) {
           },
           error: "数据库暂时不可用，商品列表已切换为空数据。",
         },
+        "unavailable",
         { status: 503 },
       );
     }
-
-    const summaryWhere: Prisma.ProductRecordWhereInput = applyProductSourceFilter({
-      organizationId: user.organizationId,
-      workspaceId: scope.workspaceId,
-    }, source);
-    const now = new Date();
-    const staleCreatedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-    const [developingCount, opsReviewCount, designInProgressCount, operationsProgressCount, overdueCount] = await Promise.all([
-      prisma.productRecord.count({ where: { ...summaryWhere, status: "developing" } }),
-      prisma.productRecord.count({ where: { ...summaryWhere, status: "ops_review" } }),
-      prisma.productRecord.count({ where: { ...summaryWhere, status: "design_in_progress" } }),
-      prisma.productRecord.count({ where: { ...summaryWhere, operationsProgressIncomplete: true } }),
-      prisma.productRecord.count({
-        where: {
-          ...summaryWhere,
-          status: { notIn: ["listed", "canceled", "delisted", "patent_risk"] },
-          OR: [{ workflowDueAt: { lt: now } }, { createdAt: { lt: staleCreatedAt } }],
-        },
-      }),
-    ]);
-
-    return NextResponse.json({
-      products: records.map((record) => (detail ? (record.payload as unknown as Product) : createProductListItem(record))),
-      pagination: {
-        page,
-        pageSize,
-        total,
-        pageCount: Math.max(1, Math.ceil(total / pageSize)),
-      },
-      summary: {
-        total,
-        developing: developingCount,
-        opsReview: opsReviewCount,
-        designInProgress: designInProgressCount,
-        operationsProgress: operationsProgressCount,
-        overdue: overdueCount,
-      },
-    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load products.";
+    console.info("[api/products]", {
+      result: "error",
+      totalMs: roundDuration(performance.now() - startedAt),
+      timings,
+      message,
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -361,58 +570,80 @@ export async function POST(request: Request) {
 
     const product = normalizeProduct(body.product);
     const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
-    const existingRecord = await prisma.productRecord.findUnique({
-      where: {
-        organizationId_workspaceId_sku: {
-          organizationId: user.organizationId,
-          workspaceId: scope.workspaceId,
-          sku: product.sku,
+    const persisted = await prisma.$transaction(async (tx) => {
+      const existingRecord = await tx.productRecord.findUnique({
+        where: {
+          organizationId_workspaceId_sku: {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            sku: product.sku,
+          },
         },
-      },
-    });
-    const existingProduct = existingRecord?.payload as Partial<Product> | undefined;
-    const productToSave: Product = {
-      ...product,
-      videoPlan: product.videoPlan ?? existingProduct?.videoPlan,
-    };
+      });
+      const existingProduct = existingRecord?.payload as Partial<Product> | undefined;
+      const productToSave: Product = {
+        ...product,
+        videoPlan: product.videoPlan ?? existingProduct?.videoPlan,
+      };
 
-    if (requiresConclusionExcel(productToSave) && !productToSave.conclusionExcelFile?.id) {
-      return NextResponse.json({ error: "状态为已取消或已上架时，请先上传结论 Excel 表。" }, { status: 400 });
-    }
+      if (requiresConclusionExcel(productToSave) && !productToSave.conclusionExcelFile?.id) {
+        throw new Error("状态为已取消或已上架时，请先上传结论 Excel 表。");
+      }
 
-    await prisma.productRecord.upsert({
-      where: {
-        organizationId_workspaceId_sku: {
+      await tx.productRecord.upsert({
+        where: {
+          organizationId_workspaceId_sku: {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            sku: productToSave.sku,
+          },
+        },
+        create: {
+          id: productToSave.id,
           organizationId: user.organizationId,
           workspaceId: scope.workspaceId,
           sku: productToSave.sku,
+          ...createProductRecordData(productToSave, user, scope),
         },
-      },
-      create: {
-        id: productToSave.id,
+        update: createProductRecordData(productToSave, user, scope),
+      });
+
+      await applyProductListSummaryChange(tx, {
         organizationId: user.organizationId,
         workspaceId: scope.workspaceId,
-        sku: productToSave.sku,
-        ...createProductRecordData(productToSave, user, scope),
-      },
-      update: createProductRecordData(productToSave, user, scope),
+        before: existingProduct,
+        after: productToSave,
+      });
+
+      return {
+        existingProduct,
+        productToSave,
+      };
     });
+
     await createWorkflowNotifications({
       user,
-      product: productToSave,
-      previousProduct: existingProduct,
+      product: persisted.productToSave,
+      previousProduct: persisted.existingProduct,
     });
     await recordDataChangeVersion({
       user,
       entityType: "product",
-      entityId: productToSave.sku,
+      entityId: persisted.productToSave.sku,
       action: "product_save",
-      summary: `${productToSave.sku} ${productToSave.chineseName}`,
-      payload: productToSave as unknown as Prisma.InputJsonValue,
+      summary: `${persisted.productToSave.sku} ${persisted.productToSave.chineseName}`,
+      payload: persisted.productToSave as unknown as Prisma.InputJsonValue,
       scope,
     });
+    await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`);
+    updateCachedProductListSummariesForProductChange({
+      organizationId: user.organizationId,
+      workspaceId: scope.workspaceId,
+      before: persisted.existingProduct,
+      after: persisted.productToSave,
+    });
 
-    return NextResponse.json({ product: productToSave });
+    return NextResponse.json({ product: persisted.productToSave });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save product.";
     return NextResponse.json({ error: message }, { status: 500 });

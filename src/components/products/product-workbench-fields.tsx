@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { buildAmazonLink } from "./product-workbench-utils";
 
@@ -59,6 +60,44 @@ export function SmallInput({
       inputMode={isNumberInput ? "decimal" : undefined}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+export function DecimalInput({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  compact?: boolean;
+}) {
+  const [text, setText] = useState(String(value));
+
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
+  function commit(nextText: string) {
+    const normalized = nextText.trim();
+    const parsed = normalized === "" ? 0 : Number(normalized);
+    onChange(Number.isFinite(parsed) ? parsed : value);
+  }
+
+  return (
+    <input
+      className={`h-8 rounded-md border border-border bg-white px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={() => commit(text)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
     />
   );
 }

@@ -10,7 +10,14 @@ function normalizeSku(sku: string) {
   return sku.trim().toUpperCase();
 }
 
+function roundDuration(ms: number) {
+  return Math.round(ms * 10) / 10;
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ sku: string }> }) {
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+
   try {
     const permission = await requireApiPermission("products", "view", request);
 
@@ -19,9 +26,37 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
     }
     const { user } = permission;
 
+    const url = new URL(request.url);
+    const debugTiming = url.searchParams.get("debugTiming") === "true";
+    const createTimedResponse = (payload: unknown, result: "ok" | "not-found", init?: ResponseInit) => {
+      const totalMs = roundDuration(performance.now() - startedAt);
+      if (debugTiming || totalMs >= 500) {
+        console.info("[api/products/detail]", {
+          result,
+          totalMs,
+          timings,
+        });
+      }
+
+      const response = NextResponse.json(payload, init);
+      response.headers.set("Server-Timing", [
+        ...Object.entries(timings).map(([name, duration]) => `${name};dur=${duration}`),
+        `total;dur=${totalMs}`,
+      ].join(", "));
+      return response;
+    };
+    const measure = async <T>(name: string, promise: Promise<T>) => {
+      const sectionStartedAt = performance.now();
+      try {
+        return await promise;
+      } finally {
+        timings[name] = roundDuration(performance.now() - sectionStartedAt);
+      }
+    };
+
     const { sku } = await params;
     const scope = workspaceScopeFromRequest(request);
-    const record = await prisma.productRecord.findUnique({
+    const record = await measure("detail", prisma.productRecord.findUnique({
       where: {
         organizationId_workspaceId_sku: {
           organizationId: user.organizationId,
@@ -32,15 +67,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
       select: {
         payload: true,
       },
-    });
+    }));
 
     if (!record) {
-      return NextResponse.json({ error: "商品不存在。" }, { status: 404 });
+      return createTimedResponse({ error: "商品不存在。" }, "not-found", { status: 404 });
     }
 
-    return NextResponse.json({ product: record.payload as unknown as Product });
+    return createTimedResponse({ product: record.payload as unknown as Product }, "ok");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load product.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const response = NextResponse.json({ error: message }, { status: 500 });
+    response.headers.set("Server-Timing", `total;dur=${roundDuration(performance.now() - startedAt)}`);
+    return response;
   }
 }

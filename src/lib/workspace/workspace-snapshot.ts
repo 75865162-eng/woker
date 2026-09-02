@@ -1,4 +1,4 @@
-import { defaultRules } from "@/data/mock-data";
+import { defaultRules } from "@/data/default-rules";
 import type {
   AdjustmentDraft,
   BlockedCampaignIdentity,

@@ -7,6 +7,7 @@ import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
 import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import { type WorkspaceScopeInput } from "@/lib/workspace/scope";
+import { imageGeneratorViews } from "@/lib/listing-ai/workspace-draft";
 
 export interface ImagePreviewPayload {
   name: string;
@@ -138,8 +139,20 @@ async function flattenImages(body: ImageGeneratorRequest, user: CurrentUser) {
   return hydrateImagePreviews(images, user);
 }
 
-function buildImagePrompt(prompt: string) {
-  return `${prompt}
+function buildViewSummary(body: ImageGeneratorRequest) {
+  const viewLabels = imageGeneratorViews
+    .filter((view) => Array.isArray(body.ownViews?.[view.key]) && body.ownViews?.[view.key]?.length)
+    .map((view) => view.label);
+
+  if (!viewLabels.length) {
+    return "";
+  }
+
+  return `图片视图说明：${viewLabels.join("、")}`;
+}
+
+function buildImagePrompt(prompt: string, viewSummary?: string) {
+  return `${prompt}${viewSummary ? `\n\n${viewSummary}` : ""}
 
 系统执行约束：
 请生成 1 张全新的 Amazon 主图/副图级商业产品图片。我的产品多角度实拍图是唯一产品主体参考，必须保持真实形状、尺寸比例、颜色、纹理、材质和结构特点。竞品图片只能作为拍摄角度、场景氛围、光线方向、使用方式、构图布局和商业摄影风格参考。不得复制竞品产品外形、颜色组合、纹理、包装、Logo、文字、品牌标识、专利结构或独特设计元素。不得改变我的产品结构，不得增加不存在的功能，不得夸大尺寸，不得生成 AI 幻觉细节。如果参考图无法识别，不要自行发明食品、鱼类、屠宰、血腥、动物处理或厨房处理场景。输出高清真实摄影、4K 细节、自然光、专业产品摄影、真实阴影和高端电商视觉效果。`;
@@ -192,6 +205,7 @@ function buildImagesGenerationsRequest(
   settings: AiModelSettings,
   prompt: string,
   referenceImages: FlattenedImage[],
+  viewSummary?: string,
 ) {
   const imageUrls = referenceImages.slice(0, 14).map((image) => image.url);
 
@@ -199,7 +213,7 @@ function buildImagesGenerationsRequest(
     url: `${settings.baseUrl}/images/generations`,
     body: {
       model: settings.model,
-      prompt: buildImagePrompt(prompt),
+      prompt: buildImagePrompt(prompt, viewSummary),
       image_url: imageUrls[0],
       image_urls: imageUrls,
       response_format: "url",
@@ -214,6 +228,7 @@ function buildResponsesRequest(
   settings: AiModelSettings,
   prompt: string,
   referenceImages: FlattenedImage[],
+  viewSummary?: string,
 ) {
   return {
     url: buildAiTextEndpoint(settings),
@@ -226,7 +241,7 @@ function buildResponsesRequest(
           content: [
             {
               type: "input_text",
-              text: buildImagePrompt(prompt),
+              text: buildImagePrompt(prompt, viewSummary),
             },
             ...referenceImages.slice(0, 20).map((image) => ({
               type: "input_image",
@@ -347,6 +362,7 @@ export async function generateListingAiImages(
   const settings = resolveAiSettings(body.aiSettings, "image");
   const prompt = body.prompt?.trim();
   const referenceImages = await flattenImages(body, user);
+  const viewSummary = buildViewSummary(body);
 
   if (!settings.apiKey?.trim()) {
     throw new Error("缺少 API Key，请先在 Settings 保存大模型配置。");
@@ -373,8 +389,8 @@ export async function generateListingAiImages(
   try {
     const imageRequest =
       settings.wireApi === "image_generations"
-        ? buildImagesGenerationsRequest(settings, prompt, referenceImages)
-        : buildResponsesRequest(settings, prompt, referenceImages);
+        ? buildImagesGenerationsRequest(settings, prompt, referenceImages, viewSummary)
+        : buildResponsesRequest(settings, prompt, referenceImages, viewSummary);
 
     response = await fetchAiApi(imageRequest.url, {
       method: "POST",

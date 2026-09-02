@@ -121,7 +121,7 @@ function normalizeRoleCatalogItem(role: RoleCatalogItem): Role {
 }
 
 function normalizeRoleCatalogResponse(value: unknown): Role[] {
-  if (!Array.isArray(value)) return initialRoles;
+  if (!Array.isArray(value)) return [];
 
   return value
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
@@ -323,7 +323,7 @@ export function AccountWorkbench() {
     void loadRolesFromApi().then((savedRoles) => {
       if (canceled || !savedRoles) return;
       setRoleRevision(savedRoles.revision);
-      setRoles(savedRoles.roles.length ? savedRoles.roles : initialRoles);
+      setRoles(savedRoles.roles);
     });
 
     return () => {
@@ -658,7 +658,7 @@ export function AccountWorkbench() {
       } else {
         void loadRolesFromApi().then((payload) => {
           if (!payload) return;
-          setRoles(payload.roles.length ? payload.roles : initialRoles);
+          setRoles(payload.roles);
         });
       }
     });

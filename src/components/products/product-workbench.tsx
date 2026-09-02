@@ -60,6 +60,7 @@ import {
   buildAmazonLink,
   calculateTrialPricing,
   formatDateTime,
+  nextSku as getNextSku,
 } from "./product-workbench-utils";
 import {
   createTrialProductDraft,
@@ -77,7 +78,10 @@ type ProductWorkbenchCache = {
   summary: ProductListSummary;
 };
 
+const productWorkbenchStorageKey = "amazon-product-workbench-cache-v4";
 let productWorkbenchCache: ProductWorkbenchCache | null = null;
+const productDetailCache = new Map<string, Product>();
+const productDetailInflight = new Map<string, Promise<Product>>();
 const compactToolbarButtonClass =
   "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
 
@@ -99,24 +103,81 @@ const emptyProductListSummary: ProductListSummary = {
   overdue: 0,
 };
 
+function readCachedProductWorkbench() {
+  if (productWorkbenchCache) {
+    return productWorkbenchCache;
+  }
+
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(productWorkbenchStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as ProductWorkbenchCache;
+    if (!Array.isArray(parsed.products)) {
+      return null;
+    }
+
+    for (const product of parsed.products) {
+      productDetailCache.set(product.sku.trim(), product);
+    }
+    productWorkbenchCache = parsed;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
+  productWorkbenchCache = cache;
+  for (const product of cache.products) {
+    productDetailCache.set(product.sku.trim(), product);
+  }
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(productWorkbenchStorageKey, JSON.stringify(cache));
+  } catch {
+    // Best effort only.
+  }
+}
+
 export function ProductWorkbench() {
-  const [products, setProducts] = useState<Product[]>(() => productWorkbenchCache?.products ?? []);
+  const initialCachedWorkbench = readCachedProductWorkbench();
+  const [products, setProducts] = useState<Product[]>(() => initialCachedWorkbench?.products ?? []);
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
-  const [filters, setFilters] = useState<ProductFilters>(() => productWorkbenchCache?.filters ?? initialFilters);
+  const [filters, setFilters] = useState<ProductFilters>(() => initialCachedWorkbench?.filters ?? initialFilters);
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [versionProduct, setVersionProduct] = useState<Product | null>(null);
-  const [page, setPage] = useState(() => productWorkbenchCache?.page ?? 1);
-  const [pageSize, setPageSize] = useState(() => productWorkbenchCache?.pageSize ?? 20);
-  const [productsTotalCount, setProductsTotalCount] = useState(() => productWorkbenchCache?.totalCount ?? 0);
-  const [listSummary, setListSummary] = useState<ProductListSummary>(() => productWorkbenchCache?.summary ?? emptyProductListSummary);
+  const [page, setPage] = useState(() => initialCachedWorkbench?.page ?? 1);
+  const [pageSize, setPageSize] = useState(() => initialCachedWorkbench?.pageSize ?? 20);
+  const [productsTotalCount, setProductsTotalCount] = useState(() => initialCachedWorkbench?.totalCount ?? 0);
+  const [listSummary, setListSummary] = useState<ProductListSummary>(() => initialCachedWorkbench?.summary ?? emptyProductListSummary);
+  const [summaryReady, setSummaryReady] = useState(() => Boolean(initialCachedWorkbench));
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
-  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(() => !initialCachedWorkbench);
   const [productsError, setProductsError] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const productsRequestSeq = useRef(0);
+  const summaryRequestSeq = useRef(0);
+  const productsRef = useRef(products);
+  const filtersRef = useRef(filters);
+  const pageRef = useRef(page);
+  const pageSizeRef = useRef(pageSize);
+  const productsTotalCountRef = useRef(productsTotalCount);
+  const listSummaryRef = useRef(listSummary);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
   const [creatorName, setCreatorName] = useState("当前创建人");
   const teamMembers = useMemo(() => accountsToTeamMembers(teamAccounts), [teamAccounts]);
@@ -126,6 +187,30 @@ export function ProductWorkbench() {
   const selectionOwnerFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["developer", "procurement"]), [teamAccounts]);
   const designerFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["designer"]), [teamAccounts]);
   const newProductStatusValues = useMemo(() => new Set(newProductStatusOptions.map((option) => option.value)), []);
+
+  useEffect(() => {
+    productsRef.current = products;
+  }, [products]);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
+  useEffect(() => {
+    pageSizeRef.current = pageSize;
+  }, [pageSize]);
+
+  useEffect(() => {
+    productsTotalCountRef.current = productsTotalCount;
+  }, [productsTotalCount]);
+
+  useEffect(() => {
+    listSummaryRef.current = listSummary;
+  }, [listSummary]);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -155,63 +240,19 @@ export function ProductWorkbench() {
     };
   }, []);
 
-  useEffect(() => {
-    let canceled = false;
-
-    async function loadProducts() {
-      setProductsLoading(true);
-      setProductsError("");
-
-      try {
-        const data = await fetchProducts({
-          filters,
-          page,
-          pageSize,
-        });
-
-        if (!canceled) {
-          const nextProducts = Array.isArray(data.products) ? data.products : [];
-          const nextTotalCount = data.pagination?.total ?? 0;
-          const nextSummary = data.summary ?? emptyProductListSummary;
-
-          setProducts(nextProducts);
-          setProductsTotalCount(nextTotalCount);
-          setListSummary(nextSummary);
-          productWorkbenchCache = {
-            products: nextProducts,
-            filters,
-            page,
-            pageSize,
-            totalCount: nextTotalCount,
-            summary: nextSummary,
-          };
-          setActivityLog((current) => ["已从数据库读取商品数据", ...current].slice(0, 8));
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "商品数据读取失败";
-        if (!canceled) {
-          setProductsError(message);
-          setActivityLog((current) => [`商品数据读取失败：${message}`, ...current].slice(0, 8));
-        }
-      } finally {
-        if (!canceled) {
-          setProductsLoading(false);
-        }
-      }
-    }
-
-    void loadProducts();
-
-    return () => {
-      canceled = true;
-    };
-  }, [filters, page, pageSize]);
-
-  async function fetchProducts(input: { filters: ProductFilters; page: number; pageSize: number }) {
+  async function fetchProducts(input: {
+    filters: ProductFilters;
+    page: number;
+    pageSize: number;
+    includeSummary?: boolean;
+    detail?: boolean;
+    signal?: AbortSignal;
+  }) {
     const params = new URLSearchParams({
       page: String(input.page),
       pageSize: String(input.pageSize),
-      detail: "full",
+      detail: input.detail === false ? "list" : "full",
+      includeSummary: input.includeSummary === false ? "false" : "true",
     });
 
     if (input.filters.keyword.trim()) params.set("search", input.filters.keyword.trim());
@@ -224,7 +265,7 @@ export function ProductWorkbench() {
     if (input.filters.minPrice.trim()) params.set("minPrice", input.filters.minPrice.trim());
     if (input.filters.maxPrice.trim()) params.set("maxPrice", input.filters.maxPrice.trim());
 
-    const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
+    const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store", signal: input.signal });
     const data = (await response.json()) as {
       products?: Product[];
       pagination?: { total?: number; pageCount?: number };
@@ -239,31 +280,206 @@ export function ProductWorkbench() {
     return data;
   }
 
-  async function reloadProducts() {
+  const loadProductSummary = useCallback(async (signal?: AbortSignal) => {
+    const requestId = ++summaryRequestSeq.current;
+    const requestSignal = signal ?? new AbortController().signal;
+
+    try {
+      const params = new URLSearchParams({
+        summaryOnly: "true",
+        includeSummary: "true",
+      });
+      const response = await fetch(`/api/products?${params.toString()}`, {
+        cache: "no-store",
+        signal: requestSignal,
+      });
+      const data = (await response.json()) as { summary?: ProductListSummary; error?: string };
+
+      if (requestSignal.aborted || requestId !== summaryRequestSeq.current) {
+        return;
+      }
+
+      if (!response.ok || !data.summary) {
+        throw new Error(data.error || "商品统计读取失败");
+      }
+
+      setListSummary(data.summary);
+      setSummaryReady(true);
+      writeCachedProductWorkbench({
+        products: productsRef.current,
+        filters: filtersRef.current,
+        page: pageRef.current,
+        pageSize: pageSizeRef.current,
+        totalCount: productsTotalCountRef.current,
+        summary: data.summary,
+      });
+    } catch (error) {
+      if (requestSignal.aborted || requestId !== summaryRequestSeq.current) {
+        return;
+      }
+
+      setSummaryReady(true);
+      const message = error instanceof Error ? error.message : "商品统计读取失败";
+      setActivityLog((current) => [`商品统计读取失败：${message}`, ...current].slice(0, 8));
+    }
+  }, []);
+
+  useEffect(() => {
+    const requestId = ++productsRequestSeq.current;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      async function loadProducts() {
+        setProductsLoading(true);
+        setProductsError("");
+
+        try {
+          const data = await fetchProducts({
+            filters,
+            page,
+            pageSize,
+            includeSummary: false,
+            detail: false,
+            signal: controller.signal,
+          });
+
+          if (controller.signal.aborted || requestId !== productsRequestSeq.current) {
+            return;
+          }
+
+          const nextProducts = Array.isArray(data.products) ? data.products : [];
+          const nextTotalCount = data.pagination?.total ?? 0;
+
+          setProducts(nextProducts);
+          setProductsTotalCount(nextTotalCount);
+          if (data.summary) {
+            setListSummary(data.summary);
+            setSummaryReady(true);
+          }
+          writeCachedProductWorkbench({
+            products: nextProducts,
+            filters,
+            page,
+            pageSize,
+            totalCount: nextTotalCount,
+            summary: data.summary ?? listSummaryRef.current,
+          });
+          setActivityLog((current) => ["已从数据库读取商品列表", ...current].slice(0, 8));
+          if (!data.summary) {
+            void loadProductSummary();
+          }
+        } catch (error) {
+          if (controller.signal.aborted || requestId !== productsRequestSeq.current) {
+            return;
+          }
+
+          const message = error instanceof Error ? error.message : "商品数据读取失败";
+          setProductsError(message);
+          setActivityLog((current) => [`商品数据读取失败：${message}`, ...current].slice(0, 8));
+        } finally {
+          if (!controller.signal.aborted && requestId === productsRequestSeq.current) {
+            setProductsLoading(false);
+          }
+        }
+      }
+
+      void loadProducts();
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [filters, loadProductSummary, page, pageSize]);
+
+  async function loadProductDetail(sku: string, signal?: AbortSignal) {
+    const normalizedSku = sku.trim();
+    const cached = productDetailCache.get(normalizedSku);
+    if (cached) {
+      return cached;
+    }
+
+    const inFlight = productDetailInflight.get(normalizedSku);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const promise = (async () => {
+      const response = await fetch(`/api/products/${encodeURIComponent(normalizedSku)}`, { cache: "no-store", signal });
+      const data = (await response.json()) as { product?: Product; error?: string };
+
+      if (!response.ok || !data.product) {
+        throw new Error(data.error || "商品详情读取失败");
+      }
+
+      productDetailCache.set(normalizedSku, data.product);
+      return data.product;
+    })();
+
+    productDetailInflight.set(normalizedSku, promise);
+
+    try {
+      return await promise;
+    } finally {
+      productDetailInflight.delete(normalizedSku);
+    }
+  }
+
+  function prefetchProductDetail(sku: string) {
+    void loadProductDetail(sku).catch(() => undefined);
+  }
+
+  async function reloadProducts(input?: { filters?: ProductFilters; page?: number; pageSize?: number }) {
+    const nextFilters = input?.filters ?? filters;
+    const nextPage = input?.page ?? page;
+    const nextPageSize = input?.pageSize ?? pageSize;
+    const requestId = ++productsRequestSeq.current;
+    const controller = new AbortController();
     setProductsLoading(true);
     setProductsError("");
 
     try {
-      const data = await fetchProducts({ filters, page, pageSize });
+      const data = await fetchProducts({
+        filters: nextFilters,
+        page: nextPage,
+        pageSize: nextPageSize,
+        includeSummary: false,
+        detail: false,
+        signal: controller.signal,
+      });
       const nextProducts = Array.isArray(data.products) ? data.products : [];
       const nextTotalCount = data.pagination?.total ?? 0;
-      const nextSummary = data.summary ?? emptyProductListSummary;
+      const nextSummary = data.summary ?? listSummary;
+
+      if (controller.signal.aborted || requestId !== productsRequestSeq.current) {
+        return;
+      }
 
       setProducts(nextProducts);
       setProductsTotalCount(nextTotalCount);
-      setListSummary(nextSummary);
-      productWorkbenchCache = {
+      if (data.summary) {
+        setListSummary(data.summary);
+        setSummaryReady(true);
+      }
+      writeCachedProductWorkbench({
         products: nextProducts,
-        filters,
-        page,
-        pageSize,
+        filters: nextFilters,
+        page: nextPage,
+        pageSize: nextPageSize,
         totalCount: nextTotalCount,
         summary: nextSummary,
-      };
+      });
+      if (!data.summary) {
+        void loadProductSummary(controller.signal);
+      }
     } catch (error) {
+      if (controller.signal.aborted || requestId !== productsRequestSeq.current) {
+        return;
+      }
       setProductsError(error instanceof Error ? error.message : "商品数据读取失败");
     } finally {
-      setProductsLoading(false);
+      if (!controller.signal.aborted && requestId === productsRequestSeq.current) {
+        setProductsLoading(false);
+      }
     }
   }
 
@@ -290,6 +506,7 @@ export function ProductWorkbench() {
   const designInProgressCount = listSummary.designInProgress;
   const operationsProgressCount = listSummary.operationsProgress;
   const overdueCount = listSummary.overdue;
+  const summaryValue = (value: number) => (summaryReady ? value.toLocaleString("zh-CN") : "…");
 
   function openNewProduct() {
     setActiveProduct(null);
@@ -297,18 +514,13 @@ export function ProductWorkbench() {
   }
 
   async function openProduct(sku: string) {
+    const normalizedSku = sku.trim();
     setDetailLoading(true);
     setProductsError("");
 
     try {
-      const response = await fetch(`/api/products/${encodeURIComponent(sku)}`, { cache: "no-store" });
-      const data = (await response.json()) as { product?: Product; error?: string };
-
-      if (!response.ok || !data.product) {
-        throw new Error(data.error || "商品详情读取失败");
-      }
-
-      setActiveProduct(data.product);
+      const product = await loadProductDetail(normalizedSku);
+      setActiveProduct(product);
       setIsEditorOpen(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品详情读取失败";
@@ -348,8 +560,11 @@ export function ProductWorkbench() {
     try {
       const savedProduct = await persistProduct(nextProduct);
       setActiveProduct(savedProduct);
+      if (!existing) {
+        setPage(1);
+      }
       setIsEditorOpen(false);
-      await reloadProducts();
+      await reloadProducts({ page: existing ? page : 1 });
       setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品保存失败";
@@ -375,7 +590,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
     }
 
     try {
-      const imported = await parseProductWorkbookFile(file, products);
+      const imported = await parseProductWorkbookFile(file, products, getNextSku(products));
       const importedWithOwner = {
         ...imported,
         selectionOwner: creatorName,
@@ -385,7 +600,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
       const savedProduct = await persistProduct(importedWithAssets);
       setActiveProduct(savedProduct);
       setIsEditorOpen(true);
-      await reloadProducts();
+      await reloadProducts({ page: 1 });
       setActivityLog((current) => [`已导入 ${file.name} 并保存到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "导入失败";
@@ -432,7 +647,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         {productsError ? (
           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{productsError}</div>
         ) : null}
-        {productsLoading ? (
+        {productsLoading && !products.length ? (
           <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
         ) : null}
         {detailLoading ? (
@@ -447,35 +662,35 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
           />
           <SummaryTile
             label="开发中"
-            value={developingCount.toLocaleString("zh-CN")}
+            value={summaryValue(developingCount)}
             tone="blue"
             active={filters.status === "developing"}
             onClick={() => patchFilters((current) => ({ ...current, status: "developing" }))}
           />
           <SummaryTile
             label="运营确认中"
-            value={opsReviewCount.toLocaleString("zh-CN")}
+            value={summaryValue(opsReviewCount)}
             tone="amber"
             active={filters.status === "ops_review"}
             onClick={() => patchFilters((current) => ({ ...current, status: "ops_review" }))}
           />
           <SummaryTile
             label="美工处理中"
-            value={designInProgressCount.toLocaleString("zh-CN")}
+            value={summaryValue(designInProgressCount)}
             tone="blue"
             active={filters.status === "design_in_progress"}
             onClick={() => patchFilters((current) => ({ ...current, status: "design_in_progress" }))}
           />
           <SummaryTile
             label="运营进程"
-            value={operationsProgressCount.toLocaleString("zh-CN")}
+            value={summaryValue(operationsProgressCount)}
             tone="amber"
             active={filters.status === "operations_progress"}
             onClick={() => patchFilters((current) => ({ ...current, status: "operations_progress" }))}
           />
           <SummaryTile
             label="超期处理"
-            value={overdueCount.toLocaleString("zh-CN")}
+            value={summaryValue(overdueCount)}
             tone="red"
             active={filters.status === "overdue"}
             onClick={() => patchFilters((current) => ({ ...current, status: "overdue" }))}
@@ -531,7 +746,16 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               onReset={() => applyFilters(initialFilters)}
               onSearch={() => void reloadProducts()}
             />
-            <ProductTable products={products} totalCount={productsTotalCount} loading={productsLoading} onOpenProduct={(sku) => void openProduct(sku)} onOpenHistory={setVersionProduct} />
+            <ProductTable
+              products={products}
+              totalCount={productsTotalCount}
+              loading={productsLoading}
+              onOpenProduct={(sku) => void openProduct(sku)}
+              onPrefetchProduct={(sku) => {
+                prefetchProductDetail(sku);
+              }}
+              onOpenHistory={setVersionProduct}
+            />
             <Pagination
               page={page}
               pageCount={pageCount}
@@ -562,10 +786,11 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         ) : null}
 
         {isEditorOpen ? (
-          <ProductEditor
-            product={activeProduct}
-            products={products}
-            creatorName={creatorName}
+            <ProductEditor
+              product={activeProduct}
+              products={products}
+              nextSku={getNextSku(products)}
+              creatorName={creatorName}
             opsOptions={opsOptions}
             designerOptions={designerOptions}
             onClose={() => setIsEditorOpen(false)}
@@ -972,6 +1197,7 @@ function TrialProductEditor({
 function ProductEditor({
   product,
   products,
+  nextSku,
   creatorName,
   opsOptions,
   designerOptions,
@@ -980,13 +1206,14 @@ function ProductEditor({
 }: {
   product: Product | null;
   products: Product[];
+  nextSku: string;
   creatorName: string;
   opsOptions: string[];
   designerOptions: string[];
   onClose: () => void;
   onSave: (draft: ProductDraft) => void;
 }) {
-  const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products));
+  const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products, nextSku));
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
   const [imageCopyGalleryOpen, setImageCopyGalleryOpen] = useState(false);
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
@@ -1115,7 +1342,9 @@ function ProductEditor({
         englishName: nextDraft.englishName.trim(),
         asin: nextDraft.asin.trim().toUpperCase(),
         cancelReason: nextDraft.cancelReason.trim(),
-        competitorAsins: workbookDetail.competitors.map((competitor) => competitor.asin.trim().toUpperCase()).filter(Boolean),
+        competitorAsins: (Array.isArray(workbookDetail.competitors) ? workbookDetail.competitors : [])
+          .map((competitor) => competitor.asin.trim().toUpperCase())
+          .filter(Boolean),
         developer: "",
         selectionOwner,
         opsAssignees: selectedOps,
@@ -2068,15 +2297,18 @@ async function uploadProductImageFile(file: File) {
 
 async function uploadEmbeddedProductImages(product: Product) {
   const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  const uploadedImages = await Promise.all(product.images.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-${index + 1}.png`)));
+  const sourceImages = Array.isArray(product.images) ? product.images : [];
+  const uploadedImages = await Promise.all(sourceImages.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-${index + 1}.png`)));
   const workbookDetail = productWithWorkbook.workbookDetail
     ? {
         ...productWithWorkbook.workbookDetail,
         remarkImages: await Promise.all(
-          productWithWorkbook.workbookDetail.remarkImages.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-remark-${index + 1}.png`)),
+          (Array.isArray(productWithWorkbook.workbookDetail.remarkImages) ? productWithWorkbook.workbookDetail.remarkImages : []).map((image, index) =>
+            uploadDataUrlImage(image, `${product.sku || "product"}-remark-${index + 1}.png`),
+          ),
         ),
         competitors: await Promise.all(
-          productWithWorkbook.workbookDetail.competitors.map(async (competitor, index) => ({
+          (Array.isArray(productWithWorkbook.workbookDetail.competitors) ? productWithWorkbook.workbookDetail.competitors : []).map(async (competitor, index) => ({
             ...competitor,
             hotVariantImage: await uploadDataUrlImage(competitor.hotVariantImage, `${product.sku || "product"}-competitor-${index + 1}.png`),
             noteImage: await uploadDataUrlImage(competitor.noteImage, `${product.sku || "product"}-competitor-note-${index + 1}.png`),

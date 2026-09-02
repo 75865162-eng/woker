@@ -6,10 +6,8 @@
 } from "@/lib/products/types";
 
 export const operationStageDefinitions: Array<{ id: ProductOperationStageId; label: string }> = [
-  { id: "selection_data", label: "选品数据" },
-  { id: "sample_confirmation", label: "样品确认" },
-  { id: "backend_upload", label: "后台上传" },
-  { id: "system_entry", label: "系统录入" },
+  { id: "selection_data", label: "竞品分析" },
+  { id: "backend_upload", label: "赛狐上传" },
   { id: "order", label: "下单" },
   { id: "image_request", label: "图片需求" },
   { id: "copywriting", label: "文案编写" },
@@ -21,18 +19,26 @@ export const operationStageDefinitions: Array<{ id: ProductOperationStageId; lab
 ];
 
 export const operationStageEvidenceRequirements: Partial<
-  Record<ProductOperationStageId, { label: string; accept: string; helper: string; kind: "image" | "excel" }>
+  Record<ProductOperationStageId, { label: string; accept: string; kind: "image" | "excel" }>
 > = {
+  image_request: {
+    label: "图片需求表",
+    accept: "image/*",
+    kind: "image",
+  },
+  copywriting: {
+    label: "文案表",
+    accept: ".xlsx,.xls,.csv",
+    kind: "excel",
+  },
   final_sample_confirmation: {
     label: "样品确认单",
     accept: "image/*",
-    helper: "上传样品确认单图片后才能勾选完成",
     kind: "image",
   },
   keyword_research: {
     label: "关键词调研表",
     accept: ".xlsx,.xls,.csv",
-    helper: "上传 Excel 表后才能勾选完成",
     kind: "excel",
   },
 };
@@ -46,11 +52,8 @@ export const operationStageStatusOptions: Array<{ value: ProductOperationStageSt
 
 export function createEmptyOperationsProgress(owner = ""): ProductOperationProgress {
   return {
-    selectionDate: "",
     orderQuantity: 0,
-    orderDate: "",
     shipDate: "",
-    dailyAdBudget: 0,
     forecastMonthlySales: 0,
     forecastPrice: 0,
     stages: operationStageDefinitions.map(({ id }) => createEmptyStage(id, owner)),
@@ -100,11 +103,8 @@ export function isOperationStageComplete(stage: ProductOperationStage) {
 export function summarizeOperationsProgressChanges(before: ProductOperationProgress, after: ProductOperationProgress) {
   const changes: string[] = [];
   const scalarFields: Array<[keyof ProductOperationProgress, string]> = [
-    ["selectionDate", "入选日期"],
     ["orderQuantity", "下单数量"],
-    ["orderDate", "下单日期"],
     ["shipDate", "出货日期"],
-    ["dailyAdBudget", "广告日预算"],
     ["forecastMonthlySales", "预估月销"],
     ["forecastPrice", "预估售价"],
   ];

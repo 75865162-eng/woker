@@ -12,6 +12,18 @@ import {
 } from "@/lib/ai-settings";
 import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
+import {
+  getProductRecordCurrentOwner,
+  getProductRecordIsOverdue,
+  getProductRecordSource,
+  isProductOperationsProgressIncomplete,
+} from "@/lib/products/list-query";
+import {
+  invalidateProductListResponseCaches,
+  updateCachedProductListSummariesForProductChange,
+} from "@/lib/products/product-list-cache";
+import { getProductWorkflowStage } from "@/lib/products/workflow";
+import { applyProductListSummaryChange } from "@/lib/products/product-list-summary";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
@@ -141,31 +153,93 @@ export async function POST(request: Request) {
 
     if (version.entityType === "product") {
       const product = version.payload as unknown as Product;
+      let existingProduct: Partial<Product> | null | undefined;
 
-      await prisma.productRecord.upsert({
-        where: {
-          organizationId_workspaceId_sku: {
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-            sku: product.sku,
+      await prisma.$transaction(async (tx) => {
+        const existingRecord = await tx.productRecord.findUnique({
+          where: {
+            organizationId_workspaceId_sku: {
+              organizationId: user.organizationId,
+              workspaceId: scope.workspaceId,
+              sku: product.sku,
+            },
           },
-        },
-        create: {
-          id: product.id,
+          select: {
+            payload: true,
+          },
+        });
+        existingProduct = existingRecord?.payload as Partial<Product> | undefined;
+
+        await tx.productRecord.upsert({
+          where: {
+            organizationId_workspaceId_sku: {
+              organizationId: user.organizationId,
+              workspaceId: scope.workspaceId,
+              sku: product.sku,
+            },
+          },
+          create: {
+            id: product.id,
+            organizationId: user.organizationId,
+            userId: user.id,
+            workspaceId: scope.workspaceId,
+            accountId: scope.accountId,
+            marketplace: scope.marketplace,
+            sku: product.sku,
+            payload: product as unknown as Prisma.InputJsonValue,
+            chineseName: product.chineseName,
+            englishName: product.englishName,
+            asin: product.asin,
+            status: product.status,
+            source: getProductRecordSource(product),
+            supplierName: product.supplierName,
+            purchasePrice: product.purchasePrice,
+            selectionOwner: product.selectionOwner || product.developer || "",
+            opsAssignee: product.opsAssignee || "",
+            designerAssignee: product.designerAssignee || "",
+            currentOwner: getProductRecordCurrentOwner(product),
+            workflowStage: getProductWorkflowStage(product),
+            workflowDueAt: product.workflowDueAt ? new Date(product.workflowDueAt) : null,
+            isOverdue: getProductRecordIsOverdue(product),
+            operationsProgressIncomplete: isProductOperationsProgressIncomplete(product),
+          },
+          update: {
+            userId: user.id,
+            accountId: scope.accountId,
+            marketplace: scope.marketplace,
+            payload: product as unknown as Prisma.InputJsonValue,
+            chineseName: product.chineseName,
+            englishName: product.englishName,
+            asin: product.asin,
+            status: product.status,
+            source: getProductRecordSource(product),
+            supplierName: product.supplierName,
+            purchasePrice: product.purchasePrice,
+            selectionOwner: product.selectionOwner || product.developer || "",
+            opsAssignee: product.opsAssignee || "",
+            designerAssignee: product.designerAssignee || "",
+            currentOwner: getProductRecordCurrentOwner(product),
+            workflowStage: getProductWorkflowStage(product),
+            workflowDueAt: product.workflowDueAt ? new Date(product.workflowDueAt) : null,
+            isOverdue: getProductRecordIsOverdue(product),
+            operationsProgressIncomplete: isProductOperationsProgressIncomplete(product),
+          },
+        });
+
+        await applyProductListSummaryChange(tx, {
           organizationId: user.organizationId,
-          userId: user.id,
           workspaceId: scope.workspaceId,
-          accountId: scope.accountId,
-          marketplace: scope.marketplace,
-          sku: product.sku,
-          payload: product as unknown as Prisma.InputJsonValue,
-        },
-        update: {
-          userId: user.id,
-          accountId: scope.accountId,
-          marketplace: scope.marketplace,
-          payload: product as unknown as Prisma.InputJsonValue,
-        },
+          before: existingProduct,
+          after: product,
+        });
+      });
+
+      await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`);
+      updateCachedProductListSummariesForProductChange({
+        organizationId: user.organizationId,
+        workspaceId: scope.workspaceId,
+        before: existingProduct,
+        after: product,
       });
     }
 
