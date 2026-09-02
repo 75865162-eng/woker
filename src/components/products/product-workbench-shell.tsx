@@ -7,13 +7,30 @@ import type { Product } from "@/lib/products/types";
 import {
   formatAssigneeList,
   formatAssigneePreview,
-  formatWorkflowDate,
   getCurrentWorkflowAssignee,
   isProductWorkflowOverdue,
   normalizeAssigneeList,
 } from "@/lib/products/workflow";
 import { type ProductFilters } from "./product-workbench-model";
 import { LabeledInput } from "./product-workbench-fields";
+
+function formatProductCreatedAtDisplay(value?: string): string | { dateText: string; timeText: string } {
+  if (!value) return "--";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const dateText = date.toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  const timeText = date.toLocaleTimeString("zh-CN", {
+    hour12: false,
+  });
+
+  return { dateText, timeText };
+}
 
 export function ProductFiltersBar({
   filters,
@@ -36,8 +53,8 @@ export function ProductFiltersBar({
     { value: "all", label: "全部状态" },
     ...productStatusOptions,
     { value: "design_in_progress", label: "美工处理中" },
-    { value: "operations_progress", label: "运营进程" },
-    { value: "overdue", label: "超期处理" },
+    { value: "operations_progress", label: "运营进度" },
+    { value: "overdue", label: "超期预警" },
   ];
 
   return (
@@ -162,7 +179,7 @@ export function ProductTable({
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
       <div className="thin-scrollbar overflow-auto">
-        <table className="w-[1876px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px]">
+        <table className="w-[1734px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px]">
           <colgroup>
             <col className="w-[84px]" />
             <col className="w-[96px]" />
@@ -173,11 +190,9 @@ export function ProductTable({
             <col className="w-[96px]" />
             <col className="w-[84px]" />
             <col className="w-[84px]" />
-            <col className="w-[112px]" />
             <col className="w-[140px]" />
             <col className="w-[130px]" />
-            <col className="w-[84px]" />
-            <col className="w-[106px]" />
+            <col className="w-[160px]" />
             <col className="w-[180px]" />
             <col className="w-[140px]" />
             <col className="w-[72px]" />
@@ -189,14 +204,12 @@ export function ProductTable({
               <th className="px-3 py-3">品名</th>
               <th className="px-3 py-3">ASIN</th>
               <th className="px-3 py-3">采购价格</th>
-              <th className="px-3 py-3">状态</th>
+              <th className="px-3 py-3">主状态</th>
               <th className="px-3 py-3">当前负责人</th>
               <th className="px-3 py-3">运营</th>
               <th className="px-3 py-3">美工</th>
-              <th className="px-3 py-3">流程截止</th>
               <th className="px-3 py-3">供应商名称</th>
               <th className="px-3 py-3">规格</th>
-              <th className="px-3 py-3">采购周期</th>
               <th className="px-3 py-3">创建日期</th>
               <th className="px-3 py-3">选品关键词</th>
               <th className="px-3 py-3">备注</th>
@@ -252,9 +265,6 @@ export function ProductTable({
                   <td className="px-3">
                     <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
                   </td>
-                  <td className="px-3 text-xs">
-                    <p className="truncate" title={formatWorkflowDate(product.workflowDueAt)}>{formatWorkflowDate(product.workflowDueAt)}</p>
-                  </td>
                   <td className="px-3">
                     <p className="truncate" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
                   </td>
@@ -262,10 +272,19 @@ export function ProductTable({
                     <p className="truncate text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
                   </td>
                   <td className="px-3">
-                    <p className="truncate" title={product.purchaseLeadTime || "--"}>{product.purchaseLeadTime || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate" title={product.createdAt}>{product.createdAt}</p>
+                    {(() => {
+                      const createdAt = formatProductCreatedAtDisplay(product.createdAt);
+                      if (typeof createdAt === "string") {
+                        return <p className="text-[11px] leading-tight text-foreground">--</p>;
+                      }
+
+                      return (
+                        <p className="text-[11px] leading-tight tabular-nums text-foreground" title={product.createdAt}>
+                          <span className="block">{createdAt.dateText}</span>
+                          <span className="block">{createdAt.timeText}</span>
+                        </p>
+                      );
+                    })()}
                   </td>
                   <td className="px-3">
                     <p className="truncate text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
@@ -283,14 +302,14 @@ export function ProductTable({
             })}
             {!products.length && loading ? (
               <tr>
-                <td colSpan={17} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={15} className="px-3 py-14 text-center text-sm text-muted">
                   正在从数据库读取商品数据...
                 </td>
               </tr>
             ) : null}
             {!products.length && !loading ? (
               <tr>
-                <td colSpan={17} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={15} className="px-3 py-14 text-center text-sm text-muted">
                   没有匹配的商品，调整筛选条件后再试。
                 </td>
               </tr>

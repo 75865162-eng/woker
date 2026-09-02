@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
 import { UserNotificationCenter } from "@/components/notifications/user-notification-center";
@@ -9,6 +10,7 @@ import { WeComNotificationRunner } from "@/components/notifications/wecom-notifi
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { WorkspaceScopeSelector } from "./workspace-scope-selector";
 
 const navItems = [
@@ -35,8 +37,8 @@ export function AppShellClient({
   userInitials = "AM",
   userName,
   userRole,
-  organizationName,
   rolePermissions,
+  appVersionLabel,
 }: {
   children: React.ReactNode;
   title: string;
@@ -44,11 +46,12 @@ export function AppShellClient({
   userInitials?: string;
   userName?: string;
   userRole?: string;
-  organizationName?: string;
   rolePermissions?: RolePermissionMap | null;
+  appVersionLabel: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [contentRevision, setContentRevision] = useState(0);
   const accountMenu = accountMenuItems.filter((item) => roleCanAccessModule(userRole, item.moduleId, rolePermissions));
   const visibleNavItems = navItems.filter((item) => {
     if (item.href === "/") return true;
@@ -60,6 +63,18 @@ export function AppShellClient({
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
   }
+
+  useEffect(() => {
+    function handleWorkspaceScopeChanged() {
+      setContentRevision((current) => current + 1);
+    }
+
+    window.addEventListener(workspaceScopeChangedEventName, handleWorkspaceScopeChanged);
+
+    return () => {
+      window.removeEventListener(workspaceScopeChangedEventName, handleWorkspaceScopeChanged);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,7 +119,7 @@ export function AppShellClient({
             <WorkspaceScopeSelector />
             <UserNotificationCenter />
             <div className="hidden items-center gap-2 lg:flex">
-              {organizationName ? <span className="max-w-[180px] truncate text-xs font-semibold text-muted">{organizationName}</span> : null}
+              <span className="max-w-[180px] truncate text-xs font-semibold text-muted">{appVersionLabel}</span>
             </div>
             <div className="group relative">
               <button
@@ -154,7 +169,9 @@ export function AppShellClient({
             </div>
           </div>
         </header>
-        <div className="p-6">{children}</div>
+        <div key={contentRevision} className="p-6">
+          {children}
+        </div>
       </main>
     </div>
   );

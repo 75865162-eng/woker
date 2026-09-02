@@ -55,6 +55,11 @@ const statusLabel: Record<ImportJobStatus, string> = {
   failed: "失败",
 };
 
+const typeLabel: Record<string, string> = {
+  bulk_upload: "Bulk 导入",
+  product_export: "商品导出",
+};
+
 function formatDate(value: string) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
@@ -204,7 +209,7 @@ export function TaskCenterWorkbench() {
                       <div className="text-xs text-muted">{formatSize(job.file?.size)} · {formatDate(job.createdAt)}</div>
                       {job.error ? <div className="mt-1 max-w-md truncate text-xs font-semibold text-danger">{job.error}</div> : null}
                     </td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{job.type}</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-muted">{typeLabel[job.type] ?? job.type}</td>
                     <td className="px-3 py-2">
                       <Badge tone={statusTone[job.status]}>{statusLabel[job.status]}</Badge>
                     </td>

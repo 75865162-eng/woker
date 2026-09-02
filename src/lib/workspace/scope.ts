@@ -26,6 +26,10 @@ export function normalizeWorkspaceScope(input?: WorkspaceScopeLike | null): Work
   };
 }
 
+export function isWorkspaceScopeComplete(scope: WorkspaceScopeInput) {
+  return Boolean(scope.workspaceId.trim() && scope.accountId.trim() && scope.marketplace.trim());
+}
+
 export function workspaceScopeFromUrl(url: string | URL): WorkspaceScopeInput {
   const searchParams = new URL(url).searchParams;
 

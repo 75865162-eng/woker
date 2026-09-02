@@ -5,6 +5,7 @@ import { BriefcaseBusiness, Plus, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { isWorkspaceScopeComplete } from "@/lib/workspace/scope";
 
 type WorkspaceScope = {
   id: string;
@@ -28,6 +29,11 @@ export function WorkspaceScopePanel() {
   const totalWorkspaces = workspaces.length;
   const defaultCount = workspaces.filter((workspace) => workspace.isDefault).length;
   const incompleteCount = workspaces.filter((workspace) => !workspace.accountId || !workspace.marketplace).length;
+  const canSave = isWorkspaceScopeComplete({
+    workspaceId: form.workspaceId,
+    accountId: form.accountId,
+    marketplace: form.marketplace,
+  });
 
   async function loadWorkspaces() {
     setLoading(true);
@@ -55,6 +61,11 @@ export function WorkspaceScopePanel() {
       return;
     }
 
+    if (!canSave) {
+      setError("请补齐 accountId 和 marketplace 后再保存。");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -79,6 +90,15 @@ export function WorkspaceScopePanel() {
     }
   }
 
+  function editWorkspace(workspace: WorkspaceScope) {
+    setForm({
+      workspaceId: workspace.id,
+      name: workspace.name,
+      accountId: workspace.accountId,
+      marketplace: workspace.marketplace,
+    });
+  }
+
   useEffect(() => {
     void loadWorkspaces();
   }, []);
@@ -86,15 +106,15 @@ export function WorkspaceScopePanel() {
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
-            <BriefcaseBusiness className="h-4 w-4" />
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
+              <BriefcaseBusiness className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle className="text-sm">Workspace / 账号 / 站点</CardTitle>
+              <p className="mt-0.5 text-xs font-medium text-muted">定义组织级数据边界，避免不同账号、站点和工作区混用同一份数据；保存前请补齐账号与站点。</p>
+            </div>
           </div>
-          <div>
-            <CardTitle className="text-sm">Workspace / 账号 / 站点</CardTitle>
-            <p className="mt-0.5 text-xs font-medium text-muted">定义组织级数据边界，避免不同账号、站点和工作区混用同一份数据。</p>
-          </div>
-        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone="blue">工作区 {totalWorkspaces}</Badge>
           <Badge tone={defaultCount ? "green" : "amber"}>默认 {defaultCount}</Badge>
@@ -117,7 +137,7 @@ export function WorkspaceScopePanel() {
           <input className={fieldClass} value={form.name} placeholder="显示名称" onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
           <input className={fieldClass} value={form.accountId} placeholder="Amazon accountId" onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))} />
           <input className={fieldClass} value={form.marketplace} placeholder="US" onChange={(event) => setForm((current) => ({ ...current, marketplace: event.target.value }))} />
-          <Button onClick={() => void saveWorkspace()} disabled={saving}>
+          <Button onClick={() => void saveWorkspace()} disabled={saving || !canSave}>
             <Plus className="h-4 w-4" />
             保存
           </Button>
@@ -136,7 +156,11 @@ export function WorkspaceScopePanel() {
             </thead>
             <tbody>
               {workspaces.map((workspace) => (
-                <tr key={workspace.id} className="border-t border-border">
+                <tr
+                  key={workspace.id}
+                  className="cursor-pointer border-t border-border hover:bg-surface-muted/50"
+                  onClick={() => editWorkspace(workspace)}
+                >
                   <td className="px-3 py-2">
                     <p className="font-bold text-foreground">{workspace.name}</p>
                     <p className="text-xs font-medium text-muted">{workspace.id}</p>
@@ -144,7 +168,9 @@ export function WorkspaceScopePanel() {
                   <td className="px-3 py-2">{workspace.accountId || "-"}</td>
                   <td className="px-3 py-2">{workspace.marketplace || "-"}</td>
                   <td className="px-3 py-2">
-                    <Badge tone={workspace.isDefault ? "green" : "blue"}>{workspace.isDefault ? "默认" : "已启用"}</Badge>
+                    <Badge tone={!workspace.accountId || !workspace.marketplace ? "amber" : workspace.isDefault ? "green" : "blue"}>
+                      {!workspace.accountId || !workspace.marketplace ? "待补齐" : workspace.isDefault ? "默认" : "已启用"}
+                    </Badge>
                   </td>
                   <td className="px-3 py-2 text-xs text-muted">{new Date(workspace.updatedAt).toLocaleString("zh-CN", { hour12: false })}</td>
                 </tr>

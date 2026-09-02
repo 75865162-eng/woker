@@ -19,6 +19,13 @@ export function LabeledInput({
 }) {
   const isNumberInput = type === "number";
   const heightClass = size === "compact" ? "h-8" : "h-10";
+  const [numberText, setNumberText] = useState(value);
+
+  useEffect(() => {
+    if (isNumberInput) {
+      setNumberText(value);
+    }
+  }, [isNumberInput, value]);
 
   return (
     <label className="text-xs font-semibold text-muted">
@@ -27,9 +34,25 @@ export function LabeledInput({
         className={`mt-1 ${heightClass} w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand`}
         type={isNumberInput ? "text" : type}
         inputMode={isNumberInput ? "decimal" : undefined}
-        value={value}
+        value={isNumberInput ? numberText : value}
         placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          if (isNumberInput) {
+            setNumberText(event.target.value);
+            return;
+          }
+          onChange(event.target.value);
+        }}
+        onBlur={() => {
+          if (isNumberInput) {
+            onChange(numberText);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (isNumberInput && event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
       />
     </label>
   );
@@ -52,14 +75,37 @@ export function SmallInput({
   compact?: boolean;
 }) {
   const isNumberInput = type === "number";
+  const [numberText, setNumberText] = useState(String(value));
+
+  useEffect(() => {
+    if (isNumberInput) {
+      setNumberText(String(value));
+    }
+  }, [isNumberInput, value]);
 
   return (
     <input
       className={`h-8 rounded-md border border-border bg-white px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
       type={isNumberInput ? "text" : type}
       inputMode={isNumberInput ? "decimal" : undefined}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
+      value={isNumberInput ? numberText : value}
+      onChange={(event) => {
+        if (isNumberInput) {
+          setNumberText(event.target.value);
+          return;
+        }
+        onChange(event.target.value);
+      }}
+      onBlur={() => {
+        if (isNumberInput) {
+          onChange(numberText);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (isNumberInput && event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
     />
   );
 }

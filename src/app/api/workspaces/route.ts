@@ -3,7 +3,7 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ensureOrganization } from "@/lib/organizations/organization-server";
-import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
+import { isWorkspaceScopeComplete, normalizeWorkspaceScope } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -60,6 +60,10 @@ export async function POST(request: Request) {
       marketplace: body.marketplace,
     });
     const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : scope.workspaceId;
+
+    if (!isWorkspaceScopeComplete(scope)) {
+      return NextResponse.json({ error: "请补齐 workspaceId、accountId 和 marketplace 后再保存工作区。" }, { status: 400 });
+    }
 
     const workspace = await prisma.workspaceScope.upsert({
       where: {

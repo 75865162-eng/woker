@@ -70,7 +70,7 @@ const statuses: ProductStatus[] = ["pending", "developing", "ops_review", "listi
 const leadTimes = ["3天", "5天", "7天", "10天"];
 
 export const initialProducts: Product[] = productSeeds.map((seed, index) => {
-  const sku = String(index + 1).padStart(5, "0");
+  const sku = String(index).padStart(4, "0");
   const packageSizeCm = {
     length: Number((seed.productSizeCm.length + 2).toFixed(1)),
     width: Number((seed.productSizeCm.width + 2).toFixed(1)),

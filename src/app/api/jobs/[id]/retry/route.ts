@@ -73,7 +73,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       },
     });
 
-    await enqueueImportJob(job.id);
+    try {
+      await enqueueImportJob(job.id);
+    } catch (enqueueError) {
+      const message = enqueueError instanceof Error ? enqueueError.message : "Failed to enqueue job.";
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: {
+          status: "failed",
+          progress: 0,
+          error: message,
+          file: {
+            update: {
+              status: "failed",
+            },
+          },
+        },
+      });
+      throw enqueueError;
+    }
 
     return NextResponse.json({ job });
   } catch (error) {

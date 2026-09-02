@@ -99,7 +99,7 @@ export function WorkerHealthPanel() {
         {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取 worker 状态...</div> : null}
         {!loading && data?.driver !== "redis" ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
-            当前未启用 Redis 队列，任务将按同步模式执行，不适合高并发场景。
+            当前未启用 Redis 队列，导入与导出任务将按同步模式执行，不适合 30 人并发场景。
           </div>
         ) : null}
 

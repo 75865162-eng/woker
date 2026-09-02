@@ -4,11 +4,13 @@ import { redirect } from "next/navigation";
 import { getAccessiblePathOrFallback } from "@/lib/accounts/permissions";
 import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
+import { getCurrentAppVersionLabel } from "@/lib/app-version-server";
 
 export async function AppShell({ children, title, subtitle }: { children: React.ReactNode; title: string; subtitle: string }) {
   const userPromise = getCurrentUserFromSignedCookie();
   const [user, headerStore] = await Promise.all([userPromise, headers()]);
   const rolePermissionsSnapshot = user?.organizationId ? await getOrganizationRolePermissionsSnapshot(user.organizationId) : null;
+  const appVersionLabel = getCurrentAppVersionLabel();
 
   const currentPath = headerStore.get("x-current-path");
   const rolePermissions = rolePermissionsSnapshot?.permissions ?? null;
@@ -36,8 +38,8 @@ export async function AppShell({ children, title, subtitle }: { children: React.
       userInitials={initials}
       userName={user?.name}
       userRole={user?.role}
-      organizationName={user?.organizationName}
       rolePermissions={rolePermissions}
+      appVersionLabel={appVersionLabel}
     >
       {children}
     </AppShellClient>

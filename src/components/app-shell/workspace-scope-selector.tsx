@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BriefcaseBusiness } from "lucide-react";
+import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
 
 const storageKey = "amazon_bulk_ad_workspace_scope";
 
@@ -47,6 +48,10 @@ function writeSelectedScope(scope: SelectedScope) {
   window.localStorage.setItem(storageKey, JSON.stringify(scope));
 }
 
+function isSameScope(left: SelectedScope, right: SelectedScope) {
+  return left.workspaceId === right.workspaceId && left.accountId === right.accountId && left.marketplace === right.marketplace;
+}
+
 function shouldScopeFetch(input: RequestInfo | URL) {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 
@@ -89,6 +94,11 @@ function scopeLabel(scope: WorkspaceScope) {
 export function WorkspaceScopeSelector() {
   const [workspaces, setWorkspaces] = useState<WorkspaceScope[]>([]);
   const [selected, setSelected] = useState(() => readSelectedScope());
+  const selectedRef = useRef(selected);
+
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
 
   useEffect(() => {
     patchFetchWithWorkspaceScope();
@@ -97,6 +107,16 @@ export function WorkspaceScopeSelector() {
   useEffect(() => {
     let cancelled = false;
 
+    function applySelectedScope(nextSelected: SelectedScope, source: "manual" | "auto") {
+      if (isSameScope(selectedRef.current, nextSelected)) {
+        return;
+      }
+
+      setSelected(nextSelected);
+      writeSelectedScope(nextSelected);
+      emitWorkspaceScopeChanged({ ...nextSelected, source });
+    }
+
     fetch("/api/workspaces")
       .then((response) => (response.ok ? response.json() : { workspaces: [] }))
       .then((data: { workspaces?: WorkspaceScope[] }) => {
@@ -104,7 +124,18 @@ export function WorkspaceScopeSelector() {
 
         const nextWorkspaces = Array.isArray(data.workspaces) ? data.workspaces : [];
         setWorkspaces(nextWorkspaces);
-        if (!nextWorkspaces.some((workspace) => workspace.id === selected.workspaceId)) {
+        const currentWorkspace = nextWorkspaces.find((workspace) => workspace.id === selectedRef.current.workspaceId);
+
+        if (currentWorkspace) {
+          applySelectedScope(
+            {
+              workspaceId: currentWorkspace.id,
+              accountId: currentWorkspace.accountId ?? "",
+              marketplace: currentWorkspace.marketplace ?? "",
+            },
+            "auto",
+          );
+        } else {
           const fallback = nextWorkspaces.find((workspace) => workspace.isDefault) ?? nextWorkspaces[0];
 
           if (fallback) {
@@ -113,8 +144,7 @@ export function WorkspaceScopeSelector() {
               accountId: fallback.accountId ?? "",
               marketplace: fallback.marketplace ?? "",
             };
-            setSelected(nextSelected);
-            writeSelectedScope(nextSelected);
+            applySelectedScope(nextSelected, "auto");
           }
         }
       })
@@ -137,9 +167,13 @@ export function WorkspaceScopeSelector() {
       marketplace: workspace?.marketplace ?? "",
     };
 
+    if (isSameScope(selectedRef.current, nextSelected)) {
+      return;
+    }
+
     setSelected(nextSelected);
     writeSelectedScope(nextSelected);
-    window.location.reload();
+    emitWorkspaceScopeChanged({ ...nextSelected, source: "manual" });
   }
 
   if (!workspaces.length) return null;

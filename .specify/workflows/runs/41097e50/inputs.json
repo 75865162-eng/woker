@@ -1,0 +1,7 @@
+{
+  "inputs": {
+    "spec": "Fix the product workbench status mismatch so the top summary cards, filter labels, and table headers use distinct, accurate status vocabulary.",
+    "integration": "codex",
+    "scope": "frontend-only"
+  }
+}

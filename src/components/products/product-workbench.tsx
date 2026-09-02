@@ -53,7 +53,7 @@ import {
 } from "./product-workbook-detail-sections";
 import { ProductImageCopyGalleryModal } from "./product-image-copy-gallery-modal";
 import { ProductVideoPlanModal } from "./product-video-plan-modal";
-import { ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
+import { DecimalInput, ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
 import { ProductOperationsProgress } from "./product-operations-progress";
 import {
@@ -78,8 +78,9 @@ type ProductWorkbenchCache = {
   summary: ProductListSummary;
 };
 
-const productWorkbenchStorageKey = "amazon-product-workbench-cache-v4";
+const productWorkbenchStorageKeyPrefix = "amazon-product-workbench-cache-v4";
 let productWorkbenchCache: ProductWorkbenchCache | null = null;
+let productWorkbenchCacheWorkspaceId: string | null = null;
 const productDetailCache = new Map<string, Product>();
 const productDetailInflight = new Map<string, Promise<Product>>();
 const compactToolbarButtonClass =
@@ -103,8 +104,52 @@ const emptyProductListSummary: ProductListSummary = {
   overdue: 0,
 };
 
+function normalizeProductFilters(filters?: Partial<ProductFilters> | null): ProductFilters {
+  return {
+    ...initialFilters,
+    ...(filters ?? {}),
+    keyword: filters?.keyword ?? "",
+    asin: filters?.asin ?? "",
+    opsAssignees: Array.isArray(filters?.opsAssignees) ? filters!.opsAssignees : [],
+    selectionOwners: Array.isArray(filters?.selectionOwners) ? filters!.selectionOwners : [],
+    designerAssignees: Array.isArray(filters?.designerAssignees) ? filters!.designerAssignees : [],
+    mySkuOwner: filters?.mySkuOwner ?? "",
+    supplierName: filters?.supplierName ?? "",
+    status: filters?.status ?? "all",
+    minPrice: filters?.minPrice ?? "",
+    maxPrice: filters?.maxPrice ?? "",
+  };
+}
+
+function readCurrentWorkspaceId() {
+  if (typeof window === "undefined") {
+    return "default";
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}") as { workspaceId?: string };
+    return parsed.workspaceId?.trim() || "default";
+  } catch {
+    return "default";
+  }
+}
+
+function getProductWorkbenchStorageKey(workspaceId: string) {
+  return `${productWorkbenchStorageKeyPrefix}:${workspaceId || "default"}`;
+}
+
+function getProductDetailCacheKey(workspaceId: string, sku: string) {
+  return `${workspaceId || "default"}:${sku.trim()}`;
+}
+
+function hasFullProductDetail(product: Product) {
+  return Boolean((product as Product & { workbookDetail?: TrialProductDraft }).workbookDetail);
+}
+
 function readCachedProductWorkbench() {
-  if (productWorkbenchCache) {
+  const workspaceId = readCurrentWorkspaceId();
+
+  if (productWorkbenchCache && productWorkbenchCacheWorkspaceId === workspaceId) {
     return productWorkbenchCache;
   }
 
@@ -113,7 +158,7 @@ function readCachedProductWorkbench() {
   }
 
   try {
-    const raw = window.localStorage.getItem(productWorkbenchStorageKey);
+    const raw = window.localStorage.getItem(getProductWorkbenchStorageKey(readCurrentWorkspaceId()));
     if (!raw) {
       return null;
     }
@@ -126,8 +171,13 @@ function readCachedProductWorkbench() {
     for (const product of parsed.products) {
       productDetailCache.set(product.sku.trim(), product);
     }
-    productWorkbenchCache = parsed;
-    return parsed;
+    const nextCache = {
+      ...parsed,
+      filters: normalizeProductFilters(parsed.filters),
+    };
+    productWorkbenchCache = nextCache;
+    productWorkbenchCacheWorkspaceId = workspaceId;
+    return nextCache;
   } catch {
     return null;
   }
@@ -135,6 +185,7 @@ function readCachedProductWorkbench() {
 
 function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
   productWorkbenchCache = cache;
+  productWorkbenchCacheWorkspaceId = readCurrentWorkspaceId();
   for (const product of cache.products) {
     productDetailCache.set(product.sku.trim(), product);
   }
@@ -144,7 +195,7 @@ function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
   }
 
   try {
-    window.localStorage.setItem(productWorkbenchStorageKey, JSON.stringify(cache));
+    window.localStorage.setItem(getProductWorkbenchStorageKey(readCurrentWorkspaceId()), JSON.stringify(cache));
   } catch {
     // Best effort only.
   }
@@ -154,7 +205,7 @@ export function ProductWorkbench() {
   const initialCachedWorkbench = readCachedProductWorkbench();
   const [products, setProducts] = useState<Product[]>(() => initialCachedWorkbench?.products ?? []);
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
-  const [filters, setFilters] = useState<ProductFilters>(() => initialCachedWorkbench?.filters ?? initialFilters);
+  const [filters, setFilters] = useState<ProductFilters>(() => normalizeProductFilters(initialCachedWorkbench?.filters));
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -166,6 +217,8 @@ export function ProductWorkbench() {
   const [productsTotalCount, setProductsTotalCount] = useState(() => initialCachedWorkbench?.totalCount ?? 0);
   const [listSummary, setListSummary] = useState<ProductListSummary>(() => initialCachedWorkbench?.summary ?? emptyProductListSummary);
   const [summaryReady, setSummaryReady] = useState(() => Boolean(initialCachedWorkbench));
+  const [mySkuCount, setMySkuCount] = useState(0);
+  const [mySkuReady, setMySkuReady] = useState(false);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
   const [productsLoading, setProductsLoading] = useState(() => !initialCachedWorkbench);
   const [productsError, setProductsError] = useState("");
@@ -180,6 +233,7 @@ export function ProductWorkbench() {
   const listSummaryRef = useRef(listSummary);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
   const [creatorName, setCreatorName] = useState("当前创建人");
+  const currentUserName = creatorName === "当前创建人" ? "" : creatorName.trim();
   const teamMembers = useMemo(() => accountsToTeamMembers(teamAccounts), [teamAccounts]);
   const opsOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["operations_supervisor", "operations"]), [teamMembers]);
   const designerOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["designer"]), [teamMembers]);
@@ -240,14 +294,14 @@ export function ProductWorkbench() {
     };
   }, []);
 
-  async function fetchProducts(input: {
+  const fetchProducts = useCallback(async (input: {
     filters: ProductFilters;
     page: number;
     pageSize: number;
     includeSummary?: boolean;
     detail?: boolean;
     signal?: AbortSignal;
-  }) {
+  }) => {
     const params = new URLSearchParams({
       page: String(input.page),
       pageSize: String(input.pageSize),
@@ -262,6 +316,7 @@ export function ProductWorkbench() {
     if (input.filters.opsAssignees.length) params.set("opsAssignees", input.filters.opsAssignees.join(","));
     if (input.filters.selectionOwners.length) params.set("selectionOwners", input.filters.selectionOwners.join(","));
     if (input.filters.designerAssignees.length) params.set("designerAssignees", input.filters.designerAssignees.join(","));
+    if (input.filters.mySkuOwner.trim()) params.set("mySkuOwner", input.filters.mySkuOwner.trim());
     if (input.filters.minPrice.trim()) params.set("minPrice", input.filters.minPrice.trim());
     if (input.filters.maxPrice.trim()) params.set("maxPrice", input.filters.maxPrice.trim());
 
@@ -278,7 +333,7 @@ export function ProductWorkbench() {
     }
 
     return data;
-  }
+  }, []);
 
   const loadProductSummary = useCallback(async (signal?: AbortSignal) => {
     const requestId = ++summaryRequestSeq.current;
@@ -323,6 +378,51 @@ export function ProductWorkbench() {
       setActivityLog((current) => [`商品统计读取失败：${message}`, ...current].slice(0, 8));
     }
   }, []);
+
+  useEffect(() => {
+    if (!currentUserName) {
+      setMySkuCount(0);
+      setMySkuReady(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let disposed = false;
+
+    void (async () => {
+      try {
+        const data = await fetchProducts({
+          filters: {
+            ...initialFilters,
+            mySkuOwner: currentUserName,
+          },
+          page: 1,
+          pageSize: 1,
+          includeSummary: false,
+          detail: false,
+          signal: controller.signal,
+        });
+
+        if (disposed || controller.signal.aborted) {
+          return;
+        }
+
+        setMySkuCount(data.pagination?.total ?? 0);
+        setMySkuReady(true);
+      } catch {
+        if (disposed || controller.signal.aborted) {
+          return;
+        }
+
+        setMySkuReady(true);
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
+  }, [currentUserName, fetchProducts]);
 
   useEffect(() => {
     const requestId = ++productsRequestSeq.current;
@@ -389,16 +489,18 @@ export function ProductWorkbench() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [filters, loadProductSummary, page, pageSize]);
+  }, [fetchProducts, filters, loadProductSummary, page, pageSize]);
 
   async function loadProductDetail(sku: string, signal?: AbortSignal) {
     const normalizedSku = sku.trim();
-    const cached = productDetailCache.get(normalizedSku);
-    if (cached) {
+    const workspaceId = readCurrentWorkspaceId();
+    const cacheKey = getProductDetailCacheKey(workspaceId, normalizedSku);
+    const cached = productDetailCache.get(cacheKey);
+    if (cached && hasFullProductDetail(cached)) {
       return cached;
     }
 
-    const inFlight = productDetailInflight.get(normalizedSku);
+    const inFlight = productDetailInflight.get(cacheKey);
     if (inFlight) {
       return inFlight;
     }
@@ -411,16 +513,16 @@ export function ProductWorkbench() {
         throw new Error(data.error || "商品详情读取失败");
       }
 
-      productDetailCache.set(normalizedSku, data.product);
+      productDetailCache.set(cacheKey, data.product);
       return data.product;
     })();
 
-    productDetailInflight.set(normalizedSku, promise);
+    productDetailInflight.set(cacheKey, promise);
 
     try {
       return await promise;
     } finally {
-      productDetailInflight.delete(normalizedSku);
+      productDetailInflight.delete(cacheKey);
     }
   }
 
@@ -507,6 +609,7 @@ export function ProductWorkbench() {
   const operationsProgressCount = listSummary.operationsProgress;
   const overdueCount = listSummary.overdue;
   const summaryValue = (value: number) => (summaryReady ? value.toLocaleString("zh-CN") : "…");
+  const mySkuValue = mySkuReady ? mySkuCount.toLocaleString("zh-CN") : "…";
 
   function openNewProduct() {
     setActiveProduct(null);
@@ -619,21 +722,32 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         opsAssignees: filters.opsAssignees.join(","),
         selectionOwners: filters.selectionOwners.join(","),
         designerAssignees: filters.designerAssignees.join(","),
+        mySkuOwner: filters.mySkuOwner.trim(),
         minPrice: filters.minPrice.trim(),
         maxPrice: filters.maxPrice.trim(),
       });
       const response = await fetch(`/api/products/export?${params.toString()}`, { method: "POST" });
-      const data = (await response.json()) as { file?: { downloadUrl?: string; name?: string }; rowCount?: number; error?: string };
+      const data = (await response.json()) as {
+        file?: { downloadUrl?: string; name?: string } | null;
+        job?: { id: string; status: string; file?: { originalName?: string } | null } | null;
+        queued?: boolean;
+        error?: string;
+      };
 
-      if (!response.ok || !data.file?.downloadUrl) {
+      if (!response.ok) {
         throw new Error(data.error || "商品导出失败");
       }
 
-      const anchor = document.createElement("a");
-      anchor.href = data.file.downloadUrl;
-      anchor.download = data.file.name ?? "products.csv";
-      anchor.click();
-      setActivityLog((current) => [`已导出 ${data.rowCount ?? 0} 条商品到数据库文件`, ...current].slice(0, 8));
+      if (data.file?.downloadUrl) {
+        const anchor = document.createElement("a");
+        anchor.href = data.file.downloadUrl;
+        anchor.download = data.file.name ?? "products.csv";
+        anchor.click();
+        setActivityLog((current) => [`商品导出已完成并生成文件 ${data.file?.name ?? "products.csv"}`, ...current].slice(0, 8));
+        return;
+      }
+
+      setActivityLog((current) => [`商品导出任务已提交到任务中心，完成后可下载 ${data.job?.file?.originalName ?? "products.csv"}`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品导出失败";
       setActivityLog((current) => [`商品导出失败：${message}`, ...current].slice(0, 8));
@@ -682,26 +796,41 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             onClick={() => patchFilters((current) => ({ ...current, status: "design_in_progress" }))}
           />
           <SummaryTile
-            label="运营进程"
+            label="运营进度"
             value={summaryValue(operationsProgressCount)}
             tone="amber"
             active={filters.status === "operations_progress"}
             onClick={() => patchFilters((current) => ({ ...current, status: "operations_progress" }))}
           />
           <SummaryTile
-            label="超期处理"
+            label="超期预警"
             value={summaryValue(overdueCount)}
             tone="red"
             active={filters.status === "overdue"}
             onClick={() => patchFilters((current) => ({ ...current, status: "overdue" }))}
           />
+          <SummaryTile
+            label="我的SKU"
+            value={mySkuValue}
+            tone="green"
+            active={filters.mySkuOwner.trim() === currentUserName && Boolean(currentUserName)}
+            onClick={() =>
+              patchFilters((current) => ({
+                ...current,
+                mySkuOwner: current.mySkuOwner.trim() ? "" : currentUserName,
+              }))
+            }
+          />
         </section>
+        <p className="px-1 text-xs font-medium text-muted">
+          顶部卡片包含商品主状态、运营进度和超期维度，不与下方表格的“主状态”列一一对应。
+        </p>
 
         <Card>
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>产品列表</CardTitle>
-              <p className="mt-1 text-xs font-medium text-muted">新增 SKU 默认待开发；创建超过 7 天且未上架、未取消的商品会自动进入超期处理。</p>
+              <p className="mt-1 text-xs font-medium text-muted">新增 SKU 默认待开发；创建超过 7 天且未上架、未取消的商品会自动进入超期预警。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <input
@@ -936,11 +1065,13 @@ function TrialProductEditor({
 }) {
   const [draft, setDraft] = useState<TrialProductDraft>(() => createTrialProductDraft());
 
-  function updatePricingRow(index: number, field: keyof TrialPriceRow, value: string) {
+  function updatePricingRow(index: number, field: keyof TrialPriceRow, value: string | number) {
     setDraft((current) => ({
       ...current,
       pricingRows: current.pricingRows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: field === "name" ? value : Number(value) || 0 } : row,
+        rowIndex === index
+          ? { ...row, [field]: field === "name" ? String(value) : typeof value === "number" ? value : Number(value) || 0 }
+          : row,
       ),
     }));
   }
@@ -952,11 +1083,21 @@ function TrialProductEditor({
     }));
   }
 
-  function updateSupplier(index: number, field: keyof TrialSupplierRow, value: string) {
+  function updateSupplier(index: number, field: keyof TrialSupplierRow, value: string | number) {
     setDraft((current) => ({
       ...current,
       suppliers: current.suppliers.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: field === "cost100" || field === "cost300" ? Number(value) || 0 : value } : row,
+        rowIndex === index
+          ? {
+              ...row,
+              [field]:
+                field === "cost100" || field === "cost300"
+                  ? typeof value === "number"
+                    ? value
+                    : Number(value) || 0
+                  : value,
+            }
+          : row,
       ),
     }));
   }
@@ -968,14 +1109,14 @@ function TrialProductEditor({
     }));
   }
 
-  function updateKeyword(index: number, field: keyof TrialKeywordRow, value: string) {
+  function updateKeyword(index: number, field: keyof TrialKeywordRow, value: string | number) {
     setDraft((current) => ({
       ...current,
       keywords: current.keywords.map((row, rowIndex) =>
         rowIndex === index
           ? {
               ...row,
-              [field]: field === "keyword" ? value : Number(value) || 0,
+              [field]: field === "keyword" ? String(value) : typeof value === "number" ? value : Number(value) || 0,
             }
           : row,
       ),
@@ -1046,22 +1187,22 @@ function TrialProductEditor({
                     return (
                       <tr key={index} className="border-t border-border align-top">
                         <td className="px-2 py-2"><SmallInput value={row.name} onChange={(value) => updatePricingRow(index, "name", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.lengthCm} onChange={(value) => updatePricingRow(index, "lengthCm", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.widthCm} onChange={(value) => updatePricingRow(index, "widthCm", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.heightCm} onChange={(value) => updatePricingRow(index, "heightCm", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.actualWeightKg} onChange={(value) => updatePricingRow(index, "actualWeightKg", value)} /></td>
-                        <ReadonlyMetric value={calc.volumeWeightKg} />
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.suggestedPrice} onChange={(value) => updatePricingRow(index, "suggestedPrice", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.purchaseCost} onChange={(value) => updatePricingRow(index, "purchaseCost", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.fbaFee} onChange={(value) => updatePricingRow(index, "fbaFee", value)} /></td>
-                        <ReadonlyMetric value={calc.fuelFee} />
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.oceanFreightUnitPrice} onChange={(value) => updatePricingRow(index, "oceanFreightUnitPrice", value)} /></td>
-                        <ReadonlyMetric value={calc.oceanFreight} />
-                        <ReadonlyMetric value={calc.commission} />
-                        <ReadonlyMetric value={calc.monthlyStorageFee} />
-                        <td className="px-2 py-2"><SmallInput compact type="number" value={row.exchangeRate} onChange={(value) => updatePricingRow(index, "exchangeRate", value)} /></td>
-                        <ReadonlyMetric value={calc.breakEvenPrice} />
-                        <ReadonlyMetric value={calc.profit} />
+                    <td className="px-2 py-2"><DecimalInput compact value={row.lengthCm} onChange={(value) => updatePricingRow(index, "lengthCm", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.widthCm} onChange={(value) => updatePricingRow(index, "widthCm", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.heightCm} onChange={(value) => updatePricingRow(index, "heightCm", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.actualWeightKg} onChange={(value) => updatePricingRow(index, "actualWeightKg", value)} /></td>
+                    <ReadonlyMetric value={calc.volumeWeightKg} />
+                    <td className="px-2 py-2"><DecimalInput compact value={row.suggestedPrice} onChange={(value) => updatePricingRow(index, "suggestedPrice", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.purchaseCost} onChange={(value) => updatePricingRow(index, "purchaseCost", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.fbaFee} onChange={(value) => updatePricingRow(index, "fbaFee", value)} /></td>
+                    <ReadonlyMetric value={calc.fuelFee} />
+                    <td className="px-2 py-2"><DecimalInput compact value={row.oceanFreightUnitPrice} onChange={(value) => updatePricingRow(index, "oceanFreightUnitPrice", value)} /></td>
+                    <ReadonlyMetric value={calc.oceanFreight} />
+                    <ReadonlyMetric value={calc.commission} />
+                    <ReadonlyMetric value={calc.monthlyStorageFee} />
+                    <td className="px-2 py-2"><DecimalInput compact value={row.exchangeRate} onChange={(value) => updatePricingRow(index, "exchangeRate", value)} /></td>
+                    <ReadonlyMetric value={calc.breakEvenPrice} />
+                    <ReadonlyMetric value={calc.profit} />
                         <ReadonlyMetric value={`${(calc.profitRate * 100).toFixed(1)}%`} />
                         <ReadonlyMetric value={calc.volumeWeightLb} />
                         <ReadonlyMetric value={calc.actualWeightLb} />
@@ -1170,9 +1311,9 @@ function TrialProductEditor({
                     {draft.keywords.map((row, index) => (
                       <tr key={index} className="border-t border-border">
                         <td className="px-2 py-2"><SmallInput value={row.keyword} onChange={(value) => updateKeyword(index, "keyword", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput type="number" value={row.cpc} onChange={(value) => updateKeyword(index, "cpc", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput type="number" value={row.monthlySearches} onChange={(value) => updateKeyword(index, "monthlySearches", value)} /></td>
-                        <td className="px-2 py-2"><SmallInput type="number" value={row.abaRank} onChange={(value) => updateKeyword(index, "abaRank", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput value={row.cpc} onChange={(value) => updateKeyword(index, "cpc", value)} /></td>
+                    <td className="px-2 py-2"><SmallInput type="number" value={row.monthlySearches} onChange={(value) => updateKeyword(index, "monthlySearches", value)} /></td>
+                    <td className="px-2 py-2"><SmallInput type="number" value={row.abaRank} onChange={(value) => updateKeyword(index, "abaRank", value)} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1404,11 +1545,13 @@ function ProductEditor({
     setDraft((current) => ({ ...current, workbookDetail: updater(current.workbookDetail) }));
   }
 
-  function updateWorkbookPricingRow(index: number, field: keyof TrialPriceRow, value: string) {
+  function updateWorkbookPricingRow(index: number, field: keyof TrialPriceRow, value: string | number) {
     setWorkbookDetail((current) => ({
       ...current,
       pricingRows: current.pricingRows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: field === "name" ? value : Number(value) || 0 } : row,
+        rowIndex === index
+          ? { ...row, [field]: field === "name" ? String(value) : typeof value === "number" ? value : Number(value) || 0 }
+          : row,
       ),
     }));
   }
@@ -1501,11 +1644,21 @@ function ProductEditor({
     }));
   }
 
-  function updateWorkbookSupplier(index: number, field: keyof TrialSupplierRow, value: string) {
+  function updateWorkbookSupplier(index: number, field: keyof TrialSupplierRow, value: string | number) {
     setWorkbookDetail((current) => ({
       ...current,
       suppliers: current.suppliers.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: field === "cost100" || field === "cost300" ? Number(value) || 0 : value } : row,
+        rowIndex === index
+          ? {
+              ...row,
+              [field]:
+                field === "cost100" || field === "cost300"
+                  ? typeof value === "number"
+                    ? value
+                    : Number(value) || 0
+                  : value,
+            }
+          : row,
       ),
     }));
   }
@@ -1573,11 +1726,11 @@ function ProductEditor({
     });
   }
 
-  function updateWorkbookKeyword(index: number, field: keyof TrialKeywordRow, value: string) {
+  function updateWorkbookKeyword(index: number, field: keyof TrialKeywordRow, value: string | number) {
     setWorkbookDetail((current) => ({
       ...current,
       keywords: current.keywords.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: field === "keyword" ? value : Number(value) || 0 } : row,
+        rowIndex === index ? { ...row, [field]: field === "keyword" ? String(value) : typeof value === "number" ? value : Number(value) || 0 } : row,
       ),
     }));
   }
@@ -1783,7 +1936,12 @@ function ProductEditor({
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <LabeledInput label="采购价格 CNY" type="number" value={String(draft.purchasePrice)} onChange={(value) => setField("purchasePrice", Number(value) || 0)} />
+                      <label className="text-xs font-semibold text-muted">
+                        采购价格 CNY
+                        <div className="mt-1">
+                          <DecimalInput value={draft.purchasePrice} onChange={(value) => setField("purchasePrice", value)} />
+                        </div>
+                      </label>
                       <label className="text-xs font-semibold text-muted">
                         状态
                         <select

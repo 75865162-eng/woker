@@ -4,6 +4,7 @@ import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
+import { getProductListImage } from "@/lib/products/image-assets";
 import type { Product, ProductListItem } from "@/lib/products/types";
 import {
   createProductListItem,
@@ -296,6 +297,7 @@ export async function GET(request: Request) {
     const status = url.searchParams.get("status");
     const minPrice = parseOptionalNumber(url.searchParams.get("minPrice"));
     const maxPrice = parseOptionalNumber(url.searchParams.get("maxPrice"));
+    const mySkuOwner = url.searchParams.get("mySkuOwner")?.trim();
     const detail = url.searchParams.get("detail") === "full";
     const includeSummary = url.searchParams.get("includeSummary") !== "false";
     const summaryOnly = url.searchParams.get("summaryOnly") === "true";
@@ -309,6 +311,7 @@ export async function GET(request: Request) {
       opsAssignees.length > 0 ||
       selectionOwners.length > 0 ||
       designerAssignees.length > 0 ||
+      Boolean(mySkuOwner) ||
       Number.isFinite(minPrice) ||
       Number.isFinite(maxPrice) ||
       (status !== null && status !== "all");
@@ -328,6 +331,7 @@ export async function GET(request: Request) {
       opsAssignees,
       selectionOwners,
       designerAssignees,
+      mySkuOwner,
       minPrice,
       maxPrice,
       detail,
@@ -385,6 +389,7 @@ export async function GET(request: Request) {
       opsAssignees,
       selectionOwners,
       designerAssignees,
+      mySkuOwner,
       minPrice,
       maxPrice,
     });
@@ -442,6 +447,7 @@ export async function GET(request: Request) {
               supplierName: true,
               workflowDueAt: true,
               isOverdue: true,
+              payload: true,
             },
         orderBy: {
           updatedAt: "desc",
@@ -461,7 +467,17 @@ export async function GET(request: Request) {
         records = recordsResult;
 
         const responsePayload: ProductListResponse = {
-          products: records.map((record) => (detail ? (record.payload as unknown as Product) : createProductListItem(record))),
+          products: records.map((record) => {
+            if (detail) {
+              return record.payload as unknown as Product;
+            }
+
+            const { payload, ...listRecord } = record;
+            return createProductListItem({
+              ...listRecord,
+              image: getProductListImage((payload as Partial<Product> | undefined) ?? {}),
+            });
+          }),
           pagination: {
             page,
             pageSize,
@@ -495,7 +511,17 @@ export async function GET(request: Request) {
       total = summary.total;
 
       const responsePayload: ProductListResponse = {
-        products: records.map((record) => (detail ? (record.payload as unknown as Product) : createProductListItem(record))),
+        products: records.map((record) => {
+          if (detail) {
+            return record.payload as unknown as Product;
+          }
+
+          const { payload, ...listRecord } = record;
+          return createProductListItem({
+            ...listRecord,
+            image: getProductListImage((payload as Partial<Product> | undefined) ?? {}),
+          });
+        }),
         pagination: {
           page,
           pageSize,

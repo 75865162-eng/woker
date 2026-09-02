@@ -5,6 +5,7 @@ APP_DIR="${APP_DIR:-/opt/amazon-ad-bulk-operation}"
 RELEASES_DIR="${RELEASES_DIR:-/opt/amazon-ad-bulk-releases}"
 CURRENT_LINK="${CURRENT_LINK:-/opt/amazon-ad-bulk-current}"
 RELEASE_LOG="${RELEASE_LOG:-/opt/amazon-ad-bulk-release-log.jsonl}"
+VERSION_STATE_FILE="${VERSION_STATE_FILE:-/opt/amazon-ad-bulk-version.json}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 SOURCE_BRANCH="${SOURCE_BRANCH:-unknown}"
 SOURCE_COMMIT="${SOURCE_COMMIT:-unknown}"
@@ -28,6 +29,25 @@ safe_branch="$(printf '%s' "$SOURCE_BRANCH" | tr -c 'A-Za-z0-9._-' '-')"
 release_id="${release_stamp}-${safe_branch}-${SOURCE_COMMIT}"
 release_dir="${RELEASES_DIR}/${release_id}"
 extract_dir="${release_dir}.extracting"
+app_version_label=""
+
+read_previous_version() {
+  if [ -f "$VERSION_STATE_FILE" ]; then
+    sed -n 's/.*"appVersion":"\([^"]*\)".*/\1/p' "$VERSION_STATE_FILE" | tail -n 1
+  fi
+}
+
+next_version_label() {
+  local current="${1:-}"
+  if [[ "$current" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local patch="${BASH_REMATCH[3]}"
+    echo "v${major}.${minor}.$((patch + 1))"
+  else
+    echo "v0.0.1"
+  fi
+}
 
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -65,6 +85,9 @@ mkdir -p "$RELEASES_DIR"
 rm -rf "$extract_dir"
 mkdir -p "$extract_dir"
 tar -xzf "$ARTIFACT_PATH" -C "$extract_dir"
+
+previous_version="$(read_previous_version)"
+app_version_label="$(next_version_label "${previous_version:-}")"
 
 if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ]; then
   echo "Artifact is not a complete release package." >&2
@@ -112,14 +135,24 @@ escaped_release_id="$(json_escape "$release_id")"
 escaped_source_branch="$(json_escape "$SOURCE_BRANCH")"
 escaped_source_commit="$(json_escape "$SOURCE_COMMIT")"
 escaped_app_dir="$(json_escape "$APP_DIR")"
+escaped_app_version_label="$(json_escape "$app_version_label")"
 cat > "$extract_dir/RELEASE.json" <<JSON
 {
   "releaseId": "$escaped_release_id",
   "branch": "$escaped_source_branch",
   "commit": "$escaped_source_commit",
   "builtAt": "$release_started_at",
+  "appVersion": "$escaped_app_version_label",
   "appDir": "$escaped_app_dir",
   "source": "ci-artifact"
+}
+JSON
+
+cat > "$VERSION_STATE_FILE" <<JSON
+{
+  "appVersion": "$escaped_app_version_label",
+  "releaseId": "$escaped_release_id",
+  "updatedAt": "$release_started_at"
 }
 JSON
 

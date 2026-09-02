@@ -151,6 +151,7 @@ export type ProductListItem = {
   sku: string;
   chineseName: string;
   englishName: string;
+  image?: string;
   asin?: string;
   status: ProductStatus;
   currentOwner: string;

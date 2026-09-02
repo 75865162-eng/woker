@@ -17,7 +17,9 @@ import {
   createSentRecords,
   validateWeComWebhookUrl,
 } from "@/lib/notifications/wecom";
+import { nextAppVersionLabel, normalizeAppVersionLabel } from "@/lib/app-version";
 import { productToDraft } from "@/components/products/product-workbench-data";
+import { nextSku } from "@/components/products/product-workbench-utils";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
 import { normalizeWorkspaceScope, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import type { CampaignGroup, PerformanceRow, Rule } from "@/lib/types";
@@ -234,4 +236,18 @@ test("productToDraft tolerates legacy products with missing array fields", () =>
   assert.deepEqual(draft.images, []);
   assert.deepEqual(draft.competitorAsins, [""]);
   assert.deepEqual(draft.workflowHistory, []);
+});
+
+test("nextSku uses the 0000-9999 range before switching to letter-prefixed SKUs", () => {
+  assert.equal(nextSku([{ sku: "0000" }]), "0001");
+  assert.equal(nextSku([{ sku: "9999" }]), "A001");
+  assert.equal(nextSku([{ sku: "A999" }]), "B001");
+});
+
+test("app version labels normalize and increment sequentially", () => {
+  assert.equal(normalizeAppVersionLabel("v0.0.1"), "v0.0.1");
+  assert.equal(normalizeAppVersionLabel("bad-value"), "v0.0.1");
+  assert.equal(nextAppVersionLabel("v0.0.1"), "v0.0.2");
+  assert.equal(nextAppVersionLabel("v0.0.9"), "v0.0.10");
+  assert.equal(nextAppVersionLabel("bad-value"), "v0.0.1");
 });

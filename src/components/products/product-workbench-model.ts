@@ -127,6 +127,7 @@ export type ProductFilters = {
   opsAssignees: string[];
   selectionOwners: string[];
   designerAssignees: string[];
+  mySkuOwner: string;
   supplierName: string;
   status: ProductStatusFilter;
   minPrice: string;
@@ -139,6 +140,7 @@ export const initialFilters: ProductFilters = {
   opsAssignees: [],
   selectionOwners: [],
   designerAssignees: [],
+  mySkuOwner: "",
   supplierName: "",
   status: "all",
   minPrice: "",

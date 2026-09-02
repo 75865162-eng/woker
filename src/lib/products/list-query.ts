@@ -78,6 +78,7 @@ export function createProductListWhere(input: {
   opsAssignees: string[];
   selectionOwners: string[];
   designerAssignees: string[];
+  mySkuOwner?: string;
   minPrice?: number;
   maxPrice?: number;
 }) {
@@ -104,6 +105,16 @@ export function createProductListWhere(input: {
   if (input.opsAssignees.length) where.opsAssignee = { in: input.opsAssignees };
   if (input.selectionOwners.length) where.selectionOwner = { in: input.selectionOwners };
   if (input.designerAssignees.length) where.designerAssignee = { in: input.designerAssignees };
+  if (input.mySkuOwner) {
+    and.push({
+      OR: [
+        { selectionOwner: { contains: input.mySkuOwner, mode: "insensitive" } },
+        { currentOwner: { contains: input.mySkuOwner, mode: "insensitive" } },
+        { opsAssignee: { contains: input.mySkuOwner, mode: "insensitive" } },
+        { designerAssignee: { contains: input.mySkuOwner, mode: "insensitive" } },
+      ],
+    });
+  }
   if (Number.isFinite(input.minPrice) || Number.isFinite(input.maxPrice)) {
     where.purchasePrice = {
       ...(Number.isFinite(input.minPrice) ? { gte: input.minPrice } : {}),
@@ -145,6 +156,7 @@ export function createProductListItem(record: {
   sku: string;
   chineseName: string;
   englishName: string;
+  image?: string;
   asin?: string;
   status: string;
   selectionOwner: string;
@@ -167,6 +179,7 @@ export function createProductListItem(record: {
     sku: record.sku,
     chineseName: record.chineseName,
     englishName: record.englishName,
+    image: record.image,
     asin: record.asin,
     status,
     currentOwner: record.currentOwner ?? "",

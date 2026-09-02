@@ -27,6 +27,7 @@ import {
 } from "./product-workbench-model";
 import {
   AmazonLinkButton,
+  DecimalInput,
   ExternalLinkButton,
   LabeledInput,
   ReadonlyMetric,
@@ -59,19 +60,19 @@ export function ProductWorkbookDetailSections({
   onRemarkImagesChange,
 }: {
   detail: TrialProductDraft;
-  onPricingChange: (index: number, field: keyof TrialPriceRow, value: string) => void;
+  onPricingChange: (index: number, field: keyof TrialPriceRow, value: string | number) => void;
   onPricingAdd: () => void;
   onPricingRemove: () => void;
   onCompetitorChange: (index: number, field: keyof TrialCompetitorRow, value: string) => void;
   onCompetitorAdd: () => void;
   onCompetitorRemove: () => void;
-  onSupplierChange: (index: number, field: keyof TrialSupplierRow, value: string) => void;
+  onSupplierChange: (index: number, field: keyof TrialSupplierRow, value: string | number) => void;
   onSupplierAdd: () => void;
   onSupplierRemove: () => void;
   onImprovementChange: (field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) => void;
   onPeakSeasonWeightsChange: (value: number[]) => void;
   onImprovementRowChange: (index: number, field: TrialImprovementCellKey, value: string) => void;
-  onKeywordChange: (index: number, field: keyof TrialKeywordRow, value: string) => void;
+  onKeywordChange: (index: number, field: keyof TrialKeywordRow, value: string | number) => void;
   onKeywordsReplace: (keywords: TrialKeywordRow[]) => void;
   onRemarkChange: (value: string) => void;
   onRemarkImagesChange: (images: string[]) => void;
@@ -129,20 +130,20 @@ export function ProductWorkbookDetailSections({
                 return (
                   <tr key={index} className="border-t border-border align-top">
                     <td className="px-2 py-2"><SmallInput value={row.name} onChange={(value) => onPricingChange(index, "name", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.lengthCm} onChange={(value) => onPricingChange(index, "lengthCm", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.widthCm} onChange={(value) => onPricingChange(index, "widthCm", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.heightCm} onChange={(value) => onPricingChange(index, "heightCm", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.actualWeightKg} onChange={(value) => onPricingChange(index, "actualWeightKg", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.lengthCm} onChange={(value) => onPricingChange(index, "lengthCm", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.widthCm} onChange={(value) => onPricingChange(index, "widthCm", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.heightCm} onChange={(value) => onPricingChange(index, "heightCm", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.actualWeightKg} onChange={(value) => onPricingChange(index, "actualWeightKg", String(value))} /></td>
                     <ReadonlyMetric value={calc.volumeWeightKg} />
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.suggestedPrice} onChange={(value) => onPricingChange(index, "suggestedPrice", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.purchaseCost} onChange={(value) => onPricingChange(index, "purchaseCost", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.fbaFee} onChange={(value) => onPricingChange(index, "fbaFee", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.suggestedPrice} onChange={(value) => onPricingChange(index, "suggestedPrice", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.purchaseCost} onChange={(value) => onPricingChange(index, "purchaseCost", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.fbaFee} onChange={(value) => onPricingChange(index, "fbaFee", value)} /></td>
                     <ReadonlyMetric value={calc.fuelFee} />
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.oceanFreightUnitPrice} onChange={(value) => onPricingChange(index, "oceanFreightUnitPrice", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.oceanFreightUnitPrice} onChange={(value) => onPricingChange(index, "oceanFreightUnitPrice", value)} /></td>
                     <ReadonlyMetric value={calc.oceanFreight} />
                     <ReadonlyMetric value={calc.commission} />
                     <ReadonlyMetric value={calc.monthlyStorageFee} />
-                    <td className="px-2 py-2"><SmallInput compact type="number" value={row.exchangeRate} onChange={(value) => onPricingChange(index, "exchangeRate", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput compact value={row.exchangeRate} onChange={(value) => onPricingChange(index, "exchangeRate", value)} /></td>
                     <ReadonlyMetric value={calc.breakEvenPrice} />
                     <ReadonlyMetric value={calc.profit} />
                     <ReadonlyMetric value={`${(calc.profitRate * 100).toFixed(1)}%`} />
@@ -261,6 +262,8 @@ export function ProductWorkbookDetailSections({
                           <SmallTextarea size="supplierWide" value={row[field]} onChange={(value) => onSupplierChange(index, field, value)} />
                           <ExternalLinkButton href={row[field]} />
                         </div>
+                      ) : field === "cost100" || field === "cost300" ? (
+                        <DecimalInput compact value={Number(row[field]) || 0} onChange={(value) => onSupplierChange(index, field, value)} />
                       ) : (
                         <SmallTextarea
                           size={getSupplierTextareaSize(field)}
@@ -313,7 +316,7 @@ export function ProductWorkbookDetailSections({
                 {detail.keywords.map((row, index) => (
                   <tr key={index} className="border-t border-border">
                     <td className="px-2 py-2"><SmallInput value={row.keyword} onChange={(value) => onKeywordChange(index, "keyword", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput type="number" value={row.cpc} onChange={(value) => onKeywordChange(index, "cpc", value)} /></td>
+                    <td className="px-2 py-2"><DecimalInput value={row.cpc} onChange={(value) => onKeywordChange(index, "cpc", value)} /></td>
                     <td className="px-2 py-2"><SmallInput type="number" value={row.monthlySearches} onChange={(value) => onKeywordChange(index, "monthlySearches", value)} /></td>
                     <td className="px-2 py-2"><SmallInput type="number" value={row.abaRank} onChange={(value) => onKeywordChange(index, "abaRank", value)} /></td>
                   </tr>

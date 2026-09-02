@@ -344,6 +344,9 @@ function extractDeveloperName(fileName: string) {
   return parts.length > 1 ? parts.at(-1) ?? "" : "";
 }
 
+function isEspressoMirrorSku(sku: string) {
+  return sku === "0000" || sku === "00001";
+}
 
 export function productToDraft(product: Product | null, products: Array<Pick<ProductListItem, "sku">>, preferredSku?: string): ProductEditorDraft {
   if (product) {
@@ -362,7 +365,7 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
       operationsProgress: normalizeOperationsProgress(product.operationsProgress, product.opsAssignee || product.selectionOwner || ""),
       workbookDetail: normalizeWorkbookDetail(
         productWithWorkbook.workbookDetail,
-        product.sku === "00001" ? createEspressoMirrorDetail() : createTrialProductDraft(),
+        isEspressoMirrorSku(product.sku) ? createEspressoMirrorDetail() : createTrialProductDraft(),
       ),
     };
   }
@@ -401,7 +404,7 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
 
 export function hydrateProductFromExcelSeed(product: Product): Product {
   const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  if (product.sku !== "00001" || productWithWorkbook.workbookDetail) {
+  if (!isEspressoMirrorSku(product.sku) || productWithWorkbook.workbookDetail) {
     return product;
   }
 
@@ -493,65 +496,7 @@ export const trialImprovementLabels: Record<Exclude<keyof TrialImprovement, "row
 };
 
 export function createTrialProductDraft(): TrialProductDraft {
-  return {
-    title: "交易卡展示架",
-    pricingRows: [
-      { name: "交易卡展示架10pcs", lengthCm: 18.5, widthCm: 15, heightCm: 8, actualWeightKg: 0.6, suggestedPrice: 23.99, purchaseCost: 35, oceanFreightUnitPrice: 12, fbaFee: 5.42, exchangeRate: 6.8 },
-      { name: "交易卡展示架24pcs", lengthCm: 25, widthCm: 20, heightCm: 8, actualWeightKg: 1.2, suggestedPrice: 37.99, purchaseCost: 76.8, oceanFreightUnitPrice: 12, fbaFee: 6.67, exchangeRate: 6.8 },
-    ],
-    competitors: [
-      { type: "头部竞品", hotVariantImage: "", asin: "B0GL1XGNQM", sales30Days: "849 / 2026-02-14", variantCount: "5", variantType: "数量", hotVariantSpec: "17.5*8.5*2", hotVariantPrice: "40.88 / 750g", fbaFee: "5.76", priceChangeNote: "42.99-59.99", reviewCount: "13", rating: "4.5", negativePoint1: "希望它们再抬高一点", negativePoint2: "", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "18.29 x 13.72 x 8.64 cm", note: "杂", noteImage: "" },
-      { type: "直接竞品", hotVariantImage: "", asin: "B0GVSNLDYF", sales30Days: "160 / 2026-05-09", variantCount: "", variantType: "", hotVariantSpec: "16.2*8.4*1.3", hotVariantPrice: "25.99 / 680g", fbaFee: "5.61", priceChangeNote: "28.9-31.99", reviewCount: "19", rating: "4.3", negativePoint1: "", negativePoint2: "", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "42.67 x 17.78 x 9.91 cm", note: "杂", noteImage: "" },
-      { type: "参考竞品", hotVariantImage: "", asin: "B0GYF4D1B5", sales30Days: "201 / 2026-05-03", variantCount: "", variantType: "", hotVariantSpec: "16*8.5", hotVariantPrice: "59.97 / 1100g", fbaFee: "6.58", priceChangeNote: "69.97-59.97", reviewCount: "26", rating: "4.8", negativePoint1: "没这么牢固，有锁扣更好", negativePoint2: "黑色丙烯看起来非常干净", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "18.80 x 15.75 x 9.65 cm", note: "收纳居多", noteImage: "" },
-    ],
-    suppliers: [
-      { productUrl: "", factoryName: "广州飞伦工艺品有限公司", configuration: "", moq: "1000", leadTime: "", domesticFreightIncluded: "否", certifications: "无", patentCountry: "", packagingMethod: "", cost100: 3.5, cost300: 35, taxPoint: "普票2%", invoiceName: "", invoiceSpecUnit: "", invoiceRegion: "" },
-    ],
-    improvement: {
-      audience: "卡片爱好者",
-      scenario: "家中",
-      painPoint1: "可以考虑怎么加锁扣或者防滑",
-      painPoint2: "去掉 logo，做差异化镂空之类的",
-      painPoint3: "采样看看品控",
-      material: "亚克力",
-      size: "17.5*8.5",
-      functionImprovement: "收纳整理、展示",
-      appearance: "",
-      accessories: "可以配一个收纳袋",
-      packaging: "前期先牛皮纸盒，后期看有没有必要加彩盒",
-      manual: "简单产品介绍显得专业",
-      imageCopySuggestion: "",
-      peakSeasonWeights: createDefaultPeakSeasonWeights(),
-      peakSales: "400-500",
-      offSeasonSales: "",
-      targetSales: "100",
-      infringement: "",
-      certification: "",
-      rows: [
-        {
-          material: "亚克力",
-          size: "17.5*8.5",
-          functionImprovement: "收纳整理、展示",
-          appearance: "",
-          accessories: "可以配一个收纳袋",
-          packaging: "前期先牛皮纸盒，后期看有没有必要加彩盒",
-          manual: "简单产品介绍显得专业",
-          imageCopySuggestion: "",
-          certification: "",
-        },
-      ],
-    },
-    remark: "",
-    remarkImages: [],
-    keywords: [
-      { keyword: "card risers for display case", cpc: 0.4, monthlySearches: 4401, abaRank: 317832 },
-      { keyword: "graded card display", cpc: 1.53, monthlySearches: 11912, abaRank: 124848 },
-      { keyword: "sports card display", cpc: 0.72, monthlySearches: 9331, abaRank: 150351 },
-      { keyword: "sports card display case", cpc: 1.54, monthlySearches: 7112, abaRank: 213697 },
-      { keyword: "card display case", cpc: 1.84, monthlySearches: 31321, abaRank: 42337 },
-      { keyword: "pokemon card display", cpc: 0.86, monthlySearches: 10715, abaRank: 154350 },
-    ],
-  };
+  return createBlankWorkbookDetail();
 }
 
 function createEspressoMirrorDetail(): TrialProductDraft {

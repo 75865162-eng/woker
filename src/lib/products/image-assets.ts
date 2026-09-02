@@ -1,5 +1,5 @@
-export function getProductListImage(product: { images?: string[] }) {
-  const image = product.images?.[0]?.trim();
+export function getProductListImage(product: { image?: string; images?: string[] }) {
+  const image = product.image?.trim() || product.images?.[0]?.trim();
 
   return image || "";
 }
