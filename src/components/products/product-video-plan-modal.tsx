@@ -496,8 +496,10 @@ export function ProductVideoPlanModal({
       {previewAsset ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/70 p-6" onClick={() => setPreviewAsset(null)}>
           <div className="max-h-full max-w-5xl overflow-hidden rounded-lg bg-white p-3 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={previewAsset.url} alt={previewAsset.name} className="max-h-[82vh] max-w-full object-contain" />
+            <div className="mt-2 flex items-center justify-center" onClick={() => setPreviewAsset(null)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewAsset.url} alt={previewAsset.name} className="max-h-[82vh] max-w-full object-contain" onClick={(event) => event.stopPropagation()} />
+            </div>
             <div className="mt-2 flex items-center justify-between gap-3">
               <p className="truncate text-sm font-semibold text-foreground">{previewAsset.name}</p>
               <Button size="sm" variant="secondary" onClick={() => setPreviewAsset(null)}>

@@ -1,4 +1,5 @@
 ﻿import type { ProductDraft, ProductSizeCm, ProductStatus } from "@/lib/products/types";
+import type { ProductImageAsset } from "@/lib/products/types";
 
 export const storageKey = "amazon-bulk-ad-products-v2";
 export const trialStorageKey = "amazon-bulk-ad-trial-products-v1";
@@ -6,7 +7,7 @@ export const pageSizeOptions = [20, 50, 100];
 export const emptySize: ProductSizeCm = { length: 0, width: 0, height: 0 };
 export const overdueThresholdDays = 7;
 
-export type ProductStatusFilter = "all" | "overdue" | "design_in_progress" | "operations_progress" | ProductStatus;
+export type ProductStatusFilter = "all" | "overdue" | "development_phase" | "design_in_progress" | "operations_progress" | ProductStatus;
 
 export type TrialPriceRow = {
   name: string;
@@ -24,6 +25,7 @@ export type TrialPriceRow = {
 export type TrialCompetitorRow = {
   type: string;
   hotVariantImage: string;
+  hotVariantImageAsset?: ProductImageAsset;
   asin: string;
   sales30Days: string;
   variantCount: string;
@@ -42,6 +44,7 @@ export type TrialCompetitorRow = {
   packageSize: string;
   note: string;
   noteImage: string;
+  noteImageAsset?: ProductImageAsset;
 };
 
 export type TrialSupplierRow = {
@@ -114,6 +117,7 @@ export type TrialProductDraft = {
   improvement: TrialImprovement;
   remark: string;
   remarkImages: string[];
+  remarkImageAssets?: ProductImageAsset[];
   keywords: TrialKeywordRow[];
 };
 

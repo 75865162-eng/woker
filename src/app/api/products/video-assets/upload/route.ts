@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import sharp from "sharp";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -25,8 +26,8 @@ const supportedExtensions = new Set([
 ]);
 const maxAssetSize = 200 * 1024 * 1024;
 
-function createAssetKey(fileName: string) {
-  const extension = path.extname(fileName).toLowerCase() || ".bin";
+function createAssetKey(fileName: string, extensionOverride?: string) {
+  const extension = extensionOverride || path.extname(fileName).toLowerCase() || ".bin";
   return `products/video-assets/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extension}`;
 }
 
@@ -63,7 +64,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "素材文件不能超过 200MB。" }, { status: 400 });
     }
 
-    const storedObject = await getStorageDriver().putFile({ key: createAssetKey(file.name), file });
+    const isImage = file.type.startsWith("image/");
+    const fileBuffer = isImage ? Buffer.from(await file.arrayBuffer()) : null;
+    const storedObject = isImage && fileBuffer
+      ? await getStorageDriver().putBuffer({
+          key: createAssetKey(file.name, ".webp"),
+          buffer: await sharp(fileBuffer)
+            .rotate()
+            .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
+            .webp({ quality: 82 })
+            .toBuffer(),
+          contentType: "image/webp",
+        })
+      : await getStorageDriver().putFile({ key: createAssetKey(file.name), file });
     const fileObject = await prisma.fileObject.create({
       data: {
         organizationId: user.organizationId,

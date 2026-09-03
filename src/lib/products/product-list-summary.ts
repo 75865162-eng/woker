@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
 import { getProductRecordSource, normalizeProductStatus, type ProductListSource } from "@/lib/products/list-query";
 import type { Product, ProductListSummary } from "@/lib/products/types";
 
@@ -12,7 +11,15 @@ export type ProductListSummaryBundle = Record<ProductListSource, ProductListSumm
 
 const summarySources: ProductListSource[] = ["all", "dashboard", "sellfox"];
 const closedStatuses = new Set(["listed", "canceled", "delisted", "patent_risk"]);
-const overdueLookbackDays = 8;
+const overdueLookbackDays = 3;
+
+function isDevelopmentPhase(status: string) {
+  return status === "pending" || status === "developing";
+}
+
+function isListingConfirming(status: string) {
+  return status === "listing_confirming";
+}
 
 function createEmptyProductListSummary(): ProductListSummary {
   return {
@@ -47,7 +54,11 @@ function isOverdue(product: ProductListSummarySource, status: string, now = new 
   const workflowDueAt = product.workflowDueAt ? new Date(product.workflowDueAt).getTime() : Number.NaN;
   const createdAt = product.createdAt ? new Date(product.createdAt).getTime() : Number.NaN;
 
-  return (Number.isFinite(workflowDueAt) && workflowDueAt < nowTime) || (Number.isFinite(createdAt) && createdAt < nowTime - overdueLookbackDays * 24 * 60 * 60 * 1000);
+  if (Number.isFinite(workflowDueAt)) {
+    return workflowDueAt < nowTime;
+  }
+
+  return Number.isFinite(createdAt) && createdAt < nowTime - overdueLookbackDays * 24 * 60 * 60 * 1000;
 }
 
 export function createProductListSummaryContribution(product: ProductListSummarySource | null | undefined, now = new Date()): ProductListSummary {
@@ -59,10 +70,10 @@ export function createProductListSummaryContribution(product: ProductListSummary
 
   return {
     total: 1,
-    developing: status === "developing" ? 1 : 0,
+    developing: isDevelopmentPhase(status) ? 1 : 0,
     opsReview: status === "ops_review" ? 1 : 0,
     designInProgress: status === "design_in_progress" ? 1 : 0,
-    operationsProgress: hasIncompleteOperationsProgress(product.operationsProgress) ? 1 : 0,
+    operationsProgress: isListingConfirming(status) ? 1 : 0,
     overdue: isOverdue(product, status, now) ? 1 : 0,
   };
 }
@@ -212,33 +223,42 @@ async function rebuildProductListSummaryBundleFromProducts(input: {
     )
     SELECT
       COUNT(*)::int AS "allTotal",
-      COUNT(*) FILTER (WHERE status = 'developing')::int AS "allDeveloping",
+      COUNT(*) FILTER (WHERE status IN ('pending', 'developing'))::int AS "allDeveloping",
       COUNT(*) FILTER (WHERE status = 'ops_review')::int AS "allOpsReview",
       COUNT(*) FILTER (WHERE status = 'design_in_progress')::int AS "allDesignInProgress",
-      COUNT(*) FILTER (WHERE "operationsProgressIncomplete" = true)::int AS "allOperationsProgress",
+      COUNT(*) FILTER (WHERE status = 'listing_confirming')::int AS "allOperationsProgress",
       COUNT(*) FILTER (
         WHERE status NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')
-          AND (("workflowDueAt" < NOW()) OR ("createdAt" < NOW() - INTERVAL '8 days'))
+          AND (
+            ("workflowDueAt" IS NOT NULL AND "workflowDueAt" < NOW())
+            OR ("workflowDueAt" IS NULL AND "createdAt" < NOW() - INTERVAL '3 days')
+          )
       )::int AS "allOverdue",
       COUNT(*) FILTER (WHERE NOT is_sellfox)::int AS "dashboardTotal",
-      COUNT(*) FILTER (WHERE NOT is_sellfox AND status = 'developing')::int AS "dashboardDeveloping",
+      COUNT(*) FILTER (WHERE NOT is_sellfox AND status IN ('pending', 'developing'))::int AS "dashboardDeveloping",
       COUNT(*) FILTER (WHERE NOT is_sellfox AND status = 'ops_review')::int AS "dashboardOpsReview",
       COUNT(*) FILTER (WHERE NOT is_sellfox AND status = 'design_in_progress')::int AS "dashboardDesignInProgress",
-      COUNT(*) FILTER (WHERE NOT is_sellfox AND "operationsProgressIncomplete" = true)::int AS "dashboardOperationsProgress",
+      COUNT(*) FILTER (WHERE NOT is_sellfox AND status = 'listing_confirming')::int AS "dashboardOperationsProgress",
       COUNT(*) FILTER (
         WHERE NOT is_sellfox
           AND status NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')
-          AND (("workflowDueAt" < NOW()) OR ("createdAt" < NOW() - INTERVAL '8 days'))
+          AND (
+            ("workflowDueAt" IS NOT NULL AND "workflowDueAt" < NOW())
+            OR ("workflowDueAt" IS NULL AND "createdAt" < NOW() - INTERVAL '3 days')
+          )
       )::int AS "dashboardOverdue",
       COUNT(*) FILTER (WHERE is_sellfox)::int AS "sellfoxTotal",
-      COUNT(*) FILTER (WHERE is_sellfox AND status = 'developing')::int AS "sellfoxDeveloping",
+      COUNT(*) FILTER (WHERE is_sellfox AND status IN ('pending', 'developing'))::int AS "sellfoxDeveloping",
       COUNT(*) FILTER (WHERE is_sellfox AND status = 'ops_review')::int AS "sellfoxOpsReview",
       COUNT(*) FILTER (WHERE is_sellfox AND status = 'design_in_progress')::int AS "sellfoxDesignInProgress",
-      COUNT(*) FILTER (WHERE is_sellfox AND "operationsProgressIncomplete" = true)::int AS "sellfoxOperationsProgress",
+      COUNT(*) FILTER (WHERE is_sellfox AND status = 'listing_confirming')::int AS "sellfoxOperationsProgress",
       COUNT(*) FILTER (
         WHERE is_sellfox
           AND status NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')
-          AND (("workflowDueAt" < NOW()) OR ("createdAt" < NOW() - INTERVAL '8 days'))
+          AND (
+            ("workflowDueAt" IS NOT NULL AND "workflowDueAt" < NOW())
+            OR ("workflowDueAt" IS NULL AND "createdAt" < NOW() - INTERVAL '3 days')
+          )
       )::int AS "sellfoxOverdue"
     FROM scoped_products
   `);

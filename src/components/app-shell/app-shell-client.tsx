@@ -1,17 +1,29 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
-import { UserNotificationCenter } from "@/components/notifications/user-notification-center";
-import { WeComNotificationRunner } from "@/components/notifications/wecom-notification-runner";
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { WorkspaceScopeSelector } from "./workspace-scope-selector";
+
+const UserNotificationCenter = dynamic(
+  () => import("@/components/notifications/user-notification-center").then((module) => module.UserNotificationCenter),
+  {
+    ssr: false,
+    loading: () => <div className="h-9 w-9 rounded-md border border-border bg-white" />,
+  },
+);
+
+const WeComNotificationRunner = dynamic(
+  () => import("@/components/notifications/wecom-notification-runner").then((module) => module.WeComNotificationRunner),
+  { ssr: false, loading: () => null },
+);
 
 const navItems = [
   { href: "/", label: "工作台首页", icon: Home, moduleId: null },
@@ -52,6 +64,7 @@ export function AppShellClient({
   const pathname = usePathname();
   const router = useRouter();
   const [contentRevision, setContentRevision] = useState(0);
+  const [enableShellEnhancements, setEnableShellEnhancements] = useState(false);
   const accountMenu = accountMenuItems.filter((item) => roleCanAccessModule(userRole, item.moduleId, rolePermissions));
   const visibleNavItems = navItems.filter((item) => {
     if (item.href === "/") return true;
@@ -65,6 +78,18 @@ export function AppShellClient({
   }
 
   useEffect(() => {
+    let cancelled = false;
+    const supportsIdleCallback = typeof window.requestIdleCallback === "function";
+    const enable = () => {
+      if (!cancelled) {
+        setEnableShellEnhancements(true);
+      }
+    };
+
+    const idleCallbackId: number = supportsIdleCallback
+      ? window.requestIdleCallback(enable, { timeout: 1500 })
+      : window.setTimeout(enable, 900);
+
     function handleWorkspaceScopeChanged() {
       setContentRevision((current) => current + 1);
     }
@@ -72,13 +97,47 @@ export function AppShellClient({
     window.addEventListener(workspaceScopeChangedEventName, handleWorkspaceScopeChanged);
 
     return () => {
+      cancelled = true;
+      if (supportsIdleCallback) {
+        window.cancelIdleCallback(idleCallbackId);
+      } else {
+        clearTimeout(idleCallbackId);
+      }
       window.removeEventListener(workspaceScopeChangedEventName, handleWorkspaceScopeChanged);
     };
   }, []);
 
+  useEffect(() => {
+    const shouldBootstrapWorkspaceStore = pathname === "/workspace" || pathname === "/settings";
+
+    if (!shouldBootstrapWorkspaceStore) {
+      return;
+    }
+
+    let cancelled = false;
+    const runBootstrap = () => {
+      if (!cancelled) {
+        void import("@/lib/stores/workspace-store").then((module) => module.initializeWorkspaceStorePersistence());
+      }
+    };
+    const supportsIdleCallback = typeof window.requestIdleCallback === "function";
+    const idleCallbackId: number = supportsIdleCallback
+      ? window.requestIdleCallback(runBootstrap, { timeout: 1500 })
+      : window.setTimeout(runBootstrap, 900);
+
+    return () => {
+      cancelled = true;
+      if (supportsIdleCallback) {
+        window.cancelIdleCallback(idleCallbackId);
+      } else {
+        window.clearTimeout(idleCallbackId);
+      }
+    };
+  }, [pathname]);
+
   return (
     <div className="min-h-screen bg-background">
-      <WeComNotificationRunner />
+      {enableShellEnhancements ? <WeComNotificationRunner /> : null}
       <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col items-center border-r border-border bg-white">
         <div className="flex h-16 w-full items-center justify-center border-b border-border">
           <div className="overflow-hidden rounded-lg">
@@ -117,7 +176,7 @@ export function AppShellClient({
           </div>
           <div className="flex items-center gap-3">
             <WorkspaceScopeSelector />
-            <UserNotificationCenter />
+            {enableShellEnhancements ? <UserNotificationCenter /> : <div className="h-9 w-9 rounded-md border border-border bg-white" aria-hidden="true" />}
             <div className="hidden items-center gap-2 lg:flex">
               <span className="max-w-[180px] truncate text-xs font-semibold text-muted">{appVersionLabel}</span>
             </div>

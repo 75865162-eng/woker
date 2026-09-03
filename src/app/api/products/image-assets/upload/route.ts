@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import sharp from "sharp";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -12,9 +13,9 @@ const supportedImageTypes = new Set(["image/avif", "image/gif", "image/jpeg", "i
 const supportedImageExtensions = new Set([".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp"]);
 const maxImageSize = 50 * 1024 * 1024;
 
-function createAssetKey(fileName: string) {
-  const extension = path.extname(fileName).toLowerCase() || ".bin";
-  return `assets/products/images/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extension}`;
+function createAssetKey(fileName: string, variant: "original" | "thumb") {
+  const extension = variant === "thumb" ? ".webp" : path.extname(fileName).toLowerCase() || ".bin";
+  return `assets/products/images/${new Date().toISOString().slice(0, 10)}/${randomUUID()}-${variant}${extension}`;
 }
 
 function createAssetUrl(key: string) {
@@ -51,7 +52,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "商品图片不能超过 50MB。" }, { status: 400 });
     }
 
-    const storedObject = await getStorageDriver().putFile({ key: createAssetKey(file.name), file });
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const thumbBuffer = await sharp(fileBuffer)
+      .rotate()
+      .resize({ width: 160, height: 160, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 78 })
+      .toBuffer();
+
+    const originalKey = createAssetKey(file.name, "original");
+    const thumbKey = createAssetKey(file.name, "thumb");
+    const [storedObject, thumbStoredObject] = await Promise.all([
+      getStorageDriver().putBuffer({ key: originalKey, buffer: fileBuffer, contentType: file.type || undefined }),
+      getStorageDriver().putBuffer({ key: thumbKey, buffer: thumbBuffer, contentType: "image/webp" }),
+    ]);
     const fileObject = await prisma.fileObject.create({
       data: {
         organizationId: user.organizationId,
@@ -67,6 +80,21 @@ export async function POST(request: Request) {
         status: "done",
       },
     });
+    const thumbFileObject = await prisma.fileObject.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
+        originalName: `${path.basename(file.name, path.extname(file.name))}-thumb.webp`,
+        mimeType: "image/webp",
+        size: thumbStoredObject.size,
+        storageKey: thumbStoredObject.key,
+        storageType: getStorageType(),
+        status: "done",
+      },
+    });
 
     return NextResponse.json({
       asset: {
@@ -76,7 +104,9 @@ export async function POST(request: Request) {
         size: fileObject.size ?? storedObject.size,
         storageType: fileObject.storageType,
         uploadedAt: fileObject.createdAt.toISOString(),
-        url: createAssetUrl(fileObject.storageKey),
+        url: createAssetUrl(thumbFileObject.storageKey),
+        thumbUrl: createAssetUrl(thumbFileObject.storageKey),
+        originalUrl: createAssetUrl(fileObject.storageKey),
       },
     });
   } catch (error) {

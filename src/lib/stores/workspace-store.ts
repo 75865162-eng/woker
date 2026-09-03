@@ -1297,11 +1297,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let hydrated = false;
+let persistenceBootstrapStarted = false;
 
-if (typeof window !== "undefined") {
-  useWorkspaceStore.getState().hydratePersistedWorkspace().finally(() => {
-    hydrated = true;
-  });
+function attachWorkspacePersistenceSubscriptions() {
+  if (typeof window === "undefined") {
+    return;
+  }
 
   useWorkspaceStore.subscribe((state, previousState) => {
     if (!hydrated || state.persistenceStatus === "loading") {
@@ -1361,6 +1362,18 @@ if (typeof window !== "undefined") {
             persistenceError: error instanceof Error ? error.message : "自动保存失败。",
           });
         });
-    }, 500);
+      }, 500);
   });
+}
+
+export function initializeWorkspaceStorePersistence() {
+  if (typeof window === "undefined" || persistenceBootstrapStarted) {
+    return;
+  }
+
+  persistenceBootstrapStarted = true;
+  useWorkspaceStore.getState().hydratePersistedWorkspace().finally(() => {
+    hydrated = true;
+  });
+  attachWorkspacePersistenceSubscriptions();
 }

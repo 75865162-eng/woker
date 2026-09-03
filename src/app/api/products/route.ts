@@ -25,7 +25,7 @@ import {
   setCachedProductListSummary,
   updateCachedProductListSummariesForProductChange,
 } from "@/lib/products/product-list-cache";
-import { applyProductListSummaryChange, loadProductListSummaryBundle } from "@/lib/products/product-list-summary";
+import { applyProductListSummaryChange, refreshProductListSummaryBundle } from "@/lib/products/product-list-summary";
 import { createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList, productWorkflowStageLabels } from "@/lib/products/workflow";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
@@ -531,13 +531,15 @@ export async function GET(request: Request) {
       maxPrice,
     });
     let total = 0;
-    const resolveSummary = async () => {
-      const cachedSummary = getCachedProductListSummary(scopeKey);
-      if (cachedSummary) {
-        return cachedSummary;
+    const resolveSummary = async (forceRefresh = false) => {
+      if (!forceRefresh) {
+        const cachedSummary = getCachedProductListSummary(scopeKey);
+        if (cachedSummary) {
+          return cachedSummary;
+        }
       }
 
-      const summaryBundle = await loadProductListSummaryBundle({
+      const summaryBundle = await refreshProductListSummaryBundle({
         organizationId: user.organizationId,
         workspaceId: scope.workspaceId,
       });
@@ -556,7 +558,7 @@ export async function GET(request: Request) {
     };
 
     if (summaryOnly) {
-      const summary = await measure("summary", resolveSummary());
+      const summary = await measure("summary", resolveSummary(true));
       return createTimedResponse({ summary }, "ok");
     }
 
@@ -613,7 +615,7 @@ export async function GET(request: Request) {
                 COALESCE(NULLIF("payload"->>'specs', ''), '') AS "specs",
                 COALESCE(NULLIF("payload"->>'keywords', ''), '') AS "keywords",
                 COALESCE(NULLIF("payload"->>'note', ''), '') AS "note",
-                COALESCE(NULLIF("payload"->'images'->>0, ''), '') AS "image"
+                COALESCE(NULLIF("payload"->'imageAssets'->0->>'thumbUrl', ''), '') AS "image"
               FROM "ProductRecord"
               ${listWhereSql}
               ORDER BY "updatedAt" DESC

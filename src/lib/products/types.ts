@@ -97,6 +97,17 @@ export type ProductFileAsset = {
   downloadUrl: string;
 };
 
+export type ProductImageAsset = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  storageType: "local" | "s3" | "r2";
+  uploadedAt: string;
+  thumbUrl: string;
+  originalUrl: string;
+};
+
 export type Product = {
   id: string;
   sku: string;
@@ -117,6 +128,7 @@ export type Product = {
   cancelReason: string;
   hsCode: string;
   images: string[];
+  imageAssets?: ProductImageAsset[];
   competitorAsins: string[];
   productWeightG: number;
   packageWeightG: number;

@@ -124,6 +124,8 @@ export function createProductListWhere(input: {
 
   if (input.status === "operations_progress") {
     where.operationsProgressIncomplete = true;
+  } else if (input.status === "development_phase") {
+    where.status = { in: ["pending", "developing"] };
   } else if (input.status === "overdue") {
     where.status = { notIn: closedStatuses };
     where.isOverdue = true;

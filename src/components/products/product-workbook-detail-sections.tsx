@@ -3,6 +3,7 @@ import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { uploadProductImageAsset } from "@/lib/products/image-assets";
+import type { ProductImageAsset } from "@/lib/products/types";
 import {
   compactCompetitorFields,
   competitorTextFields,
@@ -75,7 +76,7 @@ export function ProductWorkbookDetailSections({
   onKeywordChange: (index: number, field: keyof TrialKeywordRow, value: string | number) => void;
   onKeywordsReplace: (keywords: TrialKeywordRow[]) => void;
   onRemarkChange: (value: string) => void;
-  onRemarkImagesChange: (images: string[]) => void;
+  onRemarkImagesChange: (images: string[], imageAssets?: ProductImageAsset[]) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -183,7 +184,11 @@ export function ProductWorkbookDetailSections({
                 <tr key={index} className="border-t border-border align-top">
                   <td className="px-2 py-2">
                     <div className="w-[130px] space-y-2">
-                      <ImageUploadSquare image={row.hotVariantImage} onChange={(value) => onCompetitorChange(index, "hotVariantImage", value)} />
+                      <ImageUploadSquare
+                        image={row.hotVariantImage}
+                        previewImage={row.hotVariantImageAsset?.originalUrl || row.hotVariantImage}
+                        onChange={(value) => onCompetitorChange(index, "hotVariantImage", value)}
+                      />
                       <select
                         className="h-8 w-[130px] rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground outline-none focus:border-brand"
                         value={row.type}
@@ -205,13 +210,13 @@ export function ProductWorkbookDetailSections({
                     <td key={field} className="px-2 py-2">
                       {negativeCompetitorFields.has(field) ? (
                         <NegativePointEditor
-                          value={row[field]}
+                          value={String(row[field] ?? "")}
                           disabled={row.type !== "直接竞品"}
                           onChange={(value) => onCompetitorChange(index, field, value)}
                         />
                       ) : (
                         <SmallTextarea
-                          value={row[field]}
+                          value={String(row[field] ?? "")}
                           size={compactCompetitorFields.has(field) ? "compact" : "default"}
                           onChange={(value) => onCompetitorChange(index, field, value)}
                         />
@@ -221,7 +226,11 @@ export function ProductWorkbookDetailSections({
                   <td className="px-2 py-2">
                     <div className="w-[150px] space-y-2">
                       <SmallTextarea value={row.note} onChange={(value) => onCompetitorChange(index, "note", value)} />
-                      <ImageUploadSquare image={row.noteImage} onChange={(value) => onCompetitorChange(index, "noteImage", value)} />
+                      <ImageUploadSquare
+                        image={row.noteImage}
+                        previewImage={row.noteImageAsset?.originalUrl || row.noteImage}
+                        onChange={(value) => onCompetitorChange(index, "noteImage", value)}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -334,7 +343,7 @@ export function ProductWorkbookDetailSections({
               onChange={(event) => onRemarkChange(event.target.value)}
             />
           </label>
-          <RemarkImagesUploader images={detail.remarkImages ?? []} onChange={onRemarkImagesChange} />
+          <RemarkImagesUploader images={detail.remarkImages ?? []} imageAssets={detail.remarkImageAssets} onChange={onRemarkImagesChange} />
         </CardContent>
       </Card>
     </div>
@@ -355,10 +364,12 @@ export function getSupplierTextareaSize(field: keyof TrialSupplierRow) {
 
 function ImageUploadSquare({
   image,
+  previewImage,
   onChange,
   allowPdf = false,
 }: {
   image: string;
+  previewImage?: string;
   onChange: (value: string) => void;
   allowPdf?: boolean;
 }) {
@@ -409,7 +420,7 @@ function ImageUploadSquare({
             </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={image} alt="竞品图片" className="h-full w-full object-contain p-1" />
+            <img src={previewImage || image} alt="竞品图片" className="h-full w-full object-contain p-1" />
           )}
         </button>
       ) : (
@@ -426,26 +437,28 @@ function ImageUploadSquare({
       <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => void handleFile(event.target.files?.[0])} />
 
       {previewOpen && image ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70 p-6">
-          <div className="relative flex max-h-full max-w-5xl items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70 p-6" onClick={() => setPreviewOpen(false)} role="dialog" aria-modal="true">
+          <div className="relative flex max-h-full max-w-5xl items-center justify-center" onClick={(event) => event.stopPropagation()}>
             <div className="absolute right-0 top-0 z-10 flex translate-y-[-120%] gap-2">
-              <Button variant="secondary" size="sm" disabled={isUploading} onClick={() => fileInputRef.current?.click()}>
+              <Button variant="secondary" size="sm" disabled={isUploading} onClick={(event) => { event.stopPropagation(); fileInputRef.current?.click(); }}>
                 <ImagePlus className="h-4 w-4" />
                 {isUploading ? "上传中" : allowPdf ? "替换文件" : "替换图片"}
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
+              <Button variant="secondary" size="sm" onClick={(event) => { event.stopPropagation(); setPreviewOpen(false); }}>
                 <X className="h-4 w-4" />
                 关闭
               </Button>
             </div>
-            {isPdfDataUrl(image) ? (
-              <object data={image} type="application/pdf" className="h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl">
-                <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
-              </object>
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={image} alt="竞品大图" className="max-h-[82vh] max-w-[88vw] rounded-lg bg-white object-contain shadow-2xl" />
-            )}
+            <div className="flex items-center justify-center" onClick={() => setPreviewOpen(false)}>
+              {isPdfDataUrl(image) ? (
+                <object data={image} type="application/pdf" className="h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                  <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
+                </object>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previewImage || image} alt="竞品大图" className="max-h-[82vh] max-w-[88vw] rounded-lg bg-white object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+              )}
+            </div>
           </div>
         </div>
       ) : null}
@@ -453,7 +466,15 @@ function ImageUploadSquare({
   );
 }
 
-function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange: (images: string[]) => void }) {
+function RemarkImagesUploader({
+  images,
+  imageAssets,
+  onChange,
+}: {
+  images: string[];
+  imageAssets?: ProductImageAsset[];
+  onChange: (images: string[], imageAssets?: ProductImageAsset[]) => void;
+}) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -479,7 +500,7 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
       const firstError = results.find((result) => result.status === "rejected");
 
       if (nextImages.length) {
-        onChange([...images, ...nextImages]);
+        onChange([...images, ...nextImages], imageAssets);
       }
 
       if (firstError && firstError.status === "rejected") {
@@ -515,8 +536,18 @@ function RemarkImagesUploader({ images, onChange }: { images: string[]; onChange
         <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
           {images.map((image, index) => (
             <div key={`${image.slice(0, 32)}-${index}`} className="space-y-2">
-              <ImageUploadSquare image={image} allowPdf onChange={(value) => onChange(images.map((item, itemIndex) => (itemIndex === index ? value : item)))} />
-              <Button variant="secondary" size="sm" className="w-[130px]" onClick={() => onChange(images.filter((_, itemIndex) => itemIndex !== index))}>
+              <ImageUploadSquare
+                image={imageAssets?.[index]?.thumbUrl || image}
+                previewImage={imageAssets?.[index]?.originalUrl || imageAssets?.[index]?.thumbUrl || image}
+                allowPdf
+                onChange={(value) =>
+                  onChange(
+                    images.map((item, itemIndex) => (itemIndex === index ? value : item)),
+                    imageAssets?.map((asset, itemIndex) => (itemIndex === index ? undefined : asset)).filter((asset): asset is ProductImageAsset => Boolean(asset)),
+                  )
+                }
+              />
+              <Button variant="secondary" size="sm" className="w-[130px]" onClick={() => onChange(images.filter((_, itemIndex) => itemIndex !== index), imageAssets?.filter((_, itemIndex) => itemIndex !== index))}>
                 删除
               </Button>
             </div>
@@ -709,7 +740,7 @@ function ImprovementTable({
   onChange: (field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) => void;
   onPeakSeasonWeightsChange: (value: number[]) => void;
   onRowChange: (index: number, field: TrialImprovementCellKey, value: string) => void;
-  onRemarkImagesChange: (images: string[]) => void;
+  onRemarkImagesChange: (images: string[], imageAssets?: ProductImageAsset[]) => void;
 }) {
   const painRows = buildImprovementPainRows(detail);
   const visiblePainRows = painRows.length ? painRows : [{ summary: "", count: "" }];
@@ -734,7 +765,7 @@ function ImprovementTable({
       const firstError = results.find((result) => result.status === "rejected");
 
       if (nextImages.length) {
-        onRemarkImagesChange([...detail.remarkImages, ...nextImages]);
+        onRemarkImagesChange([...detail.remarkImages, ...nextImages], detail.remarkImageAssets);
       }
 
       if (firstError && firstError.status === "rejected") {

@@ -43,6 +43,14 @@ type PerformancePageData = {
   summary: { saleQuantity?: number; saleRevenue?: number; grossProfit?: number; adCost?: number };
 };
 
+type SelectedScope = {
+  workspaceId: string;
+  accountId: string;
+  marketplace: string;
+};
+
+type BadgeTone = "blue" | "green" | "amber" | "red" | "gray";
+
 const statusTone: Record<string, "gray" | "blue" | "green" | "amber" | "red"> = {
   pending: "gray",
   developing: "blue",
@@ -56,6 +64,7 @@ const statusTone: Record<string, "gray" | "blue" | "green" | "amber" | "red"> = 
 };
 
 const emptyProductPagination = { page: 1, pageSize: 20, total: 0, pageCount: 1 };
+const workspaceScopeStorageKey = "amazon_bulk_ad_workspace_scope";
 
 function dateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "尚未同步";
@@ -71,6 +80,45 @@ function money(value: number, currency = "USD") {
 
 function productStatusBadge(product: Product) {
   return { label: product.status || "未设置", tone: statusTone[product.status] ?? "gray" };
+}
+
+function readSelectedScope(): SelectedScope {
+  if (typeof window === "undefined") {
+    return { workspaceId: "default", accountId: "", marketplace: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(workspaceScopeStorageKey) ?? "{}") as Partial<SelectedScope>;
+
+    return {
+      workspaceId: parsed.workspaceId || "default",
+      accountId: parsed.accountId || "",
+      marketplace: parsed.marketplace || "",
+    };
+  } catch {
+    return { workspaceId: "default", accountId: "", marketplace: "" };
+  }
+}
+
+function withWorkspaceScope(init?: RequestInit): RequestInit {
+  const scope = readSelectedScope();
+  const headers = new Headers(init?.headers);
+
+  headers.set("x-workspace-id", scope.workspaceId);
+  if (scope.accountId) headers.set("x-account-id", scope.accountId);
+  if (scope.marketplace) headers.set("x-marketplace", scope.marketplace);
+
+  return { ...init, headers };
+}
+
+function appendWorkspaceScope(params: URLSearchParams) {
+  const scope = readSelectedScope();
+
+  params.set("workspaceId", scope.workspaceId);
+  if (scope.accountId) params.set("accountId", scope.accountId);
+  if (scope.marketplace) params.set("marketplace", scope.marketplace);
+
+  return params;
 }
 
 export function SellfoxWorkbench() {
@@ -92,11 +140,14 @@ export function SellfoxWorkbench() {
   const [performanceError, setPerformanceError] = useState("");
 
   const selectedStore = useMemo(() => overview?.stores.find((store) => store.id === storeId), [overview?.stores, storeId]);
+  const configurationBadge: { tone: BadgeTone; label: string } = overview
+    ? { tone: overview.configured ? "green" : "amber", label: overview.configured ? "服务端凭据已配置" : "等待配置凭据" }
+    : { tone: "gray" as const, label: "读取配置中" };
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/sellfox/overview", { cache: "no-store" });
+      const response = await fetch("/api/sellfox/overview", withWorkspaceScope({ cache: "no-store" }));
       const payload = (await response.json()) as Overview & { error?: string };
       if (!response.ok) throw new Error(payload.error || "Sellfox 数据读取失败。");
       setOverview(payload);
@@ -125,7 +176,7 @@ export function SellfoxWorkbench() {
           source: "sellfox",
         });
         if (productStatus !== "all") params.set("status", productStatus);
-        const response = await fetch(`/api/sellfox/products?${params}`, { cache: "no-store" });
+        const response = await fetch(`/api/sellfox/products?${params}`, withWorkspaceScope({ cache: "no-store" }));
         const payload = (await response.json()) as ProductPageData & { error?: string };
         if (!response.ok) throw new Error(payload.error || "读取 Sellfox 商品失败。");
         if (!canceled) setProducts({ products: payload.products ?? [], pagination: payload.pagination ?? emptyProductPagination });
@@ -155,7 +206,7 @@ export function SellfoxWorkbench() {
         const params = new URLSearchParams({ reportDate, pageSize: "50" });
         if (storeId) params.set("storeId", storeId);
         if (performanceSearch.trim()) params.set("search", performanceSearch.trim());
-        const response = await fetch(`/api/sellfox/performance?${params}`, { cache: "no-store" });
+        const response = await fetch(`/api/sellfox/performance?${params}`, withWorkspaceScope({ cache: "no-store" }));
         const payload = (await response.json()) as PerformancePageData & { error?: string };
         if (!response.ok) throw new Error(payload.error || "读取产品表现失败。");
         if (!canceled) setPerformance(payload);
@@ -178,7 +229,7 @@ export function SellfoxWorkbench() {
     try {
       const response = await fetch("/api/sellfox/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        ...withWorkspaceScope({ headers: { "Content-Type": "application/json" } }),
         body: JSON.stringify({ resource, ...(resource === "hourly" ? { storeOffset: overview?.nextHourlyStoreOffset ?? 0, storeLimit: 1 } : {}), ...(resource === "performance" ? { storeExternalId: selectedStore?.externalId, reportDate } : {}) }),
       });
       const payload = (await response.json()) as { count?: number; error?: string };
@@ -202,7 +253,7 @@ export function SellfoxWorkbench() {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-bold">Sellfox 独立同步台</h2>
-              <Badge tone={overview?.configured ? "green" : "amber"}>{overview?.configured ? "服务端凭据已配置" : "等待配置凭据"}</Badge>
+              <Badge tone={configurationBadge.tone}>{configurationBadge.label}</Badge>
             </div>
             <p className="mt-1 text-sm text-muted">Sellfox 店铺、在线商品与产品表现使用独立表，和 dashboard 产品主数据分开存放。</p>
           </div>
@@ -231,7 +282,7 @@ export function SellfoxWorkbench() {
         </div>
       </section>
 
-      {!overview?.configured ? (
+      {overview && !overview.configured ? (
         <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>在服务端环境变量中配置 `SELLFOX_CLIENT_ID` 与 `SELLFOX_CLIENT_SECRET` 后，才能调用同步按钮。</p>
@@ -248,7 +299,7 @@ export function SellfoxWorkbench() {
         <div className="border border-border bg-white p-4">
           <p className="text-xs font-semibold text-muted">在线商品</p>
           <p className="mt-2 text-2xl font-bold metric-tabular">{overview?.productCount ?? 0}</p>
-          <p className="mt-1 text-xs text-muted">Sellfox 独立表 + 旧历史记录</p>
+          <p className="mt-1 text-xs text-muted">仅统计 Sellfox 独立表</p>
         </div>
         <div className="border border-border bg-white p-4">
           <p className="text-xs font-semibold text-muted">小时指标</p>
@@ -363,7 +414,7 @@ export function SellfoxWorkbench() {
             <h3 className="text-sm font-bold">产品表现</h3>
             <p className="mt-1 text-xs text-muted">按店铺和日期查看 Sellfox 日快照。</p>
           </div>
-          <a className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-3 text-xs font-semibold text-foreground hover:bg-surface-muted" href={`/api/sellfox/performance/export?${new URLSearchParams({ reportDate, ...(storeId ? { storeId } : {}), ...(performanceSearch.trim() ? { search: performanceSearch.trim() } : {}) })}`}>
+          <a className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-3 text-xs font-semibold text-foreground hover:bg-surface-muted" href={`/api/sellfox/performance/export?${appendWorkspaceScope(new URLSearchParams({ reportDate, ...(storeId ? { storeId } : {}), ...(performanceSearch.trim() ? { search: performanceSearch.trim() } : {}) }))}`}>
             <Download className="h-4 w-4" />
             导出当前筛选
           </a>

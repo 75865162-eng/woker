@@ -16,7 +16,7 @@ This project should treat PostgreSQL as the source of truth for business data. B
 - Account roles, permission matrix, member roster, WeCom settings, AI settings, Listing AI workspace/chat history, file jobs, import jobs, and export records are database-backed.
 - Product list loading now uses `/api/products?page=&pageSize=&search=&status=` and returns lightweight list rows.
 - Product detail loading now uses `/api/products/[sku]` to fetch the full product payload only when opening a SKU.
-- Product images are uploaded through `FileObject` plus the storage adapter via `/api/products/image-assets/upload`; product payload stores the asset URL, not base64.
+- Product images are uploaded through `FileObject` plus the storage adapter via `/api/products/image-assets/upload`; product payload stores the thumbnail URL for first paint and keeps the original asset URL for preview. Historical inline `data:image/...` payloads can be backfilled with `npm run products:backfill-image-assets`.
 
 ## Next priorities
 

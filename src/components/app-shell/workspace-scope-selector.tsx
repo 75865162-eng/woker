@@ -106,6 +106,7 @@ export function WorkspaceScopeSelector() {
 
   useEffect(() => {
     let cancelled = false;
+    const supportsIdleCallback = typeof window.requestIdleCallback === "function";
 
     function applySelectedScope(nextSelected: SelectedScope, source: "manual" | "auto") {
       if (isSameScope(selectedRef.current, nextSelected)) {
@@ -117,9 +118,11 @@ export function WorkspaceScopeSelector() {
       emitWorkspaceScopeChanged({ ...nextSelected, source });
     }
 
-    fetch("/api/workspaces")
-      .then((response) => (response.ok ? response.json() : { workspaces: [] }))
-      .then((data: { workspaces?: WorkspaceScope[] }) => {
+    const loadWorkspaces = async () => {
+      try {
+        const response = await fetch("/api/workspaces");
+        const data = response.ok ? ((await response.json()) as { workspaces?: WorkspaceScope[] }) : { workspaces: [] };
+
         if (cancelled) return;
 
         const nextWorkspaces = Array.isArray(data.workspaces) ? data.workspaces : [];
@@ -135,27 +138,39 @@ export function WorkspaceScopeSelector() {
             },
             "auto",
           );
-        } else {
-          const fallback = nextWorkspaces.find((workspace) => workspace.isDefault) ?? nextWorkspaces[0];
+          return;
+        }
 
-          if (fallback) {
-            const nextSelected = {
+        const fallback = nextWorkspaces.find((workspace) => workspace.isDefault) ?? nextWorkspaces[0];
+
+        if (fallback) {
+          applySelectedScope(
+            {
               workspaceId: fallback.id,
               accountId: fallback.accountId ?? "",
               marketplace: fallback.marketplace ?? "",
-            };
-            applySelectedScope(nextSelected, "auto");
-          }
+            },
+            "auto",
+          );
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setWorkspaces([]);
-      });
+      }
+    };
+
+    const idleCallbackId: number = supportsIdleCallback
+      ? window.requestIdleCallback(() => void loadWorkspaces(), { timeout: 1500 })
+      : window.setTimeout(() => void loadWorkspaces(), 900);
 
     return () => {
       cancelled = true;
+      if (supportsIdleCallback) {
+        window.cancelIdleCallback(idleCallbackId);
+      } else {
+        window.clearTimeout(idleCallbackId);
+      }
     };
-  }, [selected.workspaceId]);
+  }, []);
 
   const selectedValue = useMemo(() => selected.workspaceId || "default", [selected.workspaceId]);
 

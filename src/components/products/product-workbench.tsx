@@ -14,7 +14,7 @@ import {
   type TeamAccountRecord,
   type TeamMember,
 } from "@/lib/accounts/team-roster";
-import type { Product, ProductDraft, ProductListItem, ProductStatus, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
+import type { Product, ProductDraft, ProductImageAsset, ProductListItem, ProductStatus, ProductWorkflowRole, ProductWorkflowStage } from "@/lib/products/types";
 import {
   buildWorkflowEvent,
   createWorkflowDueAt,
@@ -86,6 +86,28 @@ const productDetailCache = new Map<string, Product>();
 const productDetailInflight = new Map<string, Promise<Product>>();
 const compactToolbarButtonClass =
   "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
+const competitorTableFields: Array<Exclude<keyof TrialCompetitorRow, "hotVariantImageAsset" | "noteImageAsset">> = [
+  "type",
+  "hotVariantImage",
+  "asin",
+  "sales30Days",
+  "variantCount",
+  "variantType",
+  "hotVariantSpec",
+  "hotVariantPrice",
+  "fbaFee",
+  "priceChangeNote",
+  "reviewCount",
+  "rating",
+  "negativePoint1",
+  "negativePoint2",
+  "negativePoint3",
+  "negativePoint4",
+  "negativePoint5",
+  "packageSize",
+  "note",
+  "noteImage",
+];
 
 type ProductListSummary = {
   total: number;
@@ -613,7 +635,7 @@ export function ProductWorkbench() {
   const developingCount = listSummary.developing;
   const opsReviewCount = listSummary.opsReview;
   const designInProgressCount = listSummary.designInProgress;
-  const operationsProgressCount = listSummary.operationsProgress;
+  const listingConfirmingCount = listSummary.operationsProgress;
   const overdueCount = listSummary.overdue;
   const summaryValue = (value: number) => (summaryReady ? value.toLocaleString("zh-CN") : "…");
   const mySkuValue = mySkuReady ? mySkuCount.toLocaleString("zh-CN") : "…";
@@ -703,6 +725,7 @@ export function ProductWorkbench() {
     const normalizedStatus = existing || newProductStatusValues.has(draft.status) ? draft.status : "pending";
     const nextProduct: Product = {
       ...draft,
+      images: [],
       status: normalizedStatus,
       id: existing?.id ?? `prod-${draft.sku}`,
       sku: existing?.sku ?? draft.sku,
@@ -830,8 +853,8 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             label="开发中"
             value={summaryValue(developingCount)}
             tone="blue"
-            active={filters.status === "developing"}
-            onClick={() => patchFilters((current) => ({ ...current, status: "developing" }))}
+            active={filters.status === "development_phase"}
+            onClick={() => patchFilters((current) => ({ ...current, status: "development_phase" }))}
           />
           <SummaryTile
             label="运营确认中"
@@ -848,11 +871,11 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             onClick={() => patchFilters((current) => ({ ...current, status: "design_in_progress" }))}
           />
           <SummaryTile
-            label="运营进度"
-            value={summaryValue(operationsProgressCount)}
+            label="确认上架"
+            value={summaryValue(listingConfirmingCount)}
             tone="amber"
-            active={filters.status === "operations_progress"}
-            onClick={() => patchFilters((current) => ({ ...current, status: "operations_progress" }))}
+            active={filters.status === "listing_confirming"}
+            onClick={() => patchFilters((current) => ({ ...current, status: "listing_confirming" }))}
           />
           <SummaryTile
             label="超期预警"
@@ -875,14 +898,14 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
           />
         </section>
         <p className="px-1 text-xs font-medium text-muted">
-          顶部卡片包含商品主状态、运营进度和超期维度，不与下方表格的“主状态”列一一对应。
+          顶部卡片按业务阶段聚合统计，开发中会合并待开发与开发中，确认上架单独统计，超期和我的SKU可以与其它卡片重叠。
         </p>
 
         <Card>
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>产品列表</CardTitle>
-              <p className="mt-1 text-xs font-medium text-muted">新增 SKU 默认待开发；创建超过 7 天且未上架、未取消的商品会自动进入超期预警。</p>
+              <p className="mt-1 text-xs font-medium text-muted">新增 SKU 默认待开发；流转后超过 3 天且未上架、未取消的商品会自动进入超期预警。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <input
@@ -1283,9 +1306,9 @@ function TrialProductEditor({
                 <tbody>
                   {draft.competitors.map((row, index) => (
                     <tr key={index} className="border-t border-border">
-                      {(Object.keys(row) as (keyof TrialCompetitorRow)[]).map((field) => (
+                      {competitorTableFields.map((field) => (
                         <td key={field} className="px-2 py-2">
-                          <SmallInput value={row[field]} onChange={(value) => updateCompetitor(index, field, value)} />
+                          <SmallInput value={String(row[field] ?? "")} onChange={(value) => updateCompetitor(index, field, value)} />
                         </td>
                       ))}
                     </tr>
@@ -1424,6 +1447,7 @@ function ProductEditor({
   const showHeavyDetail = !isEditing || detailReady;
   const mainAmazonLink = buildAmazonLink(draft.asin);
   const workbookDetail = draft.workbookDetail;
+  const primaryImageAsset = draft.imageAssets?.[0];
   const workflowStage = getProductWorkflowStage(draft);
   const workflowAssignee = getCurrentWorkflowAssignee(draft);
   const workflowOverdue = isProductWorkflowOverdue(draft);
@@ -1669,6 +1693,14 @@ function ProductEditor({
           };
         }
 
+        if (field === "hotVariantImage") {
+          return { ...nextRow, hotVariantImageAsset: undefined };
+        }
+
+        if (field === "noteImage") {
+          return { ...nextRow, noteImageAsset: undefined };
+        }
+
         return nextRow;
       }),
     }));
@@ -1707,6 +1739,8 @@ function ProductEditor({
           packageSize: "",
           note: "",
           noteImage: "",
+          hotVariantImageAsset: undefined,
+          noteImageAsset: undefined,
         },
       ],
     }));
@@ -1817,10 +1851,11 @@ function ProductEditor({
     }));
   }
 
-  function updateWorkbookRemarkImages(images: string[]) {
+  function updateWorkbookRemarkImages(images: string[], remarkImageAssets?: ProductImageAsset[]) {
     setWorkbookDetail((current) => ({
       ...current,
       remarkImages: images,
+      remarkImageAssets: remarkImageAssets ?? current.remarkImageAssets,
     }));
   }
 
@@ -1832,7 +1867,11 @@ function ProductEditor({
 
     void Promise.all(selected.map(uploadProductImageFile))
       .then((images) => {
-        setDraft((current) => ({ ...current, images: [...current.images, ...images].slice(0, 10) }));
+        setDraft((current) => ({
+          ...current,
+          images: [...current.images, ...images.map((image) => image.thumbUrl)].slice(0, 10),
+          imageAssets: [...(current.imageAssets ?? []), ...images].slice(0, 10),
+        }));
       })
       .catch((error) => {
         window.alert(error instanceof Error ? error.message : "商品图片上传失败。");
@@ -1840,7 +1879,11 @@ function ProductEditor({
   }
 
   function removeImage(index: number) {
-    setDraft((current) => ({ ...current, images: current.images.filter((_, imageIndex) => imageIndex !== index) }));
+    setDraft((current) => ({
+      ...current,
+      images: current.images.filter((_, imageIndex) => imageIndex !== index),
+      imageAssets: current.imageAssets?.filter((_, imageIndex) => imageIndex !== index),
+    }));
   }
 
   async function handleConclusionUpload(file: File | undefined) {
@@ -1935,15 +1978,15 @@ function ProductEditor({
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <div>
                   <h3 className="text-lg font-bold text-foreground">图片</h3>
-                  {draft.images[0] ? (
+                  {primaryImageAsset ? (
                     <button
                       type="button"
                       className="mt-4 flex aspect-square w-full overflow-hidden rounded-lg border border-border bg-surface-muted transition-colors hover:border-brand hover:bg-white"
-                      onClick={() => setPreviewImage(draft.images[0])}
+                      onClick={() => setPreviewImage(primaryImageAsset.originalUrl || primaryImageAsset.thumbUrl)}
                       title="点击查看大图"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={draft.images[0]} alt="商品主图预览" className="h-full w-full object-contain p-2" />
+                      <img src={primaryImageAsset.thumbUrl || primaryImageAsset.originalUrl} alt="商品主图预览" className="h-full w-full object-contain p-2" />
                     </button>
                   ) : (
                     <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
@@ -1962,16 +2005,16 @@ function ProductEditor({
                       <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
                     </label>
                     <div className="thin-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">
-                      {draft.images.map((image, index) => (
-                        <div key={`${image.slice(0, 24)}-${index}`} className="flex shrink-0 items-center gap-1">
+                      {draft.imageAssets?.map((asset, index) => (
+                        <div key={`${asset.id || asset.thumbUrl.slice(0, 24)}-${index}`} className="flex shrink-0 items-center gap-1">
                           <button
                             type="button"
                             className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted"
-                            onClick={() => setPreviewImage(image)}
+                            onClick={() => setPreviewImage(asset.originalUrl || asset.thumbUrl)}
                             title="点击查看大图"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={image} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
+                            <img src={asset.thumbUrl || asset.originalUrl} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
                           </button>
                           <Button
                             type="button"
@@ -2189,9 +2232,9 @@ function ProductEditor({
                 关闭
               </Button>
             </div>
-            <div className="flex flex-1 items-center justify-center overflow-auto p-5">
+            <div className="flex flex-1 items-center justify-center overflow-auto p-5" onClick={() => setPreviewImage(null)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewImage} alt="商品图片大图" className="max-h-[78vh] max-w-full object-contain" />
+              <img src={previewImage} alt="商品图片大图" className="max-h-[78vh] max-w-full object-contain" onClick={(event) => event.stopPropagation()} />
             </div>
           </div>
         </div>
@@ -2536,7 +2579,7 @@ async function loadTeamAccountsFromApi() {
   }
 }
 
-async function uploadProductImageFile(file: File) {
+async function uploadProductImageFile(file: File): Promise<ProductImageAsset> {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -2544,47 +2587,75 @@ async function uploadProductImageFile(file: File) {
     method: "POST",
     body: formData,
   });
-  const data = (await response.json()) as { asset?: { url?: string }; error?: string };
+  const data = (await response.json()) as {
+    asset?: ProductImageAsset & { url?: string };
+    error?: string;
+  };
 
-  if (!response.ok || !data.asset?.url) {
+  if (!response.ok || !data.asset?.url || !data.asset?.originalUrl) {
     throw new Error(data.error || "商品图片上传失败。");
   }
 
-  return data.asset.url;
+  return {
+    ...data.asset,
+    thumbUrl: data.asset.thumbUrl || data.asset.url,
+  };
 }
 
 async function uploadEmbeddedProductImages(product: Product) {
   const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  const sourceImages = Array.isArray(product.images) ? product.images : [];
+  const sourceImages = Array.isArray(product.images) ? product.images.filter((image) => image.trim()) : [];
   const uploadedImages = await Promise.all(sourceImages.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-${index + 1}.png`)));
+  const sourceRemarkImages = Array.isArray(productWithWorkbook.workbookDetail?.remarkImages)
+    ? productWithWorkbook.workbookDetail.remarkImages.filter((image) => image.trim())
+    : [];
+  const uploadedRemarkImages = await Promise.all(sourceRemarkImages.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-remark-${index + 1}.png`)));
   const workbookDetail = productWithWorkbook.workbookDetail
     ? {
         ...productWithWorkbook.workbookDetail,
-        remarkImages: await Promise.all(
-          (Array.isArray(productWithWorkbook.workbookDetail.remarkImages) ? productWithWorkbook.workbookDetail.remarkImages : []).map((image, index) =>
-            uploadDataUrlImage(image, `${product.sku || "product"}-remark-${index + 1}.png`),
-          ),
-        ),
+        remarkImages: uploadedRemarkImages.map((asset) => asset.thumbUrl),
+        remarkImageAssets: uploadedRemarkImages,
         competitors: await Promise.all(
-          (Array.isArray(productWithWorkbook.workbookDetail.competitors) ? productWithWorkbook.workbookDetail.competitors : []).map(async (competitor, index) => ({
-            ...competitor,
-            hotVariantImage: await uploadDataUrlImage(competitor.hotVariantImage, `${product.sku || "product"}-competitor-${index + 1}.png`),
-            noteImage: await uploadDataUrlImage(competitor.noteImage, `${product.sku || "product"}-competitor-note-${index + 1}.png`),
-          })),
+          (Array.isArray(productWithWorkbook.workbookDetail.competitors) ? productWithWorkbook.workbookDetail.competitors : []).map(async (competitor, index) => {
+            const hotVariantImageAsset = competitor.hotVariantImage.trim()
+              ? await uploadDataUrlImage(competitor.hotVariantImage, `${product.sku || "product"}-competitor-${index + 1}.png`)
+              : undefined;
+            const noteImageAsset = competitor.noteImage.trim()
+              ? await uploadDataUrlImage(competitor.noteImage, `${product.sku || "product"}-competitor-note-${index + 1}.png`)
+              : undefined;
+
+            return {
+              ...competitor,
+              hotVariantImageAsset,
+              hotVariantImage: hotVariantImageAsset?.thumbUrl || "",
+              noteImageAsset,
+              noteImage: noteImageAsset?.thumbUrl || "",
+            };
+          }),
         ),
       }
     : undefined;
 
   return {
     ...product,
-    images: uploadedImages,
+    images: [],
+    imageAssets: uploadedImages,
     ...(workbookDetail ? { workbookDetail } : {}),
   };
 }
 
 async function uploadDataUrlImage(value: string, name: string) {
   if (!value.startsWith("data:")) {
-    return value;
+    return {
+      id: "",
+      name,
+      mimeType: "",
+      size: 0,
+      storageType: "r2",
+      uploadedAt: "",
+      thumbUrl: value,
+      originalUrl: value,
+    } satisfies ProductImageAsset;
   }
 
   const response = await fetch(value);
@@ -2594,7 +2665,7 @@ async function uploadDataUrlImage(value: string, name: string) {
     type: blob.type || "image/png",
   });
 
-  return uploadProductImageFile(file);
+  return await uploadProductImageFile(file);
 }
 
 function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[]) {

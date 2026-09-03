@@ -227,7 +227,14 @@ export function ProductTable({
                     <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
                       {listImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={listImage} alt={product.chineseName} loading="lazy" decoding="async" className="h-full w-full object-contain" />
+                        <img
+                          src={listImage}
+                          alt={product.chineseName}
+                          loading="lazy"
+                          decoding="async"
+                          fetchPriority="low"
+                          className="h-full w-full object-contain"
+                        />
                       ) : (
                         <ImagePlus className="h-5 w-5 text-muted" />
                       )}

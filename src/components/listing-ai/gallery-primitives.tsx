@@ -132,6 +132,7 @@ export function GalleryCell({
             src={image.url}
             alt={image.name}
             className="h-full w-full object-contain"
+            loading="lazy"
           />
         </button>
         {draggable ? (
@@ -199,12 +200,14 @@ export function ImagePreviewModal({
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-surface-muted p-4">
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-surface-muted p-4" onClick={onClose}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={image.url}
             alt={image.name}
             className="max-h-[78vh] max-w-full object-contain"
+            loading="eager"
+            onClick={(event) => event.stopPropagation()}
           />
         </div>
       </div>

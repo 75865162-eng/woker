@@ -9,7 +9,7 @@ import { defaultRules, lifecycleGroups } from "@/data/default-rules";
 import { useBulkUpload } from "@/lib/hooks/use-bulk-upload";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";
-import type { ExportHistoryRecord, LifecycleGroupId, PerformanceRow, RuleRunHistoryRecord } from "@/lib/types";
+import type { CampaignGroup, ExportHistoryRecord, LifecycleGroupId, PerformanceRow, RuleRunHistoryRecord, WorkspaceUnit } from "@/lib/types";
 
 import {
   buildBlockedIdentityId,
@@ -95,10 +95,37 @@ export function CampaignGridHome() {
     reuseRuleRunHistory,
     importGroupingStatusCsv,
   } = useWorkspaceStore();
+  const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
   const blockedIdentityIds = useMemo(
     () => new Set(blockedCampaignIdentities.map((identity) => identity.id)),
     [blockedCampaignIdentities],
   );
+  const campaignGroupById = useMemo(
+    () => new Map(campaignGroups.map((group) => [group.id, group] as const)),
+    [campaignGroups],
+  );
+  const workspaceUnitByCampaignGroupId = useMemo(() => {
+    const map = new Map<string, WorkspaceUnit>();
+
+    for (const unit of workspaceUnits) {
+      for (const campaignGroupId of unit.campaignGroupIds) {
+        map.set(campaignGroupId, unit);
+      }
+    }
+
+    return map;
+  }, [workspaceUnits]);
+  const exportHistoryCountByCampaignGroupId = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const record of exportHistoryRecords) {
+      for (const campaignGroupId of record.campaignGroupIds) {
+        counts.set(campaignGroupId, (counts.get(campaignGroupId) ?? 0) + 1);
+      }
+    }
+
+    return counts;
+  }, [exportHistoryRecords]);
 
   const orderedCampaigns = useMemo(() => {
     const emitted = new Set<string>();
@@ -108,17 +135,17 @@ export function CampaignGridHome() {
         return [];
       }
 
-      const workspaceUnit = workspaceUnits.find((unit) => unit.campaignGroupIds.includes(campaign.id));
+      const workspaceUnit = workspaceUnitByCampaignGroupId.get(campaign.id);
       const members = workspaceUnit
         ? workspaceUnit.campaignGroupIds
-            .map((id) => campaignGroups.find((group) => group.id === id))
-            .filter((group): group is (typeof campaignGroups)[number] => Boolean(group))
+            .map((id) => campaignGroupById.get(id))
+            .filter((group): group is CampaignGroup => Boolean(group))
         : [campaign];
 
       members.forEach((member) => emitted.add(member.id));
       return members;
     });
-  }, [campaignGroups, workspaceUnits]);
+  }, [campaignGroupById, campaignGroups, workspaceUnitByCampaignGroupId]);
 
   const sortedCampaigns = useMemo(() => {
     if (!campaignSortKey) {
@@ -131,9 +158,9 @@ export function CampaignGridHome() {
         return [];
       }
 
-      const workspaceUnit = workspaceUnits.find((unit) => unit.campaignGroupIds.includes(campaign.id));
+      const workspaceUnit = workspaceUnitByCampaignGroupId.get(campaign.id);
       const members = workspaceUnit
-        ? orderedCampaigns.filter((group) => workspaceUnit.campaignGroupIds.includes(group.id))
+        ? workspaceUnit.campaignGroupIds.map((id) => campaignGroupById.get(id)).filter((group): group is CampaignGroup => Boolean(group))
         : [campaign];
 
       members.forEach((member) => emitted.add(member.id));
@@ -153,9 +180,7 @@ export function CampaignGridHome() {
 
       return blocks
         .map((block, index) => {
-          const workspaceUnit = block[0]
-            ? workspaceUnits.find((unit) => unit.campaignGroupIds.includes(block[0].id))
-            : undefined;
+          const workspaceUnit = block[0] ? workspaceUnitByCampaignGroupId.get(block[0].id) : undefined;
           const scopeIds = workspaceUnit?.campaignGroupIds ?? block.map((campaign) => campaign.id);
 
           return { block, index, uploaded: hasOverallFile(scopeIds) };
@@ -171,21 +196,21 @@ export function CampaignGridHome() {
     );
 
     return blocks.flatMap((block) => campaignSortDirection === "asc" ? block : [...block].reverse());
-  }, [campaignSortDirection, campaignSortKey, orderedCampaigns, overallAdDataUploads, workspaceUnits]);
+  }, [campaignGroupById, campaignSortDirection, campaignSortKey, orderedCampaigns, overallAdDataUploads, workspaceUnitByCampaignGroupId]);
 
   const filteredCampaigns = useMemo(
     () =>
       sortedCampaigns.filter((campaign) => {
         const matchesQuery = `${campaign.sheetName ?? ""} ${campaign.campaignName} ${campaign.adGroupName}`
           .toLowerCase()
-          .includes(query.toLowerCase());
+          .includes(normalizedQuery);
         const matchesLifecycle = activeLifecycleGroupId ? campaign.lifecycleGroupId === activeLifecycleGroupId : true;
 
         const blocked = blockedIdentityIds.has(buildBlockedIdentityId(campaign.campaignName, campaign.adGroupName));
 
         return matchesQuery && matchesLifecycle && !blocked;
       }),
-    [activeLifecycleGroupId, blockedIdentityIds, query, sortedCampaigns],
+    [activeLifecycleGroupId, blockedIdentityIds, normalizedQuery, sortedCampaigns],
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredCampaigns.length / pageSize));
@@ -515,6 +540,12 @@ export function CampaignGridHome() {
         .filter((rule) => rule.enabled && rule.lifecycleGroupId === ruleModalLifecycleId)
         .sort((left, right) => left.priority - right.priority)
     : [];
+  const lifecycleColumns: Array<{ id: LifecycleGroupId; label: string }> = [
+    { id: "launch", label: "新品组" },
+    { id: "mature", label: "成熟组" },
+    { id: "decline", label: "衰退组" },
+    { id: "clearance", label: "清库存组" },
+  ];
 
   function renderMetricCell(value: string | number, align: "left" | "right" = "left") {
     return <td className={`px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>{value}</td>;
@@ -682,12 +713,7 @@ export function CampaignGridHome() {
                 </button>
               </th>
               <th className="w-24 border-b border-r border-border px-3 py-3 text-right">Keyword</th>
-              {([
-                { id: "launch", label: "新品组" },
-                { id: "mature", label: "成熟组" },
-                { id: "decline", label: "衰退组" },
-                { id: "clearance", label: "清库存组" },
-              ] as const).map((group) => (
+              {lifecycleColumns.map((group) => (
                 <th key={group.id} className="w-20 border-b border-r border-border px-2 py-3 text-center">
                   <button
                     type="button"
@@ -717,30 +743,20 @@ export function CampaignGridHome() {
           </thead>
           <tbody>
             {pagedCampaigns.map((campaign) => {
-              const workspaceUnit = workspaceUnits.find((unit) => unit.campaignGroupIds.includes(campaign.id));
+              const workspaceUnit = workspaceUnitByCampaignGroupId.get(campaign.id);
               const pageUnitMembers = workspaceUnit
-                ? pagedCampaigns.filter((group) => workspaceUnit.campaignGroupIds.includes(group.id))
+                ? workspaceUnit.campaignGroupIds.map((id) => campaignGroupById.get(id)).filter((group): group is CampaignGroup => Boolean(group))
                 : [campaign];
               const firstPageMember = pageUnitMembers[0]?.id === campaign.id;
               const scopeIds = workspaceUnit ? workspaceUnit.campaignGroupIds : [campaign.id];
               const rowOverallScopeIds = [campaign.id];
               const overallFileName = getOverallFileName(rowOverallScopeIds);
-              const exportedCount = exportHistoryRecords.filter(
-                (record) => record.campaignGroupIds.includes(campaign.id),
-              ).length;
-              const scopeLifecycleIds = scopeIds.map(
-                (id) => campaignGroups.find((group) => group.id === id)?.lifecycleGroupId,
-              );
+              const exportedCount = exportHistoryCountByCampaignGroupId.get(campaign.id) ?? 0;
+              const scopeLifecycleIds = scopeIds.map((id) => campaignGroupById.get(id)?.lifecycleGroupId);
               const workspaceLifecycleReady =
                 !workspaceUnit ||
                 (scopeLifecycleIds.every(Boolean) && new Set(scopeLifecycleIds).size === 1);
               const active = activeCampaignGroupId === campaign.id;
-              const lifecycleColumns: Array<{ id: LifecycleGroupId; label: string }> = [
-                { id: "launch", label: "新品组" },
-                { id: "mature", label: "成熟组" },
-                { id: "decline", label: "衰退组" },
-                { id: "clearance", label: "清库存组" },
-              ];
 
               return (
                 <tr

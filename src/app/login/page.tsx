@@ -62,7 +62,6 @@ export default function LoginPage() {
       const nextPath = new URLSearchParams(window.location.search).get("next");
 
       router.replace(getAccessiblePathOrFallback(nextPath, payload.user?.role, payload.rolePermissions));
-      router.refresh();
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : isRegister ? "注册失败。" : "登录失败。");
     } finally {

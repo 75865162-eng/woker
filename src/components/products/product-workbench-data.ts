@@ -1,4 +1,4 @@
-import type { Product, ProductListItem } from "@/lib/products/types";
+import type { Product, ProductImageAsset, ProductListItem } from "@/lib/products/types";
 import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
@@ -88,7 +88,7 @@ export async function parseProductWorkbookFile(file: File, products: Array<Pick<
     note: detail.remark,
     cancelReason: "",
     hsCode: "",
-    images: detail.remarkImages.slice(0, 1),
+    images: [],
     competitorAsins: detail.competitors.map((competitor) => competitor.asin.trim()).filter(Boolean),
     productWeightG: Math.round((detail.pricingRows[0]?.actualWeightKg ?? 0) * 1000),
     packageWeightG: Math.round((detail.pricingRows[0]?.actualWeightKg ?? 0) * 1000),
@@ -139,7 +139,7 @@ export function createProductShellFromListItem(product: ProductListPreview): Pro
     note: product.note ?? "",
     cancelReason: "",
     hsCode: "",
-    images: product.image ? [product.image] : [],
+    images: [],
     competitorAsins: [],
     productWeightG: 0,
     packageWeightG: 0,
@@ -311,7 +311,7 @@ async function extractWorkbookImages(buffer: ArrayBuffer, JSZip: { loadAsync: (d
     images.push({
       col: Number(from.getElementsByTagNameNS("*", "col")[0]?.textContent ?? 0),
       row: Number(from.getElementsByTagNameNS("*", "row")[0]?.textContent ?? 0),
-      dataUrl: `data:${mimeFromPath(mediaPath)};base64,${bytes}`,
+      dataUrl: await compressDataUrl(`data:${mimeFromPath(mediaPath)};base64,${bytes}`),
     });
   }
 
@@ -381,6 +381,48 @@ function mimeFromPath(path: string) {
   return "image/png";
 }
 
+async function compressDataUrl(value: string) {
+  if (!value.startsWith("data:image/")) {
+    return value;
+  }
+
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
+    return value;
+  }
+
+  const response = await fetch(value);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+  const maxEdge = 1200;
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    bitmap.close();
+    return value;
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.78));
+  if (!compressed) {
+    return value;
+  }
+
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image."));
+    reader.readAsDataURL(compressed);
+  });
+}
+
 function extractDeveloperName(fileName: string) {
   const baseName = fileName.replace(/\.(xlsx|xls)$/i, "");
   const parts = baseName.split("-");
@@ -395,11 +437,13 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
   if (product) {
     const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
     const competitorAsins = Array.isArray(product.competitorAsins) ? product.competitorAsins : [];
+    const imageAssets = normalizeProductImageAssets(product);
     return {
       ...product,
       cancelReason: product.cancelReason ?? "",
       conclusionExcelFile: product.conclusionExcelFile,
-      images: Array.isArray(product.images) ? product.images : [],
+      images: imageAssets.map((asset) => asset.thumbUrl),
+      imageAssets,
       competitorAsins: competitorAsins.length ? competitorAsins : [""],
       opsAssignees: normalizeAssigneeList(product.opsAssignee, product.opsAssignees),
       designerAssignees: normalizeAssigneeList(product.designerAssignee, product.designerAssignees),
@@ -432,6 +476,7 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
     conclusionExcelFile: undefined,
     hsCode: "",
     images: [],
+    imageAssets: [],
     competitorAsins: ["", ""],
     productWeightG: 0,
     packageWeightG: 0,
@@ -443,6 +488,24 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
     workflowHistory: [],
     workbookDetail: createBlankWorkbookDetail(),
   };
+}
+
+function normalizeProductImageAssets(product: Product): ProductImageAsset[] {
+  const assets = Array.isArray(product.imageAssets) ? product.imageAssets : [];
+  if (assets.length) {
+    return assets.map((asset, index) => ({
+      id: asset.id || `${product.sku}-image-${index + 1}`,
+      name: asset.name || `${product.sku}-${index + 1}`,
+      mimeType: asset.mimeType || "image/jpeg",
+      size: asset.size || 0,
+      storageType: asset.storageType || "r2",
+      uploadedAt: asset.uploadedAt || product.createdAt || "",
+      thumbUrl: asset.thumbUrl || asset.originalUrl || "",
+      originalUrl: asset.originalUrl || asset.thumbUrl || "",
+    }));
+  }
+
+  return [];
 }
 
 export function hydrateProductFromExcelSeed(product: Product): Product {
@@ -491,13 +554,7 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
       ? detail.pricingRows.map((row) => ({ ...row, oceanFreightUnitPrice: row.oceanFreightUnitPrice ?? 12 }))
       : fallback.pricingRows,
     competitors: detail.competitors?.length
-      ? detail.competitors.map((row) => ({
-          ...row,
-          hotVariantImage: row.hotVariantImage ?? "",
-          fbaFee: row.fbaFee ?? "",
-          negativePoint5: row.negativePoint5 ?? "",
-          noteImage: row.noteImage ?? "",
-        }))
+      ? detail.competitors.map((row, index) => normalizeWorkbookCompetitorRow(row, fallback.competitors[index], index))
       : fallback.competitors,
     suppliers: detail.suppliers?.length ? detail.suppliers : fallback.suppliers,
     improvement: {
@@ -511,8 +568,53 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
         ? sourceImprovement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
         : fallbackImprovement.rows,
     },
-    remarkImages: detail.remarkImages ?? fallback.remarkImages ?? [],
+    remarkImages: detail.remarkImages?.length
+      ? detail.remarkImages.map((image, index) => detail.remarkImageAssets?.[index]?.thumbUrl || image)
+      : detail.remarkImageAssets?.length
+        ? detail.remarkImageAssets.map((asset) => asset.thumbUrl || asset.originalUrl)
+        : fallback.remarkImages ?? [],
+    remarkImageAssets: normalizeWorkbookImageAssets(detail.remarkImages, detail.remarkImageAssets),
     keywords: detail.keywords?.length ? detail.keywords : fallback.keywords,
+  };
+}
+
+function normalizeWorkbookImageAssets(images: string[] | undefined, assets: ProductImageAsset[] | undefined) {
+  const sourceImages = Array.isArray(images) ? images : [];
+  const sourceAssets = Array.isArray(assets) ? assets : [];
+  const length = Math.max(sourceImages.length, sourceAssets.length);
+
+  return Array.from({ length }, (_, index) => normalizeImageAsset(sourceAssets[index], sourceImages[index] || sourceAssets[index]?.thumbUrl || "", `remark-${index + 1}`));
+}
+
+function normalizeImageAsset(asset: ProductImageAsset | undefined, fallbackImage: string, nameSuffix: string): ProductImageAsset {
+  const thumbUrl = asset?.thumbUrl?.trim() || fallbackImage.trim();
+  const originalUrl = asset?.originalUrl?.trim() || thumbUrl || fallbackImage.trim();
+
+  return {
+    id: asset?.id || `product-image-${nameSuffix}`,
+    name: asset?.name || `product-image-${nameSuffix}`,
+    mimeType: asset?.mimeType || "image/jpeg",
+    size: asset?.size || 0,
+    storageType: asset?.storageType || "r2",
+    uploadedAt: asset?.uploadedAt || "",
+    thumbUrl,
+    originalUrl,
+  };
+}
+
+function normalizeWorkbookCompetitorRow(row: TrialCompetitorRow, fallback: TrialCompetitorRow | undefined, index: number): TrialCompetitorRow {
+  const normalizedHotAsset = normalizeImageAsset(row.hotVariantImageAsset || fallback?.hotVariantImageAsset, row.hotVariantImage || fallback?.hotVariantImage || "", `competitor-${index + 1}-hot`);
+  const normalizedNoteAsset = normalizeImageAsset(row.noteImageAsset || fallback?.noteImageAsset, row.noteImage || fallback?.noteImage || "", `competitor-${index + 1}-note`);
+
+  return {
+    ...fallback,
+    ...row,
+    hotVariantImage: normalizedHotAsset.thumbUrl,
+    hotVariantImageAsset: normalizedHotAsset,
+    fbaFee: row.fbaFee ?? fallback?.fbaFee ?? "",
+    negativePoint5: row.negativePoint5 ?? fallback?.negativePoint5 ?? "",
+    noteImage: normalizedNoteAsset.thumbUrl,
+    noteImageAsset: normalizedNoteAsset,
   };
 }
 

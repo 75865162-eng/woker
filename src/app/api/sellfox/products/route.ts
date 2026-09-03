@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
-import { createProductListWhere, hasStandardProductStatus, splitMultiValue } from "@/lib/products/list-query";
+import { hasStandardProductStatus, splitMultiValue } from "@/lib/products/list-query";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { sellfoxProductRecordToProduct } from "@/lib/sellfox/product-records";
 
@@ -38,11 +38,11 @@ function parseFilters(url: URL, organizationId: string, workspaceId: string) {
 
 function createSellfoxWhere(input: ReturnType<typeof parseFilters>) {
   const closedStatuses = ["listed", "canceled", "delisted", "patent_risk"];
-  const and: Prisma.SellfoxProductRecordWhereInput[] = [];
   const where: Prisma.SellfoxProductRecordWhereInput = {
     organizationId: input.user.organizationId,
     workspaceId: input.workspaceId,
   };
+  const and: Prisma.SellfoxProductRecordWhereInput[] = [];
 
   if (input.search) {
     and.push({
@@ -69,6 +69,8 @@ function createSellfoxWhere(input: ReturnType<typeof parseFilters>) {
 
   if (input.status === "operations_progress") {
     where.operationsProgressIncomplete = true;
+  } else if (input.status === "development_phase") {
+    where.status = { in: ["pending", "developing"] };
   } else if (input.status === "overdue") {
     where.status = { notIn: closedStatuses };
     where.workflowDueAt = { lt: new Date() };
@@ -79,7 +81,10 @@ function createSellfoxWhere(input: ReturnType<typeof parseFilters>) {
     }
   }
 
-  if (and.length) where.AND = and;
+  if (and.length) {
+    where.AND = and;
+  }
+
   return where;
 }
 
@@ -95,53 +100,22 @@ export async function GET(request: Request) {
     const pageSize = clampPageSize(url.searchParams.get("pageSize"));
     const filters = parseFilters(url, user.organizationId, scope.workspaceId);
     const sellfoxWhere = createSellfoxWhere(filters);
-    const legacyWhere = createProductListWhere({
-      ...filters,
-      source: "sellfox",
-    });
     const takeForMerge = page * pageSize;
 
-    const [sellfoxTotal, legacyTotal, sellfoxRecords, legacyRecords] = await Promise.all([
+    const [sellfoxTotal, sellfoxRecords] = await Promise.all([
       prisma.sellfoxProductRecord.count({ where: sellfoxWhere }),
-      prisma.productRecord.count({ where: legacyWhere }),
       prisma.sellfoxProductRecord.findMany({
         where: sellfoxWhere,
         orderBy: { updatedAt: "desc" },
         take: takeForMerge,
       }),
-      prisma.productRecord.findMany({
-        where: legacyWhere,
-        orderBy: { updatedAt: "desc" },
-        take: takeForMerge,
-      }),
     ]);
 
-    const products = [
-      ...sellfoxRecords.map((record) => ({
+    const products = sellfoxRecords
+      .map((record) => ({
         product: sellfoxProductRecordToProduct(record),
         updatedAt: record.updatedAt,
-      })),
-      ...legacyRecords.map((record) => ({
-        product: sellfoxProductRecordToProduct({
-          id: record.id,
-          sku: record.sku,
-          chineseName: record.chineseName,
-          englishName: record.englishName,
-          asin: record.asin,
-          status: record.status,
-          supplierName: record.supplierName,
-          purchasePrice: record.purchasePrice,
-          selectionOwner: record.selectionOwner,
-          opsAssignee: record.opsAssignee,
-          designerAssignee: record.designerAssignee,
-          workflowStage: record.workflowStage,
-          createdAt: record.createdAt,
-          updatedAt: record.updatedAt,
-          payload: record.payload,
-        }),
-        updatedAt: record.updatedAt,
-      })),
-    ]
+      }))
       .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
       .map((entry) => entry.product)
       .slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
@@ -151,8 +125,8 @@ export async function GET(request: Request) {
       pagination: {
         page,
         pageSize,
-        total: sellfoxTotal + legacyTotal,
-        pageCount: Math.max(1, Math.ceil((sellfoxTotal + legacyTotal) / pageSize)),
+        total: sellfoxTotal,
+        pageCount: Math.max(1, Math.ceil(sellfoxTotal / pageSize)),
       },
     });
   } catch (error) {
