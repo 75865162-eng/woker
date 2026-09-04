@@ -31,6 +31,7 @@ export const runtime = "nodejs";
 
 const visibleEntityTypes = new Set<VersionedEntityType>([
   "ai_model_setting",
+  "external_integration_setting",
   "product",
   "listing_ai_workspace",
   "ppc_workspace_snapshot",

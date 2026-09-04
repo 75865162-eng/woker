@@ -126,6 +126,7 @@ export function createProductShellFromListItem(product: ProductListPreview): Pro
     sku: product.sku,
     chineseName: product.chineseName,
     englishName: product.englishName,
+    image: product.image,
     asin: product.asin ?? "",
     developer: "",
     purchasePrice: product.purchasePrice ?? 0,

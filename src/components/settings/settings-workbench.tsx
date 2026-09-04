@@ -9,6 +9,7 @@ import {
   EyeOff,
   KeyRound,
   Link2,
+  PlugZap,
   RotateCcw,
   Save,
   Send,
@@ -35,11 +36,18 @@ import {
   type AiModelSettings,
   type SavedAiModelProfile,
 } from "@/lib/ai-settings";
+import {
+  defaultSellerSpriteMcpSettings,
+  normalizeSellerSpriteMcpSettings,
+  type SellerSpriteMcpPublicSettings,
+  type SellerSpriteMcpSettings,
+} from "@/lib/integrations/sellersprite";
 
 const fieldClass =
   "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const labelClass = "text-xs font-bold uppercase tracking-normal text-muted";
 const imageGenerationModelPattern = /(image|seedream|dall|imagen|flux)/i;
+type SellerSpriteMcpState = SellerSpriteMcpSettings & Pick<SellerSpriteMcpPublicSettings, "hasApiKey" | "configured">;
 
 export function SettingsWorkbench() {
   const [settings, setSettings] = useState<AiModelSettings>(defaultAiModelSettings);
@@ -62,6 +70,16 @@ export function SettingsWorkbench() {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState("");
   const [imageSettingsError, setImageSettingsError] = useState("");
+  const [sellerSpriteSettings, setSellerSpriteSettings] = useState<SellerSpriteMcpState>({
+    ...defaultSellerSpriteMcpSettings,
+    hasApiKey: false,
+    configured: false,
+  });
+  const [showSellerSpriteSecret, setShowSellerSpriteSecret] = useState(false);
+  const [sellerSpriteSavedAt, setSellerSpriteSavedAt] = useState("");
+  const [sellerSpriteError, setSellerSpriteError] = useState("");
+  const [sellerSpriteTestMessage, setSellerSpriteTestMessage] = useState("");
+  const [testingSellerSprite, setTestingSellerSprite] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,8 +160,52 @@ export function SettingsWorkbench() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSellerSpriteSettings() {
+      try {
+        const response = await fetch("/api/integrations/sellersprite");
+
+        if (!response.ok) {
+          throw new Error("无法从数据库读取 SellerSprite MCP 配置。");
+        }
+
+        const data = (await response.json()) as { settings?: SellerSpriteMcpPublicSettings };
+        const publicSettings = data.settings;
+
+        if (!publicSettings) return;
+        if (cancelled) return;
+
+        setSellerSpriteSettings({
+          ...normalizeSellerSpriteMcpSettings({
+            enabled: publicSettings.enabled,
+            serverUrl: publicSettings.serverUrl,
+            marketplace: publicSettings.marketplace,
+            timeoutSeconds: publicSettings.timeoutSeconds,
+            protocolVersion: publicSettings.protocolVersion,
+          }),
+          apiKey: "",
+          hasApiKey: publicSettings.hasApiKey,
+          configured: publicSettings.configured,
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setSellerSpriteError(error instanceof Error ? error.message : "SellerSprite MCP 配置加载失败。");
+        }
+      }
+    }
+
+    void restoreSellerSpriteSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const ready = settings.enabled && settings.apiKey.trim().length > 0 && settings.baseUrl.trim().startsWith("http") && settings.model.trim().length > 0;
   const imageReady = imageSettings.enabled && imageSettings.apiKey.trim().length > 0 && imageSettings.baseUrl.trim().startsWith("http") && imageSettings.model.trim().length > 0;
+  const sellerSpriteReady = sellerSpriteSettings.enabled && sellerSpriteSettings.serverUrl.trim().startsWith("http") && (sellerSpriteSettings.apiKey.trim().length > 0 || sellerSpriteSettings.hasApiKey);
 
   function applyDeepseekPreset() {
     applyProviderPreset("deepseek");
@@ -464,6 +526,84 @@ export function SettingsWorkbench() {
     }
   }
 
+  function updateSellerSprite<K extends keyof SellerSpriteMcpSettings>(key: K, value: SellerSpriteMcpSettings[K]) {
+    setSellerSpriteSettings((current) => ({
+      ...current,
+      [key]: value,
+      configured: false,
+    }));
+  }
+
+  async function saveSellerSpriteSettings() {
+    const normalized = normalizeSellerSpriteMcpSettings(sellerSpriteSettings);
+
+    try {
+      const response = await fetch("/api/integrations/sellersprite", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: normalized,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { settings?: SellerSpriteMcpPublicSettings; error?: string };
+
+      if (!response.ok || !data.settings) {
+        throw new Error(data.error || "SellerSprite MCP 配置保存失败。");
+      }
+
+      setSellerSpriteSettings({
+        ...normalizeSellerSpriteMcpSettings({
+          enabled: data.settings.enabled,
+          serverUrl: data.settings.serverUrl,
+          marketplace: data.settings.marketplace,
+          timeoutSeconds: data.settings.timeoutSeconds,
+          protocolVersion: data.settings.protocolVersion,
+        }),
+        apiKey: "",
+        hasApiKey: data.settings.hasApiKey,
+        configured: data.settings.configured,
+      });
+      setSellerSpriteSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+      setSellerSpriteError("");
+    } catch (error) {
+      setSellerSpriteError(error instanceof Error ? error.message : "SellerSprite MCP 配置保存失败。");
+    }
+  }
+
+  async function testSellerSpriteSettings() {
+    const normalized = normalizeSellerSpriteMcpSettings(sellerSpriteSettings);
+
+    setTestingSellerSprite(true);
+    setSellerSpriteError("");
+    setSellerSpriteTestMessage("");
+
+    try {
+      const response = await fetch("/api/integrations/sellersprite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: normalized,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        status?: string;
+        message?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error || "SellerSprite MCP 测试失败。");
+      }
+
+      setSellerSpriteTestMessage(data.message || (data.ok ? "SellerSprite MCP 测试成功。" : "SellerSprite MCP 配置待完善。"));
+    } catch (error) {
+      setSellerSpriteError(error instanceof Error ? error.message : "SellerSprite MCP 测试失败。");
+    } finally {
+      setTestingSellerSprite(false);
+    }
+  }
+
   return (
     <>
       <div className="space-y-3">
@@ -727,6 +867,118 @@ export function SettingsWorkbench() {
                       保存生图配置
                     </Button>
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
+                  <PlugZap className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm">外部工具 / MCP 配置</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted">SellerSprite MCP 会被 Market Agent、PPC Agent 和后续 Blue Ocean Radar 共用。</p>
+                </div>
+              </div>
+              <Badge tone={sellerSpriteReady ? "green" : "gray"}>{sellerSpriteReady ? "可调用" : "待配置"}</Badge>
+            </CardHeader>
+            <CardContent className="space-y-3 p-3">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[0.7fr_1.4fr_0.9fr]">
+                <Field label="启用">
+                  <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold text-foreground">
+                    <input
+                      checked={sellerSpriteSettings.enabled}
+                      onChange={(event) => updateSellerSprite("enabled", event.target.checked)}
+                      type="checkbox"
+                    />
+                    SellerSprite MCP
+                  </label>
+                </Field>
+                <Field label="MCP Server URL">
+                  <div className="relative">
+                    <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <input
+                      className={`${fieldClass} pl-9`}
+                      value={sellerSpriteSettings.serverUrl}
+                      onChange={(event) => updateSellerSprite("serverUrl", event.target.value)}
+                      placeholder="https://mcp.sellersprite.com/mcp"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted">官方请求域名：https://mcp.sellersprite.com/mcp。直连时也可以用 `?secret-key=`。</p>
+                </Field>
+                <Field label="Marketplace">
+                  <input
+                    className={fieldClass}
+                    value={sellerSpriteSettings.marketplace}
+                    onChange={(event) => updateSellerSprite("marketplace", event.target.value.toUpperCase())}
+                    placeholder="US"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_0.7fr_0.8fr]">
+                <Field label="Secret Key">
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <input
+                      className={`${fieldClass} pl-9 pr-11 font-mono`}
+                      type={showSellerSpriteSecret ? "text" : "password"}
+                      value={sellerSpriteSettings.apiKey}
+                      onChange={(event) => updateSellerSprite("apiKey", event.target.value)}
+                      placeholder={sellerSpriteSettings.hasApiKey ? "已保存，留空则保留" : "粘贴 secret-key"}
+                    />
+                    <button
+                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-foreground"
+                      onClick={() => setShowSellerSpriteSecret((current) => !current)}
+                      title={showSellerSpriteSecret ? "隐藏密钥" : "显示密钥"}
+                      type="button"
+                    >
+                      {showSellerSpriteSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </Field>
+                <Field label="超时秒数">
+                  <input
+                    className={fieldClass}
+                    min={5}
+                    max={180}
+                    inputMode="decimal"
+                    type="text"
+                    value={sellerSpriteSettings.timeoutSeconds}
+                    onChange={(event) => updateSellerSprite("timeoutSeconds", Number(event.target.value))}
+                  />
+                </Field>
+                <Field label="协议版本">
+                  <input
+                    className={fieldClass}
+                    value={sellerSpriteSettings.protocolVersion}
+                    onChange={(event) => updateSellerSprite("protocolVersion", event.target.value)}
+                    placeholder="streamableHttp"
+                  />
+                </Field>
+              </div>
+
+              {sellerSpriteError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{sellerSpriteError}</div> : null}
+              {sellerSpriteTestMessage ? <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">{sellerSpriteTestMessage}</div> : null}
+
+              <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-muted">
+                  {sellerSpriteSavedAt ? <span>已保存：{sellerSpriteSavedAt}</span> : <span>保存后，Agent 会读取这里的连接状态；header 名固定为 secret-key。</span>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" onClick={() => void testSellerSpriteSettings()} disabled={testingSellerSprite}>
+                    <Send className="h-4 w-4" />
+                    {testingSellerSprite ? "测试中" : "测试连接"}
+                  </Button>
+                  <Button onClick={() => void saveSellerSpriteSettings()}>
+                    <Save className="h-4 w-4" />
+                    保存 MCP 配置
+                  </Button>
                 </div>
               </div>
             </CardContent>

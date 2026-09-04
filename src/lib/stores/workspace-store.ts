@@ -129,6 +129,7 @@ interface WorkspaceState {
   selectAllDrafts: () => void;
   invertDraftSelection: () => void;
   clearDraftSelection: () => void;
+  queueApprovedAgentDrafts: (drafts: AdjustmentDraft[]) => { draftCount: number; campaignGroupCount: number };
   removePendingDraftsForCampaignGroup: (campaignGroupId: string) => void;
   clearPendingAdjustmentDrafts: () => void;
   setParseStarted: (fileName: string, originalWorkbookBuffer: ArrayBuffer, originalWorkbookFileId?: string) => void;
@@ -870,6 +871,33 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       selectedDraftIds: [],
       adjustmentDrafts: state.adjustmentDrafts.map((draft) => ({ ...draft, selected: false })),
     })),
+  queueApprovedAgentDrafts: (drafts) => {
+    const sanitizedDrafts = drafts
+      .filter((draft) => draft.campaignGroupId && draft.rowId)
+      .map((draft) => ({
+        ...draft,
+        selected: true,
+        matchedRule: draft.matchedRule || "PPC Agent",
+      }));
+    const campaignGroupIds = Array.from(new Set(sanitizedDrafts.map((draft) => draft.campaignGroupId)));
+
+    if (!sanitizedDrafts.length) {
+      return { draftCount: 0, campaignGroupCount: 0 };
+    }
+
+    set((state) => ({
+      pendingAdjustmentDrafts: replacePendingDraftsForCampaignGroups(
+        state.pendingAdjustmentDrafts,
+        campaignGroupIds,
+        sanitizedDrafts,
+      ),
+    }));
+
+    return {
+      draftCount: sanitizedDrafts.length,
+      campaignGroupCount: campaignGroupIds.length,
+    };
+  },
   removePendingDraftsForCampaignGroup: (campaignGroupId) =>
     set((state) => ({
       pendingAdjustmentDrafts: state.pendingAdjustmentDrafts.filter(

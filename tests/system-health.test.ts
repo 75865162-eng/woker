@@ -18,7 +18,9 @@ import {
   validateWeComWebhookUrl,
 } from "@/lib/notifications/wecom";
 import { nextAppVersionLabel, normalizeAppVersionLabel } from "@/lib/app-version";
+import { getProductListImage } from "@/lib/products/image-assets";
 import { productToDraft } from "@/components/products/product-workbench-data";
+import { createProductShellFromListItem } from "@/components/products/product-workbench-data";
 import { nextSku } from "@/components/products/product-workbench-utils";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
 import { normalizeWorkspaceScope, workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -236,6 +238,19 @@ test("productToDraft tolerates legacy products with missing array fields", () =>
   assert.deepEqual(draft.images, []);
   assert.deepEqual(draft.competitorAsins, [""]);
   assert.deepEqual(draft.workflowHistory, []);
+});
+
+test("product list shells preserve lightweight thumbnails for the table view", () => {
+  const shell = createProductShellFromListItem({
+    id: "prod-1",
+    sku: "SKU-1",
+    chineseName: "Test",
+    englishName: "",
+    status: "pending",
+    image: "https://example.com/thumb.webp",
+  });
+
+  assert.equal(getProductListImage(shell), "https://example.com/thumb.webp");
 });
 
 test("nextSku uses the 0000-9999 range before switching to letter-prefixed SKUs", () => {

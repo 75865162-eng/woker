@@ -165,7 +165,11 @@ function getProductDetailCacheKey(workspaceId: string, sku: string) {
   return `${workspaceId || "default"}:${sku.trim()}`;
 }
 
-function hasFullProductDetail(product: Product) {
+function getProductDetailCacheKeyWithMode(workspaceId: string, sku: string, includeWorkbookImages: boolean) {
+  return `${getProductDetailCacheKey(workspaceId, sku)}:${includeWorkbookImages ? "full" : "text"}`;
+}
+
+function hasWorkbookDetail(product: Product) {
   return Boolean((product as Product & { workbookDetail?: TrialProductDraft }).workbookDetail);
 }
 
@@ -192,7 +196,9 @@ function readCachedProductWorkbench() {
     }
 
     for (const product of parsed.products) {
-      productDetailCache.set(product.sku.trim(), product);
+      if (hasWorkbookDetail(product)) {
+        productDetailCache.set(getProductDetailCacheKeyWithMode(workspaceId, product.sku, true), product);
+      }
     }
     const nextCache = {
       ...parsed,
@@ -210,7 +216,9 @@ function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
   productWorkbenchCache = cache;
   productWorkbenchCacheWorkspaceId = readCurrentWorkspaceId();
   for (const product of cache.products) {
-    productDetailCache.set(product.sku.trim(), product);
+    if (hasWorkbookDetail(product)) {
+      productDetailCache.set(getProductDetailCacheKeyWithMode(productWorkbenchCacheWorkspaceId, product.sku, true), product);
+    }
   }
 
   if (typeof window === "undefined") {
@@ -230,7 +238,6 @@ export function ProductWorkbench() {
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
   const [filters, setFilters] = useState<ProductFilters>(() => normalizeProductFilters(initialCachedWorkbench?.filters));
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [detailReady, setDetailReady] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
@@ -518,12 +525,13 @@ export function ProductWorkbench() {
     };
   }, [fetchProducts, filters, loadProductSummary, page, pageSize]);
 
-  async function loadProductDetail(sku: string, signal?: AbortSignal) {
+  const loadProductDetail = useCallback(async (sku: string, signal?: AbortSignal, options?: { includeWorkbookImages?: boolean }) => {
     const normalizedSku = sku.trim();
     const workspaceId = readCurrentWorkspaceId();
-    const cacheKey = getProductDetailCacheKey(workspaceId, normalizedSku);
+    const includeWorkbookImages = options?.includeWorkbookImages ?? true;
+    const cacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, includeWorkbookImages);
     const cached = productDetailCache.get(cacheKey);
-    if (cached && hasFullProductDetail(cached)) {
+    if (cached) {
       return cached;
     }
 
@@ -533,7 +541,15 @@ export function ProductWorkbench() {
     }
 
     const promise = (async () => {
-      const response = await fetch(`/api/products/${encodeURIComponent(normalizedSku)}`, { cache: "no-store", signal });
+      const params = new URLSearchParams();
+      if (!includeWorkbookImages) {
+        params.set("includeWorkbookImages", "false");
+      }
+
+      const response = await fetch(`/api/products/${encodeURIComponent(normalizedSku)}${params.toString() ? `?${params.toString()}` : ""}`, {
+        cache: "no-store",
+        signal,
+      });
       const data = (await response.json()) as { product?: Product; error?: string };
 
       if (!response.ok || !data.product) {
@@ -551,10 +567,50 @@ export function ProductWorkbench() {
     } finally {
       productDetailInflight.delete(cacheKey);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!products.length) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const uniqueSkus = Array.from(new Set(products.map((product) => product.sku.trim()).filter(Boolean)));
+      const skusToPrefetch = uniqueSkus.filter((sku) => {
+        const fullCachedProduct = productDetailCache.get(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), sku, true));
+        const cachedProduct = productDetailCache.get(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), sku, false));
+        return !cachedProduct && !fullCachedProduct;
+      });
+
+      if (!skusToPrefetch.length) {
+        return;
+      }
+
+      const queue = [...skusToPrefetch];
+      const concurrency = Math.min(4, queue.length);
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (!controller.signal.aborted) {
+          const sku = queue.shift();
+          if (!sku) {
+            return;
+          }
+
+          await loadProductDetail(sku, controller.signal, { includeWorkbookImages: false }).catch(() => undefined);
+        }
+      });
+
+      void Promise.all(workers).catch(() => undefined);
+    }, 0);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [loadProductDetail, products]);
 
   function prefetchProductDetail(sku: string) {
-    void loadProductDetail(sku).catch(() => undefined);
+    void loadProductDetail(sku, undefined, { includeWorkbookImages: false }).catch(() => undefined);
   }
 
   async function reloadProducts(input?: { filters?: ProductFilters; page?: number; pageSize?: number }) {
@@ -644,52 +700,42 @@ export function ProductWorkbench() {
     productDetailRequestSeq.current += 1;
     setActiveProduct(null);
     setDetailReady(true);
-    setDetailLoading(false);
     setIsEditorOpen(true);
   }
 
   function closeProductEditor() {
     productDetailRequestSeq.current += 1;
     setIsEditorOpen(false);
-    setDetailLoading(false);
   }
 
   async function openProduct(sku: string) {
     const normalizedSku = sku.trim();
     const workspaceId = readCurrentWorkspaceId();
-    const cacheKey = getProductDetailCacheKey(workspaceId, normalizedSku);
+    const fullCacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, true);
+    const textCacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, false);
     const requestId = ++productDetailRequestSeq.current;
-    const cachedDetail = productDetailCache.get(cacheKey);
-    const preview = products.find((product) => product.sku.trim() === normalizedSku);
+    const cachedDetail = productDetailCache.get(fullCacheKey);
+    const cachedTextDetail = productDetailCache.get(textCacheKey);
+    const listProduct = productsRef.current.find((product) => product.sku.trim() === normalizedSku) ?? null;
 
     setProductsError("");
+    setActiveProduct(cachedDetail ?? cachedTextDetail ?? listProduct);
+    setDetailReady(Boolean(cachedDetail));
+    setIsEditorOpen(true);
 
-    if (cachedDetail && hasFullProductDetail(cachedDetail)) {
+    if (cachedDetail) {
       setActiveProduct(cachedDetail);
       setDetailReady(true);
-      setIsEditorOpen(true);
-      setDetailLoading(false);
       return;
     }
 
-    if (preview) {
-      setActiveProduct(createProductShellFromListItem(preview));
-      setDetailReady(false);
-      setIsEditorOpen(true);
-      setDetailLoading(true);
-    } else {
-      setDetailReady(false);
-      setDetailLoading(true);
-    }
-
     try {
-      const product = await loadProductDetail(normalizedSku);
+      const product = await loadProductDetail(normalizedSku, undefined, { includeWorkbookImages: true });
       if (requestId !== productDetailRequestSeq.current) {
         return;
       }
       setActiveProduct(product);
       setDetailReady(true);
-      setIsEditorOpen(true);
     } catch (error) {
       if (requestId !== productDetailRequestSeq.current) {
         return;
@@ -698,9 +744,7 @@ export function ProductWorkbench() {
       setProductsError(message);
       setActivityLog((current) => [`商品详情读取失败：${message}`, ...current].slice(0, 8));
     } finally {
-      if (requestId === productDetailRequestSeq.current) {
-        setDetailLoading(false);
-      }
+      setIsEditorOpen(true);
     }
   }
 
@@ -734,20 +778,25 @@ export function ProductWorkbench() {
 
     try {
       const savedProduct = await persistProduct(nextProduct);
+      productDetailCache.set(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), savedProduct.sku, true), savedProduct);
       setActiveProduct(savedProduct);
       setDetailReady(true);
       if (!existing) {
         setPage(1);
       }
       closeProductEditor();
-      await reloadProducts({ page: existing ? page : 1 });
+      void reloadProducts({ page: existing ? page : 1 }).catch((reloadError) => {
+        const message = reloadError instanceof Error ? reloadError.message : "商品列表刷新失败";
+        setProductsError(message);
+        setActivityLog((current) => [`商品已保存，但列表刷新失败：${message}`, ...current].slice(0, 8));
+      });
       setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品保存失败";
       window.alert(message);
       setActivityLog((current) => [`商品保存失败：${message}`, ...current].slice(0, 8));
     }
-}
+  }
 
 function handleSaveTrialProduct(draft: TrialProductDraft) {
     const nextTrialProduct = {
@@ -775,10 +824,15 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
       };
       const importedWithAssets = await uploadEmbeddedProductImages(importedWithOwner);
       const savedProduct = await persistProduct(importedWithAssets);
+      productDetailCache.set(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), savedProduct.sku, true), savedProduct);
       setActiveProduct(savedProduct);
       setDetailReady(true);
       setIsEditorOpen(true);
-      await reloadProducts({ page: 1 });
+      void reloadProducts({ page: 1 }).catch((reloadError) => {
+        const message = reloadError instanceof Error ? reloadError.message : "商品列表刷新失败";
+        setProductsError(message);
+        setActivityLog((current) => [`商品已导入并保存，但列表刷新失败：${message}`, ...current].slice(0, 8));
+      });
       setActivityLog((current) => [`已导入 ${file.name} 并保存到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "导入失败";
@@ -838,9 +892,6 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         ) : null}
         {productsLoading && !products.length ? (
           <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
-        ) : null}
-        {detailLoading ? (
-          <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品详情...</div>
         ) : null}
         <section className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           <SummaryTile
@@ -990,7 +1041,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         ) : null}
 
         {isEditorOpen ? (
-          <ProductEditor
+            <ProductEditor
               product={activeProduct}
               products={products}
               nextSku={getNextSku(products)}
@@ -1472,8 +1523,10 @@ function ProductEditor({
   }, [nextSku]);
 
   useEffect(() => {
-    setDraft(productToDraft(productRef.current, productsRef.current, nextSkuRef.current));
-  }, [detailReady]);
+    if (!isEditing || !detailReady) {
+      setDraft(productToDraft(productRef.current, productsRef.current, nextSkuRef.current));
+    }
+  }, [detailReady, isEditing, product]);
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -2166,29 +2219,25 @@ function ProductEditor({
                 </div>
               </CardContent>
             </Card>
-            {showHeavyDetail ? (
-              <ProductWorkbookDetailSections
-                detail={workbookDetail}
-                onPricingChange={updateWorkbookPricingRow}
-                onPricingAdd={addWorkbookPricingRow}
-                onPricingRemove={removeWorkbookPricingRow}
-                onCompetitorChange={updateWorkbookCompetitor}
-                onCompetitorAdd={addWorkbookCompetitor}
-                onCompetitorRemove={removeWorkbookCompetitor}
-                onSupplierChange={updateWorkbookSupplier}
-                onSupplierAdd={addWorkbookSupplier}
-                onSupplierRemove={removeWorkbookSupplier}
-                onImprovementChange={updateWorkbookImprovement}
-                onPeakSeasonWeightsChange={updateWorkbookPeakSeasonWeights}
-                onImprovementRowChange={updateWorkbookImprovementRow}
-                onKeywordChange={updateWorkbookKeyword}
-                onKeywordsReplace={replaceWorkbookKeywords}
-                onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
-                onRemarkImagesChange={updateWorkbookRemarkImages}
-              />
-            ) : (
-              <DetailLoadingPlaceholder />
-            )}
+            <ProductWorkbookDetailSections
+              detail={workbookDetail}
+              onPricingChange={updateWorkbookPricingRow}
+              onPricingAdd={addWorkbookPricingRow}
+              onPricingRemove={removeWorkbookPricingRow}
+              onCompetitorChange={updateWorkbookCompetitor}
+              onCompetitorAdd={addWorkbookCompetitor}
+              onCompetitorRemove={removeWorkbookCompetitor}
+              onSupplierChange={updateWorkbookSupplier}
+              onSupplierAdd={addWorkbookSupplier}
+              onSupplierRemove={removeWorkbookSupplier}
+              onImprovementChange={updateWorkbookImprovement}
+              onPeakSeasonWeightsChange={updateWorkbookPeakSeasonWeights}
+              onImprovementRowChange={updateWorkbookImprovementRow}
+              onKeywordChange={updateWorkbookKeyword}
+              onKeywordsReplace={replaceWorkbookKeywords}
+              onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
+              onRemarkImagesChange={updateWorkbookRemarkImages}
+            />
           </section>
         </div>
       </div>
@@ -2240,23 +2289,6 @@ function ProductEditor({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function DetailLoadingPlaceholder() {
-  return (
-    <Card>
-      <CardContent className="space-y-3 p-5">
-        <div className="h-5 w-48 rounded bg-surface-muted" />
-        <div className="h-4 w-72 rounded bg-surface-muted" />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <div key={index} className="h-10 rounded-md bg-surface-muted" />
-          ))}
-        </div>
-        <p className="text-xs font-semibold text-muted">正在加载完整商品内容，列表和基础信息已可使用。</p>
-      </CardContent>
-    </Card>
   );
 }
 

@@ -584,9 +584,7 @@ export async function GET(request: Request) {
             "records",
             prisma.productRecord.findMany({
               where,
-              orderBy: {
-                updatedAt: "desc",
-              },
+              orderBy: [{ createdAt: "desc" }, { sku: "asc" }],
               skip: listOffset,
               take: pageSize,
             }),
@@ -618,7 +616,7 @@ export async function GET(request: Request) {
                 COALESCE(NULLIF("payload"->'imageAssets'->0->>'thumbUrl', ''), '') AS "image"
               FROM "ProductRecord"
               ${listWhereSql}
-              ORDER BY "updatedAt" DESC
+              ORDER BY "createdAt" DESC, "sku" ASC
               OFFSET ${listOffset}
               LIMIT ${pageSize}
             `),
@@ -799,19 +797,31 @@ export async function POST(request: Request) {
       };
     });
 
-    await createWorkflowNotifications({
-      user,
-      product: persisted.productToSave,
-      previousProduct: persisted.existingProduct,
-    });
-    await recordDataChangeVersion({
-      user,
-      entityType: "product",
-      entityId: persisted.productToSave.sku,
-      action: "product_save",
-      summary: `${persisted.productToSave.sku} ${persisted.productToSave.chineseName}`,
-      payload: persisted.productToSave as unknown as Prisma.InputJsonValue,
-      scope,
+    const sideEffects = await Promise.allSettled([
+      createWorkflowNotifications({
+        user,
+        product: persisted.productToSave,
+        previousProduct: persisted.existingProduct,
+      }),
+      recordDataChangeVersion({
+        user,
+        entityType: "product",
+        entityId: persisted.productToSave.sku,
+        action: "product_save",
+        summary: `${persisted.productToSave.sku} ${persisted.productToSave.chineseName}`,
+        payload: persisted.productToSave as unknown as Prisma.InputJsonValue,
+        scope,
+      }),
+    ]);
+
+    sideEffects.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.warn("[api/products] post-save side effect failed", {
+          effect: index === 0 ? "workflow-notification" : "data-change-version",
+          sku: persisted.productToSave.sku,
+          message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
     });
     await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`);
     updateCachedProductListSummariesForProductChange({

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  Bot,
   Boxes,
   PackageSearch,
   SearchCheck,
@@ -18,6 +19,7 @@ const modules = [
   { href: "/workspace", title: "PPC 优化工作台", description: "Bulk 导入、Overall 匹配、规则草稿与导出", icon: UploadCloud },
   { href: "/dashboard", title: "产品管理", description: "商品资料、负责人、流程进度和竞品信息", icon: Boxes },
   { href: "/listing-ai", title: "Listing AI", description: "标题、图片、A+ 和 Listing 优化建议", icon: Sparkles },
+  { href: "/agents", title: "Amazon AI Agent Platform", description: "统一 Agent Runtime、Trace、Approval 和 Tool Gateway", icon: Bot },
   { href: "/saihu-search-merge", title: "搜索词合并", description: "合并赛狐搜索词报表并导出汇总", icon: SearchCheck },
   { href: "/logistics", title: "物流处理", description: "装箱表、箱唛 PDF、物流模板和对比表", icon: PackageSearch },
 ];

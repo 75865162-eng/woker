@@ -1,15 +1,15 @@
 import type { ProductImageAsset } from "@/lib/products/types";
 
-export function getProductListImage(product: { imageAssets?: ProductImageAsset[] }) {
-  const image = product.imageAssets?.[0]?.thumbUrl?.trim();
+export function getProductListImage(product: { imageAssets?: ProductImageAsset[]; image?: string }) {
+  const image = product.imageAssets?.[0]?.thumbUrl?.trim() || product.image?.trim();
 
   return image || "";
 }
 
-export function getProductOriginalImage(product: { imageAssets?: ProductImageAsset[] }) {
+export function getProductOriginalImage(product: { imageAssets?: ProductImageAsset[]; image?: string }) {
   const image = product.imageAssets?.[0]?.originalUrl?.trim() || product.imageAssets?.[0]?.thumbUrl?.trim();
 
-  return image || "";
+  return image || product.image?.trim() || "";
 }
 
 export async function uploadProductImageAsset(file: File) {

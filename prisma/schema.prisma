@@ -14,6 +14,7 @@ model Organization {
   updatedAt          DateTime                    @updatedAt
   auditLogs          AuditLog[]
   dataChangeVersions DataChangeVersion[]
+  externalIntegrationSettings ExternalIntegrationSetting[]
   members            OrganizationMember[]
   notifications      UserNotification[]
   productListCacheRecords ProductListCacheRecord[]
@@ -39,6 +40,7 @@ model User {
   auditLogs               AuditLog[]
   dataChangeVersions      DataChangeVersion[]
   DraftRun                DraftRun[]
+  externalIntegrationSettings ExternalIntegrationSetting[]
   listingAiChatHistories  ListingAiChatHistory[]
   listingAiWorkspaces     ListingAiWorkspace[]
   wecomNotificationSettings WeComNotificationSetting[]
@@ -492,6 +494,27 @@ model AiModelSetting {
   @@index([userId, updatedAt])
 }
 
+model ExternalIntegrationSetting {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  workspaceId    String       @default("default")
+  accountId      String       @default("")
+  marketplace    String       @default("")
+  provider       String
+  displayName    String
+  enabled        Boolean      @default(false)
+  config         Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, userId, provider])
+  @@index([organizationId, workspaceId, provider, updatedAt], map: "ExternalIntegrationSetting_org_workspace_provider_updated")
+  @@index([userId, updatedAt])
+}
+
 model ListingAiWorkspace {
   id             String   @id @default(cuid())
   organizationId String
@@ -746,6 +769,247 @@ model WorkspaceDataset {
   @@index([organizationId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
   @@index([userId, createdAt])
+}
+
+model AgentDefinition {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  name               String
+  description        String
+  version            String
+  systemInstructions String
+  goals              Json
+  skills             Json
+  tools              Json
+  permissions        Json
+  inputSchema        Json
+  outputSchema       Json
+  approvalPolicy     Json
+  enabled            Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  executions         AgentExecution[]
+  evaluations        AgentEvaluationCase[]
+
+  @@index([organizationId, enabled, updatedAt])
+  @@index([organizationId, updatedAt])
+}
+
+model AgentTool {
+  id             String       @id @default(cuid())
+  organizationId String
+  toolId         String
+  name           String
+  description    String
+  inputSchema    Json
+  outputSchema   Json
+  permission     Json
+  riskLevel      String
+  timeoutMs      Int          @default(10000)
+  retryPolicy    Json
+  adapterType    String
+  config         Json?
+  enabled        Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, toolId])
+  @@index([organizationId, enabled, updatedAt])
+}
+
+model AgentExecution {
+  id                 String              @id @default(cuid())
+  organizationId     String
+  agentDefinitionId  String
+  requestedByUserId   String?
+  workspaceId        String              @default("default")
+  accountId          String              @default("")
+  marketplace        String              @default("")
+  sku                String?
+  asin               String?
+  projectId          String?
+  taskId             String?
+  status             String              @default("CREATED")
+  input              Json
+  context            Json
+  recommendation     Json?
+  decision           Json?
+  output             Json?
+  approvalStatus     String?
+  tokenUsage         Int                 @default(0)
+  toolCallCount      Int                 @default(0)
+  retryCount         Int                 @default(0)
+  costCents          Int                 @default(0)
+  error              Json?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  agentDefinition    AgentDefinition      @relation(fields: [agentDefinitionId], references: [id], onDelete: Cascade)
+  approvals          AgentApproval[]
+  events             AgentEvent[]
+  memoryItems        AgentMemory[]
+  tasks              AgentTask[]
+  traces             AgentExecutionTrace[]
+  toolCalls          AgentToolCall[]
+  evaluations        AgentEvaluationRun[]
+
+  @@index([organizationId, agentDefinitionId, createdAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([organizationId, accountId, marketplace, createdAt])
+  @@index([organizationId, sku, createdAt])
+  @@index([organizationId, asin, createdAt])
+  @@index([organizationId, status, createdAt])
+}
+
+model AgentExecutionTrace {
+  id             String          @id @default(cuid())
+  organizationId String
+  executionId    String
+  sequence       Int
+  eventType      String
+  message        String?
+  payload        Json?
+  redactedPayload Json?
+  createdAt      DateTime        @default(now())
+  execution      AgentExecution   @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, sequence])
+  @@index([organizationId, eventType, createdAt])
+}
+
+model AgentToolCall {
+  id              String          @id @default(cuid())
+  organizationId  String
+  executionId     String
+  toolId          String
+  toolName        String
+  adapterType     String
+  riskLevel       String
+  permission      Json
+  status          String
+  input           Json
+  redactedInput   Json
+  output          Json?
+  redactedOutput  Json?
+  latencyMs       Int?
+  retryCount      Int             @default(0)
+  error           Json?
+  createdAt       DateTime        @default(now())
+  execution       AgentExecution   @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, createdAt])
+  @@index([organizationId, toolId, createdAt])
+}
+
+model AgentApproval {
+  id               String           @id @default(cuid())
+  organizationId   String
+  executionId      String
+  toolCallId       String?
+  riskLevel        String
+  status           String           @default("REQUESTED")
+  recommendation   Json
+  action           Json
+  humanDecision    Json?
+  requestedByUserId String?
+  decidedByUserId  String?
+  requestedAt      DateTime         @default(now())
+  decidedAt        DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  execution        AgentExecution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, requestedAt])
+  @@index([organizationId, status, requestedAt])
+}
+
+model AgentEvent {
+  id             String        @id @default(cuid())
+  organizationId String
+  executionId    String
+  eventType      String
+  payload        Json
+  createdAt      DateTime      @default(now())
+  execution      AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, createdAt])
+  @@index([organizationId, eventType, createdAt])
+}
+
+model AgentMemory {
+  id               String           @id @default(cuid())
+  organizationId   String
+  agentDefinitionId String?
+  scope            String
+  scopeKey         String
+  summary          String
+  data             Json
+  sourceExecutionId String?
+  confidence       Float            @default(0.5)
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  sourceExecution  AgentExecution?   @relation(fields: [sourceExecutionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, scope, scopeKey, createdAt])
+  @@index([organizationId, agentDefinitionId, createdAt])
+}
+
+model AgentTask {
+  id             String        @id @default(cuid())
+  organizationId String
+  executionId    String?
+  title          String
+  description    String?
+  status         String        @default("queued")
+  priority       Int           @default(0)
+  payload        Json
+  result         Json?
+  dueAt          DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  execution     AgentExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, executionId, createdAt])
+}
+
+model AgentEvaluationCase {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  agentDefinitionId  String?
+  name               String
+  input              Json
+  expectedBehavior   Json
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  agentDefinition    AgentDefinition? @relation(fields: [agentDefinitionId], references: [id], onDelete: SetNull)
+  runs               AgentEvaluationRun[]
+
+  @@index([organizationId, agentDefinitionId, createdAt])
+}
+
+model AgentEvaluationRun {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  evaluationCaseId   String
+  executionId        String?
+  input              Json
+  expectedBehavior   Json
+  actualBehavior     Json
+  toolCalls          Json
+  finalOutput        Json
+  score              Float?
+  errors             Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  evaluationCase     AgentEvaluationCase @relation(fields: [evaluationCaseId], references: [id], onDelete: Cascade)
+  execution         AgentExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, evaluationCaseId, createdAt])
+  @@index([organizationId, executionId, createdAt])
 }
 
 enum UserStatus {

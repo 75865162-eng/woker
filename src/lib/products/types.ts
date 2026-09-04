@@ -113,6 +113,7 @@ export type Product = {
   sku: string;
   chineseName: string;
   englishName: string;
+  image?: string;
   asin: string;
   developer: string;
   purchasePrice: number;

@@ -8,6 +8,7 @@ export type VersionedEntityType =
   | "product"
   | "listing_ai_workspace"
   | "ai_model_setting"
+  | "external_integration_setting"
   | "ppc_workspace_snapshot"
   | "rule_config"
   | "file_object"

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
+import { Bot, Boxes, History, Home, ListChecks, LogOut, PackageSearch, SearchCheck, Settings, Sparkles, Store, UploadCloud, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,7 @@ const navItems = [
   { href: "/workspace", label: "PPC 优化", icon: UploadCloud, moduleId: "workspace" },
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
   { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
+  { href: "/agents", label: "Amazon AI Agent Platform", icon: Bot, moduleId: "agents" },
   { href: "/logistics", label: "物流处理", icon: PackageSearch, moduleId: "logistics" },
 ];
 

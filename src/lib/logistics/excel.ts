@@ -302,7 +302,9 @@ export async function parseAWorkbookBuffer(input: WorkbookInput, options: ParseA
   const packageSizeColIndex = findHeaderIndex(["包装尺寸", "尺寸"]);
   const packageWeightColIndex = findHeaderIndex(["毛重", "重量", "净重"]);
   const hsCodeColIndex = findHeaderIndex(["海关编码", "HS编码", "HS CODE"]);
-  const totalShipmentColIndex = findHeaderIndex(["发货总数", "总发货", "最终发货"]);
+  const explicitTotalShipmentColIndex = findHeaderIndex(["发货总数", "总发货", "最终发货"]);
+  const fallbackShipmentColIndex = findExactHeaderIndex(["发货"]);
+  const totalShipmentColIndex = explicitTotalShipmentColIndex >= 0 ? explicitTotalShipmentColIndex : fallbackShipmentColIndex;
   const remarkColIndex = findHeaderIndex(["备注"]);
   const firstBoxColIndex = headerRow.findIndex((value, index) => {
     const boxNo = parseNumber(value);

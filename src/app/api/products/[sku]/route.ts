@@ -2,12 +2,36 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import type { Product } from "@/lib/products/types";
+import type { TrialProductDraft } from "@/components/products/product-workbench-model";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
 function normalizeSku(sku: string) {
   return sku.trim().toUpperCase();
+}
+
+function stripWorkbookImages(product: Product) {
+  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+  if (!productWithWorkbook.workbookDetail) {
+    return product;
+  }
+
+  return {
+    ...product,
+    workbookDetail: {
+      ...productWithWorkbook.workbookDetail,
+      remarkImages: [],
+      remarkImageAssets: [],
+      competitors: productWithWorkbook.workbookDetail.competitors.map((row) => ({
+        ...row,
+        hotVariantImage: "",
+        hotVariantImageAsset: undefined,
+        noteImage: "",
+        noteImageAsset: undefined,
+      })),
+    },
+  } as Product;
 }
 
 function roundDuration(ms: number) {
@@ -28,6 +52,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
 
     const url = new URL(request.url);
     const debugTiming = url.searchParams.get("debugTiming") === "true";
+    const includeWorkbookImages = url.searchParams.get("includeWorkbookImages") !== "false";
     const createTimedResponse = (payload: unknown, result: "ok" | "not-found", init?: ResponseInit) => {
       const totalMs = roundDuration(performance.now() - startedAt);
       if (debugTiming || totalMs >= 500) {
@@ -73,7 +98,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
       return createTimedResponse({ error: "商品不存在。" }, "not-found", { status: 404 });
     }
 
-    return createTimedResponse({ product: record.payload as unknown as Product }, "ok");
+    const product = record.payload as unknown as Product;
+    return createTimedResponse({ product: includeWorkbookImages ? product : stripWorkbookImages(product) }, "ok");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load product.";
     const response = NextResponse.json({ error: message }, { status: 500 });
