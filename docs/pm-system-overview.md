@@ -1735,3 +1735,2166 @@ Workspace 页的筛选主要靠四类条件：
 6. 最后做 `agents`、`notifications`、`settings`、`tasks`、`versions`、`accounts`、`worker health`。
 
 这套顺序的目的只有一个：先把边界立住，再往里面填功能，不要反过来。
+
+## 19. 系统运行总图
+
+```mermaid
+flowchart TD
+  A[登录 / 会话] --> B[AppShell 鉴权和导航]
+  B --> C[页面入口]
+  C --> D1[workspace]
+  C --> D2[dashboard]
+  C --> D3[listing-ai]
+  C --> D4[logistics]
+  C --> D5[sellfox]
+  C --> D6[agents]
+  C --> D7[settings / tasks / versions / accounts]
+
+  D1 --> E1[Bulk / Overall / Rules / Drafts]
+  D2 --> E2[产品导入 / 编辑 / 图片 / 导出]
+  D3 --> E3[文本输入 / 图片上传 / AI 生成 / 草稿保存]
+  D4 --> E4[Excel / PDF 解析 / 模板生成 / 下载]
+  D5 --> E5[概览 / 同步 / 查询]
+  D6 --> E6[Runtime / Tool Gateway / Approval / Trace]
+  D7 --> E7[权限 / 配置 / 任务 / 审计 / 账号]
+
+  E1 --> F1[workspace store / snapshot / draft-runs]
+  E2 --> F2[products / file objects / versions]
+  E3 --> F3[AI settings / Listing draft / image assets]
+  E4 --> F4[local file processing / downloads]
+  E5 --> F5[Sellfox APIs / product snapshots]
+  E6 --> F6[executions / approvals / memory / events]
+  E7 --> F7[permissions / settings / jobs / audit]
+```
+
+这张图对应代码里的真实节奏：
+
+1. 先登录，拿到 session。
+2. AppShell 先做权限判断，再渲染页面。
+3. 页面入口只负责挂载 workbench，真正业务逻辑都在 workbench。
+4. workbench 把输入拆成文件、表单、筛选、scope、AI 配置、审批动作。
+5. 数据要么在前端内存里临时处理，要么走数据库、storage、queue 或 API。
+6. 输出要么是草稿，要么是导出文件，要么是审批后的执行记录。
+7. 所有动作最后都回到历史、任务、版本、日志或草稿里，形成闭环。
+
+## 20. 数据源和事实优先级
+
+读这套系统时，最重要的是分清谁是事实源。
+
+- 第一层：数据库和对象存储。凡是已经保存并可恢复的内容，优先以这里为准。
+- 第二层：workspace snapshot / draft / history。它们决定页面初始态，但不是最终业务真相。
+- 第三层：页面本地 state。它只负责交互、输入、临时预览和未保存编辑。
+- 第四层：临时计算结果。比如搜索过滤、当前排序、当前页数据、当前草稿建议。
+
+对应到模块里：
+
+- `workspace` 的事实源是 workspace store + snapshot + draft-runs。
+- `dashboard` 的事实源是 `Product` 记录 + image assets + versions。
+- `listing-ai` 的事实源是 AI settings + workspace draft + image assets + saved records。
+- `logistics` 的事实源是当前选择的文件和本次解析结果，结束后只保留导出文件和日志。
+- `sellfox` 的事实源是数据库里的 Sellfox 同步数据和当前 scope。
+- `agents` 的事实源是 execution / trace / approval / memory。
+- `settings` 的事实源是数据库配置和运行时快照，localStorage 只是缓存。
+
+## 21. 读文档的最短路径
+
+第一次接手的人可以按这个顺序读：
+
+1. 先看 `1` 到 `3`，知道系统分成哪几块。
+2. 再看 `12`，知道每个页面的输入和流转。
+3. 然后看 `14` 和 `15`，知道页面背后的工作台和 API。
+4. 再看 `17.25` 到 `17.38`，知道运行链、队列和数据底座。
+5. 最后看 `19` 和 `20`，确认整个系统的运行总图和事实源优先级。
+
+这样基本就能判断：
+
+- 哪个页面是输入口。
+- 哪个页面是审阅口。
+- 哪个页面是导出口。
+- 哪个页面只是壳。
+- 哪个数据是最终事实。
+- 哪个数据只是临时态。
+
+## 22. 通用请求生命周期
+
+系统里的大多数动作都能套进同一条生命周期：
+
+1. 进入页面。
+2. 先看权限和 workspace scope。
+3. 从数据库、localStorage、snapshot 或 API 读初始态。
+4. 用户输入文件、表单、筛选或审批动作。
+5. 页面先做最小校验，例如文件类型、必填项、当前 scope 是否存在。
+6. 然后走本地计算、普通 API、worker 或 queue。
+7. 成功后写入草稿、版本、历史、任务、导出文件或通知记录。
+8. 失败后保留错误文案和可恢复状态，不把原数据直接抹掉。
+
+这条生命周期里最重要的分界点有四个：
+
+- 读取边界：哪些数据来自真实存储，哪些只是缓存。
+- 计算边界：哪些在浏览器里做，哪些交给 API / worker。
+- 持久化边界：哪些写数据库，哪些只写 localStorage，哪些只保留在本次会话。
+- 发布边界：哪些结果只是草稿，哪些已经是最终导出或审批通过的动作。
+
+## 23. 页面状态机
+
+### 23.1 登录
+
+- `idle` -> `submitting` -> `authenticated` / `failed`
+- 成功后再走权限校正和页面跳转。
+- 失败后只显示错误，不刷新全站状态。
+
+### 23.2 workspace
+
+- `empty` -> `bulk_uploaded` -> `matched` -> `draft_generated` -> `selected_for_export` -> `exported`
+- 任何一步都可以回到重新上传或重新匹配。
+- `draft_generated` 不等于最终导出，仍要人工勾选。
+
+### 23.3 dashboard
+
+- `list_loading` -> `list_ready`
+- `detail_closed` -> `detail_loading` -> `detail_ready`
+- `editing` -> `saving` -> `saved` / `save_failed`
+- 导入会先得到解析草稿，再转成 product 记录。
+
+### 23.4 listing-ai
+
+- `draft_loading` -> `draft_ready`
+- `input_editing` -> `generating` -> `result_ready`
+- `image_uploading` -> `image_ready`
+- `chat_idle` -> `chat_streaming` / `chat_done`
+- `upscale_ready` -> `upscaling` -> `upscaled`
+- workspace draft 会贯穿整个页面，不会因切 tab 丢掉。
+
+### 23.5 logistics
+
+- `file_selected` -> `parsing` -> `parsed`
+- `parsed` -> `building` -> `export_ready`
+- `export_ready` -> `downloaded`
+- PDF 场景会先拿解析结果，再根据模板批量生成文件。
+- A 表如果跳过图片读取，状态仍然算 `parsed`，只是后续 D 表和对比表会再补一次完整解析。
+
+### 23.6 sellfox
+
+- `overview_loading` -> `overview_ready`
+- `products_loading` -> `products_ready`
+- `performance_loading` -> `performance_ready`
+- `syncing` -> `sync_done` / `sync_failed`
+
+### 23.7 agents
+
+- `runtime_loading` -> `runtime_ready`
+- `execution_running` -> `waiting_tool` / `waiting_approval` / `completed` / `failed`
+- `approval_requested` -> `approval_decided`
+- `trace_visible` 不是独立状态，它只是执行结果的可视化。
+
+### 23.8 accounts / settings / versions / tasks
+
+- 这些页多数是 `loading` -> `ready` -> `saving` / `querying` / `restoring` 的简单状态机。
+- 它们的差别不在 UI，而在写回的对象类型不同。
+
+## 24. 典型业务链路
+
+### 24.1 PPC 主链路
+
+1. 上传 Bulk。
+2. 解析广告组、生命周期和性能行。
+3. 上传 Overall 并按 scope 匹配。
+4. 跑规则引擎，生成草稿。
+5. 人工勾选和复核。
+6. 导出回写 Bulk。
+7. 写入 draft-run history 和版本。
+
+这条链路的核心是“先建议，再确认，再写回”，不是“导入后直接覆盖”。
+
+### 24.2 产品主链路
+
+1. 导入产品 workbook 或直接新建商品。
+2. 解析出主数据、竞品、供应、进度和图片。
+3. 保存为 product 记录和 version。
+4. 进入详情编辑、图片上传、视频计划、文案画廊和工作流流转。
+5. 需要导出时再走文件接口或导出接口。
+
+这条链路的核心是“产品主数据是主轴”，图片、视频和结论文件只是围绕主轴的附件。
+
+### 24.3 Listing AI 主链路
+
+1. 先准备商品、竞品、图片和 AI 配置。
+2. 再跑标题、描述、图片和 A+ 生成。
+3. 结果会落成草稿和 history。
+4. 对话页和图片放大页只是在这个草稿体系上延伸能力。
+
+这条链路的核心是“草稿先行”，不是“实时发布”。
+
+### 24.4 物流主链路
+
+1. 选文件。
+2. 解析 A/B/C/赛狐/PDF。
+3. 按模板或规则生成目标 workbook。
+4. 本地直接下载。
+5. 需要时把导出结果 zip 起来。
+
+这条链路的核心是“文件工具”，不是“长期任务系统”。
+
+### 24.5 Agent 主链路
+
+1. 输入自然语言目标和上下文。
+2. Agent runtime 拆解计划。
+3. Tool Gateway 按权限和风险调用工具。
+4. 高风险动作先审批。
+5. 结果写回 execution、trace、memory、approval。
+
+这条链路的核心是“受控执行”，不是“自由聊天”。
+
+## 25. 排错时先看什么
+
+如果一个页面出问题，按这个顺序排最快：
+
+1. 先看是不是权限拦了。
+2. 再看 workspace scope 对不对。
+3. 再看初始数据是从数据库还是缓存来的。
+4. 再看输入类型和校验是否通过。
+5. 再看是否走了本地计算、API、worker 还是 queue。
+6. 最后看历史、任务、版本、日志里有没有落痕。
+
+对应模块的常见判断点：
+
+- `workspace`：先看 Bulk、Overall、scope、规则和草稿。
+- `dashboard`：先看产品列表、详情和导入文件。
+- `listing-ai`：先看 AI 配置、workspace draft、图片资产和生成接口。
+- `logistics`：先看文件大小、模板是否匹配、解析是否跳过图片。
+- `sellfox`：先看服务端凭据和当前 workspace / account / marketplace。
+- `agents`：先看 execution status、approval、tool call 和 trace。
+- `settings`：先看数据库配置是否完整，再看本地缓存是否旧。
+
+## 26. 一句话总结
+
+这套系统的骨架其实很简单：
+
+- 页面负责收输入和展示结果。
+- workbench 负责编排状态和交互。
+- lib 负责纯逻辑和领域规则。
+- API / queue / worker 负责持久化、异步和恢复。
+- 草稿、版本、历史、任务和日志负责把一切动作留痕。
+
+看懂这五层，基本就能看懂整个系统。
+
+## 27. 页面输入-处理-输出总表
+
+这一节把每个页面再压缩一次：看输入是什么、主要在哪处理、最终落到哪里。
+
+- `/login`：输入账号和密码；处理在认证接口；输出 session 和跳转结果；不保留业务态。
+- `/`：输入当前用户权限；处理在权限快照和页面分发；输出可见模块入口；只做导航。
+- `/workspace`：输入 Bulk、Overall、分组状态和规则操作；处理在 workspace store、纯函数、浏览器 worker 和前端草稿流；输出草稿、导出文件、历史和任务记录。
+- `/dashboard`：输入筛选条件、产品数据、图片、视频、备注和工作流动作；处理在产品查询、列表缓存、图片资产和版本逻辑；输出产品列表、详情、版本和导出结果。
+- `/listing-ai`：输入商品信息、竞品、图片、文案和 AI 配置；处理在 workspace draft、AI client、图片资产和生成器状态；输出标题、卖点、描述、A+、图片计划、对话结果和历史草稿。
+- `/image-upscale`：输入图片放大请求；处理在 Listing AI 图像能力；输出放大结果；本身不承载独立状态。
+- `/logistics`：输入 A/B/C/赛狐/PDF 文件和模板选择；处理在浏览器内的 Excel / PDF 解析与生成函数；输出 workbook、zip、重命名 PDF 和日志。
+- `/saihu-search-merge`：输入搜索词文件；处理在本地合并和差异计算；输出合并表、对比表、历史和导出文件。
+- `/history`：输入历史记录查询条件；处理在历史索引和记录恢复；输出可复用的旧结果或旧运行现场。
+- `/sellfox`：输入同步范围和查询条件；处理在 Sellfox API 拉取、映射和入库；输出同步后的商品和绩效视图。
+- `/agents` 和各专用 Agent 页：输入目标、上下文、权限和审批动作；处理在 runtime、tool gateway、MCP、记忆和 trace；输出执行结果、建议、审批流和可追踪记录。
+- `/tasks`：输入重试、筛选和任务查看；处理在 import job / queue 状态；输出任务列表、失败原因和重试入口。
+- `/versions`：输入版本查看或恢复动作；处理在版本快照和恢复逻辑；输出版本差异和回滚结果。
+- `/accounts`：输入账号资料和角色操作；处理在组织、角色和权限模型；输出账号列表和授权结果。
+- `/settings`：输入 AI 配置、运行参数和健康检查请求；处理在配置校验、保存和 worker health 读取；输出设置状态和运行态快照。
+- `/forbidden`：输入是权限判断失败；处理是静态兜底；输出拒绝访问提示。
+
+从这个总表可以直接看出三件事：
+
+1. `workspace`、`logistics`、`listing-ai` 和 `dashboard` 是最重的业务页面，真正的计算都在 workbench / lib / API 里。
+2. `tasks`、`versions`、`history`、`settings` 是配套支撑页，负责留痕、恢复和观察。
+3. `login`、`/`、`forbidden` 是边界页，只负责控制入口，不承载业务计算。
+
+## 28. 模块执行地图
+
+这一层不再按页面看，而是按“动作怎么流动”看。
+
+### 28.1 workspace
+
+入口是 `src/app/workspace/page.tsx`，主体是 `CampaignGridHome` 和 `WorkspacePanel`。
+
+动作顺序通常是：
+
+1. 读工作区 scope、snapshot、草稿和默认规则。
+2. 上传 Bulk 后先解析表头、广告组、生命周期和性能行。
+3. 上传 Overall 后按当前 scope 进行匹配，再汇总 matched / unmatched / ambiguous。
+4. 跑规则引擎生成 adjustment drafts。
+5. 人工选择需要写回的草稿。
+6. 导出时把勾选草稿回写到原 workbook。
+7. 记录 draft-run history、export history 和版本快照。
+
+这里的关键点是：
+
+- Bulk 解析和规则运行是分开的。
+- Overall 先匹配，规则再跑。
+- 草稿先生成，再人工确认。
+- 导出只写回结果，不覆盖原始输入。
+
+### 28.2 dashboard / products
+
+入口是 `src/app/dashboard/page.tsx`，主体是产品工作台和详情编辑。
+
+动作顺序通常是：
+
+1. 读当前 workspace 下的产品列表和 summary cache。
+2. 用筛选条件缩小列表。
+3. 打开详情后才加载或编辑图片、视频、备注、工作流和版本。
+4. 导入时先生成 product record，再补齐附件和流程字段。
+5. 导出或同步时只取当前 scope 的产品记录。
+
+这里的关键点是：
+
+- 列表是摘要视图，详情才是编辑视图。
+- 图片有缩略图和原图两条链路。
+- workflow progress 和 overdue 是派生状态，不是手填字段。
+- Sellfox 来源的产品和 Dashboard 原生产品在 summary 上会分桶。
+
+### 28.3 listing-ai
+
+入口是 `src/app/listing-ai/page.tsx`，主体是 `ListingAiWorkbench`。
+
+动作顺序通常是：
+
+1. 先恢复 AI 设置、图片设置、workspace draft 和历史草稿。
+2. 输入商品信息、竞品、图片和写作目标。
+3. 进入标题、描述、分析、Listing、Image Plan、对话或图片放大等标签页。
+4. 调用 `/api/listing-ai/generate-title`、`/api/listing-ai/generate-description`、`/api/listing-ai/optimize`、`/api/listing-ai/chat`、`/api/listing-ai/generate-images` 等接口。
+5. 生成结果写回 draft、history、gallery 状态和本地缓存。
+6. 图片资产按 assetId 恢复，避免草稿只剩文本。
+
+这里的关键点是：
+
+- 文本生成和图片生成是两条链，不是一个大按钮。
+- 历史保存的是“上下文 + 结果”，不是单条消息。
+- 工作区草稿会贯穿整个页面，切 tab 不会丢。
+- 图片先做资产化，再在需要时恢复。
+
+### 28.4 logistics
+
+入口是 `src/app/logistics/page.tsx`，主体是 `LogisticsWorkbench`。
+
+动作顺序通常是：
+
+1. 用户选 A/B/C/赛狐/PDF 文件。
+2. 先在浏览器里动态加载 `src/lib/logistics/jobs.ts`。
+3. A 表先快速解析，必要时延后读取图片。
+4. B/C/赛狐/PDF 都基于 A 的解析结果生成目标文件。
+5. 下载动作直接输出 workbook、zip 或重命名后的 PDF。
+6. 日志和摘要留在当前会话里。
+
+这里的关键点是：
+
+- 它不是 worker 任务页。
+- 它的处理发生在浏览器里。
+- A 表是主源，其他模板都围着 A 转。
+- 生成结果不是排队产物，而是即时下载产物。
+
+### 28.5 sellfox
+
+入口是 `src/app/sellfox/page.tsx`，主体是 `SellfoxWorkbench`。
+
+动作顺序通常是：
+
+1. 从本地 scope 读取 workspaceId / accountId / marketplace。
+2. 拉取 overview，确认服务端凭据和站点列表。
+3. 拉取产品列表和绩效列表。
+4. 按搜索词、状态、店铺和日期筛选。
+5. 点击同步时再调用同步接口刷新数据库。
+
+这里的关键点是：
+
+- scope 必须先确定，不然查询会串。
+- overview 是总览，products 和 performance 是明细。
+- 这个页更像“同步监控 + 查询面板”，不是编辑器。
+
+### 28.6 agents
+
+入口是 `src/app/agents/page.tsx` 及各专用 agent 页。
+
+动作顺序通常是：
+
+1. 读 agent 定义、运行时配置和 MCP / 工具权限。
+2. 在中心页看当前 agent 是否就绪，或进入某个 agent 专页。
+3. 运行时把输入交给 `createAgentRuntime()`。
+4. runtime 负责创建 execution、trace、event、tool call、approval 和 memory。
+5. tool gateway 决定工具能不能被调用、要不要审批、结果怎么回写。
+6. 运行结束后记录执行历史，再回到中心页或详情页查看。
+
+这里的关键点是：
+
+- Agent 的结果不是单一文本，而是一串 execution artifacts。
+- 审批是运行时的一等状态，不是后置注释。
+- 轨迹和内存是为了复盘，不只是日志。
+
+### 28.7 tasks / versions / accounts / settings
+
+这四类页面是支撑层，但各自职责很固定。
+
+- `/tasks`：读 import job 列表，展示 queued / running / done / failed，并提供 retry。
+- `/versions`：按 entityType 和 entityId 看版本记录，必要时做恢复。
+- `/accounts`：编辑团队成员、角色、权限和导入导出账号表。
+- `/settings`：保存 AI 模型配置、图片模型配置、SellerSprite 配置和 worker health。
+
+这里的关键点是：
+
+- `tasks` 看执行状态。
+- `versions` 看可恢复历史。
+- `accounts` 看组织和权限。
+- `settings` 看系统配置和运行健康。
+
+## 29. 每条链路的最终落点
+
+所有页面最后其实都要落到四种地方之一：
+
+1. 数据库记录。
+2. 对象存储 / 文件资产。
+3. 草稿 / 历史 / 版本 / 任务这类可回放记录。
+4. 纯前端会话态。
+
+对应关系很清楚：
+
+- `workspace` 最终落到 snapshot、draft-run history、export history 和版本。
+- `dashboard` 最终落到 product records、image assets、workflow events 和版本。
+- `listing-ai` 最终落到 workspace draft、saved records、image assets、chat history 和配置。
+- `logistics` 最终落到下载文件和当前会话日志，默认不留长期任务。
+- `sellfox` 最终落到同步后的商品、绩效、导出文件和数据库快照。
+- `agents` 最终落到 execution、trace、approval、memory 和 project 记录。
+- `tasks` 最终落到 job 状态和结果文件。
+- `versions` 最终落到版本表和可回滚快照。
+- `accounts` 最终落到团队成员表和角色权限表。
+- `settings` 最终落到 AI 配置、集成配置和系统健康检查数据。
+
+这也是为什么这套系统能继续往多人协作演进：页面可以换，工作台可以换，前端可以换，但只要这些落点还在，系统逻辑就还在。
+
+## 30. 按钮级运行逻辑
+
+这一层再往下看，就是“点了某个按钮，系统会先做什么、再做什么、最后留下些什么”。
+
+### 30.1 `/workspace`
+
+- 上传 Bulk：先写入本次会话的原始文件，再解析最后一个 sheet、广告组、生命周期和性能行，随后刷新草稿和摘要。
+- 上传 Overall：先检查当前 scope，再按广告组 + 关键词/投放对象 + 匹配类型做匹配，结果会进入 matched / unmatched / ambiguous 三类。
+- 运行规则：先确认当前视图有启用规则、可运行 Bulk 行和有效 Overall，再调用对应 scope 的规则执行器。
+- 运行组合单元规则：只对组合单元内广告组生效，输出会先合成统一草稿，但导出仍按原广告组拆分。
+- 导出 Bulk 文件：只写回已勾选草稿，并从原 workbook buffer 或 fileId 重新取回原文件。
+- 合并导出 Bulk：把当前待处理草稿全部写回，随后记录 export history 和 draft-run history。
+- 清空待处理：只清当前 pending 草稿队列，不删除已生成的规则结果和历史。
+- 清空数据库保存：只清当前 workspace 的 snapshot 和持久化态，不碰原始文件和别的 workspace。
+- 点某个 Overall 统计按钮：只打开明细层，不改变任何数据。
+
+### 30.2 `/dashboard`
+
+- 切筛选条件：只更新查询参数和本地缓存，不立即改数据库。
+- 打开商品详情：加载详情、附件、图片和工作流信息，再进入编辑态。
+- 保存详情：写回 product record、版本和工作流事件。
+- 上传图片：先保留原图，再生成列表用压缩图；列表只读缩略图，预览才读原图。
+- 进入历史：只看版本和审计，不回写主记录。
+
+### 30.3 `/listing-ai`
+
+- 恢复页面：先从数据库/本地缓存恢复 AI 设置、图片设置、workspace draft 和历史草稿。
+- 切 tab：只切视图，不清输入、不丢图片、不丢生成结果。
+- 生成标题：只调用标题链路，结果写入 titleGenerator 的当前模式和 history。
+- 生成描述：只调用描述链路，结果写入 descriptionGenerator 和 history。
+- 生成分析 / Listing / Image Plan / A+：各自走独立生成接口，回写对应面板状态。
+- 发起对话：普通对话和图片意图对话共用同一聊天历史，但会根据附件和 prompt 决定执行路径。
+- 上传图片资产：先转 assetId，再在恢复时从存储里补回 url。
+- 图片放大：只是 Listing AI 里的一个子能力，不是独立系统。
+- 退出或刷新后：workspace draft 和 chat history 会被重新拉起，尽量还原上次工作面。
+
+### 30.4 `/logistics`
+
+- 上传 A 表：先快速解析，超过阈值只提示慢，不自动切到后台任务。
+- 上传 B 表：识别模板类型，准备按 A 表结果重建发货表。
+- 上传 C 表：解析箱号列和箱规，再等 A 表结果回填。
+- 上传赛狐模板：识别模板结构，按 A 表统一口径回填。
+- 上传 PDF：先解析货件标题、页数和重命名信息，再用于箱唛和发票分支。
+- 生成 C 表：必须同时有 A 和 C，且 C 表要能识别箱号列。
+- 生成对比表：必须有 A 和 PDF 才能跑。
+- 生成 B 表 / 赛狐模板：都依赖同一次 A 解析结果，A 变了才重新算。
+- 生成 D 表 / 物流发票：先根据 A 和 PDF 组合生成，凯奇模板会直接生成可下载发票。
+- 下载全部箱唛：不是重新渲染 PDF，而是把识别后的 PDF 批量重命名后打包。
+- 打包下载：把当前页已经生成好的文件统一压缩，不重新跑解析。
+
+#### 30.4.1 低层规则（实现口径）
+
+这一段记录的是当前代码里的实际匹配规则，后续改解析时优先对照这里。
+
+**A 表**
+
+- 读取最后一个 sheet，不看前面的 sheet。
+- 表头行会先找包含 `SKU`、`FNSKU` 或 `发货总数` 的那一行；如果找不到，再退回第 3 行附近的默认行。
+- 列名识别会先做去空格和大写归一化，再按包含关系或精确关系匹配。
+- `SKU`、`FNSKU`、`ASIN` 使用精确列名匹配。
+- `产品图片`、`品名`、`产品名称`、`采购成本`、`包装尺寸`、`重量`、`海关编码`、`备注` 使用包含匹配。
+- `totalShipment` 的优先级是：`发货总数` -> `总发货` -> `最终发货` -> 精确 `发货` -> 默认列位兜底。
+- 箱号列的识别规则是：表头单元格可解析成正整数，且位置必须在 `totalShipment` 右侧；如果没有 `totalShipment`，则在 `备注` 右侧；再不行就从第 13 列开始找。
+- 箱号表头会收集成 `boxHeaders`，箱号和列号的映射会保存在 `boxColumnIndexMap`。
+- 行过滤规则是：`sku` 为空且 `totalShipment === 0` 的行直接跳过。
+- `packageWeightKg` 如果表头文字包含 `克`，会把原值除以 `1000` 并保留 3 位小数；否则按原数值写入。
+- 图片解析可跳过；跳过时不会阻塞 A 表主结构解析，后续需要图片时再回读。
+
+**B 表**
+
+- 只消费 A 表解析结果，不回扫原始 A 表。
+- 只写 `totalShipment > 0` 的 SKU。
+- 目标模板固定是亚马逊官方 `Create workflow – template`。
+- 从第 9 行开始写入，`A` 列写 SKU，`B` 列写 `totalShipment`。
+
+**C 表**
+
+- 读取 sheet 时优先找 `Pack List`，再找 `包装箱包装信息`，否则取第一个 sheet。
+- 头行识别优先看 `SKU`、`第1箱`、`第 1 箱`。
+- 箱号表头解析规则是 `第?\s*(\d+)\s*箱?`，也就是 `第1箱`、`1箱`、`1` 这类都能命中。
+- 新版 `包装箱包装信息` 模板会先读 `包装箱总数`，然后按 `1..N` 自动补齐箱号列。
+- 回填时按 `A.SKU === C.SKU` 找行，再按 `A.boxMap[箱号]` 写数量。
+- 包装箱重量、宽、长、高会写回模板里对应的 metric 行。
+- 重量换算口径是 `kg -> lb`，并按 `0.454` 做除法再取整。
+- 默认尺寸是 `长 17`、`宽 18`、`高 16`。
+
+**PDF 箱唛**
+
+- 先用 PDF.js 读每页文本；失败时返回空页文本数组，不让整页直接崩。
+- 再扫 PDF stream 里的压缩文本，作为按页文本的补充来源。
+- 货件标题识别优先匹配：
+  - `货件\d+-[A-Z]{3,5}\d*-FBA[A-Z0-9]+-\d+箱-[\u4e00-\u9fffA-Za-z0-9-]+`
+  - `货件\d+-[A-Z]{3,5}\d*-FBA[A-Z0-9]+-\d+箱-[^\s()]+`
+- 货件标题标准化解析规则是：
+
+  ```text
+  /^(?:(货件\d+)-)?([A-Z]{3,5}\d*)-(FBA[A-Z0-9]+)-(\d+)箱(?:-(.+))?$/
+  ```
+
+- 这条规则会拆出：
+  - `shipmentName`
+  - `warehouseCode`
+  - `fbaCode`
+  - `totalBoxes`
+  - `channelName`
+- 全局 `fbaCode` 的兜底规则是：
+  1. 先看标题里有没有
+  2. 再找 `FBA[A-Z0-9]+U\d{6}`，并去掉尾部 `U000001` 这一类页码后缀
+  3. 再退回普通 `FBA[A-Z0-9]+`
+- 仓库码是箱唛命名的必需业务字段：优先从页内公共文本里的 `FBA STA ...-仓库码 Created:` 结构和 PDF stream 里提取，其次才看标题，再看全文里其他三到五位大写字母加数字的码。
+- 仓库码提取会过滤 PDF 内部编码/字体标识，例如 `UCS2`、`UTF8`、`UTF16`；这些值不能参与箱唛重命名。
+- `pageCount` 优先取页面文本数量；如果页面文本为空，再取标题里的箱数；再不行才取 PDF `/Count`。
+- 每页 `fbaBoxCode` 识别优先级是：
+  1. 当前页文本里的 `FBA...U000001`
+  2. 全文扫描到的同类编号按页顺序对应
+  3. 用 `fbaCode + U + 6位页码` 拼一个兜底值
+- 页级 `skuType` 只认 `Single SKU` 和 `Mixed SKUs`。
+- 页级 `qty` 只认 `Qty\s*(\d+)`。
+- 页级 `positionCode` 只认这三种模式：
+
+  ```text
+  /P\s*\d+\s*-\s*B\s*\d+/
+  /P\s*\d+\s*B\s*\d+/
+  /PAGE\s*\d+\s*-\s*BOX\s*\d+/
+  ```
+
+- 识别后会把空格去掉，并把 `PAGE` 改成 `P`、`BOX` 改成 `B`。
+- `Single SKU` 页才会尝试提 SKU，搜索区间是 `Single SKU` 后最多 120 个字符，直到换行。
+- `Mixed SKUs` 页不强行抽 SKU，只保留页型和箱号信息。
+- 解析后的重命名文件名会优先用完整货件标题；如果标题缺失，则按 `货件号-仓库-FBA-箱数箱.pdf` 拼。
+- 如果 PDF 里没有货件号，但识别到了仓库码和 FBA 编号，则重命名为 `仓库-FBA编号-箱数箱.pdf`；只有在仓库码也完全提不出来时，才会触发更低级别的兜底。
+
+**D 表 / 物流发票**
+
+- 只支持凯奇模板，模板 id 不是 `kaiqi` 就直接拦截。
+- 模板文件固定从 `public/logistics-templates/kaiqi-logistics-template.xlsx` 读取。
+- 每个 PDF 会生成一个独立 D 表，文件名默认沿用 PDF 的重命名结果，只把后缀改成 `.xlsx`。
+- 规则里把 `pageNumber` 当作箱号顺序使用，`positionCode` 只是辅助列名。
+- `boxNo` 优先从 `positionCode` 里的 `B\d+` 反推；反推不到时退回页面序号。
+- 单页如果找不到任何 A 表匹配商品，会只写箱级信息和 PDF 箱号，不会硬补伪 SKU。
+- 有匹配商品时，按 `SKU + 箱号` 的 `boxMap` 逐条展开明细。
+- `declarePrice` 的口径是 `purchaseCost / 8`，保留 2 位小数。
+- 固定写入的默认值是：
+  - 国家：`美国`
+  - 报关类型：`一般报关`
+  - 是否某项开关：`是` / `否`
+  - 材质：`尼龙/Nylon`
+  - 用途：`户外/Outdoor`
+  - 尺寸：`50 x 40 x 40`
+
+### 30.5 `/sellfox`
+
+- 刷新总览：先带上 workspace scope 读取服务端凭据、店铺和同步概况。
+- 刷新商品：按当前 scope、搜索词和状态重新拉商品列表。
+- 刷新绩效：按日期、店铺和搜索词重新拉绩效列表。
+- 点击同步：把当前 scope 对应的数据重新写回数据库，再刷新列表和总览。
+
+### 30.6 `/agents`
+
+- 中心页刷新：只重新拉 agent 定义和运行态。
+- 进入某个 Agent：只切到专页，不代表开始执行。
+- 运行市场 / 产品 / 供应 / 刊登 / PPC：先创建 execution，再进入 runtime，后续可能出现 tool call、approval、trace 和 memory。
+- 生成项目：把执行结果收束成项目草稿或交接内容。
+- 提交 handoff：把上游 Agent 的输出作为下游 Agent 的输入。
+- 审批通过 / 拒绝：只有 `REQUESTED` 状态的审批能被处理，处理后 execution 才能继续或结束。
+
+### 30.7 `/tasks`、`/versions`、`/accounts`、`/settings`
+
+- `/tasks` 查询：只改筛选条件和分页，不改任务本身。
+- `/tasks` 重试：把失败任务重新丢回 job 流程。
+- `/tasks` 下载：只在任务成功且有结果 key 时出现。
+- `/versions` 查询：只看版本，不改版本。
+- `/versions` 恢复：把被选版本重放回可恢复对象。
+- `/accounts` 导入：把账号表解析成列表后再写回团队成员数据。
+- `/accounts` 导出：把当前账号列表写成 workbook。
+- `/accounts` 新建/编辑/停用/归档：都直接改账号记录，再写版本。
+- `/settings` 保存 AI 配置：写数据库，同时更新本地缓存和 profile。
+- `/settings` 测试 AI：只做连通性验证，不会影响正式配置。
+- `/settings` 保存 SellerSprite：写集成配置，并刷新可见状态。
+- `/settings` 保存通知设置：写本地与服务端两层记录，便于后续扫描告警。
+
+## 31. 一次完整运行的闭环
+
+如果把整个系统压成一条闭环，实际就是：
+
+1. 先选工作区和权限边界。
+2. 再进入某个页面，恢复数据库或缓存里的初始态。
+3. 用户在工作台里输入文件、表单、筛选、审批或生成请求。
+4. 页面先做最小校验，再把动作交给本地计算、API、worker、queue 或 runtime。
+5. 结果先落草稿、历史、版本、任务或文件资产。
+6. 人工复核后再决定是否导出、恢复、同步或审批通过。
+7. 最终结果回写数据库、文件系统或对象存储。
+8. 下次进入页面时，再从这些落点把状态恢复回来。
+
+所以这套系统最重要的不是某一个按钮，而是“输入 -> 计算 -> 草稿/历史 -> 复核 -> 写回 -> 恢复”这个循环。
+
+## 32. 核心对象字典
+
+想真正看懂系统，最后要回到对象本身。页面只是壳，真正流动的是这些对象。
+
+### 32.1 workspace 相关对象
+
+- `CampaignGroup`：一个广告组级别的工作单元，承载 Bulk 行、Overall 匹配和规则执行。
+- `WorkspaceUnit`：多个广告组的组合单元，用来批量运行和统一审阅。
+- `LifecycleGroup`：新品、成熟、衰退、清库存这类产品周期分组，决定规则集。
+- `PerformanceRow`：Bulk 里的明细行，是规则引擎真正处理的输入。
+- `OverallAdDataRow`：Sellfox / Overall 数据行，是匹配和辅助判断输入。
+- `AdjustmentDraft`：规则引擎输出的草稿，不是最终写回结果。
+- `RuleRunHistoryRecord`：一次规则运行的记录，保存运行现场和上下文。
+- `ExportHistoryRecord`：一次导出的记录，保存最终写回的文件名和范围。
+- `BlockedCampaignIdentity`：屏蔽名单，用来稳定排除已禁用广告组。
+
+这些对象的关系是：
+
+1. Bulk 先变成 `PerformanceRow`。
+2. Overall 先变成 `OverallAdDataRow`。
+3. 两者经过匹配后进入 `AdjustmentDraft`。
+4. `AdjustmentDraft` 再经过人工确认后才进入导出。
+5. 运行和导出都要留 `HistoryRecord`，方便复盘。
+
+### 32.2 产品相关对象
+
+- `Product`：产品主数据，是 dashboard 的核心对象。
+- `ProductImageAsset`：图片资产，承载原图、缩略图和可恢复引用。
+- `ProductWorkflowEvent`：工作流事件，记录产品从创建到交付的过程。
+- `ProductVideoPlan`：视频计划草稿，属于产品附件和内容计划的一部分。
+- `ProductListSummary`：产品列表的汇总统计，是派生对象，不是主数据。
+
+这些对象的关系是：
+
+1. 产品先作为主记录存在。
+2. 图片、视频和流程事件围绕主记录挂接。
+3. 列表页只看汇总，详情页才看完整对象。
+4. 统计值可重建，所以不应该当成唯一事实源。
+
+### 32.3 Listing AI 相关对象
+
+- `WorkspaceDraft`：Listing AI 的整体草稿容器，贯穿输入、生成和历史。
+- `TitleGeneratorDraft` / `DescriptionGeneratorDraft`：文本生成状态。
+- `ImageGeneratorDraft`：图片生成状态。
+- `SavedRecord`：一次可回放的生成记录。
+- `ChatHistoryState`：聊天历史状态。
+- `ImagePreview`：图片的可展示引用，可能来自 assetId 或临时 url。
+
+这些对象的关系是：
+
+1. 页面先恢复 `WorkspaceDraft`。
+2. 生成器状态在草稿里分模块保存。
+3. `SavedRecord` 保存的是结果和上下文，不只是答案文本。
+4. 图片先资产化，再在需要时还原。
+
+### 32.4 Logistics 相关对象
+
+- `AWorkbookSummary`：A 表的解析总览，是物流链路的主源。
+- `BWorkbookSummary`：B 表解析结果。
+- `CWorkbookSummary`：C 表解析结果。
+- `SaihuWorkbookSummary`：赛狐模板解析结果。
+- `PdfSummary`：PDF 解析结果。
+- `WorkbookExportResult`：导出 workbook 的统一结果对象。
+- `NamedWorkbookExportResult`：需要打包时的命名导出对象。
+
+这些对象的关系是：
+
+1. A 表先被解析成主摘要。
+2. B / C / 赛狐 / PDF 都围着 A 表结果工作。
+3. 导出函数只吃摘要，不直接重扫原文件。
+4. 下载只是最后一步，不是解析的一部分。
+
+### 32.5 Agent 相关对象
+
+- `AgentExecution`：一次 Agent 执行。
+- `AgentTraceEvent`：执行轨迹。
+- `AgentToolCall`：工具调用记录。
+- `AgentApproval`：审批请求。
+- `AgentMemoryEntry`：可回放记忆。
+- `AgentEvent`：执行事件流。
+
+这些对象的关系是：
+
+1. 先创建 execution。
+2. 再产生 trace、event、tool call。
+3. 必要时插入 approval。
+4. 最后把结果和记忆落回系统。
+
+### 32.6 支撑对象
+
+- `ImportJob`：后台导入或导出任务。
+- `VersionRecord`：版本审计记录。
+- `Account` / `Role`：账号和角色。
+- `AiModelSettings`：AI 模型配置。
+- `SellerSpriteMcpSettings`：SellerSprite 配置。
+
+这些对象决定了系统的边界，而不是某个页面的显示方式。
+
+## 33. 保存与恢复规则
+
+不同页面看起来都在“保存”，但其实保存的东西不一样。
+
+### 33.1 保存优先级
+
+系统里常见的优先级顺序是：
+
+1. 数据库和对象存储。
+2. 页面专用草稿或历史接口。
+3. localStorage 之类的浏览器缓存。
+4. 当前组件 state。
+5. 临时计算值。
+
+这意味着：
+
+- 真正需要多人共享的东西，最终要进入数据库。
+- 只供当前工作面复用的东西，可以先留在草稿或 history。
+- 只是为了下次打开更顺手的配置，可以放 localStorage。
+- 只在当前交互里有意义的东西，不要硬写持久层。
+
+### 33.2 恢复顺序
+
+系统恢复状态时，通常按这个顺序：
+
+1. 先读数据库里的事实源。
+2. 再读草稿、历史、版本或任务里的可恢复记录。
+3. 再读 localStorage 里的用户习惯配置。
+4. 最后用组件默认值补齐缺失字段。
+
+### 33.3 失败时怎么处理
+
+如果保存失败，系统一般不会直接清掉页面内容，而是：
+
+- 保留当前输入。
+- 标记错误状态。
+- 允许继续编辑或重试。
+- 尽量不把原始数据覆盖成空值。
+
+这条规则很重要，因为它保证“失败”只是暂停，不是数据蒸发。
+
+### 33.4 哪些东西会自动恢复
+
+- `workspace`：snapshot、草稿选择、Overall 数据、规则状态。
+- `listing-ai`：workspace draft、AI 配置、图片资产、聊天历史。
+- `settings`：AI 配置、图片配置、SellerSprite 配置、通知设置。
+- `accounts`：账号和角色列表。
+- `tasks` / `versions`：查询结果本身不持久化，只是重新读取。
+
+### 33.5 哪些东西不会自动恢复
+
+- 当前操作中的临时拖拽状态。
+- 正在弹开的明细层和对话框。
+- 纯视觉上的分页位置。
+- 未提交的瞬时选择框。
+
+这些东西属于会话体验，不属于业务事实。
+
+## 34. 读文档时的脑内顺序
+
+如果你想靠这份文档直接理解系统，脑内顺序其实不用复杂：
+
+1. 先记住每个页面负责什么。
+2. 再记住每个页面的主对象是什么。
+3. 再记住保存到哪里。
+4. 再记住失败会保留什么。
+5. 最后记住哪些链路走前端，哪些链路走 API、queue 或 worker。
+
+只要这五件事顺了，后面看任何新功能，都只是把它塞回这张网里。
+
+## 35. 关键 API 入口图
+
+页面只是入口，真正让数据移动的是 API。
+
+### 35.1 workspace
+
+- `POST /api/workspace/workbook-files/upload`：上传原始 Bulk 文件，返回 fileId 和文件元数据。
+- `GET /api/workspace/workbook-files/[id]/download`：按 fileId 取回原始 workbook buffer。
+- `GET /api/workspace/snapshot`：读取当前工作区快照。
+- `PUT /api/workspace/snapshot`：保存当前工作区快照。
+- `DELETE /api/workspace/snapshot`：清空当前工作区快照。
+- `GET /api/workspace/draft-runs`：读取导出和规则运行记录。
+- `POST /api/workspace/draft-runs`：记录一次规则运行或导出现场。
+
+### 35.2 listing-ai
+
+- `GET /api/listing-ai/workspace` / `PUT /api/listing-ai/workspace`：读取和保存 Listing AI 工作区草稿。
+- `POST /api/listing-ai/generate-title`：生成标题。
+- `POST /api/listing-ai/generate-description`：生成描述。
+- `POST /api/listing-ai/optimize`：生成分析、Listing、图片计划等综合结果。
+- `POST /api/listing-ai/chat`：发送聊天消息。
+- `GET /api/listing-ai/chat-history` / `PUT /api/listing-ai/chat-history`：读取和保存聊天历史。
+- `POST /api/listing-ai/generate-images`：生成图片方案或图片请求。
+
+### 35.3 agents
+
+- `GET /api/agents`：读取 Agent 中心态。
+- `GET /api/agents/[agentId]`：读取单个 Agent 详情。
+- `POST /api/agents/[agentId]/executions`：启动通用 Agent 执行。
+- `GET /api/agents/[agentId]/executions`：读取某个 Agent 的执行列表。
+- `POST /api/agents/[agentId]/approvals/[approvalId]`：处理审批。
+- `GET /api/agents/tools`：读取工具目录。
+- `GET /api/agents/evaluations`：读取评估结果。
+- `POST /api/agents/market/executions`、`/product/executions`、`/listing/executions`、`/ppc/executions`：各专用 Agent 的执行入口。
+- `POST /api/agents/market/projects`、`/product/projects`、`/listing/projects`、`/supplier/projects`：把 Agent 结果转成项目或交接。
+- `POST /api/agents/ppc/actions`：PPC Agent 的动作入口。
+- `GET /api/agents/orchestrator`、`POST /api/agents/orchestrator/executions`：编排器读取和执行。
+
+### 35.4 sellfox
+
+- `GET /api/sellfox/overview`：读取总览。
+- `GET /api/sellfox/products`：读取商品列表。
+- `GET /api/sellfox/performance`：读取绩效列表。
+- `GET /api/sellfox/performance/export`：导出绩效文件。
+- `POST /api/sellfox/sync`：同步 Sellfox 数据。
+
+### 35.5 accounts / settings / versions / notifications
+
+- `GET /api/accounts/team-members` / `PUT /api/accounts/team-members`：读取和保存账号列表。
+- `GET /api/accounts/roles` / `PUT /api/accounts/roles`：读取和保存角色。
+- `GET /api/accounts/role-permissions` / `PUT /api/accounts/role-permissions`：读取和保存角色权限。
+- `GET /api/audit/versions` / `POST /api/audit/versions`：读取和恢复版本。
+- `GET /api/notifications/wecom/settings` / `PUT /api/notifications/wecom/settings`：读取和保存企业微信通知设置。
+- `POST /api/notifications/wecom`：发送企业微信消息。
+
+这个接口图的意义很简单：页面负责交互，API 负责跨页面和跨会话的数据落点。
+
+## 36. 失败、重试和回退
+
+系统不是只看“成功”，还要看失败后能不能回到一个安全位置。
+
+### 36.1 workspace
+
+- Bulk 解析失败：保留原文件和当前快照，不清空工作区。
+- Overall 匹配失败：保留已上传 Bulk，等用户重新上传或重新选择 scope。
+- 规则运行失败：保留当前草稿队列和历史，不自动把结果标记成已导出。
+- 导出失败：不删除待处理草稿，允许重新导出。
+
+### 36.2 listing-ai
+
+- AI 请求失败：保留当前输入、图片、历史和草稿，只显示错误。
+- 图片恢复失败：保留 assetId 或空壳预览，不把整份草稿打断。
+- 聊天失败：保留消息历史和会话上下文，允许重发。
+
+### 36.3 logistics
+
+- 解析失败：保留已经上传的文件和日志，要求重新上传或换模板。
+- 生成失败：不清空 A 表摘要，用户可以直接重试 B/C/D。
+- PDF 重命名失败：只影响当前批次，不影响其他已成功文件。
+
+### 36.4 agents
+
+- tool 调用失败：execution 会留下 trace 和 error，便于复盘。
+- 审批超时或拒绝：execution 进入等待结束或失败路径，不会自动继续执行高风险动作。
+- 交接失败：下游 Agent 不会收到半截结果，仍保留上游 execution。
+
+### 36.5 tasks / versions / accounts / settings
+
+- `tasks` 失败：直接保留失败任务和错误，靠重试恢复。
+- `versions` 恢复失败：只影响当前恢复动作，不改原版本。
+- `accounts` 保存失败：当前编辑态继续保留，方便修正后再保存。
+- `settings` 保存失败：保留当前表单值，不回滚到旧值。
+
+### 36.6 统一原则
+
+遇到失败时，系统优先保留输入和上下文，再让用户决定下一步，而不是替用户“自动修正”。
+
+## 37. 低层规则字典
+
+这一节是最底层的。页面怎么讲都可以变，但这些归一化、匹配和正则规则会直接决定系统“认不认得出同一件事”。
+
+### 37.1 通用文本归一化
+
+- `trim()` 是第一步，所有关键字段都会先去首尾空白。
+- `toLowerCase()` 用于大小写不敏感比较。
+- 多空格会压成一个空格：`/\s+/g` -> `" "`.
+- 许多 key 的比较会先去 BOM 和中英文标点，再做归一化。
+
+最典型的是表头规则：
+
+- `normalizeHeader()` 会把字符串转小写。
+- 再去掉 `\uFEFF`。
+- 再删掉空格、括号、下划线、连字符、冒号、中文冒号、逗号、句号、斜杠、反斜杠和中英文括号。
+
+所以这些表头在系统里会被看成同一个：
+
+- `广告活动名称`
+- `广告活动名称（仅供参考）`
+- `广告活动名称(仅供参考)`
+- `广告活动 名称`
+
+### 37.2 表头读取规则
+
+`readColumn()` 的顺序是：
+
+1. 先把每个原始列名做标准化。
+2. 先找完全相等的标准化表头。
+3. 找不到时再做模糊匹配，规则是“候选包含实际值”或“实际值包含候选”。
+4. 都找不到才返回空串。
+
+`readNumber()` 再进一步：
+
+- 先取文本。
+- 再删掉 `$`、`%`、`￥` 和逗号。
+- 再 `Number(...)`。
+- 失败就回 0。
+
+所以 `1,234.50`、`US$12.3`、`12%` 都能被读成数值。
+
+### 37.3 workspace 的行与键
+
+workspace 里最重要的几类 key：
+
+- `normalizeMatchValue()`：`trim()` 后转小写，再把多个空格压成一个。
+- `buildBlockedCampaignIdentityId()`：`campaignName::adGroupName` 的组合键。
+- `buildCampaignGroupId()`：`sheetName::adGroupName` 转小写后，把非字母数字和中文以外的字符都换成 `-`。
+
+这几个规则的含义是：
+
+- 广告组屏蔽靠“活动名 + 广告组名”双键。
+- 组 ID 靠 sheet + adGroup。
+- 对外展示可以保留原名，内部比较必须稳定。
+
+### 37.4 workspace 的匹配和分组规则
+
+#### 37.4.1 匹配类型
+
+`normalizeMatchType()` 会把这些词统一成同一类：
+
+- `exact` / `精确` / `精准` / `精确匹配` / `精准匹配`
+- `phrase` / `短语` / `词组` / `短语匹配` / `词组匹配`
+- `broad` / `广泛` / `广泛匹配` / `broad match`
+
+另外还保留一些特殊映射，例如：
+
+- `紧密匹配` -> `close match`
+- `宽泛匹配` -> `loose match`
+- `同类商品` -> `substitutes`
+- `关联商品` -> `complements`
+
+#### 37.4.2 生命周期
+
+`normalizeLifecycleGroupId()` 会把这些词统一成四个周期：
+
+- `launch` / `新品` / `新品组`
+- `mature` / `成熟` / `成熟组`
+- `decline` / `衰退` / `衰退组`
+- `clearance` / `清库存` / `清库存组`
+
+#### 37.4.3 Campaign / Workspace Unit
+
+- `buildCampaignGroupLookup()` 会把以下四种写法都映射到同一个 group：
+  - `group.id`
+  - `group.adGroupName`
+  - `sheetName::adGroupName`
+  - `campaignName::adGroupName`
+- `buildWorkspaceUnitsFromGroupingRows()` 只有在一个 workspace unit 内有至少 2 个有效广告组时才会生成单元。
+- 如果行里没写 workspace unit，但写了生命周期，而且那个值正好能被识别成周期名，就会被当作“生命周期列被挪到 workspace unit 列”的兼容情况处理。
+
+### 37.5 Bulk 行识别条件
+
+`toPerformanceRow()` 只接收满足这些条件的行：
+
+- sheet 名要像 Sponsored Products Campaigns 或 Sponsored Products。
+- entity 要像 `关键词` / `关键字` / `keyword` / `keywords`。
+- 广告组名不能为空。
+- bid 不能为空。
+
+它会优先读：
+
+- `campaignName`
+- `adGroupName`
+- `keyword`
+- `target`
+- `matchType`
+- `bid`
+
+并把暂停态统一成：
+
+- 包含 `暂停`
+- 或者小写后等于 `paused`
+
+### 37.6 Overall / 广告数据匹配规则
+
+Overall 数据的低层规则是：
+
+- 先读 CSV 或 sheet。
+- 只要 `keyword` 和 `matchType` 任一缺失，这行就不会进入可处理数据。
+- `target` 会和 `keyword` 一起进入匹配键。
+- 匹配键是：`normalizeMatchValue(value)::normalizeMatchType(matchType)`
+
+对应到匹配顺序：
+
+1. 先在同一 `campaignGroupId` 里找。
+2. 再按 `adGroupName` 对齐。
+3. 再按 keyword / target + matchType 匹配。
+4. 找到多个候选时就是 ambiguous。
+5. 完全找不到就是 unmatched。
+
+`summarizeOverallRows()` 只统计：
+
+- `matchStatus !== "unmatched" && campaignGroupId`
+
+也就是说，只有真正能进入后续规则的行才算可处理。
+
+### 37.7 CSV 和搜索词合并规则
+
+CSV 解析的最底层规则是：
+
+- 支持双引号包裹字段。
+- 支持转义双引号 `""`。
+- 以逗号分列。
+- 保留空单元格。
+- 只跳过空白行。
+
+赛狐合并里的数值规则是：
+
+- `parseNumber()` 会先删 `US$`、`%` 和所有非数字、非小数点、非负号字符。
+- 解析失败就按 0。
+- `parseNullableNumber()` 遇到空值会返回 `null`，不会强行变 0。
+
+标签规则是：
+
+- 用 `,`、`，`、`、` 分割。
+- 再逐项 `trim()`。
+- 空串丢弃。
+
+### 37.8 Logistics 的最底层解析规则
+
+#### 37.8.1 A 表
+
+- 只读最后一个 sheet。
+- 没有最后一个 sheet 就直接报错。
+- 先快速解析结构，再按需补图片。
+- `skipImages` 为真时，会先跳过图片，这就是大文件快一点的原因。
+
+#### 37.8.2 图片和附件
+
+- 图片扩展名会统一成：
+  - `jpg/jpeg` -> `jpeg`
+  - `png` -> `png`
+  - `gif` -> `gif`
+  - 其他默认 `png`
+- 只要单元格里是 `http(s)` 图片地址，才会尝试拉图。
+- 不是 http(s) 的图片地址会直接视为不可恢复。
+
+#### 37.8.3 箱号和页码
+
+- `parseBoxHeader()` 用的是 `第?\s*(\d+)\s*箱?`
+- `parseBoxNumberFromLabel()` 用的是 `B(\d+)`
+- PDF 位置码支持：
+  - `P12-B3`
+  - `P12B3`
+  - `PAGE12-BOX3`
+
+#### 37.8.4 PDF 货件标题
+
+标题识别分两层：
+
+1. 先从 PDF 文本或 stream 里找完整货件标题。
+2. 找不到时再从文件名回退。
+
+核心标题格式是：
+
+```text
+^(?:(货件\d+)-)?([A-Z]{3,5}\d*)-(FBA[A-Z0-9]+)-(\d+)箱(?:-(.+))?$
+```
+
+此外还会尝试在全文里找：
+
+- `货件\d+-[A-Z]{3,5}\d*-FBA[A-Z0-9]+-\d+箱-...`
+
+如果都没有，就退回到文件名推断。
+
+#### 37.8.5 文件名回退
+
+`inferPdfMetaFromFileName()` 的文件名逻辑是：
+
+- 先去掉 `.pdf`
+- 再按 `-` 拆分
+- 识别：
+  - `货件\d+`
+  - `[A-Z]{3,5}\d*`
+  - `FBA[A-Z0-9]+`
+  - 以 `箱` 结尾的段
+- `箱` 后面的所有段都当成渠道名
+
+### 37.9 Listing AI 的最底层规则
+
+#### 37.9.1 附件识别
+
+图片附件判定：
+
+- MIME 以 `image/` 开头
+- 或文件名匹配 `\.(avif|gif|jpe?g|png|webp)$`
+
+文档附件判定：
+
+- 文件名匹配 `\.(pdf|csv|xls|xlsx)$`
+- 或 MIME 是 pdf / csv / xls / xlsx 的常见类型
+
+不符合这两类就直接拒绝。
+
+#### 37.9.2 文档摘要
+
+- PDF 只抽前 8 页。
+- 每页文本会压成一个空格。
+- 最终摘要最多 8000 字。
+- Spreadsheet 只看前三个 sheet。
+- 每个 sheet 只预览前 20 行。
+- CSV 直接按全文摘要，但也会截断。
+
+#### 37.9.3 聊天历史
+
+`normalizeChatHistory()` 只保留同时满足以下条件的会话：
+
+- `id` 是字符串
+- `title` 是字符串
+- `createdAt` 是字符串
+- `updatedAt` 是字符串
+- `messages` 是数组
+
+#### 37.9.4 图片生成
+
+- `hydrateImagePreviews()` 只接受 `data:image/` 或合法 assetId。
+- assetId 必须满足：
+  - 以 `assets/` 开头
+  - 不能有空段
+  - 不能有 `.`、`..`
+  - 不能包含 `\`
+- `buildImagePrompt()` 会把视图说明追加到提示词后面，再加一段固定系统约束。
+- `buildImagesGenerationsRequest()` 只取前 14 张引用图。
+
+#### 37.9.5 AI 配置
+
+AI 配置的硬规则：
+
+- `ready` 条件里必须：
+  - `enabled`
+  - `apiKey.trim().length > 0`
+  - `baseUrl.trim().startsWith("http")`
+  - `model.trim().length > 0`
+- `normalizeAiSettings()` 会去掉 baseUrl 尾部斜杠。
+- 超时时间被限制在 10 到 240 秒。
+- `volcengine` 的旧模型名会迁移成新模型名。
+- 图片配置如果走 `image_generations`，模型名必须像图片模型，`imageGenerationModelPattern = /(image|seedream|dall|imagen|flux)/i`。
+
+### 37.10 Accounts / 角色 / 权限
+
+账号归一化的硬规则：
+
+- 必须至少有 `id`、`name`、`roleId`
+- 账号状态只能是：
+  - `active`
+  - `pending`
+  - `disabled`
+  - `archived`
+- 其他状态一律回落成 `active`
+
+角色归一化的硬规则：
+
+- `normalizeAccountRoleId()` 会把空值回落成 `viewer`
+- 旧角色会迁移：
+  - `selection` -> `procurement`
+  - `ppc_manager` -> `operations`
+  - `listing_operator` -> `operations`
+  - `logistics_operator` -> `warehouse`
+
+账号筛选时会做整条字符串的 `includes()`：
+
+- name
+- phone
+- email
+- username
+- department
+- title
+- id
+
+### 37.11 SellerSprite / WeCom / 通知
+
+SellerSprite 的低层规则：
+
+- `serverUrl` 先 `trim()` 再去尾部 `/`
+- `marketplace` 强制大写
+- `timeoutSeconds` 限制在 5 到 180 秒
+- `validateSellerSpriteMcpSettings()` 只检查：
+  - 启用时 URL 必须以 `http://` 或 `https://` 开头
+  - API key 不能为空
+
+WeCom 的低层规则：
+
+- Webhook 必须是：
+  - `https:`
+  - hostname = `qyapi.weixin.qq.com`
+  - pathname = `/cgi-bin/webhook/send`
+  - query 里必须有 `key`
+- `launchOverdueDays` 限制在 1 到 180
+- 发送成功后只记录当天已发过的广告组
+- 每条消息最多展开 12 个告警
+- 整条 markdown 最长截到 3900 字符
+
+### 37.12 产品、状态和查询
+
+产品列表规则：
+
+- `search` 会同时匹配：
+  - `sku`
+  - `id`
+  - `chineseName`
+  - `englishName`
+- `asin`、`supplierName` 都是 insensitive contains
+- `opsAssignees`、`selectionOwners`、`designerAssignees` 都是 `in` 过滤
+- `status=operations_progress` 实际代表 `operationsProgressIncomplete=true`
+- `status=overdue` 实际代表未关闭且 overdue
+
+产品来源规则：
+
+- `source="sellfox"`
+- 或 `id` 以 `sellfox-` 开头
+- 或 note 里包含 `赛狐在线产品 api`
+
+### 37.13 为什么要写到这么细
+
+因为系统现在不是“展示数据”这么简单，而是在做三件事：
+
+1. 把不同来源的数据判成同一件事。
+2. 把不同页面的输入折叠到同一套对象上。
+3. 把不确定的东西尽量在边界层消化掉，而不是传进核心逻辑里。
+
+这些边界规则越清楚，后面的工作台、AI、导出和恢复才不会互相污染。
+
+## 38. 正则目录
+
+这一节把系统里真正会“认字段、认文件、认标题、认位置”的正则单独拎出来。读到这里，就基本能知道系统为什么能认出那些长得差不多但不完全一样的输入。
+
+### 38.1 workspace / bulk
+
+- `\uFEFF`：去掉 BOM，避免表头前面藏一个不可见字符。
+- `/[\s()[\]_\-:：,，.。/\\（）]/g`：用于 `normalizeHeader()`，把表头里的空格、括号、下划线、连字符、冒号、逗号、句号、斜杠、反斜杠都清掉。
+- `/\s+/g`：把连续空白压成单空格，常用于匹配键。
+- `/[^a-z0-9\u4e00-\u9fff]+/g`：把 workspace unit / campaign group 的内部 key 变成稳定的短横线串。
+- `/^\uFEFF/`：CSV 读取时去掉首行 BOM。
+- `/\r?\n/`：CSV 分行，兼容 Windows 和 Unix 换行。
+- `/"/g`：CSV 字段里双引号转义。
+- `/[,，、]/u`：多值标签拆分。
+- `/[",\r\n]/`：CSV 输出时判断是否需要加引号。
+- `/\.(xlsx|xls)$/i`：工作簿文件类型识别。
+- `/\.csv$/i`：CSV 文件类型识别。
+
+### 38.2 workspace / 匹配键
+
+- `/\s+/g`：`normalizeMatchValue()` 把多个空格折叠掉。
+- `/[^a-z0-9\u4e00-\u9fff]+/g`：`buildCampaignGroupId()` 和 `buildWorkspaceUnitId()` 的 key 清洗。
+- `/^(?:(货件\d+)-)?([A-Z]{3,5}\d*)-(FBA[A-Z0-9]+)-(\d+)箱(?:-(.+))?$/u`：物流 PDF 货件标题主模式，后面会在 38.4 再展开。
+
+### 38.3 workspace / 规则和状态词
+
+这些不是完整正则，但属于同一层“模式表”：
+
+- `exact / 精确 / 精准 / 精确匹配 / 精准匹配`
+- `phrase / 短语 / 词组 / 短语匹配 / 词组匹配`
+- `broad / 广泛 / 广泛匹配 / broad match`
+- `launch / 新品 / 新品组`
+- `mature / 成熟 / 成熟组`
+- `decline / 衰退 / 衰退组`
+- `clearance / 清库存 / 清库存组`
+
+它们在代码里不是单个正则，而是归一化后的字典匹配。
+
+### 38.4 Logistics / Excel
+
+- `/B(\d+)/iu`：从标签里抓箱号，例如 `B1`、`B12`。
+- `/第?\s*(\d+)\s*箱?/u`：从标题或标签里抓“第几箱”。
+- `/^[A-Z]{3,5}\d*$/u`：仓库码识别。
+- `/^FBA[A-Z0-9]+$/u`：FBA 号识别。
+- `/^货件\d+$/u`：货件名识别。
+- `/^https?:\/\//iu`：图片 URL、远程资源只认 http(s)。
+- `/<v>[\s\S]*?<\/v>/u`：xlsx sheet XML 里替换数值。
+- `/<f>[\s\S]*?<\/f>/u`：xlsx sheet XML 里保留公式时写回 `<v>`。
+- `/<c[^>]*r="${cellRef}"[^>]*>/u`：定位指定单元格。
+- `/<row[^>]*r="${rowNumber}"[^>]*>/u`：定位指定行。
+- `/\.pdf$/i`：PDF 文件名去后缀。
+- `/\.pdf\.pdf$/i`：处理重复后缀。
+- `/^-+|-+$/g`：清理重命名结果两端多余横线。
+
+### 38.5 Logistics / PDF
+
+- `/[.*+?^${}()|[\]\\]/g`：`escapeRegExp()` 里转义普通字符串，避免拼正则时误伤。
+- `/stream\r?\n([\s\S]*?)\r?\nendstream/g`：从 PDF 原文中抓 stream。
+- `/\((.*?)\)Tj/g`：从解压后的 PDF 内容流里抓文本段。
+- `/货件\d+-[A-Z]{3,5}\d*-FBA[A-Z0-9]+-\d+箱-[\u4e00-\u9fffA-Za-z0-9-]+/u`：带中文或英文描述的完整货件标题。
+- `/货件\d+-[A-Z]{3,5}\d*-FBA[A-Z0-9]+-\d+箱-[^\s()]+/u`：不带空格和括号的标题兜底。
+- `/\b(P\s*\d+\s*-\s*B\s*\d+)\b/u`：`P12-B3` 类位置码。
+- `/\b(P\s*\d+\s*B\s*\d+)\b/u`：`P12B3` 类位置码。
+- `/\b(PAGE\s*\d+\s*-\s*BOX\s*\d+)\b/u`：`PAGE12-BOX3` 类位置码。
+- `/\/Count\s+(\d+)/`：PDF 页数。
+- `/FBA[A-Z0-9]+U\d{6}/u`：PDF 页里常见的箱唛编号。
+- `/(Single SKU|Mixed SKUs)/u`：单箱 / 混箱模式。
+- `/Qty\s*(\d+)/u`：页内数量。
+
+### 38.6 Logistics / 文件名回退
+
+- `/\.pdf$/i`：先去掉 PDF 后缀。
+- `/-/`：按短横线拆分文件名。
+- `/箱$/`：以“箱”结尾的段作为箱数段。
+- `/[^\d]/g`：从箱数段里剔除非数字字符。
+- `/\.(jpg|jpeg|png|gif|webp|avif)$/i`：图片后缀识别。
+
+### 38.7 Listing AI / 附件和资产
+
+- `/\u0000/g`：去掉文本里的空字符。
+- `/\.(avif|gif|jpe?g|png|webp)$/i`：图片附件识别。
+- `/\.(pdf|csv|xls|xlsx)$/i`：文档附件识别。
+- `/^(application\/pdf|text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)/i`：MIME 文档识别。
+- `/\s+/g`：PDF / Spreadsheet / CSV 摘要压缩空白。
+- `/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i`：从 data URL 解析图片内容。
+- `/^https?:\/\//iu`：远程图片 URL。
+- `/\.(jpg|jpeg)$/i`：图片导出时把后缀统一到 jpeg。
+- `/\.(avif|gif|jpe?g|png|webp)$/i`：读取附件时的图片候选。
+
+### 38.8 Listing AI / 生成与提示词
+
+- `/^```(?:json)?\s*/i`：去掉模型返回内容外层的 JSON code fence。
+- `/\s*```$/i`：去掉结尾 code fence。
+- `/openrouter\.ai/`：识别 OpenRouter。
+- `/only allows Codex official clients/`：识别特定模型错误提示。
+- `/images endpoint requires an image model/`：图片接口返回的模型类型错误提示。
+- `/InvalidEndpointOrModel\.NotFound/`：模型或端点不存在。
+- `/image size must be at least 3686400 pixels/`：图片尺寸不足的错误提示。
+- `/image|seedream|dall|imagen|flux/i`：图片模型的宽松识别规则。
+
+### 38.9 Accounts / 角色 / 权限
+
+- `/\s+/g`：账号角色名、用户名、部门名的基础归一化仍然靠空白压缩。
+- `/^role-/`：默认生成的角色 ID 前缀。
+- `/^\d{8}$/`：账号导出文件名里的日期片段通常会变成 `YYYYMMDD`。
+- `/^local-admin$/`：默认超级账号 ID。
+- `/^1$/`：历史兼容里把 `1` 视为默认超级账号凭证。
+
+### 38.10 SellerSprite / WeCom
+
+- `/^https?:\/\//`：两类外部集成都要求 URL 先像 URL。
+- `/\/+$/`：集成 URL 统一去尾斜杠。
+- `/^FBA[A-Z0-9]+$/`：物流 / 产品边界里仍然会用到 FBA 号的格式。
+- `/key=/`：WeCom webhook 里必须存在 key 参数。
+
+### 38.11 赛狐搜索词合并
+
+- `/US\$/giu`：去掉美元前缀。
+- `/[%]/gu`：去掉百分号。
+- `/[^\d.-]/gu`：只保留数字、小数点和负号。
+- `/[,，、]/u`：多标签拆分。
+- `/\.(xlsx|xls|csv)$/iu`：输入文件类型识别。
+- `/\.(xlsx|xls|csv)$/iu`：输出文件名去后缀。
+
+### 38.12 这些正则的共同特点
+
+它们大部分都不是为了“聪明”，而是为了“稳定”：
+
+- 先做宽松识别，再做严格落点。
+- 先容忍脏输入，再把结果收紧成标准对象。
+- 先兼容历史写法，再统一到现在的主规则。
+
+这也是这套系统能长期演进的原因之一。不是因为规则少，而是因为每条规则都清楚自己在边界上做什么。
+
+## 39. 字段候选、列定位和写回细则
+
+第 37 和 38 章讲的是“规则是什么”。这一章讲更底层的“规则怎么落到行、列、单元格和对象上”。
+
+### 39.1 A 表列定位
+
+A 表不会靠固定列号死读，优先靠表头识别，失败后才用旧模板列号兜底。
+
+表头行定位：
+
+- 从整个 matrix 里找第一行，只要这一行任一单元格等于 `SKU`、`FNSKU` 或 `发货总数`，就认为是表头行。
+- 如果找不到表头行，则默认使用 `matrix[2]`，也就是 Excel 第 3 行。
+
+表头文本归一化：
+
+- `toText(value)`
+- 删除所有空白：`replace(/\s+/g, "")`
+- 转大写：`toUpperCase()`
+
+列定位规则：
+
+- 图片列：包含 `产品图片` 或 `图片`
+- 品名列：包含 `品名` 或 `产品名称`
+- ASIN：精确等于 `ASIN`
+- SKU：精确等于 `SKU`
+- FNSKU：精确等于 `FNSKU`
+- 采购成本：包含 `采购成本`、`价格`、`单价`
+- 包装尺寸：包含 `包装尺寸`、`尺寸`
+- 包装重量：包含 `毛重`、`重量`、`净重`
+- 海关编码：包含 `海关编码`、`HS编码`、`HS CODE`
+- 最终发货数量：优先包含 `发货总数`、`总发货`、`最终发货`
+- 最终发货数量兜底：精确等于 `发货`
+- 备注列：包含 `备注`
+
+这条规则非常关键：如果能找到 `发货总数 / 总发货 / 最终发货`，就绝不再用普通 `发货` 列。只有完全找不到显式总数列，才退回精确 `发货`。
+
+### 39.2 A 表数据行规则
+
+A 表数据行从表头下一行开始：
+
+- 起始行是 `Math.max(headerRowIndex + 1, 3)`
+- 换成 Excel 视觉行号，就是至少从第 4 行开始读
+- 每行先读 SKU 和 totalShipment
+- 如果 SKU 为空且 totalShipment 为 0，这行跳过
+- 否则会生成 `AProductRow`
+
+每个产品行的字段来源：
+
+- `rowIndex`：真实 Excel 行号，等于 matrix index + 1
+- `image`：图片列，找不到时读第 1 列
+- `productName`：品名列，找不到时读第 2 列
+- `asin`：ASIN 列，找不到时读第 3 列
+- `fnsku`：FNSKU 列，找不到时读第 4 列
+- `sku`：SKU 列，找不到时读第 5 列
+- `packageSize`：包装尺寸列，找不到时读第 6 列
+- `packageWeightKg`：包装重量列，找不到时读第 7 列
+- `hsCode`：海关编码列，找不到时读第 8 列
+- `purchaseCost`：采购成本列，找不到时读第 13 列
+- `totalShipment`：最终发货列，找不到时读第 24 列
+
+这说明 A 表既支持新模板，也保留了老模板列号兼容。
+
+### 39.3 A 表箱号列规则
+
+箱号列不是按“第几个非空列”推断，而是按表头数值推断。
+
+第一箱列定位：
+
+- 表头单元格必须能 `parseNumber()`
+- 数字必须大于 0
+- 如果识别到了总发货列，箱号列必须在总发货列右侧
+- 否则如果识别到了备注列，箱号列必须在备注列右侧
+- 如果两者都没有，箱号列必须从第 13 列以后开始
+
+箱号列表：
+
+- 遍历表头行
+- 每个能解析成正数的表头都作为箱号
+- 如果已经找到了第一箱列，则只接受第一箱列及其右侧的数字列
+- `boxHeaders` 按原表头顺序保留
+- `boxColumnIndexMap` 保存 `boxNo -> columnIndex`
+
+每个产品的箱内数量：
+
+- 遍历 `boxHeaders`
+- 到对应列读数量
+- 非空且不为 0 才写入 `boxMap`
+- `boxMap` 的 key 是箱号，不是列序号
+
+所以 A 表里如果箱号列是 `1, 2, 4, 7`，系统会保留这些真实箱号，不会重排成 `1, 2, 3, 4`。
+
+### 39.4 A 表重量和尺寸规则
+
+重量单位判断：
+
+- 先读包装重量列对应的表头
+- 表头去空白后如果包含 `克`，则把原值除以 1000
+- 换算后保留 3 位小数
+- 否则认为原值已经是 kg
+
+箱规指标行识别：
+
+- 箱重行：第 5 列小写后等于 `weight of box (kg)`
+- 长度行：第 5 列小写后等于 `box length (cm)`
+- 宽度行：第 5 列小写后等于 `box width (cm)`
+- 高度行：第 5 列小写后等于 `box height (cm)`
+
+箱规值读取优先级：
+
+1. 指标行对应箱号列。
+2. 第二行 inline metric 对应列。
+3. 第二行同一箱号列。
+4. 指标行的旧模板位置 `7 + boxNo - 1`。
+5. 全部失败则回 0。
+
+### 39.5 C 表识别和写回规则
+
+C 表优先找 sheet：
+
+- 先找 `Pack List`
+- 再找 `包装箱包装信息`
+- 再退回第一个 sheet
+
+新版 Amazon 包装箱表：
+
+- sheet 名等于 `包装箱包装信息`
+- 必须识别 `包装箱总数`
+- 箱号列从第 14 列开始，也就是 index = `13 + boxNo - 1`
+- 如果包装箱总数缺失或小于等于 0，直接报错
+
+旧版包装箱表：
+
+- 遍历表头行
+- 用 `第?\s*(\d+)\s*箱?` 抓箱号
+- 抓到的箱号进入 `boxColIndexMap`
+
+SKU 行定位：
+
+- 遍历整个 matrix
+- SKU 默认读识别到的 SKU 列
+- 找不到 SKU 列时用第 5 列
+- 建立 `sku -> Excel 行号` 映射
+
+数量写回：
+
+- 遍历 A 表每个产品
+- 用 `product.sku` 找 C 表行号
+- 再遍历 `product.boxMap`
+- 用箱号找 C 表列号
+- 写回该箱数量
+
+箱规写回：
+
+- 重量行如果存在，把 kg 转 lb：`Math.round(kg / 0.454)`
+- 宽度固定写 18
+- 长度固定写 17
+- 高度固定写 16
+
+这就是 C 表为什么可以先不上传图片也能生成：它只依赖 A 表 SKU、箱号、数量和箱重。
+
+### 39.6 XLSX XML 写回规则
+
+C 表写回不完全依赖 xlsx 高层 API，而是直接 patch worksheet XML。
+
+`upsertNumericCell(sheetXml, cellRef, value)` 的顺序：
+
+1. 从 cellRef 里取行号：`cellRef.replace(/^[A-Z]+/u, "")`
+2. 用 `<c ... r="${cellRef}" ...>` 找指定单元格
+3. 如果单元格已有 `<v>...</v>`，只替换 `<v>`
+4. 如果单元格有 `<f>...</f>` 公式但没有 `<v>`，保留公式并追加 `<v>`
+5. 如果单元格没有值也没有公式，写入 `<v>`
+6. 如果找不到单元格，就找对应 `<row ... r="${rowNumber}" ...>`
+7. 找到行后，在行末追加 `<c r="${cellRef}"><v>${value}</v></c>`
+8. 如果连行都找不到，原样返回，不强行造行
+
+这个规则的目的不是重建整张表，而是在尽量少破坏模板结构的情况下改数值。
+
+### 39.7 PDF 页内字段规则
+
+PDF 元数据先有全局，再有页级。
+
+全局字段：
+
+- 从全文抓所有 `(FBA[A-Z0-9]+U\d{6})`
+- 第一个箱唛编号去掉结尾 `U\d{6}` 后可作为 FBA 编号
+- 找不到时再用 `(FBA[A-Z0-9]+)` 兜底
+- 仓库码从 `\b([A-Z]{3}\d{1,2})\b` 抓
+- 仓库候选会排除 `FBA`、`PDT`、`SKU`、`UCS2`、`UTF8`、`UTF16`
+
+页级字段：
+
+- 箱唛编号：优先当前页里的 `(FBA[A-Z0-9]+U\d{6})`
+- SKU 类型：优先当前页里的 `(Single SKU|Mixed SKUs)`
+- 数量：优先当前页里的 `Qty\s*(\d+)`
+- 位置码：优先当前页 `P...B...`，其次 stream candidate
+
+页级兜底：
+
+- 如果当前页没有箱唛编号，就用全局第 N 个箱唛编号
+- 如果仍没有，就用 `FBA号 + U + 6位页码`
+- 例如第一页是 `FBAxxxxU000001`
+
+Single SKU 的 SKU 抓取：
+
+- 只有 `skuType === "Single SKU"` 才尝试
+- 搜索文本优先用当前页文本
+- 没有页文本时，在全文里以箱唛编号附近前 400 / 后 800 字符为窗口
+- 正则是 `Single SKU[\s\S]{0,120}?([A-Z0-9][A-Z0-9\- ]{2,})[\r\n]`
+- 抓到后再 `trim()`
+
+### 39.8 D 表生成规则
+
+D 表只支持凯奇：
+
+- `templateId !== "kaiqi"` 直接报错
+- 模板路径是 `/logistics-templates/kaiqi-logistics-template.xlsx`
+- sheet 必须有 `Sheet1`
+
+表头固定写入：
+
+- `B3` = FBA 编号
+- `E3` = 仓库码
+- `B4` = 渠道名
+- `B5` = 美国
+- `B6` = PDF 页数
+- `B7` = 一般报关
+- `B8` = 是
+- `B11` = 否
+
+明细从第 16 行开始：
+
+- 第 16 到 22 行是模板容量
+- 超出容量会在第 23 行之后插入空行
+- 新增行复制第 16 行的高度、样式和数字格式
+
+每行字段：
+
+- A = 箱号
+- B = 箱唛编号
+- D = 箱重 kg
+- E/F/G = 50/40/40
+- H = 海关编码
+- I = 中文品名
+- J = 英文品名
+- K = 每箱数量
+- L = 申报单价，采购价 / 8，保留 2 位
+- M/N = 无
+- O = 尼龙/Nylon
+- P = 户外/Outdoor
+- Q = 图片
+
+如果某页 PDF 对应箱号在 A 表里找不到商品：
+
+- 仍然生成一行空商品行
+- 保留箱号、箱唛、重量和 PDF 数量
+- 品名、海关编码、图片留空
+
+这保证发票不会因为某一箱 SKU 没匹配上就整份失败。
+
+### 39.9 Listing AI 表格样式规则
+
+图片文案表格的单元格 key：
+
+- `galleryCellKey(rowLabel, columnKey)` = `rowLabel::columnKey`
+
+红字范围：
+
+- 每个 range 都会被夹在 `0` 到文本长度之间
+- `end <= start` 的范围会被丢弃
+- 剩余范围按 start 升序
+
+Excel 写样式：
+
+- `redText` 会写 bold + `FFFF0000`
+- `yellowBg` 会写纯色填充 `FFFFFF00`
+- 局部红字会转成 `richText`
+
+从 Excel 读样式：
+
+- 字体颜色 argb 以 `FF0000` 结尾，就认为是红字
+- 填充颜色 argb 以 `FFFF00` 结尾，就认为是黄底
+- richText 片段颜色以 `FF0000` 结尾，就记录该片段的 start/end
+
+Excel 单元格转文本：
+
+- null / undefined -> 空串
+- string / number / boolean -> String
+- Date -> `YYYY-MM-DD`
+- richText -> 拼接所有片段
+- text -> 直接转字符串
+- result -> 递归转文本
+- formula -> 公式文本
+- hyperlink -> 链接文本
+
+### 39.10 账号表导入规则
+
+账号 workbook 支持 xlsx 和 csv：
+
+- 文件名小写后以 `.csv` 结尾，用文本读取
+- 否则按 ArrayBuffer 读取 workbook
+- 只读第一个 sheet
+- 没有 sheet 时返回错误 `未找到可读取的工作表。`
+
+字段候选：
+
+- id：`id`、`账号ID`、`账号 id`、`账号编号`
+- username：`username`、`用户名`、`登录账号`
+- name：`name`、`姓名`、`名称`
+- email：`email`、`邮箱`
+- password：`password`、`密码`
+- department：`department`、`部门`
+- title：`title`、`岗位`、`职务`
+- role：`roleId`、`role`、`系统角色`、`角色`、`岗位角色`
+- status：`status`、`状态`
+- phone：`phone`、`电话`、`手机号`
+- lastLoginIp：`lastLoginIp`、`最后登录IP`
+- lastLoginAt：`lastLoginAt`、`最后登录时间`
+- sourceCreatedAt：`sourceCreatedAt`、`创建时间`、`来源创建时间`
+
+默认值：
+
+- 没有 id 就用 `imported-${index + 1}`
+- 没有姓名就报 `第 N 行缺少姓名。`
+- 没有 department 就是 `未分配`
+- 没有 title 就是 `未命名岗位`
+- 没有 password 就不写 password
+
+状态映射：
+
+- `pending` / `待激活` -> `pending`
+- `disabled` / `停用` / `已停用` -> `disabled`
+- `archived` / `归档` / `已归档` -> `archived`
+- 其他全部 -> `active`
+
+角色映射：
+
+- 先把角色标签转小写匹配 roleLabels
+- 匹配不上就直接用原 roleValue
+- 最后再走 `normalizeAccountRoleId()`
+
+### 39.11 Listing 图片资产规则
+
+Listing AI 图片资产保存前会做一层轻处理：
+
+- 如果文件不是 `image/*`，或者是 gif，就不压缩，直接保留
+- 其他图片会尝试压缩成 webp
+- 输出文件名会用 `file.name.replace(/\.[a-z0-9]+$/i, ".webp")`
+
+读取资产时：
+
+- assetId 必须以 `assets/` 开头
+- `/` 分段后，任何段为空、`.`、`..` 或包含反斜杠都视为非法
+- 只有合法 assetId 才会拼成 `/api/assets/...`
+
+这条规则避免前端通过 assetId 读取任意路径。
+
+### 39.12 低层规则的调试顺序
+
+如果某条数据没有被识别，调试时按这个顺序看：
+
+1. 原值是不是空，或者只有不可见字符。
+2. 是否先经过了 `trim()`、`toLowerCase()`、去 BOM、去标点。
+3. 表头是精确匹配失败，还是模糊匹配也失败。
+4. 数字是否被 `$`、`%`、中文单位或逗号影响。
+5. 文件名是不是满足后缀规则。
+6. PDF 文本是不是能被 pdfjs 抽到，还是只能走 stream fallback。
+7. 图片 URL 是不是 http(s)，assetId 是不是合法 `assets/...`。
+8. 业务状态是不是被映射到标准枚举。
+9. 最终对象有没有被过滤条件丢弃。
+
+只要按这个顺序查，基本能定位是“输入不合法、识别规则不够、还是后续业务过滤把它排除了”。
+
+### 39.13 物流页到底哪些按钮会碰图片
+
+从实现看，`/logistics` 不是所有按钮都会走图片处理。性能差异主要来自“是否做文件解码、是否做图片压缩、是否做 PDF stream fallback”，而不是按钮名字本身。
+
+明确分层：
+
+- `发货模板 B`：只读模板结构和 A 表结果，不需要图片解码。
+- `包装箱表 C`：只做 A 表和 C 表的数量回填，不需要图片解码。
+- `箱唛 PDF`：主要做 PDF 文本抽取、标题识别、位置码识别、页级字段归一化，不依赖图片上传。
+- `物流模板 D`：会把 A 表里的图片字段写入模板，但它消耗的是已存在的图片字符串或图片资产引用，不是重新压缩整批上传图。
+
+真正会引入图片处理的地方主要是：
+
+- A 表解析时，`skipImages=false` 才会补图片。
+- Listing AI 的图片上传会先压缩到 webp，再走资产上传。
+
+所以如果你看到 `/logistics` 前几个按钮卡顿，优先怀疑的是：
+
+1. workbook 解析太大。
+2. PDF 文本抽取和 stream fallback 太多。
+3. 图片补全被打开了，而不是 B/C/D 本身在做重图像处理。
+
+### 39.14 workspace 导入的严格失败线
+
+workspace 的导入不是“尽量读一点算一点”，而是有明确的失败线。
+
+Bulk 行如果不满足这些条件，就会被当作不可执行数据：
+
+- `entity` 读不到，或者不是关键词 / 关键字 / keyword / keywords 这一类。
+- `adGroupName` 为空。
+- `bid` 为空。
+
+但这里还有一层更细的回退：
+
+- `campaignName` 为空时，会直接退回 `sheetName`。
+- `keyword` 为空时，会尝试 `target`。
+- `target` 为空时，会继续回退到 `keyword`。
+- `matchType` 为空时，先落成 `"-"`，后面再由归一化规则决定是否能进入匹配。
+
+这意味着 workspace 允许“字段不完美”，但不允许“没有主键”。
+
+### 39.15 Overall 匹配的真正判定顺序
+
+Overall 不是简单比对关键词文本，而是按“同 scope、同广告组、同关键词语义、同匹配类型”四层推进。
+
+判定顺序是：
+
+1. 先限定 `scopeCampaignGroupIds`。
+2. 再限定同 `adGroupName`。
+3. 再比较 `keyword` / `target`。
+4. 再比较 `matchType`。
+5. 只有完全对上，才进入 `matched`。
+
+补充细节：
+
+- `keyword` 和 `target` 都会各自生成匹配键。
+- 同一条行如果两个键都能对上，可能会变成 ambiguous。
+- `matchType` 在比较前先归一到 `exact / phrase / broad`，再保留少数扩展词。
+- `cpc`、`acos`、`roas` 这些字段不是匹配主键，只是解析后补充出来的数值属性。
+
+### 39.16 账号导入和角色迁移的最后一层
+
+账号导入不是单纯按表头抄字段，它还有两层兼容：
+
+- 表格里的 role 文本会先尝试映射到当前 `roleLabels`。
+- 映射不上再交给 `normalizeAccountRoleId()`。
+
+`normalizeAccountRoleId()` 的底层行为只有三种：
+
+- 空值 -> `viewer`
+- 旧角色名 -> 迁移后的新角色名
+- 其他值 -> 原样保留
+
+这也是为什么账号表里写老系统角色时不会直接坏掉，但新系统里的角色展示又能逐步统一。
+
+### 39.17 图片资产恢复的最后一道门
+
+Listing AI 的图片资产恢复不是“拿到字符串就去读”，而是先过 assetId 白名单。
+
+合法 assetId 必须：
+
+- 以 `assets/` 开头。
+- 不能出现空段。
+- 不能出现 `.` 或 `..`。
+- 不能包含反斜杠。
+
+只要不合法，系统就不会拼成 `/api/assets/...`。
+
+这条规则的目标很直接：阻止前端把任意路径当图片源读出来。
+
+## 40. 页面输入与性能边界
+
+这一章把“页面到底收什么输入、会不会压主线程、会不会碰图片”再收紧一层。它是前面规则表的运行视角版。
+
+### 40.1 `/workspace`
+
+输入：
+
+- 原始 Bulk workbook。
+- Overall CSV / XLSX。
+- Grouping 状态表。
+- 规则条件和动作。
+
+处理：
+
+- 先按表头和候选词识别行。
+- 再把行拆成 PerformanceRow、OverallAdDataRow、CampaignGroup、WorkspaceUnit。
+- 再进入规则引擎、草稿生成、待处理队列和导出历史。
+
+性能边界：
+
+- 正常工作量主要来自 workbook 解析和匹配。
+- 只有在启用图片补全或读取大 workbook 时才会明显吃主线程。
+- 规则执行本身通常比文件解码轻。
+
+### 40.2 `/logistics`
+
+输入：
+
+- A 表 workbook。
+- C 表 workbook 或模板。
+- PDF 文件。
+- 物流模板选择。
+
+处理：
+
+- A 表先做结构识别、箱号识别、重量单位换算、SKU 与箱号映射。
+- C 表做数量回填和箱规回填。
+- PDF 做标题、仓库码、FBA 码、页码、箱唛、SKU 类型、数量、位置码识别。
+- D 表做模板填充和行扩展。
+
+性能边界：
+
+- B / C 不做图片重处理。
+- PDF 只要 text 层能读到，通常就不会碰 stream fallback。
+- 一旦 PDF 文本层失败，就会进入 stream 解压和逐段抽取，体感会明显变慢。
+
+### 40.3 `/listing-ai`
+
+输入：
+
+- 商品信息。
+- 竞品信息。
+- 文案草稿。
+- 图片附件。
+- AI 配置。
+
+处理：
+
+- 图片附件会先做压缩和资产化。
+- 文档附件会做摘要。
+- 草稿会按 tab、生成器和历史一起保存。
+
+性能边界：
+
+- 图片越多，`assetId -> data URL` 的恢复越重。
+- 文档越大，摘要和预览越慢。
+- 只要切换的是文本草稿，不碰图片资产，恢复会轻很多。
+
+### 40.4 `/accounts` 与 `/settings`
+
+输入：
+
+- 账号导入 workbook。
+- 角色配置。
+- AI / SellerSprite / WeCom 的设置表单。
+
+处理：
+
+- 账号导入只读首个 sheet。
+- 设置页主要做字段校验、归一化和保存。
+
+性能边界：
+
+- 这里的成本主要在表单校验和少量 workbook 解析，不在大批量计算。
+
+### 40.5 什么时候会真正卡
+
+按实现看，真正容易让页面慢下来的通常是这些动作：
+
+1. 读取大 workbook。
+2. 读取大 PDF。
+3. 图片压缩和 data URL 恢复。
+4. 需要做大量候选词匹配和回退扫描。
+5. 需要把整份结构写回模板 XML。
+
+所以“按钮少”不代表“按钮轻”，真正决定速度的是按钮后面那条链路里有没有重解码、重写回和重资产恢复。
+
+## 41. 附件、产品和草稿的更底层规则
+
+这一章把还没完全展开的几个“识别门”补到底。它们看起来像小工具，实际决定了系统会不会把文件、产品和草稿认成合法输入。
+
+### 41.1 Listing AI 附件识别
+
+图片附件的判定是双条件之一：
+
+- `file.type.startsWith("image/")`
+- 或文件名匹配 `\.(avif|gif|jpe?g|png|webp)$/i`
+
+文档附件的判定也是双条件之一：
+
+- 文件名匹配 `\.(pdf|csv|xls|xlsx)$/i`
+- 或 MIME 匹配 `application/pdf`、`text/csv`、`application/vnd.ms-excel`、`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+
+不在这两类里就直接拒绝。
+
+文档摘要的顺序是：
+
+1. PDF 先读前 8 页。
+2. 每页文本先 `trim()`，再把空白压成一个空格。
+3. Spreadsheet 只读前三个 sheet。
+4. 每个 sheet 只预览前 20 行。
+5. CSV 直接全文读取，再统一截断。
+
+摘要长度上限是 8000 字。更长也会被截断，不会继续往下塞。
+
+### 41.2 Listing AI 图片恢复和生成
+
+图片恢复只认两种输入：
+
+- `data:image/...;base64,...`
+- 合法 `assetId`
+
+assetId 白名单是前面已经写过的 `assets/...` 规则。
+
+生成链里还有几条很硬的错误识别：
+
+- `only allows Codex official clients`：说明当前模型或渠道不接受这个客户端。
+- `images endpoint requires an image model`：说明图片接口拿到了文本模型。
+- `InvalidEndpointOrModel.NotFound`：说明模型名或端点不存在。
+- `image size must be at least 3686400 pixels`：说明输入图尺寸不够。
+
+这些错误不是业务校验失败，而是模型接入层的硬失败。
+
+### 41.3 产品列表查询
+
+产品列表的筛选不是单纯 `where status = x`，而是分成几个层：
+
+- `search` 会同时搜 `sku`、`id`、`chineseName`、`englishName`
+- `asin` 和 `supplierName` 是 insensitive contains
+- `opsAssignees`、`selectionOwners`、`designerAssignees` 是 `in`
+- `mySkuOwner` 会在 `selectionOwner`、`currentOwner`、`opsAssignee`、`designerAssignee` 四个字段里做 contains
+- `minPrice` / `maxPrice` 会折到 `purchasePrice` 的范围条件
+
+状态层更细：
+
+- `operations_progress` 不是数据库状态，而是 `operationsProgressIncomplete = true`
+- `development_phase` 是 `pending` + `developing`
+- `overdue` 是“未关闭 + overdue 标记”
+- 其他标准状态才直接落到 `status`
+
+产品来源也有底层识别：
+
+- `source === "sellfox"`
+- 或 `id` 以 `sellfox-` 开头
+- 或 note 包含 `赛狐在线产品 api`
+
+### 41.4 产品列表多值参数
+
+多值筛选不是 JSON，而是一个简单的字符串拆分器：
+
+- 先按 `,` 切
+- 每段 `trim()`
+- 空串丢弃
+
+所以 URL 里的 `a,b, c ,,` 会被读成 `["a", "b", "c"]`。
+
+### 41.5 workspace 草稿和可运行行
+
+`getRunnableRowsForCampaignGroup()` 的逻辑很窄：
+
+- 必须是当前 `campaignGroupId`
+- 并且 batch 要么等于 `activeBatchId`
+- 要么在 `mockBatchIds` 里
+
+如果不满足，就算这行在数据里存在，也不会进入规则运行。
+
+`buildNoDraftMessage()` 的判断顺序也是固定的：
+
+1. 没有 group，先提示选组。
+2. 没有规则，先提示启用规则。
+3. 没有可运行行，先提示 Bulk 没准备好。
+4. 有 Overall 匹配但没草稿，说明匹配到了但没触发。
+5. 其他情况就是完全没命中规则。
+
+`findOverallAdDataUploadForScope()` 的 scope 匹配是两层：
+
+- 先完全相等
+- 再判断 container 是否包含 scope
+
+这意味着它允许“更大范围的上传”覆盖“更小范围的当前 scope”，但不会反过来误认。
+
+### 41.6 workspace 快照迁移
+
+快照迁移时有两个核心动作：
+
+- `recentAdData*` 全部迁成 `overallAdData*`
+- 旧 rule 里的 `dataSource: "recent"` 迁成 `dataSource: "overall"`
+
+默认规则合并时也有一层保留：
+
+- 内置默认规则始终优先保留
+- 只继承 persisted 里对应默认规则的 `enabled`
+- 自定义规则继续追加
+- 旧默认 rule ID 会被识别并剔除，不会重复叠加
+
+所以旧数据能打开，不代表旧字段还会继续作为事实源。
+
+## 42. 物流 PDF 的回退链和文件名规则
+
+这一章把 PDF 识别的最后一层补完，尤其是“文件名怎么回退”“标题怎么拼”“为什么有时会自动补箱数”。
+
+### 42.1 文件名推断
+
+`inferPdfMetaFromFileName()` 的行为很机械：
+
+1. 先去掉 `.pdf`
+2. 按 `-` 切分
+3. 逐段识别：
+   - `^货件\d+$`
+   - `^[A-Z]{3,5}\d*$`
+   - `^FBA[A-Z0-9]+$`
+   - 以 `箱` 结尾的段
+4. `箱` 后面的所有段拼成 `channelName`
+
+所以文件名像：
+
+```text
+货件12-AB123-FBAABC123-8箱-美西仓-空运.pdf
+```
+
+会被拆成：
+
+- shipmentName = `货件12`
+- warehouseCode = `AB123`
+- fbaCode = `FBAABC123`
+- totalBoxes = `8`
+- channelName = `美西仓-空运`
+
+### 42.2 PDF 标题识别
+
+PDF 标题优先从内容里找，不先信文件名。
+
+先找全文或 stream 里的这类模式：
+
+- `货件\d+-[A-Z]{3,5}\d*-FBA[A-Z0-9]+-\d+箱-[\u4e00-\u9fffA-Za-z0-9-]+`
+- `货件\d+-[A-Z]{3,5}\d*-FBA[A-Z0-9]+-\d+箱-[^\s()]+`
+
+如果找不到，再走文件名推断。
+
+再找不到时，才会退到：
+
+- 全局第一个 FBA box code
+- 全局仓库码候选
+- 页面数或 file name base
+
+这就是为什么同一个 PDF，有时换名后还能继续识别。
+
+### 42.3 页级识别回退
+
+页级字段的回退顺序是固定的：
+
+- box code：当前页 -> 全局同序号 -> `FBA + U + 6位页码`
+- sku type：当前页 -> 全局同序号 -> 空串
+- qty：当前页 -> 全局同序号 -> `null`
+- position code：当前页 -> stream candidate -> 空串
+
+Single SKU 的 SKU 只在 `skuType === "Single SKU"` 时抓。
+
+抓取窗口也有顺序：
+
+- 先看当前页文本
+- 如果当前页没有，再从全文里围绕 box code 截一段窗口
+
+这意味着不是每一页都一定能抓到 SKU，系统允许空着继续生成。
+
+### 42.4 重命名规则
+
+最终重命名优先级：
+
+1. `shipmentTitle`
+2. `shipmentName-warehouseCode-fbaCode-totalBoxes箱`
+3. 原文件名
+
+最后还会做两个小清理：
+
+- 去掉重复 `.pdf.pdf`
+- 去掉前后多余 `-`
+
+所以最终文件名会尽量像人能直接看懂的物流标题，而不是内部中间态。
+
+### 42.5 content-based 判定
+
+`isPdfSummaryContentBased()` 会拿期待文件名再做一次正则等价判断。
+
+它的本质不是“校验是否正确”，而是：
+
+- 看当前 `renamedFileName` 是否就是根据内容推导出来的
+- 如果是，就说明不是靠外部文件名瞎拼的
+
+这对排查“为什么这个 PDF 名字像改过”的问题很有用。

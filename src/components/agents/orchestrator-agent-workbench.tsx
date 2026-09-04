@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { ArrowRight, CheckCircle2, Clock3, FileText, GitBranch, Play, RefreshCw, ShieldAlert } from "lucide-react";
+import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -249,12 +249,12 @@ export function OrchestratorAgentWorkbench() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
             {["market", "product", "supplier", "listing", "ppc"].map((agentId) => (
-              <Link key={agentId} href={`/agents/${agentId}`} prefetch={false}>
+              <PrefetchLink key={agentId} href={`/agents/${agentId}`}>
                 <Button type="button" size="sm" variant="secondary" className="w-full justify-between">
                   {stageLabels[agentId]}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              </Link>
+              </PrefetchLink>
             ))}
           </CardContent>
         </Card>
@@ -391,12 +391,12 @@ function HandoffRow({ handoff }: { handoff: OrchestratorHandoff }) {
         <div className="flex items-center gap-2">
         {handoff.requiredApproval ? <Badge tone="amber">审批</Badge> : null}
           {handoff.route ? (
-            <Link href={handoff.route} prefetch={false}>
+            <PrefetchLink href={handoff.route}>
               <Button type="button" size="sm" variant="secondary">
                 打开
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </Link>
+            </PrefetchLink>
           ) : null}
         </div>
       </div>

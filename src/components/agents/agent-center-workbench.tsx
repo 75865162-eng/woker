@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Bot, Circle, GitBranch, RefreshCw } from "lucide-react";
+import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,12 +160,12 @@ export function AgentCenterWorkbench() {
           </div>
           <div className="flex flex-wrap gap-2">
             {orchestrator ? (
-              <Link href="/agents/orchestrator" prefetch={false}>
+              <PrefetchLink href="/agents/orchestrator">
                 <Button type="button" size="sm" variant="secondary">
                   <GitBranch className="h-4 w-4" />
                   编排器
                 </Button>
-              </Link>
+              </PrefetchLink>
             ) : null}
               <Button type="button" size="sm" variant="ghost" onClick={() => setRefreshToken((current) => current + 1)} disabled={loading}>
                 <RefreshCw className="h-4 w-4" />
@@ -211,10 +211,9 @@ export function AgentCenterWorkbench() {
             ) : workflowAgents.length ? (
               <div className="divide-y divide-border">
                 {workflowAgents.map((agent) => (
-                  <Link
+                  <PrefetchLink
                     key={agent.id}
                     href={`/agents/${agent.id}`}
-                    prefetch={false}
                     className="flex items-center justify-between gap-3 px-4 py-4 transition-colors hover:bg-surface-muted"
                   >
                     <div className="flex min-w-0 items-center gap-3">
@@ -228,7 +227,7 @@ export function AgentCenterWorkbench() {
                       <Badge tone={statusTone(agent)}>{statusLabel(agent)}</Badge>
                       <ArrowRight className="h-4 w-4 text-muted" />
                     </div>
-                  </Link>
+                  </PrefetchLink>
                 ))}
               </div>
             ) : (
@@ -243,10 +242,9 @@ export function AgentCenterWorkbench() {
             <div className="divide-y divide-border">
               {activeTasks.length ? (
                 activeTasks.map((task) => (
-                  <Link
+                  <PrefetchLink
                     key={`${task.agent.id}-${task.agent.lastExecutionId ?? task.agent.lastStatus}`}
                     href={`/agents/${task.agent.id}`}
-                    prefetch={false}
                     className="flex items-start justify-between gap-3 px-4 py-4 transition-colors hover:bg-surface-muted"
                   >
                     <div className="flex min-w-0 gap-3">
@@ -258,7 +256,7 @@ export function AgentCenterWorkbench() {
                       </div>
                     </div>
                     <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted" />
-                  </Link>
+                  </PrefetchLink>
                 ))
               ) : (
                 <div className="px-4 py-8 text-sm font-semibold text-muted">当前没有运行中或待审批任务。</div>

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   ArrowRight,
   Bot,
@@ -9,6 +8,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getModuleIdForPath, roleCanAccessModule } from "@/lib/accounts/permissions";
@@ -40,15 +40,15 @@ export default async function Home() {
             <p className="mt-2 text-sm text-muted">选择一个模块开始工作，页面会标明当前数据来源和待迁移边界。</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/workspace" prefetch={false}>
+            <PrefetchLink href="/workspace">
               <Button>
                 PPC 优化
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </Link>
-            <Link href="/listing-ai" prefetch={false}>
+            </PrefetchLink>
+            <PrefetchLink href="/listing-ai">
               <Button variant="secondary">Listing AI</Button>
-            </Link>
+            </PrefetchLink>
           </div>
         </section>
 
@@ -57,7 +57,7 @@ export default async function Home() {
             const Icon = module.icon;
 
             return (
-              <Link key={module.href} href={module.href} prefetch={false} className="group block">
+              <PrefetchLink key={module.href} href={module.href} className="group block">
                 <Card className="h-full transition-colors group-hover:border-brand">
                   <CardContent className="flex min-h-[96px] items-center justify-between gap-4 p-5">
                     <div className="flex items-center gap-3">
@@ -72,7 +72,7 @@ export default async function Home() {
                     <ArrowRight className="h-4 w-4 shrink-0 text-muted transition-colors group-hover:text-brand" />
                   </CardContent>
                 </Card>
-              </Link>
+              </PrefetchLink>
             );
           })}
         </section>

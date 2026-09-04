@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { CheckCircle2, Clock3, FileText, RefreshCw, ShieldAlert, SlidersHorizontal, Target, TriangleAlert } from "lucide-react";
+import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -409,9 +409,9 @@ export function PpcAgentWorkbench() {
             {handoffMessage ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
                 <span>{handoffMessage}</span>
-                <Link href="/workspace" prefetch={false} className="text-brand underline">
+                <PrefetchLink href="/workspace" className="text-brand underline">
                   去 PPC 工作台导出
-                </Link>
+                </PrefetchLink>
               </div>
             ) : null}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

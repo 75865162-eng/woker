@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { getModuleIdForPath, roleCanAccessModule, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { cn } from "@/lib/utils";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { AppShellUserProvider } from "./app-shell-context";
 import { WorkspaceScopeSelector } from "./workspace-scope-selector";
 
 const UserNotificationCenter = dynamic(
@@ -137,7 +138,8 @@ export function AppShellClient({
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <AppShellUserProvider value={{ userInitials, userName, userRole }}>
+      <div className="min-h-screen bg-background">
       {enableShellEnhancements ? <WeComNotificationRunner /> : null}
       <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col items-center border-r border-border bg-white">
         <div className="flex h-16 w-full items-center justify-center border-b border-border">
@@ -233,6 +235,7 @@ export function AppShellClient({
           {children}
         </div>
       </main>
-    </div>
+      </div>
+    </AppShellUserProvider>
   );
 }

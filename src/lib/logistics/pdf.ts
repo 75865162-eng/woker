@@ -167,6 +167,25 @@ function matchFirst(text: string, pattern: RegExp) {
   return matched?.[1] ?? "";
 }
 
+function isWarehouseCodeCandidate(value: string, fbaCode: string) {
+  if (value === fbaCode) {
+    return false;
+  }
+
+  return !["FBA", "PDT", "SKU", "UCS2", "UTF8", "UTF16"].includes(value);
+}
+
+function extractWarehouseCodeFromBusinessText(text: string) {
+  const normalized = normalizePdfText(text).replace(/\0/g, "").replace(/[—–]/g, "-").toUpperCase();
+  const matches = [
+    normalized.match(/FBA\s*STA\s*\([^)]*\)\s*-\s*([A-Z]{3,5}\d{0,2})\b/u)?.[1],
+    normalized.match(/-\s*([A-Z]{3,5}\d{1,2})\s+CREATED:/u)?.[1],
+    normalized.match(/\b([A-Z]{3,5}\d{1,2})\b/u)?.[1],
+  ];
+
+  return matches.find((value) => value && isWarehouseCodeCandidate(value, "")) ?? "";
+}
+
 function extractPositionCode(text: string) {
   const normalized = normalizePdfText(text).toUpperCase();
   const patterns = [
@@ -230,7 +249,7 @@ function buildMetaFromShipmentTitle(titleText: string) {
   };
 }
 
-function extractGlobalMeta(pdfText: string, fallbackName: string) {
+function extractGlobalMeta(pdfText: string, fallbackName: string, pageTexts: string[], streamCandidates: string[]) {
   const titleText = findShipmentTitleInText(pdfText) || "";
   const parsedTitle = parseShipmentTitle(titleText);
 
@@ -242,14 +261,21 @@ function extractGlobalMeta(pdfText: string, fallbackName: string) {
     parsedTitle?.fbaCode ||
     (firstFbaBoxCode ? firstFbaBoxCode.replace(/U\d{6}$/u, "") : matchFirst(pdfText, /(FBA[A-Z0-9]+)/u));
 
+  const pageWarehouseCode =
+    [...pageTexts, ...streamCandidates]
+      .map(extractWarehouseCodeFromBusinessText)
+      .find(Boolean) ?? "";
   const warehouseCandidates = new Set<string>();
   for (const match of pdfText.matchAll(/\b([A-Z]{3}\d{1,2})\b/g)) {
     const value = match[1];
-    if (value !== "FBA" && value !== "PDT" && value !== "SKU") {
+    if (isWarehouseCodeCandidate(value, fbaCode)) {
       warehouseCandidates.add(value);
     }
   }
-  const warehouseCode = parsedTitle?.warehouseCode || (Array.from(warehouseCandidates).find((value) => value !== fbaCode) ?? "");
+  const warehouseCode =
+    pageWarehouseCode ||
+    parsedTitle?.warehouseCode ||
+    (Array.from(warehouseCandidates).find((value) => isWarehouseCodeCandidate(value, fbaCode)) ?? "");
   const titleBoxCount = parsedTitle?.totalBoxes ?? null;
   const channelNameFromTitle = parsedTitle?.channelName ?? "";
 
@@ -257,7 +283,7 @@ function extractGlobalMeta(pdfText: string, fallbackName: string) {
   const resolvedShipmentName = shipmentName;
   const resolvedWarehouseCode = warehouseCode || fallbackMeta.warehouseCode;
   const resolvedFbaCode = fbaCode || fallbackMeta.fbaCode;
-  const resolvedTotalBoxes = titleBoxCount ?? fallbackMeta.totalBoxes;
+  const resolvedTotalBoxes = titleBoxCount ?? fallbackMeta.totalBoxes ?? (pageTexts.length || getPageCount(pdfText));
   const resolvedChannelName = channelNameFromTitle;
   const resolvedShipmentTitle = [
     resolvedShipmentName,
@@ -342,7 +368,7 @@ export async function parsePdfBuffer(buffer: ArrayBuffer, fileName: string): Pro
   const parsedPageCount = getPageCount(pdfText);
   const sharedMeta =
     (streamShipmentTitle ? buildMetaFromShipmentTitle(streamShipmentTitle) : null) ??
-    extractGlobalMeta(pdfText, fileName);
+    extractGlobalMeta(pdfText, fileName, pageTexts, streamCandidates);
 
   const pageCount = pageTexts.length || (sharedMeta.totalBoxes && Number.isFinite(sharedMeta.totalBoxes) ? sharedMeta.totalBoxes : parsedPageCount);
   const pages = extractPageSummaries(pdfText, sharedMeta, pageCount, pageTexts, streamCandidates);

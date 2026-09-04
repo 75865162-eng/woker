@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isWorkspaceScopeComplete } from "@/lib/workspace/scope";
+import { fetchWorkspacesCached, invalidateWorkspaceApiCache, saveWorkspaceScope } from "@/lib/workspace/workspace-api-cache";
 
 type WorkspaceScope = {
   id: string;
@@ -40,14 +41,19 @@ export function WorkspaceScopePanel() {
     setError("");
 
     try {
-      const response = await fetch("/api/workspaces", { cache: "no-store" });
-      const data = (await response.json()) as { workspaces?: WorkspaceScope[]; error?: string };
-
-      if (!response.ok) {
-        throw new Error(data.error || "工作区读取失败。");
-      }
-
-      setWorkspaces(Array.isArray(data.workspaces) ? data.workspaces : []);
+      const data = await fetchWorkspacesCached({ force: true });
+      setWorkspaces(
+        Array.isArray(data.workspaces)
+          ? data.workspaces.map((workspace) => ({
+              id: workspace.id,
+              name: workspace.name,
+              accountId: workspace.accountId ?? "",
+              marketplace: workspace.marketplace ?? "",
+              isDefault: Boolean(workspace.isDefault),
+              updatedAt: workspace.updatedAt ?? new Date().toISOString(),
+            }))
+          : [],
+      );
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "工作区读取失败。");
     } finally {
@@ -70,18 +76,10 @@ export function WorkspaceScopePanel() {
     setError("");
 
     try {
-      const response = await fetch("/api/workspaces", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = (await response.json()) as { workspace?: WorkspaceScope; error?: string };
-
-      if (!response.ok || !data.workspace) {
-        throw new Error(data.error || "工作区保存失败。");
-      }
+      await saveWorkspaceScope(form);
 
       setForm({ workspaceId: "", name: "", accountId: "", marketplace: "" });
+      invalidateWorkspaceApiCache();
       await loadWorkspaces();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "工作区保存失败。");

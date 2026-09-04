@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Database, FileText, RefreshCw, ShieldX } from "lucide-react";
+import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -170,12 +170,12 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <Link href="/agents" prefetch={false}>
+        <PrefetchLink href="/agents">
           <Button type="button" size="sm" variant="secondary">
             <ArrowLeft className="h-4 w-4" />
             Agent 中心
           </Button>
-        </Link>
+        </PrefetchLink>
         <Button type="button" size="sm" variant="ghost" onClick={() => setRefreshToken((current) => current + 1)} disabled={loading}>
           <RefreshCw className="h-4 w-4" />
           刷新

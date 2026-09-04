@@ -2,6 +2,7 @@ import { History, ImagePlus, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
+import { useVirtualRows } from "@/lib/hooks/use-virtual-rows";
 import { getProductListImage } from "@/lib/products/image-assets";
 import type { Product } from "@/lib/products/types";
 import {
@@ -172,13 +173,21 @@ export function ProductTable({
   onOpenHistory: (product: Product) => void;
   onPrefetchProduct?: (sku: string) => void;
 }) {
+  const virtualRows = useVirtualRows<HTMLDivElement>({
+    itemCount: products.length,
+    rowHeight: 61,
+    overscan: 6,
+    enabled: products.length > 0,
+  });
+  const visibleProducts = products.slice(virtualRows.startIndex, virtualRows.endIndex);
+
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <p className="text-sm font-bold text-foreground">筛选结果</p>
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
-      <div className="thin-scrollbar overflow-auto">
+      <div ref={virtualRows.containerRef} className="thin-scrollbar max-h-[min(68vh,720px)] overflow-auto">
         <table className="w-[1734px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px]">
           <colgroup>
             <col className="w-[84px]" />
@@ -197,7 +206,7 @@ export function ProductTable({
             <col className="w-[140px]" />
             <col className="w-[72px]" />
           </colgroup>
-          <thead className="bg-surface-muted text-xs text-muted">
+          <thead className="sticky top-0 z-10 bg-surface-muted text-xs text-muted">
             <tr>
               <th className="px-3 py-3">图片</th>
               <th className="px-3 py-3">SKU</th>
@@ -217,96 +226,110 @@ export function ProductTable({
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => {
-              const listImage = getProductListImage(product);
-              const overdue = product.isOverdue ?? isProductWorkflowOverdue(product);
+            {products.length > 0 ? (
+              <>
+                {virtualRows.beforeHeight > 0 ? (
+                  <tr aria-hidden="true">
+                    <td colSpan={15} style={{ height: `${virtualRows.beforeHeight}px`, padding: 0, border: 0 }} />
+                  </tr>
+                ) : null}
+                {visibleProducts.map((product) => {
+                  const listImage = getProductListImage(product);
+                  const overdue = product.isOverdue ?? isProductWorkflowOverdue(product);
 
-              return (
-                <tr key={product.id} className="border-t border-border/70 align-middle hover:bg-surface-muted/60">
-                  <td className="px-3">
-                    <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
-                      {listImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={listImage}
-                          alt={product.chineseName}
-                          loading="lazy"
-                          decoding="async"
-                          fetchPriority="low"
-                          className="h-full w-full object-contain"
-                        />
-                      ) : (
-                        <ImagePlus className="h-5 w-5 text-muted" />
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3">
-                    <button
-                      className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark"
-                      title={product.sku}
-                      onClick={() => onOpenProduct(product.sku)}
-                      onFocus={() => onPrefetchProduct?.(product.sku)}
-                      onMouseEnter={() => onPrefetchProduct?.(product.sku)}
-                    >
-                      {product.sku}
-                    </button>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-words font-semibold text-foreground">{product.chineseName || "--"}</p>
-                    <p className="mt-1 break-words text-xs text-muted">{product.englishName || "--"}</p>
-                  </td>
-                  <td className="px-3 font-mono text-xs">
-                    <p className="break-all" title={product.asin || "--"}>{product.asin || "--"}</p>
-                  </td>
-                  <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
-                  <td className="px-3">
-                    <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
-                    {overdue ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate" title={getCurrentWorkflowAssignee(product) || "--"}>{formatAssigneePreview(getCurrentWorkflowAssignee(product)) || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    {(() => {
-                      const createdAt = formatProductCreatedAtDisplay(product.createdAt);
-                      if (typeof createdAt === "string") {
-                        return <p className="text-[11px] leading-tight text-foreground">--</p>;
-                      }
+                  return (
+                    <tr key={product.id} className="border-t border-border/70 align-middle hover:bg-surface-muted/60">
+                      <td className="px-3">
+                        <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
+                          {listImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={listImage}
+                              alt={product.chineseName}
+                              loading="lazy"
+                              decoding="async"
+                              fetchPriority="low"
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <ImagePlus className="h-5 w-5 text-muted" />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3">
+                        <button
+                          className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark"
+                          title={product.sku}
+                          onClick={() => onOpenProduct(product.sku)}
+                          onFocus={() => onPrefetchProduct?.(product.sku)}
+                          onMouseEnter={() => onPrefetchProduct?.(product.sku)}
+                        >
+                          {product.sku}
+                        </button>
+                      </td>
+                      <td className="px-3">
+                        <p className="break-words font-semibold text-foreground">{product.chineseName || "--"}</p>
+                        <p className="mt-1 break-words text-xs text-muted">{product.englishName || "--"}</p>
+                      </td>
+                      <td className="px-3 font-mono text-xs">
+                        <p className="break-all" title={product.asin || "--"}>{product.asin || "--"}</p>
+                      </td>
+                      <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
+                      <td className="px-3">
+                        <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
+                        {overdue ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={getCurrentWorkflowAssignee(product) || "--"}>{formatAssigneePreview(getCurrentWorkflowAssignee(product)) || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        {(() => {
+                          const createdAt = formatProductCreatedAtDisplay(product.createdAt);
+                          if (typeof createdAt === "string") {
+                            return <p className="text-[11px] leading-tight text-foreground">--</p>;
+                          }
 
-                      return (
-                        <p className="text-[11px] leading-tight tabular-nums text-foreground" title={product.createdAt}>
-                          <span className="block">{createdAt.dateText}</span>
-                          <span className="block">{createdAt.timeText}</span>
-                        </p>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="truncate text-xs" title={product.note || "--"}>{product.note || "--"}</p>
-                  </td>
-                  <td className="px-3 text-right">
-                    <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>
-                      <History className="h-4 w-4" />
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
+                          return (
+                            <p className="text-[11px] leading-tight tabular-nums text-foreground" title={product.createdAt}>
+                              <span className="block">{createdAt.dateText}</span>
+                              <span className="block">{createdAt.timeText}</span>
+                            </p>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate text-xs" title={product.note || "--"}>{product.note || "--"}</p>
+                      </td>
+                      <td className="px-3 text-right">
+                        <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>
+                          <History className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {virtualRows.afterHeight > 0 ? (
+                  <tr aria-hidden="true">
+                    <td colSpan={15} style={{ height: `${virtualRows.afterHeight}px`, padding: 0, border: 0 }} />
+                  </tr>
+                ) : null}
+              </>
+            ) : null}
             {!products.length && loading ? (
               <tr>
                 <td colSpan={15} className="px-3 py-14 text-center text-sm text-muted">

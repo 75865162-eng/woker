@@ -5,12 +5,12 @@ import { ArrowRight, Bell, ChevronDown, ExternalLink, FileDown, FileUp, History,
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { newProductStatusOptions, productStatusOptions } from "@/data/products";
 import {
   accountsToTeamMembers,
   type AccountRoleId,
   filterTeamMembersByRoles,
-  normalizeTeamAccounts,
   type TeamAccountRecord,
   type TeamMember,
 } from "@/lib/accounts/team-roster";
@@ -69,6 +69,7 @@ import {
   productToDraft,
   trialImprovementLabels,
 } from "./product-workbench-data";
+import { fetchTeamAccountsCached } from "@/lib/workspace/workspace-api-cache";
 
 type ProductWorkbenchCache = {
   products: Product[];
@@ -84,6 +85,11 @@ let productWorkbenchCache: ProductWorkbenchCache | null = null;
 let productWorkbenchCacheWorkspaceId: string | null = null;
 const productDetailCache = new Map<string, Product>();
 const productDetailInflight = new Map<string, Promise<Product>>();
+const productListResponseCache = new Map<string, { cachedAt: number; data: { products?: ProductListItem[]; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string } }>();
+const productListInflight = new Map<string, Promise<{ products?: ProductListItem[]; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string }>>();
+const productSummaryResponseCache = new Map<string, { cachedAt: number; data: { summary?: ProductListSummary; error?: string } }>();
+const productSummaryInflight = new Map<string, Promise<{ summary?: ProductListSummary; error?: string }>>();
+const REQUEST_CACHE_TTL_MS = 5000;
 const compactToolbarButtonClass =
   "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
 const competitorTableFields: Array<Exclude<keyof TrialCompetitorRow, "hotVariantImageAsset" | "noteImageAsset">> = [
@@ -159,6 +165,45 @@ function readCurrentWorkspaceId() {
 
 function getProductWorkbenchStorageKey(workspaceId: string) {
   return `${productWorkbenchStorageKeyPrefix}:${workspaceId || "default"}`;
+}
+
+function getProductListRequestCacheKey(input: {
+  filters: ProductFilters;
+  page: number;
+  pageSize: number;
+  includeSummary?: boolean;
+  detail?: boolean;
+}) {
+  const params = new URLSearchParams({
+    page: String(input.page),
+    pageSize: String(input.pageSize),
+    detail: input.detail === false ? "list" : "full",
+    includeSummary: input.includeSummary === false ? "false" : "true",
+  });
+
+  if (input.filters.keyword.trim()) params.set("search", input.filters.keyword.trim());
+  if (input.filters.asin.trim()) params.set("asin", input.filters.asin.trim());
+  if (input.filters.supplierName.trim()) params.set("supplierName", input.filters.supplierName.trim());
+  if (input.filters.status !== "all") params.set("status", input.filters.status);
+  if (input.filters.opsAssignees.length) params.set("opsAssignees", input.filters.opsAssignees.join(","));
+  if (input.filters.selectionOwners.length) params.set("selectionOwners", input.filters.selectionOwners.join(","));
+  if (input.filters.designerAssignees.length) params.set("designerAssignees", input.filters.designerAssignees.join(","));
+  if (input.filters.mySkuOwner.trim()) params.set("mySkuOwner", input.filters.mySkuOwner.trim());
+  if (input.filters.minPrice.trim()) params.set("minPrice", input.filters.minPrice.trim());
+  if (input.filters.maxPrice.trim()) params.set("maxPrice", input.filters.maxPrice.trim());
+
+  return `${readCurrentWorkspaceId()}::${params.toString()}`;
+}
+
+function getProductSummaryRequestCacheKey() {
+  return `${readCurrentWorkspaceId()}::summary`;
+}
+
+function invalidateProductRequestCaches() {
+  productListResponseCache.clear();
+  productListInflight.clear();
+  productSummaryResponseCache.clear();
+  productSummaryInflight.clear();
 }
 
 function getProductDetailCacheKey(workspaceId: string, sku: string) {
@@ -264,7 +309,8 @@ export function ProductWorkbench() {
   const productsTotalCountRef = useRef(productsTotalCount);
   const listSummaryRef = useRef(listSummary);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
-  const [creatorName, setCreatorName] = useState("当前创建人");
+  const shellUser = useAppShellUser();
+  const creatorName = shellUser?.userName?.trim() || "当前创建人";
   const currentUserName = creatorName === "当前创建人" ? "" : creatorName.trim();
   const teamMembers = useMemo(() => accountsToTeamMembers(teamAccounts), [teamAccounts]);
   const opsOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["operations_supervisor", "operations"]), [teamMembers]);
@@ -299,17 +345,6 @@ export function ProductWorkbench() {
   }, [listSummary]);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { user?: { name?: string } } | null) => {
-        if (data?.user?.name) {
-          setCreatorName(data.user.name);
-        }
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     let canceled = false;
 
     async function loadTeamAccounts() {
@@ -334,80 +369,116 @@ export function ProductWorkbench() {
     detail?: boolean;
     signal?: AbortSignal;
   }) => {
-    const params = new URLSearchParams({
-      page: String(input.page),
-      pageSize: String(input.pageSize),
-      detail: input.detail === false ? "list" : "full",
-      includeSummary: input.includeSummary === false ? "false" : "true",
-    });
-
-    if (input.filters.keyword.trim()) params.set("search", input.filters.keyword.trim());
-    if (input.filters.asin.trim()) params.set("asin", input.filters.asin.trim());
-    if (input.filters.supplierName.trim()) params.set("supplierName", input.filters.supplierName.trim());
-    if (input.filters.status !== "all") params.set("status", input.filters.status);
-    if (input.filters.opsAssignees.length) params.set("opsAssignees", input.filters.opsAssignees.join(","));
-    if (input.filters.selectionOwners.length) params.set("selectionOwners", input.filters.selectionOwners.join(","));
-    if (input.filters.designerAssignees.length) params.set("designerAssignees", input.filters.designerAssignees.join(","));
-    if (input.filters.mySkuOwner.trim()) params.set("mySkuOwner", input.filters.mySkuOwner.trim());
-    if (input.filters.minPrice.trim()) params.set("minPrice", input.filters.minPrice.trim());
-    if (input.filters.maxPrice.trim()) params.set("maxPrice", input.filters.maxPrice.trim());
-
-    const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store", signal: input.signal });
-    const data = (await response.json()) as {
-      products?: ProductListItem[];
-      pagination?: { total?: number; pageCount?: number };
-      summary?: ProductListSummary;
-      error?: string;
-    };
-
-    if (!response.ok) {
-      throw new Error(data.error || "商品数据读取失败");
+    const requestCacheKey = getProductListRequestCacheKey(input);
+    const cached = productListResponseCache.get(requestCacheKey);
+    if (cached && Date.now() - cached.cachedAt < REQUEST_CACHE_TTL_MS) {
+      return cached.data;
     }
 
-    return data;
+    const inFlight = productListInflight.get(requestCacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const params = requestCacheKey.split("::").slice(1).join("::");
+    const promise = (async () => {
+      const response = await fetch(`/api/products?${params}`, { cache: "no-store", signal: input.signal });
+      const data = (await response.json()) as {
+        products?: ProductListItem[];
+        pagination?: { total?: number; pageCount?: number };
+        summary?: ProductListSummary;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error || "商品数据读取失败");
+      }
+
+      productListResponseCache.set(requestCacheKey, { cachedAt: Date.now(), data });
+      return data;
+    })();
+
+    productListInflight.set(requestCacheKey, promise);
+
+    try {
+      return await promise;
+    } finally {
+      productListInflight.delete(requestCacheKey);
+    }
   }, []);
 
   const loadProductSummary = useCallback(async (signal?: AbortSignal) => {
     const requestId = ++summaryRequestSeq.current;
     const requestSignal = signal ?? new AbortController().signal;
+    const requestCacheKey = getProductSummaryRequestCacheKey();
+    const cached = productSummaryResponseCache.get(requestCacheKey);
+
+    if (cached && Date.now() - cached.cachedAt < REQUEST_CACHE_TTL_MS) {
+      if (!requestSignal.aborted && requestId === summaryRequestSeq.current && cached.data.summary) {
+        setListSummary(cached.data.summary);
+        setSummaryReady(true);
+      }
+
+      return;
+    }
+
+    const inFlight = productSummaryInflight.get(requestCacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const promise = (async () => {
+      try {
+        const params = new URLSearchParams({
+          summaryOnly: "true",
+          includeSummary: "true",
+        });
+        const response = await fetch(`/api/products?${params.toString()}`, {
+          cache: "no-store",
+          signal: requestSignal,
+        });
+        const data = (await response.json()) as { summary?: ProductListSummary; error?: string };
+
+        if (requestSignal.aborted || requestId !== summaryRequestSeq.current) {
+          return data;
+        }
+
+        if (!response.ok || !data.summary) {
+          throw new Error(data.error || "商品统计读取失败");
+        }
+
+        productSummaryResponseCache.set(requestCacheKey, { cachedAt: Date.now(), data });
+
+        setListSummary(data.summary);
+        setSummaryReady(true);
+        writeCachedProductWorkbench({
+          products: productsRef.current,
+          filters: filtersRef.current,
+          page: pageRef.current,
+          pageSize: pageSizeRef.current,
+          totalCount: productsTotalCountRef.current,
+          summary: data.summary,
+        });
+
+        return data;
+      } catch (error) {
+        if (requestSignal.aborted || requestId !== summaryRequestSeq.current) {
+          return { error: error instanceof Error ? error.message : "商品统计读取失败" };
+        }
+
+        setSummaryReady(true);
+        const message = error instanceof Error ? error.message : "商品统计读取失败";
+        setActivityLog((current) => [`商品统计读取失败：${message}`, ...current].slice(0, 8));
+        throw error;
+      }
+    })();
+
+    productSummaryInflight.set(requestCacheKey, promise);
 
     try {
-      const params = new URLSearchParams({
-        summaryOnly: "true",
-        includeSummary: "true",
-      });
-      const response = await fetch(`/api/products?${params.toString()}`, {
-        cache: "no-store",
-        signal: requestSignal,
-      });
-      const data = (await response.json()) as { summary?: ProductListSummary; error?: string };
-
-      if (requestSignal.aborted || requestId !== summaryRequestSeq.current) {
-        return;
-      }
-
-      if (!response.ok || !data.summary) {
-        throw new Error(data.error || "商品统计读取失败");
-      }
-
-      setListSummary(data.summary);
-      setSummaryReady(true);
-      writeCachedProductWorkbench({
-        products: productsRef.current,
-        filters: filtersRef.current,
-        page: pageRef.current,
-        pageSize: pageSizeRef.current,
-        totalCount: productsTotalCountRef.current,
-        summary: data.summary,
-      });
-    } catch (error) {
-      if (requestSignal.aborted || requestId !== summaryRequestSeq.current) {
-        return;
-      }
-
-      setSummaryReady(true);
-      const message = error instanceof Error ? error.message : "商品统计读取失败";
-      setActivityLog((current) => [`商品统计读取失败：${message}`, ...current].slice(0, 8));
+      return await promise;
+    } finally {
+      productSummaryInflight.delete(requestCacheKey);
     }
   }, []);
 
@@ -778,6 +849,7 @@ export function ProductWorkbench() {
 
     try {
       const savedProduct = await persistProduct(nextProduct);
+      invalidateProductRequestCaches();
       productDetailCache.set(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), savedProduct.sku, true), savedProduct);
       setActiveProduct(savedProduct);
       setDetailReady(true);
@@ -824,6 +896,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
       };
       const importedWithAssets = await uploadEmbeddedProductImages(importedWithOwner);
       const savedProduct = await persistProduct(importedWithAssets);
+      invalidateProductRequestCaches();
       productDetailCache.set(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), savedProduct.sku, true), savedProduct);
       setActiveProduct(savedProduct);
       setDetailReady(true);
@@ -2601,11 +2674,8 @@ function MultiSelectField({
 
 async function loadTeamAccountsFromApi() {
   try {
-    const response = await fetch("/api/accounts/team-members");
-    if (!response.ok) return [];
-
-    const data = (await response.json()) as { accounts?: unknown };
-    return normalizeTeamAccounts(data.accounts);
+    const data = await fetchTeamAccountsCached();
+    return data.accounts;
   } catch {
     return [];
   }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BriefcaseBusiness } from "lucide-react";
 import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
+import { fetchWorkspacesCached } from "@/lib/workspace/workspace-api-cache";
 
 const storageKey = "amazon_bulk_ad_workspace_scope";
 
@@ -120,8 +121,7 @@ export function WorkspaceScopeSelector() {
 
     const loadWorkspaces = async () => {
       try {
-        const response = await fetch("/api/workspaces");
-        const data = response.ok ? ((await response.json()) as { workspaces?: WorkspaceScope[] }) : { workspaces: [] };
+        const data = await fetchWorkspacesCached();
 
         if (cancelled) return;
 
