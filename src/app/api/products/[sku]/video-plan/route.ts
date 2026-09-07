@@ -12,7 +12,7 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 export const runtime = "nodejs";
 
 function normalizeSku(sku: string) {
-  return sku.trim().toUpperCase();
+  return sku.trim();
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ sku: string }> }) {

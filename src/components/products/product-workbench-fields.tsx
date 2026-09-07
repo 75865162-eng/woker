@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ExternalLink } from "lucide-react";
-import { buildAmazonLink } from "./product-workbench-utils";
+import { ArrowUpRight, ExternalLink } from "lucide-react";
+import { buildAmazonLink, buildAmazonSearchLink } from "./product-workbench-utils";
 
 export function LabeledInput({
   label,
@@ -211,6 +211,22 @@ export function AmazonLinkButton({ asin }: { asin: string }) {
     >
       <ExternalLink className="h-3.5 w-3.5" />
       打开
+    </a>
+  );
+}
+
+export function AmazonSearchLinkButton({ keyword }: { keyword: string }) {
+  const href = buildAmazonSearchLink(keyword);
+  return (
+    <a
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border ${href ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
+      href={href || "#"}
+      target="_blank"
+      rel="noreferrer"
+      title="在 Amazon 搜索关键词"
+      aria-label="在 Amazon 搜索关键词"
+    >
+      <ArrowUpRight className="h-4 w-4" />
     </a>
   );
 }

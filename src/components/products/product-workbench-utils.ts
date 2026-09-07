@@ -164,3 +164,8 @@ export function buildAmazonLink(asin: string) {
   const normalized = asin.trim();
   return normalized ? `https://www.amazon.com/dp/${encodeURIComponent(normalized)}` : "";
 }
+
+export function buildAmazonSearchLink(keyword: string) {
+  const normalized = keyword.trim();
+  return normalized ? `https://www.amazon.com/s?k=${encodeURIComponent(normalized)}` : "";
+}

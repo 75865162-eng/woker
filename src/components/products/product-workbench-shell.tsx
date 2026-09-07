@@ -53,7 +53,6 @@ export function ProductFiltersBar({
   const statusOptions = [
     { value: "all", label: "全部状态" },
     ...productStatusOptions,
-    { value: "design_in_progress", label: "美工处理中" },
     { value: "operations_progress", label: "运营进度" },
     { value: "overdue", label: "超期预警" },
   ];

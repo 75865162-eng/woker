@@ -8,7 +8,7 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 export const runtime = "nodejs";
 
 function normalizeSku(sku: string) {
-  return sku.trim().toUpperCase();
+  return sku.trim();
 }
 
 function stripWorkbookImages(product: Product) {

@@ -28,6 +28,7 @@ import {
 } from "./product-workbench-model";
 import {
   AmazonLinkButton,
+  AmazonSearchLinkButton,
   DecimalInput,
   ExternalLinkButton,
   LabeledInput,
@@ -312,13 +313,14 @@ export function ProductWorkbookDetailSections({
         <CardContent className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,1fr)]">
             <div className="thin-scrollbar overflow-auto">
-              <table className="min-w-[680px] text-left text-xs">
+              <table className="min-w-[720px] text-left text-xs">
               <thead className="bg-surface-muted text-muted">
                 <tr>
                   <th className="px-2 py-2">关键词</th>
                   <th className="px-2 py-2">CPC</th>
                   <th className="px-2 py-2">月搜索量</th>
                   <th className="px-2 py-2">ABA周排名</th>
+                  <th className="w-12 px-2 py-2"><span className="sr-only">Amazon 搜索</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -328,6 +330,7 @@ export function ProductWorkbookDetailSections({
                     <td className="px-2 py-2"><DecimalInput value={row.cpc} onChange={(value) => onKeywordChange(index, "cpc", value)} /></td>
                     <td className="px-2 py-2"><SmallInput type="number" value={row.monthlySearches} onChange={(value) => onKeywordChange(index, "monthlySearches", value)} /></td>
                     <td className="px-2 py-2"><SmallInput type="number" value={row.abaRank} onChange={(value) => onKeywordChange(index, "abaRank", value)} /></td>
+                    <td className="px-2 py-2"><AmazonSearchLinkButton keyword={row.keyword} /></td>
                   </tr>
                 ))}
               </tbody>

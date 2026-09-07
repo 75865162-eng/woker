@@ -53,7 +53,7 @@ import {
 } from "./product-workbook-detail-sections";
 import { ProductImageCopyGalleryModal } from "./product-image-copy-gallery-modal";
 import { ProductVideoPlanModal } from "./product-video-plan-modal";
-import { DecimalInput, ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
+import { AmazonSearchLinkButton, DecimalInput, ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
 import { ProductOperationsProgress } from "./product-operations-progress";
 import {
@@ -1498,13 +1498,14 @@ function TrialProductEditor({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="thin-scrollbar overflow-auto">
-                <table className="min-w-[640px] text-left text-xs">
+                <table className="min-w-[680px] text-left text-xs">
                   <thead className="bg-surface-muted text-muted">
                     <tr>
                       <th className="px-2 py-2">关键词</th>
                       <th className="px-2 py-2">CPC</th>
                       <th className="px-2 py-2">月搜索量</th>
                       <th className="px-2 py-2">ABA周排名</th>
+                      <th className="w-12 px-2 py-2"><span className="sr-only">Amazon 搜索</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1514,6 +1515,7 @@ function TrialProductEditor({
                     <td className="px-2 py-2"><DecimalInput value={row.cpc} onChange={(value) => updateKeyword(index, "cpc", value)} /></td>
                     <td className="px-2 py-2"><SmallInput type="number" value={row.monthlySearches} onChange={(value) => updateKeyword(index, "monthlySearches", value)} /></td>
                     <td className="px-2 py-2"><SmallInput type="number" value={row.abaRank} onChange={(value) => updateKeyword(index, "abaRank", value)} /></td>
+                    <td className="px-2 py-2"><AmazonSearchLinkButton keyword={row.keyword} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1566,6 +1568,7 @@ function ProductEditor({
   const productRef = useRef(product);
   const productsRef = useRef(products);
   const nextSkuRef = useRef(nextSku);
+  const draftSourceKeyRef = useRef("");
 
   const isEditing = Boolean(product);
   const showHeavyDetail = !isEditing || detailReady;
@@ -1596,7 +1599,14 @@ function ProductEditor({
   }, [nextSku]);
 
   useEffect(() => {
-    if (!isEditing || !detailReady) {
+    const productKey = product?.id || product?.sku || "";
+    const imageAssetCount = Array.isArray(product?.imageAssets) ? product.imageAssets.length : 0;
+    const sourceKey = !isEditing
+      ? `new:${nextSkuRef.current}`
+      : `${productKey}:${detailReady ? "detail" : "preview"}:${imageAssetCount}`;
+
+    if (draftSourceKeyRef.current !== sourceKey) {
+      draftSourceKeyRef.current = sourceKey;
       setDraft(productToDraft(productRef.current, productsRef.current, nextSkuRef.current));
     }
   }, [detailReady, isEditing, product]);
@@ -2122,7 +2132,7 @@ function ProductEditor({
                       <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
                     </label>
                   )}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-start gap-2">
                     <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
                       <div className="flex flex-col items-center justify-center">
                         <ImagePlus className="h-4 w-4 text-brand" />
@@ -2130,9 +2140,9 @@ function ProductEditor({
                       </div>
                       <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
                     </label>
-                    <div className="thin-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">
+                    <div className="flex flex-1 flex-wrap gap-2">
                       {draft.imageAssets?.map((asset, index) => (
-                        <div key={`${asset.id || asset.thumbUrl.slice(0, 24)}-${index}`} className="flex shrink-0 items-center gap-1">
+                        <div key={`${asset.id || asset.thumbUrl.slice(0, 24)}-${index}`} className="flex w-[104px] items-center gap-1">
                           <button
                             type="button"
                             className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted"
