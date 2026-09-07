@@ -48,6 +48,7 @@ export function AppShellClient({
   children,
   title,
   subtitle,
+  actions,
   userInitials = "AM",
   userName,
   userRole,
@@ -57,6 +58,7 @@ export function AppShellClient({
   children: React.ReactNode;
   title: string;
   subtitle: string;
+  actions?: React.ReactNode;
   userInitials?: string;
   userName?: string;
   userRole?: string;
@@ -178,6 +180,7 @@ export function AppShellClient({
             <p className="text-xs font-medium text-muted">{subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
+            {actions}
             <WorkspaceScopeSelector />
             {enableShellEnhancements ? <UserNotificationCenter /> : <div className="h-9 w-9 rounded-md border border-border bg-white" aria-hidden="true" />}
             <div className="hidden items-center gap-2 lg:flex">

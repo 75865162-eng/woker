@@ -87,7 +87,22 @@ export interface SaihuHistoryRecord {
   createdAt: string;
   sourceFileName: string;
   outputFileName?: string;
+  workspaceId?: string;
+  accountId?: string;
+  marketplace?: string;
   outputBlob?: Blob;
   summary: SaihuMergeSummary;
   rows: SaihuMergedRow[];
+}
+
+export interface SaihuHistoryPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  pageCount: number;
+}
+
+export interface SaihuHistoryListResponse {
+  records: SaihuHistoryRecord[];
+  pagination: SaihuHistoryPagination;
 }

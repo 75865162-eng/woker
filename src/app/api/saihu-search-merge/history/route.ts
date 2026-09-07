@@ -42,6 +42,9 @@ function normalizeHistoryRecord(value: unknown): SaihuHistoryRecord {
     createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(),
     sourceFileName: value.sourceFileName,
     outputFileName: typeof value.outputFileName === "string" ? value.outputFileName : undefined,
+    workspaceId: typeof value.workspaceId === "string" ? value.workspaceId : undefined,
+    accountId: typeof value.accountId === "string" ? value.accountId : undefined,
+    marketplace: typeof value.marketplace === "string" ? value.marketplace : undefined,
     summary: value.summary as unknown as SaihuMergeSummary,
     rows: value.rows as SaihuMergedRow[],
   };
@@ -53,6 +56,9 @@ function toHistoryRecord(record: {
   createdAt: Date;
   sourceFileName: string;
   outputFileName: string | null;
+  workspaceId: string;
+  accountId: string;
+  marketplace: string;
   summary: unknown;
   rows: unknown;
 }): SaihuHistoryRecord {
@@ -62,6 +68,9 @@ function toHistoryRecord(record: {
     createdAt: record.createdAt.toISOString(),
     sourceFileName: record.sourceFileName,
     outputFileName: record.outputFileName ?? undefined,
+    workspaceId: record.workspaceId,
+    accountId: record.accountId,
+    marketplace: record.marketplace,
     summary: record.summary as SaihuMergeSummary,
     rows: Array.isArray(record.rows) ? (record.rows as SaihuMergedRow[]) : [],
   };
@@ -102,9 +111,9 @@ export async function GET(request: Request) {
       prisma.saihuSearchMergeHistoryRecord.count({ where }),
       prisma.saihuSearchMergeHistoryRecord.findMany({
         where,
-      orderBy: {
-        createdAt: "desc",
-      },
+        orderBy: {
+          createdAt: "desc",
+        },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),

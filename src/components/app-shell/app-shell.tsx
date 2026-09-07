@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AppShellClient } from "@/components/app-shell/app-shell-client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -6,7 +7,17 @@ import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { getCurrentAppVersionLabel } from "@/lib/app-version-server";
 
-export async function AppShell({ children, title, subtitle }: { children: React.ReactNode; title: string; subtitle: string }) {
+export async function AppShell({
+  children,
+  title,
+  subtitle,
+  actions,
+}: {
+  children: React.ReactNode;
+  title: string;
+  subtitle: string;
+  actions?: ReactNode;
+}) {
   const userPromise = getCurrentUserFromSignedCookie();
   const [user, headerStore] = await Promise.all([userPromise, headers()]);
   const rolePermissionsSnapshot = user?.organizationId ? await getOrganizationRolePermissionsSnapshot(user.organizationId) : null;
@@ -40,6 +51,7 @@ export async function AppShell({ children, title, subtitle }: { children: React.
       userRole={user?.role}
       rolePermissions={rolePermissions}
       appVersionLabel={appVersionLabel}
+      actions={actions}
     >
       {children}
     </AppShellClient>
