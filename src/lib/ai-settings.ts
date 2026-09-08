@@ -132,7 +132,7 @@ export const aiProviderOptions: AiProviderOption[] = [
     shortLabel: "TG",
     accentClass: "bg-cyan-50 text-cyan-700",
     baseUrl: "https://api.togoapi.com/v1",
-    model: "gpt-5.4",
+    model: "gpt-5.5",
     wireApi: "chat_completions",
     recommended: true,
   },
@@ -179,6 +179,10 @@ export const defaultAiImageModelSettings: AiModelSettings = {
 };
 
 function normalizeModelName(value: Partial<AiModelSettings> | null | undefined) {
+  if (value?.provider === "togoapi" && value.model === "gpt-5.4") {
+    return "gpt-5.5";
+  }
+
   if (value?.provider === "volcengine" && value.model === "doubao-seedream-3-0-t2i-250415") {
     return "doubao-seedream-5-0-lite-260128";
   }

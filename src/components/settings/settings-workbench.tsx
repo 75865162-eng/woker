@@ -334,7 +334,7 @@ export function SettingsWorkbench() {
     const normalized = normalizeImageBeforeSave(imageSettings);
 
     if (normalized.wireApi === "image_generations" && !imageGenerationModelPattern.test(normalized.model)) {
-      setImageSettingsError("Images Generations API 需要图片模型，例如 gpt-image-2；gpt-5.4 / gpt-5.5 这类文本模型请用于系统配置。");
+      setImageSettingsError("Images Generations API 需要图片模型，例如 gpt-image-2；gpt-5.5 这类文本模型请用于系统配置。");
       return;
     }
 
