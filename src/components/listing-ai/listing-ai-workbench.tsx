@@ -201,6 +201,41 @@ async function hydrateImageGeneratorDraft(draft: ImageGeneratorDraft) {
   };
 }
 
+function stripCompetitorImages(competitor: CompetitorDraft): CompetitorDraft {
+  return {
+    ...competitor,
+    mainImage: [],
+    screenshot: [],
+    images: [],
+  };
+}
+
+function stripOwnImageDraftImages(ownImages: OwnImageDraft): OwnImageDraft {
+  return {
+    ...ownImages,
+    mainImage: [],
+    images: [],
+  };
+}
+
+function stripImageGeneratorDraftImages(draft: ImageGeneratorDraft): ImageGeneratorDraft {
+  return {
+    ...draft,
+    ownViews: imageGeneratorViews.reduce((acc, view) => {
+      acc[view.key] = [];
+      return acc;
+    }, { ...initialImageGenerator.ownViews }),
+    competitorImages: [],
+    generatedImages: [],
+    history: Array.isArray(draft.history)
+      ? draft.history.map((record) => ({
+          ...record,
+          images: [],
+        }))
+      : [],
+  };
+}
+
 function readLocalAiSettings(storageKey: string) {
   try {
     const saved = window.localStorage.getItem(storageKey);
@@ -387,18 +422,33 @@ export function ListingAiWorkbench() {
 
     async function applyWorkspaceDraft(draft: Partial<WorkspaceDraft>) {
       if (draft.input && !cancelled) setInput({ ...initialInput, ...draft.input });
-      if (draft.competitors) {
-        const restoredCompetitors = await Promise.all(
+      if (draft.titleGenerator && !cancelled) {
+        setTitleGenerator(normalizeTitleGeneratorDraft(draft.titleGenerator));
+      }
+      if (draft.descriptionGenerator && !cancelled) {
+        setDescriptionGenerator(
+          normalizeDescriptionGeneratorDraft(draft.descriptionGenerator),
+        );
+      }
+      if (draft.galleryCellStyles && !cancelled) {
+        setCellStyles(draft.galleryCellStyles);
+      }
+      if (draft.activeTab && !cancelled && !requestedTab) {
+        setActiveTab(draft.activeTab);
+      }
+
+      if (draft.competitors && !cancelled) {
+        setCompetitors(
           initialCompetitors.map((emptyCompetitor, index) =>
-            hydrateCompetitorDraft({
+            stripCompetitorImages({
               ...emptyCompetitor,
               ...draft.competitors?.[index],
             }),
           ),
         );
-        if (!cancelled) setCompetitors(restoredCompetitors);
       }
-      if (draft.ownImages) {
+
+      if (draft.ownImages && !cancelled) {
         const emptyOwnImages: OwnImageDraft = {
           structureNotes: "",
           mainImage: [],
@@ -409,51 +459,113 @@ export function ListingAiWorkbench() {
           rating: "",
           reviewCount: "",
         };
-        const restoredOwnImages = await hydrateOwnImageDraft({
-          ...emptyOwnImages,
-          ...draft.ownImages,
-        });
-        if (!cancelled) setOwnImages(restoredOwnImages);
-      }
-      if (draft.titleGenerator && !cancelled) {
-        setTitleGenerator(normalizeTitleGeneratorDraft(draft.titleGenerator));
-      }
-      if (draft.descriptionGenerator && !cancelled) {
-        setDescriptionGenerator(
-          normalizeDescriptionGeneratorDraft(draft.descriptionGenerator),
+        setOwnImages(
+          stripOwnImageDraftImages({
+            ...emptyOwnImages,
+            ...draft.ownImages,
+          }),
         );
       }
-      if (draft.imageGenerator) {
-        const restoredImageGenerator = await hydrateImageGeneratorDraft({
-          ...initialImageGenerator,
-          ...draft.imageGenerator,
-          ownViews: {
-            ...initialImageGenerator.ownViews,
-            ...draft.imageGenerator.ownViews,
-          },
-          competitorImages: Array.isArray(
-            draft.imageGenerator.competitorImages,
-          )
-            ? draft.imageGenerator.competitorImages
-            : [],
-          generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
-            ? draft.imageGenerator.generatedImages
-            : [],
-          history: Array.isArray(draft.imageGenerator.history)
-            ? draft.imageGenerator.history
-            : [],
-          prompt: draft.imageGenerator.prompt?.trim()
-            ? draft.imageGenerator.prompt
-            : defaultImageGeneratorPrompt,
+
+      if (draft.imageGenerator && !cancelled) {
+        setImageGenerator(
+          stripImageGeneratorDraftImages({
+            ...initialImageGenerator,
+            ...draft.imageGenerator,
+            ownViews: {
+              ...initialImageGenerator.ownViews,
+              ...draft.imageGenerator.ownViews,
+            },
+            competitorImages: Array.isArray(
+              draft.imageGenerator.competitorImages,
+            )
+              ? draft.imageGenerator.competitorImages
+              : [],
+            generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
+              ? draft.imageGenerator.generatedImages
+              : [],
+            history: Array.isArray(draft.imageGenerator.history)
+              ? draft.imageGenerator.history
+              : [],
+            prompt: draft.imageGenerator.prompt?.trim()
+              ? draft.imageGenerator.prompt
+              : defaultImageGeneratorPrompt,
+          }),
+        );
+      }
+
+      const restoreImages = async () => {
+        if (cancelled) return;
+
+        if (draft.competitors) {
+          const restoredCompetitors = await Promise.all(
+            initialCompetitors.map((emptyCompetitor, index) =>
+              hydrateCompetitorDraft({
+                ...emptyCompetitor,
+                ...draft.competitors?.[index],
+              }),
+            ),
+          );
+          if (!cancelled) setCompetitors(restoredCompetitors);
+        }
+
+        if (draft.ownImages) {
+          const emptyOwnImages: OwnImageDraft = {
+            structureNotes: "",
+            mainImage: [],
+            images: [],
+            imageNotes: [],
+            sales: "",
+            price: "",
+            rating: "",
+            reviewCount: "",
+          };
+          const restoredOwnImages = await hydrateOwnImageDraft({
+            ...emptyOwnImages,
+            ...draft.ownImages,
+          });
+          if (!cancelled) setOwnImages(restoredOwnImages);
+        }
+
+        if (draft.imageGenerator) {
+          const restoredImageGenerator = await hydrateImageGeneratorDraft({
+            ...initialImageGenerator,
+            ...draft.imageGenerator,
+            ownViews: {
+              ...initialImageGenerator.ownViews,
+              ...draft.imageGenerator.ownViews,
+            },
+            competitorImages: Array.isArray(
+              draft.imageGenerator.competitorImages,
+            )
+              ? draft.imageGenerator.competitorImages
+              : [],
+            generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
+              ? draft.imageGenerator.generatedImages
+              : [],
+            history: Array.isArray(draft.imageGenerator.history)
+              ? draft.imageGenerator.history
+              : [],
+            prompt: draft.imageGenerator.prompt?.trim()
+              ? draft.imageGenerator.prompt
+              : defaultImageGeneratorPrompt,
+          });
+          if (!cancelled) setImageGenerator(restoredImageGenerator);
+        }
+      };
+
+      const waitForIdle = () =>
+        new Promise<void>((resolve) => {
+          if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(() => resolve());
+            return;
+          }
+
+          window.setTimeout(resolve, 0);
         });
-        if (!cancelled) setImageGenerator(restoredImageGenerator);
-      }
-      if (draft.galleryCellStyles && !cancelled) {
-        setCellStyles(draft.galleryCellStyles);
-      }
-      if (draft.activeTab && !cancelled && !requestedTab) {
-        setActiveTab(draft.activeTab);
-      }
+
+      await waitForIdle();
+      await restoreImages();
     }
 
     async function restoreDraft() {
