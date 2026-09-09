@@ -21,10 +21,10 @@ REALESRGAN_NCNN_BIN=tools/realesrgan-ncnn-vulkan/realesrgan-ncnn-vulkan
 在生产项目目录执行：
 
 ```bash
-npm run setup:realesrgan:linux
+TOOLS_ROOT=/opt/amazon-ad-bulk-operation/tools npm run setup:realesrgan:linux
 ```
 
-脚本会下载官方 `realesrgan-ncnn-vulkan` Ubuntu 包，安装二进制和模型文件到 `tools/realesrgan-ncnn-vulkan/`。Worker 会从 R2 下载输入文件到系统临时目录，处理后把 PNG 结果上传回 R2，并清理临时文件。
+脚本会下载官方 `realesrgan-ncnn-vulkan` Ubuntu 包，安装二进制到 `/opt/amazon-ad-bulk-operation/tools/realesrgan-ncnn-vulkan/`，模型文件放在其 `models/` 子目录。引擎目录放在 release 目录之外，避免切换 release 时丢失。Worker 会从 R2 下载输入文件到系统临时目录，处理后把 PNG 结果上传回 R2，并清理临时文件。
 
 ## 运维
 
