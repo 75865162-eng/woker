@@ -15,7 +15,9 @@
     "products:refresh-derived": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/refresh-product-derived-fields.ts",
     "products:backfill-image-assets": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/backfill-product-image-assets.ts",
     "worker": "tsx scripts/import-worker.ts",
+    "worker:image-upscale": "tsx scripts/image-upscale-worker.ts",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
+    "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",
     "lint": "eslint",
     "test": "tsx --test tests/*.test.ts",
     "check": "npm run test && npm run lint && npm run build"

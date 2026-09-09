@@ -25,6 +25,7 @@ model Organization {
   teamRoster         TeamRosterMember[]
   workerHeartbeats   WorkerHeartbeat[]
   workspaceScopes    WorkspaceScope[]
+  imageUpscaleJobs   ImageUpscaleJob[]
 }
 
 model User {
@@ -50,6 +51,7 @@ model User {
   sessions                UserSession[]
   WorkspaceDataset        WorkspaceDataset[]
   workspaceSnapshots      WorkspaceSnapshot[]
+  imageUpscaleJobs        ImageUpscaleJob[]
 }
 
 model WorkspaceScope {
@@ -234,6 +236,49 @@ model ImportJob {
   @@index([userId, createdAt])
   @@index([fileId])
   @@index([status])
+}
+
+enum ImageUpscaleJobStatus {
+  queued
+  running
+  completed
+  failed
+}
+
+model ImageUpscaleJob {
+  id             String                @id @default(cuid())
+  organizationId String
+  userId         String
+  batchId        String
+  originalName   String
+  mimeType       String
+  inputKey       String
+  outputKey      String?
+  status         ImageUpscaleJobStatus @default(queued)
+  progress       Int                   @default(0)
+  scale          Int
+  imageKind      String
+  noiseLevel     String
+  model          String
+  inputWidth     Int?
+  inputHeight    Int?
+  outputWidth    Int?
+  outputHeight   Int?
+  inputSize      Int
+  outputSize     Int?
+  processingMs   Int?
+  error          String?
+  createdAt      DateTime              @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, batchId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }
 
 model ExportRecord {

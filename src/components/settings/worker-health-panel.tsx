@@ -10,6 +10,7 @@ type WorkerHealthPayload = {
   driver: string;
   queueName: string;
   queueCounts: Record<string, number>;
+  imageQueueCounts?: Record<string, number>;
   workers: Array<{
     id: string;
     workerName: string;
@@ -28,6 +29,22 @@ type WorkerHealthPayload = {
     file?: {
       originalName: string;
     };
+  }>;
+  imageWorkers?: Array<{
+    id: string;
+    workerName: string;
+    status: string;
+    concurrency: number;
+    lastSeenAt: string;
+    online: boolean;
+  }>;
+  recentImageJobs?: Array<{
+    id: string;
+    status: string;
+    progress: number;
+    error?: string | null;
+    updatedAt: string;
+    originalName: string;
   }>;
   error?: string;
 };
@@ -70,6 +87,7 @@ export function WorkerHealthPanel() {
   const active = Number(counts.active ?? 0);
   const failed = Number(counts.failed ?? 0);
   const delayed = Number(counts.delayed ?? 0);
+  const imageCounts = data?.imageQueueCounts ?? {};
   const queueModeTone = data?.driver === "redis" ? "green" : "amber";
 
   return (
@@ -155,6 +173,25 @@ export function WorkerHealthPanel() {
               ) : (
                 <p className="py-6 text-center text-sm font-medium text-muted">暂无异常或运行中任务。</p>
               )}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-white">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <p className="text-sm font-bold text-foreground">图片放大 Worker</p>
+              <Badge tone={Number(imageCounts.failed ?? 0) > 0 ? "red" : "green"}>失败 {Number(imageCounts.failed ?? 0)}</Badge>
+            </div>
+            <div className="p-2.5">
+              <p className="text-xs font-medium text-muted">队列：待处理 {Number(imageCounts.waiting ?? 0)} · 处理中 {Number(imageCounts.active ?? 0)}</p>
+              {data?.imageWorkers?.map((worker) => (
+                <div key={worker.id} className="mt-2 rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-bold text-foreground">{worker.workerName}</p>
+                    <Badge tone={worker.online ? "green" : "red"}>{worker.online ? "online" : worker.status}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-muted">并发 {worker.concurrency} · {formatDate(worker.lastSeenAt)}</p>
+                </div>
+              ))}
+              {!data?.imageWorkers?.length ? <p className="mt-3 text-xs font-medium text-amber-700">图片 Worker 尚未上报心跳。</p> : null}
             </div>
           </div>
         </div>

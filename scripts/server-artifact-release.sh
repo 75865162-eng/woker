@@ -161,9 +161,10 @@ ln -sfn "$release_dir" "$CURRENT_LINK"
 
 install -m 0644 "$release_dir/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
 install -m 0644 "$release_dir/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
+install -m 0644 "$release_dir/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service
 systemctl daemon-reload
-systemctl enable amazon-web amazon-worker
-systemctl restart amazon-web amazon-worker
+systemctl enable amazon-web amazon-worker amazon-image-upscale-worker
+systemctl restart amazon-web amazon-worker amazon-image-upscale-worker
 
 sh "$release_dir/deploy/caddy/run-caddy.sh"
 
@@ -177,7 +178,7 @@ done
 
 trap - ERR
 
-systemctl --no-pager --full status amazon-web amazon-worker
+systemctl --no-pager --full status amazon-web amazon-worker amazon-image-upscale-worker
 docker compose ps
 df -h /
 echo "Current release: $release_id"

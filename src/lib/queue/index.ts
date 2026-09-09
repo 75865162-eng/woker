@@ -1,5 +1,5 @@
 import { processImportJob } from "@/lib/jobs/processor";
-import { getImportJobQueue } from "@/lib/queue/redis-queue";
+import { getImageUpscaleJobQueue, getImportJobQueue } from "@/lib/queue/redis-queue";
 
 export async function enqueueImportJob(jobId: string) {
   const driver = process.env.QUEUE_DRIVER ?? "inline";
@@ -27,4 +27,21 @@ export async function enqueueImportJob(jobId: string) {
   }
 
   throw new Error(`Unsupported queue driver: ${driver}`);
+}
+
+export async function enqueueImageUpscaleJob(jobId: string) {
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    throw new Error("图片放大必须启用 Redis Worker。请配置 QUEUE_DRIVER=redis。");
+  }
+
+  await getImageUpscaleJobQueue().add(
+    "process-image-upscale-job",
+    { jobId },
+    {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: 100,
+      removeOnFail: 200,
+    },
+  );
 }

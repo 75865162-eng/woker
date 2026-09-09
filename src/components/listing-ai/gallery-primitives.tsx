@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -192,18 +192,26 @@ export function ImagePreviewModal({
   onClose: () => void;
 }) {
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startPan: { x: number; y: number };
+  } | null>(null);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "+" || event.key === "=") {
         event.preventDefault();
-        setZoom((current) => Math.min(3, current + 0.25));
+        adjustZoom(0.25);
       } else if (event.key === "-") {
         event.preventDefault();
-        setZoom((current) => Math.max(0.5, current - 0.25));
+        adjustZoom(-0.25);
       } else if (event.key === "0") {
         event.preventDefault();
-        setZoom(1);
+        resetZoom();
       } else if (event.key === "Escape") {
         onClose();
       }
@@ -214,9 +222,67 @@ export function ImagePreviewModal({
   }, [onClose]);
 
   function adjustZoom(delta: number) {
-    setZoom((current) =>
-      Math.min(3, Math.max(0.5, Number((current + delta).toFixed(2)))),
-    );
+    setZoom((current) => {
+      const nextZoom = Math.min(
+        3,
+        Math.max(0.5, Number((current + delta).toFixed(2))),
+      );
+
+      if (nextZoom <= 1) {
+        setPan({ x: 0, y: 0 });
+      }
+
+      return nextZoom;
+    });
+  }
+
+  function resetZoom() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setIsPanning(false);
+    panDragRef.current = null;
+  }
+
+  function handlePreviewPointerDown(event: ReactPointerEvent<HTMLImageElement>) {
+    event.stopPropagation();
+
+    if (zoom <= 1) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPan: pan,
+    };
+    setIsPanning(true);
+  }
+
+  function handlePreviewPointerMove(event: ReactPointerEvent<HTMLImageElement>) {
+    const drag = panDragRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.stopPropagation();
+    setPan({
+      x: drag.startPan.x + event.clientX - drag.startX,
+      y: drag.startPan.y + event.clientY - drag.startY,
+    });
+  }
+
+  function handlePreviewPointerEnd(event: ReactPointerEvent<HTMLImageElement>) {
+    if (panDragRef.current?.pointerId === event.pointerId) {
+      event.stopPropagation();
+      panDragRef.current = null;
+      setIsPanning(false);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    }
   }
 
   return (
@@ -261,7 +327,7 @@ export function ImagePreviewModal({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setZoom(1)}
+              onClick={resetZoom}
               disabled={zoom === 1}
               title="Reset zoom"
               aria-label="Reset zoom"
@@ -285,10 +351,22 @@ export function ImagePreviewModal({
           <img
             src={image.url}
             alt={image.name}
-            className="max-h-[78vh] max-w-full origin-center object-contain transition-transform duration-150"
-            style={{ transform: `scale(${zoom})` }}
+            className={`max-h-[78vh] max-w-full origin-center select-none object-contain transition-transform duration-150 ${
+              zoom > 1
+                ? isPanning
+                  ? "cursor-grabbing"
+                  : "cursor-grab"
+                : "cursor-zoom-in"
+            }`}
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             loading="eager"
+            draggable={false}
             onClick={(event) => event.stopPropagation()}
+            onDragStart={(event) => event.preventDefault()}
+            onPointerDown={handlePreviewPointerDown}
+            onPointerMove={handlePreviewPointerMove}
+            onPointerUp={handlePreviewPointerEnd}
+            onPointerCancel={handlePreviewPointerEnd}
           />
         </div>
       </div>
