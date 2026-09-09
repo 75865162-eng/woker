@@ -1,12 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
   ExternalLink,
   GripVertical,
+  RotateCcw,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
@@ -120,9 +124,15 @@ export function GalleryCell({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <div className="relative">
+      <div
+        className={`relative ${
+          compact
+            ? "h-20 w-full max-h-20"
+            : "aspect-square h-[226px] max-h-[226px] w-full max-w-[226px]"
+        }`}
+      >
         <button
-          className={`${compact ? "h-20" : "aspect-square"} flex w-full cursor-zoom-in items-center justify-center bg-white`}
+          className="flex h-full w-full cursor-zoom-in items-center justify-center bg-white"
           onClick={onPreview}
           type="button"
           title="View large image"
@@ -181,6 +191,34 @@ export function ImagePreviewModal({
   image: ImagePreview;
   onClose: () => void;
 }) {
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        setZoom((current) => Math.min(3, current + 0.25));
+      } else if (event.key === "-") {
+        event.preventDefault();
+        setZoom((current) => Math.max(0.5, current - 0.25));
+      } else if (event.key === "0") {
+        event.preventDefault();
+        setZoom(1);
+      } else if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  function adjustZoom(delta: number) {
+    setZoom((current) =>
+      Math.min(3, Math.max(0.5, Number((current + delta).toFixed(2)))),
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -196,16 +234,59 @@ export function ImagePreviewModal({
           <p className="truncate text-sm font-bold text-foreground">
             {image.name}
           </p>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => adjustZoom(-0.25)}
+              disabled={zoom <= 0.5}
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <span className="w-12 text-center text-xs font-semibold text-muted">
+              {Math.round(zoom * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => adjustZoom(0.25)}
+              disabled={zoom >= 3}
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setZoom(1)}
+              disabled={zoom === 1}
+              title="Reset zoom"
+              aria-label="Reset zoom"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose} title="Close" aria-label="Close">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center bg-surface-muted p-4" onClick={onClose}>
+        <div
+          className="flex min-h-0 max-h-[78vh] flex-1 items-center justify-center overflow-auto bg-surface-muted p-4"
+          onClick={onClose}
+          onWheel={(event) => {
+            event.preventDefault();
+            adjustZoom(event.deltaY > 0 ? -0.1 : 0.1);
+          }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={image.url}
             alt={image.name}
-            className="max-h-[78vh] max-w-full object-contain"
+            className="max-h-[78vh] max-w-full origin-center object-contain transition-transform duration-150"
+            style={{ transform: `scale(${zoom})` }}
             loading="eager"
             onClick={(event) => event.stopPropagation()}
           />
