@@ -29,6 +29,8 @@ import {
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
 import { isOperationsProgressComplete } from "@/lib/products/operations-progress";
+import { uploadDataUrlAsProductAttachment } from "@/lib/products/image-assets";
+import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 
 import {
   initialFilters,
@@ -820,10 +822,11 @@ export function ProductWorkbench() {
   }
 
   async function persistProduct(product: Product) {
+    const productForPersistence = await migrateLegacyProductAttachments(product);
     const response = await fetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product }),
+      body: JSON.stringify({ product: productForPersistence }),
     });
     const data = (await response.json()) as { product?: Product; error?: string };
 
@@ -1809,7 +1812,7 @@ function ProductEditor({
     }));
   }
 
-  function updateWorkbookCompetitor(index: number, field: keyof TrialCompetitorRow, value: string) {
+  function updateWorkbookCompetitor(index: number, field: keyof TrialCompetitorRow, value: string, asset?: ProductImageAsset) {
     setWorkbookDetail((current) => ({
       ...current,
       competitors: current.competitors.map((row, rowIndex) => {
@@ -1830,11 +1833,11 @@ function ProductEditor({
         }
 
         if (field === "hotVariantImage") {
-          return { ...nextRow, hotVariantImageAsset: undefined };
+          return { ...nextRow, hotVariantImageAsset: asset };
         }
 
         if (field === "noteImage") {
-          return { ...nextRow, noteImageAsset: undefined };
+          return { ...nextRow, noteImageAsset: asset };
         }
 
         return nextRow;
@@ -2024,6 +2027,10 @@ function ProductEditor({
 
   async function handleConclusionUpload(file: File | undefined) {
     if (!file) {
+      return;
+    }
+    if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
+      window.alert(productAttachmentSizeError(file.name, file.size));
       return;
     }
 
@@ -2692,25 +2699,28 @@ async function loadTeamAccountsFromApi() {
 }
 
 async function uploadProductImageFile(file: File): Promise<ProductImageAsset> {
+  if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
+    throw new Error(productAttachmentSizeError(file.name, file.size));
+  }
+  if (!file.type.startsWith("image/")) {
+    throw new Error("商品主图仅支持图片文件。");
+  }
   const formData = new FormData();
   formData.append("file", file);
-
   const response = await fetch("/api/products/image-assets/upload", {
     method: "POST",
     body: formData,
   });
-  const data = (await response.json()) as {
+  const data = (await response.json().catch(() => ({}))) as {
     asset?: ProductImageAsset & { url?: string };
     error?: string;
   };
-
-  if (!response.ok || !data.asset?.url || !data.asset?.originalUrl) {
+  if (!response.ok || !data.asset?.id) {
     throw new Error(data.error || "商品图片上传失败。");
   }
-
   return {
     ...data.asset,
-    thumbUrl: data.asset.thumbUrl || data.asset.url,
+    thumbUrl: data.asset.thumbUrl || data.asset.url || data.asset.originalUrl,
   };
 }
 
@@ -2770,14 +2780,151 @@ async function uploadDataUrlImage(value: string, name: string) {
     } satisfies ProductImageAsset;
   }
 
-  const response = await fetch(value);
-  const blob = await response.blob();
-  const extension = blob.type === "image/jpeg" ? ".jpg" : blob.type === "image/webp" ? ".webp" : ".png";
-  const file = new File([blob], name.replace(/\.[a-z0-9]+$/i, extension), {
-    type: blob.type || "image/png",
-  });
+  const asset = await uploadDataUrlAsProductAttachment(value, name);
+  if (!asset) {
+    throw new Error(`${name} 图片上传失败。`);
+  }
+  return asset;
+}
 
-  return await uploadProductImageFile(file);
+async function migrateLegacyProductAttachments(product: Product): Promise<Product> {
+  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+  const imageAssets = await migrateImageAssets(
+    product.imageAssets,
+    product.images?.length ? product.images : product.image ? [product.image] : [],
+    product.sku,
+    "image",
+  );
+  const workbookDetail = productWithWorkbook.workbookDetail
+    ? {
+        ...productWithWorkbook.workbookDetail,
+        ...await migrateWorkbookAttachments(productWithWorkbook.workbookDetail, product.sku),
+      }
+    : undefined;
+  const operationsProgress = product.operationsProgress
+    ? {
+        ...product.operationsProgress,
+        stages: await Promise.all(
+          product.operationsProgress.stages.map(async (stage, index) => {
+            const evidence = stage.evidenceFile;
+            if (!evidence?.fileDataUrl?.startsWith("data:")) {
+              return stage;
+            }
+
+            const asset = await uploadDataUrlAsProductAttachment(
+              evidence.fileDataUrl,
+              evidence.fileName || `${product.sku || "product"}-evidence-${index + 1}`,
+            );
+            return {
+              ...stage,
+              evidenceFile: {
+                fileId: asset?.id,
+                fileName: evidence.fileName,
+                fileType: evidence.fileType || asset?.mimeType || "",
+                fileSize: evidence.fileSize || asset?.size,
+                downloadUrl: asset?.downloadUrl || asset?.originalUrl,
+                thumbUrl: asset?.thumbUrl,
+                uploadedAt: evidence.uploadedAt || asset?.uploadedAt || new Date().toISOString(),
+              },
+            };
+          }),
+        ),
+      }
+    : product.operationsProgress;
+
+  return {
+    ...product,
+    image: product.image?.startsWith("data:") ? imageAssets[0]?.thumbUrl || imageAssets[0]?.originalUrl : product.image,
+    images: [],
+    imageAssets,
+    ...(workbookDetail ? { workbookDetail } : {}),
+    ...(operationsProgress ? { operationsProgress } : {}),
+  };
+}
+
+async function migrateImageAssets(
+  assets: ProductImageAsset[] | undefined,
+  fallbackImages: string[] | undefined,
+  sku: string,
+  namePrefix: string,
+) {
+  const sourceAssets = Array.isArray(assets) ? assets : [];
+  const sourceImages = Array.isArray(fallbackImages) ? fallbackImages : [];
+  const length = Math.max(sourceAssets.length, sourceImages.length);
+  const migrated: ProductImageAsset[] = [];
+
+  for (let index = 0; index < length; index += 1) {
+    const asset = sourceAssets[index];
+    const value = asset?.originalUrl || asset?.thumbUrl || sourceImages[index] || "";
+    if (!value) continue;
+
+    if (value.startsWith("data:")) {
+      const uploaded = await uploadDataUrlAsProductAttachment(value, `${sku || "product"}-${namePrefix}-${index + 1}`);
+      if (uploaded) migrated.push(uploaded);
+      continue;
+    }
+
+    migrated.push(asset ?? {
+      id: "",
+      name: `${sku || "product"}-${namePrefix}-${index + 1}`,
+      mimeType: "image/jpeg",
+      size: 0,
+      storageType: "r2",
+      uploadedAt: "",
+      thumbUrl: sourceImages[index] || value,
+      originalUrl: value,
+    });
+  }
+
+  return migrated;
+}
+
+async function migrateWorkbookAttachments(detail: TrialProductDraft, sku: string) {
+  const remarkImageAssets = await migrateImageAssets(detail.remarkImageAssets, detail.remarkImages, sku, "remark");
+  const competitors = await Promise.all(detail.competitors.map(async (competitor, index) => {
+    const hotVariantImageAsset = await migrateSingleWorkbookAsset(
+      competitor.hotVariantImageAsset,
+      competitor.hotVariantImage,
+      `${sku || "product"}-competitor-${index + 1}`,
+    );
+    const noteImageAsset = await migrateSingleWorkbookAsset(
+      competitor.noteImageAsset,
+      competitor.noteImage,
+      `${sku || "product"}-competitor-note-${index + 1}`,
+    );
+
+    return {
+      ...competitor,
+      hotVariantImageAsset,
+      hotVariantImage: hotVariantImageAsset?.thumbUrl || hotVariantImageAsset?.originalUrl || "",
+      noteImageAsset,
+      noteImage: noteImageAsset?.thumbUrl || noteImageAsset?.originalUrl || "",
+    };
+  }));
+
+  return {
+    remarkImages: remarkImageAssets.map((asset) => asset.thumbUrl || asset.originalUrl),
+    remarkImageAssets,
+    competitors,
+  };
+}
+
+async function migrateSingleWorkbookAsset(asset: ProductImageAsset | undefined, value: string | undefined, name: string) {
+  const source = asset?.originalUrl || asset?.thumbUrl || value || "";
+  if (!source) return undefined;
+  if (source.startsWith("data:")) {
+    return (await uploadDataUrlAsProductAttachment(source, name)) || undefined;
+  }
+  return asset ?? {
+    id: "",
+    name,
+    mimeType: "image/jpeg",
+    size: 0,
+    storageType: "r2",
+    uploadedAt: "",
+    thumbUrl: value || source,
+    originalUrl: source,
+  };
 }
 
 function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[]) {

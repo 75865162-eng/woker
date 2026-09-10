@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { uploadProductImageAsset } from "@/lib/products/image-assets";
+import { uploadProductAttachmentAsset, uploadProductImageAsset } from "@/lib/products/image-assets";
 import type { ProductImageAsset } from "@/lib/products/types";
 import {
   compactCompetitorFields,
@@ -65,7 +65,7 @@ export function ProductWorkbookDetailSections({
   onPricingChange: (index: number, field: keyof TrialPriceRow, value: string | number) => void;
   onPricingAdd: () => void;
   onPricingRemove: () => void;
-  onCompetitorChange: (index: number, field: keyof TrialCompetitorRow, value: string) => void;
+  onCompetitorChange: (index: number, field: keyof TrialCompetitorRow, value: string, asset?: ProductImageAsset) => void;
   onCompetitorAdd: () => void;
   onCompetitorRemove: () => void;
   onSupplierChange: (index: number, field: keyof TrialSupplierRow, value: string | number) => void;
@@ -189,6 +189,7 @@ export function ProductWorkbookDetailSections({
                         image={row.hotVariantImage}
                         previewImage={row.hotVariantImageAsset?.originalUrl || row.hotVariantImage}
                         onChange={(value) => onCompetitorChange(index, "hotVariantImage", value)}
+                        onAssetChange={(asset) => onCompetitorChange(index, "hotVariantImage", asset.thumbUrl || asset.originalUrl, asset)}
                       />
                       <select
                         className="h-8 w-[130px] rounded-md border border-border bg-white px-2 text-xs font-semibold text-foreground outline-none focus:border-brand"
@@ -231,6 +232,7 @@ export function ProductWorkbookDetailSections({
                         image={row.noteImage}
                         previewImage={row.noteImageAsset?.originalUrl || row.noteImage}
                         onChange={(value) => onCompetitorChange(index, "noteImage", value)}
+                        onAssetChange={(asset) => onCompetitorChange(index, "noteImage", asset.thumbUrl || asset.originalUrl, asset)}
                       />
                     </div>
                   </td>
@@ -369,11 +371,13 @@ function ImageUploadSquare({
   image,
   previewImage,
   onChange,
+  onAssetChange,
   allowPdf = false,
 }: {
   image: string;
   previewImage?: string;
   onChange: (value: string) => void;
+  onAssetChange?: (asset: ProductImageAsset) => void;
   allowPdf?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -390,12 +394,9 @@ function ImageUploadSquare({
     setUploadError("");
 
     try {
-      const nextImage =
-        allowPdf && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))
-          ? await fileToDataUrl(file)
-          : await fileToDataUrl(file);
-
-      onChange(nextImage);
+      const asset = await uploadProductAttachmentAsset(file);
+      onChange(asset.thumbUrl || asset.originalUrl);
+      onAssetChange?.(asset);
       setPreviewOpen(false);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "图片上传失败。");
@@ -416,7 +417,7 @@ function ImageUploadSquare({
           onClick={() => setPreviewOpen(true)}
           title="查看大图"
         >
-          {isPdfDataUrl(image) ? (
+          {isPdfDataUrl(image) || image.toLowerCase().endsWith(".pdf") ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-md bg-white text-center">
               <FileText className="h-10 w-10 text-brand" />
               <span className="text-xs font-semibold text-foreground">PDF</span>
@@ -453,8 +454,8 @@ function ImageUploadSquare({
               </Button>
             </div>
             <div className="flex items-center justify-center" onClick={() => setPreviewOpen(false)}>
-              {isPdfDataUrl(image) ? (
-                <object data={image} type="application/pdf" className="h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              {isPdfDataUrl(image) || image.toLowerCase().endsWith(".pdf") ? (
+                <object data={previewImage || image} type="application/pdf" className="h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
                   <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
                 </object>
               ) : (
@@ -492,18 +493,15 @@ function RemarkImagesUploader({
     setUploadError("");
 
     try {
-      const results = await Promise.allSettled(
-        selected.map(async (file) =>
-          file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
-            ? fileToDataUrl(file)
-            : fileToDataUrl(file),
-        ),
-      );
-      const nextImages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const results = await Promise.allSettled(selected.map((file) => uploadProductAttachmentAsset(file)));
+      const nextAssets = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
       const firstError = results.find((result) => result.status === "rejected");
 
-      if (nextImages.length) {
-        onChange([...images, ...nextImages], imageAssets);
+      if (nextAssets.length) {
+        onChange(
+          [...images, ...nextAssets.map((asset) => asset.thumbUrl || asset.originalUrl)],
+          [...(imageAssets ?? []), ...nextAssets],
+        );
       }
 
       if (firstError && firstError.status === "rejected") {
@@ -546,7 +544,13 @@ function RemarkImagesUploader({
                 onChange={(value) =>
                   onChange(
                     images.map((item, itemIndex) => (itemIndex === index ? value : item)),
-                    imageAssets?.map((asset, itemIndex) => (itemIndex === index ? undefined : asset)).filter((asset): asset is ProductImageAsset => Boolean(asset)),
+                    imageAssets,
+                  )
+                }
+                onAssetChange={(asset) =>
+                  onChange(
+                    images,
+                    imageAssets?.map((currentAsset, assetIndex) => (assetIndex === index ? asset : currentAsset)),
                   )
                 }
               />
@@ -764,11 +768,14 @@ function ImprovementTable({
 
     try {
       const results = await Promise.allSettled(selected.map((file) => uploadProductImageAsset(file)));
-      const nextImages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const nextAssets = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
       const firstError = results.find((result) => result.status === "rejected");
 
-      if (nextImages.length) {
-        onRemarkImagesChange([...detail.remarkImages, ...nextImages], detail.remarkImageAssets);
+      if (nextAssets.length) {
+        onRemarkImagesChange(
+          [...detail.remarkImages, ...nextAssets.map((asset) => asset.thumbUrl || asset.originalUrl)],
+          [...(detail.remarkImageAssets ?? []), ...nextAssets],
+        );
       }
 
       if (firstError && firstError.status === "rejected") {
@@ -1240,12 +1247,4 @@ function parseOriginalCount(count: string) {
 
 function normalizeOriginalsLength(originals: string[], count: number) {
   return Array.from({ length: count }, (_, index) => originals[index] ?? "");
-}
-
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
 }

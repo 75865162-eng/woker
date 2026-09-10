@@ -1,4 +1,5 @@
 import type { ProductImageAsset } from "@/lib/products/types";
+import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 
 export function getProductListImage(product: { imageAssets?: ProductImageAsset[]; image?: string }) {
   const image = product.imageAssets?.[0]?.thumbUrl?.trim() || product.image?.trim();
@@ -12,59 +13,52 @@ export function getProductOriginalImage(product: { imageAssets?: ProductImageAss
   return image || product.image?.trim() || "";
 }
 
+export async function uploadProductAttachmentAsset(file: File) {
+  if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
+    throw new Error(productAttachmentSizeError(file.name, file.size));
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch("/api/products/file-assets/upload", {
+    method: "POST",
+    body: formData,
+  });
+  const data = (await response.json().catch(() => ({}))) as {
+    asset?: ProductImageAsset & { downloadUrl?: string };
+    error?: string;
+  };
+
+  if (!response.ok || !data.asset?.id) {
+    throw new Error(data.error || "商品附件上传失败。");
+  }
+
+  return data.asset;
+}
+
 export async function uploadProductImageAsset(file: File) {
-  if (file.type.startsWith("image/") && file.type !== "image/gif") {
-    return await compressImageToDataUrl(file);
-  }
-
-  return await fileToDataUrl(file);
+  return uploadProductAttachmentAsset(file);
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image."));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function compressImageToDataUrl(file: File) {
-  if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
-    return await fileToDataUrl(file);
+export async function uploadDataUrlAsProductAttachment(value: string, fileName: string) {
+  if (!value.startsWith("data:")) {
+    return undefined;
   }
 
-  const bitmap = await createImageBitmap(file);
-  const maxEdge = 1400;
-  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    bitmap.close();
-    return await fileToDataUrl(file);
+  const match = value.match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/);
+  if (!match) {
+    throw new Error(`${fileName} 图片数据格式无效，请重新上传。`);
   }
 
-  canvas.width = width;
-  canvas.height = height;
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.8));
-  if (!blob) {
-    return await fileToDataUrl(file);
+  const mimeType = match[1] || "application/octet-stream";
+  const isBase64 = Boolean(match[2]);
+  const body = match[3] || "";
+  const bytes = isBase64
+    ? Uint8Array.from(atob(body), (character) => character.charCodeAt(0))
+    : new TextEncoder().encode(decodeURIComponent(body));
+  if (bytes.byteLength > PRODUCT_ATTACHMENT_MAX_BYTES) {
+    throw new Error(productAttachmentSizeError(fileName, bytes.byteLength));
   }
 
-  return await blobToDataUrl(blob);
-}
-
-function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image."));
-    reader.readAsDataURL(blob);
-  });
+  return uploadProductAttachmentAsset(new File([bytes], fileName, { type: mimeType }));
 }

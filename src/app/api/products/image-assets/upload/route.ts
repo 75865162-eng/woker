@@ -5,13 +5,14 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
+import { PRODUCT_ATTACHMENT_MAX_BYTES } from "@/lib/products/file-assets";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
 const supportedImageTypes = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
 const supportedImageExtensions = new Set([".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp"]);
-const maxImageSize = 50 * 1024 * 1024;
+const maxImageSize = PRODUCT_ATTACHMENT_MAX_BYTES;
 
 function createAssetKey(fileName: string, variant: "original" | "thumb") {
   const extension = variant === "thumb" ? ".webp" : path.extname(fileName).toLowerCase() || ".bin";
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     }
 
     if (file.size > maxImageSize) {
-      return NextResponse.json({ error: "商品图片不能超过 50MB。" }, { status: 400 });
+      return NextResponse.json({ error: "商品图片不能超过 10MB。" }, { status: 400 });
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());

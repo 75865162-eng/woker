@@ -738,7 +738,15 @@ export async function POST(request: Request) {
     }
     const { user } = permission;
 
-    const body = (await request.json()) as { product?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
+    let body: { product?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
+    try {
+      body = (await request.json()) as { product?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
+    } catch {
+      return NextResponse.json(
+        { error: "商品数据过大或上传内容不完整，请检查附件是否超过 10MB 后重新上传。" },
+        { status: 413 },
+      );
+    }
 
     if (!isProduct(body.product)) {
       return NextResponse.json({ error: "Invalid product payload." }, { status: 400 });

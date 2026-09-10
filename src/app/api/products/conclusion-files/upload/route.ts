@@ -5,12 +5,13 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import type { ProductFileAsset } from "@/lib/products/types";
+import { PRODUCT_ATTACHMENT_MAX_BYTES } from "@/lib/products/file-assets";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
 const supportedExtensions = new Set([".xls", ".xlsx", ".xlsm"]);
-const maxUploadSize = 50 * 1024 * 1024;
+const maxUploadSize = PRODUCT_ATTACHMENT_MAX_BYTES;
 
 function createStorageKey(fileName: string) {
   const extension = path.extname(fileName).toLowerCase() || ".xlsx";
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     if (file.size > maxUploadSize) {
-      return NextResponse.json({ error: "结论 Excel 不能超过 50MB。" }, { status: 400 });
+      return NextResponse.json({ error: "结论 Excel 不能超过 10MB。" }, { status: 400 });
     }
 
     const storedObject = await getStorageDriver().putFile({ key: createStorageKey(file.name), file });

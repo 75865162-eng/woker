@@ -1084,7 +1084,8 @@ Workspace 页的筛选主要靠四类条件：
 - `/api/products`：产品主数据列表、筛选、摘要。
 - `/api/products/[sku]`：单个产品详情。
 - `/api/products/export`：产品导出任务。
-- `/api/products/image-assets/upload`、`/api/products/video-assets/upload`、`/api/products/conclusion-files/upload`：产品附件上传。
+- `/api/products/image-assets/upload`、`/api/products/file-assets/upload`、`/api/products/video-assets/upload`、`/api/products/conclusion-files/upload`：产品附件上传。
+- `/api/products/file-assets/[id]/download`：产品运营进度、备注和文档附件的权限校验下载。
 - `/api/files` 和 `/api/files/[id]/download`：通用文件列表和下载。
 - `/api/assets/upload` 和 `/api/assets/[...key]`：通用对象上传和读取。
 
@@ -1179,6 +1180,9 @@ Workspace 页的筛选主要靠四类条件：
 - `/api/agents/[agentId]/executions` 会创建一次 Agent execution，并根据具体 Agent 选择 executor、工具集、适配器和上下文。
 - `/api/agents/product/projects`、`/api/agents/supplier/projects`、`/api/agents/listing/projects`、`/api/agents/ppc/actions` 都是“审批先行”的高风险接口，返回 execution、approval、task 和 trace。
 - `/api/products/image-assets/upload` 会上传原图并生成 WebP 缩略图，返回 thumbUrl 和 originalUrl。
+- 产品图片、Excel、PDF 和 CSV 单文件上限统一为 10 MB；缩略图只用于展示，超过上限不会静默压缩，而是在前端和服务端拒绝。
+- `/api/products/file-assets/upload` 会把商品备注、竞品图片/PDF 和运营进度附件先写入 storage，商品 payload 只保存文件元数据和 URL。
+- 商品保存前会把旧版本的 `data:` Base64 图片或运营进度附件迁移为文件资产，避免再次把大段 Base64 放进 `/api/products` JSON 请求。
 - `/api/products/video-assets/upload` 会上传视频或图片素材，图片会转 WebP，非图片则原样存储。
 - `/api/products/conclusion-files/upload` 只接收结论 Excel，返回下载地址，不直接解析文件内容。
 - `/api/ai-settings` 会自动创建默认 profile pair，保存时会同步文本配置、图片配置和 profiles。
@@ -1658,6 +1662,7 @@ Workspace 页的筛选主要靠四类条件：
 
 - `src/app/api/products/[sku]/route.ts`：产品详情接口。它按 organization + workspace + SKU 读单条产品 payload，支持 `includeWorkbookImages=false` 去掉 workbook 里的大图，并用 `Server-Timing` 暴露查询耗时。
 - `src/app/api/products/image-assets/upload/route.ts`：产品图片上传接口。它同时保存原图和 160x160 内缩略图，返回 `thumbUrl` 与 `originalUrl`，供列表、详情和画廊直接引用。
+- `src/app/api/products/file-assets/upload/route.ts`、`src/app/api/products/file-assets/[id]/download/route.ts`：产品通用附件的 10 MB 双重校验、storage 落盘、图片缩略图和权限下载。
 - `src/app/api/products/video-assets/upload/route.ts`：视频策划素材上传接口。图片会被压成 WebP，其他视频/音频则原样落存储，最后返回可用于视频方案草稿的 asset。
 - `src/app/api/products/conclusion-files/upload/route.ts`：结论 Excel 上传接口。它只负责落存储和创建文件元数据，不在这里解析内容，下载则走 `/api/products/conclusion-files/[id]/download`。
 - `src/app/api/sellfox/overview/route.ts`：Sellfox 概览接口。它读店铺、商品数、小时粒度指标数、最近同步时间和下一次小时同步偏移，供 Sellfox 页面展示同步态。

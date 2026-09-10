@@ -52,9 +52,13 @@ export type ProductOperationStageId =
 export type ProductOperationStageStatus = "not_started" | "in_progress" | "completed" | "blocked";
 
 export type ProductOperationStageEvidence = {
+  fileId?: string;
   fileName: string;
   fileType: string;
-  fileDataUrl: string;
+  fileSize?: number;
+  downloadUrl?: string;
+  thumbUrl?: string;
+  fileDataUrl?: string;
   uploadedAt: string;
 };
 

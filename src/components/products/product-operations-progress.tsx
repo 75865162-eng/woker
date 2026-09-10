@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, CheckSquare, FileSpreadsheet, History, ImagePlus, Square, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { uploadProductAttachmentAsset } from "@/lib/products/image-assets";
 import {
   calculateForecastMonthlyRevenue,
   isOperationStageComplete,
@@ -35,6 +36,7 @@ export function ProductOperationsProgress({
 }) {
   const initialValue = useMemo(() => normalizeOperationsProgress(value, defaultOwner), [defaultOwner, value]);
   const [draft, setDraft] = useState(initialValue);
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const revenue = calculateForecastMonthlyRevenue(draft);
   const completedCount = draft.stages.filter(isOperationStageComplete).length;
   const isComplete = isOperationsProgressComplete(draft);
@@ -74,7 +76,7 @@ export function ProductOperationsProgress({
     updateStage(index, { evidenceFile });
   }
 
-  function handleEvidenceUpload(index: number, file: File | null) {
+  async function handleEvidenceUpload(index: number, file: File | null) {
     if (!file) return;
 
     const stage = draft.stages[index];
@@ -88,16 +90,23 @@ export function ProductOperationsProgress({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
+    setUploadingIndex(index);
+    try {
+      const asset = await uploadProductAttachmentAsset(file);
       updateStageEvidence(index, {
+        fileId: asset.id,
         fileName: file.name,
         fileType: file.type,
-        fileDataUrl: String(reader.result),
+        fileSize: file.size,
+        downloadUrl: asset.downloadUrl || asset.originalUrl,
+        thumbUrl: asset.thumbUrl,
         uploadedAt: new Date().toISOString(),
       });
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "附件上传失败。");
+    } finally {
+      setUploadingIndex(null);
+    }
   }
 
   function applyChanges() {
@@ -234,7 +243,8 @@ export function ProductOperationsProgress({
                               fileName={stage.evidenceFile?.fileName}
                               label={evidenceRequirement.label}
                               kind={evidenceRequirement.kind}
-                              onChange={(file) => handleEvidenceUpload(index, file)}
+                              uploading={uploadingIndex === index}
+                              onChange={(file) => void handleEvidenceUpload(index, file)}
                             />
                           ) : (
                             <span className="text-muted">--</span>
@@ -294,12 +304,14 @@ function EvidenceUpload({
   fileName,
   label,
   kind,
+  uploading,
   onChange,
 }: {
   accept: string;
   fileName?: string;
   label: string;
   kind: "image" | "excel";
+  uploading: boolean;
   onChange: (file: File | null) => void;
 }) {
   const Icon = kind === "excel" ? FileSpreadsheet : ImagePlus;
@@ -308,8 +320,8 @@ function EvidenceUpload({
     <div className="space-y-1">
       <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted">
         <Icon className="h-4 w-4 text-brand" />
-        {fileName ? "重新上传" : `上传${label}`}
-        <input className="hidden" type="file" accept={accept} onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
+        {uploading ? "上传中" : fileName ? "重新上传" : `上传${label}`}
+        <input className="hidden" type="file" accept={accept} disabled={uploading} onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
       </label>
       {fileName ? <p className="max-w-44 truncate text-xs font-semibold text-foreground">{fileName}</p> : null}
     </div>
