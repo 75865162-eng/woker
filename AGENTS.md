@@ -110,6 +110,7 @@ npm run dev
 npm run build
 npm run lint
 npm run test
+npm run test:e2e
 npm run check
 npm run products:refresh-derived
 ```
@@ -120,6 +121,7 @@ npm run products:refresh-derived
 - `npm run build` 使用 `.next-build`，配置为 standalone 输出。
 - `npm run lint` 运行 ESLint flat config。
 - `npm run test` 运行不依赖数据库、外部服务或密钥的核心业务回归测试。
+- `npm run test:e2e` 使用 Playwright 模拟隔离测试账号完成登录、Bulk/Overall 上传、分组、规则运行、保存恢复和导出；必须设置 `E2E_TEST_EMAIL`、`E2E_TEST_PASSWORD`，可用 `E2E_BASE_URL` 指定测试环境。
 - `npm run check` 依次运行测试、lint 和生产构建，适合作为每次更新后的完整本地健康检查。
 - `npm run products:refresh-derived` 刷新商品列表派生字段、重建商品摘要表并清理过期商品列表缓存；涉及商品状态、负责人、超期逻辑或生产定时维护时使用。
 

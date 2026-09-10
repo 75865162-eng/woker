@@ -1,6 +1,35 @@
 import type { ProductImageAsset } from "@/lib/products/types";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 
+function attachmentExtensionForMimeType(mimeType: string) {
+  switch (mimeType.toLowerCase()) {
+    case "image/avif":
+      return ".avif";
+    case "image/gif":
+      return ".gif";
+    case "image/jpeg":
+      return ".jpg";
+    case "image/png":
+      return ".png";
+    case "image/webp":
+      return ".webp";
+    case "application/pdf":
+      return ".pdf";
+    case "text/csv":
+      return ".csv";
+    default:
+      return "";
+  }
+}
+
+export function ensureProductAttachmentFileName(fileName: string, mimeType: string) {
+  if (/\.[a-z0-9]+$/i.test(fileName)) {
+    return fileName;
+  }
+
+  return `${fileName}${attachmentExtensionForMimeType(mimeType)}`;
+}
+
 export function getProductListImage(product: { imageAssets?: ProductImageAsset[]; image?: string }) {
   const image = product.imageAssets?.[0]?.thumbUrl?.trim() || product.image?.trim();
 
@@ -60,5 +89,5 @@ export async function uploadDataUrlAsProductAttachment(value: string, fileName: 
     throw new Error(productAttachmentSizeError(fileName, bytes.byteLength));
   }
 
-  return uploadProductAttachmentAsset(new File([bytes], fileName, { type: mimeType }));
+  return uploadProductAttachmentAsset(new File([bytes], ensureProductAttachmentFileName(fileName, mimeType), { type: mimeType }));
 }

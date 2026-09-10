@@ -20,6 +20,7 @@
     "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",
     "lint": "eslint",
     "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test",
     "check": "npm run test && npm run lint && npm run build"
   },
   "dependencies": {
@@ -44,6 +45,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
