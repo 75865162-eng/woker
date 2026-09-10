@@ -23,6 +23,7 @@ type RecordVersionInput = {
   summary?: string;
   payload: Prisma.InputJsonValue;
   scope?: Partial<WorkspaceScopeInput>;
+  idempotencyKey?: string;
 };
 
 export async function ensureWorkspaceScope(user: CurrentUser, scope?: Partial<WorkspaceScopeInput>) {
@@ -55,6 +56,16 @@ export async function ensureWorkspaceScope(user: CurrentUser, scope?: Partial<Wo
 }
 
 export async function recordDataChangeVersion(input: RecordVersionInput) {
+  if (input.idempotencyKey) {
+    const existing = await prisma.dataChangeVersion.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+      select: { version: true },
+    });
+    if (existing) {
+      return existing.version;
+    }
+  }
+
   const scope = await ensureWorkspaceScope(input.user, input.scope);
   const latest = await prisma.dataChangeVersion.aggregate({
     where: {
@@ -68,39 +79,55 @@ export async function recordDataChangeVersion(input: RecordVersionInput) {
   });
   const version = (latest._max.version ?? 0) + 1;
 
-  await prisma.$transaction([
-    prisma.dataChangeVersion.create({
-      data: {
-        organizationId: input.user.organizationId,
-        userId: input.user.id,
-        workspaceId: scope.workspaceId,
-        accountId: scope.accountId,
-        marketplace: scope.marketplace,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        version,
-        action: input.action,
-        summary: input.summary,
-        payload: input.payload,
-      },
-    }),
-    prisma.auditLog.create({
-      data: {
-        organizationId: input.user.organizationId,
-        userId: input.user.id,
-        action: input.action,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        metadata: {
-          version,
+  try {
+    await prisma.$transaction([
+      prisma.dataChangeVersion.create({
+        data: {
+          organizationId: input.user.organizationId,
+          userId: input.user.id,
+          idempotencyKey: input.idempotencyKey,
           workspaceId: scope.workspaceId,
           accountId: scope.accountId,
           marketplace: scope.marketplace,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          version,
+          action: input.action,
           summary: input.summary,
+          payload: input.payload,
         },
-      },
-    }),
-  ]);
+      }),
+      prisma.auditLog.create({
+        data: {
+          organizationId: input.user.organizationId,
+          userId: input.user.id,
+          idempotencyKey: input.idempotencyKey,
+          action: input.action,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          metadata: {
+            version,
+            workspaceId: scope.workspaceId,
+            accountId: scope.accountId,
+            marketplace: scope.marketplace,
+            summary: input.summary,
+            ...(input.idempotencyKey ? { outboxEventId: input.idempotencyKey } : {}),
+          },
+        },
+      }),
+    ]);
+  } catch (error) {
+    if (input.idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prisma.dataChangeVersion.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+        select: { version: true },
+      });
+      if (existing) {
+        return existing.version;
+      }
+    }
+    throw error;
+  }
 
   return version;
 }

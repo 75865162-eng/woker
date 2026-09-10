@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, ChevronDown, ExternalLink, FileDown, FileUp, History, ImagePlus, Minus, PackagePlus, RotateCcw, Save, Search, Video, X } from "lucide-react";
+import { ArrowRight, Bell, ChevronDown, ExternalLink, FileDown, FileUp, History, ImagePlus, LoaderCircle, Minus, PackagePlus, RotateCcw, Save, Search, Video, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +29,8 @@ import {
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
 import { isOperationsProgressComplete } from "@/lib/products/operations-progress";
-import { uploadDataUrlAsProductAttachment } from "@/lib/products/image-assets";
+import { getProductAssetDownloadUrl, uploadDataUrlAsProductAttachment } from "@/lib/products/image-assets";
+import { toLightweightProduct } from "@/lib/products/lightweight-product";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 
 import {
@@ -66,7 +67,6 @@ import {
 } from "./product-workbench-utils";
 import {
   createTrialProductDraft,
-  createProductShellFromListItem,
   parseProductWorkbookFile,
   productToDraft,
   trialImprovementLabels,
@@ -86,12 +86,11 @@ const productWorkbenchStorageKeyPrefix = "amazon-product-workbench-cache-v4";
 let productWorkbenchCache: ProductWorkbenchCache | null = null;
 let productWorkbenchCacheWorkspaceId: string | null = null;
 const productDetailCache = new Map<string, Product>();
-const productDetailInflight = new Map<string, Promise<Product>>();
-const productListResponseCache = new Map<string, { cachedAt: number; data: { products?: ProductListItem[]; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string } }>();
-const productListInflight = new Map<string, Promise<{ products?: ProductListItem[]; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string }>>();
+const productListResponseCache = new Map<string, { cachedAt: number; data: { products?: Array<Product | ProductListItem>; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string } }>();
+const productListInflight = new Map<string, Promise<{ products?: Array<Product | ProductListItem>; pagination?: { total?: number; pageCount?: number }; summary?: ProductListSummary; error?: string }>>();
 const productSummaryResponseCache = new Map<string, { cachedAt: number; data: { summary?: ProductListSummary; error?: string } }>();
 const productSummaryInflight = new Map<string, Promise<{ summary?: ProductListSummary; error?: string }>>();
-const REQUEST_CACHE_TTL_MS = 5000;
+const REQUEST_CACHE_TTL_MS = 30_000;
 const compactToolbarButtonClass =
   "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
 const competitorTableFields: Array<Exclude<keyof TrialCompetitorRow, "hotVariantImageAsset" | "noteImageAsset">> = [
@@ -242,13 +241,15 @@ function readCachedProductWorkbench() {
       return null;
     }
 
-    for (const product of parsed.products) {
+    const lightweightProducts = parsed.products.map((product) => toLightweightProduct(product));
+    for (const product of lightweightProducts) {
       if (hasWorkbookDetail(product)) {
         productDetailCache.set(getProductDetailCacheKeyWithMode(workspaceId, product.sku, true), product);
       }
     }
     const nextCache = {
       ...parsed,
+      products: lightweightProducts,
       filters: normalizeProductFilters(parsed.filters),
     };
     productWorkbenchCache = nextCache;
@@ -386,7 +387,7 @@ export function ProductWorkbench() {
     const promise = (async () => {
       const response = await fetch(`/api/products?${params}`, { cache: "no-store", signal: input.signal });
       const data = (await response.json()) as {
-        products?: ProductListItem[];
+        products?: Array<Product | ProductListItem>;
         pagination?: { total?: number; pageCount?: number };
         summary?: ProductListSummary;
         error?: string;
@@ -543,7 +544,7 @@ export function ProductWorkbench() {
             page,
             pageSize,
             includeSummary: false,
-            detail: false,
+            detail: true,
             signal: controller.signal,
           });
 
@@ -552,7 +553,7 @@ export function ProductWorkbench() {
           }
 
           const nextProducts = Array.isArray(data.products)
-            ? data.products.map((product) => createProductShellFromListItem(product))
+            ? data.products.map((product) => product as Product)
             : [];
           const nextTotalCount = data.pagination?.total ?? 0;
 
@@ -598,94 +599,6 @@ export function ProductWorkbench() {
     };
   }, [fetchProducts, filters, loadProductSummary, page, pageSize]);
 
-  const loadProductDetail = useCallback(async (sku: string, signal?: AbortSignal, options?: { includeWorkbookImages?: boolean }) => {
-    const normalizedSku = sku.trim();
-    const workspaceId = readCurrentWorkspaceId();
-    const includeWorkbookImages = options?.includeWorkbookImages ?? true;
-    const cacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, includeWorkbookImages);
-    const cached = productDetailCache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const inFlight = productDetailInflight.get(cacheKey);
-    if (inFlight) {
-      return inFlight;
-    }
-
-    const promise = (async () => {
-      const params = new URLSearchParams();
-      if (!includeWorkbookImages) {
-        params.set("includeWorkbookImages", "false");
-      }
-
-      const response = await fetch(`/api/products/${encodeURIComponent(normalizedSku)}${params.toString() ? `?${params.toString()}` : ""}`, {
-        cache: "no-store",
-        signal,
-      });
-      const data = (await response.json()) as { product?: Product; error?: string };
-
-      if (!response.ok || !data.product) {
-        throw new Error(data.error || "商品详情读取失败");
-      }
-
-      productDetailCache.set(cacheKey, data.product);
-      return data.product;
-    })();
-
-    productDetailInflight.set(cacheKey, promise);
-
-    try {
-      return await promise;
-    } finally {
-      productDetailInflight.delete(cacheKey);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!products.length) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      const uniqueSkus = Array.from(new Set(products.map((product) => product.sku.trim()).filter(Boolean)));
-      const skusToPrefetch = uniqueSkus.filter((sku) => {
-        const fullCachedProduct = productDetailCache.get(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), sku, true));
-        const cachedProduct = productDetailCache.get(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), sku, false));
-        return !cachedProduct && !fullCachedProduct;
-      });
-
-      if (!skusToPrefetch.length) {
-        return;
-      }
-
-      const queue = [...skusToPrefetch];
-      const concurrency = Math.min(4, queue.length);
-      const workers = Array.from({ length: concurrency }, async () => {
-        while (!controller.signal.aborted) {
-          const sku = queue.shift();
-          if (!sku) {
-            return;
-          }
-
-          await loadProductDetail(sku, controller.signal, { includeWorkbookImages: false }).catch(() => undefined);
-        }
-      });
-
-      void Promise.all(workers).catch(() => undefined);
-    }, 0);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [loadProductDetail, products]);
-
-  function prefetchProductDetail(sku: string) {
-    void loadProductDetail(sku, undefined, { includeWorkbookImages: false }).catch(() => undefined);
-  }
-
   async function reloadProducts(input?: { filters?: ProductFilters; page?: number; pageSize?: number }) {
     const nextFilters = input?.filters ?? filters;
     const nextPage = input?.page ?? page;
@@ -701,11 +614,11 @@ export function ProductWorkbench() {
         page: nextPage,
         pageSize: nextPageSize,
         includeSummary: false,
-        detail: false,
+        detail: true,
         signal: controller.signal,
       });
       const nextProducts = Array.isArray(data.products)
-        ? data.products.map((product) => createProductShellFromListItem(product))
+        ? data.products.map((product) => product as Product)
         : [];
       const nextTotalCount = data.pagination?.total ?? 0;
       const nextSummary = data.summary ?? listSummary;
@@ -781,19 +694,18 @@ export function ProductWorkbench() {
     setIsEditorOpen(false);
   }
 
-  async function openProduct(sku: string) {
+  function openProduct(sku: string) {
     const normalizedSku = sku.trim();
     const workspaceId = readCurrentWorkspaceId();
     const fullCacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, true);
     const textCacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, false);
-    const requestId = ++productDetailRequestSeq.current;
     const cachedDetail = productDetailCache.get(fullCacheKey);
     const cachedTextDetail = productDetailCache.get(textCacheKey);
     const listProduct = productsRef.current.find((product) => product.sku.trim() === normalizedSku) ?? null;
 
     setProductsError("");
     setActiveProduct(cachedDetail ?? cachedTextDetail ?? listProduct);
-    setDetailReady(Boolean(cachedDetail));
+    setDetailReady(Boolean(cachedDetail ?? cachedTextDetail ?? listProduct));
     setIsEditorOpen(true);
 
     if (cachedDetail) {
@@ -801,37 +713,25 @@ export function ProductWorkbench() {
       setDetailReady(true);
       return;
     }
-
-    try {
-      const product = await loadProductDetail(normalizedSku, undefined, { includeWorkbookImages: true });
-      if (requestId !== productDetailRequestSeq.current) {
-        return;
-      }
-      setActiveProduct(product);
-      setDetailReady(true);
-    } catch (error) {
-      if (requestId !== productDetailRequestSeq.current) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : "商品详情读取失败";
-      setProductsError(message);
-      setActivityLog((current) => [`商品详情读取失败：${message}`, ...current].slice(0, 8));
-    } finally {
-      setIsEditorOpen(true);
-    }
   }
 
-  async function persistProduct(product: Product) {
-    const productForPersistence = await migrateLegacyProductAttachments(product);
+  async function persistProduct(product: Product, options?: { migrateLegacyAttachments?: boolean }) {
+    const productForPersistence = options?.migrateLegacyAttachments
+      ? await migrateLegacyProductAttachments(product)
+      : stripLegacyAttachmentData(product);
     const response = await fetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ product: productForPersistence }),
     });
-    const data = (await response.json()) as { product?: Product; error?: string };
+    const data = (await response.json()) as { product?: Product; error?: string; conflict?: boolean; currentRevision?: number };
 
     if (!response.ok || !data.product) {
-      throw new Error(data.error || "商品保存失败");
+      const error = new Error(data.error || "商品保存失败");
+      if (data.conflict) {
+        error.name = "ProductRevisionConflictError";
+      }
+      throw error;
     }
 
     return data.product;
@@ -849,6 +749,7 @@ export function ProductWorkbench() {
       sku: existing?.sku ?? draft.sku,
       createdAt: existing?.createdAt ?? formatDateTime(new Date()),
     };
+    const hasLegacyAttachments = hasLegacyAttachmentData(nextProduct);
 
     try {
       const savedProduct = await persistProduct(nextProduct);
@@ -865,10 +766,17 @@ export function ProductWorkbench() {
         setProductsError(message);
         setActivityLog((current) => [`商品已保存，但列表刷新失败：${message}`, ...current].slice(0, 8));
       });
-      setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
+      setActivityLog((current) => [
+        hasLegacyAttachments
+          ? `${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库；检测到旧附件，待单独迁移`
+          : `${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`,
+        ...current,
+      ].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品保存失败";
-      window.alert(message);
+      window.alert(error instanceof Error && error.name === "ProductRevisionConflictError"
+        ? `${message}\n\n当前页面数据已过期，请关闭后重新打开商品再保存。`
+        : message);
       setActivityLog((current) => [`商品保存失败：${message}`, ...current].slice(0, 8));
     }
   }
@@ -1082,9 +990,6 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               totalCount={productsTotalCount}
               loading={productsLoading}
               onOpenProduct={(sku) => void openProduct(sku)}
-              onPrefetchProduct={(sku) => {
-                prefetchProductDetail(sku);
-              }}
               onOpenHistory={setVersionProduct}
             />
             <Pagination
@@ -1559,14 +1464,16 @@ function ProductEditor({
   opsOptions: string[];
   designerOptions: string[];
   onClose: () => void;
-  onSave: (draft: ProductDraft) => void;
+  onSave: (draft: ProductDraft) => void | Promise<void>;
 }) {
   const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products, nextSku));
+  const [saving, setSaving] = useState(false);
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
   const [imageCopyGalleryOpen, setImageCopyGalleryOpen] = useState(false);
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
   const [conclusionUploading, setConclusionUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const conclusionInputRef = useRef<HTMLInputElement | null>(null);
   const productRef = useRef(product);
   const productsRef = useRef(products);
@@ -1588,6 +1495,15 @@ function ProductEditor({
   const showListingActions = ["listing_confirming", "design_in_progress", "listed", "delisted"].includes(draft.status);
   const statusOptions = isEditing ? productStatusOptions : newProductStatusOptions;
   const requiresConclusionExcel = draft.status === "canceled" || draft.status === "listed";
+
+  function openImagePreview(asset?: ProductImageAsset, fallbackImage?: string) {
+    const source = getProductAssetDownloadUrl(asset) || (fallbackImage?.startsWith("data:") ? "" : fallbackImage || "");
+    if (!source) {
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewImage(source);
+  }
 
   useEffect(() => {
     productRef.current = product;
@@ -1748,6 +1664,10 @@ function ProductEditor({
   }
 
   async function handleSubmit(override?: Partial<ProductEditorDraft>) {
+    if (saving) {
+      return;
+    }
+
     const nextDraft = { ...draft, ...override };
 
     if (!nextDraft.chineseName.trim() || !nextDraft.englishName.trim()) {
@@ -1770,7 +1690,12 @@ function ProductEditor({
       return;
     }
 
-    await saveDraft(nextDraft);
+    setSaving(true);
+    try {
+      await saveDraft(nextDraft);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function moveWorkflow(stage: ProductWorkflowStage, note: string) {
@@ -2108,9 +2033,9 @@ function ProductEditor({
               <X className="h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" className={compactToolbarButtonClass} onClick={() => handleSubmit()}>
-              <Save className="h-4 w-4" />
-              保存
+            <Button size="sm" className={compactToolbarButtonClass} onClick={() => void handleSubmit()} disabled={saving}>
+              {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {saving ? "保存中" : "保存"}
             </Button>
           </div>
         </div>
@@ -2125,7 +2050,7 @@ function ProductEditor({
                     <button
                       type="button"
                       className="mt-4 flex aspect-square w-full overflow-hidden rounded-lg border border-border bg-surface-muted transition-colors hover:border-brand hover:bg-white"
-                      onClick={() => setPreviewImage(primaryImageAsset.originalUrl || primaryImageAsset.thumbUrl)}
+                      onClick={() => openImagePreview(primaryImageAsset, primaryImageAsset.thumbUrl)}
                       title="点击查看大图"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2153,7 +2078,7 @@ function ProductEditor({
                           <button
                             type="button"
                             className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted"
-                            onClick={() => setPreviewImage(asset.originalUrl || asset.thumbUrl)}
+                            onClick={() => openImagePreview(asset, asset.thumbUrl)}
                             title="点击查看大图"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2372,8 +2297,16 @@ function ProductEditor({
               </Button>
             </div>
             <div className="flex flex-1 items-center justify-center overflow-auto p-5" onClick={() => setPreviewImage(null)}>
+              {previewLoading ? <p className="text-sm font-semibold text-white">正在下载</p> : null}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewImage} alt="商品图片大图" className="max-h-[78vh] max-w-full object-contain" onClick={(event) => event.stopPropagation()} />
+              <img
+                src={previewImage}
+                alt="商品图片大图"
+                className={`max-h-[78vh] max-w-full object-contain ${previewLoading ? "hidden" : ""}`}
+                onLoad={() => setPreviewLoading(false)}
+                onError={() => setPreviewLoading(false)}
+                onClick={(event) => event.stopPropagation()}
+              />
             </div>
           </div>
         </div>
@@ -2429,6 +2362,33 @@ function ConclusionExcelField({
   uploading: boolean;
   onUpload: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadFile() {
+    if (!file?.downloadUrl || downloading) {
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      const response = await fetch(file.downloadUrl);
+      if (!response.ok) {
+        throw new Error("附件下载失败");
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = file.name || "conclusion.xlsx";
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.alert("附件下载失败，请稍后重试。");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div className="text-xs font-semibold text-muted">
       <p>结论 Excel 表（必传）</p>
@@ -2443,9 +2403,9 @@ function ConclusionExcelField({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {file?.downloadUrl ? (
-            <a className="text-xs font-bold text-brand hover:underline" href={file.downloadUrl}>
-              下载
-            </a>
+            <button type="button" className="text-xs font-bold text-brand hover:underline" onClick={() => void downloadFile()} disabled={downloading}>
+              {downloading ? "正在下载" : "下载"}
+            </button>
           ) : null}
           <Button size="sm" variant="secondary" onClick={onUpload} disabled={uploading}>
             <FileUp className="h-4 w-4" />
@@ -2787,6 +2747,102 @@ async function uploadDataUrlImage(value: string, name: string) {
   return asset;
 }
 
+function stripLegacyAttachmentData(product: Product): Product {
+  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+  const workbookDetail = productWithWorkbook.workbookDetail;
+
+  return {
+    ...product,
+    image: stripDataUrl(product.image),
+    images: (product.images ?? []).map(stripDataUrl).filter(Boolean),
+    imageAssets: product.imageAssets
+      ?.map((asset) => ({
+        ...asset,
+        thumbUrl: stripDataUrl(asset.thumbUrl),
+        originalUrl: stripDataUrl(asset.originalUrl),
+      }))
+      .filter((asset) => Boolean(asset.id || asset.thumbUrl || asset.originalUrl)),
+    ...(workbookDetail
+      ? {
+          workbookDetail: {
+            ...workbookDetail,
+            remarkImages: (workbookDetail.remarkImages ?? []).map(stripDataUrl).filter(Boolean),
+            remarkImageAssets: workbookDetail.remarkImageAssets
+              ?.map((asset) => ({
+                ...asset,
+                thumbUrl: stripDataUrl(asset.thumbUrl),
+                originalUrl: stripDataUrl(asset.originalUrl),
+              }))
+              .filter((asset) => Boolean(asset.id || asset.thumbUrl || asset.originalUrl)),
+            competitors: workbookDetail.competitors.map((competitor) => ({
+              ...competitor,
+              hotVariantImage: stripDataUrl(competitor.hotVariantImage),
+              noteImage: stripDataUrl(competitor.noteImage),
+              hotVariantImageAsset: stripImageAssetData(competitor.hotVariantImageAsset),
+              noteImageAsset: stripImageAssetData(competitor.noteImageAsset),
+            })),
+          },
+        }
+      : {}),
+    ...(product.operationsProgress
+      ? {
+          operationsProgress: {
+            ...product.operationsProgress,
+            stages: product.operationsProgress.stages.map((stage) => ({
+              ...stage,
+              evidenceFile: stage.evidenceFile
+                ? {
+                    ...stage.evidenceFile,
+                    downloadUrl: stripDataUrl(stage.evidenceFile.downloadUrl),
+                    thumbUrl: stripDataUrl(stage.evidenceFile.thumbUrl),
+                    fileDataUrl: undefined,
+                  }
+                : undefined,
+            })),
+          },
+        }
+      : {}),
+  };
+}
+
+function hasLegacyAttachmentData(product: Product) {
+  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+  const workbookDetail = productWithWorkbook.workbookDetail;
+
+  return Boolean(
+    product.image?.startsWith("data:")
+      || product.images?.some((image) => image.startsWith("data:"))
+      || product.imageAssets?.some((asset) => asset.thumbUrl.startsWith("data:") || asset.originalUrl.startsWith("data:"))
+      || workbookDetail?.remarkImages.some((image) => image.startsWith("data:"))
+      || workbookDetail?.remarkImageAssets?.some((asset) => asset.thumbUrl.startsWith("data:") || asset.originalUrl.startsWith("data:"))
+      || workbookDetail?.competitors.some((competitor) =>
+        competitor.hotVariantImage.startsWith("data:")
+          || competitor.noteImage.startsWith("data:")
+          || competitor.hotVariantImageAsset?.thumbUrl.startsWith("data:")
+          || competitor.hotVariantImageAsset?.originalUrl.startsWith("data:")
+          || competitor.noteImageAsset?.thumbUrl.startsWith("data:")
+          || competitor.noteImageAsset?.originalUrl.startsWith("data:"),
+      )
+      || product.operationsProgress?.stages.some((stage) => stage.evidenceFile?.fileDataUrl?.startsWith("data:")),
+  );
+}
+
+function stripImageAssetData(asset: ProductImageAsset | undefined) {
+  if (!asset) {
+    return undefined;
+  }
+
+  return {
+    ...asset,
+    thumbUrl: stripDataUrl(asset.thumbUrl),
+    originalUrl: stripDataUrl(asset.originalUrl),
+  };
+}
+
+function stripDataUrl(value: string | undefined) {
+  return value?.startsWith("data:") ? "" : value ?? "";
+}
+
 async function migrateLegacyProductAttachments(product: Product): Promise<Product> {
   const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
   const imageAssets = await migrateImageAssets(
@@ -2855,7 +2911,10 @@ async function migrateImageAssets(
 
   for (let index = 0; index < length; index += 1) {
     const asset = sourceAssets[index];
-    const value = asset?.originalUrl || asset?.thumbUrl || sourceImages[index] || "";
+    const assetDownloadUrl = asset?.id
+      ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download`
+      : "";
+    const value = asset?.originalUrl || asset?.thumbUrl || sourceImages[index] || assetDownloadUrl;
     if (!value) continue;
 
     if (value.startsWith("data:")) {
@@ -2864,7 +2923,11 @@ async function migrateImageAssets(
       continue;
     }
 
-    migrated.push(asset ?? {
+    migrated.push(asset ? {
+      ...asset,
+      originalUrl: asset.originalUrl || (asset.id ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download` : value),
+      thumbUrl: asset.thumbUrl || sourceImages[index] || value,
+    } : {
       id: "",
       name: `${sku || "product"}-${namePrefix}-${index + 1}`,
       mimeType: "image/jpeg",
@@ -2910,12 +2973,19 @@ async function migrateWorkbookAttachments(detail: TrialProductDraft, sku: string
 }
 
 async function migrateSingleWorkbookAsset(asset: ProductImageAsset | undefined, value: string | undefined, name: string) {
-  const source = asset?.originalUrl || asset?.thumbUrl || value || "";
+  const assetDownloadUrl = asset?.id
+    ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download`
+    : "";
+  const source = asset?.originalUrl || asset?.thumbUrl || value || assetDownloadUrl;
   if (!source) return undefined;
   if (source.startsWith("data:")) {
     return (await uploadDataUrlAsProductAttachment(source, name)) || undefined;
   }
-  return asset ?? {
+  return asset ? {
+    ...asset,
+    originalUrl: asset.originalUrl || (asset.id ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download` : source),
+    thumbUrl: asset.thumbUrl || value || source,
+  } : {
     id: "",
     name,
     mimeType: "image/jpeg",

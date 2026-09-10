@@ -241,6 +241,7 @@ export function ProductOperationsProgress({
                             <EvidenceUpload
                               accept={evidenceRequirement.accept}
                               fileName={stage.evidenceFile?.fileName}
+                              downloadUrl={stage.evidenceFile?.downloadUrl || (stage.evidenceFile?.fileId ? `/api/products/file-assets/${encodeURIComponent(stage.evidenceFile.fileId)}/download` : undefined)}
                               label={evidenceRequirement.label}
                               kind={evidenceRequirement.kind}
                               uploading={uploadingIndex === index}
@@ -302,6 +303,7 @@ function ProgressField({ label, children }: { label: string; children: React.Rea
 function EvidenceUpload({
   accept,
   fileName,
+  downloadUrl,
   label,
   kind,
   uploading,
@@ -309,12 +311,34 @@ function EvidenceUpload({
 }: {
   accept: string;
   fileName?: string;
+  downloadUrl?: string;
   label: string;
   kind: "image" | "excel";
   uploading: boolean;
   onChange: (file: File | null) => void;
 }) {
   const Icon = kind === "excel" ? FileSpreadsheet : ImagePlus;
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadEvidence() {
+    if (!downloadUrl || downloading) return;
+    setDownloading(true);
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error("附件下载失败");
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName || "product-attachment";
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.alert("附件下载失败，请稍后重试。");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div className="space-y-1">
@@ -323,7 +347,11 @@ function EvidenceUpload({
         {uploading ? "上传中" : fileName ? "重新上传" : `上传${label}`}
         <input className="hidden" type="file" accept={accept} disabled={uploading} onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
       </label>
-      {fileName ? <p className="max-w-44 truncate text-xs font-semibold text-foreground">{fileName}</p> : null}
+      {fileName ? (
+        <button type="button" className="max-w-44 truncate text-left text-xs font-semibold text-brand hover:underline" onClick={() => void downloadEvidence()} disabled={!downloadUrl || downloading} title={fileName}>
+          {downloading ? "正在下载" : fileName}
+        </button>
+      ) : null}
     </div>
   );
 }

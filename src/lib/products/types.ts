@@ -110,10 +110,13 @@ export type ProductImageAsset = {
   uploadedAt: string;
   thumbUrl: string;
   originalUrl: string;
+  thumbFileId?: string;
+  downloadUrl?: string;
 };
 
 export type Product = {
   id: string;
+  revision?: number;
   sku: string;
   chineseName: string;
   englishName: string;

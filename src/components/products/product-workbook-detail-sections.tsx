@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { uploadProductAttachmentAsset, uploadProductImageAsset } from "@/lib/products/image-assets";
+import { getProductAssetDownloadUrl, uploadProductAttachmentAsset, uploadProductImageAsset } from "@/lib/products/image-assets";
 import type { ProductImageAsset } from "@/lib/products/types";
 import {
   compactCompetitorFields,
@@ -187,6 +187,7 @@ export function ProductWorkbookDetailSections({
                     <div className="w-[130px] space-y-2">
                       <ImageUploadSquare
                         image={row.hotVariantImage}
+                        asset={row.hotVariantImageAsset}
                         previewImage={row.hotVariantImageAsset?.originalUrl || row.hotVariantImage}
                         onChange={(value) => onCompetitorChange(index, "hotVariantImage", value)}
                         onAssetChange={(asset) => onCompetitorChange(index, "hotVariantImage", asset.thumbUrl || asset.originalUrl, asset)}
@@ -230,6 +231,7 @@ export function ProductWorkbookDetailSections({
                       <SmallTextarea value={row.note} onChange={(value) => onCompetitorChange(index, "note", value)} />
                       <ImageUploadSquare
                         image={row.noteImage}
+                        asset={row.noteImageAsset}
                         previewImage={row.noteImageAsset?.originalUrl || row.noteImage}
                         onChange={(value) => onCompetitorChange(index, "noteImage", value)}
                         onAssetChange={(asset) => onCompetitorChange(index, "noteImage", asset.thumbUrl || asset.originalUrl, asset)}
@@ -369,18 +371,22 @@ export function getSupplierTextareaSize(field: keyof TrialSupplierRow) {
 
 function ImageUploadSquare({
   image,
+  asset,
   previewImage,
   onChange,
   onAssetChange,
   allowPdf = false,
 }: {
   image: string;
+  asset?: ProductImageAsset;
   previewImage?: string;
   onChange: (value: string) => void;
   onAssetChange?: (asset: ProductImageAsset) => void;
   allowPdf?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSource, setPreviewSource] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -408,19 +414,32 @@ function ImageUploadSquare({
     }
   }
 
+  function openPreview() {
+    const source = getProductAssetDownloadUrl(asset) || (image.startsWith("data:") ? "" : previewImage || image);
+    if (!source) {
+      return;
+    }
+    setPreviewSource(source);
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+  }
+
+  const hasFile = Boolean(image || asset?.id);
+  const isPdf = asset?.mimeType === "application/pdf" || isPdfDataUrl(image) || image.toLowerCase().endsWith(".pdf");
+
   return (
     <>
-      {image ? (
+      {hasFile ? (
         <button
           type="button"
           className="flex h-[130px] w-[130px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted"
-          onClick={() => setPreviewOpen(true)}
+          onClick={openPreview}
           title="查看大图"
         >
-          {isPdfDataUrl(image) || image.toLowerCase().endsWith(".pdf") ? (
+          {isPdf ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-md bg-white text-center">
               <FileText className="h-10 w-10 text-brand" />
-              <span className="text-xs font-semibold text-foreground">PDF</span>
+              <span className="max-w-[112px] truncate px-2 text-xs font-semibold text-foreground">{asset?.name || "PDF"}</span>
             </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
@@ -440,7 +459,7 @@ function ImageUploadSquare({
       {uploadError ? <p className="text-[11px] font-semibold text-danger">{uploadError}</p> : null}
       <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => void handleFile(event.target.files?.[0])} />
 
-      {previewOpen && image ? (
+      {previewOpen && (image || asset?.id) ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/70 p-6" onClick={() => setPreviewOpen(false)} role="dialog" aria-modal="true">
           <div className="relative flex max-h-full max-w-5xl items-center justify-center" onClick={(event) => event.stopPropagation()}>
             <div className="absolute right-0 top-0 z-10 flex translate-y-[-120%] gap-2">
@@ -454,13 +473,19 @@ function ImageUploadSquare({
               </Button>
             </div>
             <div className="flex items-center justify-center" onClick={() => setPreviewOpen(false)}>
-              {isPdfDataUrl(image) || image.toLowerCase().endsWith(".pdf") ? (
-                <object data={previewImage || image} type="application/pdf" className="h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-                  <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
-                </object>
+              {isPdf ? (
+                <>
+                  {previewLoading ? <p className="absolute text-sm font-semibold text-white">正在下载</p> : null}
+                  <object data={previewSource} type="application/pdf" className={`h-[82vh] w-[88vw] rounded-lg bg-white shadow-2xl ${previewLoading ? "opacity-0" : ""}`} onLoad={() => setPreviewLoading(false)} onClick={(event) => event.stopPropagation()}>
+                    <p className="rounded-lg bg-white px-4 py-3 text-sm text-muted">PDF 预览不可用。</p>
+                  </object>
+                </>
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewImage || image} alt="竞品大图" className="max-h-[82vh] max-w-[88vw] rounded-lg bg-white object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+                <>
+                  {previewLoading ? <p className="absolute text-sm font-semibold text-white">正在下载</p> : null}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={previewSource} alt="竞品大图" className={`max-h-[82vh] max-w-[88vw] rounded-lg bg-white object-contain shadow-2xl ${previewLoading ? "opacity-0" : ""}`} onLoad={() => setPreviewLoading(false)} onError={() => setPreviewLoading(false)} onClick={(event) => event.stopPropagation()} />
+                </>
               )}
             </div>
           </div>
@@ -539,6 +564,7 @@ function RemarkImagesUploader({
             <div key={`${image.slice(0, 32)}-${index}`} className="space-y-2">
               <ImageUploadSquare
                 image={imageAssets?.[index]?.thumbUrl || image}
+                asset={imageAssets?.[index]}
                 previewImage={imageAssets?.[index]?.originalUrl || imageAssets?.[index]?.thumbUrl || image}
                 allowPdf
                 onChange={(value) =>

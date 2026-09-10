@@ -42,6 +42,17 @@ export function getProductOriginalImage(product: { imageAssets?: ProductImageAss
   return image || product.image?.trim() || "";
 }
 
+export function getProductAssetDownloadUrl(asset?: Pick<ProductImageAsset, "id" | "downloadUrl" | "originalUrl">) {
+  if (!asset) {
+    return "";
+  }
+
+  return asset.downloadUrl?.trim()
+    || (asset.id ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download` : "")
+    || asset.originalUrl?.trim()
+    || "";
+}
+
 export async function uploadProductAttachmentAsset(file: File) {
   if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
     throw new Error(productAttachmentSizeError(file.name, file.size));

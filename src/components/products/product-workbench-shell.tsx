@@ -1,4 +1,5 @@
-import { History, ImagePlus, RotateCcw, Search, X } from "lucide-react";
+import { useState } from "react";
+import { History, ImagePlus, LoaderCircle, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
@@ -31,6 +32,27 @@ function formatProductCreatedAtDisplay(value?: string): string | { dateText: str
   });
 
   return { dateText, timeText };
+}
+
+function ProductListThumbnail({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return <ImagePlus className="h-5 w-5 text-muted" aria-label="暂无图片" />;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      fetchPriority="low"
+      className="h-full w-full object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export function ProductFiltersBar({
@@ -183,7 +205,15 @@ export function ProductTable({
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <p className="text-sm font-bold text-foreground">筛选结果</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-bold text-foreground">筛选结果</p>
+          {loading && products.length ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              正在更新
+            </span>
+          ) : null}
+        </div>
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
       <div ref={virtualRows.containerRef} className="thin-scrollbar max-h-[min(68vh,720px)] overflow-auto">
@@ -241,15 +271,7 @@ export function ProductTable({
                       <td className="px-3">
                         <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
                           {listImage ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={listImage}
-                              alt={product.chineseName}
-                              loading="lazy"
-                              decoding="async"
-                              fetchPriority="low"
-                              className="h-full w-full object-contain"
-                            />
+                            <ProductListThumbnail src={listImage} alt={product.chineseName} />
                           ) : (
                             <ImagePlus className="h-5 w-5 text-muted" />
                           )}

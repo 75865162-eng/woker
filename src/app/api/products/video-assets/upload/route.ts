@@ -90,6 +90,7 @@ export async function POST(request: Request) {
         storageKey: storedObject.key,
         storageType: getStorageType(),
         status: "done",
+        productBindingStatus: "temporary",
       },
     });
 

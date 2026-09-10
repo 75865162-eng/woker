@@ -589,7 +589,9 @@ function normalizeWorkbookImageAssets(images: string[] | undefined, assets: Prod
 
 function normalizeImageAsset(asset: ProductImageAsset | undefined, fallbackImage: string, nameSuffix: string): ProductImageAsset {
   const thumbUrl = asset?.thumbUrl?.trim() || fallbackImage.trim();
-  const originalUrl = asset?.originalUrl?.trim() || thumbUrl || fallbackImage.trim();
+  const originalUrl = asset && Object.prototype.hasOwnProperty.call(asset, "originalUrl")
+    ? asset.originalUrl?.trim() || ""
+    : thumbUrl || fallbackImage.trim();
 
   return {
     id: asset?.id || `product-image-${nameSuffix}`,
@@ -600,6 +602,7 @@ function normalizeImageAsset(asset: ProductImageAsset | undefined, fallbackImage
     uploadedAt: asset?.uploadedAt || "",
     thumbUrl,
     originalUrl,
+    downloadUrl: asset?.downloadUrl,
   };
 }
 

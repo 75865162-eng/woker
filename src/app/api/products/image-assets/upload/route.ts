@@ -79,6 +79,7 @@ export async function POST(request: Request) {
         storageKey: storedObject.key,
         storageType: getStorageType(),
         status: "done",
+        productBindingStatus: "temporary",
       },
     });
     const thumbFileObject = await prisma.fileObject.create({
@@ -94,6 +95,7 @@ export async function POST(request: Request) {
         storageKey: thumbStoredObject.key,
         storageType: getStorageType(),
         status: "done",
+        productBindingStatus: "temporary",
       },
     });
 
@@ -108,6 +110,7 @@ export async function POST(request: Request) {
         url: createAssetUrl(thumbFileObject.storageKey),
         thumbUrl: createAssetUrl(thumbFileObject.storageKey),
         originalUrl: createAssetUrl(fileObject.storageKey),
+        thumbFileId: thumbFileObject.id,
       },
     });
   } catch (error) {

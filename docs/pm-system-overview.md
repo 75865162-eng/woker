@@ -128,11 +128,17 @@
 - 列表分页和总数由后端接口返回，前端只做展示和局部缓存。
 - 点击商品会进入详情编辑，列表页只承担筛选和入口作用。
 - 缓存是按 workspaceId 分桶的，切换工作区不会把别的组数据串进来。
-- 图片处理链路是两层：列表用缩略图，详情/预览用原图。商品卡片和列表表格先读 `imageAssets[0].thumbUrl`，只有没有资产时才回退到旧的单图字段 `image`。打开详情后，主图按钮和每个缩略图按钮才会读取 `originalUrl`，预览弹层里也优先用原图。
-- 上传入口在详情页的图片区，走 `/api/products/image-assets/upload`。允许的文件类型是 JPG、PNG、WEBP、GIF、AVIF，单文件上限 50MB。服务端会先保留原始文件，再用 `sharp` 旋转校正、按 160x160 以内等比压缩、转成 WebP、质量 78，生成一张专门给列表和缩略图条使用的压缩图。
+- 图片处理链路是两层：当前页列表一次返回完整文字字段和缩略图，原图只在用户点击预览时按 `fileId` 请求。商品卡片和列表表格先读 `imageAssets[0].thumbUrl`，只有没有资产时才回退到旧的单图字段 `image`；初始商品 JSON 不返回原始图片内容或 Base64。
+- 上传入口在详情页的图片区，走 `/api/products/image-assets/upload`。允许的文件类型是 JPG、PNG、WEBP、GIF、AVIF，单文件上限 10MB。服务端会先保留原始文件，再用 `sharp` 旋转校正、按 160x160 以内等比压缩、转成 WebP、质量 78，生成一张专门给列表和缩略图条使用的压缩图。
+- 商品详情中的图片、竞品图、备注图、运营进度证据和结论 Excel 都在选择文件时立即上传，商品记录只保存 `fileId` / `assetId` 和 URL 引用；正常保存商品时不得再次上传或迁移附件。极少数历史 Base64 附件会从保存请求中剥离并记录为待迁移，避免大对象阻塞商品保存。
+- 商品保存的同步边界只包含商品主记录、附件引用和必要状态；版本审计、流程通知和持久化列表缓存清理在商品事务成功后异步执行。保存按钮显示“保存中”并禁止重复提交。
+- 商品附件先进入 `temporary` 状态；商品保存事务会校验附件属于当前组织和工作区，并把当前引用绑定到 `ProductAttachmentBinding`，文件转为 `linked`。从商品移除的引用转为 `orphan`，超过 24 小时仍未绑定的临时附件由 worker 标记为孤儿，后续可接对象存储清理。
+- 商品保存使用 `ProductRecord.revision` 乐观锁。编辑页读取 revision，保存时必须携带原 revision；并发用户已经保存时返回 409，不允许静默覆盖。
+- 商品保存事务同时写入 `ProductOutboxEvent`。Redis worker 负责可靠执行版本审计、流程通知和持久化缓存失效；worker 启动和定时恢复会重新投递未完成事件。
+- 商品 Outbox 的审计和流程通知使用 `outboxEventId` 幂等键；即使副作用已完成但 worker 在写入 `done` 前崩溃，重试也只会复用审计版本并跳过重复通知。
 - 服务端会同时落两份 `FileObject`：原图一份、压缩图一份。接口返回里 `thumbUrl` 和 `url` 都指向压缩图，`originalUrl` 指向原图，所以前端默认先拿压缩图渲染，只有点开预览时才切原图。
 - 对于从 Excel/本地数据导入的图片，前端会在浏览器里先做一轮轻量压缩：能用 `createImageBitmap` 时会缩到最长边 1400px、转 WebP、质量 0.8；不能压缩时才直接读成 data URL。这样做是为了减少首屏体积，但不改变原始素材的可追溯性。
-- 列表页的图片单元格显式使用 `loading="lazy"`、`decoding="async"`、`fetchPriority="low"`，所以图片不会抢首屏主线程和带宽；只有用户滚到可见区域时才逐步加载。详情面板里的主图和缩略图不做 lazy，是因为它们只在打开单个商品后才出现，读原图的时机已经被页面层级自然延后了。
+- 列表页的图片单元格显式使用 `loading="lazy"`、`decoding="async"`、`fetchPriority="low"`，所以图片不会抢首屏主线程和带宽；只有用户滚到可见区域时才逐步加载。服务端会短缓存已脱敏的当前页数据，客户端刷新期间保留旧行并显示“正在更新”；图片加载失败时回退到稳定占位。打开商品直接使用当前页已加载的文字和缩略图数据，点击大图时才显示“正在下载”并请求原图。
 - 图片文案库、竞品图、备注图这类辅助图片不会在列表页预加载，只在打开对应详情模块或弹窗后才拉取或渲染，避免把整批图片一次性塞进产品列表。
 
 ### `/listing-ai`
@@ -1182,7 +1188,8 @@ Workspace 页的筛选主要靠四类条件：
 - `/api/products/image-assets/upload` 会上传原图并生成 WebP 缩略图，返回 thumbUrl 和 originalUrl。
 - 产品图片、Excel、PDF 和 CSV 单文件上限统一为 10 MB；缩略图只用于展示，超过上限不会静默压缩，而是在前端和服务端拒绝。
 - `/api/products/file-assets/upload` 会把商品备注、竞品图片/PDF 和运营进度附件先写入 storage，商品 payload 只保存文件元数据和 URL。
-- 商品保存前会把旧版本的 `data:` Base64 图片或运营进度附件迁移为文件资产，避免再次把大段 Base64 放进 `/api/products` JSON 请求。
+- `/api/products?detail=full` 仅对当前分页返回完整文字字段、缩略图和附件元数据；服务端会移除 `data:`、`fileDataUrl`、原图 URL 和原始二进制，PDF/Excel 文件名和元数据先展示，点击后再通过下载接口按需读取。
+- 正常商品保存不会迁移旧版本的 `data:` Base64 图片或运营进度附件；保存请求会剥离这类历史内联数据并提示待迁移。旧附件应通过独立兼容迁移任务处理，避免再次把大段 Base64 放进 `/api/products` JSON 请求。
 - `/api/products/video-assets/upload` 会上传视频或图片素材，图片会转 WebP，非图片则原样存储。
 - `/api/products/conclusion-files/upload` 只接收结论 Excel，返回下载地址，不直接解析文件内容。
 - `/api/ai-settings` 会自动创建默认 profile pair，保存时会同步文本配置、图片配置和 profiles。

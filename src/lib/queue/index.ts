@@ -1,5 +1,6 @@
 import { processImportJob } from "@/lib/jobs/processor";
-import { getImageUpscaleJobQueue, getImportJobQueue } from "@/lib/queue/redis-queue";
+import { getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue } from "@/lib/queue/redis-queue";
+import { processProductOutboxEvent } from "@/lib/products/product-outbox";
 
 export async function enqueueImportJob(jobId: string) {
   const driver = process.env.QUEUE_DRIVER ?? "inline";
@@ -40,6 +41,24 @@ export async function enqueueImageUpscaleJob(jobId: string) {
     {
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: 100,
+      removeOnFail: 200,
+    },
+  );
+}
+
+export async function enqueueProductOutboxEvent(eventId: string) {
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    await processProductOutboxEvent(eventId);
+    return;
+  }
+
+  await getProductOutboxQueue().add(
+    "process-product-outbox-event",
+    { eventId },
+    {
+      attempts: 5,
+      backoff: { type: "exponential", delay: 1000 },
       removeOnComplete: 100,
       removeOnFail: 200,
     },

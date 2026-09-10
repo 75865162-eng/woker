@@ -79,6 +79,9 @@
 
 - [ ] T013 [P] Validate the new list-to-detail flow against `specs/002-sku-thumbnail-lazy-load/quickstart.md`
 - [x] T014 [P] Run `npm run lint` for the touched product workbench files and capture any residual performance notes in `specs/002-sku-thumbnail-lazy-load/plan.md`
+- [x] T015 [P] Cache the sanitized current-page text and thumbnail response on the server, with response-tier headers and save-triggered invalidation in `src/app/api/products/route.ts`
+- [x] T016 [P] Preserve stale visible rows during refresh and add thumbnail failure fallback / refresh feedback in `src/components/products/product-workbench-shell.tsx`
+- [x] T017 [P] Extend client page-response reuse to a 30-second session cache while retaining explicit invalidation after saves in `src/components/products/product-workbench.tsx`
 
 ---
 

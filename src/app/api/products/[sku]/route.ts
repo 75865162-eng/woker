@@ -91,6 +91,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
       },
       select: {
         payload: true,
+        revision: true,
       },
     }));
 
@@ -99,7 +100,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
     }
 
     const product = record.payload as unknown as Product;
-    return createTimedResponse({ product: includeWorkbookImages ? product : stripWorkbookImages(product) }, "ok");
+    const productWithRevision = {
+      ...(includeWorkbookImages ? product : stripWorkbookImages(product)),
+      revision: record.revision,
+    } as Product;
+    return createTimedResponse({ product: productWithRevision }, "ok");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load product.";
     const response = NextResponse.json({ error: message }, { status: 500 });

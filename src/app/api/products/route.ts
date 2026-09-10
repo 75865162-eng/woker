@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
@@ -26,8 +25,11 @@ import {
   updateCachedProductListSummariesForProductChange,
 } from "@/lib/products/product-list-cache";
 import { applyProductListSummaryChange, refreshProductListSummaryBundle } from "@/lib/products/product-list-summary";
-import { createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList, productWorkflowStageLabels } from "@/lib/products/workflow";
+import { getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { toLightweightProduct } from "@/lib/products/lightweight-product";
+import { collectProductAttachmentReferences } from "@/lib/products/attachment-bindings";
+import { enqueueProductOutboxEvent } from "@/lib/queue";
 
 export const runtime = "nodejs";
 
@@ -68,6 +70,13 @@ function normalizeProduct(product: Product): Product {
 
 function requiresConclusionExcel(product: Product) {
   return product.status === "canceled" || product.status === "listed";
+}
+
+class ProductRevisionConflictError extends Error {
+  constructor(public readonly currentRevision: number) {
+    super("商品已被其他用户更新，请刷新后再保存。");
+    this.name = "ProductRevisionConflictError";
+  }
 }
 
 function clampPageSize(value: string | null) {
@@ -264,154 +273,6 @@ function createProductRecordData(product: Product, user: { id: string; organizat
   };
 }
 
-function getWorkflowNotificationAssignees(product: Product) {
-  const stage = getProductWorkflowStage(product);
-
-  if (stage === "ops_confirming") {
-    return normalizeAssigneeList(product.opsAssignee, product.opsAssignees);
-  }
-
-  if (stage === "design_in_progress" || stage === "design_review") {
-    return normalizeAssigneeList(product.designerAssignee, product.designerAssignees);
-  }
-
-  return [];
-}
-
-function getPreviousWorkflowStage(product?: Partial<Product>) {
-  if (!product) return undefined;
-
-  return getProductWorkflowStage({
-    status: product.status ?? "pending",
-    developer: product.developer ?? "",
-    selectionOwner: product.selectionOwner,
-    opsAssignee: product.opsAssignee,
-    opsAssignees: product.opsAssignees,
-    designerAssignee: product.designerAssignee,
-    designerAssignees: product.designerAssignees,
-    workflowStage: product.workflowStage,
-    workflowDueAt: product.workflowDueAt,
-    workflowHistory: product.workflowHistory,
-  });
-}
-
-async function createWorkflowNotifications(input: {
-  user: { id: string; name: string; organizationId: string };
-  product: Product;
-  previousProduct?: Partial<Product>;
-}) {
-  const stage = getProductWorkflowStage(input.product);
-  const previousStage = getPreviousWorkflowStage(input.previousProduct);
-
-  if (stage === previousStage || (stage !== "ops_confirming" && stage !== "design_in_progress")) {
-    return;
-  }
-
-  const assigneeNames = getWorkflowNotificationAssignees(input.product);
-
-  if (!assigneeNames.length) {
-    return;
-  }
-
-  const members = await prisma.teamRosterMember.findMany({
-    where: {
-      organizationId: input.user.organizationId,
-      name: {
-        in: assigneeNames,
-      },
-      status: {
-        notIn: ["disabled", "archived"],
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-    },
-  });
-
-  if (!members.length) {
-    return;
-  }
-
-  const memberships = await prisma.organizationMember.findMany({
-    where: {
-      organizationId: input.user.organizationId,
-      userId: {
-        in: members.map((member) => member.id),
-      },
-    },
-    select: {
-      userId: true,
-    },
-  });
-  const recipientIds = new Set(memberships.map((membership) => membership.userId));
-  const dueAt = input.product.workflowDueAt || createWorkflowDueAt(new Date());
-  const title = stage === "ops_confirming" ? "新的运营处理任务" : "新的美工处理任务";
-  const productName = input.product.chineseName || input.product.englishName || input.product.sku;
-  const message = `${input.user.name} 已将 ${input.product.sku} ${productName} 流转到${productWorkflowStageLabels[stage]}，处理期限：${new Date(dueAt).toLocaleString("zh-CN", { hour12: false })}。`;
-  const notifications: Prisma.UserNotificationCreateManyInput[] = members
-    .filter((member) => recipientIds.has(member.id))
-    .map((member) => ({
-      organizationId: input.user.organizationId,
-      recipientUserId: member.id,
-      actorUserId: input.user.id,
-      type: "product_workflow",
-      title,
-      message,
-      entityType: "product",
-      entityId: input.product.sku,
-      metadata: {
-        productId: input.product.id,
-        sku: input.product.sku,
-        stage,
-        stageLabel: productWorkflowStageLabels[stage],
-        dueAt,
-        assigneeName: member.name,
-      },
-    }));
-
-  if (!notifications.length) {
-    return;
-  }
-
-  const userNotificationDelegate = prisma.userNotification as unknown as
-    | {
-        createMany?: (args: { data: Prisma.UserNotificationCreateManyInput[] }) => Promise<unknown>;
-      }
-    | undefined;
-
-  if (typeof userNotificationDelegate?.createMany === "function") {
-    await userNotificationDelegate.createMany({ data: notifications });
-    return;
-  }
-
-  for (const notification of notifications) {
-    await prisma.$executeRaw`
-      INSERT INTO "UserNotification" (
-        "organizationId",
-        "recipientUserId",
-        "actorUserId",
-        "type",
-        "title",
-        "message",
-        "entityType",
-        "entityId",
-        "metadata"
-      ) VALUES (
-        ${notification.organizationId},
-        ${notification.recipientUserId},
-        ${notification.actorUserId ?? null},
-        ${notification.type},
-        ${notification.title},
-        ${notification.message},
-        ${notification.entityType ?? null},
-        ${notification.entityId ?? null},
-        ${JSON.stringify(notification.metadata ?? null)}::jsonb
-      )
-    `;
-  }
-}
-
 export async function GET(request: Request) {
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
@@ -480,6 +341,8 @@ export async function GET(request: Request) {
         const response = NextResponse.json(payload, init);
         response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
         response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
+        response.headers.set("X-Product-Data-Tier", detail ? "page-text-thumbnail" : "summary-row");
+        response.headers.set("Cache-Control", "private, max-age=0, stale-while-revalidate=30");
         return response;
       }
 
@@ -498,6 +361,8 @@ export async function GET(request: Request) {
       const response = NextResponse.json(payload, init);
       response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
       response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
+      response.headers.set("X-Product-Data-Tier", detail ? "page-text-thumbnail" : "summary-row");
+      response.headers.set("Cache-Control", "private, max-age=0, stale-while-revalidate=30");
       return response;
     };
     const measure = async <T>(name: string, promise: Promise<T>) => {
@@ -509,7 +374,7 @@ export async function GET(request: Request) {
       }
     };
 
-    if (!detail && !summaryOnly) {
+    if (!summaryOnly) {
       const cached = await getCachedProductListResponse<ProductListResponse>(cacheKey);
       if (cached) {
         return createTimedResponse(cached, "cache-hit");
@@ -631,7 +496,10 @@ export async function GET(request: Request) {
         ]);
         total = countResult;
         const products = detail
-          ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => record.payload as unknown as Product)
+          ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => ({
+              ...toLightweightProduct(record.payload as unknown as Product),
+              revision: record.revision,
+            }))
           : (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
 
         const responsePayload: ProductListResponse = {
@@ -648,17 +516,15 @@ export async function GET(request: Request) {
           responsePayload.summary = summaryResult;
         }
 
-        if (!detail) {
-          await setCachedProductListResponse(
-            cacheKey,
-            {
-              organizationId: user.organizationId,
-              workspaceId: scope.workspaceId,
-              scopeKey,
-            },
-            responsePayload,
-          );
-        }
+        await setCachedProductListResponse(
+          cacheKey,
+          {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            scopeKey,
+          },
+          responsePayload,
+        );
 
         return createTimedResponse(responsePayload, "ok");
       }
@@ -667,7 +533,10 @@ export async function GET(request: Request) {
       const summary = summaryResult ?? (await resolveSummary());
       total = summary.total;
       const products = detail
-        ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => record.payload as unknown as Product)
+        ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => ({
+            ...toLightweightProduct(record.payload as unknown as Product),
+            revision: record.revision,
+          }))
         : (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
 
       const responsePayload: ProductListResponse = {
@@ -684,17 +553,15 @@ export async function GET(request: Request) {
         responsePayload.summary = summaryResult;
       }
 
-      if (!detail) {
-        await setCachedProductListResponse(
-          cacheKey,
-          {
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-            scopeKey,
-          },
-          responsePayload,
-        );
-      }
+      await setCachedProductListResponse(
+        cacheKey,
+        {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          scopeKey,
+        },
+        responsePayload,
+      );
 
       return createTimedResponse(responsePayload, "ok");
     } catch (error) {
@@ -765,8 +632,19 @@ export async function POST(request: Request) {
         },
       });
       const existingProduct = existingRecord?.payload as Partial<Product> | undefined;
+      const requestedRevision = typeof product.revision === "number" && Number.isInteger(product.revision)
+        ? product.revision
+        : undefined;
+      if (existingRecord && requestedRevision === undefined) {
+        throw new ProductRevisionConflictError(existingRecord.revision);
+      }
+      if (existingRecord && requestedRevision !== existingRecord.revision) {
+        throw new ProductRevisionConflictError(existingRecord.revision);
+      }
+      const nextRevision = existingRecord ? existingRecord.revision + 1 : 1;
       const productToSave: Product = {
         ...product,
+        revision: nextRevision,
         videoPlan: product.videoPlan ?? existingProduct?.videoPlan,
       };
 
@@ -774,23 +652,70 @@ export async function POST(request: Request) {
         throw new Error("状态为已取消或已上架时，请先上传结论 Excel 表。");
       }
 
-      await tx.productRecord.upsert({
-        where: {
-          organizationId_workspaceId_sku: {
+      const attachmentReferences = collectProductAttachmentReferences(productToSave);
+      const attachmentIds = attachmentReferences.map((reference) => reference.fileId);
+      if (attachmentIds.length) {
+        const files = await tx.fileObject.findMany({
+          where: {
+            id: { in: attachmentIds },
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+          },
+          select: { id: true },
+        });
+        if (files.length !== attachmentIds.length) {
+          throw new Error("商品包含无效或无权限的附件引用，请重新上传附件后再保存。");
+        }
+
+        const existingBindings = await tx.productAttachmentBinding.findMany({
+          where: { fileId: { in: attachmentIds } },
+          select: { fileId: true, productSku: true, status: true },
+        });
+        const conflictingBinding = existingBindings.find((binding) =>
+          binding.productSku !== productToSave.sku && binding.status === "linked");
+        if (conflictingBinding) {
+          throw new Error("商品附件已被其他商品占用，请重新上传附件后再保存。");
+        }
+      }
+
+      if (existingRecord) {
+        const updated = await tx.productRecord.updateMany({
+          where: {
             organizationId: user.organizationId,
             workspaceId: scope.workspaceId,
             sku: productToSave.sku,
+            revision: existingRecord.revision,
           },
-        },
-        create: {
-          id: productToSave.id,
-          organizationId: user.organizationId,
-          workspaceId: scope.workspaceId,
-          sku: productToSave.sku,
-          ...createProductRecordData(productToSave, user, scope),
-        },
-        update: createProductRecordData(productToSave, user, scope),
-      });
+          data: {
+            ...createProductRecordData(productToSave, user, scope),
+            revision: nextRevision,
+          },
+        });
+        if (updated.count !== 1) {
+          const current = await tx.productRecord.findUnique({
+            where: {
+              organizationId_workspaceId_sku: {
+                organizationId: user.organizationId,
+                workspaceId: scope.workspaceId,
+                sku: productToSave.sku,
+              },
+            },
+            select: { revision: true },
+          });
+          throw new ProductRevisionConflictError(current?.revision ?? existingRecord.revision);
+        }
+      } else {
+        await tx.productRecord.create({
+          data: {
+            id: productToSave.id,
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            sku: productToSave.sku,
+            revision: nextRevision,
+            ...createProductRecordData(productToSave, user, scope),
+          },
+        });
+      }
 
       await applyProductListSummaryChange(tx, {
         organizationId: user.organizationId,
@@ -799,39 +724,94 @@ export async function POST(request: Request) {
         after: productToSave,
       });
 
+      const previousBindings = await tx.productAttachmentBinding.findMany({
+        where: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          productSku: productToSave.sku,
+          status: "linked",
+        },
+        select: { id: true, fileId: true },
+      });
+      const currentAttachmentIds = new Set(attachmentIds);
+      const removedBindings = previousBindings.filter((binding) => !currentAttachmentIds.has(binding.fileId));
+      if (removedBindings.length) {
+        await tx.productAttachmentBinding.updateMany({
+          where: { id: { in: removedBindings.map((binding) => binding.id) } },
+          data: { status: "orphan", linkedAt: null },
+        });
+        await tx.fileObject.updateMany({
+          where: { id: { in: removedBindings.map((binding) => binding.fileId) } },
+          data: { productBindingStatus: "orphan" },
+        });
+      }
+      for (const reference of attachmentReferences) {
+        await tx.productAttachmentBinding.upsert({
+          where: { fileId: reference.fileId },
+          create: {
+            fileId: reference.fileId,
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            productSku: productToSave.sku,
+            fieldPath: reference.fieldPath,
+            status: "linked",
+            linkedAt: new Date(),
+          },
+          update: {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            productSku: productToSave.sku,
+            fieldPath: reference.fieldPath,
+            status: "linked",
+            linkedAt: new Date(),
+          },
+        });
+      }
+      if (attachmentIds.length) {
+        await tx.fileObject.updateMany({
+          where: { id: { in: attachmentIds } },
+          data: { productBindingStatus: "linked" },
+        });
+      }
+
+      const outboxEvent = await tx.productOutboxEvent.create({
+        data: {
+          organizationId: user.organizationId,
+          userId: user.id,
+          workspaceId: scope.workspaceId,
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          eventType: "product_saved",
+          entityType: "product",
+          entityId: productToSave.sku,
+          payload: {
+            product: productToSave,
+            previousProduct: existingProduct ?? null,
+            actorName: user.name,
+          } as Prisma.InputJsonValue,
+        },
+      });
+
       return {
         existingProduct,
         productToSave,
+        outboxEventId: outboxEvent.id,
       };
     });
 
-    const sideEffects = await Promise.allSettled([
-      createWorkflowNotifications({
-        user,
-        product: persisted.productToSave,
-        previousProduct: persisted.existingProduct,
-      }),
-      recordDataChangeVersion({
-        user,
-        entityType: "product",
-        entityId: persisted.productToSave.sku,
-        action: "product_save",
-        summary: `${persisted.productToSave.sku} ${persisted.productToSave.chineseName}`,
-        payload: persisted.productToSave as unknown as Prisma.InputJsonValue,
-        scope,
-      }),
-    ]);
-
-    sideEffects.forEach((result, index) => {
-      if (result.status === "rejected") {
-        console.warn("[api/products] post-save side effect failed", {
-          effect: index === 0 ? "workflow-notification" : "data-change-version",
-          sku: persisted.productToSave.sku,
-          message: result.reason instanceof Error ? result.reason.message : String(result.reason),
-        });
-      }
+    void enqueueProductOutboxEvent(persisted.outboxEventId).catch((error) => {
+      console.warn("[api/products] product outbox enqueue failed", {
+        eventId: persisted.outboxEventId,
+        sku: persisted.productToSave.sku,
+        message: error instanceof Error ? error.message : String(error),
+      });
     });
-    await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`);
+    invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`).catch((error) => {
+      console.warn("[api/products] product cache invalidation failed", {
+        sku: persisted.productToSave.sku,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
     updateCachedProductListSummariesForProductChange({
       organizationId: user.organizationId,
       workspaceId: scope.workspaceId,
@@ -841,6 +821,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ product: persisted.productToSave });
   } catch (error) {
+    if (error instanceof ProductRevisionConflictError) {
+      return NextResponse.json(
+        { error: error.message, conflict: true, currentRevision: error.currentRevision },
+        { status: 409 },
+      );
+    }
     const message = error instanceof Error ? error.message : "Failed to save product.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

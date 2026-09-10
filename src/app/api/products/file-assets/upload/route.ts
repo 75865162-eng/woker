@@ -81,10 +81,12 @@ export async function POST(request: Request) {
         storageKey: originalObject.key,
         storageType: getStorageType(),
         status: "done",
+        productBindingStatus: "temporary",
       },
     });
 
     let thumbUrl: string | undefined;
+    let thumbFileId: string | undefined;
     if (isImage) {
       const thumbBuffer = await sharp(fileBuffer)
         .rotate()
@@ -109,9 +111,11 @@ export async function POST(request: Request) {
           storageKey: thumbObject.key,
           storageType: getStorageType(),
           status: "done",
+          productBindingStatus: "temporary",
         },
       });
       thumbUrl = createAssetUrl(thumbFileObject.storageKey);
+      thumbFileId = thumbFileObject.id;
     }
 
     const originalUrl = createAssetUrl(fileObject.storageKey);
@@ -124,6 +128,7 @@ export async function POST(request: Request) {
       uploadedAt: fileObject.createdAt.toISOString(),
       thumbUrl: thumbUrl || originalUrl,
       originalUrl,
+      ...(thumbFileId ? { thumbFileId } : {}),
       downloadUrl: createDownloadUrl(fileObject.id),
     };
 
