@@ -54,7 +54,7 @@ import {
 import { ProductVideoPlanModal } from "./product-video-plan-modal";
 import { DecimalInput, LabeledInput } from "./product-workbench-fields";
 import { ConclusionExcelField, MultiSelectField, ReadonlyField } from "./product-editor-fields";
-import { ProductEditorImagePanel, ProductImagePreviewModal } from "./product-editor-image-panel";
+import { ProductEditorImagePanel, ProductImagePreviewModal, type ProductImageUploadProgress } from "./product-editor-image-panel";
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
 import { ProductOperationsProgress } from "./product-operations-progress";
 import {
@@ -82,6 +82,12 @@ type ProductWorkbenchCache = {
   pageSize: number;
   totalCount: number;
   summary: ProductListSummary;
+};
+
+type ProductExportNotice = {
+  tone: "info" | "success" | "error";
+  message: string;
+  jobId?: string;
 };
 
 const productWorkbenchStorageKeyPrefix = "amazon-product-workbench-cache-v4";
@@ -112,6 +118,17 @@ const emptyProductListSummary: ProductListSummary = {
   operationsProgress: 0,
   overdue: 0,
 };
+
+function getProductExportNoticeClass(tone: ProductExportNotice["tone"]) {
+  if (tone === "success") {
+    return "border-green-200 bg-green-50 text-green-700";
+  }
+  if (tone === "error") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  return "border-blue-200 bg-blue-50 text-blue-700";
+}
 
 function normalizeProductFilters(filters?: Partial<ProductFilters> | null): ProductFilters {
   return {
@@ -183,7 +200,7 @@ function getProductListRequestCacheKey(input: {
   if (input.filters.opsAssignees.length) params.set("opsAssignees", input.filters.opsAssignees.join(","));
   if (input.filters.selectionOwners.length) params.set("selectionOwners", input.filters.selectionOwners.join(","));
   if (input.filters.designerAssignees.length) params.set("designerAssignees", input.filters.designerAssignees.join(","));
-  if (input.filters.mySkuOwner.trim()) params.set("mySkuOwner", input.filters.mySkuOwner.trim());
+  if (input.filters.mySkuOwner.trim()) params.set("createdByMe", "true");
   if (input.filters.minPrice.trim()) params.set("minPrice", input.filters.minPrice.trim());
   if (input.filters.maxPrice.trim()) params.set("maxPrice", input.filters.maxPrice.trim());
 
@@ -294,9 +311,12 @@ export function ProductWorkbench() {
   const [mySkuReady, setMySkuReady] = useState(false);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
   const [exportingProducts, setExportingProducts] = useState(false);
+  const [exportNotice, setExportNotice] = useState<ProductExportNotice | null>(null);
   const [productsLoading, setProductsLoading] = useState(() => !initialCachedWorkbench);
   const [productsError, setProductsError] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const exportPollingJobsRef = useRef(new Set<string>());
+  const exportPollingTimersRef = useRef(new Map<string, number>());
   const productsRequestSeq = useRef(0);
   const summaryRequestSeq = useRef(0);
   const productDetailRequestSeq = useRef(0);
@@ -314,6 +334,19 @@ export function ProductWorkbench() {
   const teamMembers = useMemo(() => accountsToTeamMembers(teamAccounts), [teamAccounts]);
   const opsOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["operations_supervisor", "operations"]), [teamMembers]);
   const designerOptions = useMemo(() => getTeamMemberOptions(teamMembers, ["designer"]), [teamMembers]);
+
+  useEffect(() => {
+    const pollingTimers = exportPollingTimersRef.current;
+    const pollingJobs = exportPollingJobsRef.current;
+
+    return () => {
+      for (const timer of pollingTimers.values()) {
+        window.clearTimeout(timer);
+      }
+      pollingTimers.clear();
+      pollingJobs.clear();
+    };
+  }, []);
   const opsFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["operations"]), [teamAccounts]);
   const selectionOwnerFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["developer", "procurement"]), [teamAccounts]);
   const designerFilterOptions = useMemo(() => getAccountNameOptionsByRoleIds(teamAccounts, ["designer"]), [teamAccounts]);
@@ -907,27 +940,84 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
     anchor.click();
   }
 
-  async function waitForProductExport(jobId: string) {
-    for (let attempt = 0; attempt < 80; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 1500));
-      const response = await fetch(`/api/products/export/${encodeURIComponent(jobId)}`, { cache: "no-store" });
-      const data = (await response.json()) as {
-        job?: { status?: string; error?: string | null; file?: { originalName?: string } | null };
-        error?: string;
-      };
+  function stopProductExportPolling(jobId: string) {
+    const timer = exportPollingTimersRef.current.get(jobId);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      exportPollingTimersRef.current.delete(jobId);
+    }
+    exportPollingJobsRef.current.delete(jobId);
+  }
 
-      if (!response.ok || !data.job) {
-        throw new Error(data.error || "导出任务状态读取失败");
+  function pollProductExport(jobId: string, attempt = 0) {
+    if (attempt === 0) {
+      if (exportPollingJobsRef.current.has(jobId)) {
+        return;
       }
-      if (data.job.status === "failed") {
-        throw new Error(data.job.error || "商品导出失败");
-      }
-      if (data.job.status === "done") {
-        return data.job.file?.originalName ?? "products.csv";
-      }
+      exportPollingJobsRef.current.add(jobId);
+    } else if (!exportPollingJobsRef.current.has(jobId)) {
+      return;
     }
 
-    throw new Error("导出处理时间较长，请到任务中心查看结果");
+    const checkStatus = async () => {
+      if (attempt >= 120) {
+        stopProductExportPolling(jobId);
+        setExportNotice({
+          tone: "info",
+          message: "商品导出等待时间较长，任务仍在后台处理，请到任务中心查看进度。",
+          jobId,
+        });
+        setActivityLog((current) => [`商品导出仍在处理中，请到任务中心查看任务 ${jobId}`, ...current].slice(0, 8));
+        window.alert("商品导出等待时间较长，请到任务中心查看进度和下载文件。");
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/products/export/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+        const data = (await response.json()) as {
+          job?: { status?: string; error?: string | null; file?: { originalName?: string } | null };
+          error?: string;
+        };
+
+        if (response.ok && data.job?.status === "done") {
+          const fileName = data.job.file?.originalName ?? "products.xlsx";
+          await downloadProductExport(`/api/products/export/${encodeURIComponent(jobId)}/download`, fileName);
+          stopProductExportPolling(jobId);
+          setExportNotice({
+            tone: "success",
+            message: `商品导出已完成，文件已开始下载：${fileName}`,
+            jobId,
+          });
+          setActivityLog((current) => [`商品导出已完成并自动下载 ${fileName}`, ...current].slice(0, 8));
+          window.alert(`商品导出已完成，文件已开始下载：${fileName}`);
+          return;
+        }
+
+        if (response.ok && data.job?.status === "failed") {
+          const message = data.job.error || "商品导出失败";
+          stopProductExportPolling(jobId);
+          setExportNotice({
+            tone: "error",
+            message,
+            jobId,
+          });
+          setActivityLog((current) => [`商品导出失败：${message}`, ...current].slice(0, 8));
+          window.alert(message);
+          return;
+        }
+      } catch {
+        // Keep polling through temporary network failures.
+      }
+
+      const nextAttempt = attempt + 1;
+      const timer = window.setTimeout(() => {
+        exportPollingTimersRef.current.delete(jobId);
+        pollProductExport(jobId, nextAttempt);
+      }, 5_000);
+      exportPollingTimersRef.current.set(jobId, timer);
+    };
+
+    void checkStatus();
   }
 
   async function handleExportProducts() {
@@ -945,7 +1035,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         opsAssignees: filters.opsAssignees.join(","),
         selectionOwners: filters.selectionOwners.join(","),
         designerAssignees: filters.designerAssignees.join(","),
-        mySkuOwner: filters.mySkuOwner.trim(),
+        createdByMe: filters.mySkuOwner.trim() ? "true" : "",
         minPrice: filters.minPrice.trim(),
         maxPrice: filters.maxPrice.trim(),
       });
@@ -962,8 +1052,12 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
       }
 
       if (data.file?.downloadUrl) {
-        await downloadProductExport(data.file.downloadUrl, data.file.name ?? "products.csv");
-        setActivityLog((current) => [`商品导出已完成并生成文件 ${data.file?.name ?? "products.csv"}`, ...current].slice(0, 8));
+        await downloadProductExport(data.file.downloadUrl, data.file.name ?? "products.xlsx");
+        setExportNotice({
+          tone: "success",
+          message: `商品导出已完成，文件已开始下载：${data.file.name ?? "products.xlsx"}`,
+        });
+        setActivityLog((current) => [`商品导出已完成并生成文件 ${data.file?.name ?? "products.xlsx"}`, ...current].slice(0, 8));
         return;
       }
 
@@ -971,9 +1065,13 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         throw new Error("商品导出任务创建失败");
       }
 
-      const fileName = await waitForProductExport(data.job.id);
-      await downloadProductExport(`/api/products/export/${encodeURIComponent(data.job.id)}/download`, fileName);
-      setActivityLog((current) => [`商品导出已完成并生成文件 ${fileName}`, ...current].slice(0, 8));
+      setExportNotice({
+        tone: "info",
+        message: "商品导出任务已提交，正在后台处理。页面会每 5 秒检查一次，完成后自动下载并通知。",
+        jobId: data.job.id,
+      });
+      setActivityLog((current) => [`商品导出任务已提交，完成后将自动下载并通知`, ...current].slice(0, 8));
+      pollProductExport(data.job.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品导出失败";
       setActivityLog((current) => [`商品导出失败：${message}`, ...current].slice(0, 8));
@@ -991,6 +1089,15 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         ) : null}
         {productsLoading && !products.length ? (
           <div className="rounded-md border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">正在从数据库读取商品数据...</div>
+        ) : null}
+        {exportNotice ? (
+          <div className={`flex flex-col gap-2 rounded-md border px-3 py-2 text-sm font-semibold sm:flex-row sm:items-center sm:justify-between ${getProductExportNoticeClass(exportNotice.tone)}`}>
+            <span>
+              {exportNotice.message}
+              {exportNotice.jobId ? <span className="ml-2 text-xs opacity-80">任务 {exportNotice.jobId}</span> : null}
+            </span>
+            <a href="/tasks" className="text-xs font-bold underline underline-offset-2">查看任务中心</a>
+          </div>
         ) : null}
         <section className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           <SummaryTile
@@ -1074,7 +1181,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               </Button>
               <Button variant="secondary" size="sm" disabled={exportingProducts} onClick={() => void handleExportProducts()}>
                 <FileDown className="h-4 w-4" />
-                {exportingProducts ? "导出中..." : "导出数据"}
+                {exportingProducts ? "提交中..." : "导出数据"}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setIsActivityLogOpen(true)}>
                 <History className="h-4 w-4" />
@@ -1187,6 +1294,7 @@ function ProductEditor({
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
   const [conclusionUploading, setConclusionUploading] = useState(false);
+  const [imageUploads, setImageUploads] = useState<ProductImageUploadProgress[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const conclusionInputRef = useRef<HTMLInputElement | null>(null);
@@ -1637,24 +1745,45 @@ function ProductEditor({
     }));
   }
 
-  function handleImageUpload(files: FileList | null) {
+  async function handleImageUpload(files: FileList | null) {
     const currentImageCount = Math.max(draft.imageAssets?.length ?? 0, draft.images.length);
     const selected = selectProductImageFiles(files ?? [], currentImageCount);
     if (!selected.length) {
       return;
     }
 
-    void Promise.all(selected.map(uploadProductImageFile))
-      .then((images) => {
+    const uploads = selected.map((file, index) => ({
+      id: `product-image-upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+    }));
+    setImageUploads(uploads.map(({ id, file }) => ({ id, name: file.name, progress: 0 })));
+
+    try {
+      const results = await Promise.allSettled(
+        uploads.map(({ id, file }) =>
+          uploadProductImageFile(file, {
+            onUploadProgress: (progress) => {
+              setImageUploads((current) => current.map((item) => (item.id === id ? { ...item, progress } : item)));
+            },
+          }),
+        ),
+      );
+      const images = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const firstError = results.find((result) => result.status === "rejected");
+
+      if (images.length) {
         setDraft((current) => ({
           ...current,
           images: [...current.images, ...images.map((image) => image.thumbUrl)].slice(0, 10),
           imageAssets: [...(current.imageAssets ?? []), ...images].slice(0, 10),
         }));
-      })
-      .catch((error) => {
-        window.alert(error instanceof Error ? error.message : "商品图片上传失败。");
-      });
+      }
+      if (firstError?.status === "rejected") {
+        window.alert(firstError.reason instanceof Error ? firstError.reason.message : "商品图片上传失败。");
+      }
+    } finally {
+      setImageUploads([]);
+    }
   }
 
   function removeImage(index: number) {
@@ -1758,6 +1887,7 @@ function ProductEditor({
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <ProductEditorImagePanel
                   imageAssets={draft.imageAssets}
+                  uploadingFiles={imageUploads}
                   onPreview={(asset) => openImagePreview(asset, asset.thumbUrl)}
                   onUpload={handleImageUpload}
                   onRemove={removeImage}

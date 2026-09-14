@@ -1,5 +1,5 @@
 import type { Product, ProductImageAsset } from "@/lib/products/types";
-import { uploadDataUrlAsProductAttachment } from "@/lib/products/image-assets";
+import { appendCurrentWorkspaceScope, uploadDataUrlAsProductAttachment, type ProductUploadOptions } from "@/lib/products/image-assets";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 import type { TrialProductDraft } from "./product-workbench-model";
 
@@ -8,7 +8,7 @@ export function selectProductImageFiles(files: Iterable<File>, currentImageCount
   return Array.from(files).slice(0, remaining);
 }
 
-export async function uploadProductImageFile(file: File): Promise<ProductImageAsset> {
+export async function uploadProductImageFile(file: File, options?: ProductUploadOptions): Promise<ProductImageAsset> {
   if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
     throw new Error(productAttachmentSizeError(file.name, file.size));
   }
@@ -17,20 +17,55 @@ export async function uploadProductImageFile(file: File): Promise<ProductImageAs
   }
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch("/api/products/image-assets/upload", {
-    method: "POST",
-    body: formData,
+  appendCurrentWorkspaceScope(formData);
+  if (typeof XMLHttpRequest === "undefined") {
+    const response = await fetch("/api/products/image-assets/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const body = (await response.json().catch(() => ({}))) as {
+      asset?: ProductImageAsset & { url?: string };
+      error?: string;
+    };
+    if (!response.ok || !body.asset?.id) {
+      throw new Error(body.error || "商品图片上传失败。");
+    }
+    return {
+      ...body.asset,
+      thumbUrl: body.asset.thumbUrl || body.asset.url || body.asset.originalUrl,
+    };
+  }
+
+  const data = await new Promise<{
+    ok: boolean;
+    body: { asset?: ProductImageAsset & { url?: string }; error?: string };
+  }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/products/image-assets/upload");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        options?.onUploadProgress?.(Math.max(0, Math.min(1, event.loaded / event.total)));
+      }
+    };
+    xhr.onload = () => {
+      let body: { asset?: ProductImageAsset & { url?: string }; error?: string } = {};
+      try {
+        body = JSON.parse(xhr.responseText) as typeof body;
+      } catch {
+        // The caller turns an empty or invalid response into its standard upload error.
+      }
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300, body });
+    };
+    xhr.onerror = () => reject(new Error("商品图片上传失败。"));
+    xhr.onabort = () => reject(new Error("商品图片上传已取消。"));
+    xhr.send(formData);
   });
-  const data = (await response.json().catch(() => ({}))) as {
-    asset?: ProductImageAsset & { url?: string };
-    error?: string;
-  };
-  if (!response.ok || !data.asset?.id) {
-    throw new Error(data.error || "商品图片上传失败。");
+  if (!data.ok || !data.body.asset?.id) {
+    throw new Error(data.body.error || "商品图片上传失败。");
   }
   return {
-    ...data.asset,
-    thumbUrl: data.asset.thumbUrl || data.asset.url || data.asset.originalUrl,
+    ...data.body.asset,
+    thumbUrl: data.body.asset.thumbUrl || data.body.asset.url || data.body.asset.originalUrl,
   };
 }
 

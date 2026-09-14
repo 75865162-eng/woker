@@ -46,7 +46,7 @@ export async function POST(request: Request) {
         accountId: scope.accountId,
         marketplace: scope.marketplace,
         originalName: fileName,
-        mimeType: "text/csv; charset=utf-8",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         size: 0,
         storageKey,
         storageType: getStorageType(),

@@ -435,13 +435,28 @@ function isEspressoMirrorSku(sku: string) {
   return sku === "0000" || sku === "00001";
 }
 
+function normalizeSpecialSkuProductName(value: string) {
+  return value
+    .replace(/^SKU:\s*[^|]+\|\s*/i, "")
+    .replace(/\s*\+\s*(?:2|4)\s*pcs\s*$/i, "")
+    .trim();
+}
+
 export function productToDraft(product: Product | null, products: Array<Pick<ProductListItem, "sku">>, preferredSku?: string): ProductEditorDraft {
   if (product) {
     const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
     const competitorAsins = Array.isArray(product.competitorAsins) ? product.competitorAsins : [];
     const imageAssets = normalizeProductImageAssets(product);
+    const workbookDetail = normalizeWorkbookDetail(
+      productWithWorkbook.workbookDetail,
+      isEspressoMirrorSku(product.sku) ? createEspressoMirrorDetail() : createTrialProductDraft(),
+    );
+    const chineseName = product.sku === "0000"
+      ? normalizeSpecialSkuProductName(workbookDetail.title || product.chineseName)
+      : product.chineseName;
     return {
       ...product,
+      chineseName,
       cancelReason: product.cancelReason ?? "",
       conclusionExcelFile: product.conclusionExcelFile,
       images: imageAssets.map((asset) => getProductListImage({ imageAssets: [asset] })).filter(Boolean),
@@ -452,10 +467,7 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
       workflowStage: getProductWorkflowStage(product),
       workflowHistory: Array.isArray(product.workflowHistory) ? product.workflowHistory : [],
       operationsProgress: normalizeOperationsProgress(product.operationsProgress, product.opsAssignee || product.selectionOwner || ""),
-      workbookDetail: normalizeWorkbookDetail(
-        productWithWorkbook.workbookDetail,
-        isEspressoMirrorSku(product.sku) ? createEspressoMirrorDetail() : createTrialProductDraft(),
-      ),
+      workbookDetail,
     };
   }
 
@@ -505,6 +517,7 @@ function normalizeProductImageAssets(product: Product): ProductImageAsset[] {
       thumbUrl: asset.thumbUrl || asset.originalUrl || "",
       originalUrl: asset.originalUrl || asset.thumbUrl || "",
       ...(asset.thumbFileId ? { thumbFileId: asset.thumbFileId } : {}),
+      ...(asset.previewUrl ? { previewUrl: asset.previewUrl } : {}),
       ...(asset.downloadUrl ? { downloadUrl: asset.downloadUrl } : {}),
     }));
   }
@@ -621,6 +634,7 @@ function normalizeImageAsset(asset: ProductImageAsset | undefined, fallbackImage
     uploadedAt: asset?.uploadedAt || "",
     thumbUrl,
     originalUrl,
+    previewUrl: asset?.previewUrl,
     downloadUrl: asset?.downloadUrl,
   };
 }

@@ -35,6 +35,8 @@ export function createProductListResponseCacheKey(input: {
   selectionOwners: string[];
   designerAssignees: string[];
   mySkuOwner?: string;
+  createdByMe?: boolean;
+  createdByUserId?: string;
   minPrice?: number;
   maxPrice?: number;
   detail: boolean;
@@ -52,6 +54,8 @@ export function createProductListResponseCacheKey(input: {
     input.selectionOwners.join(","),
     input.designerAssignees.join(","),
     input.mySkuOwner ?? "",
+    input.createdByMe ? "created-by-me" : "",
+    input.createdByMe ? input.createdByUserId ?? "" : "",
     Number.isFinite(input.minPrice) ? input.minPrice : "",
     Number.isFinite(input.maxPrice) ? input.maxPrice : "",
     input.detail ? "full" : "list",

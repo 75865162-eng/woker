@@ -6,6 +6,7 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import { PRODUCT_ATTACHMENT_MAX_BYTES } from "@/lib/products/file-assets";
+import { createProductImagePreview } from "@/lib/products/image-preview";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -14,8 +15,8 @@ const supportedImageTypes = new Set(["image/avif", "image/gif", "image/jpeg", "i
 const supportedImageExtensions = new Set([".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp"]);
 const maxImageSize = PRODUCT_ATTACHMENT_MAX_BYTES;
 
-function createAssetKey(fileName: string, variant: "original" | "thumb") {
-  const extension = variant === "thumb" ? ".webp" : path.extname(fileName).toLowerCase() || ".bin";
+function createAssetKey(fileName: string, variant: "original" | "thumb" | "preview") {
+  const extension = variant === "original" ? path.extname(fileName).toLowerCase() || ".bin" : ".webp";
   return `assets/products/images/${new Date().toISOString().slice(0, 10)}/${randomUUID()}-${variant}${extension}`;
 }
 
@@ -59,12 +60,15 @@ export async function POST(request: Request) {
       .resize({ width: 160, height: 160, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 78 })
       .toBuffer();
+    const previewBuffer = await createProductImagePreview(fileBuffer);
 
     const originalKey = createAssetKey(file.name, "original");
     const thumbKey = createAssetKey(file.name, "thumb");
-    const [storedObject, thumbStoredObject] = await Promise.all([
+    const previewKey = createAssetKey(file.name, "preview");
+    const [storedObject, thumbStoredObject, previewStoredObject] = await Promise.all([
       getStorageDriver().putBuffer({ key: originalKey, buffer: fileBuffer, contentType: file.type || undefined }),
       getStorageDriver().putBuffer({ key: thumbKey, buffer: thumbBuffer, contentType: "image/webp" }),
+      getStorageDriver().putBuffer({ key: previewKey, buffer: previewBuffer, contentType: "image/webp" }),
     ]);
     const fileObject = await prisma.fileObject.create({
       data: {
@@ -98,6 +102,22 @@ export async function POST(request: Request) {
         productBindingStatus: "temporary",
       },
     });
+    const previewFileObject = await prisma.fileObject.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
+        originalName: `${path.basename(file.name, path.extname(file.name))}-preview.webp`,
+        mimeType: "image/webp",
+        size: previewStoredObject.size,
+        storageKey: previewStoredObject.key,
+        storageType: getStorageType(),
+        status: "done",
+        productBindingStatus: "temporary",
+      },
+    });
 
     return NextResponse.json({
       asset: {
@@ -109,6 +129,7 @@ export async function POST(request: Request) {
         uploadedAt: fileObject.createdAt.toISOString(),
         url: createAssetUrl(thumbFileObject.storageKey),
         thumbUrl: createAssetUrl(thumbFileObject.storageKey),
+        previewUrl: createAssetUrl(previewFileObject.storageKey),
         originalUrl: createAssetUrl(fileObject.storageKey),
         thumbFileId: thumbFileObject.id,
       },

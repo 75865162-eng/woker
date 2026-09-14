@@ -15,6 +15,7 @@ export async function enqueueImportJob(jobId: string) {
       "process-import-job",
       { jobId },
       {
+        jobId: `import-job-${jobId}`,
         attempts: 3,
         backoff: {
           type: "exponential",

@@ -217,7 +217,7 @@ export function ProductTable({
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
       <div ref={virtualRows.containerRef} className="thin-scrollbar max-h-[min(68vh,720px)] overflow-auto">
-        <table className="w-[1734px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px]">
+        <table className="w-[1734px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:max-h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px] [&_tbody_tr]:max-h-[61px]">
           <colgroup>
             <col className="w-[84px]" />
             <col className="w-[96px]" />
@@ -279,7 +279,7 @@ export function ProductTable({
                       </td>
                       <td className="px-3">
                         <button
-                          className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark"
+                          className="block max-w-full truncate text-left font-bold text-brand hover:text-brand-dark"
                           title={product.sku}
                           onClick={() => onOpenProduct(product.sku)}
                           onFocus={() => onPrefetchProduct?.(product.sku)}
@@ -289,11 +289,13 @@ export function ProductTable({
                         </button>
                       </td>
                       <td className="px-3">
-                        <p className="break-words font-semibold text-foreground">{product.chineseName || "--"}</p>
-                        <p className="mt-1 break-words text-xs text-muted">{product.englishName || "--"}</p>
+                        <div className="min-w-0 overflow-hidden">
+                          <p className="truncate font-semibold text-foreground" title={product.chineseName || "--"}>{product.chineseName || "--"}</p>
+                          <p className="mt-1 truncate text-xs text-muted" title={product.englishName || "--"}>{product.englishName || "--"}</p>
+                        </div>
                       </td>
                       <td className="px-3 font-mono text-xs">
-                        <p className="break-all" title={product.asin || "--"}>{product.asin || "--"}</p>
+                        <p className="truncate" title={product.asin || "--"}>{product.asin || "--"}</p>
                       </td>
                       <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
                       <td className="px-3">

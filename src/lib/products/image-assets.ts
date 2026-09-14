@@ -81,45 +81,67 @@ export function getProductOriginalImage(product: { imageAssets?: ProductImageAss
 }
 
 export function getProductAssetDownloadUrl(
-  asset?: Pick<ProductImageAsset, "id" | "downloadUrl" | "originalUrl" | "thumbFileId" | "thumbUrl">,
+  asset?: Pick<ProductImageAsset, "id" | "downloadUrl" | "originalUrl" | "previewUrl" | "thumbFileId" | "thumbUrl">,
 ) {
   if (!asset) {
     return "";
   }
 
-  return safeProductImageUrl(asset.downloadUrl)
-    || productImageFileDownloadUrl(asset.id)
+  return safeProductImageUrl(asset.previewUrl)
     || safeProductImageUrl(asset.originalUrl)
+    || safeProductImageUrl(asset.downloadUrl)
+    || productImageFileDownloadUrl(asset.id)
     || productImageFileDownloadUrl(asset.thumbFileId)
     || safeProductImageUrl(asset.thumbUrl)
     || "";
 }
 
-export async function uploadProductAttachmentAsset(file: File) {
+export type ProductUploadOptions = {
+  onUploadProgress?: (progress: number) => void;
+};
+
+export function appendCurrentWorkspaceScope(formData: FormData) {
+  if (typeof window === "undefined") {
+    return formData;
+  }
+
+  try {
+    const stored = window.localStorage.getItem("amazon_bulk_ad_workspace_scope");
+    const scope = stored
+      ? (JSON.parse(stored) as Partial<Record<"workspaceId" | "accountId" | "marketplace", unknown>>)
+      : {};
+
+    for (const field of ["workspaceId", "accountId", "marketplace"] as const) {
+      const value = typeof scope[field] === "string" ? scope[field].trim() : "";
+      if (value && !formData.has(field)) {
+        formData.append(field, value);
+      }
+    }
+  } catch {
+    // Keep upload usable when local workspace state is unavailable or malformed.
+  }
+
+  return formData;
+}
+
+export async function uploadProductAttachmentAsset(file: File, options?: ProductUploadOptions) {
   if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
     throw new Error(productAttachmentSizeError(file.name, file.size));
   }
 
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch("/api/products/file-assets/upload", {
-    method: "POST",
-    body: formData,
-  });
-  const data = (await response.json().catch(() => ({}))) as {
-    asset?: ProductImageAsset & { downloadUrl?: string };
-    error?: string;
-  };
+  const data = await uploadProductFormData("/api/products/file-assets/upload", appendCurrentWorkspaceScope(formData), options);
 
-  if (!response.ok || !data.asset?.id) {
-    throw new Error(data.error || "商品附件上传失败。");
+  if (!data.response.ok || !data.body.asset?.id) {
+    throw new Error(data.body.error || "商品附件上传失败。");
   }
 
-  return data.asset;
+  return data.body.asset;
 }
 
-export async function uploadProductImageAsset(file: File) {
-  return uploadProductAttachmentAsset(file);
+export async function uploadProductImageAsset(file: File, options?: ProductUploadOptions) {
+  return uploadProductAttachmentAsset(file, options);
 }
 
 export async function uploadDataUrlAsProductAttachment(value: string, fileName: string) {
@@ -143,4 +165,53 @@ export async function uploadDataUrlAsProductAttachment(value: string, fileName: 
   }
 
   return uploadProductAttachmentAsset(new File([bytes], ensureProductAttachmentFileName(fileName, mimeType), { type: mimeType }));
+}
+
+async function uploadProductFormData(
+  url: string,
+  formData: FormData,
+  options?: ProductUploadOptions,
+): Promise<{
+  response: { ok: boolean; status: number };
+  body: {
+    asset?: ProductImageAsset & { downloadUrl?: string; url?: string };
+    error?: string;
+  };
+}> {
+  if (typeof XMLHttpRequest === "undefined") {
+    const response = await fetch(url, { method: "POST", body: formData });
+    const body = (await response.json().catch(() => ({}))) as {
+      asset?: ProductImageAsset & { downloadUrl?: string; url?: string };
+      error?: string;
+    };
+    return { response: { ok: response.ok, status: response.status }, body };
+  }
+
+  return await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        options?.onUploadProgress?.(Math.max(0, Math.min(1, event.loaded / event.total)));
+      }
+    };
+    xhr.onload = () => {
+      let body: {
+        asset?: ProductImageAsset & { downloadUrl?: string; url?: string };
+        error?: string;
+      } = {};
+      try {
+        body = JSON.parse(xhr.responseText) as typeof body;
+      } catch {
+        // The caller turns an empty or invalid response into its standard upload error.
+      }
+      resolve({
+        response: { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status },
+        body,
+      });
+    };
+    xhr.onerror = () => reject(new Error("商品附件上传失败。"));
+    xhr.onabort = () => reject(new Error("商品附件上传已取消。"));
+    xhr.send(formData);
+  });
 }

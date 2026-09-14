@@ -104,6 +104,7 @@ function buildProductListWhereSql(input: {
   selectionOwners: string[];
   designerAssignees: string[];
   mySkuOwner?: string;
+  createdByUserId?: string;
   minPrice?: number;
   maxPrice?: number;
 }) {
@@ -172,6 +173,10 @@ function buildProductListWhereSql(input: {
         OR COALESCE(r."payload"->'designerAssignees', '[]'::jsonb)::text ILIKE ${ownerSearch}
       )
     `);
+  }
+
+  if (input.createdByUserId) {
+    conditions.push(Prisma.sql`r."userId" = ${input.createdByUserId}`);
   }
 
   if (Number.isFinite(input.minPrice) || Number.isFinite(input.maxPrice)) {
@@ -294,6 +299,7 @@ export async function GET(request: Request) {
     const minPrice = parseOptionalNumber(url.searchParams.get("minPrice"));
     const maxPrice = parseOptionalNumber(url.searchParams.get("maxPrice"));
     const mySkuOwner = url.searchParams.get("mySkuOwner")?.trim();
+    const createdByMe = url.searchParams.get("createdByMe") === "true";
     const includeSummary = url.searchParams.get("includeSummary") !== "false";
     const summaryOnly = url.searchParams.get("summaryOnly") === "true";
     const opsAssignees = splitMultiValue(url.searchParams.get("opsAssignees"));
@@ -307,6 +313,7 @@ export async function GET(request: Request) {
       selectionOwners.length > 0 ||
       designerAssignees.length > 0 ||
       Boolean(mySkuOwner) ||
+      createdByMe ||
       Number.isFinite(minPrice) ||
       Number.isFinite(maxPrice) ||
       (status !== null && status !== "all");
@@ -327,6 +334,8 @@ export async function GET(request: Request) {
       selectionOwners,
       designerAssignees,
       mySkuOwner,
+      createdByMe,
+      createdByUserId: createdByMe ? user.id : undefined,
       minPrice,
       maxPrice,
       detail: false,
@@ -422,6 +431,7 @@ export async function GET(request: Request) {
         selectionOwners,
         designerAssignees,
         mySkuOwner,
+        createdByUserId: createdByMe ? user.id : undefined,
         minPrice,
         maxPrice,
       });

@@ -37,6 +37,7 @@ import {
   SmallTextarea,
 } from "./product-workbench-fields";
 import { calculateExcelPricing } from "./product-workbench-utils";
+import { ProductImageUploadProgressCard, type ProductImageUploadProgress } from "./product-editor-image-panel";
 
 function isPdfDataUrl(value: string) {
   return value.startsWith("data:application/pdf");
@@ -188,7 +189,7 @@ export function ProductWorkbookDetailSections({
                       <ImageUploadSquare
                         image={row.hotVariantImage}
                         asset={row.hotVariantImageAsset}
-                        previewImage={row.hotVariantImageAsset?.originalUrl || row.hotVariantImage}
+                        previewImage={row.hotVariantImageAsset?.previewUrl || row.hotVariantImageAsset?.originalUrl || row.hotVariantImage}
                         onChange={(value) => onCompetitorChange(index, "hotVariantImage", value)}
                         onAssetChange={(asset) => onCompetitorChange(index, "hotVariantImage", asset.thumbUrl || asset.originalUrl, asset)}
                       />
@@ -232,7 +233,7 @@ export function ProductWorkbookDetailSections({
                       <ImageUploadSquare
                         image={row.noteImage}
                         asset={row.noteImageAsset}
-                        previewImage={row.noteImageAsset?.originalUrl || row.noteImage}
+                        previewImage={row.noteImageAsset?.previewUrl || row.noteImageAsset?.originalUrl || row.noteImage}
                         onChange={(value) => onCompetitorChange(index, "noteImage", value)}
                         onAssetChange={(asset) => onCompetitorChange(index, "noteImage", asset.thumbUrl || asset.originalUrl, asset)}
                       />
@@ -388,6 +389,7 @@ function ImageUploadSquare({
   const [previewSource, setPreviewSource] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -397,10 +399,11 @@ function ImageUploadSquare({
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
     setUploadError("");
 
     try {
-      const asset = await uploadProductAttachmentAsset(file);
+      const asset = await uploadProductAttachmentAsset(file, { onUploadProgress: setUploadProgress });
       onChange(asset.thumbUrl || asset.originalUrl);
       onAssetChange?.(asset);
       setPreviewOpen(false);
@@ -411,6 +414,7 @@ function ImageUploadSquare({
         fileInputRef.current.value = "";
       }
       setIsUploading(false);
+      setUploadProgress(0);
     }
   }
 
@@ -447,14 +451,17 @@ function ImageUploadSquare({
           )}
         </button>
       ) : (
-        <button
-          type="button"
-          className="flex h-[130px] w-[130px] items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center text-xs font-semibold text-muted transition-colors hover:border-brand hover:bg-white"
-          disabled={isUploading}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {isUploading ? "上传中" : "上传图片"}
-        </button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            className="flex h-[130px] w-[130px] items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center text-xs font-semibold text-muted transition-colors hover:border-brand hover:bg-white"
+            disabled={isUploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {isUploading ? "上传中" : "上传图片"}
+          </button>
+          {isUploading ? <UploadProgressBar progress={uploadProgress} /> : null}
+        </div>
       )}
       {uploadError ? <p className="text-[11px] font-semibold text-danger">{uploadError}</p> : null}
       <input ref={fileInputRef} type="file" accept={allowPdf ? "image/*,.pdf" : "image/*"} className="hidden" onChange={(event) => void handleFile(event.target.files?.[0])} />
@@ -507,6 +514,7 @@ function RemarkImagesUploader({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadingFiles, setUploadingFiles] = useState<ProductImageUploadProgress[]>([]);
 
   async function handleFiles(files: FileList | null) {
     const selected = Array.from(files ?? []);
@@ -515,10 +523,23 @@ function RemarkImagesUploader({
     }
 
     setIsUploading(true);
+    const uploads = selected.map((file, index) => ({
+      id: `remark-image-upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+    }));
+    setUploadingFiles(uploads.map(({ id, file }) => ({ id, name: file.name, progress: 0 })));
     setUploadError("");
 
     try {
-      const results = await Promise.allSettled(selected.map((file) => uploadProductAttachmentAsset(file)));
+      const results = await Promise.allSettled(
+        uploads.map(({ id, file }) =>
+          uploadProductAttachmentAsset(file, {
+            onUploadProgress: (progress) => {
+              setUploadingFiles((current) => current.map((item) => (item.id === id ? { ...item, progress } : item)));
+            },
+          }),
+        ),
+      );
       const nextAssets = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
       const firstError = results.find((result) => result.status === "rejected");
 
@@ -534,6 +555,7 @@ function RemarkImagesUploader({
       }
     } finally {
       setIsUploading(false);
+      setUploadingFiles([]);
     }
   }
 
@@ -547,6 +569,13 @@ function RemarkImagesUploader({
         </Button>
       </div>
       {uploadError ? <p className="mt-2 text-xs font-semibold text-danger">{uploadError}</p> : null}
+      {uploadingFiles.length ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {uploadingFiles.map((upload) => (
+            <ProductImageUploadProgressCard key={upload.id} upload={upload} />
+          ))}
+        </div>
+      ) : null}
       <input
         ref={inputRef}
         className="hidden"
@@ -565,7 +594,7 @@ function RemarkImagesUploader({
               <ImageUploadSquare
                 image={imageAssets?.[index]?.thumbUrl || image}
                 asset={imageAssets?.[index]}
-                previewImage={imageAssets?.[index]?.originalUrl || imageAssets?.[index]?.thumbUrl || image}
+                previewImage={imageAssets?.[index]?.previewUrl || imageAssets?.[index]?.originalUrl || imageAssets?.[index]?.thumbUrl || image}
                 allowPdf
                 onChange={(value) =>
                   onChange(
@@ -591,6 +620,26 @@ function RemarkImagesUploader({
           导入 Excel 中非热销变体图片，或手动批量上传图片 / PDF 后会显示在这里。
         </div>
       )}
+    </div>
+  );
+}
+
+function UploadProgressBar({ progress }: { progress: number }) {
+  const percentage = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+
+  return (
+    <div className="w-[130px]">
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-border"
+        role="progressbar"
+        aria-label="文件上传进度"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percentage}
+      >
+        <div className="h-full rounded-full bg-brand transition-[width] duration-150" style={{ width: `${percentage}%` }} />
+      </div>
+      <p className="mt-1 text-center text-[10px] font-semibold tabular-nums text-muted">{percentage}%</p>
     </div>
   );
 }
@@ -782,6 +831,7 @@ function ImprovementTable({
   const remarkUploadRef = useRef<HTMLInputElement | null>(null);
   const [remarkUploading, setRemarkUploading] = useState(false);
   const [remarkUploadError, setRemarkUploadError] = useState("");
+  const [remarkUploadingFiles, setRemarkUploadingFiles] = useState<ProductImageUploadProgress[]>([]);
 
   async function handleRemarkUpload(files: FileList | null) {
     const selected = Array.from(files ?? []);
@@ -790,10 +840,23 @@ function ImprovementTable({
     }
 
     setRemarkUploading(true);
+    const uploads = selected.map((file, index) => ({
+      id: `remark-image-upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+    }));
+    setRemarkUploadingFiles(uploads.map(({ id, file }) => ({ id, name: file.name, progress: 0 })));
     setRemarkUploadError("");
 
     try {
-      const results = await Promise.allSettled(selected.map((file) => uploadProductImageAsset(file)));
+      const results = await Promise.allSettled(
+        uploads.map(({ id, file }) =>
+          uploadProductImageAsset(file, {
+            onUploadProgress: (progress) => {
+              setRemarkUploadingFiles((current) => current.map((item) => (item.id === id ? { ...item, progress } : item)));
+            },
+          }),
+        ),
+      );
       const nextAssets = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
       const firstError = results.find((result) => result.status === "rejected");
 
@@ -809,6 +872,7 @@ function ImprovementTable({
       }
     } finally {
       setRemarkUploading(false);
+      setRemarkUploadingFiles([]);
     }
   }
 
@@ -921,6 +985,13 @@ function ImprovementTable({
           })}
         </tbody>
       </table>
+      {remarkUploadingFiles.length ? (
+        <div className="mt-2 grid max-w-[720px] gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {remarkUploadingFiles.map((upload) => (
+            <ProductImageUploadProgressCard key={upload.id} upload={upload} />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

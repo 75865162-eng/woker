@@ -73,7 +73,7 @@ When introducing new functionality:
 
 ## 项目概览
 
-这是一个本地优先的 Amazon 运营工作台，基于 Next.js 15、React 19、TypeScript、Tailwind CSS 4 构建。当前主要业务模块：
+这是一个以本地优先工作流为基础、同时包含后端商品主数据域的 Amazon 运营工作台，基于 Next.js 15、React 19、TypeScript、Tailwind CSS 4 构建。PPC Workspace 仍可使用 IndexedDB snapshot 做本地恢复；Product Center 商品主数据已经以 PostgreSQL 为事实源，不要把两个域混为同一套存储策略。当前主要业务模块：
 
 - Amazon PPC Optimization Workspace：导入 Amazon Bulk workbook，按 Campaign / Ad Group / Lifecycle / Workspace Unit 组织优化工作流，生成可审阅的调整草稿。
 - Workspace 内置规则中心：维护 PPC 规则条件和动作，规则引擎输出 draft，不直接修改原始文件。
@@ -81,7 +81,7 @@ When introducing new functionality:
 - Listing AI：根据商品、关键词、广告数据和竞品信息生成 Listing 优化建议、图片计划和 A+ 模块建议。
 - Logistics：处理物流相关 Excel / PDF 模板、箱规、货件对比和导出。
 
-商品域路径边界以 `docs/product-domain-phase0.md` 为准：商品主数据只走 `ProductRecord → Transaction → Outbox → Projection → Read Model → API → UI`；已废弃的独立 Sellfox 商品资料和图片文案 Gallery 路径不得作为备用读写实现恢复。Sellfox 店铺、小时指标和产品表现快照属于报表数据，单独管理。
+商品域路径边界以 `docs/product-domain-phase0.md` 和 `docs/product-domain-simple-architecture-plan.md` 为准：`ProductRecord` 是商品核心资料唯一事实源，保存经过 PostgreSQL transaction、revision、Audit/DataChangeVersion 和 Outbox；Projection、Read Model 和 Cache 都是可重建的派生层。当前列表主读路径仍是 `ProductSummaryRecord + ProductTextRecord`，详情主路径是 `ProductDetailService` 直接聚合 `ProductRecord` 和必要关联数据，不要把所有商品查询强制经过 Redis 或 Projection。已废弃的独立 Sellfox 商品资料和图片文案 Gallery 路径不得作为备用读写实现恢复。Sellfox 店铺、小时指标和产品表现快照属于报表数据，单独管理。
 
 ## 技术栈
 
@@ -160,7 +160,7 @@ npm run products:scan-statuses
 - `src/data/`：mock data 和默认规则。
 - `src/workers/`：浏览器 worker，目前用于 Excel 解析。
 - `docs/`：PPC 工作台、数据模型、导出、规则、UI、物流等规格文档。
-- `docs/product-domain-simple-architecture-plan.md`：50 人 ERP 商品域简化架构、ProductRecord 直读、Outbox/Worker 和 Redis 旁路缓存迁移规划。
+- `docs/product-domain-simple-architecture-plan.md`：Product Center 当前性能审计、读模型/缓存责任、benchmark 门槛和后续架构收口规划。
 - `public/logistics-templates/`：物流导出使用的模板文件。
 - `scripts/next-run.mjs`：为 Next dev/build 指定不同 distDir。
 
@@ -172,6 +172,38 @@ npm run products:scan-statuses
 - IndexedDB snapshot 是本地恢复机制。改 state shape 时要考虑旧 snapshot 的兼容性或降级处理。
 - Listing AI 的输出结构由 `src/lib/listing-ai/types.ts` 定义，改 prompt 或 client 时要保持 UI 消费字段稳定。
 - Logistics 模块依赖实际 Excel/PDF 模板和中文字段名，改解析逻辑前先看 `src/lib/logistics/types.ts`、`excel.ts`、`pdf.ts` 以及 `public/logistics-templates/`。
+
+## Product Center 当前规则与后续方向
+
+Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 功能扩张。处理商品列表、详情、图片、缓存或投影任务时，必须先以 `docs/product-domain-simple-architecture-plan.md` 的当前审计结论为准。
+
+### 当前已确认
+
+- `ProductRecord` 是商品核心资料唯一 Source of Truth；`payload` 不因性能优化直接删除。
+- 商品保存通过 PostgreSQL transaction、revision、审计记录和 `ProductOutboxEvent` 完成；Projection、Read Model 和 Cache 不得反向覆盖 `ProductRecord`。
+- 商品列表当前真实主读路径是 `ProductSummaryRecord + ProductTextRecord`，由数据库执行过滤、排序和分页；不要未经 benchmark 直接切换到 `ProductRecord` 直读。
+- 商品详情当前通过 `ProductDetailService` 统一聚合 `ProductRecord`、必要关联数据和投影状态；不要把详情拆成前端请求瀑布。
+- 列表当前使用分页、`useVirtualRows`、第一张 `thumbUrl`、lazy loading、异步解码和低优先级图片请求；不要默认加载全量商品、完整 payload 或原图。
+- `ProductMedia` 是媒体关系/元数据索引，不是商品核心资料事实源；二进制属于 Storage / FileObject。
+- Redis 当前主要用于 BullMQ 调度，不是商品事实源，也不是图片二进制缓存；商品详情 Redis 缓存尚未证明有收益。
+
+### 后续升级硬约束
+
+- 先做 1,000 / 5,000 / 10,000 SKU 的列表、详情、图片和并发 benchmark，记录 API/SQL/网络/浏览器的 P50、P95、P99，再决定是否改查询、索引、分页或缓存。
+- 没有真实性能证据时，不新增 Read Model，不强制接入 Redis，不把复杂筛选列表迁移到 Redis，不引入 Elasticsearch、微服务或新的图片处理服务。
+- Redis 只允许缓存高频、重算成本明显、可从 PostgreSQL 重建且允许短暂最终一致的数据；必须包含 organization/workspace/权限/版本维度，并具备 TTL、失效和 PostgreSQL fallback。
+- Redis 不保存原图、缩略图二进制、密钥、完整大 payload、库存扣减结果或金额结算结果。
+- 任何列表主读路径切换都必须保留旧路径回滚能力，并验证分页结果、筛选结果、权限边界、投影延迟和 P95。
+- 任何 Projection、Summary、Text、Media 或 Cache 的删除，都必须先完成调用方盘点、历史数据一致性校验、重建验证和回滚方案。
+- 发现 ProductRecord、ProductMedia、Summary 或缓存存在重复写入时，先收口写入边界；不要通过增加另一张表或手动同步继续放大多 Source of Truth。
+
+### 当前未完成项
+
+- 尚未形成 1,000 / 5,000 / 10,000 SKU 的真实 P50/P95/P99 benchmark；
+- 尚未证明 `ProductSummaryRecord` 是否应长期作为列表主读模型；
+- 尚未证明商品详情 Redis 缓存能改善 P95；
+- 深页 `OFFSET/LIMIT`、50 用户并发、图片 immutable/CDN 缓存和图片引用重复表示仍需专项验证；
+- `/api/products` 的关键词搜索语义必须以真实代码和测试为准，不要只根据 UI 文案判断已支持。
 
 ## 可迁移部署架构
 

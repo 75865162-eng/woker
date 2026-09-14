@@ -52,6 +52,7 @@ export function createProductListWhere(input: {
   selectionOwners: string[];
   designerAssignees: string[];
   mySkuOwner?: string;
+  userId?: string;
   minPrice?: number;
   maxPrice?: number;
 }) {
@@ -94,6 +95,13 @@ export function createProductListWhere(input: {
         { opsAssignee: { contains: input.mySkuOwner, mode: "insensitive" } },
         { designerAssignee: { contains: input.mySkuOwner, mode: "insensitive" } },
       ],
+    });
+  }
+  if (input.userId) {
+    and.push({
+      productRecord: {
+        userId: input.userId,
+      },
     });
   }
   if (Number.isFinite(input.minPrice) || Number.isFinite(input.maxPrice)) {

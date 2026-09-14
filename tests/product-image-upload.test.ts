@@ -4,7 +4,7 @@ import {
   selectProductImageFiles,
   uploadProductImageFile,
 } from "@/components/products/product-attachment-upload";
-import { getProductListImage, getProductOriginalImage } from "@/lib/products/image-assets";
+import { getProductAssetDownloadUrl, getProductListImage, getProductOriginalImage } from "@/lib/products/image-assets";
 
 function createImageFile(name = "hero.png", size = 10) {
   return new File([new Uint8Array(size)], name, { type: "image/png" });
@@ -136,6 +136,20 @@ test("product original image never returns embedded data URLs and keeps file ref
       }],
     }),
     "/api/products/file-assets/file-image-1/download",
+  );
+});
+
+test("product image preview prefers the persisted storage URL over the scoped file download route", () => {
+  assert.equal(
+    getProductAssetDownloadUrl({
+      id: "file-image-1",
+      thumbFileId: "file-thumb-1",
+      thumbUrl: "/api/assets/hero-thumb.webp",
+      previewUrl: "/api/assets/hero-preview.webp",
+      originalUrl: "/api/assets/hero.png",
+      downloadUrl: "/api/products/file-assets/file-image-1/download",
+    }),
+    "/api/assets/hero-preview.webp",
   );
 });
 

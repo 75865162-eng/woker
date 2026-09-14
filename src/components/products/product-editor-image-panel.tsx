@@ -1,17 +1,25 @@
 "use client";
 
-import { ImagePlus, Minus, X } from "lucide-react";
+import { ImagePlus, LoaderCircle, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getProductListImage } from "@/lib/products/image-assets";
 import type { ProductImageAsset } from "@/lib/products/types";
 
+export type ProductImageUploadProgress = {
+  id: string;
+  name: string;
+  progress: number;
+};
+
 export function ProductEditorImagePanel({
   imageAssets,
+  uploadingFiles = [],
   onPreview,
   onUpload,
   onRemove,
 }: {
   imageAssets?: ProductImageAsset[];
+  uploadingFiles?: ProductImageUploadProgress[];
   onPreview: (asset: ProductImageAsset) => void;
   onUpload: (files: FileList | null) => void;
   onRemove: (index: number) => void;
@@ -42,6 +50,7 @@ export function ProductEditorImagePanel({
             accept="image/*"
             multiple
             className="hidden"
+            disabled={uploadingFiles.length > 0}
             onChange={(event) => {
               onUpload(event.target.files);
               event.currentTarget.value = "";
@@ -50,7 +59,7 @@ export function ProductEditorImagePanel({
         </label>
       )}
       <div className="mt-3 flex flex-wrap items-start gap-2">
-        <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
+        <label className={`flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white ${uploadingFiles.length ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
           <div className="flex flex-col items-center justify-center">
             <ImagePlus className="h-4 w-4 text-brand" />
             <span className="mt-1 text-[10px] font-semibold text-foreground">上传</span>
@@ -60,13 +69,17 @@ export function ProductEditorImagePanel({
             accept="image/*"
             multiple
             className="hidden"
+            disabled={uploadingFiles.length > 0}
             onChange={(event) => {
               onUpload(event.target.files);
               event.currentTarget.value = "";
             }}
           />
         </label>
-        <div className="flex flex-1 flex-wrap gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+          {uploadingFiles.map((upload) => (
+            <ProductImageUploadProgressCard key={upload.id} upload={upload} />
+          ))}
           {imageAssets?.map((asset, index) => {
             const image = getProductListImage({ imageAssets: [asset] });
             return (
@@ -87,6 +100,23 @@ export function ProductEditorImagePanel({
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+export function ProductImageUploadProgressCard({ upload }: { upload: ProductImageUploadProgress }) {
+  const progress = Math.round(Math.max(0, Math.min(1, upload.progress)) * 100);
+
+  return (
+    <div className="flex min-h-16 w-[180px] min-w-0 flex-1 items-center gap-2 rounded-md border border-brand/30 bg-brand/5 px-2 py-1.5">
+      <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-brand" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-semibold text-foreground" title={upload.name}>{upload.name}</p>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${upload.name} 上传进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+          <div className="h-full rounded-full bg-brand transition-[width] duration-150" style={{ width: `${progress}%` }} />
+        </div>
+        <p className="mt-1 text-[10px] font-semibold tabular-nums text-muted">{progress}%</p>
       </div>
     </div>
   );

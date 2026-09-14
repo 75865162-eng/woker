@@ -109,6 +109,7 @@ export type ProductImageAsset = {
   storageType: "local" | "s3" | "r2";
   uploadedAt: string;
   thumbUrl: string;
+  previewUrl?: string;
   originalUrl: string;
   thumbFileId?: string;
   downloadUrl?: string;

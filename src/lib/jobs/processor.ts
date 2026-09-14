@@ -13,11 +13,11 @@ import {
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import {
-  buildProductExportCsv,
-  buildProductExportRows,
+  buildProductExportWorkbook,
   buildProductExportWhere,
   normalizeProductExportPayload,
 } from "@/lib/products/product-export-job";
+import { productRecordPayloadToProduct } from "@/lib/products/product-projection";
 import { getStorageDriver } from "@/lib/storage";
 import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
 import type { CurrentUser } from "@/lib/auth/session";
@@ -180,6 +180,23 @@ async function processProductExportJob(
   auditUser: CurrentUser | undefined,
 ) {
   const payload = normalizeProductExportPayload(job.payload);
+  const startedAt = new Date().toISOString();
+
+  await prisma.importJob.update({
+    where: { id: job.id },
+    data: {
+      progress: 10,
+      payload: {
+        ...payload,
+        _runtime: {
+          phase: "读取商品数据",
+          startedAt,
+          processedCount: 0,
+          totalCount: null,
+        },
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
 
   if (auditUser) {
     await recordJobVersion({
@@ -209,25 +226,12 @@ async function processProductExportJob(
 
   const records = await prisma.productSummaryRecord.findMany({
     where: buildProductExportWhere({
-      user: { organizationId: job.organizationId },
+      user: { organizationId: job.organizationId, id: job.userId },
       workspaceId: job.workspaceId,
       payload,
     }),
     select: {
-      id: true,
-      sku: true,
-      chineseName: true,
-      englishName: true,
-      status: true,
-      selectionOwner: true,
-      opsAssignee: true,
-      designerAssignee: true,
-      workflowStage: true,
-      updatedAt: true,
-      asin: true,
-      supplierName: true,
-      purchasePrice: true,
-      workflowDueAt: true,
+      productRecordId: true,
     },
     orderBy: {
       updatedAt: "desc",
@@ -239,13 +243,59 @@ async function processProductExportJob(
     throw new Error(`导出结果超过 ${maxProductExportRows.toLocaleString("zh-CN")} 条，请缩小筛选范围后重试。`);
   }
 
-  const csv = buildProductExportCsv(buildProductExportRows(records));
-  const buffer = Buffer.from(csv, "utf8");
+  await prisma.importJob.update({
+    where: { id: job.id },
+    data: {
+      progress: 55,
+      payload: {
+        ...payload,
+        _runtime: {
+          phase: "生成 Excel",
+          startedAt,
+          processedCount: 0,
+          totalCount: records.length,
+        },
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  const productRecords = await prisma.productRecord.findMany({
+    where: {
+      id: { in: records.map((record) => record.productRecordId) },
+      organizationId: job.organizationId,
+      workspaceId: job.workspaceId,
+    },
+    select: {
+      id: true,
+      payload: true,
+    },
+  });
+  const productsById = new Map(productRecords.map((record) => [record.id, productRecordPayloadToProduct(record.payload)]));
+  const products = records
+    .map((record) => productsById.get(record.productRecordId))
+    .filter((product): product is ReturnType<typeof productRecordPayloadToProduct> => Boolean(product));
+  const buffer = Buffer.from(await buildProductExportWorkbook(products));
+
+  await prisma.importJob.update({
+    where: { id: job.id },
+    data: {
+      progress: 85,
+      payload: {
+        ...payload,
+        _runtime: {
+          phase: "保存导出文件",
+          startedAt,
+          processedCount: products.length,
+          totalCount: records.length,
+        },
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
 
   await getStorageDriver().putBuffer({
     key: job.file.storageKey,
     buffer,
-    contentType: "text/csv; charset=utf-8",
+    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
   await prisma.importJob.update({
@@ -254,10 +304,19 @@ async function processProductExportJob(
       status: "done",
       progress: 100,
       resultKey: job.file.storageKey,
+      payload: {
+        ...payload,
+        _runtime: {
+          phase: "已完成",
+          startedAt,
+          processedCount: products.length,
+          totalCount: records.length,
+        },
+      } as unknown as Prisma.InputJsonValue,
       file: {
         update: {
           status: "done",
-          mimeType: "text/csv; charset=utf-8",
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           size: buffer.byteLength,
         },
       },
@@ -281,12 +340,12 @@ async function processProductExportJob(
       jobId: job.id,
       resultKey: job.file.storageKey,
       fileName: job.file.originalName,
-      mimeType: "text/csv; charset=utf-8",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       size: buffer.byteLength,
     },
     update: {
       fileName: job.file.originalName,
-      mimeType: "text/csv; charset=utf-8",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       size: buffer.byteLength,
     },
   });
@@ -308,7 +367,7 @@ async function processProductExportJob(
         workspaceId: job.workspaceId,
         accountId: job.accountId,
         marketplace: job.marketplace,
-        rowCount: records.length,
+        rowCount: products.length,
       } as unknown as Prisma.InputJsonValue,
       scope: {
         workspaceId: job.workspaceId,
