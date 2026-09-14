@@ -1,6 +1,22 @@
 import type { ProductImageAsset } from "@/lib/products/types";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 
+export function safeProductImageUrl(value?: string) {
+  const normalized = value?.trim() ?? "";
+  return normalized && !normalized.startsWith("data:") ? normalized : "";
+}
+
+export function isPlaceholderProductImageAssetId(value?: string) {
+  return Boolean(value?.trim().startsWith("product-image-"));
+}
+
+function productImageFileDownloadUrl(fileId?: string) {
+  const normalized = fileId?.trim();
+  return normalized && !isPlaceholderProductImageAssetId(normalized)
+    ? `/api/products/file-assets/${encodeURIComponent(normalized)}/download`
+    : "";
+}
+
 function attachmentExtensionForMimeType(mimeType: string) {
   switch (mimeType.toLowerCase()) {
     case "image/avif":
@@ -30,26 +46,52 @@ export function ensureProductAttachmentFileName(fileName: string, mimeType: stri
   return `${fileName}${attachmentExtensionForMimeType(mimeType)}`;
 }
 
-export function getProductListImage(product: { imageAssets?: ProductImageAsset[]; image?: string }) {
-  const image = product.imageAssets?.[0]?.thumbUrl?.trim() || product.image?.trim();
+export function getProductListImage(product: { imageAssets?: ProductImageAsset[]; image?: string; images?: string[] }) {
+  for (const asset of product.imageAssets ?? []) {
+    const image = safeProductImageUrl(asset.thumbUrl)
+      || productImageFileDownloadUrl(asset.thumbFileId)
+      || productImageFileDownloadUrl(asset.id)
+      || safeProductImageUrl(asset.originalUrl)
+      || safeProductImageUrl(asset.downloadUrl);
+    if (image) {
+      return image;
+    }
+  }
 
-  return image || "";
+  return safeProductImageUrl(product.image)
+    || (product.images ?? []).map((image) => safeProductImageUrl(image)).find(Boolean)
+    || "";
 }
 
-export function getProductOriginalImage(product: { imageAssets?: ProductImageAsset[]; image?: string }) {
-  const image = product.imageAssets?.[0]?.originalUrl?.trim() || product.imageAssets?.[0]?.thumbUrl?.trim();
+export function getProductOriginalImage(product: { imageAssets?: ProductImageAsset[]; image?: string; images?: string[] }) {
+  for (const asset of product.imageAssets ?? []) {
+    const image = safeProductImageUrl(asset.originalUrl)
+      || safeProductImageUrl(asset.downloadUrl)
+      || productImageFileDownloadUrl(asset.id)
+      || safeProductImageUrl(asset.thumbUrl)
+      || productImageFileDownloadUrl(asset.thumbFileId);
+    if (image) {
+      return image;
+    }
+  }
 
-  return image || product.image?.trim() || "";
+  return safeProductImageUrl(product.image)
+    || (product.images ?? []).map((image) => safeProductImageUrl(image)).find(Boolean)
+    || "";
 }
 
-export function getProductAssetDownloadUrl(asset?: Pick<ProductImageAsset, "id" | "downloadUrl" | "originalUrl">) {
+export function getProductAssetDownloadUrl(
+  asset?: Pick<ProductImageAsset, "id" | "downloadUrl" | "originalUrl" | "thumbFileId" | "thumbUrl">,
+) {
   if (!asset) {
     return "";
   }
 
-  return asset.downloadUrl?.trim()
-    || (asset.id ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download` : "")
-    || asset.originalUrl?.trim()
+  return safeProductImageUrl(asset.downloadUrl)
+    || productImageFileDownloadUrl(asset.id)
+    || safeProductImageUrl(asset.originalUrl)
+    || productImageFileDownloadUrl(asset.thumbFileId)
+    || safeProductImageUrl(asset.thumbUrl)
     || "";
 }
 

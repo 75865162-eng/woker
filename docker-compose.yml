@@ -24,7 +24,7 @@ services:
       BOOTSTRAP_ADMIN_PASSWORD: "1"
       AIGOCODE_API_KEY: ${AIGOCODE_API_KEY}
       AIGOCODE_BASE_URL: ${AIGOCODE_BASE_URL:-https://api.aigocode.app/v1}
-      AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.4}
+      AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.5}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
@@ -52,7 +52,7 @@ services:
       AUTH_SECRET: change-this-local-secret-before-production
       AIGOCODE_API_KEY: ${AIGOCODE_API_KEY}
       AIGOCODE_BASE_URL: ${AIGOCODE_BASE_URL:-https://api.aigocode.app/v1}
-      AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.4}
+      AIGOCODE_MODEL: ${AIGOCODE_MODEL:-gpt-5.5}
     command: ["npm", "run", "worker"]
     volumes:
       - uploads:/app/uploads

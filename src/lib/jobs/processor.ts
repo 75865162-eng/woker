@@ -22,6 +22,8 @@ import { getStorageDriver } from "@/lib/storage";
 import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
 import type { CurrentUser } from "@/lib/auth/session";
 
+const maxProductExportRows = 100_000;
+
 function createResultKey(jobId: string) {
   return `results/${new Date().toISOString().slice(0, 10)}/${jobId}.xlsx`;
 }
@@ -205,7 +207,7 @@ async function processProductExportJob(
     });
   }
 
-  const records = await prisma.productRecord.findMany({
+  const records = await prisma.productSummaryRecord.findMany({
     where: buildProductExportWhere({
       user: { organizationId: job.organizationId },
       workspaceId: job.workspaceId,
@@ -230,7 +232,12 @@ async function processProductExportJob(
     orderBy: {
       updatedAt: "desc",
     },
+    take: maxProductExportRows + 1,
   });
+
+  if (records.length > maxProductExportRows) {
+    throw new Error(`导出结果超过 ${maxProductExportRows.toLocaleString("zh-CN")} 条，请缩小筛选范围后重试。`);
+  }
 
   const csv = buildProductExportCsv(buildProductExportRows(records));
   const buffer = Buffer.from(csv, "utf8");
@@ -335,18 +342,26 @@ async function processProductExportJob(
 }
 
 export async function processImportJob(jobId: string) {
-  const job = await prisma.importJob.update({
-    where: { id: jobId },
+  const claimed = await prisma.importJob.updateMany({
+    where: {
+      id: jobId,
+      status: { in: ["queued", "failed"] },
+    },
     data: {
       status: "running",
       progress: 10,
-      file: {
-        update: {
-          status: "processing",
-        },
-      },
+      error: null,
     },
+  });
+  if (!claimed.count) return;
+
+  const job = await prisma.importJob.findUniqueOrThrow({
+    where: { id: jobId },
     include: { file: true },
+  });
+  await prisma.fileObject.update({
+    where: { id: job.fileId },
+    data: { status: "processing" },
   });
   const auditUser = await getAuditUserForJob(job);
 

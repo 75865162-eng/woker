@@ -9,7 +9,12 @@ export const publicApiPrefixes = ["/api/auth/login", "/api/auth/register"];
 export type AuthDriver = "local" | "database";
 
 export function getAuthDriver(): AuthDriver {
-  return process.env.AUTH_DRIVER === "database" ? "database" : "local";
+  const configuredDriver = process.env.AUTH_DRIVER;
+  if (process.env.NODE_ENV === "production" && configuredDriver !== "database") {
+    throw new Error("AUTH_DRIVER=database is required in production.");
+  }
+
+  return configuredDriver === "database" ? "database" : "local";
 }
 
 export function getBootstrapAdminEmail() {

@@ -13,13 +13,12 @@ type StatusMetric = {
 };
 
 async function loadDatabaseMetrics() {
-  const [organizations, users, teamMembers, workspaceScopes, products, imageCopyGalleries, files, jobs, exports, wecomSettings] = await Promise.all([
+  const [organizations, users, teamMembers, workspaceScopes, products, files, jobs, exports, wecomSettings] = await Promise.all([
     prisma.organization.count(),
     prisma.user.count(),
     prisma.teamRosterMember.count(),
     prisma.workspaceScope.count(),
     prisma.productRecord.count(),
-    prisma.productImageCopyGalleryRecord.count(),
     prisma.fileObject.count(),
     prisma.importJob.count(),
     prisma.exportRecord.count(),
@@ -32,7 +31,7 @@ async function loadDatabaseMetrics() {
     },
   });
 
-  return { organizations, users, teamMembers, workspaceScopes, incompleteWorkspaceScopes, products, imageCopyGalleries, files, jobs, exports, wecomSettings };
+  return { organizations, users, teamMembers, workspaceScopes, incompleteWorkspaceScopes, products, files, jobs, exports, wecomSettings };
 }
 
 export async function SystemDataStatusPanel() {
@@ -87,12 +86,6 @@ export async function SystemDataStatusPanel() {
       value: metrics ? metrics.products.toLocaleString("zh-CN") : "-",
       detail: "共享商品资产",
       icon: Database,
-    },
-    {
-      label: "图片文案",
-      value: metrics ? metrics.imageCopyGalleries.toLocaleString("zh-CN") : "-",
-      detail: "图片与文案草稿",
-      icon: FileArchive,
     },
     {
       label: "文件记录",
@@ -190,7 +183,7 @@ export async function SystemDataStatusPanel() {
               <p className="font-bold text-foreground">已接后端边界</p>
               <Badge tone="green">共享</Badge>
             </div>
-            <p className="mt-1">账号、组织、团队成员、Workspace、商品、图片文案、文件对象、处理任务、导出记录都在数据库里，适合多人共用。</p>
+            <p className="mt-1">账号、组织、团队成员、Workspace、商品、文件对象、处理任务、导出记录都在数据库里，适合多人共用。</p>
           </div>
           <div className="rounded-md border border-border bg-white p-2.5">
             <div className="flex items-center justify-between gap-2">

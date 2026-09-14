@@ -6,11 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { Product, ProductListItem } from "@/lib/products/types";
 import {
   createProductListItem,
-  createProductListWhere,
-  getProductRecordCurrentOwner,
-  getProductRecordIsOverdue,
-  getProductRecordSource,
-  isProductOperationsProgressIncomplete,
+  hasStandardProductStatus,
   splitMultiValue,
   type ProductListSource,
 } from "@/lib/products/list-query";
@@ -19,19 +15,21 @@ import {
   createProductListScopeKey,
   getCachedProductListResponse,
   getCachedProductListSummary,
+  invalidateProductListSummaryCaches,
   invalidateProductListResponseCaches,
   setCachedProductListResponse,
   setCachedProductListSummary,
-  updateCachedProductListSummariesForProductChange,
 } from "@/lib/products/product-list-cache";
-import { applyProductListSummaryChange, refreshProductListSummaryBundle } from "@/lib/products/product-list-summary";
-import { getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
+import { refreshProductListSummaryBundle } from "@/lib/products/product-list-summary";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
-import { toLightweightProduct } from "@/lib/products/lightweight-product";
-import { collectProductAttachmentReferences } from "@/lib/products/attachment-bindings";
 import { enqueueProductOutboxEvent } from "@/lib/queue";
+import { ProductRecordRevisionConflictError } from "@/lib/products/product-record-repository";
+import { InvalidProductStatusError } from "@/lib/products/status-machine";
+import { saveProductAggregate } from "@/lib/products/product-aggregate-service";
 
 export const runtime = "nodejs";
+
+const maxProductPayloadBytes = 8 * 1024 * 1024;
 
 type ProductListResponse = {
   products: Array<Product | ProductListItem>;
@@ -72,10 +70,10 @@ function requiresConclusionExcel(product: Product) {
   return product.status === "canceled" || product.status === "listed";
 }
 
-class ProductRevisionConflictError extends Error {
-  constructor(public readonly currentRevision: number) {
-    super("商品已被其他用户更新，请刷新后再保存。");
-    this.name = "ProductRevisionConflictError";
+class ProductWritePermissionError extends Error {
+  constructor(action: "create" | "edit") {
+    super(action === "create" ? "当前账号没有新增商品的权限。" : "当前账号没有编辑该商品的权限。");
+    this.name = "ProductWritePermissionError";
   }
 }
 
@@ -109,73 +107,94 @@ function buildProductListWhereSql(input: {
   minPrice?: number;
   maxPrice?: number;
 }) {
+  const field = (name: string) => Prisma.sql`COALESCE(s."${Prisma.raw(name)}", r."${Prisma.raw(name)}")`;
   const conditions: Prisma.Sql[] = [
-    Prisma.sql`"organizationId" = ${input.organizationId}`,
-    Prisma.sql`"workspaceId" = ${input.workspaceId}`,
+    Prisma.sql`r."organizationId" = ${input.organizationId}`,
+    Prisma.sql`r."workspaceId" = ${input.workspaceId}`,
   ];
 
-  if (input.source === "dashboard" || input.source === "sellfox") {
-    conditions.push(Prisma.sql`"source" = ${input.source}`);
+  if (input.source === "dashboard") {
+    conditions.push(Prisma.sql`r."source" = ${input.source}`);
   }
 
   if (input.search) {
     const search = `%${input.search}%`;
     conditions.push(Prisma.sql`
       (
-        "sku" ILIKE ${search}
-        OR "id" ILIKE ${search}
-        OR "chineseName" ILIKE ${search}
-        OR "englishName" ILIKE ${search}
+        ${field("sku")} ILIKE ${search}
+        OR r."id" ILIKE ${search}
+        OR ${field("chineseName")} ILIKE ${search}
+        OR ${field("englishName")} ILIKE ${search}
+        OR COALESCE(t."keywords", r."payload"->>'keywords', '') ILIKE ${search}
       )
     `);
   }
 
   if (input.asin) {
-    conditions.push(Prisma.sql`"asin" ILIKE ${`%${input.asin}%`}`);
+    conditions.push(Prisma.sql`${field("asin")} ILIKE ${`%${input.asin}%`}`);
   }
 
   if (input.supplierName) {
-    conditions.push(Prisma.sql`"supplierName" ILIKE ${`%${input.supplierName}%`}`);
+    conditions.push(Prisma.sql`${field("supplierName")} ILIKE ${`%${input.supplierName}%`}`);
   }
 
   if (input.opsAssignees.length) {
-    conditions.push(Prisma.sql`"opsAssignee" IN (${Prisma.join(input.opsAssignees)})`);
+    conditions.push(Prisma.sql`(${Prisma.join(
+      input.opsAssignees.map((assignee) => Prisma.sql`${field("opsAssignee")} ILIKE ${`%${assignee}%`}`),
+      " OR ",
+    )})`);
   }
 
   if (input.selectionOwners.length) {
-    conditions.push(Prisma.sql`"selectionOwner" IN (${Prisma.join(input.selectionOwners)})`);
+    conditions.push(Prisma.sql`${field("selectionOwner")} IN (${Prisma.join(input.selectionOwners)})`);
   }
 
   if (input.designerAssignees.length) {
-    conditions.push(Prisma.sql`"designerAssignee" IN (${Prisma.join(input.designerAssignees)})`);
+    conditions.push(Prisma.sql`(${Prisma.join(
+      input.designerAssignees.map((assignee) => Prisma.sql`${field("designerAssignee")} ILIKE ${`%${assignee}%`}`),
+      " OR ",
+    )})`);
   }
 
   if (input.mySkuOwner) {
     const ownerSearch = `%${input.mySkuOwner}%`;
     conditions.push(Prisma.sql`
       (
-        "selectionOwner" ILIKE ${ownerSearch}
-        OR "currentOwner" ILIKE ${ownerSearch}
-        OR "opsAssignee" ILIKE ${ownerSearch}
-        OR "designerAssignee" ILIKE ${ownerSearch}
+        ${field("selectionOwner")} ILIKE ${ownerSearch}
+        OR ${field("currentOwner")} ILIKE ${ownerSearch}
+        OR ${field("opsAssignee")} ILIKE ${ownerSearch}
+        OR ${field("designerAssignee")} ILIKE ${ownerSearch}
+        OR COALESCE(r."payload"->>'selectionOwner', '') ILIKE ${ownerSearch}
+        OR COALESCE(r."payload"->>'currentOwner', '') ILIKE ${ownerSearch}
+        OR COALESCE(r."payload"->>'opsAssignee', '') ILIKE ${ownerSearch}
+        OR COALESCE(r."payload"->>'designerAssignee', '') ILIKE ${ownerSearch}
+        OR COALESCE(r."payload"->'opsAssignees', '[]'::jsonb)::text ILIKE ${ownerSearch}
+        OR COALESCE(r."payload"->'designerAssignees', '[]'::jsonb)::text ILIKE ${ownerSearch}
       )
     `);
   }
 
   if (Number.isFinite(input.minPrice) || Number.isFinite(input.maxPrice)) {
     conditions.push(
-      Prisma.sql`"purchasePrice" >= ${Number.isFinite(input.minPrice) ? input.minPrice : 0}`,
-      Prisma.sql`"purchasePrice" <= ${Number.isFinite(input.maxPrice) ? input.maxPrice : Number.MAX_SAFE_INTEGER}`,
+      Prisma.sql`${field("purchasePrice")} >= ${Number.isFinite(input.minPrice) ? input.minPrice : 0}`,
+      Prisma.sql`${field("purchasePrice")} <= ${Number.isFinite(input.maxPrice) ? input.maxPrice : Number.MAX_SAFE_INTEGER}`,
     );
   }
 
   if (input.status === "operations_progress") {
-    conditions.push(Prisma.sql`"operationsProgressIncomplete" = true`);
+    conditions.push(Prisma.sql`COALESCE(s."operationsProgressIncomplete", r."operationsProgressIncomplete") = true`);
+  } else if (input.status === "development_phase") {
+    conditions.push(Prisma.sql`${field("status")} IN ('pending', 'developing')`);
   } else if (input.status === "overdue") {
-    conditions.push(Prisma.sql`"status" NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')`);
-    conditions.push(Prisma.sql`"isOverdue" = true`);
-  } else if (input.status && input.status !== "all") {
-    conditions.push(Prisma.sql`"status" = ${input.status}`);
+    conditions.push(Prisma.sql`${field("status")} NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')`);
+    conditions.push(Prisma.sql`
+      (
+        (${field("workflowDueAt")} IS NOT NULL AND ${field("workflowDueAt")} < NOW())
+        OR (${field("workflowDueAt")} IS NULL AND ${field("createdAt")} < NOW() - INTERVAL '3 days')
+      )
+    `);
+  } else if (input.status && input.status !== "all" && hasStandardProductStatus(input.status)) {
+    conditions.push(Prisma.sql`${field("status")} = ${input.status}`);
   }
 
   return Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`;
@@ -185,6 +204,11 @@ function toOptionalString(value: unknown) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function toOptionalImageUrl(value: unknown) {
+  const imageUrl = toOptionalString(value);
+  return imageUrl && !imageUrl.startsWith("data:") ? imageUrl : undefined;
 }
 
 function toOptionalDate(value: unknown) {
@@ -212,7 +236,7 @@ function mapProductListRow(record: Record<string, unknown>): ProductListItem {
     sku: String(record.sku ?? ""),
     chineseName: String(record.chineseName ?? ""),
     englishName: String(record.englishName ?? ""),
-    image: toOptionalString(record.image),
+    image: toOptionalImageUrl(record.image),
     asin: toOptionalString(record.asin),
     status: String(record.status ?? "pending"),
     selectionOwner: toOptionalString(record.selectionOwner) ?? "",
@@ -233,7 +257,7 @@ function mapProductListRow(record: Record<string, unknown>): ProductListItem {
 }
 
 function normalizeProductListSource(value: string | null): ProductListSource {
-  return value === "sellfox" || value === "all" ? value : "dashboard";
+  return value === "all" ? value : "dashboard";
 }
 
 function roundDuration(ms: number) {
@@ -245,32 +269,6 @@ function createServerTimingHeader(timings: Record<string, number>, totalMs: numb
     ...Object.entries(timings).map(([name, duration]) => `${name};dur=${duration}`),
     `total;dur=${totalMs}`,
   ].join(", ");
-}
-
-function createProductRecordData(product: Product, user: { id: string; organizationId: string }, scope: { workspaceId: string; accountId: string; marketplace: string }) {
-  const workflowStage = getProductWorkflowStage(product);
-
-  return {
-    userId: user.id,
-    accountId: scope.accountId,
-    marketplace: scope.marketplace,
-    payload: product as unknown as Prisma.InputJsonValue,
-    chineseName: product.chineseName,
-    englishName: product.englishName,
-    asin: product.asin,
-    status: product.status,
-    source: getProductRecordSource(product),
-    supplierName: product.supplierName,
-    purchasePrice: product.purchasePrice,
-    selectionOwner: product.selectionOwner || product.developer || "",
-    opsAssignee: product.opsAssignee || normalizeAssigneeList(undefined, product.opsAssignees).join("、"),
-    designerAssignee: product.designerAssignee || normalizeAssigneeList(undefined, product.designerAssignees).join("、"),
-    currentOwner: getProductRecordCurrentOwner(product),
-    workflowStage,
-    workflowDueAt: product.workflowDueAt ? new Date(product.workflowDueAt) : null,
-    isOverdue: getProductRecordIsOverdue(product),
-    operationsProgressIncomplete: isProductOperationsProgressIncomplete(product),
-  };
 }
 
 export async function GET(request: Request) {
@@ -296,7 +294,6 @@ export async function GET(request: Request) {
     const minPrice = parseOptionalNumber(url.searchParams.get("minPrice"));
     const maxPrice = parseOptionalNumber(url.searchParams.get("maxPrice"));
     const mySkuOwner = url.searchParams.get("mySkuOwner")?.trim();
-    const detail = url.searchParams.get("detail") === "full";
     const includeSummary = url.searchParams.get("includeSummary") !== "false";
     const summaryOnly = url.searchParams.get("summaryOnly") === "true";
     const opsAssignees = splitMultiValue(url.searchParams.get("opsAssignees"));
@@ -332,7 +329,7 @@ export async function GET(request: Request) {
       mySkuOwner,
       minPrice,
       maxPrice,
-      detail,
+      detail: false,
       includeSummary,
     });
     const createTimedResponse = (payload: unknown, result: "cache-hit" | "ok" | "unavailable", init?: ResponseInit) => {
@@ -341,7 +338,7 @@ export async function GET(request: Request) {
         const response = NextResponse.json(payload, init);
         response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
         response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
-        response.headers.set("X-Product-Data-Tier", detail ? "page-text-thumbnail" : "summary-row");
+        response.headers.set("X-Product-Data-Tier", "summary-row");
         response.headers.set("Cache-Control", "private, max-age=0, stale-while-revalidate=30");
         return response;
       }
@@ -353,7 +350,7 @@ export async function GET(request: Request) {
         page,
         pageSize,
         source,
-        detail,
+        detail: false,
         includeSummary,
         summaryOnly,
         hasListFilters,
@@ -361,7 +358,7 @@ export async function GET(request: Request) {
       const response = NextResponse.json(payload, init);
       response.headers.set("Server-Timing", createServerTimingHeader(timings, totalMs));
       response.headers.set("X-Product-Cache", result === "cache-hit" ? "hit" : "miss");
-      response.headers.set("X-Product-Data-Tier", detail ? "page-text-thumbnail" : "summary-row");
+      response.headers.set("X-Product-Data-Tier", "summary-row");
       response.headers.set("Cache-Control", "private, max-age=0, stale-while-revalidate=30");
       return response;
     };
@@ -380,21 +377,6 @@ export async function GET(request: Request) {
         return createTimedResponse(cached, "cache-hit");
       }
     }
-    const where = createProductListWhere({
-      user,
-      workspaceId: scope.workspaceId,
-      source,
-      search,
-      asin: url.searchParams.get("asin")?.trim(),
-      status: status === "all" ? "" : status,
-      supplierName: url.searchParams.get("supplierName")?.trim(),
-      opsAssignees,
-      selectionOwners,
-      designerAssignees,
-      mySkuOwner,
-      minPrice,
-      maxPrice,
-    });
     let total = 0;
     const resolveSummary = async (forceRefresh = false) => {
       if (!forceRefresh) {
@@ -408,7 +390,7 @@ export async function GET(request: Request) {
         organizationId: user.organizationId,
         workspaceId: scope.workspaceId,
       });
-      for (const summarySource of ["all", "dashboard", "sellfox"] as const) {
+      for (const summarySource of ["all", "dashboard"] as const) {
         setCachedProductListSummary(
           createProductListScopeKey({
             organizationId: user.organizationId,
@@ -444,63 +426,149 @@ export async function GET(request: Request) {
         maxPrice,
       });
       const listOffset = (page - 1) * pageSize;
-      const recordsPromise = detail
-        ? measure(
-            "records",
-            prisma.productRecord.findMany({
-              where,
-              orderBy: [{ createdAt: "desc" }, { sku: "asc" }],
-              skip: listOffset,
-              take: pageSize,
-            }),
-          )
-        : measure(
-            "records",
-            prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
-              SELECT
-                "id",
-                "sku",
-                "chineseName",
-                "englishName",
-                "asin",
-                "status",
-                "selectionOwner",
-                "opsAssignee",
-                "designerAssignee",
-                "currentOwner",
-                "workflowStage",
-                "createdAt",
-                "updatedAt",
-                "purchasePrice",
-                "supplierName",
-                "workflowDueAt",
-                "isOverdue",
-                COALESCE(NULLIF("payload"->>'specs', ''), '') AS "specs",
-                COALESCE(NULLIF("payload"->>'keywords', ''), '') AS "keywords",
-                COALESCE(NULLIF("payload"->>'note', ''), '') AS "note",
-                COALESCE(NULLIF("payload"->'imageAssets'->0->>'thumbUrl', ''), '') AS "image"
-              FROM "ProductRecord"
-              ${listWhereSql}
-              ORDER BY "createdAt" DESC, "sku" ASC
-              OFFSET ${listOffset}
-              LIMIT ${pageSize}
-            `),
-          );
+      const recordsPromise = measure(
+        "records",
+        prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+          SELECT
+            r."id" AS "id",
+            COALESCE(s."sku", r."sku") AS "sku",
+            COALESCE(s."chineseName", r."chineseName") AS "chineseName",
+            COALESCE(s."englishName", r."englishName") AS "englishName",
+            COALESCE(s."asin", r."asin") AS "asin",
+            COALESCE(s."status", r."status") AS "status",
+            COALESCE(s."selectionOwner", r."selectionOwner") AS "selectionOwner",
+            COALESCE(s."opsAssignee", r."opsAssignee") AS "opsAssignee",
+            COALESCE(s."designerAssignee", r."designerAssignee") AS "designerAssignee",
+            COALESCE(s."currentOwner", r."currentOwner") AS "currentOwner",
+            COALESCE(s."workflowStage", r."workflowStage") AS "workflowStage",
+            COALESCE(s."createdAt", r."createdAt") AS "createdAt",
+            COALESCE(s."updatedAt", r."updatedAt") AS "updatedAt",
+            COALESCE(s."purchasePrice", r."purchasePrice") AS "purchasePrice",
+            COALESCE(s."supplierName", r."supplierName") AS "supplierName",
+            COALESCE(s."workflowDueAt", r."workflowDueAt") AS "workflowDueAt",
+            CASE
+              WHEN COALESCE(s."status", r."status") IN ('listed', 'canceled', 'delisted', 'patent_risk') THEN false
+              WHEN COALESCE(s."workflowDueAt", r."workflowDueAt") IS NOT NULL
+                THEN COALESCE(s."workflowDueAt", r."workflowDueAt") < NOW()
+              ELSE COALESCE(s."createdAt", r."createdAt") < NOW() - INTERVAL '3 days'
+            END AS "isOverdue",
+            COALESCE(t."specs", r."payload"->>'specs', '') AS "specs",
+            COALESCE(t."keywords", r."payload"->>'keywords', '') AS "keywords",
+            COALESCE(t."note", r."payload"->>'note', '') AS "note",
+            COALESCE(
+              CASE
+                WHEN LOWER(LEFT(COALESCE(s."primaryImageUrl", ''), 5)) <> 'data:'
+                THEN NULLIF(s."primaryImageUrl", '')
+                ELSE NULL
+              END,
+              CASE
+                WHEN LOWER(LEFT(COALESCE(image_asset.asset->>'thumbUrl', ''), 5)) <> 'data:'
+                THEN NULLIF(image_asset.asset->>'thumbUrl', '')
+                ELSE NULL
+              END,
+              CASE
+                WHEN NULLIF(image_asset.asset->>'thumbFileId', '') IS NOT NULL
+                  AND LOWER(LEFT(image_asset.asset->>'thumbFileId', 14)) <> 'product-image-'
+                THEN '/api/products/file-assets/' || (image_asset.asset->>'thumbFileId') || '/download'
+                WHEN NULLIF(image_asset.asset->>'id', '') IS NOT NULL
+                  AND LOWER(LEFT(image_asset.asset->>'id', 14)) <> 'product-image-'
+                THEN '/api/products/file-assets/' || (image_asset.asset->>'id') || '/download'
+                ELSE NULL
+              END,
+              CASE
+                WHEN LOWER(LEFT(COALESCE(image_asset.asset->>'originalUrl', ''), 5)) <> 'data:'
+                THEN NULLIF(image_asset.asset->>'originalUrl', '')
+                ELSE NULL
+              END,
+              CASE
+                WHEN LOWER(LEFT(COALESCE(r."payload"->>'image', ''), 5)) <> 'data:'
+                THEN NULLIF(r."payload"->>'image', '')
+                ELSE NULL
+              END,
+              CASE
+                WHEN jsonb_typeof(r."payload"->'images') = 'array'
+                  AND LOWER(LEFT(COALESCE(r."payload"#>>'{images,0}', ''), 5)) <> 'data:'
+                THEN NULLIF(r."payload"#>>'{images,0}', '')
+                ELSE NULL
+              END,
+              ''
+            ) AS "image"
+          FROM "ProductRecord" r
+          LEFT JOIN "ProductSummaryRecord" s
+            ON s."productRecordId" = r."id"
+            AND s."organizationId" = r."organizationId"
+            AND s."workspaceId" = r."workspaceId"
+            AND s."sourceRevision" = r."revision"
+          LEFT JOIN "ProductTextRecord" t
+            ON t."productRecordId" = r."id"
+            AND t."organizationId" = r."organizationId"
+            AND t."workspaceId" = r."workspaceId"
+            AND t."language" = 'default'
+            AND t."sourceRevision" = r."revision"
+          LEFT JOIN LATERAL (
+            SELECT entries.asset
+            FROM jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(r."payload"->'imageAssets') = 'array'
+                THEN r."payload"->'imageAssets'
+                ELSE '[]'::jsonb
+              END
+            ) WITH ORDINALITY AS entries(asset, position)
+            WHERE (
+              (
+                NULLIF(entries.asset->>'thumbUrl', '') IS NOT NULL
+                AND LOWER(LEFT(entries.asset->>'thumbUrl', 5)) <> 'data:'
+              )
+              OR (
+                NULLIF(entries.asset->>'thumbFileId', '') IS NOT NULL
+                AND LOWER(LEFT(entries.asset->>'thumbFileId', 14)) <> 'product-image-'
+              )
+              OR (
+                NULLIF(entries.asset->>'id', '') IS NOT NULL
+                AND LOWER(LEFT(entries.asset->>'id', 14)) <> 'product-image-'
+              )
+              OR (
+                NULLIF(entries.asset->>'originalUrl', '') IS NOT NULL
+                AND LOWER(LEFT(entries.asset->>'originalUrl', 5)) <> 'data:'
+              )
+            )
+            ORDER BY entries.position
+            LIMIT 1
+          ) image_asset ON true
+          ${listWhereSql}
+          ORDER BY COALESCE(s."createdAt", r."createdAt") DESC, COALESCE(s."sku", r."sku") ASC
+          OFFSET ${listOffset}
+          LIMIT ${pageSize}
+        `),
+      );
       const summaryPromise = includeSummary ? measure("summary", resolveSummary()) : Promise.resolve(null);
 
       if (hasListFilters) {
         const [countResult, recordsResult, summaryResult] = await Promise.all([
-          measure("count", prisma.productRecord.count({ where })),
+          measure(
+            "count",
+            prisma.$queryRaw<Array<{ count: number | bigint }>>(Prisma.sql`
+              SELECT COUNT(*)::int AS "count"
+              FROM "ProductRecord" r
+              LEFT JOIN "ProductSummaryRecord" s
+                ON s."productRecordId" = r."id"
+                AND s."organizationId" = r."organizationId"
+                AND s."workspaceId" = r."workspaceId"
+                AND s."sourceRevision" = r."revision"
+              LEFT JOIN "ProductTextRecord" t
+                ON t."productRecordId" = r."id"
+                AND t."organizationId" = r."organizationId"
+                AND t."workspaceId" = r."workspaceId"
+                AND t."language" = 'default'
+                AND t."sourceRevision" = r."revision"
+              ${listWhereSql}
+            `),
+          ).then((rows) => Number(rows[0]?.count ?? 0)),
           recordsPromise,
           summaryPromise,
         ]);
         total = countResult;
-        const products = detail
-          ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => ({
-              ...toLightweightProduct(record.payload as unknown as Product),
-              revision: record.revision,
-            }))
-          : (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
+        const products = (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
 
         const responsePayload: ProductListResponse = {
           products,
@@ -532,12 +600,7 @@ export async function GET(request: Request) {
       const [recordsResult, summaryResult] = await Promise.all([recordsPromise, summaryPromise]);
       const summary = summaryResult ?? (await resolveSummary());
       total = summary.total;
-      const products = detail
-        ? (recordsResult as Awaited<ReturnType<typeof prisma.productRecord.findMany>>).map((record) => ({
-            ...toLightweightProduct(record.payload as unknown as Product),
-            revision: record.revision,
-          }))
-        : (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
+      const products = (recordsResult as Array<Record<string, unknown>>).map((record) => mapProductListRow(record));
 
       const responsePayload: ProductListResponse = {
         products,
@@ -598,16 +661,41 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("products", "edit", request);
+    const editPermission = await requireApiPermission("products", "edit", request);
+    const createPermission = await requireApiPermission("products", "create", request);
 
-    if (!permission.ok) {
-      return permission.response;
+    if (!editPermission.ok && !createPermission.ok) {
+      return createPermission.response;
     }
-    const { user } = permission;
+    const user = editPermission.ok
+      ? editPermission.user
+      : createPermission.ok
+        ? createPermission.user
+        : undefined;
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+    const canEditProducts = editPermission.ok;
+    const canCreateProducts = createPermission.ok;
 
     let body: { product?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
     try {
-      body = (await request.json()) as { product?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
+      const contentLength = Number(request.headers.get("content-length"));
+      if (Number.isFinite(contentLength) && contentLength > maxProductPayloadBytes) {
+        return NextResponse.json(
+          { error: "商品数据过大，请移除内嵌图片后重新保存。" },
+          { status: 413 },
+        );
+      }
+
+      const rawBody = await request.text();
+      if (Buffer.byteLength(rawBody, "utf8") > maxProductPayloadBytes) {
+        return NextResponse.json(
+          { error: "商品数据过大，请移除内嵌图片后重新保存。" },
+          { status: 413 },
+        );
+      }
+      body = JSON.parse(rawBody) as { product?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
     } catch {
       return NextResponse.json(
         { error: "商品数据过大或上传内容不完整，请检查附件是否超过 10MB 后重新上传。" },
@@ -631,20 +719,19 @@ export async function POST(request: Request) {
           },
         },
       });
+      if (existingRecord && !canEditProducts) {
+        throw new ProductWritePermissionError("edit");
+      }
+      if (!existingRecord && !canCreateProducts) {
+        throw new ProductWritePermissionError("create");
+      }
       const existingProduct = existingRecord?.payload as Partial<Product> | undefined;
       const requestedRevision = typeof product.revision === "number" && Number.isInteger(product.revision)
         ? product.revision
         : undefined;
-      if (existingRecord && requestedRevision === undefined) {
-        throw new ProductRevisionConflictError(existingRecord.revision);
-      }
-      if (existingRecord && requestedRevision !== existingRecord.revision) {
-        throw new ProductRevisionConflictError(existingRecord.revision);
-      }
-      const nextRevision = existingRecord ? existingRecord.revision + 1 : 1;
       const productToSave: Product = {
         ...product,
-        revision: nextRevision,
+        id: existingRecord?.id ?? product.id,
         videoPlan: product.videoPlan ?? existingProduct?.videoPlan,
       };
 
@@ -652,180 +739,51 @@ export async function POST(request: Request) {
         throw new Error("状态为已取消或已上架时，请先上传结论 Excel 表。");
       }
 
-      const attachmentReferences = collectProductAttachmentReferences(productToSave);
-      const attachmentIds = attachmentReferences.map((reference) => reference.fileId);
-      if (attachmentIds.length) {
-        const files = await tx.fileObject.findMany({
-          where: {
-            id: { in: attachmentIds },
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-          },
-          select: { id: true },
-        });
-        if (files.length !== attachmentIds.length) {
-          throw new Error("商品包含无效或无权限的附件引用，请重新上传附件后再保存。");
-        }
-
-        const existingBindings = await tx.productAttachmentBinding.findMany({
-          where: { fileId: { in: attachmentIds } },
-          select: { fileId: true, productSku: true, status: true },
-        });
-        const conflictingBinding = existingBindings.find((binding) =>
-          binding.productSku !== productToSave.sku && binding.status === "linked");
-        if (conflictingBinding) {
-          throw new Error("商品附件已被其他商品占用，请重新上传附件后再保存。");
-        }
-      }
-
-      if (existingRecord) {
-        const updated = await tx.productRecord.updateMany({
-          where: {
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-            sku: productToSave.sku,
-            revision: existingRecord.revision,
-          },
-          data: {
-            ...createProductRecordData(productToSave, user, scope),
-            revision: nextRevision,
-          },
-        });
-        if (updated.count !== 1) {
-          const current = await tx.productRecord.findUnique({
-            where: {
-              organizationId_workspaceId_sku: {
-                organizationId: user.organizationId,
-                workspaceId: scope.workspaceId,
-                sku: productToSave.sku,
-              },
-            },
-            select: { revision: true },
-          });
-          throw new ProductRevisionConflictError(current?.revision ?? existingRecord.revision);
-        }
-      } else {
-        await tx.productRecord.create({
-          data: {
-            id: productToSave.id,
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-            sku: productToSave.sku,
-            revision: nextRevision,
-            ...createProductRecordData(productToSave, user, scope),
-          },
-        });
-      }
-
-      await applyProductListSummaryChange(tx, {
-        organizationId: user.organizationId,
-        workspaceId: scope.workspaceId,
-        before: existingProduct,
-        after: productToSave,
+      const saved = await saveProductAggregate(tx, {
+        product: productToSave,
+        user,
+        scope: { ...scope, organizationId: user.organizationId },
+        expectedRevision: requestedRevision,
+        existingRecord,
       });
-
-      const previousBindings = await tx.productAttachmentBinding.findMany({
-        where: {
-          organizationId: user.organizationId,
-          workspaceId: scope.workspaceId,
-          productSku: productToSave.sku,
-          status: "linked",
-        },
-        select: { id: true, fileId: true },
-      });
-      const currentAttachmentIds = new Set(attachmentIds);
-      const removedBindings = previousBindings.filter((binding) => !currentAttachmentIds.has(binding.fileId));
-      if (removedBindings.length) {
-        await tx.productAttachmentBinding.updateMany({
-          where: { id: { in: removedBindings.map((binding) => binding.id) } },
-          data: { status: "orphan", linkedAt: null },
-        });
-        await tx.fileObject.updateMany({
-          where: { id: { in: removedBindings.map((binding) => binding.fileId) } },
-          data: { productBindingStatus: "orphan" },
-        });
-      }
-      for (const reference of attachmentReferences) {
-        await tx.productAttachmentBinding.upsert({
-          where: { fileId: reference.fileId },
-          create: {
-            fileId: reference.fileId,
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-            productSku: productToSave.sku,
-            fieldPath: reference.fieldPath,
-            status: "linked",
-            linkedAt: new Date(),
-          },
-          update: {
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-            productSku: productToSave.sku,
-            fieldPath: reference.fieldPath,
-            status: "linked",
-            linkedAt: new Date(),
-          },
-        });
-      }
-      if (attachmentIds.length) {
-        await tx.fileObject.updateMany({
-          where: { id: { in: attachmentIds } },
-          data: { productBindingStatus: "linked" },
-        });
-      }
-
-      const outboxEvent = await tx.productOutboxEvent.create({
-        data: {
-          organizationId: user.organizationId,
-          userId: user.id,
-          workspaceId: scope.workspaceId,
-          accountId: scope.accountId,
-          marketplace: scope.marketplace,
-          eventType: "product_saved",
-          entityType: "product",
-          entityId: productToSave.sku,
-          payload: {
-            product: productToSave,
-            previousProduct: existingProduct ?? null,
-            actorName: user.name,
-          } as Prisma.InputJsonValue,
-        },
-      });
-
       return {
-        existingProduct,
-        productToSave,
-        outboxEventId: outboxEvent.id,
+        productToSave: saved.product,
+        outboxEventId: saved.outboxEventId,
+        projectionEventId: saved.projectionEventId,
       };
     });
 
-    void enqueueProductOutboxEvent(persisted.outboxEventId).catch((error) => {
+    void Promise.all([
+      enqueueProductOutboxEvent(persisted.outboxEventId),
+      enqueueProductOutboxEvent(persisted.projectionEventId),
+    ]).catch((error) => {
       console.warn("[api/products] product outbox enqueue failed", {
         eventId: persisted.outboxEventId,
         sku: persisted.productToSave.sku,
         message: error instanceof Error ? error.message : String(error),
       });
     });
-    invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`).catch((error) => {
+    await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`).catch((error) => {
       console.warn("[api/products] product cache invalidation failed", {
         sku: persisted.productToSave.sku,
         message: error instanceof Error ? error.message : String(error),
       });
     });
-    updateCachedProductListSummariesForProductChange({
-      organizationId: user.organizationId,
-      workspaceId: scope.workspaceId,
-      before: persisted.existingProduct,
-      after: persisted.productToSave,
-    });
+    invalidateProductListSummaryCaches(`${user.organizationId}:${scope.workspaceId}:`);
 
     return NextResponse.json({ product: persisted.productToSave });
   } catch (error) {
-    if (error instanceof ProductRevisionConflictError) {
+    if (error instanceof ProductRecordRevisionConflictError) {
       return NextResponse.json(
         { error: error.message, conflict: true, currentRevision: error.currentRevision },
         { status: 409 },
       );
+    }
+    if (error instanceof InvalidProductStatusError) {
+      return NextResponse.json({ error: error.message, code: "INVALID_PRODUCT_STATUS_TRANSITION" }, { status: 400 });
+    }
+    if (error instanceof ProductWritePermissionError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
     const message = error instanceof Error ? error.message : "Failed to save product.";
     return NextResponse.json({ error: message }, { status: 500 });

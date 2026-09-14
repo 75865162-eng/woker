@@ -2,16 +2,14 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
-import { buildProductRecordIndex } from "@/lib/products/product-record-index";
 import { sellfoxPost } from "@/lib/sellfox/client";
 import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots } from "@/lib/sellfox/product-performance";
-import { productFromSellfoxApiRow, sellfoxProductUpsertData } from "@/lib/sellfox/product-records";
-import { workspaceScopeFromRequest, type WorkspaceScopeInput } from "@/lib/workspace/scope";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
 type RecordLike = Record<string, unknown>;
-type SyncResource = "stores" | "products" | "hourly" | "performance";
+type SyncResource = "stores" | "hourly" | "performance";
 
 function parseOptionalNumber(value: unknown) {
   const number = Number(value);
@@ -89,45 +87,6 @@ async function syncStores(organizationId: string, workspaceId: string) {
   return synced;
 }
 
-async function syncProducts(organizationId: string, userId: string, scope: WorkspaceScopeInput) {
-  let synced = 0;
-  const pageSize = 100;
-
-  for (let pageNo = 1; pageNo <= 1_000; pageNo += 1) {
-    const payload = await sellfoxPost<unknown>("/api/order/api/product/v2/pageList.json", { pageNo, pageSize, onlineStatusList: ["active"] });
-    const rows = recordsFrom(payload);
-
-    for (const row of rows) {
-      const product = productFromSellfoxApiRow(row);
-      if (!product) continue;
-
-      const recordData = sellfoxProductUpsertData(product, { id: userId }, scope);
-      const index = buildProductRecordIndex(product);
-      await prisma.sellfoxProductRecord.upsert({
-        where: { organizationId_workspaceId_sku: { organizationId, workspaceId: scope.workspaceId, sku: product.sku } },
-        create: {
-          id: product.id,
-          organizationId,
-          sku: product.sku,
-          ...recordData,
-          ...index,
-          payload: { ...product, sellfoxPayload: row } as Prisma.InputJsonValue,
-        },
-      update: {
-        ...recordData,
-        ...index,
-        payload: { ...product, sellfoxPayload: row } as Prisma.InputJsonValue,
-      },
-      });
-      synced += 1;
-    }
-
-    if (rows.length < pageSize) break;
-  }
-
-  return synced;
-}
-
 async function syncHourly(organizationId: string, workspaceId: string, storeOffset: number, storeLimit: number) {
   const stores = await prisma.sellfoxStore.findMany({
     where: { organizationId, workspaceId },
@@ -192,7 +151,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as { resource?: SyncResource; storeOffset?: unknown; storeLimit?: unknown; storeExternalId?: unknown; reportDate?: unknown };
   const resource = body.resource;
-  if (!resource || !["stores", "products", "hourly", "performance"].includes(resource)) {
+  if (!resource || !["stores", "hourly", "performance"].includes(resource)) {
     return NextResponse.json({ error: "请选择同步资源。" }, { status: 400 });
   }
 
@@ -223,9 +182,7 @@ export async function POST(request: Request) {
       performance?.synced ??
       (resource === "stores"
         ? await syncStores(permission.user.organizationId, scope.workspaceId)
-        : resource === "products"
-          ? await syncProducts(permission.user.organizationId, permission.user.id, scope)
-          : await syncHourly(permission.user.organizationId, scope.workspaceId, storeOffset, storeLimit));
+        : await syncHourly(permission.user.organizationId, scope.workspaceId, storeOffset, storeLimit));
     const summary = resource === "performance" ? { count, reportDate: performance?.reportDate, storeCount: performance?.storeCount } : resource === "hourly" ? { count, storeOffset, storeLimit } : { count };
     await prisma.sellfoxSyncRun.update({ where: { id: run.id }, data: { status: "done", summary, finishedAt: new Date() } });
     return NextResponse.json({ runId: run.id, ...summary });

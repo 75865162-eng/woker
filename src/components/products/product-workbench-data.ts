@@ -1,6 +1,7 @@
 import type { Product, ProductImageAsset, ProductListItem } from "@/lib/products/types";
 import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
+import { getProductListImage, safeProductImageUrl } from "@/lib/products/image-assets";
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
 import {
   emptySize,
@@ -443,7 +444,7 @@ export function productToDraft(product: Product | null, products: Array<Pick<Pro
       ...product,
       cancelReason: product.cancelReason ?? "",
       conclusionExcelFile: product.conclusionExcelFile,
-      images: imageAssets.map((asset) => asset.thumbUrl),
+      images: imageAssets.map((asset) => getProductListImage({ imageAssets: [asset] })).filter(Boolean),
       imageAssets,
       competitorAsins: competitorAsins.length ? competitorAsins : [""],
       opsAssignees: normalizeAssigneeList(product.opsAssignee, product.opsAssignees),
@@ -495,7 +496,7 @@ function normalizeProductImageAssets(product: Product): ProductImageAsset[] {
   const assets = Array.isArray(product.imageAssets) ? product.imageAssets : [];
   if (assets.length) {
     return assets.map((asset, index) => ({
-      id: asset.id || `${product.sku}-image-${index + 1}`,
+      id: asset.id || `product-image-${product.sku || "unknown"}-${index + 1}`,
       name: asset.name || `${product.sku}-${index + 1}`,
       mimeType: asset.mimeType || "image/jpeg",
       size: asset.size || 0,
@@ -503,10 +504,28 @@ function normalizeProductImageAssets(product: Product): ProductImageAsset[] {
       uploadedAt: asset.uploadedAt || product.createdAt || "",
       thumbUrl: asset.thumbUrl || asset.originalUrl || "",
       originalUrl: asset.originalUrl || asset.thumbUrl || "",
+      ...(asset.thumbFileId ? { thumbFileId: asset.thumbFileId } : {}),
+      ...(asset.downloadUrl ? { downloadUrl: asset.downloadUrl } : {}),
     }));
   }
 
-  return [];
+  return (Array.isArray(product.images) ? product.images : [])
+    .map((image, index): ProductImageAsset | null => {
+      const url = safeProductImageUrl(image);
+      return url
+        ? {
+            id: `product-image-${product.sku || "unknown"}-${index + 1}`,
+            name: `${product.sku || "product"}-${index + 1}`,
+            mimeType: "image/jpeg",
+            size: 0,
+            storageType: "local" as const,
+            uploadedAt: product.createdAt || "",
+            thumbUrl: url,
+            originalUrl: url,
+          }
+        : null;
+    })
+    .filter((asset): asset is ProductImageAsset => Boolean(asset));
 }
 
 export function hydrateProductFromExcelSeed(product: Product): Product {
@@ -594,7 +613,7 @@ function normalizeImageAsset(asset: ProductImageAsset | undefined, fallbackImage
     : thumbUrl || fallbackImage.trim();
 
   return {
-    id: asset?.id || `product-image-${nameSuffix}`,
+      id: asset?.id || `product-image-${nameSuffix}`,
     name: asset?.name || `product-image-${nameSuffix}`,
     mimeType: asset?.mimeType || "image/jpeg",
     size: asset?.size || 0,

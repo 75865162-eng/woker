@@ -1,24 +1,23 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getProductRecordSource, normalizeProductStatus, type ProductListSource } from "@/lib/products/list-query";
+import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
+import { normalizeProductStatus, type ProductListSource } from "@/lib/products/list-query";
 import type { Product, ProductListSummary } from "@/lib/products/types";
 
 type ProductListSummarySource = Partial<Pick<Product, "id" | "note" | "status" | "workflowDueAt" | "createdAt" | "operationsProgress">> & {
   source?: string | null;
+  operationsProgressIncomplete?: boolean;
 };
+type ProductListSummaryDbClient = Prisma.TransactionClient | PrismaClient;
 
 export type ProductListSummaryBundle = Record<ProductListSource, ProductListSummary>;
 
-const summarySources: ProductListSource[] = ["all", "dashboard", "sellfox"];
+const summarySources: ProductListSource[] = ["all", "dashboard"];
 const closedStatuses = new Set(["listed", "canceled", "delisted", "patent_risk"]);
 const overdueLookbackDays = 3;
 
 function isDevelopmentPhase(status: string) {
   return status === "pending" || status === "developing";
-}
-
-function isListingConfirming(status: string) {
-  return status === "listing_confirming";
 }
 
 function createEmptyProductListSummary(): ProductListSummary {
@@ -37,12 +36,7 @@ function createEmptyProductListSummaryBundle(): ProductListSummaryBundle {
   return {
     all: { ...empty },
     dashboard: { ...empty },
-    sellfox: { ...empty },
   };
-}
-
-function isSellfoxProductRecord(product: Pick<ProductListSummarySource, "id" | "note">) {
-  return getProductRecordSource(product) === "sellfox";
 }
 
 function isOverdue(product: ProductListSummarySource, status: string, now = new Date()) {
@@ -67,13 +61,15 @@ export function createProductListSummaryContribution(product: ProductListSummary
   }
 
   const status = normalizeProductStatus(product.status ?? "");
+  const operationsProgressIncomplete = product.operationsProgressIncomplete
+    ?? hasIncompleteOperationsProgress(product.operationsProgress);
 
   return {
     total: 1,
     developing: isDevelopmentPhase(status) ? 1 : 0,
     opsReview: status === "ops_review" ? 1 : 0,
     designInProgress: status === "design_in_progress" ? 1 : 0,
-    operationsProgress: isListingConfirming(status) ? 1 : 0,
+    operationsProgress: operationsProgressIncomplete ? 1 : 0,
     overdue: isOverdue(product, status, now) ? 1 : 0,
   };
 }
@@ -106,14 +102,6 @@ export function getProductListSummarySourceContribution(
   now = new Date(),
 ) {
   if (!product) {
-    return createEmptyProductListSummary();
-  }
-
-  const isSellfox = isSellfoxProductRecord(product);
-  if (source === "dashboard" && isSellfox) {
-    return createEmptyProductListSummary();
-  }
-  if (source === "sellfox" && !isSellfox) {
     return createEmptyProductListSummary();
   }
 
@@ -165,7 +153,7 @@ function toProductListSummaryBundle(rows: Array<{
   const bundle = createEmptyProductListSummaryBundle();
 
   for (const row of rows) {
-    if (row.source === "all" || row.source === "dashboard" || row.source === "sellfox") {
+    if (row.source === "all" || row.source === "dashboard") {
       const source = row.source as ProductListSource;
       bundle[source] = mapSummaryRecord(row);
     }
@@ -204,19 +192,21 @@ async function readProductListSummaryBundleFromTable(input: {
   return toProductListSummaryBundle(rows);
 }
 
-async function rebuildProductListSummaryBundleFromProducts(input: {
+async function rebuildProductListSummaryBundleFromProducts(
+  client: ProductListSummaryDbClient,
+  input: {
   organizationId: string;
   workspaceId: string;
-}): Promise<ProductListSummaryBundle> {
-  const [row] = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+  },
+): Promise<ProductListSummaryBundle> {
+  const [row] = await client.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
     WITH scoped_products AS (
       SELECT
         status,
         "source",
         "workflowDueAt",
         "createdAt",
-        "operationsProgressIncomplete",
-        ("source" = 'sellfox') AS is_sellfox
+        "operationsProgressIncomplete"
       FROM "ProductRecord"
       WHERE "organizationId" = ${input.organizationId}
         AND "workspaceId" = ${input.workspaceId}
@@ -226,7 +216,7 @@ async function rebuildProductListSummaryBundleFromProducts(input: {
       COUNT(*) FILTER (WHERE status IN ('pending', 'developing'))::int AS "allDeveloping",
       COUNT(*) FILTER (WHERE status = 'ops_review')::int AS "allOpsReview",
       COUNT(*) FILTER (WHERE status = 'design_in_progress')::int AS "allDesignInProgress",
-      COUNT(*) FILTER (WHERE status = 'listing_confirming')::int AS "allOperationsProgress",
+      COUNT(*) FILTER (WHERE "operationsProgressIncomplete" = true)::int AS "allOperationsProgress",
       COUNT(*) FILTER (
         WHERE status NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')
           AND (
@@ -234,32 +224,18 @@ async function rebuildProductListSummaryBundleFromProducts(input: {
             OR ("workflowDueAt" IS NULL AND "createdAt" < NOW() - INTERVAL '3 days')
           )
       )::int AS "allOverdue",
-      COUNT(*) FILTER (WHERE NOT is_sellfox)::int AS "dashboardTotal",
-      COUNT(*) FILTER (WHERE NOT is_sellfox AND status IN ('pending', 'developing'))::int AS "dashboardDeveloping",
-      COUNT(*) FILTER (WHERE NOT is_sellfox AND status = 'ops_review')::int AS "dashboardOpsReview",
-      COUNT(*) FILTER (WHERE NOT is_sellfox AND status = 'design_in_progress')::int AS "dashboardDesignInProgress",
-      COUNT(*) FILTER (WHERE NOT is_sellfox AND status = 'listing_confirming')::int AS "dashboardOperationsProgress",
+      COUNT(*)::int AS "dashboardTotal",
+      COUNT(*) FILTER (WHERE status IN ('pending', 'developing'))::int AS "dashboardDeveloping",
+      COUNT(*) FILTER (WHERE status = 'ops_review')::int AS "dashboardOpsReview",
+      COUNT(*) FILTER (WHERE status = 'design_in_progress')::int AS "dashboardDesignInProgress",
+      COUNT(*) FILTER (WHERE "operationsProgressIncomplete" = true)::int AS "dashboardOperationsProgress",
       COUNT(*) FILTER (
-        WHERE NOT is_sellfox
-          AND status NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')
+        WHERE status NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')
           AND (
             ("workflowDueAt" IS NOT NULL AND "workflowDueAt" < NOW())
             OR ("workflowDueAt" IS NULL AND "createdAt" < NOW() - INTERVAL '3 days')
           )
-      )::int AS "dashboardOverdue",
-      COUNT(*) FILTER (WHERE is_sellfox)::int AS "sellfoxTotal",
-      COUNT(*) FILTER (WHERE is_sellfox AND status IN ('pending', 'developing'))::int AS "sellfoxDeveloping",
-      COUNT(*) FILTER (WHERE is_sellfox AND status = 'ops_review')::int AS "sellfoxOpsReview",
-      COUNT(*) FILTER (WHERE is_sellfox AND status = 'design_in_progress')::int AS "sellfoxDesignInProgress",
-      COUNT(*) FILTER (WHERE is_sellfox AND status = 'listing_confirming')::int AS "sellfoxOperationsProgress",
-      COUNT(*) FILTER (
-        WHERE is_sellfox
-          AND status NOT IN ('listed', 'canceled', 'delisted', 'patent_risk')
-          AND (
-            ("workflowDueAt" IS NOT NULL AND "workflowDueAt" < NOW())
-            OR ("workflowDueAt" IS NULL AND "createdAt" < NOW() - INTERVAL '3 days')
-          )
-      )::int AS "sellfoxOverdue"
+      )::int AS "dashboardOverdue"
     FROM scoped_products
   `);
 
@@ -280,14 +256,6 @@ async function rebuildProductListSummaryBundleFromProducts(input: {
       toNumber(row?.dashboardOperationsProgress),
       toNumber(row?.dashboardOverdue),
     ),
-    sellfox: toSummary(
-      toNumber(row?.sellfoxTotal),
-      toNumber(row?.sellfoxDeveloping),
-      toNumber(row?.sellfoxOpsReview),
-      toNumber(row?.sellfoxDesignInProgress),
-      toNumber(row?.sellfoxOperationsProgress),
-      toNumber(row?.sellfoxOverdue),
-    ),
   };
 }
 
@@ -300,7 +268,7 @@ export async function loadProductListSummaryBundle(input: {
     return cached;
   }
 
-  const rebuilt = await rebuildProductListSummaryBundleFromProducts(input);
+  const rebuilt = await rebuildProductListSummaryBundleFromProducts(prisma, input);
   await upsertProductListSummaryBundle(prisma, input, rebuilt);
   return rebuilt;
 }
@@ -319,10 +287,6 @@ function summaryBundleDelta(input: {
     dashboard: subtractProductListSummaries(
       getProductListSummarySourceContribution(input.after ?? null, "dashboard", now),
       getProductListSummarySourceContribution(input.before ?? null, "dashboard", now),
-    ),
-    sellfox: subtractProductListSummaries(
-      getProductListSummarySourceContribution(input.after ?? null, "sellfox", now),
-      getProductListSummarySourceContribution(input.before ?? null, "sellfox", now),
     ),
   };
 }
@@ -410,9 +374,19 @@ export async function refreshProductListSummaryBundle(input: {
   organizationId: string;
   workspaceId: string;
 }) {
-  const rebuilt = await rebuildProductListSummaryBundleFromProducts(input);
-  await upsertProductListSummaryBundle(prisma, input, rebuilt);
-  return rebuilt;
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(
+          ${`${input.organizationId}:${input.workspaceId}:product-list-summary`},
+          0
+        )
+      )
+    `;
+    const rebuilt = await rebuildProductListSummaryBundleFromProducts(tx, input);
+    await upsertProductListSummaryBundle(tx, input, rebuilt);
+    return rebuilt;
+  });
 }
 
 export async function applyProductListSummaryChange(

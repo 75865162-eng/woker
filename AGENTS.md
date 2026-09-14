@@ -81,6 +81,8 @@ When introducing new functionality:
 - Listing AI：根据商品、关键词、广告数据和竞品信息生成 Listing 优化建议、图片计划和 A+ 模块建议。
 - Logistics：处理物流相关 Excel / PDF 模板、箱规、货件对比和导出。
 
+商品域路径边界以 `docs/product-domain-phase0.md` 为准：商品主数据只走 `ProductRecord → Transaction → Outbox → Projection → Read Model → API → UI`；已废弃的独立 Sellfox 商品资料和图片文案 Gallery 路径不得作为备用读写实现恢复。Sellfox 店铺、小时指标和产品表现快照属于报表数据，单独管理。
+
 ## 技术栈
 
 - Framework: Next.js `^15.5.19` App Router
@@ -113,6 +115,8 @@ npm run test
 npm run test:e2e
 npm run check
 npm run products:refresh-derived
+npm run products:repair-projections
+npm run products:scan-statuses
 ```
 
 脚本说明：
@@ -122,8 +126,11 @@ npm run products:refresh-derived
 - `npm run lint` 运行 ESLint flat config。
 - `npm run test` 运行不依赖数据库、外部服务或密钥的核心业务回归测试。
 - `npm run test:e2e` 使用 Playwright 模拟隔离测试账号完成登录、Bulk/Overall 上传、分组、规则运行、保存恢复和导出；必须设置 `E2E_TEST_EMAIL`、`E2E_TEST_PASSWORD`，可用 `E2E_BASE_URL` 指定测试环境。
+- `npm run check:fast` 运行核心测试、lint 和类型检查，适合每次小改动后的快速回归。
 - `npm run check` 依次运行测试、lint 和生产构建，适合作为每次更新后的完整本地健康检查。
 - `npm run products:refresh-derived` 刷新商品列表派生字段、重建商品摘要表并清理过期商品列表缓存；涉及商品状态、负责人、超期逻辑或生产定时维护时使用。
+- `npm run products:repair-projections` 以 `ProductRecord` 为事实源，分批重建 `ProductSummaryRecord` / `ProductTextRecord` 和列表汇总；只在人工维护或投影漂移排查时执行，不在服务启动时运行。
+- `npm run products:scan-statuses` 只读扫描 `ProductRecord.status` 是否属于产品状态枚举；发现非法状态时以退出码 2 结束，不自动修改数据。
 
 ## 目录地图
 
@@ -153,6 +160,7 @@ npm run products:refresh-derived
 - `src/data/`：mock data 和默认规则。
 - `src/workers/`：浏览器 worker，目前用于 Excel 解析。
 - `docs/`：PPC 工作台、数据模型、导出、规则、UI、物流等规格文档。
+- `docs/product-domain-simple-architecture-plan.md`：50 人 ERP 商品域简化架构、ProductRecord 直读、Outbox/Worker 和 Redis 旁路缓存迁移规划。
 - `public/logistics-templates/`：物流导出使用的模板文件。
 - `scripts/next-run.mjs`：为 Next dev/build 指定不同 distDir。
 

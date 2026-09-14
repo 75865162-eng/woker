@@ -21,7 +21,7 @@ import { nextAppVersionLabel, normalizeAppVersionLabel } from "@/lib/app-version
 import { getProductListImage } from "@/lib/products/image-assets";
 import { productToDraft } from "@/components/products/product-workbench-data";
 import { createProductShellFromListItem } from "@/components/products/product-workbench-data";
-import { nextSku } from "@/components/products/product-workbench-utils";
+import { buildAmazonLink, buildAmazonSearchLink, nextSku } from "@/components/products/product-workbench-utils";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
 import { normalizeWorkspaceScope, workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import type { CampaignGroup, PerformanceRow, Rule } from "@/lib/types";
@@ -253,10 +253,96 @@ test("product list shells preserve lightweight thumbnails for the table view", (
   assert.equal(getProductListImage(shell), "https://example.com/thumb.webp");
 });
 
+test("productToDraft preserves legacy image URLs without creating fake file downloads", () => {
+  const product = {
+    id: "prod-1",
+    sku: "SKU-1",
+    chineseName: "Test",
+    englishName: "",
+    asin: "",
+    developer: "",
+    purchasePrice: 0,
+    status: "pending",
+    supplierName: "",
+    supplierUrl: "",
+    specs: "",
+    purchaseLeadTime: "",
+    createdAt: "2026-09-02T00:00:00.000Z",
+    keywords: "",
+    note: "",
+    cancelReason: "",
+    hsCode: "",
+    images: [],
+    imageAssets: [{
+      id: "",
+      name: "legacy.png",
+      mimeType: "image/png",
+      size: 0,
+      storageType: "local",
+      uploadedAt: "",
+      thumbUrl: "",
+      originalUrl: "https://example.com/legacy.png",
+    }],
+    competitorAsins: [],
+    productWeightG: 0,
+    packageWeightG: 0,
+    productSizeCm: { length: 0, width: 0, height: 0 },
+    packageSizeCm: { length: 0, width: 0, height: 0 },
+  } as Product;
+
+  const draft = productToDraft(product, []);
+
+  assert.deepEqual(draft.images, ["https://example.com/legacy.png"]);
+  assert.equal(draft.imageAssets?.[0]?.id, "product-image-SKU-1-1");
+  assert.equal(getProductListImage({ imageAssets: draft.imageAssets }), "https://example.com/legacy.png");
+});
+
+test("productToDraft hydrates legacy image arrays into displayable image assets", () => {
+  const product = {
+    id: "prod-legacy",
+    sku: "SKU-LEGACY",
+    chineseName: "Legacy",
+    englishName: "",
+    asin: "",
+    developer: "",
+    purchasePrice: 0,
+    status: "pending",
+    supplierName: "",
+    supplierUrl: "",
+    specs: "",
+    purchaseLeadTime: "",
+    createdAt: "2026-09-02T00:00:00.000Z",
+    keywords: "",
+    note: "",
+    cancelReason: "",
+    hsCode: "",
+    images: ["data:image/png;base64,legacy", "https://example.com/legacy-2.webp"],
+    competitorAsins: [],
+    productWeightG: 0,
+    packageWeightG: 0,
+    productSizeCm: { length: 0, width: 0, height: 0 },
+    packageSizeCm: { length: 0, width: 0, height: 0 },
+  } as Product;
+
+  const draft = productToDraft(product, []);
+
+  assert.equal(draft.imageAssets?.length, 1);
+  assert.equal(draft.imageAssets?.[0]?.thumbUrl, "https://example.com/legacy-2.webp");
+  assert.deepEqual(draft.images, ["https://example.com/legacy-2.webp"]);
+});
+
 test("nextSku uses the 0000-9999 range before switching to letter-prefixed SKUs", () => {
   assert.equal(nextSku([{ sku: "0000" }]), "0001");
   assert.equal(nextSku([{ sku: "9999" }]), "A001");
   assert.equal(nextSku([{ sku: "A999" }]), "B001");
+});
+
+test("Amazon link helpers tolerate missing legacy values", () => {
+  assert.equal(buildAmazonLink(undefined), "");
+  assert.equal(buildAmazonLink(null), "");
+  assert.equal(buildAmazonLink("  B0ABC  "), "https://www.amazon.com/dp/B0ABC");
+  assert.equal(buildAmazonSearchLink(undefined), "");
+  assert.equal(buildAmazonSearchLink("wireless keyboard"), "https://www.amazon.com/s?k=wireless%20keyboard");
 });
 
 test("app version labels normalize and increment sequentially", () => {

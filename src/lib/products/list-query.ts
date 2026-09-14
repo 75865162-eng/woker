@@ -2,8 +2,9 @@ import { Prisma } from "@prisma/client";
 import { hasIncompleteOperationsProgress } from "@/lib/products/operations-progress";
 import type { Product, ProductListItem, ProductListSummary, ProductStatus, ProductWorkflowStage } from "@/lib/products/types";
 import { getCurrentWorkflowAssignee, isProductWorkflowOverdue } from "@/lib/products/workflow";
+import { isProductStatus } from "@/lib/products/status-catalog";
 
-export type ProductListSource = "dashboard" | "sellfox" | "all";
+export type ProductListSource = "dashboard" | "all";
 
 export function splitMultiValue(value: string | null) {
   return (value ?? "")
@@ -12,18 +13,7 @@ export function splitMultiValue(value: string | null) {
     .filter(Boolean);
 }
 
-export const sellfoxProductSourceWhere: Prisma.ProductRecordWhereInput = {
-  source: "sellfox",
-};
-
-export function applyProductSourceFilter(where: Prisma.ProductRecordWhereInput, source?: ProductListSource | null) {
-  if (source === "sellfox") {
-    return {
-      ...where,
-      source: "sellfox",
-    };
-  }
-
+export function applyProductSourceFilter(where: Prisma.ProductSummaryRecordWhereInput, source?: ProductListSource | null) {
   if (source === "dashboard") {
     return {
       ...where,
@@ -34,11 +24,7 @@ export function applyProductSourceFilter(where: Prisma.ProductRecordWhereInput, 
   return where;
 }
 
-export function getProductRecordSource(product: { id?: string | null; note?: string | null; source?: string | null }): Exclude<ProductListSource, "all"> {
-  if (product.source === "sellfox" || (product.id ?? "").toLowerCase().startsWith("sellfox-") || (product.note ?? "").toLowerCase().includes("赛狐在线产品 api")) {
-    return "sellfox";
-  }
-
+export function getProductRecordSource(): Exclude<ProductListSource, "all"> {
   return "dashboard";
 }
 
@@ -51,20 +37,7 @@ export function getProductRecordIsOverdue(product: Product) {
 }
 
 export function hasStandardProductStatus(value: string | null): value is ProductStatus {
-  return Boolean(
-    value &&
-      [
-        "pending",
-        "developing",
-        "ops_review",
-        "design_in_progress",
-        "listing_confirming",
-        "listed",
-        "canceled",
-        "delisted",
-        "patent_risk",
-      ].includes(value),
-  );
+  return Boolean(value && isProductStatus(value));
 }
 
 export function createProductListWhere(input: {
@@ -83,8 +56,8 @@ export function createProductListWhere(input: {
   maxPrice?: number;
 }) {
   const closedStatuses: ProductStatus[] = ["listed", "canceled", "delisted", "patent_risk"];
-  const and: Prisma.ProductRecordWhereInput[] = [];
-  const where: Prisma.ProductRecordWhereInput = {
+  const and: Prisma.ProductSummaryRecordWhereInput[] = [];
+  const where: Prisma.ProductSummaryRecordWhereInput = {
     organizationId: input.user.organizationId,
     workspaceId: input.workspaceId,
   };
@@ -93,7 +66,7 @@ export function createProductListWhere(input: {
     and.push({
       OR: [
         { sku: { contains: input.search, mode: "insensitive" } },
-        { id: { contains: input.search, mode: "insensitive" } },
+        { productRecordId: { contains: input.search, mode: "insensitive" } },
         { chineseName: { contains: input.search, mode: "insensitive" } },
         { englishName: { contains: input.search, mode: "insensitive" } },
       ],
@@ -102,9 +75,17 @@ export function createProductListWhere(input: {
 
   if (input.asin) where.asin = { contains: input.asin, mode: "insensitive" };
   if (input.supplierName) where.supplierName = { contains: input.supplierName, mode: "insensitive" };
-  if (input.opsAssignees.length) where.opsAssignee = { in: input.opsAssignees };
+  if (input.opsAssignees.length) {
+    and.push({
+      OR: input.opsAssignees.map((assignee) => ({ opsAssignee: { contains: assignee, mode: "insensitive" as const } })),
+    });
+  }
   if (input.selectionOwners.length) where.selectionOwner = { in: input.selectionOwners };
-  if (input.designerAssignees.length) where.designerAssignee = { in: input.designerAssignees };
+  if (input.designerAssignees.length) {
+    and.push({
+      OR: input.designerAssignees.map((assignee) => ({ designerAssignee: { contains: assignee, mode: "insensitive" as const } })),
+    });
+  }
   if (input.mySkuOwner) {
     and.push({
       OR: [

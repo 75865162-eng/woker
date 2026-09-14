@@ -14,6 +14,7 @@ import {
   ppcToolDefinitions,
 } from "@/lib/agent-platform/ppc";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
+import type { JsonValue } from "@/lib/agent-platform/types";
 import type { CampaignGroup, OverallAdDataRow, PerformanceRow } from "@/lib/types";
 
 const campaignGroups: CampaignGroup[] = [
@@ -239,7 +240,7 @@ test("amazon ads adapter plans safely and blocks apply without approval", async 
     context: {},
     toolId: "amazon.ads.recommendation.apply",
     input: {
-      plan: (planResult.output as Record<string, unknown>).plan,
+      plan: (planResult.output as Record<string, unknown>).plan as JsonValue,
     },
   });
 
@@ -268,7 +269,7 @@ test("amazon ads adapter plans safely and blocks apply without approval", async 
     context: {},
     toolId: "amazon.ads.recommendation.apply",
     input: {
-      plan: (planResult.output as Record<string, unknown>).plan,
+      plan: (planResult.output as Record<string, unknown>).plan as JsonValue,
     },
     approval,
   });

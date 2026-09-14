@@ -10,6 +10,8 @@ import {
   listingEvaluationCases,
   listingToolDefinitions,
 } from "@/lib/agent-platform/listing";
+import type { ProductDevelopmentReport } from "@/lib/agent-platform/product";
+import type { JsonValue } from "@/lib/agent-platform/types";
 
 test("listing agent has a full tool surface and evaluation cases", () => {
   assert.equal(listingToolDefinitions.length, 7);
@@ -63,10 +65,9 @@ test("listing agent runtime turns product and keyword evidence into a listing dr
       executionConfidence: 78,
     },
     evidence: [],
-    summary: "Portable desk organizer product report",
     recommendation: "Proceed",
     generatedAt: "2026-09-03T00:00:00.000Z",
-  };
+  } as unknown as ProductDevelopmentReport;
 
   const result = await runtime.run({
     agentId: listingAgentDefinition.id,
@@ -98,7 +99,7 @@ test("listing agent runtime turns product and keyword evidence into a listing dr
         { name: "Competitor A", weakness: "Generic title", opportunity: "Sharper keyword hierarchy" },
         { name: "Competitor B", weakness: "Weak benefits", opportunity: "Conversion-led bullets" },
       ],
-    },
+    } as unknown as JsonValue,
     requestedByUserId: "user-listing",
     workspaceId: "default",
     accountId: "",

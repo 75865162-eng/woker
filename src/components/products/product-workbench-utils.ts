@@ -160,12 +160,12 @@ export function formatDateTime(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-export function buildAmazonLink(asin: string) {
-  const normalized = asin.trim();
+export function buildAmazonLink(asin?: string | null) {
+  const normalized = typeof asin === "string" ? asin.trim() : "";
   return normalized ? `https://www.amazon.com/dp/${encodeURIComponent(normalized)}` : "";
 }
 
-export function buildAmazonSearchLink(keyword: string) {
-  const normalized = keyword.trim();
+export function buildAmazonSearchLink(keyword?: string | null) {
+  const normalized = typeof keyword === "string" ? keyword.trim() : "";
   return normalized ? `https://www.amazon.com/s?k=${encodeURIComponent(normalized)}` : "";
 }

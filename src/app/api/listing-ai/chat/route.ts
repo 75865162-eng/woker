@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { generateListingAiChatReply, type ListingAiChatRequest } from "@/lib/listing-ai/chat";
 import { generateListingAiImages, hydrateImagePreviews } from "@/lib/listing-ai/image-generation";
+import { resolveUserAiTextSettings } from "@/lib/server/user-ai-settings";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -63,8 +64,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ mode, images });
     }
 
+    const aiSettings = await resolveUserAiTextSettings(user, scope);
     const result = await generateListingAiChatReply({
       ...body,
+      aiSettings,
       referenceImages: await hydrateImagePreviews(
         referenceImages.map((image) => ({
           name: image.name,

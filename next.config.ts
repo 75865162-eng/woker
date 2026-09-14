@@ -5,12 +5,10 @@ const distDir = process.env.NEXT_DIST_DIR || ".next";
 
 const localOnlyTraceExcludes = [
   "**/.git/**/*",
-  "**/.next*/**/*",
   "**/tmp/**/*",
   "**/tools/**/*",
   "**/uploads/**/*",
   "**\\.git\\**\\*",
-  "**\\.next*\\**\\*",
   "**\\tmp\\**\\*",
   "**\\tools\\**\\*",
   "**\\uploads\\**\\*",

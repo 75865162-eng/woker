@@ -62,9 +62,14 @@ export function isSecureRequest(request: Request) {
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
 
-  if (!secret || secret === "change-this-local-secret-before-production") {
-    if (process.env.NODE_ENV === "production" && getAuthDriver() === "database") {
-      throw new Error("AUTH_SECRET must be set before production use.");
+  if (process.env.NODE_ENV === "production") {
+    if (
+      !secret
+      || secret === "change-this-local-secret-before-production"
+      || secret === "replace-with-a-random-secret-at-least-32-characters"
+      || secret.length < 32
+    ) {
+      throw new Error("AUTH_SECRET must be a non-placeholder value with at least 32 characters in production.");
     }
   }
 
@@ -121,6 +126,9 @@ async function getCurrentUserFromPayload(payload: SessionPayload): Promise<Curre
   }
 
   if (payload.driver === "local") {
+    if (getAuthDriver() !== "local") {
+      return undefined;
+    }
     return payload.localUser;
   }
 

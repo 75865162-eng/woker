@@ -127,6 +127,13 @@ export async function POST(request: Request) {
         throw error;
       }
 
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          { error: "数据库暂时不可用，请稍后重试。" },
+          { status: 503 },
+        );
+      }
+
       const configuredEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || "1").trim().toLowerCase();
       const configuredPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || "1";
 

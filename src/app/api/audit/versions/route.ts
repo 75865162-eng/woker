@@ -12,18 +12,17 @@ import {
 } from "@/lib/ai-settings";
 import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
+import { enqueueProductOutboxEvent } from "@/lib/queue";
 import {
-  getProductRecordCurrentOwner,
-  getProductRecordIsOverdue,
-  getProductRecordSource,
-  isProductOperationsProgressIncomplete,
-} from "@/lib/products/list-query";
-import {
+  invalidateProductListSummaryCaches,
   invalidateProductListResponseCaches,
-  updateCachedProductListSummariesForProductChange,
 } from "@/lib/products/product-list-cache";
-import { getProductWorkflowStage } from "@/lib/products/workflow";
-import { applyProductListSummaryChange } from "@/lib/products/product-list-summary";
+import {
+  findProductRecordBySku,
+  ProductRecordRevisionConflictError,
+} from "@/lib/products/product-record-repository";
+import { InvalidProductStatusError } from "@/lib/products/status-machine";
+import { saveProductAggregate } from "@/lib/products/product-aggregate-service";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
@@ -123,8 +122,9 @@ export async function POST(request: Request) {
     }
     const { user } = permission;
 
-    const body = (await request.json()) as { versionId?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
+    const body = (await request.json()) as { versionId?: unknown };
     const versionId = typeof body.versionId === "string" ? body.versionId : "";
+    const requestScope = workspaceScopeFromRequest(request);
 
     if (!versionId) {
       return NextResponse.json({ error: "Version id is required." }, { status: 400 });
@@ -134,6 +134,7 @@ export async function POST(request: Request) {
       where: {
         id: versionId,
         organizationId: user.organizationId,
+        workspaceId: requestScope.workspaceId,
       },
     });
 
@@ -145,103 +146,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This version type is audit-only and cannot be restored." }, { status: 400 });
     }
 
-    const scope = workspaceScopeFromRequest(request, {
-      workspaceId: body.workspaceId ?? version.workspaceId,
-      accountId: body.accountId ?? version.accountId,
-      marketplace: body.marketplace ?? version.marketplace,
-    });
+    const scope = {
+      workspaceId: version.workspaceId,
+      accountId: version.accountId,
+      marketplace: version.marketplace,
+    };
     const payload = toInputJsonValue(version.payload);
 
     if (version.entityType === "product") {
       const product = version.payload as unknown as Product;
-      let existingProduct: Partial<Product> | null | undefined;
+      let productOutboxEventId: string | undefined;
+      let projectionEventId: string | undefined;
 
       await prisma.$transaction(async (tx) => {
-        const existingRecord = await tx.productRecord.findUnique({
-          where: {
-            organizationId_workspaceId_sku: {
-              organizationId: user.organizationId,
-              workspaceId: scope.workspaceId,
-              sku: product.sku,
-            },
-          },
-          select: {
-            payload: true,
-          },
-        });
-        existingProduct = existingRecord?.payload as Partial<Product> | undefined;
-
-        await tx.productRecord.upsert({
-          where: {
-            organizationId_workspaceId_sku: {
-              organizationId: user.organizationId,
-              workspaceId: scope.workspaceId,
-              sku: product.sku,
-            },
-          },
-          create: {
-            id: product.id,
-            organizationId: user.organizationId,
-            userId: user.id,
-            workspaceId: scope.workspaceId,
-            accountId: scope.accountId,
-            marketplace: scope.marketplace,
-            sku: product.sku,
-            payload: product as unknown as Prisma.InputJsonValue,
-            chineseName: product.chineseName,
-            englishName: product.englishName,
-            asin: product.asin,
-            status: product.status,
-            source: getProductRecordSource(product),
-            supplierName: product.supplierName,
-            purchasePrice: product.purchasePrice,
-            selectionOwner: product.selectionOwner || product.developer || "",
-            opsAssignee: product.opsAssignee || "",
-            designerAssignee: product.designerAssignee || "",
-            currentOwner: getProductRecordCurrentOwner(product),
-            workflowStage: getProductWorkflowStage(product),
-            workflowDueAt: product.workflowDueAt ? new Date(product.workflowDueAt) : null,
-            isOverdue: getProductRecordIsOverdue(product),
-            operationsProgressIncomplete: isProductOperationsProgressIncomplete(product),
-          },
-          update: {
-            userId: user.id,
-            accountId: scope.accountId,
-            marketplace: scope.marketplace,
-            payload: product as unknown as Prisma.InputJsonValue,
-            chineseName: product.chineseName,
-            englishName: product.englishName,
-            asin: product.asin,
-            status: product.status,
-            source: getProductRecordSource(product),
-            supplierName: product.supplierName,
-            purchasePrice: product.purchasePrice,
-            selectionOwner: product.selectionOwner || product.developer || "",
-            opsAssignee: product.opsAssignee || "",
-            designerAssignee: product.designerAssignee || "",
-            currentOwner: getProductRecordCurrentOwner(product),
-            workflowStage: getProductWorkflowStage(product),
-            workflowDueAt: product.workflowDueAt ? new Date(product.workflowDueAt) : null,
-            isOverdue: getProductRecordIsOverdue(product),
-            operationsProgressIncomplete: isProductOperationsProgressIncomplete(product),
-          },
-        });
-
-        await applyProductListSummaryChange(tx, {
+        const existingRecord = await findProductRecordBySku(tx, {
           organizationId: user.organizationId,
           workspaceId: scope.workspaceId,
-          before: existingProduct,
-          after: product,
+        }, product.sku);
+        const saved = await saveProductAggregate(tx, {
+          product: {
+            ...product,
+            id: existingRecord?.id ?? product.id,
+          },
+          user,
+          scope: { ...scope, organizationId: user.organizationId },
+          expectedRevision: existingRecord?.revision,
+          allowStatusRollback: true,
+          existingRecord,
+          eventType: "product_restored",
         });
+        productOutboxEventId = saved.outboxEventId;
+        projectionEventId = saved.projectionEventId;
+
       });
 
+      if (productOutboxEventId) {
+        await enqueueProductOutboxEvent(productOutboxEventId);
+      }
+      if (projectionEventId) {
+        await enqueueProductOutboxEvent(projectionEventId);
+      }
       await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`);
-      updateCachedProductListSummariesForProductChange({
-        organizationId: user.organizationId,
-        workspaceId: scope.workspaceId,
-        before: existingProduct,
-        after: product,
-      });
+      invalidateProductListSummaryCaches(`${user.organizationId}:${scope.workspaceId}:`);
     }
 
     if (version.entityType === "listing_ai_workspace" && isRecord(version.payload)) {
@@ -381,18 +327,29 @@ export async function POST(request: Request) {
       });
     }
 
-    await recordDataChangeVersion({
-      user,
-      entityType: version.entityType,
-      entityId: version.entityId,
-      action: `${version.entityType}_restore`,
-      summary: `恢复到版本 ${version.version}`,
-      payload,
-      scope,
-    });
+    if (version.entityType !== "product") {
+      await recordDataChangeVersion({
+        user,
+        entityType: version.entityType,
+        entityId: version.entityId,
+        action: `${version.entityType}_restore`,
+        summary: `恢复到版本 ${version.version}`,
+        payload,
+        scope,
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof ProductRecordRevisionConflictError) {
+      return NextResponse.json(
+        { error: error.message, conflict: true, currentRevision: error.currentRevision },
+        { status: 409 },
+      );
+    }
+    if (error instanceof InvalidProductStatusError) {
+      return NextResponse.json({ error: error.message, code: "INVALID_PRODUCT_STATUS_TRANSITION" }, { status: 400 });
+    }
     const message = error instanceof Error ? error.message : "Failed to restore version.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

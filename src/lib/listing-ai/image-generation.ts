@@ -410,7 +410,7 @@ export async function generateListingAiImages(
   if (!response.ok) {
     const errorText = await response.text();
     const imageModelHint = errorText.includes("images endpoint requires an image model")
-      ? "。当前生图配置使用了文本模型，请在 Settings 的生图预设里把模型改成图片模型，例如 gpt-image-2；gpt-5.4 / gpt-5.5 应放在系统配置用于 Title 和 AI Analysis"
+      ? "。当前生图配置使用了文本模型，请在 Settings 的生图预设里把模型改成图片模型，例如 gpt-image-2；gpt-5.5 应放在系统配置用于 Title 和 AI Analysis"
       : "";
     const endpointHint = errorText.includes("InvalidEndpointOrModel.NotFound")
       ? "。火山方舟提示模型或接入点不存在/无权限：请确认 Settings 里的模型 ID 是 doubao-seedream-5-0-lite-260128，或填写你在方舟控制台创建的推理接入点 Endpoint ID，并确认账号已开通该模型"

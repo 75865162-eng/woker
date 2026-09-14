@@ -11,7 +11,7 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 export const runtime = "nodejs";
 
 function createDownloadUrl(jobId: string) {
-  return `/api/files/${encodeURIComponent(jobId)}/download`;
+  return `/api/products/export/${encodeURIComponent(jobId)}/download`;
 }
 
 async function recordVersionSafely(input: Parameters<typeof recordDataChangeVersion>[0]) {

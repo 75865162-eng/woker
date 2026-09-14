@@ -99,3 +99,39 @@ test("lightweight image assets fall back to a protected file download when no th
   assert.equal(result.imageAssets?.[0]?.thumbUrl, "/api/products/file-assets/legacy-image-1/download");
   assert.equal(result.imageAssets?.[0]?.originalUrl, "");
 });
+
+test("lightweight image assets prefer the persisted thumbnail file reference", () => {
+  const result = toLightweightProduct({
+    id: "prod-3",
+    sku: "SKU-3",
+    chineseName: "旧商品",
+    englishName: "",
+    imageAssets: [{
+      id: "legacy-image-3",
+      thumbFileId: "legacy-thumb-3",
+      name: "legacy.png",
+      mimeType: "image/png",
+      size: 100,
+      storageType: "local",
+      uploadedAt: "",
+      thumbUrl: "",
+      originalUrl: "data:image/png;base64,legacy",
+    }],
+  } as unknown as Product);
+
+  assert.equal(result.imageAssets?.[0]?.thumbUrl, "/api/products/file-assets/legacy-thumb-3/download");
+  assert.equal(result.image, "/api/products/file-assets/legacy-thumb-3/download");
+});
+
+test("lightweight products preserve legacy non-data image arrays", () => {
+  const result = toLightweightProduct({
+    id: "prod-4",
+    sku: "SKU-4",
+    chineseName: "旧商品",
+    englishName: "",
+    images: ["data:image/png;base64,legacy", "https://example.com/legacy.webp"],
+  } as unknown as Product);
+
+  assert.deepEqual(result.images, ["https://example.com/legacy.webp"]);
+  assert.equal(result.image, "https://example.com/legacy.webp");
+});

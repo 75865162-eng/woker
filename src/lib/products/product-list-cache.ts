@@ -179,7 +179,7 @@ export function updateCachedProductListSummariesForProductChange(input: {
 }) {
   const now = new Date();
 
-  for (const source of ["all", "dashboard", "sellfox"] as const) {
+  for (const source of ["all", "dashboard"] as const) {
     const cacheKey = createProductListScopeKey({
       organizationId: input.organizationId,
       workspaceId: input.workspaceId,

@@ -391,7 +391,7 @@ export async function PUT(request: Request) {
     const result = await runRosterSaveTransaction(() =>
       prisma.$transaction(
         async (tx) => {
-          await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${user.organizationId} FOR UPDATE`;
+          await tx.$queryRaw<{ locked: number }[]>`SELECT 1::int AS "locked" FROM "Organization" WHERE id = ${user.organizationId} FOR UPDATE`;
 
           const currentMembers = (
             await tx.teamRosterMember.findMany({

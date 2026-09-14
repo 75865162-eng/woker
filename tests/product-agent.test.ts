@@ -10,6 +10,8 @@ import {
   productEvaluationCases,
   productToolDefinitions,
 } from "@/lib/agent-platform/product";
+import type { MarketResearchReport } from "@/lib/agent-platform/market";
+import type { JsonValue } from "@/lib/agent-platform/types";
 
 test("product agent has a full tool surface and evaluation cases", () => {
   assert.equal(productToolDefinitions.length, 6);
@@ -64,7 +66,7 @@ test("product agent runtime turns a market opportunity into a PRD and project dr
           category: "Home & Kitchen",
           summary: "Market report summary",
           productOpportunities: [marketOpportunity],
-        },
+        } as unknown as MarketResearchReport,
       },
     },
     input: {
@@ -78,8 +80,8 @@ test("product agent runtime turns a market opportunity into a PRD and project dr
         category: "Home & Kitchen",
         summary: "Market report summary",
         productOpportunities: [marketOpportunity],
-      },
-    },
+      } as unknown as MarketResearchReport,
+    } as unknown as JsonValue,
     requestedByUserId: "user-product",
     workspaceId: "default",
     accountId: "",
@@ -96,7 +98,7 @@ test("product agent runtime turns a market opportunity into a PRD and project dr
           category: "Home & Kitchen",
           summary: "Market report summary",
           productOpportunities: [marketOpportunity],
-        },
+        } as unknown as MarketResearchReport,
       },
       requestedByUserId: "user-product",
       clock,

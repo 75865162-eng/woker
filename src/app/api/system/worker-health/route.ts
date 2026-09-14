@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { getImageUpscaleJobQueue, getImportJobQueue, imageUpscaleJobQueueName, importJobQueueName } from "@/lib/queue/redis-queue";
+import { getProductOutboxHealth } from "@/lib/products/product-outbox";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
@@ -13,6 +15,7 @@ export async function GET(request: Request) {
       return permission.response;
     }
     const { user } = permission;
+    const workspaceId = workspaceScopeFromRequest(request).workspaceId;
 
     const driver = process.env.QUEUE_DRIVER ?? "inline";
     const queueCounts =
@@ -24,7 +27,7 @@ export async function GET(request: Request) {
         ? await getImageUpscaleJobQueue().getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused")
         : { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
     const heartbeatCutoff = new Date(Date.now() - 90_000);
-    const [heartbeats, imageWorkers, recentImageJobs, recentJobs] = await Promise.all([
+    const [heartbeats, imageWorkers, recentImageJobs, recentJobs, productHealth] = await Promise.all([
       process.env.DATABASE_URL
         ? prisma.workerHeartbeat.findMany({
             where: {
@@ -62,9 +65,15 @@ export async function GET(request: Request) {
             orderBy: {
               updatedAt: "desc",
             },
-            take: 20,
-          })
+          take: 20,
+        })
         : [],
+      process.env.DATABASE_URL
+        ? getProductOutboxHealth({
+            organizationId: user.organizationId,
+            workspaceId,
+          })
+        : null,
     ]);
 
     return NextResponse.json({
@@ -82,6 +91,7 @@ export async function GET(request: Request) {
       })),
       recentJobs,
       recentImageJobs,
+      productHealth,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load worker health.";

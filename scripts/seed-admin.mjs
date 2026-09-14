@@ -36,8 +36,14 @@ const organizationSlug = process.env.BOOTSTRAP_ORG_SLUG || slugify(organizationN
 const adminEmail = requiredEnv("BOOTSTRAP_ADMIN_EMAIL").trim().toLowerCase();
 const adminPassword = requiredEnv("BOOTSTRAP_ADMIN_PASSWORD");
 
-if (process.env.NODE_ENV === "production" && adminPassword.length < 10) {
-  throw new Error("BOOTSTRAP_ADMIN_PASSWORD must contain at least 10 characters in production.");
+if (
+  process.env.NODE_ENV === "production"
+  && (
+    adminPassword.length < 10
+    || adminPassword === "replace-with-a-strong-password"
+  )
+) {
+  throw new Error("BOOTSTRAP_ADMIN_PASSWORD must be a real password with at least 10 characters in production.");
 }
 
 const organization = await prisma.organization.upsert({

@@ -46,6 +46,33 @@ type WorkerHealthPayload = {
     updatedAt: string;
     originalName: string;
   }>;
+  productHealth?: {
+    outbox: {
+      queued: number;
+      running: number;
+      failed: number;
+      staleRunning: number;
+      oldestQueuedAt: string | null;
+      oldestRunningAt: string | null;
+      oldestFailedAt: string | null;
+    };
+    projections: {
+      pending: number;
+      processing: number;
+      failed: number;
+      staleFailures: number;
+      oldestFailedAt: string | null;
+    };
+    consistency: {
+      productRecords: number;
+      missingSummary: number;
+      staleSummary: number;
+      missingText: number;
+      staleText: number;
+      missingProjectionStates: number;
+    };
+    staleAfterMs: number;
+  } | null;
   error?: string;
 };
 
@@ -193,6 +220,62 @@ export function WorkerHealthPanel() {
               ))}
               {!data?.imageWorkers?.length ? <p className="mt-3 text-xs font-medium text-amber-700">图片 Worker 尚未上报心跳。</p> : null}
             </div>
+          </div>
+          <div className="rounded-md border border-border bg-white">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <p className="text-sm font-bold text-foreground">商品域一致性</p>
+              <Badge tone={(data?.productHealth?.projections.failed ?? 0) > 0 ? "red" : "green"}>
+                投影失败 {data?.productHealth?.projections.failed ?? 0}
+              </Badge>
+            </div>
+            {data?.productHealth ? (
+              <div className="grid grid-cols-2 gap-2 p-2.5 text-xs">
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">Outbox 待处理</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(data.productHealth.outbox.queued + data.productHealth.outbox.running).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    运行中 {data.productHealth.outbox.running} · 失败 {data.productHealth.outbox.failed}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">异常重试</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(data.productHealth.outbox.staleRunning + data.productHealth.projections.staleFailures).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    超时 Outbox · 投影失败
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">投影处理中</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(data.productHealth.projections.pending + data.productHealth.projections.processing).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    待开始 {data.productHealth.projections.pending} · 处理中 {data.productHealth.projections.processing}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">读模型漂移</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(
+                      data.productHealth.consistency.missingSummary
+                      + data.productHealth.consistency.staleSummary
+                      + data.productHealth.consistency.missingText
+                      + data.productHealth.consistency.staleText
+                      + data.productHealth.consistency.missingProjectionStates
+                    ).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    商品记录 {data.productHealth.consistency.productRecords.toLocaleString("zh-CN")} · 缺少投影状态 {data.productHealth.consistency.missingProjectionStates}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="p-3 text-xs font-medium text-muted">数据库未启用，暂无商品域健康数据。</p>
+            )}
           </div>
         </div>
       </CardContent>

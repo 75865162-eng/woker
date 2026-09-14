@@ -128,9 +128,9 @@
 - 列表分页和总数由后端接口返回，前端只做展示和局部缓存。
 - 点击商品会进入详情编辑，列表页只承担筛选和入口作用。
 - 缓存是按 workspaceId 分桶的，切换工作区不会把别的组数据串进来。
-- 图片处理链路是两层：当前页列表一次返回完整文字字段和缩略图，原图只在用户点击预览时按 `fileId` 请求。商品卡片和列表表格先读 `imageAssets[0].thumbUrl`，只有没有资产时才回退到旧的单图字段 `image`；初始商品 JSON 不返回原始图片内容或 Base64。
+- 图片处理链路是两层：当前页列表一次返回完整文字字段和缩略图，原图只在用户点击预览时按 `fileId` 请求。商品卡片和列表表格优先读当前 revision 的 `primaryImageUrl`，再回退到 `ProductRecord.payload.imageAssets[0].thumbUrl`、受权限保护的 `fileId` 下载地址和旧的单图字段 `image`；初始商品 JSON 不返回原始图片内容或 Base64。
 - 上传入口在详情页的图片区，走 `/api/products/image-assets/upload`。允许的文件类型是 JPG、PNG、WEBP、GIF、AVIF，单文件上限 10MB。服务端会先保留原始文件，再用 `sharp` 旋转校正、按 160x160 以内等比压缩、转成 WebP、质量 78，生成一张专门给列表和缩略图条使用的压缩图。
-- 商品详情中的图片、竞品图、备注图、运营进度证据和结论 Excel 都在选择文件时立即上传，商品记录只保存 `fileId` / `assetId` 和 URL 引用；正常保存商品时不得再次上传或迁移附件。极少数历史 Base64 附件会从保存请求中剥离并记录为待迁移，避免大对象阻塞商品保存。
+- 商品详情中的图片、竞品图、备注图、运营进度证据和结论 Excel 都在选择文件时立即上传，商品记录只保存 `fileId` / `assetId` 和 URL 引用；正常保存商品时不得再次上传或迁移附件。当前商品流程不保留历史 Base64 附件迁移入口。
 - 商品保存的同步边界只包含商品主记录、附件引用和必要状态；版本审计、流程通知和持久化列表缓存清理在商品事务成功后异步执行。保存按钮显示“保存中”并禁止重复提交。
 - 商品附件先进入 `temporary` 状态；商品保存事务会校验附件属于当前组织和工作区，并把当前引用绑定到 `ProductAttachmentBinding`，文件转为 `linked`。从商品移除的引用转为 `orphan`，超过 24 小时仍未绑定的临时附件由 worker 标记为孤儿，后续可接对象存储清理。
 - 商品保存使用 `ProductRecord.revision` 乐观锁。编辑页读取 revision，保存时必须携带原 revision；并发用户已经保存时返回 409，不允许静默覆盖。
@@ -289,23 +289,21 @@
 
 ### `/sellfox`
 
-- 布局：概览、商品列表、表现数据、同步操作。
-- 功能：Sellfox 店铺、商品、小时数据和绩效同步。
+- 布局：概览、表现数据、同步操作。
+- 功能：Sellfox 店铺、小时数据和绩效同步。
 - 属性：工作区/账号/站点 scope、店铺状态、同步状态。
 - 权限：`products` 模块权限。
-- 流程：读取概览 -> 选择 store -> 拉商品/绩效 -> 触发同步。
+- 流程：读取概览 -> 选择 store -> 拉绩效 -> 触发同步。
 - 上下级：产品域的外部数据接入页。
 - 能力边界：只同步和查看，不直接改 Amazon 原站数据。
 - 依赖：`/api/sellfox/*`、workspace scope headers、本地/后端产品数据。
 
 补充细节：
 
-- 这个页把 Sellfox 数据和 dashboard 产品主数据分成两套存储和展示，不会把两个系统的数据混在一起。
-- 页顶会先读概览，再读商品列表和产品表现；概览里会告诉你服务端凭据是否配置、店铺数量、商品数量、小时数据量和最近同步情况。
-- 同步按钮分四种：店铺、在线商品、产品表现、小时报告。每一种都独立触发，不会互相串联。
+- 这个页只管理 Sellfox 报表数据，不写入 dashboard 的 ProductRecord 商品主数据。
+- 页顶会先读概览，再读产品表现；概览里会告诉你服务端凭据是否配置、店铺数量、小时数据量和最近同步情况。
+- 同步按钮分三种：店铺、产品表现、小时报告。每一种都独立触发，不会互相串联。
 - 同步前必须先有服务端凭据，否则按钮直接禁用；页面也会显式提示要先在环境变量里配置 `SELLFOX_CLIENT_ID` 和 `SELLFOX_CLIENT_SECRET`。
-- 商品列表支持按 SKU、品名、ASIN 搜索，再叠加状态过滤；状态是产品状态，不是随便一个标签。
-- 商品表里的负责人字段会优先显示 selection owner，拿不到再回退 developer，说明这个页是围绕运营责任链读的。
 - 产品表现页支持按店铺、日期和关键词筛选，并提供当前筛选导出，适合按日快照看毛利和广告花费。
 - 右上角的导出其实是直接访问导出接口，不是先生成临时文件再弹下载。
 - 最近同步信息会显示资源、状态、开始时间和错误摘要，便于区分“没配好”和“同步失败”。
@@ -555,7 +553,7 @@
 
 补充细节：
 
-- 数据库状态卡会直接读真实计数，展示组织、账号、团队成员、workspace、商品、图片文案、文件对象、任务、导出、企业微信配置。
+- 数据库状态卡会直接读真实计数，展示组织、账号、团队成员、workspace、商品、文件对象、任务、导出、企业微信配置。
 - 它会额外指出仍留在本地草稿层的数据，比如 PPC workspace snapshot、Listing AI 历史、赛狐合并历史、物流本次处理状态。
 - 如果 `QUEUE_DRIVER=inline`，页面会明确提示任务是同步执行，不适合多人并发。
 - workspace 边界强调 `workspaceId + accountId + marketplace` 三元组，避免不同店铺串数。
@@ -842,7 +840,7 @@ Workspace 页的筛选主要靠四类条件：
 
 ### 9.5 产品管理代码链
 
-- `src/lib/products/list-query.ts`：`splitMultiValue` 处理多值筛选，`applyProductSourceFilter` 处理 dashboard / sellfox 来源过滤，`getProductRecordSource` 识别数据来源，`createProductListWhere` 生成 Prisma 查询条件，`createProductListItem` 负责把数据库记录压成列表行，`createProductListSummary` 负责汇总页头统计。
+- `src/lib/products/list-query.ts`：`splitMultiValue` 处理多值筛选，`applyProductSourceFilter` 处理 dashboard 来源过滤，`getProductRecordSource` 统一返回 ProductRecord 主数据来源，`createProductListWhere` 生成 Prisma 查询条件，`createProductListItem` 负责把数据库记录压成列表行，`createProductListSummary` 负责汇总页头统计。
 - `src/lib/products/workflow.ts`：`getProductWorkflowStage` 判断产品当前阶段，`getCurrentWorkflowAssignee` 找当前负责人，`normalizeAssigneeList` 和 `formatAssigneeList` 处理多负责人文本，`createWorkflowDueAt` 和 `isProductWorkflowOverdue` 处理 SLA，`buildWorkflowEvent` 和 `appendWorkflowEvent` 负责写流程历史。
 - `src/lib/products/operations-progress.ts`：`createEmptyOperationsProgress` 创建空运营进度，`normalizeOperationsProgress` 修复缺字段数据，`isOperationsProgressComplete` / `isOperationStageComplete` 判断是否完结，`summarizeOperationsProgressChanges` 生成变更摘要。
 - `src/lib/products/product-export-job.ts`：负责把产品列表筛选条件转换成导出任务 payload，并组装 CSV。
@@ -990,7 +988,7 @@ Workspace 页的筛选主要靠四类条件：
 - `/dashboard` 先通过 `.xlsx/.xls` 导入商品 workbook，再把 workbook 里的嵌入图片上传成独立资产并保存商品。页面内还有搜索、状态、负责人、价格等筛选输入，商品编辑表单，试算商品表单，版本恢复，图片 / 备注图批量上传，以及结论文件上传和视频方案入口。
 - `/listing-ai` 是多 tab 工作台。`标题描述` tab 维护产品名、ASIN、卖点、关键词和 prompt；`Images & A+` tab 负责竞品图、主图、补图、自己的六视图上传以及画廊样式；`AI Analysis`、`Listing`、`Image Plan` 主要消费前面输入；`对话` tab 处理文本消息和附件上传；`图片放大` tab 负责单图上传、放大倍数、图片类型和降噪强度。
 - `/logistics` 的输入分成 A / B / C / 赛狐 / PDF 五类文件槽位和一个物流模板下拉框。A 表上传后先做轻量解析，生成 C 表、对比表和 D 表时再按需补图片；B 表和赛狐模板只做模板识别；C 表做箱号回填；PDF 则按多文件批量解析、重命名、对比和发票生成。
-- `/sellfox` 没有文件上传，核心输入是商品搜索、状态筛选、店铺选择、报表日期和表现搜索词。同步按钮按资源类型分别拉取店铺、在线商品、小时报告和产品表现，再刷新概览和列表。
+- `/sellfox` 没有文件上传，核心输入是店铺选择、报表日期和表现搜索词。同步按钮按资源类型分别拉取店铺、小时报告和产品表现，再刷新概览和表现列表。
 - `/saihu-search-merge` 主页有两个文件输入，表 A 和表 B 选完后立即比较、合并并生成结果。支持 `.xlsx/.xls/.csv`。`/history` 历史页没有文件上传，只提供历史搜索、统计、下载和清理。
 - `/tasks` 只有状态筛选和文件名搜索，用来查看上传、解析、导出任务的状态、进度和失败原因；失败任务可以重试，完成任务可以下载结果。
 - `/versions` 只有实体类型下拉框和实体 ID 输入，用来查版本审计记录；支持恢复的实体类型才显示恢复按钮。
@@ -1028,7 +1026,7 @@ Workspace 页的筛选主要靠四类条件：
 - `readCachedProductWorkbench()` / `writeCachedProductWorkbench()` 负责整页缓存。
 - `fetchProducts()` 负责调 `/api/products`，支持分页、摘要和简版/全版详情。
 - `loadProductDetail()` 和 `prefetchProductDetail()` 负责按 SKU 拉单品详情。
-- 这个工作台的编辑区由 `TrialProductEditor`、`ProductEditor`、`ProductVersionModal`、`ProductImageCopyGalleryModal`、`ProductVideoPlanModal`、`ProductOperationsProgress` 等子组件拆开，分别对应试产草稿、正式产品、版本、图片文案、视频计划和运营进度。
+- 这个工作台的编辑区由 `TrialProductEditor`、`ProductEditor`、`ProductVersionModal`、`ProductVideoPlanModal`、`ProductOperationsProgress` 等子组件拆开，分别对应试产草稿、正式产品、版本、视频计划和运营进度。
 
 ### 14.2 物流工作台
 
@@ -1044,8 +1042,8 @@ Workspace 页的筛选主要靠四类条件：
 
 - `src/components/sellfox/sellfox-workbench.tsx`：Sellfox 是独立同步面板，不和 dashboard 主产品表混表。
 - `loadOverview()` 读 `/api/sellfox/overview`。
-- 商品列表通过 `/api/sellfox/products` 拉取，表现表通过 `/api/sellfox/performance` 拉取。
-- `sync(resource)` 统一触发 `/api/sellfox/sync` 的 stores / products / hourly / performance 四种同步。
+- 表现表通过 `/api/sellfox/performance` 拉取。
+- `sync(resource)` 统一触发 `/api/sellfox/sync` 的 stores / hourly / performance 三种同步。
 - 工作台内部会自动把当前 workspace scope 塞进请求头，确保同一账号切换 workspace 不串数。
 
 ### 14.4 账号工作台
@@ -1189,7 +1187,7 @@ Workspace 页的筛选主要靠四类条件：
 - 产品图片、Excel、PDF 和 CSV 单文件上限统一为 10 MB；缩略图只用于展示，超过上限不会静默压缩，而是在前端和服务端拒绝。
 - `/api/products/file-assets/upload` 会把商品备注、竞品图片/PDF 和运营进度附件先写入 storage，商品 payload 只保存文件元数据和 URL。
 - `/api/products?detail=full` 仅对当前分页返回完整文字字段、缩略图和附件元数据；服务端会移除 `data:`、`fileDataUrl`、原图 URL 和原始二进制，PDF/Excel 文件名和元数据先展示，点击后再通过下载接口按需读取。
-- 正常商品保存不会迁移旧版本的 `data:` Base64 图片或运营进度附件；保存请求会剥离这类历史内联数据并提示待迁移。旧附件应通过独立兼容迁移任务处理，避免再次把大段 Base64 放进 `/api/products` JSON 请求。
+- 正常商品保存只接受当前附件引用，不执行旧版本 `data:` Base64 图片或运营进度附件迁移；商品流程不再为这类历史内联数据提供兼容入口。
 - `/api/products/video-assets/upload` 会上传视频或图片素材，图片会转 WebP，非图片则原样存储。
 - `/api/products/conclusion-files/upload` 只接收结论 Excel，返回下载地址，不直接解析文件内容。
 - `/api/ai-settings` 会自动创建默认 profile pair，保存时会同步文本配置、图片配置和 profiles。
@@ -1206,7 +1204,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/components/products/product-workbook-detail-sections.tsx`：负责详情页里的利润试算、竞品分析、供应商报价、改进方案、关键词和备注区，是产品 workbook 的编辑区。
 - `src/components/products/product-workbench-fields.tsx`：封装产品页常用输入控件、只读指标、文本框、链接按钮，保证整页表单风格一致。
 - `src/components/products/product-operations-progress.tsx`：展示产品运营流程进度、阶段完成情况和过期状态，给产品状态一个可扫描的 SLA 视图。
-- `src/components/products/product-image-copy-gallery-modal.tsx`：用于复制和整理商品图片画廊素材，不承载主数据，只处理图片编排。
 - `src/components/products/product-video-plan-modal.tsx`：用于创建和编辑商品视频方案，是独立的创意计划弹窗。
 
 ### 17.7 Listing AI 页面工作台文件
@@ -1245,7 +1242,7 @@ Workspace 页的筛选主要靠四类条件：
 - `src/app/api/listing-ai/optimize/route.ts`、`src/app/api/listing-ai/chat/route.ts`、`src/app/api/listing-ai/chat-history/route.ts`、`src/app/api/listing-ai/generate-title/route.ts`、`src/app/api/listing-ai/generate-description/route.ts`、`src/app/api/listing-ai/generate-images/route.ts`、`src/app/api/listing-ai/workspace/route.ts`：Listing AI 的优化、对话、历史、标题、描述、图片和草稿保存。
 - `src/app/api/ai-settings/route.ts`、`src/app/api/ai-settings/test-chat/route.ts`、`src/app/api/integrations/sellersprite/route.ts`：AI 配置、连通性测试和 SellerSprite 集成。
 - `src/app/api/notifications/user/route.ts`、`src/app/api/notifications/wecom/route.ts`、`src/app/api/notifications/wecom/settings/route.ts`：站内通知、企业微信发送和企业微信配置。
-- `src/app/api/sellfox/overview/route.ts`、`src/app/api/sellfox/products/route.ts`、`src/app/api/sellfox/performance/route.ts`、`src/app/api/sellfox/performance/export/route.ts`、`src/app/api/sellfox/sync/route.ts`：Sellfox 概览、商品、表现、导出和同步。
+- `src/app/api/sellfox/overview/route.ts`、`src/app/api/sellfox/performance/route.ts`、`src/app/api/sellfox/performance/export/route.ts`、`src/app/api/sellfox/sync/route.ts`：Sellfox 概览、表现、导出和同步。
 - `src/app/api/jobs/route.ts`、`src/app/api/jobs/[id]/route.ts`、`src/app/api/jobs/[id]/retry/route.ts`：任务列表、任务详情和失败重试。
 - `src/app/api/accounts/team-members/route.ts`、`src/app/api/accounts/roles/route.ts`、`src/app/api/accounts/role-permissions/route.ts`：成员、角色和权限矩阵接口。
 - `src/app/api/agents/route.ts`、`src/app/api/agents/[agentId]/route.ts`、`src/app/api/agents/[agentId]/executions/route.ts`、`src/app/api/agents/orchestrator/route.ts`、`src/app/api/agents/orchestrator/executions/route.ts`、`src/app/api/agents/market/route.ts`、`src/app/api/agents/market/projects/route.ts`、`src/app/api/agents/market/executions/route.ts`、`src/app/api/agents/product/projects/route.ts`、`src/app/api/agents/product/executions/route.ts`、`src/app/api/agents/supplier/projects/route.ts`、`src/app/api/agents/listing/route.ts`、`src/app/api/agents/listing/projects/route.ts`、`src/app/api/agents/listing/executions/route.ts`、`src/app/api/agents/ppc/actions/route.ts`、`src/app/api/agents/ppc/executions/route.ts`、`src/app/api/agents/approvals/[approvalId]/route.ts`、`src/app/api/agents/tools/route.ts`、`src/app/api/agents/evaluations/route.ts`：Agent 平台中心、详情、执行、编排、项目、审批、工具和评测接口。
@@ -1266,10 +1263,9 @@ Workspace 页的筛选主要靠四类条件：
 
 ### 17.11 Sellfox、赛狐合并和任务页
 
-- `src/components/sellfox/sellfox-workbench.tsx`：Sellfox 独立同步台，负责店铺概览、商品列表、表现数据、分页、搜索和同步动作。
+- `src/components/sellfox/sellfox-workbench.tsx`：Sellfox 独立报表同步台，负责店铺概览、表现数据、分页、搜索和同步动作。
 - `src/lib/sellfox/client.ts`：Sellfox API 客户端封装，统一外部请求、鉴权和响应解析。
 - `src/lib/sellfox/performance-query.ts`：产品表现查询条件构造器，负责报表日期、店铺、搜索词和分页。
-- `src/lib/sellfox/product-records.ts`：Sellfox 商品记录映射与规整。
 - `src/lib/sellfox/product-performance.ts`：Sellfox 表现行的标准化与汇总。
 - `src/components/saihu-search-merge/saihu-search-merge-workbench.tsx`：赛狐搜索词合并主页面，负责上传、合并、预览、差异比对、导出和历史保存。
 - `src/components/saihu-search-merge/saihu-search-merge-history.tsx`：赛狐历史页，负责查看、下载和清空历史记录。
@@ -1306,7 +1302,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/lib/products/product-list-cache.ts`：产品列表前端缓存。
 - `src/lib/products/product-record-index.ts`：产品记录索引与查找。
 - `src/lib/products/image-assets.ts`：商品图片资产的保存和读取。
-- `src/lib/products/image-copy-gallery.ts`：商品图片文案画廊数据模型。
 - `src/lib/products/video-plan.ts`：商品视频方案数据模型与默认值。
 - `src/lib/products/product-export-job.ts`：产品导出任务构造。
 - `src/lib/products/operations-progress.ts`：产品流程进度判断和汇总。
@@ -1359,7 +1354,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/lib/products/image-assets.ts`：产品图片资产读取与关联辅助。
 - `src/lib/products/video-plan.ts`：产品视频方案的草稿模型和默认结构。
 - `src/lib/products/product-export-job.ts`：产品导出任务的 payload 组装与执行入口。
-- `src/lib/products/image-copy-gallery.ts`：商品图片文案画廊的数据模型与草稿结构。
 - `src/lib/listing-ai/workspace-draft.ts`：Listing AI 页面草稿总模型，定义输入、竞品、自有图、标题生成、描述生成、图片生成、历史和 tab 状态。
 - `src/lib/listing-ai/gallery-excel.ts`：Listing AI 的 Excel 画廊样式读写，负责红字、黄底、富文本和单元格样式互转。
 - `src/lib/listing-ai/image-generation.ts`：图片生成核心，负责把 assetId 水合成 data URL、拼 image generation 请求、抽取生成结果和创建派生资产。
@@ -1371,7 +1365,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/lib/listing-ai/image-assets.ts`：Listing AI 图片资产的存取与浏览器预览。
 - `src/lib/sellfox/client.ts`：Sellfox 外部 API 客户端。
 - `src/lib/sellfox/performance-query.ts`：Sellfox 表现查询参数与分页构造。
-- `src/lib/sellfox/product-records.ts`：Sellfox 商品记录映射。
 - `src/lib/sellfox/product-performance.ts`：Sellfox 表现行标准化与汇总。
 - `src/lib/saihu-search-merge/merge.ts`：赛狐搜索词合并、去重和 workbook 导出。
 - `src/lib/saihu-search-merge/diff.ts`：赛狐两表差异比对。
@@ -1450,9 +1443,9 @@ Workspace 页的筛选主要靠四类条件：
 - `src/app/api/accounts/team-members/route.ts`、`src/app/api/accounts/roles/route.ts`、`src/app/api/accounts/role-permissions/route.ts`：账号、角色和权限矩阵接口。
 - `src/app/api/products/route.ts`、`src/app/api/products/[sku]/route.ts`、`src/app/api/products/export/route.ts`：产品主数据列表、详情和导出接口。
 - `src/app/api/products/image-assets/upload/route.ts`、`src/app/api/products/video-assets/upload/route.ts`、`src/app/api/products/conclusion-files/upload/route.ts`、`src/app/api/products/conclusion-files/[id]/download/route.ts`：产品图片、视频和结论文件接口。
-- `src/app/api/products/[sku]/video-plan/route.ts`、`src/app/api/products/[sku]/image-copy-gallery/route.ts`：产品视频方案与图片文案画廊接口。
+- `src/app/api/products/[sku]/video-plan/route.ts`：产品视频方案接口。
 - `src/app/api/listing-ai/optimize/route.ts`、`src/app/api/listing-ai/chat/route.ts`、`src/app/api/listing-ai/chat-history/route.ts`、`src/app/api/listing-ai/generate-title/route.ts`、`src/app/api/listing-ai/generate-description/route.ts`、`src/app/api/listing-ai/generate-images/route.ts`、`src/app/api/listing-ai/workspace/route.ts`：Listing AI 优化、对话、历史、标题、描述、图片和草稿接口。
-- `src/app/api/sellfox/overview/route.ts`、`src/app/api/sellfox/products/route.ts`、`src/app/api/sellfox/performance/route.ts`、`src/app/api/sellfox/performance/export/route.ts`、`src/app/api/sellfox/sync/route.ts`：Sellfox 概览、商品、表现、导出和同步接口。
+- `src/app/api/sellfox/overview/route.ts`、`src/app/api/sellfox/performance/route.ts`、`src/app/api/sellfox/performance/export/route.ts`、`src/app/api/sellfox/sync/route.ts`：Sellfox 概览、表现、导出和同步接口。
 - `src/app/api/saihu-search-merge/history/route.ts`：赛狐历史读取接口。
 - `src/app/api/image-upscale/route.ts`：图片放大服务接口。
 - `src/app/api/agents/*`：Agent 中心、详情、执行、项目、审批、工具和评测接口，负责把 runtime、工具网关和审批闭环接起来。
@@ -1483,7 +1476,7 @@ Workspace 页的筛选主要靠四类条件：
 - `src/app/api/products/image-assets/upload/route.ts`：产品图片上传会同时存原图和压缩图，返回可用于列表和详情预览的 URL。
 - `src/app/api/products/video-assets/upload/route.ts`：视频资产上传会区分图片和非图片，图片会转 WebP。
 - `src/app/api/products/conclusion-files/upload/route.ts`：结论文件上传只负责文件落库和引用，不在这个接口里解析内容。
-- `src/app/api/products/[sku]/video-plan/route.ts` 和 `src/app/api/products/[sku]/image-copy-gallery/route.ts`：这两个接口分别承载视频计划和图片文案画廊草稿。
+- `src/app/api/products/[sku]/video-plan/route.ts`：承载视频计划草稿。
 - `src/app/api/listing-ai/workspace/route.ts`：Listing AI workspace 草稿会按 tab、图像资产、标题/描述/图片生成器和历史一起保存与恢复。
 - `src/app/api/listing-ai/chat-history/route.ts`：聊天历史按产品名或上下文分组，便于重载整包草稿。
 - `src/app/api/sellfox/sync/route.ts`：Sellfox 同步接口按 resource 单独拉取，不会互相串联。
@@ -1529,7 +1522,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/components/products/product-workbench-fields.tsx`：产品页输入原子件。它统一封装文本框、只读指标、链接按钮、数值输入和小型文本域，保证整页编辑态一致。
 - `src/components/products/product-workbench-shell.tsx`：产品页壳层。它承载筛选条、表格、活动日志和辅助弹窗，是列表浏览和编辑动作的入口。
 - `src/components/products/product-operations-progress.tsx`：产品运营进度条，负责把 workflow / operations progress 转成页面上的阶段提示。
-- `src/components/products/product-image-copy-gallery-modal.tsx`：图片文案画廊弹窗，负责图片与复制文案的组合预览和导出。
 - `src/components/products/product-video-plan-modal.tsx`：视频方案弹窗，负责把产品信息整理成可读的视频拍摄计划。
 - `src/components/accounts/account-workbench.tsx`：账号权限工作台。它负责账号列表、角色目录、权限矩阵、搜索、分页、导入导出、激活/停用/归档、角色分配以及乐观保存失败后的回滚。
 - `src/components/agents/agent-center-workbench.tsx`：Agent 中心总览。它拉取 `/api/agents`，展示工作流 Agent、编排器、AI 与 SellerSprite 运行态，以及当前未完成任务。
@@ -1606,11 +1598,11 @@ Workspace 页的筛选主要靠四类条件：
 
 - `src/lib/products/list-query.ts`：产品列表过滤器。它把搜索词、ASIN、负责人、价格、来源、状态和工作流状态翻译成 Prisma where 条件，并把 ProductRecord 规范化成列表项。
 - `src/lib/products/product-list-cache.ts`：产品列表缓存层。它负责内存缓存、数据库缓存、缓存 key、summary 更新、过期清理和按产品变更增量修正统计值。
-- `src/lib/products/product-list-summary.ts`：产品列表 summary 计算层。它按总量、开发中、运营审核、设计中、运营进度和超期等维度聚合，并区分 dashboard / sellfox / all 三个来源。
+- `src/lib/products/product-list-summary.ts`：产品列表 summary 计算层。它按总量、开发中、运营审核、设计中、运营进度和超期等维度聚合，并区分 dashboard / all 两个视图。
 - `src/lib/products/product-record-index.ts`、`src/lib/products/product-export-job.ts`：分别负责产品记录索引和产品导出任务标识，供查询和后台导出流程使用。
 - `src/lib/products/workflow.ts`：产品工作流引擎。它负责当前阶段、负责人、过期判断、阶段标签、阶段 tone、事件记录和 workflow due date 生成。
 - `src/lib/products/operations-progress.ts`：运营进度判定层。它把产品的运营任务完成度转成可展示的进度状态。
-- `src/lib/products/image-assets.ts`、`src/lib/products/image-copy-gallery.ts`、`src/lib/products/video-plan.ts`：分别负责产品图片资产、图片文案画廊和视频计划草稿的读写与展示数据。
+- `src/lib/products/image-assets.ts`、`src/lib/products/video-plan.ts`：分别负责产品图片资产和视频计划草稿的读写与展示数据。
 
 ### 17.29 账号、权限、认证和组织底座
 
@@ -1659,7 +1651,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/lib/server/ai-runtime.ts`：AI 运行时配置解析。它优先使用环境变量补全文本/图片模型配置，再交给 `normalizeAiSettings` 规范化，保证服务端和页面端读取到的模型参数一致。
 - `src/lib/notifications/wecom.ts`：企业微信通知规则。它负责 settings 归一化、发送记录归一化、webhook 校验、新品超期告警生成、Markdown 消息拼装和 sent record 写回。
 - `src/lib/products/image-assets.ts`：产品图片资产辅助层。它负责把展示图优先取缩略图、原图优先取 originalUrl，并在浏览器里把上传图片压成 WebP data URL。
-- `src/lib/products/image-copy-gallery.ts`：图片文案画廊草稿。它负责竞品列、自家图、标题、五点、A+ 要求和备注行的标准化。
 - `src/lib/products/video-plan.ts`：产品视频计划草稿。它负责视频参考、镜头表、道具表、背景音乐和制作备注的默认结构与归一化。
 - `src/app/api/products/route.ts`：产品列表接口的具体实现。它按 workspace scope、来源、搜索、状态、负责人、价格和工作流状态构建查询，同时支持 summary 读取、缓存命中和列表项标准化。
 - `src/app/api/listing-ai/workspace/route.ts`：Listing AI 草稿接口。它把输入、竞品、图片、标题生成器、描述生成器、图像生成器、active tab 和画廊样式整包保存/恢复，兼顾旧草稿字段迁移。
@@ -1672,12 +1663,12 @@ Workspace 页的筛选主要靠四类条件：
 - `src/app/api/products/file-assets/upload/route.ts`、`src/app/api/products/file-assets/[id]/download/route.ts`：产品通用附件的 10 MB 双重校验、storage 落盘、图片缩略图和权限下载。
 - `src/app/api/products/video-assets/upload/route.ts`：视频策划素材上传接口。图片会被压成 WebP，其他视频/音频则原样落存储，最后返回可用于视频方案草稿的 asset。
 - `src/app/api/products/conclusion-files/upload/route.ts`：结论 Excel 上传接口。它只负责落存储和创建文件元数据，不在这里解析内容，下载则走 `/api/products/conclusion-files/[id]/download`。
-- `src/app/api/sellfox/overview/route.ts`：Sellfox 概览接口。它读店铺、商品数、小时粒度指标数、最近同步时间和下一次小时同步偏移，供 Sellfox 页面展示同步态。
+- `src/app/api/sellfox/overview/route.ts`：Sellfox 概览接口。它读店铺、小时粒度指标数、最近同步时间和下一次小时同步偏移，供 Sellfox 页面展示同步态。
 - `src/app/api/sellfox/performance/route.ts`：Sellfox 表现接口。它按 page/pageSize 和筛选条件分页读取 `sellfoxProductDailySnapshot`，并回传聚合 summary。
-- `src/app/api/sellfox/sync/route.ts`：Sellfox 同步入口。它按 resource 分为 stores、products、hourly、performance 四条路径，分别 upsert 店铺、商品、小时指标和日表现，并把每次同步写入 sync run。
+- `src/app/api/sellfox/sync/route.ts`：Sellfox 同步入口。它按 resource 分为 stores、hourly、performance 三条路径，分别 upsert 店铺、小时指标和日表现，并把每次同步写入 sync run。
 - `src/app/api/saihu-search-merge/history/route.ts`：赛狐合并历史接口。`GET` 负责分页查询历史记录，`POST` 负责写入历史快照，`DELETE` 清理当前 workspace 下全部历史。
 - `src/app/api/listing-ai/generate-images/route.ts`：Listing AI 生图接口。它接收 image generation 请求体，结合当前 scope 调用模型，把返回的图片结果交给前端画廊和历史。
-- `src/lib/sellfox/performance-query.ts`、`src/lib/sellfox/product-records.ts`、`src/lib/sellfox/product-performance.ts`、`src/lib/sellfox/client.ts`：Sellfox 同步和查询的底层实现，分别负责查询条件、商品记录转换、日表现同步和外部 API 调用。
+- `src/lib/sellfox/performance-query.ts`、`src/lib/sellfox/product-performance.ts`、`src/lib/sellfox/client.ts`：Sellfox 报表同步和查询的底层实现，分别负责查询条件、日表现同步和外部 API 调用。
 - `src/lib/saihu-search-merge/diff.ts`、`src/lib/saihu-search-merge/merge.ts`、`src/lib/saihu-search-merge/history.ts`：赛狐搜索词合并的 diff、合并和历史记录底层。
 
 ### 17.34 工作流、权限和实用工具补充
@@ -1685,7 +1676,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/lib/products/workflow.ts`：产品工作流判定层。它负责 status 到 workflow stage 的映射、当前负责人计算、SLA 到期时间、workflow 事件构造和历史追加。
 - `src/lib/products/operations-progress.ts`：运营进度判定层。它负责阶段定义、证据要求、进度归一化、完成度检查、预估营收计算和变更摘要生成。
 - `src/lib/sellfox/performance-query.ts`：Sellfox 表现查询条件生成器。它把 query string 变成 Prisma where 输入，支持 store、日期和关键字筛选。
-- `src/lib/sellfox/product-records.ts`：Sellfox 商品记录转换层。它负责从 Sellfox API 行转产品主数据、判断旧记录、以及把产品回写为 Sellfox upsert 数据。
 - `src/lib/logistics/utils.ts`：物流通用工具。它负责 ID 生成、数字解析、文本归一化、Blob 下载、Zip 导出、指标格式化和 PDF 文件名元数据推断。
 - `src/lib/auth/api-permissions.ts`：API 权限守门层。它先读取当前用户，再按 organization 的角色权限矩阵判断是否允许访问模块动作，拒绝时直接返回 401/403 Response。
 - `src/lib/accounts/permissions.ts`：权限矩阵和动作判定的核心定义，所有 API 权限检查都依赖它。
@@ -1715,7 +1705,6 @@ Workspace 页的筛选主要靠四类条件：
 - `src/lib/products/workflow.ts`：产品工作流主逻辑。它把状态翻译成 workflow stage，计算当前负责人、SLA 到期时间、是否超期，以及如何把一次变更写成 workflow history event。
 - `src/lib/products/operations-progress.ts`：运营进度主逻辑。它定义具体阶段、阶段证据要求、完成判定、变更摘要和月营收估算，是运营进度页面和产品详情页的共同底座。
 - `src/lib/sellfox/performance-query.ts`：Sellfox 表现查询 where 生成器，只做 store/date/search 这几个核心筛选，供页面列表与导出复用。
-- `src/lib/sellfox/product-records.ts`：Sellfox 商品转换器，把 Sellfox API 返回的行变成系统内 Product，再把 Product 转回可 upsert 的数据库字段。
 - `src/lib/logistics/excel.ts`：物流 Excel 处理核心。它负责读写 A/B/C/Saihu/D 多种模板、解析图片、共享公式、箱号、包装数和模板宽高，是物流导入导出的真正规则引擎。A 表的最终发货数量只在这里解析一次，优先 `发货总数 / 总发货 / 最终发货`，再兜底精确 `发货`，然后作为 `totalShipment` 传给 B/C/D 写入和导出。
 - `src/lib/logistics/pdf.ts`：物流 PDF 处理核心。它先用 pdfjs 读页面文本，再在必要时解压 PDF stream 抽字符串，识别货件标题、仓库码、FBA 码、箱数和位置码。
 - `src/lib/logistics/jobs.ts`：物流任务入口。它把 A/B/C/Saihu/PDF 的 parse 和 build 整合成一组可直接调用的工作流函数，供页面和 API route 复用。
@@ -2583,7 +2572,6 @@ flowchart TD
 ### 35.4 sellfox
 
 - `GET /api/sellfox/overview`：读取总览。
-- `GET /api/sellfox/products`：读取商品列表。
 - `GET /api/sellfox/performance`：读取绩效列表。
 - `GET /api/sellfox/performance/export`：导出绩效文件。
 - `POST /api/sellfox/sync`：同步 Sellfox 数据。
@@ -2989,8 +2977,6 @@ WeCom 的低层规则：
 
 产品来源规则：
 
-- `source="sellfox"`
-- 或 `id` 以 `sellfox-` 开头
 - 或 note 里包含 `赛狐在线产品 api`
 
 ### 37.13 为什么要写到这么细
@@ -3759,12 +3745,6 @@ assetId 白名单是前面已经写过的 `assets/...` 规则。
 - `development_phase` 是 `pending` + `developing`
 - `overdue` 是“未关闭 + overdue 标记”
 - 其他标准状态才直接落到 `status`
-
-产品来源也有底层识别：
-
-- `source === "sellfox"`
-- 或 `id` 以 `sellfox-` 开头
-- 或 note 包含 `赛狐在线产品 api`
 
 ### 41.4 产品列表多值参数
 

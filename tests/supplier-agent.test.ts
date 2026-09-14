@@ -10,6 +10,8 @@ import {
   supplierEvaluationCases,
   supplierToolDefinitions,
 } from "@/lib/agent-platform/supplier";
+import type { ProductDevelopmentReport, ProductHandoffPayload } from "@/lib/agent-platform/product";
+import type { JsonValue } from "@/lib/agent-platform/types";
 
 test("supplier agent has a full tool surface and evaluation cases", () => {
   assert.equal(supplierToolDefinitions.length, 6);
@@ -61,7 +63,7 @@ test("supplier agent runtime turns a product plan into a sourcing report", async
     evidence: [],
     recommendation: "Review sourcing plan",
     generatedAt: "2026-09-02T00:00:00.000Z",
-  };
+  } as unknown as ProductDevelopmentReport;
 
   const result = await runtime.run({
     agentId: supplierAgentDefinition.id,
@@ -88,8 +90,8 @@ test("supplier agent runtime turns a product plan into a sourcing report", async
         category: "Home & Kitchen",
         productReport: report,
         prd: report.prd,
-      },
-    },
+      } as unknown as ProductHandoffPayload,
+    } as unknown as JsonValue,
     requestedByUserId: "user-supplier",
     workspaceId: "default",
     accountId: "",
@@ -106,7 +108,7 @@ test("supplier agent runtime turns a product plan into a sourcing report", async
           category: "Home & Kitchen",
           productReport: report,
           prd: report.prd,
-        },
+        } as unknown as ProductHandoffPayload,
       },
       requestedByUserId: "user-supplier",
       clock,

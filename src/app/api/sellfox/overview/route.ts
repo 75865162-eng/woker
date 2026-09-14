@@ -12,9 +12,8 @@ export async function GET(request: Request) {
 
     const scope = workspaceScopeFromRequest(request);
     const where = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
-    const [stores, productCount, hourlyCount, latestRun, latestHourlyRun, latestPerformanceRun, latestMetric] = await Promise.all([
+    const [stores, hourlyCount, latestRun, latestHourlyRun, latestPerformanceRun, latestMetric] = await Promise.all([
       prisma.sellfoxStore.findMany({ where, orderBy: { name: "asc" } }),
-      prisma.sellfoxProductRecord.count({ where }),
       prisma.sellfoxHourlyMetric.count({ where }),
       prisma.sellfoxSyncRun.findFirst({ where, orderBy: { startedAt: "desc" } }),
       prisma.sellfoxSyncRun.findFirst({ where: { ...where, resource: "hourly", status: "done" }, orderBy: { startedAt: "desc" } }),
@@ -25,7 +24,6 @@ export async function GET(request: Request) {
     return NextResponse.json({
       configured: Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET),
       stores,
-      productCount,
       hourlyCount,
       latestRun,
       latestPerformanceRun,

@@ -1,25 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Building2, ChevronLeft, ChevronRight, Database, Download, RefreshCw, Search, Store } from "lucide-react";
+import { AlertCircle, Building2, Database, Download, RefreshCw, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { Product, ProductStatus } from "@/lib/products/types";
 
 type Overview = {
   configured: boolean;
   stores: Array<{ id: string; externalId: string; name: string; marketplace: string; country: string; status: string; lastSyncedAt: string }>;
-  productCount: number;
   hourlyCount: number;
   latestMetricAt: string | null;
   nextHourlyStoreOffset: number;
   latestRun: { resource: string; status: string; startedAt: string; summary?: { count?: number } | null; error?: string | null } | null;
   latestPerformanceRun?: { resource: string; status: string; startedAt: string; summary?: { count?: number; reportDate?: string; storeCount?: number } | null; error?: string | null } | null;
-};
-
-type ProductPageData = {
-  products: Product[];
-  pagination: { page: number; pageSize: number; total: number; pageCount: number };
 };
 
 type PerformanceRow = {
@@ -51,19 +44,6 @@ type SelectedScope = {
 
 type BadgeTone = "blue" | "green" | "amber" | "red" | "gray";
 
-const statusTone: Record<string, "gray" | "blue" | "green" | "amber" | "red"> = {
-  pending: "gray",
-  developing: "blue",
-  ops_review: "amber",
-  design_in_progress: "blue",
-  listing_confirming: "amber",
-  listed: "green",
-  canceled: "red",
-  delisted: "red",
-  patent_risk: "red",
-};
-
-const emptyProductPagination = { page: 1, pageSize: 20, total: 0, pageCount: 1 };
 const workspaceScopeStorageKey = "amazon_bulk_ad_workspace_scope";
 
 function dateTime(value: string | null | undefined) {
@@ -76,10 +56,6 @@ function reportDateDefault() {
 
 function money(value: number, currency = "USD") {
   return new Intl.NumberFormat("zh-CN", { style: "currency", currency, maximumFractionDigits: 2 }).format(value || 0);
-}
-
-function productStatusBadge(product: Product) {
-  return { label: product.status || "未设置", tone: statusTone[product.status] ?? "gray" };
 }
 
 function readSelectedScope(): SelectedScope {
@@ -125,13 +101,7 @@ export function SellfoxWorkbench() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
-  const [working, setWorking] = useState<"stores" | "products" | "hourly" | "performance" | null>(null);
-  const [productSearch, setProductSearch] = useState("");
-  const [productStatus, setProductStatus] = useState<"all" | ProductStatus>("all");
-  const [productPage, setProductPage] = useState(1);
-  const [products, setProducts] = useState<ProductPageData>({ products: [], pagination: emptyProductPagination });
-  const [productsLoading, setProductsLoading] = useState(true);
-  const [productsError, setProductsError] = useState("");
+  const [working, setWorking] = useState<"stores" | "hourly" | "performance" | null>(null);
   const [reportDate, setReportDate] = useState(reportDateDefault);
   const [storeId, setStoreId] = useState("");
   const [performanceSearch, setPerformanceSearch] = useState("");
@@ -166,40 +136,6 @@ export function SellfoxWorkbench() {
   useEffect(() => {
     let canceled = false;
     const timer = window.setTimeout(async () => {
-      setProductsLoading(true);
-      setProductsError("");
-      try {
-        const params = new URLSearchParams({
-          page: String(productPage),
-          pageSize: "20",
-          search: productSearch.trim(),
-          source: "sellfox",
-        });
-        if (productStatus !== "all") params.set("status", productStatus);
-        const response = await fetch(`/api/sellfox/products?${params}`, withWorkspaceScope({ cache: "no-store" }));
-        const payload = (await response.json()) as ProductPageData & { error?: string };
-        if (!response.ok) throw new Error(payload.error || "读取 Sellfox 商品失败。");
-        if (!canceled) setProducts({ products: payload.products ?? [], pagination: payload.pagination ?? emptyProductPagination });
-      } catch (error) {
-        if (!canceled) setProductsError(error instanceof Error ? error.message : "读取 Sellfox 商品失败。");
-      } finally {
-        if (!canceled) setProductsLoading(false);
-      }
-    }, 250);
-
-    return () => {
-      canceled = true;
-      window.clearTimeout(timer);
-    };
-  }, [productPage, productSearch, productStatus]);
-
-  useEffect(() => {
-    setProductPage(1);
-  }, [productSearch, productStatus]);
-
-  useEffect(() => {
-    let canceled = false;
-    const timer = window.setTimeout(async () => {
       setPerformanceLoading(true);
       setPerformanceError("");
       try {
@@ -223,7 +159,7 @@ export function SellfoxWorkbench() {
     };
   }, [performanceSearch, reportDate, storeId]);
 
-  async function sync(resource: "stores" | "products" | "hourly" | "performance") {
+  async function sync(resource: "stores" | "hourly" | "performance") {
     setWorking(resource);
     setNotice("");
     try {
@@ -234,7 +170,7 @@ export function SellfoxWorkbench() {
       });
       const payload = (await response.json()) as { count?: number; error?: string };
       if (!response.ok) throw new Error(payload.error || "同步失败。");
-      setNotice(`${resource === "stores" ? "店铺" : resource === "products" ? "商品" : resource === "performance" ? "产品表现" : "小时报告"}同步完成：${payload.count ?? 0} 条记录。`);
+      setNotice(`${resource === "stores" ? "店铺" : resource === "performance" ? "产品表现" : "小时报告"}同步完成：${payload.count ?? 0} 条记录。`);
       await loadOverview();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "同步失败。");
@@ -255,7 +191,7 @@ export function SellfoxWorkbench() {
               <h2 className="text-base font-bold">Sellfox 独立同步台</h2>
               <Badge tone={configurationBadge.tone}>{configurationBadge.label}</Badge>
             </div>
-            <p className="mt-1 text-sm text-muted">Sellfox 店铺、在线商品与产品表现使用独立表，和 dashboard 产品主数据分开存放。</p>
+            <p className="mt-1 text-sm text-muted">Sellfox 仅保留店铺、广告小时指标与产品表现报表，不写入商品主数据。</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -266,10 +202,6 @@ export function SellfoxWorkbench() {
           <Button size="sm" onClick={() => void sync("stores")} disabled={!overview?.configured || Boolean(working)}>
             <Building2 className="h-4 w-4" />
             同步店铺
-          </Button>
-          <Button size="sm" onClick={() => void sync("products")} disabled={!overview?.configured || Boolean(working)}>
-            <Database className="h-4 w-4" />
-            同步在线商品
           </Button>
           <Button size="sm" onClick={() => void sync("performance")} disabled={!overview?.configured || Boolean(working)}>
             <Database className="h-4 w-4" />
@@ -297,114 +229,9 @@ export function SellfoxWorkbench() {
           <p className="mt-1 text-xs text-muted">按工作区隔离</p>
         </div>
         <div className="border border-border bg-white p-4">
-          <p className="text-xs font-semibold text-muted">在线商品</p>
-          <p className="mt-2 text-2xl font-bold metric-tabular">{overview?.productCount ?? 0}</p>
-          <p className="mt-1 text-xs text-muted">仅统计 Sellfox 独立表</p>
-        </div>
-        <div className="border border-border bg-white p-4">
           <p className="text-xs font-semibold text-muted">小时指标</p>
           <p className="mt-2 text-2xl font-bold metric-tabular">{overview?.hourlyCount ?? 0}</p>
           <p className="mt-1 text-xs text-muted">最近写入：{dateTime(overview?.latestMetricAt)}</p>
-        </div>
-      </section>
-
-      <section className="border border-border bg-white">
-        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h3 className="text-sm font-bold">在线商品</h3>
-            <p className="mt-1 text-xs text-muted">Sellfox 只读同步的商品资料。</p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_160px]">
-            <label className="relative block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input
-                value={productSearch}
-                onChange={(event) => setProductSearch(event.target.value)}
-                placeholder="搜索 SKU、品名或 ASIN"
-                className="h-9 w-full min-w-0 border border-border bg-white pl-9 pr-3 text-sm outline-none focus:border-brand"
-              />
-            </label>
-            <select
-              value={productStatus}
-              onChange={(event) => setProductStatus(event.target.value as "all" | ProductStatus)}
-              className="h-9 border border-border bg-white px-3 text-sm outline-none focus:border-brand"
-            >
-              <option value="all">全部状态</option>
-              <option value="pending">pending</option>
-              <option value="developing">developing</option>
-              <option value="ops_review">ops_review</option>
-              <option value="design_in_progress">design_in_progress</option>
-              <option value="listing_confirming">listing_confirming</option>
-              <option value="listed">listed</option>
-              <option value="canceled">canceled</option>
-            </select>
-          </div>
-        </div>
-        {productsError ? <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700">{productsError}</div> : null}
-        <div className="overflow-x-auto thin-scrollbar">
-          <table className="min-w-[960px] w-full text-left text-sm">
-            <thead className="bg-surface-muted text-xs text-muted">
-              <tr>
-                {["SKU", "品名 / ASIN", "状态", "采购价", "供应商", "负责人", "创建日期"].map((header) => (
-                  <th key={header} className="px-4 py-3 font-semibold">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {products.products.length ? (
-                products.products.map((product) => {
-                  const badge = productStatusBadge(product);
-                  return (
-                    <tr key={product.id} className="border-t border-border align-top">
-                      <td className="px-4 py-3 font-mono text-xs font-semibold">{product.sku}</td>
-                      <td className="px-4 py-3">
-                        <p className="max-w-[280px] truncate font-semibold">{product.chineseName || product.englishName || "-"}</p>
-                        <p className="mt-1 font-mono text-xs text-info">{product.asin || "-"}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge tone={badge.tone}>{badge.label}</Badge>
-                      </td>
-                      <td className="px-4 py-3 metric-tabular">CNY {(product.purchasePrice || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3">
-                        <p className="max-w-[180px] truncate" title={product.supplierName || "-"}>
-                          {product.supplierName || "-"}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="max-w-[160px] truncate" title={product.selectionOwner || product.developer || "-"}>
-                          {product.selectionOwner || product.developer || "-"}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted">{product.createdAt || "-"}</td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-muted">
-                    {productsLoading ? "正在读取商品..." : "当前筛选没有商品。"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex flex-col gap-3 border-t border-border px-5 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            共 {products.pagination.total.toLocaleString("zh-CN")} 条，当前第 {products.pagination.page} / {products.pagination.pageCount} 页
-          </span>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="secondary" onClick={() => setProductPage((value) => Math.max(1, value - 1))} disabled={productPage <= 1 || productsLoading}>
-              <ChevronLeft className="h-4 w-4" />
-              上一页
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => setProductPage((value) => Math.min(products.pagination.pageCount, value + 1))} disabled={productPage >= products.pagination.pageCount || productsLoading}>
-              下一页
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </section>
 

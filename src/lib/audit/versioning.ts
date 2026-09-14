@@ -56,32 +56,44 @@ export async function ensureWorkspaceScope(user: CurrentUser, scope?: Partial<Wo
 }
 
 export async function recordDataChangeVersion(input: RecordVersionInput) {
-  if (input.idempotencyKey) {
-    const existing = await prisma.dataChangeVersion.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
-      select: { version: true },
-    });
-    if (existing) {
-      return existing.version;
-    }
-  }
-
   const scope = await ensureWorkspaceScope(input.user, input.scope);
-  const latest = await prisma.dataChangeVersion.aggregate({
-    where: {
-      organizationId: input.user.organizationId,
-      entityType: input.entityType,
-      entityId: input.entityId,
-    },
-    _max: {
-      version: true,
-    },
-  });
-  const version = (latest._max.version ?? 0) + 1;
+  return prisma.$transaction(async (tx) => {
+    if (input.idempotencyKey) {
+      const existing = await tx.dataChangeVersion.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+        select: { version: true },
+      });
+      if (existing) {
+        return existing.version;
+      }
+    }
 
-  try {
-    await prisma.$transaction([
-      prisma.dataChangeVersion.create({
+    // Serialize version allocation for one tenant/workspace/entity without
+    // holding a long application-level lock.
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(
+          ${`${input.user.organizationId}:${scope.workspaceId}:${input.entityType}:${input.entityId}`},
+          0
+        )
+      )
+    `;
+
+    const latest = await tx.dataChangeVersion.aggregate({
+      where: {
+        organizationId: input.user.organizationId,
+        workspaceId: scope.workspaceId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+      },
+      _max: {
+        version: true,
+      },
+    });
+    const version = (latest._max.version ?? 0) + 1;
+
+    try {
+      await tx.dataChangeVersion.create({
         data: {
           organizationId: input.user.organizationId,
           userId: input.user.id,
@@ -96,8 +108,8 @@ export async function recordDataChangeVersion(input: RecordVersionInput) {
           summary: input.summary,
           payload: input.payload,
         },
-      }),
-      prisma.auditLog.create({
+      });
+      await tx.auditLog.create({
         data: {
           organizationId: input.user.organizationId,
           userId: input.user.id,
@@ -114,20 +126,20 @@ export async function recordDataChangeVersion(input: RecordVersionInput) {
             ...(input.idempotencyKey ? { outboxEventId: input.idempotencyKey } : {}),
           },
         },
-      }),
-    ]);
-  } catch (error) {
-    if (input.idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const existing = await prisma.dataChangeVersion.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
-        select: { version: true },
       });
-      if (existing) {
-        return existing.version;
+    } catch (error) {
+      if (input.idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const existing = await tx.dataChangeVersion.findUnique({
+          where: { idempotencyKey: input.idempotencyKey },
+          select: { version: true },
+        });
+        if (existing) {
+          return existing.version;
+        }
       }
+      throw error;
     }
-    throw error;
-  }
 
-  return version;
+    return version;
+  });
 }

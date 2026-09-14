@@ -2,13 +2,17 @@ import { prisma } from "@/lib/db/prisma";
 import { processImageUpscale } from "@/lib/image-upscale/engine";
 
 export async function processImageUpscaleJob(jobId: string) {
-  const job = await prisma.imageUpscaleJob.findUnique({ where: { id: jobId } });
-  if (!job) throw new Error("Image upscale job not found.");
-
-  await prisma.imageUpscaleJob.update({
-    where: { id: jobId },
+  const claimed = await prisma.imageUpscaleJob.updateMany({
+    where: {
+      id: jobId,
+      status: { in: ["queued", "failed"] },
+    },
     data: { status: "running", progress: 10, startedAt: new Date(), error: null },
   });
+  if (!claimed.count) return;
+
+  const job = await prisma.imageUpscaleJob.findUnique({ where: { id: jobId } });
+  if (!job) throw new Error("Image upscale job not found.");
 
   try {
     const result = await processImageUpscale({

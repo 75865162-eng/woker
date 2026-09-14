@@ -62,21 +62,3 @@ export function collectProductAttachmentReferences(product: Product): ProductAtt
 function isPlaceholderAssetId(value: string) {
   return value.startsWith("product-image-");
 }
-
-export function hasInlineProductAttachmentData(value: unknown): boolean {
-  if (typeof value === "string") {
-    return value.startsWith("data:");
-  }
-
-  if (Array.isArray(value)) {
-    return value.some(hasInlineProductAttachmentData);
-  }
-
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  return Object.entries(value as Record<string, unknown>).some(([key, child]) => key === "fileDataUrl"
-    ? typeof child === "string" && child.startsWith("data:")
-    : hasInlineProductAttachmentData(child));
-}

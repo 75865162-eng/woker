@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, ChevronDown, ExternalLink, FileDown, FileUp, History, ImagePlus, LoaderCircle, Minus, PackagePlus, RotateCcw, Save, Search, Video, X } from "lucide-react";
+import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, LoaderCircle, PackagePlus, Save, Video, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,15 +29,13 @@ import {
   productWorkflowStageTones,
 } from "@/lib/products/workflow";
 import { isOperationsProgressComplete } from "@/lib/products/operations-progress";
-import { getProductAssetDownloadUrl, uploadDataUrlAsProductAttachment } from "@/lib/products/image-assets";
+import { getProductAssetDownloadUrl } from "@/lib/products/image-assets";
 import { toLightweightProduct } from "@/lib/products/lightweight-product";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 
 import {
   initialFilters,
   pageSizeOptions,
-  scalarImprovementFields,
-  supplierFields,
   type ProductEditorDraft,
   type ProductFilters,
   type TrialCompetitorRow,
@@ -52,26 +50,30 @@ import {
   ProductWorkbookDetailSections,
   createEmptyImprovementRow,
   getImprovementRow,
-  getSupplierTextareaSize,
 } from "./product-workbook-detail-sections";
-import { ProductImageCopyGalleryModal } from "./product-image-copy-gallery-modal";
 import { ProductVideoPlanModal } from "./product-video-plan-modal";
-import { AmazonSearchLinkButton, DecimalInput, ExternalLinkButton, LabeledInput, ReadonlyMetric, SmallInput, SmallTextarea } from "./product-workbench-fields";
+import { DecimalInput, LabeledInput } from "./product-workbench-fields";
+import { ConclusionExcelField, MultiSelectField, ReadonlyField } from "./product-editor-fields";
+import { ProductEditorImagePanel, ProductImagePreviewModal } from "./product-editor-image-panel";
 import { ActivityLogModal, ProductFiltersBar, ProductTable } from "./product-workbench-shell";
 import { ProductOperationsProgress } from "./product-operations-progress";
 import {
   buildAmazonLink,
-  calculateTrialPricing,
   formatDateTime,
   nextSku as getNextSku,
 } from "./product-workbench-utils";
 import {
-  createTrialProductDraft,
   parseProductWorkbookFile,
   productToDraft,
-  trialImprovementLabels,
 } from "./product-workbench-data";
 import { fetchTeamAccountsCached } from "@/lib/workspace/workspace-api-cache";
+import {
+  selectProductImageFiles,
+  uploadProductImageFile,
+  uploadEmbeddedProductImages,
+} from "./product-attachment-upload";
+import { ProductVersionModal } from "./product-version-modal";
+import { TrialProductEditor as ExtractedTrialProductEditor } from "./trial-product-editor";
 
 type ProductWorkbenchCache = {
   products: Product[];
@@ -93,29 +95,6 @@ const productSummaryInflight = new Map<string, Promise<{ summary?: ProductListSu
 const REQUEST_CACHE_TTL_MS = 30_000;
 const compactToolbarButtonClass =
   "shrink-0 whitespace-nowrap max-sm:h-7 max-sm:px-2 max-sm:text-[10px] max-sm:leading-none max-sm:gap-1";
-const competitorTableFields: Array<Exclude<keyof TrialCompetitorRow, "hotVariantImageAsset" | "noteImageAsset">> = [
-  "type",
-  "hotVariantImage",
-  "asin",
-  "sales30Days",
-  "variantCount",
-  "variantType",
-  "hotVariantSpec",
-  "hotVariantPrice",
-  "fbaFee",
-  "priceChangeNote",
-  "reviewCount",
-  "rating",
-  "negativePoint1",
-  "negativePoint2",
-  "negativePoint3",
-  "negativePoint4",
-  "negativePoint5",
-  "packageSize",
-  "note",
-  "noteImage",
-];
-
 type ProductListSummary = {
   total: number;
   developing: number;
@@ -151,6 +130,21 @@ function normalizeProductFilters(filters?: Partial<ProductFilters> | null): Prod
   };
 }
 
+function hasActiveProductListFilters(filters: ProductFilters) {
+  return Boolean(
+    filters.keyword.trim()
+      || filters.asin.trim()
+      || filters.supplierName.trim()
+      || filters.opsAssignees.length
+      || filters.selectionOwners.length
+      || filters.designerAssignees.length
+      || filters.mySkuOwner.trim()
+      || filters.minPrice.trim()
+      || filters.maxPrice.trim()
+      || filters.status !== "all",
+  );
+}
+
 function readCurrentWorkspaceId() {
   if (typeof window === "undefined") {
     return "default";
@@ -178,7 +172,7 @@ function getProductListRequestCacheKey(input: {
   const params = new URLSearchParams({
     page: String(input.page),
     pageSize: String(input.pageSize),
-    detail: input.detail === false ? "list" : "full",
+    detail: "list",
     includeSummary: input.includeSummary === false ? "false" : "true",
   });
 
@@ -299,12 +293,14 @@ export function ProductWorkbench() {
   const [mySkuCount, setMySkuCount] = useState(0);
   const [mySkuReady, setMySkuReady] = useState(false);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
+  const [exportingProducts, setExportingProducts] = useState(false);
   const [productsLoading, setProductsLoading] = useState(() => !initialCachedWorkbench);
   const [productsError, setProductsError] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const productsRequestSeq = useRef(0);
   const summaryRequestSeq = useRef(0);
   const productDetailRequestSeq = useRef(0);
+  const pendingProductRef = useRef<{ product: Product; isNew: boolean } | null>(null);
   const productsRef = useRef(products);
   const filtersRef = useRef(filters);
   const pageRef = useRef(page);
@@ -530,6 +526,38 @@ export function ProductWorkbench() {
     };
   }, [currentUserName, fetchProducts]);
 
+  function mergePendingProduct(
+    nextProducts: Product[],
+    nextTotalCount: number,
+    nextFilters: ProductFilters,
+    nextPage: number,
+    nextPageSize: number,
+  ) {
+    const pending = pendingProductRef.current;
+    if (!pending) {
+      return { products: nextProducts, totalCount: nextTotalCount };
+    }
+
+    const pendingSku = pending.product.sku.trim();
+    const projectedIndex = nextProducts.findIndex((product) => product.sku.trim() === pendingSku);
+    if (projectedIndex >= 0) {
+      pendingProductRef.current = null;
+      return {
+        products: nextProducts.map((product) => (product.sku.trim() === pendingSku ? pending.product : product)),
+        totalCount: nextTotalCount,
+      };
+    }
+
+    if (pending.isNew && nextPage === 1 && !hasActiveProductListFilters(nextFilters)) {
+      return {
+        products: [pending.product, ...nextProducts].slice(0, nextPageSize),
+        totalCount: nextTotalCount + 1,
+      };
+    }
+
+    return { products: nextProducts, totalCount: nextTotalCount };
+  }
+
   useEffect(() => {
     const requestId = ++productsRequestSeq.current;
     const controller = new AbortController();
@@ -552,10 +580,18 @@ export function ProductWorkbench() {
             return;
           }
 
-          const nextProducts = Array.isArray(data.products)
+          const fetchedProducts = Array.isArray(data.products)
             ? data.products.map((product) => product as Product)
             : [];
-          const nextTotalCount = data.pagination?.total ?? 0;
+          const merged = mergePendingProduct(
+            fetchedProducts,
+            data.pagination?.total ?? 0,
+            filters,
+            page,
+            pageSize,
+          );
+          const nextProducts = merged.products;
+          const nextTotalCount = merged.totalCount;
 
           setProducts(nextProducts);
           setProductsTotalCount(nextTotalCount);
@@ -617,10 +653,18 @@ export function ProductWorkbench() {
         detail: true,
         signal: controller.signal,
       });
-      const nextProducts = Array.isArray(data.products)
+      const fetchedProducts = Array.isArray(data.products)
         ? data.products.map((product) => product as Product)
         : [];
-      const nextTotalCount = data.pagination?.total ?? 0;
+      const merged = mergePendingProduct(
+        fetchedProducts,
+        data.pagination?.total ?? 0,
+        nextFilters,
+        nextPage,
+        nextPageSize,
+      );
+      const nextProducts = merged.products;
+      const nextTotalCount = merged.totalCount;
       const nextSummary = data.summary ?? listSummary;
 
       if (controller.signal.aborted || requestId !== productsRequestSeq.current) {
@@ -694,7 +738,7 @@ export function ProductWorkbench() {
     setIsEditorOpen(false);
   }
 
-  function openProduct(sku: string) {
+  async function openProduct(sku: string) {
     const normalizedSku = sku.trim();
     const workspaceId = readCurrentWorkspaceId();
     const fullCacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, true);
@@ -713,16 +757,38 @@ export function ProductWorkbench() {
       setDetailReady(true);
       return;
     }
+
+    const requestId = ++productDetailRequestSeq.current;
+    setDetailReady(false);
+    try {
+      const response = await fetch(`/api/products/${encodeURIComponent(normalizedSku)}/detail`, {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as { product?: Product; error?: string };
+      if (requestId !== productDetailRequestSeq.current) {
+        return;
+      }
+      if (!response.ok || !data.product) {
+        throw new Error(data.error || "商品详情读取失败");
+      }
+      productDetailCache.set(fullCacheKey, data.product);
+      setActiveProduct(data.product);
+      setDetailReady(true);
+    } catch (error) {
+      if (requestId !== productDetailRequestSeq.current) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "商品详情读取失败";
+      setProductsError(message);
+      setDetailReady(true);
+    }
   }
 
-  async function persistProduct(product: Product, options?: { migrateLegacyAttachments?: boolean }) {
-    const productForPersistence = options?.migrateLegacyAttachments
-      ? await migrateLegacyProductAttachments(product)
-      : stripLegacyAttachmentData(product);
+  async function persistProduct(product: Product) {
     const response = await fetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product: productForPersistence }),
+      body: JSON.stringify({ product }),
     });
     const data = (await response.json()) as { product?: Product; error?: string; conflict?: boolean; currentRevision?: number };
 
@@ -749,14 +815,28 @@ export function ProductWorkbench() {
       sku: existing?.sku ?? draft.sku,
       createdAt: existing?.createdAt ?? formatDateTime(new Date()),
     };
-    const hasLegacyAttachments = hasLegacyAttachmentData(nextProduct);
-
     try {
       const savedProduct = await persistProduct(nextProduct);
       invalidateProductRequestCaches();
       productDetailCache.set(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), savedProduct.sku, true), savedProduct);
+      pendingProductRef.current = {
+        product: toLightweightProduct(savedProduct),
+        isNew: !existing,
+      };
       setActiveProduct(savedProduct);
       setDetailReady(true);
+      setProducts((current) => {
+        const savedSku = savedProduct.sku.trim();
+        const savedLightweightProduct = toLightweightProduct(savedProduct);
+        const existingIndex = current.findIndex((product) => product.sku.trim() === savedSku);
+        if (existingIndex >= 0) {
+          return current.map((product) => (product.sku.trim() === savedSku ? savedLightweightProduct : product));
+        }
+        return [savedLightweightProduct, ...current];
+      });
+      if (!existing) {
+        setProductsTotalCount((current) => current + 1);
+      }
       if (!existing) {
         setPage(1);
       }
@@ -766,12 +846,7 @@ export function ProductWorkbench() {
         setProductsError(message);
         setActivityLog((current) => [`商品已保存，但列表刷新失败：${message}`, ...current].slice(0, 8));
       });
-      setActivityLog((current) => [
-        hasLegacyAttachments
-          ? `${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库；检测到旧附件，待单独迁移`
-          : `${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`,
-        ...current,
-      ].slice(0, 8));
+      setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品保存失败";
       window.alert(error instanceof Error && error.name === "ProductRevisionConflictError"
@@ -825,7 +900,42 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
     }
   }
 
+  async function downloadProductExport(downloadUrl: string, fileName: string) {
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = fileName;
+    anchor.click();
+  }
+
+  async function waitForProductExport(jobId: string) {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      const response = await fetch(`/api/products/export/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+      const data = (await response.json()) as {
+        job?: { status?: string; error?: string | null; file?: { originalName?: string } | null };
+        error?: string;
+      };
+
+      if (!response.ok || !data.job) {
+        throw new Error(data.error || "导出任务状态读取失败");
+      }
+      if (data.job.status === "failed") {
+        throw new Error(data.job.error || "商品导出失败");
+      }
+      if (data.job.status === "done") {
+        return data.job.file?.originalName ?? "products.csv";
+      }
+    }
+
+    throw new Error("导出处理时间较长，请到任务中心查看结果");
+  }
+
   async function handleExportProducts() {
+    if (exportingProducts) {
+      return;
+    }
+
+    setExportingProducts(true);
     try {
       const params = new URLSearchParams({
         search: filters.keyword.trim(),
@@ -852,19 +962,24 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
       }
 
       if (data.file?.downloadUrl) {
-        const anchor = document.createElement("a");
-        anchor.href = data.file.downloadUrl;
-        anchor.download = data.file.name ?? "products.csv";
-        anchor.click();
+        await downloadProductExport(data.file.downloadUrl, data.file.name ?? "products.csv");
         setActivityLog((current) => [`商品导出已完成并生成文件 ${data.file?.name ?? "products.csv"}`, ...current].slice(0, 8));
         return;
       }
 
-      setActivityLog((current) => [`商品导出任务已提交到任务中心，完成后可下载 ${data.job?.file?.originalName ?? "products.csv"}`, ...current].slice(0, 8));
+      if (!data.job?.id) {
+        throw new Error("商品导出任务创建失败");
+      }
+
+      const fileName = await waitForProductExport(data.job.id);
+      await downloadProductExport(`/api/products/export/${encodeURIComponent(data.job.id)}/download`, fileName);
+      setActivityLog((current) => [`商品导出已完成并生成文件 ${fileName}`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品导出失败";
       setActivityLog((current) => [`商品导出失败：${message}`, ...current].slice(0, 8));
       window.alert(message);
+    } finally {
+      setExportingProducts(false);
     }
   }
 
@@ -906,11 +1021,11 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             onClick={() => patchFilters((current) => ({ ...current, status: "design_in_progress" }))}
           />
           <SummaryTile
-            label="确认上架"
+            label="运营进度"
             value={summaryValue(listingConfirmingCount)}
             tone="amber"
-            active={filters.status === "listing_confirming"}
-            onClick={() => patchFilters((current) => ({ ...current, status: "listing_confirming" }))}
+            active={filters.status === "operations_progress"}
+            onClick={() => patchFilters((current) => ({ ...current, status: "operations_progress" }))}
           />
           <SummaryTile
             label="超期预警"
@@ -933,7 +1048,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
           />
         </section>
         <p className="px-1 text-xs font-medium text-muted">
-          顶部卡片按业务阶段聚合统计，开发中会合并待开发与开发中，确认上架单独统计，超期和我的SKU可以与其它卡片重叠。
+          顶部卡片按业务阶段聚合统计，开发中会合并待开发与开发中；运营进度、超期和我的 SKU 可以与其它卡片重叠。
         </p>
 
         <Card>
@@ -957,9 +1072,9 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
                 <FileUp className="h-4 w-4" />
                 导入数据
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => void handleExportProducts()}>
+              <Button variant="secondary" size="sm" disabled={exportingProducts} onClick={() => void handleExportProducts()}>
                 <FileDown className="h-4 w-4" />
-                导出数据
+                {exportingProducts ? "导出中..." : "导出数据"}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setIsActivityLogOpen(true)}>
                 <History className="h-4 w-4" />
@@ -1036,412 +1151,13 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         ) : null}
 
         {isTrialEditorOpen ? (
-          <TrialProductEditor
+          <ExtractedTrialProductEditor
             onClose={() => setIsTrialEditorOpen(false)}
             onSave={handleSaveTrialProduct}
           />
         ) : null}
       </div>
     </>
-  );
-}
-
-type ProductVersionRecord = {
-  id: string;
-  version: number;
-  action: string;
-  summary?: string | null;
-  createdAt: string;
-  userId?: string | null;
-};
-
-function ProductVersionModal({
-  product,
-  onClose,
-  onRestored,
-}: {
-  product: Product;
-  onClose: () => void;
-  onRestored: () => void;
-}) {
-  const [versions, setVersions] = useState<ProductVersionRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState("");
-  const [error, setError] = useState("");
-
-  const loadVersions = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const params = new URLSearchParams({
-        entityType: "product",
-        entityId: product.sku,
-        pageSize: "50",
-      });
-      const response = await fetch(`/api/audit/versions?${params.toString()}`, { cache: "no-store" });
-      const data = (await response.json()) as { versions?: ProductVersionRecord[]; error?: string };
-
-      if (!response.ok) {
-        throw new Error(data.error || "版本历史读取失败。");
-      }
-
-      setVersions(Array.isArray(data.versions) ? data.versions : []);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "版本历史读取失败。");
-    } finally {
-      setLoading(false);
-    }
-  }, [product.sku]);
-
-  async function restoreVersion(version: ProductVersionRecord) {
-    if (!window.confirm(`确定恢复 ${product.sku} 到版本 ${version.version} 吗？`)) {
-      return;
-    }
-
-    setBusyId(version.id);
-    setError("");
-
-    try {
-      const response = await fetch("/api/audit/versions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ versionId: version.id }),
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(data.error || "版本恢复失败。");
-      }
-
-      onRestored();
-      await loadVersions();
-    } catch (restoreError) {
-      setError(restoreError instanceof Error ? restoreError.message : "版本恢复失败。");
-    } finally {
-      setBusyId("");
-    }
-  }
-
-  useEffect(() => {
-    void loadVersions();
-  }, [loadVersions]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm">
-      <div className="flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <h3 className="text-lg font-bold text-foreground">版本历史：{product.sku}</h3>
-            <p className="mt-1 text-xs font-semibold text-muted">{product.chineseName || product.englishName || "未命名商品"}</p>
-          </div>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-            关闭
-          </Button>
-        </div>
-        <div className="thin-scrollbar flex-1 space-y-3 overflow-y-auto p-5">
-          {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
-          {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取版本历史...</div> : null}
-          {versions.map((version) => (
-            <div key={version.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-muted px-3 py-3">
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground">版本 {version.version} · {version.action}</p>
-                <p className="mt-1 truncate text-xs font-medium text-muted">{version.summary || "无摘要"} · {new Date(version.createdAt).toLocaleString("zh-CN", { hour12: false })}</p>
-              </div>
-              <Button size="sm" variant="secondary" onClick={() => void restoreVersion(version)} disabled={Boolean(busyId)}>
-                <RotateCcw className="h-4 w-4" />
-                {busyId === version.id ? "恢复中" : "恢复"}
-              </Button>
-            </div>
-          ))}
-          {!loading && versions.length === 0 ? (
-            <p className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm font-medium text-muted">这个商品还没有版本记录。</p>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TrialProductEditor({
-  onClose,
-  onSave,
-}: {
-  onClose: () => void;
-  onSave: (draft: TrialProductDraft) => void;
-}) {
-  const [draft, setDraft] = useState<TrialProductDraft>(() => createTrialProductDraft());
-
-  function updatePricingRow(index: number, field: keyof TrialPriceRow, value: string | number) {
-    setDraft((current) => ({
-      ...current,
-      pricingRows: current.pricingRows.map((row, rowIndex) =>
-        rowIndex === index
-          ? { ...row, [field]: field === "name" ? String(value) : typeof value === "number" ? value : Number(value) || 0 }
-          : row,
-      ),
-    }));
-  }
-
-  function updateCompetitor(index: number, field: keyof TrialCompetitorRow, value: string) {
-    setDraft((current) => ({
-      ...current,
-      competitors: current.competitors.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)),
-    }));
-  }
-
-  function updateSupplier(index: number, field: keyof TrialSupplierRow, value: string | number) {
-    setDraft((current) => ({
-      ...current,
-      suppliers: current.suppliers.map((row, rowIndex) =>
-        rowIndex === index
-          ? {
-              ...row,
-              [field]:
-                field === "cost100" || field === "cost300"
-                  ? typeof value === "number"
-                    ? value
-                    : Number(value) || 0
-                  : value,
-            }
-          : row,
-      ),
-    }));
-  }
-
-  function updateImprovement(field: Exclude<keyof TrialImprovement, "rows" | "peakSeasonWeights">, value: string) {
-    setDraft((current) => ({
-      ...current,
-      improvement: { ...current.improvement, [field]: value },
-    }));
-  }
-
-  function updateKeyword(index: number, field: keyof TrialKeywordRow, value: string | number) {
-    setDraft((current) => ({
-      ...current,
-      keywords: current.keywords.map((row, rowIndex) =>
-        rowIndex === index
-          ? {
-              ...row,
-              [field]: field === "keyword" ? String(value) : typeof value === "number" ? value : Number(value) || 0,
-            }
-          : row,
-      ),
-    }));
-  }
-
-  function handleSubmit() {
-    const hasName = draft.title.trim() || draft.pricingRows.some((row) => row.name.trim());
-    if (!hasName) {
-      window.alert("请至少填写试算商品名称。");
-      return;
-    }
-
-    onSave({
-      ...draft,
-      title: draft.title.trim() || draft.pricingRows[0]?.name.trim() || "未命名试算商品",
-    });
-  }
-
-  return (
-    <div className="fixed inset-0 z-30 bg-foreground/35 p-4 backdrop-blur-sm">
-      <div className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <h2 className="text-lg font-bold text-foreground">新增试算商品</h2>
-            <p className="mt-1 text-xs font-medium text-muted">按 Excel 试算表拆分为利润试算、竞品、供应商、改进点和关键词区域。</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-              取消
-            </Button>
-            <Button size="sm" onClick={handleSubmit}>
-              <Save className="h-4 w-4" />
-              保存
-            </Button>
-          </div>
-        </div>
-
-        <div className="thin-scrollbar flex-1 space-y-5 overflow-auto p-5">
-          <Card>
-            <CardHeader>
-              <CardTitle>试算商品标题</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LabeledInput label="试算商品名称" value={draft.title} placeholder="例如：交易卡展示" onChange={(value) => setDraft((current) => ({ ...current, title: value }))} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>区域 1：利润试算</CardTitle>
-            </CardHeader>
-            <CardContent className="thin-scrollbar overflow-auto">
-              <table className="min-w-[1760px] text-left text-xs">
-                <thead className="bg-surface-muted text-muted">
-                  <tr>
-                    {["品名", "长 cm", "宽 cm", "高 cm", "实际重量 g", "材积重量 g", "建议售价(USD)", "采购成本(RMB)", "FBA配送费$", "3.5% 燃油及物流附加费(USD)", "海运单价(RMB)", "海运头程(RMB)", "佣金(USD)", "月仓储费(USD)", "汇率", "保本价(USD)", "海运毛利(USD)", "海运毛利率", "体积重量/", "重量/"].map((label) => (
-                      <th key={label} className="px-2 py-2 font-bold">
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {draft.pricingRows.map((row, index) => {
-                    const calc = calculateTrialPricing(row);
-                    return (
-                      <tr key={index} className="border-t border-border align-top">
-                        <td className="px-2 py-2"><SmallInput value={row.name} onChange={(value) => updatePricingRow(index, "name", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.lengthCm} onChange={(value) => updatePricingRow(index, "lengthCm", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.widthCm} onChange={(value) => updatePricingRow(index, "widthCm", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.heightCm} onChange={(value) => updatePricingRow(index, "heightCm", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.actualWeightKg} onChange={(value) => updatePricingRow(index, "actualWeightKg", value)} /></td>
-                    <ReadonlyMetric value={calc.volumeWeightKg} />
-                    <td className="px-2 py-2"><DecimalInput compact value={row.suggestedPrice} onChange={(value) => updatePricingRow(index, "suggestedPrice", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.purchaseCost} onChange={(value) => updatePricingRow(index, "purchaseCost", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput compact value={row.fbaFee} onChange={(value) => updatePricingRow(index, "fbaFee", value)} /></td>
-                    <ReadonlyMetric value={calc.fuelFee} />
-                    <td className="px-2 py-2"><DecimalInput compact value={row.oceanFreightUnitPrice} onChange={(value) => updatePricingRow(index, "oceanFreightUnitPrice", value)} /></td>
-                    <ReadonlyMetric value={calc.oceanFreight} />
-                    <ReadonlyMetric value={calc.commission} />
-                    <ReadonlyMetric value={calc.monthlyStorageFee} />
-                    <td className="px-2 py-2"><DecimalInput compact value={row.exchangeRate} onChange={(value) => updatePricingRow(index, "exchangeRate", value)} /></td>
-                    <ReadonlyMetric value={calc.breakEvenPrice} />
-                    <ReadonlyMetric value={calc.profit} />
-                        <ReadonlyMetric value={`${(calc.profitRate * 100).toFixed(1)}%`} />
-                        <ReadonlyMetric value={calc.volumeWeightLb} />
-                        <ReadonlyMetric value={calc.actualWeightLb} />
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>区域 2：竞品分析</CardTitle>
-            </CardHeader>
-            <CardContent className="thin-scrollbar overflow-auto">
-              <table className="min-w-[1560px] text-left text-xs">
-                <thead className="bg-surface-muted text-muted">
-                  <tr>
-                    {["类型", "ASIN", "近30天销量", "变体数量", "变体类型", "热销变体规格", "热销变体价格($)", "FBA费用($)", "近3个月价格变动备注", "评论数", "评分", "差评点1", "差评点2", "差评点3", "差评点4", "差评点5", "竞品包装尺寸", "备注"].map((label) => (
-                      <th key={label} className="px-2 py-2 font-bold">{label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {draft.competitors.map((row, index) => (
-                    <tr key={index} className="border-t border-border">
-                      {competitorTableFields.map((field) => (
-                        <td key={field} className="px-2 py-2">
-                          <SmallInput value={String(row[field] ?? "")} onChange={(value) => updateCompetitor(index, field, value)} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>区域 3：供应商报价</CardTitle>
-            </CardHeader>
-            <CardContent className="thin-scrollbar overflow-auto">
-              <table className="min-w-[1420px] text-left text-xs">
-                <thead className="bg-surface-muted text-muted">
-                  <tr>
-                    {["供应商产品链路", "厂家名称", "配置", "起订量", "交期", "国内物流费", "相关认证", "专利国家", "产品包装方式", "采购成本(100套)", "采购成本(300)", "开票信息", "备注"].map((label) => (
-                      <th key={label} className="px-2 py-2 font-bold">{label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {draft.suppliers.map((row, index) => (
-                    <tr key={index} className="border-t border-border">
-                      {supplierFields.map((field) => (
-                        <td key={field} className="px-2 py-2">
-                          {field === "productUrl" ? (
-                            <div className="flex gap-2">
-                              <SmallTextarea size="supplierWide" value={row[field]} onChange={(value) => updateSupplier(index, field, value)} />
-                              <ExternalLinkButton href={row[field]} />
-                            </div>
-                          ) : (
-                            <SmallTextarea
-                              size={getSupplierTextareaSize(field)}
-                              value={row[field]}
-                              onChange={(value) => updateSupplier(index, field, value)}
-                            />
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>区域 4：产品改进点</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {scalarImprovementFields.map((field) => (
-                <LabeledInput key={field} label={trialImprovementLabels[field]} value={draft.improvement[field]} onChange={(value) => updateImprovement(field, value)} />
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>区域 5：关键词</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="thin-scrollbar overflow-auto">
-                <table className="min-w-[680px] text-left text-xs">
-                  <thead className="bg-surface-muted text-muted">
-                    <tr>
-                      <th className="px-2 py-2">关键词</th>
-                      <th className="px-2 py-2">CPC</th>
-                      <th className="px-2 py-2">月搜索量</th>
-                      <th className="px-2 py-2">ABA周排名</th>
-                      <th className="w-12 px-2 py-2"><span className="sr-only">Amazon 搜索</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draft.keywords.map((row, index) => (
-                      <tr key={index} className="border-t border-border">
-                        <td className="px-2 py-2"><SmallInput value={row.keyword} onChange={(value) => updateKeyword(index, "keyword", value)} /></td>
-                    <td className="px-2 py-2"><DecimalInput value={row.cpc} onChange={(value) => updateKeyword(index, "cpc", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput type="number" value={row.monthlySearches} onChange={(value) => updateKeyword(index, "monthlySearches", value)} /></td>
-                    <td className="px-2 py-2"><SmallInput type="number" value={row.abaRank} onChange={(value) => updateKeyword(index, "abaRank", value)} /></td>
-                    <td className="px-2 py-2"><AmazonSearchLinkButton keyword={row.keyword} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <label className="block text-xs font-semibold text-muted">
-                备注
-                <textarea
-                  className="mt-1 min-h-24 w-full rounded-md border border-border px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
-                  value={draft.remark}
-                  onChange={(event) => setDraft((current) => ({ ...current, remark: event.target.value }))}
-                />
-              </label>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1469,7 +1185,6 @@ function ProductEditor({
   const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products, nextSku));
   const [saving, setSaving] = useState(false);
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
-  const [imageCopyGalleryOpen, setImageCopyGalleryOpen] = useState(false);
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
   const [conclusionUploading, setConclusionUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -1484,7 +1199,6 @@ function ProductEditor({
   const showHeavyDetail = !isEditing || detailReady;
   const mainAmazonLink = buildAmazonLink(draft.asin);
   const workbookDetail = draft.workbookDetail;
-  const primaryImageAsset = draft.imageAssets?.[0];
   const workflowStage = getProductWorkflowStage(draft);
   const workflowAssignee = getCurrentWorkflowAssignee(draft);
   const workflowOverdue = isProductWorkflowOverdue(draft);
@@ -1924,7 +1638,8 @@ function ProductEditor({
   }
 
   function handleImageUpload(files: FileList | null) {
-    const selected = Array.from(files ?? []).slice(0, 10 - draft.images.length);
+    const currentImageCount = Math.max(draft.imageAssets?.length ?? 0, draft.images.length);
+    const selected = selectProductImageFiles(files ?? [], currentImageCount);
     if (!selected.length) {
       return;
     }
@@ -2018,9 +1733,6 @@ function ProductEditor({
                 </Button>
                 {showHeavyDetail ? (
                   <>
-                    <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setImageCopyGalleryOpen(true)}>
-                      图片文案
-                    </Button>
                     <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setVideoPlanOpen(true)}>
                       <Video className="h-4 w-4" />
                       视频
@@ -2044,61 +1756,12 @@ function ProductEditor({
           <section className="space-y-4">
             <Card>
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">图片</h3>
-                  {primaryImageAsset ? (
-                    <button
-                      type="button"
-                      className="mt-4 flex aspect-square w-full overflow-hidden rounded-lg border border-border bg-surface-muted transition-colors hover:border-brand hover:bg-white"
-                      onClick={() => openImagePreview(primaryImageAsset, primaryImageAsset.thumbUrl)}
-                      title="点击查看大图"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={primaryImageAsset.thumbUrl || primaryImageAsset.originalUrl} alt="商品主图预览" className="h-full w-full object-contain p-2" />
-                    </button>
-                  ) : (
-                    <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
-                      <ImagePlus className="h-8 w-8 text-brand" />
-                      <span className="mt-2 text-sm font-semibold text-foreground">上传图片</span>
-                      <span className="mt-1 text-xs text-muted">可上传 5-10 张，第一张会显示为主图。</span>
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
-                    </label>
-                  )}
-                  <div className="mt-3 flex flex-wrap items-start gap-2">
-                    <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
-                      <div className="flex flex-col items-center justify-center">
-                        <ImagePlus className="h-4 w-4 text-brand" />
-                        <span className="mt-1 text-[10px] font-semibold text-foreground">上传</span>
-                      </div>
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleImageUpload(event.target.files)} />
-                    </label>
-                    <div className="flex flex-1 flex-wrap gap-2">
-                      {draft.imageAssets?.map((asset, index) => (
-                        <div key={`${asset.id || asset.thumbUrl.slice(0, 24)}-${index}`} className="flex w-[104px] items-center gap-1">
-                          <button
-                            type="button"
-                            className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted"
-                            onClick={() => openImagePreview(asset, asset.thumbUrl)}
-                            title="点击查看大图"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={asset.thumbUrl || asset.originalUrl} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
-                          </button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            title="删除图片"
-                            onClick={() => removeImage(index)}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <ProductEditorImagePanel
+                  imageAssets={draft.imageAssets}
+                  onPreview={(asset) => openImagePreview(asset, asset.thumbUrl)}
+                  onUpload={handleImageUpload}
+                  onRemove={removeImage}
+                />
 
                 <div>
                   <h3 className="text-lg font-bold text-foreground">基础信息</h3>
@@ -2269,13 +1932,6 @@ function ProductEditor({
           }}
         />
       ) : null}
-      {imageCopyGalleryOpen ? (
-        <ProductImageCopyGalleryModal
-          sku={draft.sku}
-          productName={draft.chineseName}
-          onClose={() => setImageCopyGalleryOpen(false)}
-        />
-      ) : null}
       {videoPlanOpen ? (
         <ProductVideoPlanModal
           sku={draft.sku}
@@ -2284,32 +1940,12 @@ function ProductEditor({
         />
       ) : null}
       {previewImage ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
-          <div className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">图片预览</h3>
-                <p className="mt-1 text-xs font-semibold text-muted">点击空白处或关闭按钮返回。</p>
-              </div>
-              <Button variant="secondary" size="sm" onClick={() => setPreviewImage(null)}>
-                <X className="h-4 w-4" />
-                关闭
-              </Button>
-            </div>
-            <div className="flex flex-1 items-center justify-center overflow-auto p-5" onClick={() => setPreviewImage(null)}>
-              {previewLoading ? <p className="text-sm font-semibold text-white">正在下载</p> : null}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={previewImage}
-                alt="商品图片大图"
-                className={`max-h-[78vh] max-w-full object-contain ${previewLoading ? "hidden" : ""}`}
-                onLoad={() => setPreviewLoading(false)}
-                onError={() => setPreviewLoading(false)}
-                onClick={(event) => event.stopPropagation()}
-              />
-            </div>
-          </div>
-        </div>
+        <ProductImagePreviewModal
+          image={previewImage}
+          loading={previewLoading}
+          onClose={() => setPreviewImage(null)}
+          onLoad={() => setPreviewLoading(false)}
+        />
       ) : null}
     </div>
   );
@@ -2353,302 +1989,6 @@ function SummaryTile({
   );
 }
 
-function ConclusionExcelField({
-  file,
-  uploading,
-  onUpload,
-}: {
-  file?: Product["conclusionExcelFile"];
-  uploading: boolean;
-  onUpload: () => void;
-}) {
-  const [downloading, setDownloading] = useState(false);
-
-  async function downloadFile() {
-    if (!file?.downloadUrl || downloading) {
-      return;
-    }
-
-    setDownloading(true);
-    try {
-      const response = await fetch(file.downloadUrl);
-      if (!response.ok) {
-        throw new Error("附件下载失败");
-      }
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = file.name || "conclusion.xlsx";
-      anchor.click();
-      URL.revokeObjectURL(objectUrl);
-    } catch {
-      window.alert("附件下载失败，请稍后重试。");
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  return (
-    <div className="text-xs font-semibold text-muted">
-      <p>结论 Excel 表（必传）</p>
-      <div className="mt-1 flex min-h-10 items-center justify-between gap-2 rounded-md border border-border bg-white px-3 py-2">
-        <div className="min-w-0">
-          <p className={`truncate text-sm font-semibold ${file ? "text-foreground" : "text-danger"}`}>
-            {file?.name || "未上传"}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted">
-            {file ? `${formatFileSize(file.size)} · ${file.storageType}` : "已取消或确认上架前必须上传"}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {file?.downloadUrl ? (
-            <button type="button" className="text-xs font-bold text-brand hover:underline" onClick={() => void downloadFile()} disabled={downloading}>
-              {downloading ? "正在下载" : "下载"}
-            </button>
-          ) : null}
-          <Button size="sm" variant="secondary" onClick={onUpload} disabled={uploading}>
-            <FileUp className="h-4 w-4" />
-            {uploading ? "上传中" : file ? "替换" : "上传"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function formatFileSize(size: number) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function ReadonlyField({ label, value, title }: { label: string; value: string; title?: string }) {
-  return (
-    <div className="text-xs font-semibold text-muted">
-      {label}
-      <div className="mt-1 flex h-10 w-full items-center rounded-md border border-border bg-surface-muted px-3 text-sm font-semibold text-foreground" title={title ?? value}>
-        {value || "--"}
-      </div>
-    </div>
-  );
-}
-
-function MultiSelectField({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string[];
-  options: string[];
-  onChange: (value: string[]) => void;
-}) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [draftValue, setDraftValue] = useState<string[]>(value);
-  const [panelStyle, setPanelStyle] = useState<{
-    position: "fixed";
-    top: number;
-    left: number;
-    width: number;
-    zIndex: number;
-  }>({
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: 0,
-    zIndex: 60,
-  });
-
-  const filteredOptions = useMemo(() => {
-    const uniqueOptions = Array.from(new Set(options.map((option) => option.trim()).filter(Boolean)));
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return uniqueOptions;
-    return uniqueOptions.filter((option) => option.toLowerCase().includes(normalizedQuery));
-  }, [options, query]);
-
-  const normalizedValue = useMemo(() => Array.from(new Set(value.map((item) => item.trim()).filter(Boolean))), [value]);
-  const selectedCount = normalizedValue.length;
-  const triggerText = selectedCount ? normalizedValue.join("、") : "请选择";
-  const allVisibleSelected = filteredOptions.length > 0 && filteredOptions.every((option) => draftValue.includes(option));
-  const visibleSelectedCount = filteredOptions.filter((option) => draftValue.includes(option)).length;
-
-  useEffect(() => {
-    if (open) {
-      setDraftValue(normalizedValue);
-      setQuery("");
-    }
-  }, [normalizedValue, open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function updatePanelPosition() {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-
-      const rect = trigger.getBoundingClientRect();
-      setPanelStyle({
-        position: "fixed",
-        top: rect.bottom + 8,
-        left: rect.left,
-        width: rect.width,
-        zIndex: 60,
-      });
-    }
-
-    function handleOutsidePointer(event: PointerEvent) {
-      const target = event.target as Node | null;
-      if (target && !rootRef.current?.contains(target)) {
-        setOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    }
-
-    updatePanelPosition();
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    document.addEventListener("pointerdown", handleOutsidePointer);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-      document.removeEventListener("pointerdown", handleOutsidePointer);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  function toggle(option: string) {
-    setDraftValue((current) => (current.includes(option) ? current.filter((item) => item !== option) : [...current, option]));
-  }
-
-  function toggleAllVisible() {
-    if (!filteredOptions.length) return;
-
-    setDraftValue((current) =>
-      allVisibleSelected ? current.filter((item) => !filteredOptions.includes(item)) : Array.from(new Set([...current, ...filteredOptions])),
-    );
-  }
-
-  function commit() {
-    onChange(Array.from(new Set(draftValue.map((item) => item.trim()).filter(Boolean))));
-    setOpen(false);
-  }
-
-  function cancel() {
-    setDraftValue(normalizedValue);
-    setQuery("");
-    setOpen(false);
-  }
-
-  return (
-    <div ref={rootRef} className="relative text-xs font-semibold text-muted">
-      <p>{label}</p>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`mt-1 flex h-10 w-full items-center justify-between gap-3 rounded-md border bg-white px-3 text-left text-sm outline-none transition-colors focus:border-brand ${
-          open ? "border-brand ring-2 ring-brand/15" : "border-border"
-        }`}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span className={`min-w-0 flex-1 truncate ${selectedCount ? "text-foreground" : "text-muted"}`}>{triggerText}</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      {open ? (
-        <div style={panelStyle} className="rounded-lg border border-border bg-white shadow-2xl">
-          <div className="border-b border-border px-3 py-3">
-            <label className="flex h-10 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm text-foreground focus-within:border-brand">
-              <Search className="h-4 w-4 shrink-0 text-muted" />
-              <input
-                className="w-full bg-transparent outline-none placeholder:text-muted"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索"
-              />
-              {query ? (
-                <button
-                  type="button"
-                  className="shrink-0 text-muted hover:text-foreground"
-                  onClick={() => setQuery("")}
-                  aria-label="清空搜索"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              ) : null}
-            </label>
-          </div>
-
-          <div className="thin-scrollbar max-h-64 overflow-auto px-3 py-2">
-            <button
-              type="button"
-              className="flex w-full items-center gap-3 rounded-md px-1 py-2 text-left hover:bg-surface-muted"
-              onClick={toggleAllVisible}
-            >
-              <span className={`flex h-5 w-5 items-center justify-center rounded-sm border ${allVisibleSelected ? "border-brand bg-brand text-white" : "border-border bg-white"}`}>
-                {allVisibleSelected ? <span className="text-[11px] font-bold leading-none">✓</span> : null}
-              </span>
-              <span className="text-sm font-semibold text-foreground">全选</span>
-              <span className="ml-auto text-xs font-medium text-muted">
-                {filteredOptions.length ? `${visibleSelectedCount}/${filteredOptions.length}` : "无匹配"}
-              </span>
-            </button>
-
-            <div className="mt-1 space-y-1">
-              {filteredOptions.length ? (
-                filteredOptions.map((option) => {
-                  const checked = draftValue.includes(option);
-
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      className="flex w-full items-center gap-3 rounded-md px-1 py-2 text-left hover:bg-surface-muted"
-                      onClick={() => toggle(option)}
-                    >
-                      <span className={`flex h-5 w-5 items-center justify-center rounded-sm border ${checked ? "border-brand bg-brand text-white" : "border-border bg-white"}`}>
-                        {checked ? <span className="text-[11px] font-bold leading-none">✓</span> : null}
-                      </span>
-                      <span className={`min-w-0 flex-1 truncate text-sm ${checked ? "font-bold text-foreground" : "font-medium text-foreground"}`}>{option}</span>
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="px-1 py-8 text-center text-xs font-medium text-muted">暂无匹配结果</p>
-              )}
-            </div>
-          </div>
-
-          <div className="border-t border-border px-3 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-medium text-muted">按住 Shift 可快速多选</p>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" onClick={cancel}>
-                  取消
-                </Button>
-                <Button size="sm" onClick={commit}>
-                  确定
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 async function loadTeamAccountsFromApi() {
   try {
     const data = await fetchTeamAccountsCached();
@@ -2656,345 +1996,6 @@ async function loadTeamAccountsFromApi() {
   } catch {
     return [];
   }
-}
-
-async function uploadProductImageFile(file: File): Promise<ProductImageAsset> {
-  if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
-    throw new Error(productAttachmentSizeError(file.name, file.size));
-  }
-  if (!file.type.startsWith("image/")) {
-    throw new Error("商品主图仅支持图片文件。");
-  }
-  const formData = new FormData();
-  formData.append("file", file);
-  const response = await fetch("/api/products/image-assets/upload", {
-    method: "POST",
-    body: formData,
-  });
-  const data = (await response.json().catch(() => ({}))) as {
-    asset?: ProductImageAsset & { url?: string };
-    error?: string;
-  };
-  if (!response.ok || !data.asset?.id) {
-    throw new Error(data.error || "商品图片上传失败。");
-  }
-  return {
-    ...data.asset,
-    thumbUrl: data.asset.thumbUrl || data.asset.url || data.asset.originalUrl,
-  };
-}
-
-async function uploadEmbeddedProductImages(product: Product) {
-  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  const sourceImages = Array.isArray(product.images) ? product.images.filter((image) => image.trim()) : [];
-  const uploadedImages = await Promise.all(sourceImages.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-${index + 1}.png`)));
-  const sourceRemarkImages = Array.isArray(productWithWorkbook.workbookDetail?.remarkImages)
-    ? productWithWorkbook.workbookDetail.remarkImages.filter((image) => image.trim())
-    : [];
-  const uploadedRemarkImages = await Promise.all(sourceRemarkImages.map((image, index) => uploadDataUrlImage(image, `${product.sku || "product"}-remark-${index + 1}.png`)));
-  const workbookDetail = productWithWorkbook.workbookDetail
-    ? {
-        ...productWithWorkbook.workbookDetail,
-        remarkImages: uploadedRemarkImages.map((asset) => asset.thumbUrl),
-        remarkImageAssets: uploadedRemarkImages,
-        competitors: await Promise.all(
-          (Array.isArray(productWithWorkbook.workbookDetail.competitors) ? productWithWorkbook.workbookDetail.competitors : []).map(async (competitor, index) => {
-            const hotVariantImageAsset = competitor.hotVariantImage.trim()
-              ? await uploadDataUrlImage(competitor.hotVariantImage, `${product.sku || "product"}-competitor-${index + 1}.png`)
-              : undefined;
-            const noteImageAsset = competitor.noteImage.trim()
-              ? await uploadDataUrlImage(competitor.noteImage, `${product.sku || "product"}-competitor-note-${index + 1}.png`)
-              : undefined;
-
-            return {
-              ...competitor,
-              hotVariantImageAsset,
-              hotVariantImage: hotVariantImageAsset?.thumbUrl || "",
-              noteImageAsset,
-              noteImage: noteImageAsset?.thumbUrl || "",
-            };
-          }),
-        ),
-      }
-    : undefined;
-
-  return {
-    ...product,
-    images: [],
-    imageAssets: uploadedImages,
-    ...(workbookDetail ? { workbookDetail } : {}),
-  };
-}
-
-async function uploadDataUrlImage(value: string, name: string) {
-  if (!value.startsWith("data:")) {
-    return {
-      id: "",
-      name,
-      mimeType: "",
-      size: 0,
-      storageType: "r2",
-      uploadedAt: "",
-      thumbUrl: value,
-      originalUrl: value,
-    } satisfies ProductImageAsset;
-  }
-
-  const asset = await uploadDataUrlAsProductAttachment(value, name);
-  if (!asset) {
-    throw new Error(`${name} 图片上传失败。`);
-  }
-  return asset;
-}
-
-function stripLegacyAttachmentData(product: Product): Product {
-  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  const workbookDetail = productWithWorkbook.workbookDetail;
-
-  return {
-    ...product,
-    image: stripDataUrl(product.image),
-    images: (product.images ?? []).map(stripDataUrl).filter(Boolean),
-    imageAssets: product.imageAssets
-      ?.map((asset) => ({
-        ...asset,
-        thumbUrl: stripDataUrl(asset.thumbUrl),
-        originalUrl: stripDataUrl(asset.originalUrl),
-      }))
-      .filter((asset) => Boolean(asset.id || asset.thumbUrl || asset.originalUrl)),
-    ...(workbookDetail
-      ? {
-          workbookDetail: {
-            ...workbookDetail,
-            remarkImages: (workbookDetail.remarkImages ?? []).map(stripDataUrl).filter(Boolean),
-            remarkImageAssets: workbookDetail.remarkImageAssets
-              ?.map((asset) => ({
-                ...asset,
-                thumbUrl: stripDataUrl(asset.thumbUrl),
-                originalUrl: stripDataUrl(asset.originalUrl),
-              }))
-              .filter((asset) => Boolean(asset.id || asset.thumbUrl || asset.originalUrl)),
-            competitors: workbookDetail.competitors.map((competitor) => ({
-              ...competitor,
-              hotVariantImage: stripDataUrl(competitor.hotVariantImage),
-              noteImage: stripDataUrl(competitor.noteImage),
-              hotVariantImageAsset: stripImageAssetData(competitor.hotVariantImageAsset),
-              noteImageAsset: stripImageAssetData(competitor.noteImageAsset),
-            })),
-          },
-        }
-      : {}),
-    ...(product.operationsProgress
-      ? {
-          operationsProgress: {
-            ...product.operationsProgress,
-            stages: product.operationsProgress.stages.map((stage) => ({
-              ...stage,
-              evidenceFile: stage.evidenceFile
-                ? {
-                    ...stage.evidenceFile,
-                    downloadUrl: stripDataUrl(stage.evidenceFile.downloadUrl),
-                    thumbUrl: stripDataUrl(stage.evidenceFile.thumbUrl),
-                    fileDataUrl: undefined,
-                  }
-                : undefined,
-            })),
-          },
-        }
-      : {}),
-  };
-}
-
-function hasLegacyAttachmentData(product: Product) {
-  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  const workbookDetail = productWithWorkbook.workbookDetail;
-
-  return Boolean(
-    product.image?.startsWith("data:")
-      || product.images?.some((image) => image.startsWith("data:"))
-      || product.imageAssets?.some((asset) => asset.thumbUrl.startsWith("data:") || asset.originalUrl.startsWith("data:"))
-      || workbookDetail?.remarkImages.some((image) => image.startsWith("data:"))
-      || workbookDetail?.remarkImageAssets?.some((asset) => asset.thumbUrl.startsWith("data:") || asset.originalUrl.startsWith("data:"))
-      || workbookDetail?.competitors.some((competitor) =>
-        competitor.hotVariantImage.startsWith("data:")
-          || competitor.noteImage.startsWith("data:")
-          || competitor.hotVariantImageAsset?.thumbUrl.startsWith("data:")
-          || competitor.hotVariantImageAsset?.originalUrl.startsWith("data:")
-          || competitor.noteImageAsset?.thumbUrl.startsWith("data:")
-          || competitor.noteImageAsset?.originalUrl.startsWith("data:"),
-      )
-      || product.operationsProgress?.stages.some((stage) => stage.evidenceFile?.fileDataUrl?.startsWith("data:")),
-  );
-}
-
-function stripImageAssetData(asset: ProductImageAsset | undefined) {
-  if (!asset) {
-    return undefined;
-  }
-
-  return {
-    ...asset,
-    thumbUrl: stripDataUrl(asset.thumbUrl),
-    originalUrl: stripDataUrl(asset.originalUrl),
-  };
-}
-
-function stripDataUrl(value: string | undefined) {
-  return value?.startsWith("data:") ? "" : value ?? "";
-}
-
-async function migrateLegacyProductAttachments(product: Product): Promise<Product> {
-  const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  const imageAssets = await migrateImageAssets(
-    product.imageAssets,
-    product.images?.length ? product.images : product.image ? [product.image] : [],
-    product.sku,
-    "image",
-  );
-  const workbookDetail = productWithWorkbook.workbookDetail
-    ? {
-        ...productWithWorkbook.workbookDetail,
-        ...await migrateWorkbookAttachments(productWithWorkbook.workbookDetail, product.sku),
-      }
-    : undefined;
-  const operationsProgress = product.operationsProgress
-    ? {
-        ...product.operationsProgress,
-        stages: await Promise.all(
-          product.operationsProgress.stages.map(async (stage, index) => {
-            const evidence = stage.evidenceFile;
-            if (!evidence?.fileDataUrl?.startsWith("data:")) {
-              return stage;
-            }
-
-            const asset = await uploadDataUrlAsProductAttachment(
-              evidence.fileDataUrl,
-              evidence.fileName || `${product.sku || "product"}-evidence-${index + 1}`,
-            );
-            return {
-              ...stage,
-              evidenceFile: {
-                fileId: asset?.id,
-                fileName: evidence.fileName,
-                fileType: evidence.fileType || asset?.mimeType || "",
-                fileSize: evidence.fileSize || asset?.size,
-                downloadUrl: asset?.downloadUrl || asset?.originalUrl,
-                thumbUrl: asset?.thumbUrl,
-                uploadedAt: evidence.uploadedAt || asset?.uploadedAt || new Date().toISOString(),
-              },
-            };
-          }),
-        ),
-      }
-    : product.operationsProgress;
-
-  return {
-    ...product,
-    image: product.image?.startsWith("data:") ? imageAssets[0]?.thumbUrl || imageAssets[0]?.originalUrl : product.image,
-    images: [],
-    imageAssets,
-    ...(workbookDetail ? { workbookDetail } : {}),
-    ...(operationsProgress ? { operationsProgress } : {}),
-  };
-}
-
-async function migrateImageAssets(
-  assets: ProductImageAsset[] | undefined,
-  fallbackImages: string[] | undefined,
-  sku: string,
-  namePrefix: string,
-) {
-  const sourceAssets = Array.isArray(assets) ? assets : [];
-  const sourceImages = Array.isArray(fallbackImages) ? fallbackImages : [];
-  const length = Math.max(sourceAssets.length, sourceImages.length);
-  const migrated: ProductImageAsset[] = [];
-
-  for (let index = 0; index < length; index += 1) {
-    const asset = sourceAssets[index];
-    const assetDownloadUrl = asset?.id
-      ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download`
-      : "";
-    const value = asset?.originalUrl || asset?.thumbUrl || sourceImages[index] || assetDownloadUrl;
-    if (!value) continue;
-
-    if (value.startsWith("data:")) {
-      const uploaded = await uploadDataUrlAsProductAttachment(value, `${sku || "product"}-${namePrefix}-${index + 1}`);
-      if (uploaded) migrated.push(uploaded);
-      continue;
-    }
-
-    migrated.push(asset ? {
-      ...asset,
-      originalUrl: asset.originalUrl || (asset.id ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download` : value),
-      thumbUrl: asset.thumbUrl || sourceImages[index] || value,
-    } : {
-      id: "",
-      name: `${sku || "product"}-${namePrefix}-${index + 1}`,
-      mimeType: "image/jpeg",
-      size: 0,
-      storageType: "r2",
-      uploadedAt: "",
-      thumbUrl: sourceImages[index] || value,
-      originalUrl: value,
-    });
-  }
-
-  return migrated;
-}
-
-async function migrateWorkbookAttachments(detail: TrialProductDraft, sku: string) {
-  const remarkImageAssets = await migrateImageAssets(detail.remarkImageAssets, detail.remarkImages, sku, "remark");
-  const competitors = await Promise.all(detail.competitors.map(async (competitor, index) => {
-    const hotVariantImageAsset = await migrateSingleWorkbookAsset(
-      competitor.hotVariantImageAsset,
-      competitor.hotVariantImage,
-      `${sku || "product"}-competitor-${index + 1}`,
-    );
-    const noteImageAsset = await migrateSingleWorkbookAsset(
-      competitor.noteImageAsset,
-      competitor.noteImage,
-      `${sku || "product"}-competitor-note-${index + 1}`,
-    );
-
-    return {
-      ...competitor,
-      hotVariantImageAsset,
-      hotVariantImage: hotVariantImageAsset?.thumbUrl || hotVariantImageAsset?.originalUrl || "",
-      noteImageAsset,
-      noteImage: noteImageAsset?.thumbUrl || noteImageAsset?.originalUrl || "",
-    };
-  }));
-
-  return {
-    remarkImages: remarkImageAssets.map((asset) => asset.thumbUrl || asset.originalUrl),
-    remarkImageAssets,
-    competitors,
-  };
-}
-
-async function migrateSingleWorkbookAsset(asset: ProductImageAsset | undefined, value: string | undefined, name: string) {
-  const assetDownloadUrl = asset?.id
-    ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download`
-    : "";
-  const source = asset?.originalUrl || asset?.thumbUrl || value || assetDownloadUrl;
-  if (!source) return undefined;
-  if (source.startsWith("data:")) {
-    return (await uploadDataUrlAsProductAttachment(source, name)) || undefined;
-  }
-  return asset ? {
-    ...asset,
-    originalUrl: asset.originalUrl || (asset.id ? `/api/products/file-assets/${encodeURIComponent(asset.id)}/download` : source),
-    thumbUrl: asset.thumbUrl || value || source,
-  } : {
-    id: "",
-    name,
-    mimeType: "image/jpeg",
-    size: 0,
-    storageType: "r2",
-    uploadedAt: "",
-    thumbUrl: value || source,
-    originalUrl: source,
-  };
 }
 
 function getTeamMemberOptions(members: TeamMember[], roles: ProductWorkflowRole[]) {

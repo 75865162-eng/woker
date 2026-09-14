@@ -123,7 +123,7 @@ export const aiProviderOptions: AiProviderOption[] = [
     shortLabel: "AG",
     accentClass: "bg-orange-50 text-orange-700",
     baseUrl: "https://api.aigocode.app/v1",
-    model: "gpt-5.4",
+    model: "gpt-5.5",
     wireApi: "responses",
   },
   {
@@ -179,7 +179,7 @@ export const defaultAiImageModelSettings: AiModelSettings = {
 };
 
 function normalizeModelName(value: Partial<AiModelSettings> | null | undefined) {
-  if (value?.provider === "togoapi" && value.model === "gpt-5.4") {
+  if ((value?.provider === "togoapi" || value?.provider === "aigocode") && value.model === "gpt-5.4") {
     return "gpt-5.5";
   }
 

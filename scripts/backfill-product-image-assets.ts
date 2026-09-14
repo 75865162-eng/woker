@@ -247,7 +247,12 @@ async function main() {
       select: {
         id: true,
         organizationId: true,
+        userId: true,
         workspaceId: true,
+        accountId: true,
+        marketplace: true,
+        sku: true,
+        revision: true,
         payload: true,
       },
       orderBy: {
@@ -280,13 +285,38 @@ async function main() {
       estimatedBytes += result.originalDataUrlBytes;
 
       if (applyChanges) {
-        await prisma.productRecord.update({
-          where: {
-            id: record.id,
-          },
-          data: {
-            payload: result.nextPayload as Prisma.InputJsonValue,
-          },
+        await prisma.$transaction(async (tx) => {
+          const updated = await tx.productRecord.updateMany({
+            where: {
+              id: record.id,
+              revision: record.revision,
+            },
+            data: {
+              payload: result.nextPayload as Prisma.InputJsonValue,
+              revision: record.revision + 1,
+            },
+          });
+          if (updated.count !== 1) {
+            throw new Error(`Product ${record.sku} changed during image backfill.`);
+          }
+
+          await tx.productOutboxEvent.create({
+            data: {
+              organizationId: record.organizationId,
+              userId: record.userId,
+              workspaceId: record.workspaceId,
+              accountId: record.accountId,
+              marketplace: record.marketplace,
+              eventType: "product_projection_requested",
+              entityType: "product",
+              entityId: record.id,
+              payload: {
+                productRecordId: record.id,
+                revision: record.revision + 1,
+                projectionVersion: 1,
+              },
+            },
+          });
         });
       }
     }

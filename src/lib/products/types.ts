@@ -125,7 +125,7 @@ export type Product = {
   developer: string;
   purchasePrice: number;
   status: ProductStatus;
-  source?: "dashboard" | "sellfox";
+  source?: "dashboard";
   supplierName: string;
   supplierUrl: string;
   specs: string;

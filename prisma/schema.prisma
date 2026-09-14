@@ -17,6 +17,7 @@ model Organization {
   externalIntegrationSettings ExternalIntegrationSetting[]
   members            OrganizationMember[]
   notifications      UserNotification[]
+  marketplaces       Marketplace[]
   productListCacheRecords ProductListCacheRecord[]
   rosterRoles        OrganizationRosterRole[]
   wecomNotificationSettings WeComNotificationSetting[]
@@ -30,6 +31,16 @@ model Organization {
   productOutboxEvents ProductOutboxEvent[]
   productSummaryRecords ProductSummaryRecord[]
   productTextRecords ProductTextRecord[]
+  productProjectionStates ProductProjectionState[]
+  productProjectionFailures ProductProjectionFailure[]
+  sellerAccounts     SellerAccount[]
+  suppliers          Supplier[]
+  productMasters     ProductMaster[]
+  productVariants    ProductVariant[]
+  productListings    ProductListing[]
+  productSuppliers   ProductSupplier[]
+  productCosts       ProductCost[]
+  productMedia       ProductMedia[]
 }
 
 model User {
@@ -210,6 +221,7 @@ model FileObject {
   jobs             ImportJob[]
   WorkspaceDataset WorkspaceDataset[]
   productBinding   ProductAttachmentBinding?
+  productMedia     ProductMedia[]
 
   @@index([organizationId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
@@ -349,6 +361,12 @@ model ProductRecord {
   revision                     Int       @default(1)
   summary                      ProductSummaryRecord?
   texts                        ProductTextRecord[]
+  projectionStates             ProductProjectionState[]
+  projectionFailures           ProductProjectionFailure[]
+  productMaster                ProductMaster?
+  productVariants              ProductVariant[]
+  productListings              ProductListing[]
+  productMedia                 ProductMedia[]
 
   @@unique([organizationId, workspaceId, sku])
   @@index([organizationId, updatedAt])
@@ -371,6 +389,236 @@ model ProductRecord {
   @@index([organizationId, workspaceId, supplierName])
   @@index([organizationId, workspaceId, workflowDueAt])
   @@index([organizationId, workspaceId, workflowStage])
+}
+
+model Marketplace {
+  id             String           @id @default(cuid())
+  organizationId String
+  code           String
+  name           String           @default("")
+  countryCode    String           @default("")
+  region         String           @default("")
+  currency       String           @default("")
+  status         String           @default("active")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sellerAccounts SellerAccount[]
+  listings       ProductListing[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status, updatedAt])
+}
+
+model SellerAccount {
+  id              String           @id @default(cuid())
+  organizationId  String
+  workspaceId     String           @default("default")
+  accountKey      String
+  displayName     String           @default("")
+  marketplaceCode String           @default("")
+  marketplaceId   String?
+  status          String           @default("active")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  marketplace     Marketplace?     @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
+  listings        ProductListing[]
+
+  @@unique([organizationId, workspaceId, accountKey, marketplaceCode])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, marketplaceCode])
+}
+
+model Supplier {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  normalizedName String
+  contactName    String            @default("")
+  phone          String            @default("")
+  email          String            @default("")
+  website        String            @default("")
+  address        String            @default("")
+  notes          String            @default("")
+  payload        Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productLinks   ProductSupplier[]
+
+  @@unique([organizationId, normalizedName])
+  @@index([organizationId, name])
+  @@index([organizationId, updatedAt])
+}
+
+model ProductMaster {
+  id                String            @id @default(cuid())
+  productRecordId   String            @unique
+  organizationId    String
+  workspaceId       String            @default("default")
+  sku               String
+  chineseName       String            @default("")
+  englishName       String            @default("")
+  brand             String            @default("")
+  status            String            @default("")
+  source            String            @default("dashboard")
+  currentOwner      String            @default("")
+  sourceRevision    Int               @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord     @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  variants          ProductVariant[]
+  listings          ProductListing[]
+  suppliers         ProductSupplier[]
+  costs             ProductCost[]
+  media             ProductMedia[]
+
+  @@unique([organizationId, workspaceId, sku])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, workspaceId, currentOwner, updatedAt])
+}
+
+model ProductVariant {
+  id                String          @id @default(cuid())
+  productMasterId   String
+  productRecordId   String
+  organizationId    String
+  workspaceId       String          @default("default")
+  sku               String
+  asin              String          @default("")
+  parentAsin        String          @default("")
+  variantName       String          @default("")
+  attributes        Json?
+  status            String          @default("")
+  sourceRevision    Int             @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster   @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord   @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  listings          ProductListing[]
+  costs             ProductCost[]
+
+  @@unique([organizationId, workspaceId, sku])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, productMasterId])
+  @@index([organizationId, workspaceId, status, updatedAt])
+}
+
+model ProductListing {
+  id                String          @id @default(cuid())
+  productMasterId   String
+  productVariantId  String?
+  productRecordId   String
+  organizationId    String
+  workspaceId       String          @default("default")
+  sellerAccountId   String?
+  marketplaceId     String?
+  listingKey        String
+  sku               String
+  asin              String          @default("")
+  listingStatus     String          @default("")
+  title             String          @default("")
+  currency          String          @default("")
+  price             Float?
+  inventory         Int?
+  fulfillmentType   String          @default("")
+  sourceRevision    Int             @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster   @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  productRecord     ProductRecord   @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  sellerAccount     SellerAccount?  @relation(fields: [sellerAccountId], references: [id], onDelete: SetNull)
+  marketplace       Marketplace?    @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, workspaceId, listingKey])
+  @@index([organizationId, workspaceId, sku])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, listingStatus, updatedAt])
+}
+
+model ProductSupplier {
+  id                String        @id @default(cuid())
+  productMasterId   String
+  supplierId        String
+  organizationId    String
+  workspaceId       String        @default("default")
+  supplierSku       String        @default("")
+  productUrl        String        @default("")
+  isPrimary         Boolean       @default(false)
+  purchaseLeadTime  String        @default("")
+  moq               Int?
+  notes             String        @default("")
+  sourceRevision    Int           @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  supplier          Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, productMasterId, supplierId])
+  @@index([organizationId, workspaceId, supplierId])
+  @@index([organizationId, workspaceId, isPrimary])
+}
+
+model ProductCost {
+  id                String          @id @default(cuid())
+  productMasterId   String
+  productVariantId  String?
+  organizationId    String
+  workspaceId       String          @default("default")
+  costType          ProductCostType @default(purchase)
+  amount            Float           @default(0)
+  currency          String          @default("CNY")
+  effectiveAt       DateTime?
+  sourceRevision    Int             @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster   @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workspaceId, productMasterId, costType, updatedAt])
+  @@index([organizationId, workspaceId, productVariantId, costType, updatedAt])
+}
+
+model ProductMedia {
+  id                String           @id @default(cuid())
+  productMasterId   String
+  productRecordId   String
+  fileId            String?
+  organizationId    String
+  workspaceId       String           @default("default")
+  mediaType         ProductMediaType @default(image)
+  role              String           @default("gallery")
+  url               String           @default("")
+  thumbUrl          String           @default("")
+  originalUrl       String           @default("")
+  fileName          String           @default("")
+  mimeType          String           @default("")
+  size              Int?
+  sortOrder         Int              @default(0)
+  sourceRevision    Int              @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster    @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord    @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  file              FileObject?      @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workspaceId, productMasterId, mediaType, sortOrder])
+  @@index([organizationId, workspaceId, productRecordId])
+  @@index([fileId])
 }
 
 model ProductSummaryRecord {
@@ -451,6 +699,48 @@ model ProductTextRecord {
   @@index([organizationId, workspaceId, language, updatedAt])
 }
 
+model ProductProjectionState {
+  id                String                   @id @default(cuid())
+  productRecordId   String
+  organizationId    String
+  workspaceId       String                   @default("default")
+  projectionName    ProductProjectionName
+  status            ProductProjectionStatus @default(pending)
+  sourceRevision    Int?
+  projectionVersion Int?
+  attempts          Int                    @default(0)
+  lastError         String?
+  lastStartedAt     DateTime?
+  lastCompletedAt   DateTime?
+  nextRetryAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord           @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([productRecordId, projectionName])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, workspaceId, projectionName, status, updatedAt])
+}
+
+model ProductProjectionFailure {
+  id                String                 @id @default(cuid())
+  productRecordId   String
+  organizationId    String
+  workspaceId       String                 @default("default")
+  projectionName    ProductProjectionName
+  sourceRevision    Int?
+  projectionVersion Int?
+  attempt           Int
+  error             String
+  createdAt         DateTime               @default(now())
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord           @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, productRecordId, createdAt])
+  @@index([organizationId, workspaceId, projectionName, createdAt])
+}
+
 model ProductAttachmentBinding {
   id             String                   @id @default(cuid())
   fileId         String                   @unique
@@ -528,49 +818,6 @@ model ProductListCacheRecord {
   @@index([expiresAt])
 }
 
-model SellfoxProductRecord {
-  id                           String    @id
-  organizationId               String
-  userId                       String
-  sku                          String
-  payload                      Json
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
-  workspaceId                  String    @default("default")
-  accountId                    String    @default("")
-  marketplace                  String    @default("")
-  chineseName                  String    @default("")
-  englishName                  String    @default("")
-  asin                         String    @default("")
-  status                       String    @default("")
-  supplierName                 String    @default("")
-  purchasePrice                Float     @default(0)
-  selectionOwner               String    @default("")
-  opsAssignee                  String    @default("")
-  designerAssignee             String    @default("")
-  workflowStage                String    @default("")
-  workflowDueAt                DateTime?
-  operationsProgressIncomplete Boolean   @default(false)
-
-  @@unique([organizationId, workspaceId, sku])
-  @@index([organizationId, updatedAt])
-  @@index([organizationId, workspaceId, updatedAt])
-  @@index([organizationId, sku])
-  @@index([userId, updatedAt])
-  @@index([organizationId, accountId, marketplace, updatedAt], map: "SellfoxProductRecord_organizationId_accountId_marketplace_upda")
-  @@index([organizationId, workspaceId, asin])
-  @@index([organizationId, workspaceId, chineseName])
-  @@index([organizationId, workspaceId, designerAssignee])
-  @@index([organizationId, workspaceId, operationsProgressIncomplete], map: "SellfoxProductRecord_organizationId_workspaceId_operationsPro")
-  @@index([organizationId, workspaceId, opsAssignee])
-  @@index([organizationId, workspaceId, purchasePrice])
-  @@index([organizationId, workspaceId, selectionOwner])
-  @@index([organizationId, workspaceId, status])
-  @@index([organizationId, workspaceId, supplierName])
-  @@index([organizationId, workspaceId, workflowDueAt])
-  @@index([organizationId, workspaceId, workflowStage])
-}
-
 model UserNotification {
   id              String       @id @default(cuid())
   organizationId  String
@@ -594,25 +841,6 @@ model UserNotification {
   @@index([entityType, entityId])
 }
 
-model ProductImageCopyGalleryRecord {
-  id             String   @id @default(cuid())
-  organizationId String
-  userId         String
-  sku            String
-  payload        Json
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  workspaceId    String   @default("default")
-  accountId      String   @default("")
-  marketplace    String   @default("")
-
-  @@unique([organizationId, workspaceId, sku], map: "ProductImageCopyGalleryRecord_organizationId_workspaceId_sku_ke")
-  @@index([organizationId, updatedAt])
-  @@index([userId, updatedAt])
-  @@index([organizationId, accountId, marketplace, updatedAt], map: "ProductImageCopyGalleryRecord_organizationId_accountId_marketpl")
-  @@index([organizationId, workspaceId, updatedAt], map: "ProductImageCopyGalleryRecord_organizationId_workspaceId_update")
-}
-
 model DataChangeVersion {
   id             String       @id @default(cuid())
   organizationId String
@@ -631,7 +859,7 @@ model DataChangeVersion {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User?        @relation(fields: [userId], references: [id])
 
-  @@unique([organizationId, entityType, entityId, version], map: "DataChangeVersion_organizationId_entityType_entityId_version_ke")
+  @@unique([organizationId, workspaceId, entityType, entityId, version], map: "DataChangeVersion_org_workspace_entity_version_key")
   @@index([userId, createdAt])
   @@index([organizationId, entityType, entityId, createdAt], map: "DataChangeVersion_organizationId_entityType_entityId_createdAt_")
   @@index([organizationId, workspaceId, entityType, createdAt], map: "DataChangeVersion_organizationId_workspaceId_entityType_created")
@@ -1243,6 +1471,38 @@ enum ProductOutboxStatus {
   running
   done
   failed
+}
+
+enum ProductProjectionName {
+  summary
+  text
+  list_summary
+  product_center
+}
+
+enum ProductProjectionStatus {
+  pending
+  processing
+  ready
+  failed
+}
+
+enum ProductCostType {
+  purchase
+  freight
+  packaging
+  tariff
+  storage
+  advertising
+  other
+}
+
+enum ProductMediaType {
+  image
+  video
+  document
+  workbook
+  other
 }
 
 enum ImportJobStatus {

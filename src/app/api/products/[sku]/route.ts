@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
-import { prisma } from "@/lib/db/prisma";
 import type { Product } from "@/lib/products/types";
 import type { TrialProductDraft } from "@/components/products/product-workbench-model";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { getProductDetail } from "@/lib/products/product-detail-service";
 
 export const runtime = "nodejs";
 
@@ -81,30 +81,32 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
 
     const { sku } = await params;
     const scope = workspaceScopeFromRequest(request);
-    const record = await measure("detail", prisma.productRecord.findUnique({
-      where: {
-        organizationId_workspaceId_sku: {
-          organizationId: user.organizationId,
-          workspaceId: scope.workspaceId,
-          sku: normalizeSku(sku),
-        },
-      },
-      select: {
-        payload: true,
-        revision: true,
-      },
+    const detail = await measure("detail", getProductDetail({
+      organizationId: user.organizationId,
+      workspaceId: scope.workspaceId,
+      sku: normalizeSku(sku),
     }));
 
-    if (!record) {
+    if (!detail) {
       return createTimedResponse({ error: "商品不存在。" }, "not-found", { status: 404 });
     }
 
-    const product = record.payload as unknown as Product;
+    const product = detail.product;
     const productWithRevision = {
       ...(includeWorkbookImages ? product : stripWorkbookImages(product)),
-      revision: record.revision,
     } as Product;
-    return createTimedResponse({ product: productWithRevision }, "ok");
+    return createTimedResponse({
+      product: productWithRevision,
+      detail: {
+        productCenter: detail.productCenter,
+        summary: detail.summary,
+        text: detail.text,
+        workflow: detail.workflow,
+        media: detail.media,
+        metrics: detail.metrics,
+        projection: detail.projection,
+      },
+    }, "ok");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load product.";
     const response = NextResponse.json({ error: message }, { status: 500 });

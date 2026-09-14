@@ -89,7 +89,7 @@ export async function saveOrganizationRoleCatalog(organizationId: string, roles:
     }));
 
   const saved = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+    await tx.$queryRaw<{ locked: number }[]>`SELECT 1::int AS "locked" FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
 
     await tx.organizationRosterRole.deleteMany({
       where: {

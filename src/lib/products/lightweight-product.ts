@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/products/types";
+import { getProductListImage, isPlaceholderProductImageAssetId } from "@/lib/products/image-assets";
 
 function isDataUrl(value: string) {
   return /^data:[^,]+,/i.test(value.trim());
@@ -48,8 +49,10 @@ function sanitizeValue(value: unknown, key?: string): unknown {
       const originalUrl = typeof source.originalUrl === "string" ? source.originalUrl.trim() : "";
       result.thumbUrl = !isDataUrl(originalUrl)
         ? originalUrl
-        : typeof source.id === "string" && source.id
-          ? `/api/products/file-assets/${encodeURIComponent(source.id)}/download`
+        : typeof source.thumbFileId === "string" && source.thumbFileId && !isPlaceholderProductImageAssetId(source.thumbFileId)
+          ? `/api/products/file-assets/${encodeURIComponent(source.thumbFileId)}/download`
+          : typeof source.id === "string" && source.id && !isPlaceholderProductImageAssetId(source.id)
+            ? `/api/products/file-assets/${encodeURIComponent(source.id)}/download`
           : "";
     }
   }
@@ -72,9 +75,10 @@ export function toLightweightProduct(product: Product): Product {
     };
   };
 
-  const firstImage = sanitized.imageAssets?.[0];
-  sanitized.image = firstImage?.thumbUrl || "";
-  sanitized.images = (sanitized.imageAssets ?? []).map((asset) => asset.thumbUrl).filter(Boolean);
+  sanitized.image = getProductListImage(sanitized);
+  sanitized.images = (sanitized.imageAssets ?? []).length
+    ? (sanitized.imageAssets ?? []).map((asset) => asset.thumbUrl).filter(Boolean)
+    : (sanitized.images ?? []).filter((image) => Boolean(image) && !isDataUrl(image));
 
   if (withExtras.workbookDetail) {
     withExtras.workbookDetail.remarkImages = (withExtras.workbookDetail.remarkImageAssets ?? [])

@@ -12,7 +12,9 @@ type ProductWorkflowLike = Pick<
   | "workflowStage"
   | "workflowDueAt"
   | "workflowHistory"
->;
+> & {
+  createdAt?: Product["createdAt"];
+};
 
 export const productWorkflowStageLabels: Record<ProductWorkflowStage, string> = {
   selection_pending: "选品待提交",
@@ -37,6 +39,7 @@ export const productWorkflowStageOptions: Array<{ value: ProductWorkflowStage; l
 ).map(([value, label]) => ({ value: value as ProductWorkflowStage, label }));
 
 export const productWorkflowSlaDays = 3;
+export const productWorkflowOverdueLookbackDays = 3;
 
 const dayMs = 24 * 60 * 60 * 1000;
 const closedStages = new Set<ProductWorkflowStage>(["done", "blocked"]);
@@ -97,7 +100,9 @@ export function isProductWorkflowOverdue(product: ProductWorkflowLike, now = new
   }
 
   if (!product.workflowDueAt) {
-    return false;
+    const createdAt = product.createdAt ? new Date(product.createdAt).getTime() : Number.NaN;
+    return Number.isFinite(createdAt)
+      && createdAt < now.getTime() - productWorkflowOverdueLookbackDays * dayMs;
   }
 
   return new Date(product.workflowDueAt).getTime() < now.getTime();

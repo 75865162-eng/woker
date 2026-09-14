@@ -61,7 +61,6 @@ specs/002-sku-thumbnail-lazy-load/
 ```text
 src/components/products/product-workbench.tsx
 src/components/products/product-workbench-shell.tsx
-src/components/products/product-image-copy-gallery-modal.tsx
 src/components/products/product-video-plan-modal.tsx
 src/app/api/products/[sku]/route.ts
 src/app/api/products/route.ts
