@@ -9,7 +9,7 @@
 5. CI 上传 artifact 和 manifest 到发布系统。
 6. 服务器校验 artifact SHA256 后调用 `scripts/server-artifact-release.sh` 解压产物、执行 Prisma migrate、切换 release、重启 systemd。
 
-服务器端只负责下载、校验、解压、迁移、切换 release、重启服务和本机 HTTP 健康检查，不执行 `npm run build`。发布完成后只输出 `RELEASE-RESULT.json` 摘要。
+服务器端只负责下载、校验、解压、迁移、切换 release、重启服务和本机 HTTP 健康检查，不执行 `npm run build`。发布完成后只输出 `RELEASE-RESULT.json` 摘要；如果切换后的应用无法通过健康检查，会只回滚应用代码、current symlink、systemd 进程和 Caddy 配置，不回滚数据库 migration。
 
 当前 worker 仍以 `tsx scripts/*.ts` 运行，因此第一阶段 artifact 仍保留 worker 所需的 `src/`、`scripts/` 和 Prisma 文件；这些目录不是 Web standalone 的重复依赖。后续 worker 预编译为 JS 后，再进一步删除这部分源码。
 

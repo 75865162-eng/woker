@@ -255,6 +255,7 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 - 默认只保留最近 5 个 release。可通过服务器环境变量 `KEEP_RELEASES` 临时调整；不要为了省空间删除当前 release 或 Docker volumes。
 - 小盘服务器上如果历史 Docker build cache 占用过高，可在服务启动并验证通过后运行 `docker builder prune -af`；不要清理 Docker volumes。
 - 每次部署后优先读取 release 目录中的 `RELEASE-RESULT.json`；只有摘要显示失败时，再检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker` 和 `journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
+- 发布失败时只允许回滚应用代码、current symlink、systemd 进程和 Caddy 配置；数据库 migration 只向前执行，不自动执行 `migrate down`、删表或恢复数据库。`RELEASE-RESULT.json` 必须明确记录 `database: not_rolled_back`。
 
 推荐更新流程（优先 CI artifact 发布）：
 
