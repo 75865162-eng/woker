@@ -47,6 +47,7 @@ function readSelectedScope(): SelectedScope {
 
 function writeSelectedScope(scope: SelectedScope) {
   window.localStorage.setItem(storageKey, JSON.stringify(scope));
+  document.cookie = `${storageKey}=${encodeURIComponent(JSON.stringify(scope))}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
 function isSameScope(left: SelectedScope, right: SelectedScope) {
@@ -103,6 +104,7 @@ export function WorkspaceScopeSelector() {
 
   useEffect(() => {
     patchFetchWithWorkspaceScope();
+    writeSelectedScope(selectedRef.current);
   }, []);
 
   useEffect(() => {

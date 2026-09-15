@@ -31,7 +31,7 @@ import {
 } from "@/lib/accounts/permissions";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { accountWorkbookColumns, createAccountWorkbookRows, exportAccountWorkbook, parseAccountWorkbookFile } from "@/lib/accounts/account-workbook";
-import { normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
+import { normalizeTeamAccounts, type AccountRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 
 type AccountStatus = "active" | "pending" | "disabled" | "archived";
 type RoleId = AccountRoleId;
@@ -66,12 +66,6 @@ type Role = {
 };
 
 const defaultRoleCatalog = buildDefaultRoleCatalog();
-const initialRoles: Role[] = defaultRoleCatalog.map((role) => ({
-  ...role,
-  id: role.id as RoleId,
-  memberCount: 0,
-}));
-
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const teamMembersApiPath = "/api/accounts/team-members";
@@ -271,10 +265,35 @@ async function saveRolesToApi(roles: Role[]) {
   }
 }
 
-export function AccountWorkbench() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
+export function AccountWorkbench({
+  initialAccounts,
+  initialRoles: serverRoles,
+}: {
+  initialAccounts?: TeamAccountRecord[];
+  initialRoles?: RoleCatalogItem[];
+}) {
+  const [accounts, setAccounts] = useState<Account[]>(() =>
+    (initialAccounts ?? []).map((account) => withLoadedAccountState({
+      ...account,
+      lastActiveAt: account.lastActiveAt ?? "未记录",
+      username: account.username ?? "",
+      password: account.password ?? undefined,
+      amazonStorePermissions: account.amazonStorePermissions ?? "",
+      multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
+      phone: account.phone ?? "",
+      lastLoginIp: account.lastLoginIp ?? "",
+      lastLoginAt: account.lastLoginAt ?? "",
+      sourceCreatedAt: account.sourceCreatedAt ?? "",
+    })) as Account[],
+  );
   const [accountSaveError, setAccountSaveError] = useState("");
-  const [roles, setRoles] = useState(initialRoles);
+  const [roles, setRoles] = useState<Role[]>(() =>
+    (serverRoles ?? defaultRoleCatalog).map((role) => ({
+      ...role,
+      id: role.id as RoleId,
+      memberCount: 0,
+    })),
+  );
   const [activeRoleId, setActiveRoleId] = useState<RoleId>("operations");
   const [query, setQuery] = useState("");
   const [newAccountOpen, setNewAccountOpen] = useState(false);
@@ -302,6 +321,8 @@ export function AccountWorkbench() {
   useEffect(() => {
     let canceled = false;
 
+    if (initialAccounts) return;
+
     void loadAccountsFromApi().then((payload) => {
       if (canceled) return;
 
@@ -315,10 +336,12 @@ export function AccountWorkbench() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [initialAccounts]);
 
   useEffect(() => {
     let canceled = false;
+
+    if (serverRoles) return;
 
     void loadRolesFromApi().then((savedRoles) => {
       if (canceled || !savedRoles) return;
@@ -329,7 +352,7 @@ export function AccountWorkbench() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [serverRoles]);
 
   const activeRole = visibleRoles.find((role) => role.id === activeRoleId) ?? visibleRoles[0];
   const activeRoleMembers = useMemo(

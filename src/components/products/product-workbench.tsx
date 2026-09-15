@@ -110,6 +110,18 @@ type ProductListSummary = {
   overdue: number;
 };
 
+type ProductWorkbenchInitialData = {
+  workspaceId: string;
+  products: ProductListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    pageCount: number;
+  };
+  summary: ProductListSummary;
+};
+
 const emptyProductListSummary: ProductListSummary = {
   total: 0,
   developing: 0,
@@ -218,6 +230,17 @@ function invalidateProductRequestCaches() {
   productSummaryInflight.clear();
 }
 
+function scheduleNonCriticalTask(callback: () => void, timeout = 1500) {
+  if (typeof window.requestIdleCallback === "function") {
+    const idleId = window.requestIdleCallback(callback, { timeout });
+
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timer = window.setTimeout(callback, Math.min(timeout, 500));
+  return () => window.clearTimeout(timer);
+}
+
 function getProductDetailCacheKey(workspaceId: string, sku: string) {
   return `${workspaceId || "default"}:${sku.trim()}`;
 }
@@ -291,28 +314,40 @@ function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
   }
 }
 
-export function ProductWorkbench() {
+export function ProductWorkbench({ initialData }: { initialData?: ProductWorkbenchInitialData }) {
   const initialCachedWorkbench = readCachedProductWorkbench();
-  const [products, setProducts] = useState<Product[]>(() => initialCachedWorkbench?.products ?? []);
+  const hasServerInitialData = Boolean(
+    initialData
+      && (typeof window === "undefined" || readCurrentWorkspaceId() === initialData.workspaceId),
+  );
+  const [products, setProducts] = useState<Product[]>(() => (
+    hasServerInitialData ? (initialData?.products as unknown as Product[]) : initialCachedWorkbench?.products ?? []
+  ));
   const [, setTrialProducts] = useState<TrialProductDraft[]>([]);
-  const [filters, setFilters] = useState<ProductFilters>(() => normalizeProductFilters(initialCachedWorkbench?.filters));
+  const [filters, setFilters] = useState<ProductFilters>(() => (
+    hasServerInitialData ? normalizeProductFilters() : normalizeProductFilters(initialCachedWorkbench?.filters)
+  ));
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [detailReady, setDetailReady] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [versionProduct, setVersionProduct] = useState<Product | null>(null);
-  const [page, setPage] = useState(() => initialCachedWorkbench?.page ?? 1);
-  const [pageSize, setPageSize] = useState(() => initialCachedWorkbench?.pageSize ?? 20);
-  const [productsTotalCount, setProductsTotalCount] = useState(() => initialCachedWorkbench?.totalCount ?? 0);
-  const [listSummary, setListSummary] = useState<ProductListSummary>(() => initialCachedWorkbench?.summary ?? emptyProductListSummary);
-  const [summaryReady, setSummaryReady] = useState(() => Boolean(initialCachedWorkbench));
+  const [page, setPage] = useState(() => (hasServerInitialData ? initialData?.pagination.page : initialCachedWorkbench?.page) ?? 1);
+  const [pageSize, setPageSize] = useState(() => (hasServerInitialData ? initialData?.pagination.pageSize : initialCachedWorkbench?.pageSize) ?? 20);
+  const [productsTotalCount, setProductsTotalCount] = useState(() => (
+    hasServerInitialData ? initialData?.pagination.total : initialCachedWorkbench?.totalCount
+  ) ?? 0);
+  const [listSummary, setListSummary] = useState<ProductListSummary>(() => (
+    hasServerInitialData ? initialData?.summary : initialCachedWorkbench?.summary
+  ) ?? emptyProductListSummary);
+  const [summaryReady, setSummaryReady] = useState(() => Boolean((hasServerInitialData && initialData) || initialCachedWorkbench));
   const [mySkuCount, setMySkuCount] = useState(0);
   const [mySkuReady, setMySkuReady] = useState(false);
   const [activityLog, setActivityLog] = useState<string[]>(["产品工作台已连接数据库"]);
   const [exportingProducts, setExportingProducts] = useState(false);
   const [exportNotice, setExportNotice] = useState<ProductExportNotice | null>(null);
-  const [productsLoading, setProductsLoading] = useState(() => !initialCachedWorkbench);
+  const [productsLoading, setProductsLoading] = useState(() => !hasServerInitialData && !initialCachedWorkbench);
   const [productsError, setProductsError] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const exportPollingJobsRef = useRef(new Set<string>());
@@ -320,6 +355,10 @@ export function ProductWorkbench() {
   const productsRequestSeq = useRef(0);
   const summaryRequestSeq = useRef(0);
   const productDetailRequestSeq = useRef(0);
+  const initialDataConsumedRef = useRef(false);
+  const previousFiltersRef = useRef<ProductFilters | null>(null);
+  const previousPageRef = useRef<number | null>(null);
+  const previousPageSizeRef = useRef<number | null>(null);
   const pendingProductRef = useRef<{ product: Product; isNew: boolean } | null>(null);
   const productsRef = useRef(products);
   const filtersRef = useRef(filters);
@@ -378,6 +417,7 @@ export function ProductWorkbench() {
 
   useEffect(() => {
     let canceled = false;
+    let cancelScheduledTask: (() => void) | null = null;
 
     async function loadTeamAccounts() {
       const apiAccounts = await loadTeamAccountsFromApi();
@@ -386,10 +426,13 @@ export function ProductWorkbench() {
       setTeamAccounts(apiAccounts);
     }
 
-    void loadTeamAccounts();
+    cancelScheduledTask = scheduleNonCriticalTask(() => {
+      void loadTeamAccounts();
+    });
 
     return () => {
       canceled = true;
+      cancelScheduledTask?.();
     };
   }, []);
 
@@ -523,8 +566,9 @@ export function ProductWorkbench() {
 
     const controller = new AbortController();
     let disposed = false;
+    let cancelScheduledTask: (() => void) | null = null;
 
-    void (async () => {
+    cancelScheduledTask = scheduleNonCriticalTask(() => void (async () => {
       try {
         const data = await fetchProducts({
           filters: {
@@ -551,10 +595,11 @@ export function ProductWorkbench() {
 
         setMySkuReady(true);
       }
-    })();
+    })());
 
     return () => {
       disposed = true;
+      cancelScheduledTask?.();
       controller.abort();
     };
   }, [currentUserName, fetchProducts]);
@@ -592,6 +637,30 @@ export function ProductWorkbench() {
   }
 
   useEffect(() => {
+    const isFirstLoad = !initialDataConsumedRef.current;
+    const hasMatchingServerData =
+      isFirstLoad
+      && Boolean(initialData)
+      && readCurrentWorkspaceId() === initialData?.workspaceId
+      && page === initialData?.pagination.page
+      && pageSize === initialData?.pagination.pageSize
+      && !hasActiveProductListFilters(filters);
+
+    initialDataConsumedRef.current = true;
+
+    if (hasMatchingServerData) {
+      previousFiltersRef.current = filters;
+      previousPageRef.current = page;
+      previousPageSizeRef.current = pageSize;
+      return;
+    }
+
+    const filtersChanged = previousFiltersRef.current !== null
+      && JSON.stringify(previousFiltersRef.current) !== JSON.stringify(filters);
+    const shouldDebounce = !isFirstLoad && filtersChanged;
+    previousFiltersRef.current = filters;
+    previousPageRef.current = page;
+    previousPageSizeRef.current = pageSize;
     const requestId = ++productsRequestSeq.current;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
@@ -604,7 +673,7 @@ export function ProductWorkbench() {
             filters,
             page,
             pageSize,
-            includeSummary: false,
+            includeSummary: true,
             detail: true,
             signal: controller.signal,
           });
@@ -660,13 +729,13 @@ export function ProductWorkbench() {
       }
 
       void loadProducts();
-    }, 180);
+    }, shouldDebounce ? 180 : 0);
 
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [fetchProducts, filters, loadProductSummary, page, pageSize]);
+  }, [fetchProducts, filters, initialData, loadProductSummary, page, pageSize]);
 
   async function reloadProducts(input?: { filters?: ProductFilters; page?: number; pageSize?: number }) {
     const nextFilters = input?.filters ?? filters;
@@ -682,7 +751,7 @@ export function ProductWorkbench() {
         filters: nextFilters,
         page: nextPage,
         pageSize: nextPageSize,
-        includeSummary: false,
+        includeSummary: true,
         detail: true,
         signal: controller.signal,
       });

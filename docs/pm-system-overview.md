@@ -1280,7 +1280,7 @@ Workspace 页的筛选主要靠四类条件：
 - `src/components/accounts/account-workbench.tsx`：账号与角色工作台，负责团队成员、角色矩阵、导入导出、分页、搜索和编辑保存。
 - `src/lib/accounts/account-workbook.ts`：账号 Excel 导入导出核心，负责表头映射、行规整和 workbook 生成。
 - `src/lib/accounts/permissions.ts`：模块和动作权限常量，决定哪些页面与接口可访问。
-- `src/lib/accounts/role-definitions.ts`、`src/lib/accounts/role-catalog.ts`、`src/lib/accounts/role-permissions-utils.ts`、`src/lib/accounts/role-permissions-server.ts`：角色字典、权限目录、权限工具和服务端权限快照。
+- `src/lib/accounts/role-definitions.ts`、`src/lib/accounts/role-catalog.ts`、`src/lib/accounts/role-permissions-utils.ts`、`src/lib/accounts/role-permissions-server.ts`：角色字典、权限目录、权限工具和服务端权限快照适配；角色权限最终以组织角色目录为准。
 - `src/lib/accounts/team-roster.ts`、`src/lib/accounts/roster-auth-sync.ts`：团队成员与认证账号同步、角色归并和工作流角色映射。
 - `src/components/versions/version-history-workbench.tsx`：版本历史页，负责版本筛选、对象审计、恢复按钮和分页。
 - `src/components/workspace/campaign-grid-home.tsx`、`src/components/workspace/workspace-panel.tsx`、`src/components/workspace/adjustment-table.tsx`、`src/components/workspace/pending-draft-queue.tsx`：PPC 主工作台的首页、侧板、草稿表和待处理队列。
@@ -1535,8 +1535,8 @@ Workspace 页的筛选主要靠四类条件：
 
 ### 17.22 账号、权限和角色底层补充
 
-- `src/lib/accounts/role-catalog-server.ts`：角色目录的数据库适配层。它从 Prisma 读取组织角色目录，生成 revision，保存时会先锁组织记录，再 upsert 角色并删除多余角色，保证目录是完整快照。
-- `src/lib/accounts/role-permissions-server.ts`：角色权限快照层。它把角色目录里的 permissions 投影成 `RolePermissionMap`，并在保存时把归一化后的权限回写到角色目录，再重新生成快照。
+- `src/lib/accounts/role-catalog-server.ts`：角色目录的数据库适配层。`OrganizationRosterRole` 是角色与权限的唯一持久化事实源；读取空目录时只会兼容读取旧 `OrganizationRolePermission` 快照并初始化默认角色，之后保存会先锁组织记录，再 upsert 角色并删除多余角色，保证目录是完整快照。
+- `src/lib/accounts/role-permissions-server.ts`：角色权限快照适配层。它只把角色目录里的 `permissions` 投影成 `RolePermissionMap` 供认证、路由和 API 检查使用，并把保存请求转回角色目录，不再维护第二套独立权限数据。
 - `src/components/accounts/account-workbench.tsx` 内部的 `loadAccountsFromApi` / `saveAccountsToApi` / `loadRolesFromApi` / `saveRolesToApi`：分别负责账号、角色的读写接口封装，UI 只做状态编排，真正的持久化仍然走 API。
 - `src/components/accounts/account-workbench.tsx` 内部的 `commitAccounts`：先本地乐观更新，再调用保存接口；如果保存失败，会重新拉取账号列表恢复到服务端状态，避免前端和数据库分叉。
 

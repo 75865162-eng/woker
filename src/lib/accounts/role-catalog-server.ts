@@ -2,7 +2,7 @@ import { type Prisma } from "@prisma/client";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
-import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
+import { normalizeRolePermissionMap, normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 
 export type RoleCatalogSnapshot = {
   roles: RoleCatalogItem[];
@@ -38,6 +38,37 @@ function normalizeRoleRow(row: RoleRow): RoleCatalogItem {
   };
 }
 
+async function readLegacyPermissions(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
+  const legacy = await client.organizationRolePermission.findUnique({
+    where: { organizationId },
+  });
+
+  return normalizeRolePermissionMap(legacy?.permissions);
+}
+
+async function seedOrganizationRoles(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
+  const existingCount = await client.organizationRosterRole.count({
+    where: { organizationId },
+  });
+
+  if (existingCount > 0) return;
+
+  const legacyPermissions = await readLegacyPermissions(client, organizationId);
+  const mergedRoles = defaultRoleCatalog.map((role) => ({
+    organizationId,
+    id: role.id,
+    name: role.name,
+    description: role.description,
+    permissions: legacyPermissions[role.id] ?? role.permissions,
+    sortOrder: role.sortOrder,
+  }));
+
+  await client.organizationRosterRole.createMany({
+    data: mergedRoles,
+    skipDuplicates: true,
+  });
+}
+
 export async function getOrganizationRoleCatalogSnapshot(organizationId: string): Promise<RoleCatalogSnapshot> {
   if (!process.env.DATABASE_URL) {
     return {
@@ -47,10 +78,20 @@ export async function getOrganizationRoleCatalogSnapshot(organizationId: string)
   }
 
   try {
-    const roles = (await prisma.organizationRosterRole.findMany({
+    let roles = (await prisma.organizationRosterRole.findMany({
       where: { organizationId },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
     })) as RoleRow[];
+
+    if (roles.length === 0) {
+      await prisma.$transaction(async (tx) => {
+        await seedOrganizationRoles(tx, organizationId);
+      });
+      roles = (await prisma.organizationRosterRole.findMany({
+        where: { organizationId },
+        orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
+      })) as RoleRow[];
+    }
 
     return {
       roles: roles.map(normalizeRoleRow),

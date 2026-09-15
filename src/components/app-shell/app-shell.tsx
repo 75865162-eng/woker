@@ -3,7 +3,9 @@ import { AppShellClient } from "@/components/app-shell/app-shell-client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAccessiblePathOrFallback } from "@/lib/accounts/permissions";
+import type { RolePermissionMap } from "@/lib/accounts/permissions";
 import { getCurrentUserFromSignedCookie } from "@/lib/auth/session";
+import type { CurrentUser } from "@/lib/auth/session";
 import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 import { getCurrentAppVersionLabel } from "@/lib/app-version-server";
 
@@ -12,15 +14,24 @@ export async function AppShell({
   title,
   subtitle,
   actions,
+  initialUser,
+  initialRolePermissions,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle: string;
   actions?: ReactNode;
+  initialUser?: CurrentUser;
+  initialRolePermissions?: RolePermissionMap | null;
 }) {
-  const userPromise = getCurrentUserFromSignedCookie();
+  const userPromise = initialUser ? Promise.resolve(initialUser) : getCurrentUserFromSignedCookie();
   const [user, headerStore] = await Promise.all([userPromise, headers()]);
-  const rolePermissionsSnapshot = user?.organizationId ? await getOrganizationRolePermissionsSnapshot(user.organizationId) : null;
+  const rolePermissionsSnapshot =
+    initialRolePermissions
+      ? { permissions: initialRolePermissions }
+      : user?.organizationId
+        ? await getOrganizationRolePermissionsSnapshot(user.organizationId)
+        : null;
   const appVersionLabel = getCurrentAppVersionLabel();
 
   const currentPath = headerStore.get("x-current-path");

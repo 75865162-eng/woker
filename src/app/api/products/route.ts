@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { roleCanPerformAction, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
 import type { Product, ProductListItem } from "@/lib/products/types";
+import type { CurrentUser } from "@/lib/auth/session";
 import {
   createProductListItem,
   hasStandardProductStatus,
@@ -276,12 +278,23 @@ function createServerTimingHeader(timings: Record<string, number>, totalMs: numb
   ].join(", ");
 }
 
-export async function GET(request: Request) {
+export async function getProductsResponse(
+  request: Request,
+  context?: { user: CurrentUser; permissions: RolePermissionMap | Promise<RolePermissionMap> },
+) {
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
 
   try {
-    const permission = await requireApiPermission("products", "view", request);
+    const permissions = context ? await context.permissions : null;
+    const permission = context
+      ? roleCanPerformAction(context.user.role, "products", "view", permissions)
+        ? { ok: true as const, user: context.user }
+        : {
+            ok: false as const,
+            response: NextResponse.json({ error: "Forbidden." }, { status: 403 }),
+          }
+      : await requireApiPermission("products", "view", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -667,6 +680,10 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return getProductsResponse(request);
 }
 
 export async function POST(request: Request) {

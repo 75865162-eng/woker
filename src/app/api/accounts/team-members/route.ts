@@ -6,7 +6,7 @@ import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { normalizeAccountRoleId, normalizeTeamAccounts, toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 import { syncRosterLoginUsers } from "@/lib/accounts/roster-auth-sync";
-import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
+import { getTeamRosterSnapshot } from "@/lib/accounts/team-roster-server";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -29,17 +29,6 @@ type RosterAccountRow = {
   lastLoginAt?: string | null;
   sourceCreatedAt?: string | null;
   updatedAt: Date;
-};
-
-type OrganizationMembershipWithUser = {
-  role: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    status: string;
-    lastLoginAt: Date | null;
-  };
 };
 
 type RosterSaveAccount = TeamAccountRecord & { organizationId: string; sortOrder: number };
@@ -91,10 +80,6 @@ function toRosterWriteData(account: RosterSaveAccount) {
     sourceCreatedAt: account.sourceCreatedAt ?? null,
     sortOrder: account.sortOrder,
   };
-}
-
-function mapOrganizationRoleToAccountRole(role: string): TeamAccountRecord["roleId"] {
-  return normalizeAccountRoleId(role);
 }
 
 function mapAccountRoleToOrganizationRole(roleId: TeamAccountRecord["roleId"]) {
@@ -230,93 +215,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ accounts: [] });
-    }
-
-    let members: RosterAccountRow[];
-
-    try {
-      members = await prisma.teamRosterMember.findMany({
-        where: {
-          organizationId: user.organizationId,
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      });
-    } catch (error) {
-      if (isDatabaseUnavailableError(error)) {
-        return NextResponse.json(
-          {
-            accounts: [],
-            revision: "database-unavailable",
-            error: "数据库暂时不可用，账号列表已切换为空数据。",
-          },
-          { status: 503 },
-        );
-      }
-
-      throw error;
-    }
-
-    const existingRosterIds = new Set(members.map((member) => member.id));
-    const userMemberships = (await prisma.organizationMember.findMany({
-      where: {
-        organizationId: user.organizationId,
-      },
-      include: {
-        user: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    })) as OrganizationMembershipWithUser[];
-    const defaultSuperAccountIds = new Set(
-      userMemberships.filter((membership) => isBootstrapAdminEmail(membership.user.email)).map((membership) => membership.user.id),
-    );
-    const missingUserAccounts = userMemberships
-      .filter((membership) => !existingRosterIds.has(membership.user.id))
-      .map((membership, index) => ({
-        organizationId: user.organizationId,
-        id: membership.user.id,
-        name: membership.user.name,
-        email: membership.user.email,
-        department: "未分配",
-        title: "注册用户",
-        roleId: isBootstrapAdminEmail(membership.user.email) ? ("owner" as const) : mapOrganizationRoleToAccountRole(membership.role),
-        status: isBootstrapAdminEmail(membership.user.email) || membership.user.status !== "disabled" ? ("active" as const) : ("disabled" as const),
-        lastActiveAt: membership.user.lastLoginAt ? membership.user.lastLoginAt.toLocaleString("zh-CN", { hour12: false }) : "已注册",
-        sortOrder: members.length + index,
-      }));
-
-    if (missingUserAccounts.length) {
-      await prisma.teamRosterMember.createMany({
-        data: missingUserAccounts,
-        skipDuplicates: true,
-      });
-      members = await prisma.teamRosterMember.findMany({
-        where: {
-          organizationId: user.organizationId,
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      });
-    }
-
-    await syncRosterLoginUsers(
-      prisma,
-      members.map((member) => ({
-        ...toAccountRecord(member),
-        organizationId: user.organizationId,
-        roleId: normalizeAccountRoleId(member.roleId),
-      })),
-    );
+    const snapshot = await getTeamRosterSnapshot(user.organizationId);
 
     return NextResponse.json({
-      accounts: members.map(toAccountRecord).map((account) => lockDefaultSuperAccount(account, defaultSuperAccountIds)),
-      revision: buildRosterRevision(members),
+      accounts: snapshot.accounts,
+      revision: snapshot.revision,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load team members.";
