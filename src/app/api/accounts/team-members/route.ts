@@ -4,7 +4,7 @@ import { getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/consta
 import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
-import { normalizeAccountRoleId, normalizeTeamAccounts, type TeamAccountRecord } from "@/lib/accounts/team-roster";
+import { normalizeAccountRoleId, normalizeTeamAccounts, toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 import { syncRosterLoginUsers } from "@/lib/accounts/roster-auth-sync";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
@@ -98,37 +98,7 @@ function mapOrganizationRoleToAccountRole(role: string): TeamAccountRecord["role
 }
 
 function mapAccountRoleToOrganizationRole(roleId: TeamAccountRecord["roleId"]) {
-  switch (normalizeAccountRoleId(roleId)) {
-    case "owner":
-      return "owner";
-    case "database_admin":
-    case "admin":
-      return "database_admin";
-    case "operations_manager":
-    case "operations_supervisor":
-      return "operations_supervisor";
-    case "operations":
-    case "operations_assistant":
-    case "ppc_specialist":
-    case "listing_specialist":
-      return "operations";
-    case "developer":
-      return "developer";
-    case "designer":
-      return "designer";
-    case "warehouse":
-    case "logistics_specialist":
-      return "warehouse";
-    case "warehouse_supervisor":
-      return "warehouse_supervisor";
-    case "finance":
-      return "finance";
-    case "procurement":
-      return "procurement";
-    case "viewer":
-    default:
-      return "viewer";
-  }
+  return toOrganizationRoleId(roleId);
 }
 
 function isDefaultSuperAccount(

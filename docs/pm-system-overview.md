@@ -3460,8 +3460,8 @@ Excel 单元格转文本：
 角色映射：
 
 - 先把角色标签转小写匹配 roleLabels
-- 匹配不上就直接用原 roleValue
-- 最后再走 `normalizeAccountRoleId()`
+- 匹配不上再由 `normalizeAccountRoleId()` 识别内置角色、中文角色名和组合角色
+- 无法识别的账号角色在写入 `OrganizationMember` 时由 `toOrganizationRoleId()` 回落为 `viewer`，不会把显示名称直接写入 Prisma enum
 
 ### 39.11 Listing 图片资产规则
 
@@ -3562,11 +3562,12 @@ Overall 不是简单比对关键词文本，而是按“同 scope、同广告组
 - 表格里的 role 文本会先尝试映射到当前 `roleLabels`。
 - 映射不上再交给 `normalizeAccountRoleId()`。
 
-`normalizeAccountRoleId()` 的底层行为只有三种：
+`normalizeAccountRoleId()` 的底层行为：
 
 - 空值 -> `viewer`
 - 旧角色名 -> 迁移后的新角色名
-- 其他值 -> 原样保留
+- 中文内置角色名或组合角色 -> 对应的内部角色名
+- 其他值 -> 原样保留，写入组织成员时再由 `toOrganizationRoleId()` 做 enum 白名单校验
 
 这也是为什么账号表里写老系统角色时不会直接坏掉，但新系统里的角色展示又能逐步统一。
 

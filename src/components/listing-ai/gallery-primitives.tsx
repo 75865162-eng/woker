@@ -128,7 +128,7 @@ export function GalleryCell({
         className={`relative ${
           compact
             ? "h-20 w-full max-h-20"
-            : "aspect-square h-[226px] max-h-[226px] w-full max-w-[226px]"
+            : "aspect-square w-full"
         }`}
       >
         <button
@@ -146,7 +146,9 @@ export function GalleryCell({
           />
         </button>
         {draggable ? (
-          <div className="absolute right-2 top-2 flex flex-col gap-1 opacity-0 transition group-hover:opacity-100">
+          <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
+            <GripVertical className="h-4 w-4 rounded bg-white/90 text-muted shadow-sm" />
+            <div className="flex flex-col gap-1 opacity-0 transition group-hover:opacity-100">
             <button
               className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!canMoveUp}
@@ -165,12 +167,9 @@ export function GalleryCell({
             >
               <ArrowDown className="h-4 w-4" />
             </button>
+            </div>
           </div>
         ) : null}
-      </div>
-      <div className="flex items-center gap-1 px-2 py-1 text-xs text-muted">
-        {draggable ? <GripVertical className="h-3.5 w-3.5 shrink-0" /> : null}
-        <p className="truncate">{image.name}</p>
       </div>
     </div>
   ) : (

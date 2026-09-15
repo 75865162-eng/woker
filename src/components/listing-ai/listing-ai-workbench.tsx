@@ -16,6 +16,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1333,6 +1334,7 @@ function ImagesSection({
   const [excelError, setExcelError] = useState("");
   const [excelNotice, setExcelNotice] = useState("");
   const [focusedCellKey, setFocusedCellKey] = useState("");
+  const [clearGalleryConfirmOpen, setClearGalleryConfirmOpen] = useState(false);
   const selectedTextRangeRef = useRef<{
     styleKey: string;
     range: { start: number; end: number };
@@ -1533,6 +1535,34 @@ function ImagesSection({
     setCompetitors((current) =>
       current.length > 1 ? current.slice(0, current.length - 1) : current,
     );
+  }
+
+  function clearGallery() {
+    setCompetitors((current) => current.map(() => createEmptyCompetitor()));
+    setOwnImages((current) => ({
+      ...current,
+      structureNotes: "",
+      mainImage: [],
+      images: [],
+      imageNotes: [],
+      sales: "",
+      price: "",
+      rating: "",
+      reviewCount: "",
+    }));
+    setCellStyles({});
+    const clearInputKeys: Array<keyof ListingOptimizationRequest> = [
+      "asin",
+      "mainSellingPoint1",
+      "variationInfo",
+      "currentTitle",
+      "currentBullets",
+      "aplusRequirements",
+    ];
+    clearInputKeys.forEach((key) => update(key, ""));
+    setFocusedCellKey("");
+    selectedTextRangeRef.current = null;
+    setClearGalleryConfirmOpen(false);
   }
 
   function updateImageNote(index: number, value: string) {
@@ -2214,6 +2244,16 @@ function ImagesSection({
               )}
               导出 Excel
             </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={excelBusy}
+              onClick={() => setClearGalleryConfirmOpen(true)}
+              title="清空当前图片表格中的图片和文字"
+            >
+              <Trash2 className="h-4 w-4" />
+              清空图片和文字
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -2434,6 +2474,41 @@ function ImagesSection({
           image={previewImage}
           onClose={() => setPreviewImage(null)}
         />
+      ) : null}
+      {clearGalleryConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => setClearGalleryConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-gallery-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="clear-gallery-title" className="text-lg font-bold text-foreground">
+              确认清空图片和文字？
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              将清空当前 Images &amp; A+ 页中的所有图片、备注、竞品资料、标题、五点和 A+ 内容。此操作只影响当前草稿，不能自动恢复。
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setClearGalleryConfirmOpen(false)}
+              >
+                取消
+              </Button>
+              <Button variant="danger" size="sm" onClick={clearGallery}>
+                <Trash2 className="h-4 w-4" />
+                确认清空
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

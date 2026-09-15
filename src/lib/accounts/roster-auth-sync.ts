@@ -1,7 +1,7 @@
 import type { OrganizationRole, Prisma, PrismaClient } from "@prisma/client";
 import { hashPassword } from "@/lib/auth/password";
 import { isBootstrapAdminEmail } from "@/lib/auth/constants";
-import type { TeamAccountRecord } from "@/lib/accounts/team-roster";
+import { toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 
 type RosterLoginAccount = Pick<TeamAccountRecord, "id" | "name" | "email" | "username" | "phone" | "status" | "password">;
 type RosterLoginAccountWithOrg = RosterLoginAccount & {
@@ -104,12 +104,12 @@ export async function syncRosterLoginUsers(
         },
       },
       update: {
-        role: account.roleId as OrganizationRole,
+        role: toOrganizationRoleId(account.roleId) as OrganizationRole,
       },
       create: {
         organizationId: account.organizationId,
         userId: account.id,
-        role: account.roleId as OrganizationRole,
+        role: toOrganizationRoleId(account.roleId) as OrganizationRole,
       },
     });
   }
