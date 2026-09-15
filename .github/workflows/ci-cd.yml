@@ -41,13 +41,27 @@ jobs:
         run: npm run build
 
       - name: Package release artifact
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
+          RELEASE_LINT_STATUS: passed
+          RELEASE_TEST_STATUS: passed
+          RELEASE_BUILD_STATUS: passed
         run: bash scripts/package-ci-artifact.sh
+
+      - name: Check release artifact
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: bash scripts/release-check.sh dist/amazon-ad-bulk-operation-release.tar.gz
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
           name: amazon-ad-bulk-operation-release
-          path: dist/amazon-ad-bulk-operation-release.tar.gz
+          path: |
+            dist/amazon-ad-bulk-operation-release.tar.gz
+            dist/release-manifest.json
+            dist/release-check.json
           if-no-files-found: error
           retention-days: 14
 
@@ -83,7 +97,7 @@ jobs:
           SERVER_USER: ${{ secrets.PRODUCTION_SERVER_USER }}
           SERVER_DIR: ${{ secrets.PRODUCTION_SERVER_DIR }}
           SSH_OPTS: -o StrictHostKeyChecking=yes
-          INSTALL_DEPS_ON_SERVER: "true"
+          INSTALL_DEPS_ON_SERVER: "false"
           RUN_BOOTSTRAP_SEED: "false"
           SOURCE_BRANCH: ${{ github.ref_name }}
           SOURCE_COMMIT: ${{ github.sha }}

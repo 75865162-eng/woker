@@ -247,7 +247,7 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 - 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
 - worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
 - 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
-- 服务器发布脚本负责启动 Docker infra、Prisma generate、Prisma migrate deploy、bootstrap admin seed、Next standalone build、生成 release 目录、切换 current symlink、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器。
+- 服务器发布脚本负责启动 Docker infra、校验 CI artifact SHA256、Prisma generate、Prisma migrate deploy、bootstrap admin seed、生成 release 目录、切换 current symlink、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器；服务器不执行 Next standalone build。
 - 发布产物目录：`/opt/amazon-ad-bulk-releases/<timestamp>-<branch>-<commit>`。
 - 当前线上版本软链接：`/opt/amazon-ad-bulk-current`。`amazon-web` 和 `amazon-worker` 都从该 symlink 启动，保证 web/worker 版本一致。
 - 发布记录文件：`/opt/amazon-ad-bulk-release-log.jsonl`。每次部署和回滚都应追加记录。
@@ -262,10 +262,11 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 npm run lint
 npm run build
 bash scripts/package-ci-artifact.sh
+bash scripts/release-check.sh dist/amazon-ad-bulk-operation-release.tar.gz
 bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
 ```
 
-这条路径由 CI 或本机先完成 build，服务器只解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。
+这条路径由 CI 或本机先完成 build，服务器只校验 SHA256、解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。普通部署也不主动执行 `npm ci`；只有 `package-lock.json` 变化并明确设置 `INSTALL_DEPS_ON_SERVER=true` 时才更新服务器共享依赖。
 
 当任务明确需要发布到服务器时，默认沿用这条 CI artifact 链路，不再把 build 放回服务器；只有明确的 fallback 或应急修复才走源码发布脚本。
 

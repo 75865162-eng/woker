@@ -9,6 +9,7 @@ VERSION_STATE_FILE="${VERSION_STATE_FILE:-/opt/amazon-ad-bulk-version.json}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 SOURCE_BRANCH="${SOURCE_BRANCH:-unknown}"
 SOURCE_COMMIT="${SOURCE_COMMIT:-unknown}"
+EXPECTED_ARTIFACT_SHA256="${EXPECTED_ARTIFACT_SHA256:-}"
 INSTALL_DEPS_ON_SERVER="${INSTALL_DEPS_ON_SERVER:-false}"
 RUN_BOOTSTRAP_SEED="${RUN_BOOTSTRAP_SEED:-false}"
 ARTIFACT_PATH="${1:-}"
@@ -20,6 +21,12 @@ fi
 
 if [ ! -f "$ARTIFACT_PATH" ]; then
   echo "Artifact not found: $ARTIFACT_PATH" >&2
+  exit 1
+fi
+
+actual_artifact_sha256="$(sha256sum "$ARTIFACT_PATH" | awk '{print $1}')"
+if [ -n "$EXPECTED_ARTIFACT_SHA256" ] && [ "$actual_artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+  echo "Artifact SHA256 verification failed." >&2
   exit 1
 fi
 
@@ -89,8 +96,14 @@ tar -xzf "$ARTIFACT_PATH" -C "$extract_dir"
 previous_version="$(read_previous_version)"
 app_version_label="$(next_version_label "${previous_version:-}")"
 
-if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ]; then
+if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ] || [ ! -f "$extract_dir/RELEASE-METADATA.json" ]; then
   echo "Artifact is not a complete release package." >&2
+  exit 1
+fi
+
+metadata_commit="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.commit || "")' "$extract_dir/RELEASE-METADATA.json")"
+if [ "$SOURCE_COMMIT" != "unknown" ] && [ "$metadata_commit" != "$SOURCE_COMMIT" ]; then
+  echo "Artifact commit does not match requested source commit." >&2
   exit 1
 fi
 
@@ -142,6 +155,7 @@ cat > "$extract_dir/RELEASE.json" <<JSON
   "branch": "$escaped_source_branch",
   "commit": "$escaped_source_commit",
   "builtAt": "$release_started_at",
+  "artifactSha256": "$actual_artifact_sha256",
   "appVersion": "$escaped_app_version_label",
   "appDir": "$escaped_app_dir",
   "source": "ci-artifact"
