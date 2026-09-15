@@ -41,7 +41,9 @@ copy_without_macos_metadata .next-build/standalone "$PACKAGE_DIR/.next-build/"
 rm -rf \
   "$PACKAGE_DIR/.next-build/standalone/.next-build/server" \
   "$PACKAGE_DIR/.next-build/standalone/.next-build/static" \
+  "$PACKAGE_DIR/.next-build/standalone/.next-build/cache" \
   "$PACKAGE_DIR/.next-build/standalone/node_modules" \
+  "$PACKAGE_DIR/.next-build/standalone/.specify" \
   "$PACKAGE_DIR/.next-build/standalone/dist" \
   "$PACKAGE_DIR/.next-build/standalone/.next" \
   "$PACKAGE_DIR/.next-build/standalone/.next-dev" \
