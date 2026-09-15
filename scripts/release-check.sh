@@ -20,6 +20,7 @@ artifact_sha256="$(shasum -a 256 "$ARTIFACT_PATH" | awk '{print $1}')"
 artifact_size="$(stat -f%z "$ARTIFACT_PATH" 2>/dev/null || stat -c%s "$ARTIFACT_PATH")"
 manifest_sha256="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.artifactSha256 || "")' "$MANIFEST_PATH")"
 manifest_commit="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.commit || "")' "$MANIFEST_PATH")"
+manifest_statuses="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write([data.build,data.lint,data.tests].join(","))' "$MANIFEST_PATH")"
 
 if [ "$artifact_sha256" != "$manifest_sha256" ]; then
   echo "Artifact SHA256 does not match release manifest." >&2
@@ -28,6 +29,11 @@ fi
 
 if [ "$EXPECTED_COMMIT" != "unknown" ] && [ "$manifest_commit" != "$EXPECTED_COMMIT" ]; then
   echo "Release commit does not match expected commit." >&2
+  exit 1
+fi
+
+if [ "$manifest_statuses" != "passed,passed,passed" ]; then
+  echo "Release manifest must report passed build, lint, and tests." >&2
   exit 1
 fi
 

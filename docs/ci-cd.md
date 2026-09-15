@@ -3,13 +3,13 @@
 本项目的默认发布链路是 CI 构建产物发布；三端对齐时也走同一条链路，不把 build 放回服务器：
 
 1. 本地只提交代码到 GitHub / GitLab。
-2. CI 机器执行 `npm ci`、`npm run lint`、`npm run build`。
+2. CI 机器执行 `npm ci`、`npm run test`、`npm run lint`、`npm run build`。
 3. CI 调用 `scripts/package-ci-artifact.sh` 打包已经构建好的 Next standalone 产物。
 4. CI 调用 `scripts/release-check.sh`，生成机器可读的 `release-manifest.json` 和 `release-check.json`。
 5. CI 上传 artifact 和 manifest 到发布系统。
 6. 服务器校验 artifact SHA256 后调用 `scripts/server-artifact-release.sh` 解压产物、执行 Prisma migrate、切换 release、重启 systemd。
 
-服务器端只负责下载、校验、解压、迁移、切换 release、重启服务和健康检查，不执行 `npm run build`。
+服务器端只负责下载、校验、解压、迁移、切换 release、重启服务和本机 HTTP 健康检查，不执行 `npm run build`。发布完成后只输出 `RELEASE-RESULT.json` 摘要。
 
 当前 worker 仍以 `tsx scripts/*.ts` 运行，因此第一阶段 artifact 仍保留 worker 所需的 `src/`、`scripts/` 和 Prisma 文件；这些目录不是 Web standalone 的重复依赖。后续 worker 预编译为 JS 后，再进一步删除这部分源码。
 

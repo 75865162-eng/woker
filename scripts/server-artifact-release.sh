@@ -6,6 +6,7 @@ RELEASES_DIR="${RELEASES_DIR:-/opt/amazon-ad-bulk-releases}"
 CURRENT_LINK="${CURRENT_LINK:-/opt/amazon-ad-bulk-current}"
 RELEASE_LOG="${RELEASE_LOG:-/opt/amazon-ad-bulk-release-log.jsonl}"
 VERSION_STATE_FILE="${VERSION_STATE_FILE:-/opt/amazon-ad-bulk-version.json}"
+RELEASE_RESULT_FILE="${RELEASE_RESULT_FILE:-}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 SOURCE_BRANCH="${SOURCE_BRANCH:-unknown}"
 SOURCE_COMMIT="${SOURCE_COMMIT:-unknown}"
@@ -182,6 +183,12 @@ systemctl restart amazon-web amazon-worker amazon-image-upscale-worker
 
 sh "$release_dir/deploy/caddy/run-caddy.sh"
 
+health_url="${HEALTH_URL:-http://127.0.0.1:3000/login}"
+if ! curl --fail --silent --show-error --max-time 15 "$health_url" >/dev/null; then
+  echo "HTTP health check failed: $health_url" >&2
+  exit 1
+fi
+
 write_release_log deployed "artifact deployed and services restarted successfully"
 
 find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r | awk "NR>${KEEP_RELEASES}" | while read -r old_release; do
@@ -192,7 +199,34 @@ done
 
 trap - ERR
 
-systemctl --no-pager --full status amazon-web amazon-worker amazon-image-upscale-worker
-docker compose ps
-df -h /
+web_status="$(systemctl is-active amazon-web)"
+worker_status="$(systemctl is-active amazon-worker)"
+image_worker_status="$(systemctl is-active amazon-image-upscale-worker)"
+postgres_container="$(docker compose ps -q postgres)"
+redis_container="$(docker compose ps -q redis)"
+postgres_status="$(docker inspect --format='{{.State.Status}}' "$postgres_container")"
+redis_status="$(docker inspect --format='{{.State.Status}}' "$redis_container")"
+disk_available_kb="$(df -Pk / | awk 'NR == 2 {print $4}')"
+result_path="${RELEASE_RESULT_FILE:-$release_dir/RELEASE-RESULT.json}"
+cat > "$result_path" <<JSON
+{
+  "status": "passed",
+  "releaseId": "$(json_escape "$release_id")",
+  "commit": "$(json_escape "$SOURCE_COMMIT")",
+  "artifactSha256": "$actual_artifact_sha256",
+  "healthUrl": "$(json_escape "$health_url")",
+  "health": "passed",
+  "services": {
+    "amazon-web": "$(json_escape "$web_status")",
+    "amazon-worker": "$(json_escape "$worker_status")",
+    "amazon-image-upscale-worker": "$(json_escape "$image_worker_status")",
+    "postgres": "$(json_escape "$postgres_status")",
+    "redis": "$(json_escape "$redis_status")"
+  },
+  "diskAvailableKb": $disk_available_kb,
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+JSON
+
+cat "$result_path"
 echo "Current release: $release_id"
