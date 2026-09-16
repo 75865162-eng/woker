@@ -160,9 +160,15 @@ test("rule engine produces an auditable bid draft and respects the minimum bid f
 
 test("permission checks map nested routes and reject malformed permission cookies", () => {
   assert.equal(getModuleIdForPath("/workspace/import"), "workspace");
+  assert.equal(getModuleIdForPath("/sellfox"), "sellfox");
+  assert.equal(getModuleIdForPath("/sellfox/performance"), "sellfox");
+  assert.equal(getModuleIdForPath("/agents/market"), "agents");
   assert.equal(getModuleIdForPath("/rules"), null);
   assert.equal(getModuleIdForPath("/not-a-module"), null);
   assert.equal(roleCanAccessModule("viewer", "workspace"), false);
+  assert.equal(roleCanAccessModule("operations", "sellfox"), true);
+  assert.equal(roleCanAccessModule("warehouse", "sellfox"), false);
+  assert.equal(roleCanAccessModule("operations", "agents"), true);
   assert.equal(roleCanPerformAction("ppc_specialist", "workspace", "export"), true);
   assert.equal(roleCanPerformAction("operations", "workspace", "view"), false);
   assert.equal(getAccessiblePathOrFallback("/dashboard", "operations"), "/dashboard");

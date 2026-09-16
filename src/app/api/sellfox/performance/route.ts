@@ -18,7 +18,7 @@ function parseOptionalNumber(value: string | null) {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("products", "view", request);
+    const permission = await requireApiPermission("sellfox", "view", request);
     if (!permission.ok) return permission.response;
 
     const scope = workspaceScopeFromRequest(request);

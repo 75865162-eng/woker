@@ -7,7 +7,7 @@ import {
   type ProductRecordScope,
   type ProductRecordUser,
 } from "@/lib/products/product-record-repository";
-import { getProductWorkflowStage } from "@/lib/products/workflow";
+import { getProductWorkflowStage, stampNewWorkflowEventActors } from "@/lib/products/workflow";
 
 type ProductRecord = Awaited<ReturnType<typeof findProductRecordBySku>>;
 
@@ -29,8 +29,9 @@ export async function saveProductAggregate(
       ? await findProductRecordBySku(tx, input.scope, input.product.sku)
       : input.existingRecord;
   const existingProduct = existingRecord?.payload as Partial<Product> | undefined;
+  const productToSave = stampNewWorkflowEventActors(input.product, existingProduct, input.user.name);
   const saved = await saveProductRecord(tx, {
-    product: input.product,
+    product: productToSave,
     user: input.user,
     scope: input.scope,
     expectedRevision: input.expectedRevision,

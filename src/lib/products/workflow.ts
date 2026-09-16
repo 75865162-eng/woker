@@ -137,6 +137,26 @@ export function buildWorkflowEvent(input: {
   };
 }
 
+export function stampNewWorkflowEventActors(
+  product: Product,
+  existingProduct: Pick<Product, "workflowHistory"> | undefined,
+  actorName?: string,
+): Product {
+  const normalizedActorName = actorName?.trim();
+  if (!normalizedActorName || !product.workflowHistory?.length) {
+    return product;
+  }
+
+  const existingEventIds = new Set((existingProduct?.workflowHistory ?? []).map((event) => event.id));
+  const workflowHistory = product.workflowHistory.map((event) =>
+    existingEventIds.has(event.id)
+      ? event
+      : { ...event, actorName: normalizedActorName },
+  );
+
+  return { ...product, workflowHistory };
+}
+
 export function appendWorkflowEvent(product: Product, event: ProductWorkflowEvent): ProductWorkflowEvent[] {
   return [event, ...(product.workflowHistory ?? [])].slice(0, 20);
 }

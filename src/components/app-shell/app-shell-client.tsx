@@ -29,7 +29,7 @@ const WeComNotificationRunner = dynamic(
 const navItems = [
   { href: "/", label: "工作台首页", icon: Home, moduleId: null },
   { href: "/dashboard", label: "产品管理", icon: Boxes, moduleId: "products" },
-  { href: "/sellfox", label: "Sellfox", icon: Store, moduleId: "products" },
+  { href: "/sellfox", label: "Sellfox", icon: Store, moduleId: "sellfox" },
   { href: "/workspace", label: "PPC 优化", icon: UploadCloud, moduleId: "workspace" },
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
   { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },

@@ -1470,7 +1470,7 @@ function ProductEditor({
 
     const event = buildWorkflowEvent({
       stage,
-      actorName: draft.selectionOwner || creatorName,
+      actorName: creatorName,
       assigneeName,
       note,
       createdAt: now,
@@ -1508,7 +1508,7 @@ function ProductEditor({
       : [
           buildWorkflowEvent({
             stage: normalizedStage,
-            actorName: selectionOwner,
+            actorName: creatorName,
             assigneeName:
               normalizedStage === "ops_confirming"
                 ? formatAssigneeList(selectedOps)

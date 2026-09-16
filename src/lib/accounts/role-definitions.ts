@@ -146,7 +146,7 @@ export function buildRoleDefinitions(permissionActions: PermissionAction[], modu
         return {
           ...role,
           permissions: createPermissions(
-            ["products", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history", "versions", "accounts", "settings"],
+            ["products", "sellfox", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history", "versions", "accounts", "settings"],
             ["view", "create", "edit", "export"],
           ),
         };
@@ -155,32 +155,32 @@ export function buildRoleDefinitions(permissionActions: PermissionAction[], modu
         return {
           ...role,
           permissions: createPermissions(
-            ["products", "workspace", "searchMerge", "listingAi", "agents", "imageUpscale", "logistics", "tasks", "history"],
+            ["products", "sellfox", "workspace", "searchMerge", "listingAi", "agents", "imageUpscale", "logistics", "tasks", "history"],
             allActions,
           ),
         };
       case "operations_supervisor":
-        return { ...role, permissions: createPermissions(["products", "listingAi", "agents", "imageUpscale", "tasks"], ["view", "create", "edit", "approve", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "imageUpscale", "tasks"], ["view", "create", "edit", "approve", "export"]) };
       case "operations":
-        return { ...role, permissions: createPermissions(["products", "listingAi", "agents"], ["view", "create", "edit", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents"], ["view", "create", "edit", "export"]) };
       case "operations_assistant":
-        return { ...role, permissions: createPermissions(["products", "listingAi", "agents"], ["view", "create", "edit"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents"], ["view", "create", "edit"]) };
       case "developer":
-        return { ...role, permissions: createPermissions(["products", "logistics", "agents"], ["view", "create", "edit", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "logistics", "agents"], ["view", "create", "edit", "export"]) };
       case "designer":
-        return { ...role, permissions: createPermissions(["products", "listingAi", "agents", "imageUpscale"], ["view"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "imageUpscale"], ["view"]) };
       case "warehouse":
         return { ...role, permissions: createPermissions(["logistics"], ["view", "create", "edit", "export"]) };
       case "finance":
-        return { ...role, permissions: createPermissions(["products", "workspace", "agents", "logistics", "history"], ["view", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "workspace", "agents", "logistics", "history"], ["view", "export"]) };
       case "warehouse_supervisor":
         return { ...role, permissions: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]) };
       case "procurement":
-        return { ...role, permissions: createPermissions(["products", "agents", "logistics"], ["view", "create", "edit", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "agents", "logistics"], ["view", "create", "edit", "export"]) };
       case "ppc_specialist":
         return { ...role, permissions: createPermissions(["workspace", "searchMerge", "agents"], ["view", "create", "edit", "export"]) };
       case "listing_specialist":
-        return { ...role, permissions: createPermissions(["products", "listingAi", "agents", "imageUpscale"], ["view", "create", "edit", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "imageUpscale"], ["view", "create", "edit", "export"]) };
       case "logistics_specialist":
         return { ...role, permissions: createPermissions(["logistics"], ["view", "create", "edit", "export"]) };
       case "viewer":

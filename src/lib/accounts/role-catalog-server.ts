@@ -1,5 +1,6 @@
 import { type Prisma } from "@prisma/client";
 import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
+import { defaultRolePermissionMap } from "@/lib/accounts/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { normalizeRolePermissionMap, normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
@@ -27,7 +28,10 @@ function buildRevision(rows: Pick<RoleRow, "id" | "updatedAt">[]) {
 }
 
 function normalizeRoleRow(row: RoleRow): RoleCatalogItem {
-  const permissions = normalizeRolePermissions(row.permissions);
+  const permissions = {
+    ...(defaultRolePermissionMap[row.id] ?? {}),
+    ...normalizeRolePermissions(row.permissions),
+  };
 
   return {
     id: row.id,

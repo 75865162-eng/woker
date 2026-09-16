@@ -292,7 +292,7 @@
 - 布局：概览、表现数据、同步操作。
 - 功能：Sellfox 店铺、小时数据和绩效同步。
 - 属性：工作区/账号/站点 scope、店铺状态、同步状态。
-- 权限：`products` 模块权限。
+- 权限：`sellfox` 模块权限，可在 Accounts 的角色权限矩阵中单独开关。
 - 流程：读取概览 -> 选择 store -> 拉绩效 -> 触发同步。
 - 上下级：产品域的外部数据接入页。
 - 能力边界：只同步和查看，不直接改 Amazon 原站数据。
@@ -896,7 +896,7 @@ Workspace 页的筛选主要靠四类条件：
 
 ### 11.2 页面壳和路由控制
 
-- `src/components/app-shell/app-shell.tsx` 是服务端壳层。它先取当前用户，再取组织权限快照，再根据 `x-current-path` 做一次访问校正；如果没登录就跳 `/login`，如果当前路径没权限就跳到最近可访问模块。
+- `src/components/app-shell/app-shell.tsx` 是服务端壳层。它先取当前用户，再取组织权限快照，再根据 `x-current-path` 做一次访问校正；如果没登录就跳 `/login`，如果当前路径没权限就跳到最近可访问模块。`/sellfox` 使用独立的 `sellfox` 模块权限，`/agents` 使用 `agents` 模块权限。
 - `src/components/app-shell/app-shell-client.tsx` 是客户端壳层。它负责左侧导航、顶部标题、用户菜单、工作区切换、通知入口和版本标识。
 - `src/components/app-shell/workspace-scope-selector.tsx` 会把当前 workspace / account / marketplace 写入 localStorage，并 monkey-patch `window.fetch`，让所有 `/api/*` 请求自动带上 scope headers。
 - `src/components/app-shell/lazy-workbenches.tsx` 只做懒加载分发，不承载业务逻辑。

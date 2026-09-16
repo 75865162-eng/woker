@@ -18,6 +18,7 @@ export const permissionActions: Array<{ id: PermissionAction; label: string }> =
 
 export const permissionModules = [
   { id: "products", name: "产品管理 /dashboard", paths: ["/dashboard"] },
+  { id: "sellfox", name: "Sellfox /sellfox", paths: ["/sellfox"] },
   { id: "workspace", name: "PPC 优化 /workspace", paths: ["/workspace"] },
   { id: "searchMerge", name: "赛狐搜词合并 /saihu-search-merge", paths: ["/saihu-search-merge"] },
   { id: "listingAi", name: "Listing AI /listing-ai", paths: ["/listing-ai"] },
@@ -34,6 +35,7 @@ export const permissionModules = [
 export const defaultAccessiblePaths = [
   { href: "/", moduleId: null },
   { href: "/dashboard", moduleId: "products" },
+  { href: "/sellfox", moduleId: "sellfox" },
   { href: "/workspace", moduleId: "workspace" },
   { href: "/saihu-search-merge", moduleId: "searchMerge" },
   { href: "/listing-ai", moduleId: "listingAi" },
