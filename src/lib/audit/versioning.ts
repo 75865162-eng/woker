@@ -1,9 +1,19 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { CurrentUser } from "@/lib/auth/session";
+import { ensureOrganization } from "@/lib/organizations/organization-server";
 import { normalizeWorkspaceScope, type WorkspaceScopeInput } from "@/lib/workspace/scope";
 
-export type VersionedEntityType = "product" | "listing_ai_workspace" | "ppc_workspace_snapshot" | "rule_config";
+export type VersionedEntityType =
+  | "product"
+  | "listing_ai_workspace"
+  | "ai_model_setting"
+  | "external_integration_setting"
+  | "ppc_workspace_snapshot"
+  | "rule_config"
+  | "file_object"
+  | "import_job"
+  | "export_record";
 
 type RecordVersionInput = {
   user: CurrentUser;
@@ -13,10 +23,13 @@ type RecordVersionInput = {
   summary?: string;
   payload: Prisma.InputJsonValue;
   scope?: Partial<WorkspaceScopeInput>;
+  idempotencyKey?: string;
 };
 
 export async function ensureWorkspaceScope(user: CurrentUser, scope?: Partial<WorkspaceScopeInput>) {
   const normalized = normalizeWorkspaceScope(scope);
+
+  await ensureOrganization(user.organizationId, user.organizationName);
 
   await prisma.workspaceScope.upsert({
     where: {
@@ -44,52 +57,89 @@ export async function ensureWorkspaceScope(user: CurrentUser, scope?: Partial<Wo
 
 export async function recordDataChangeVersion(input: RecordVersionInput) {
   const scope = await ensureWorkspaceScope(input.user, input.scope);
-  const latest = await prisma.dataChangeVersion.aggregate({
-    where: {
-      organizationId: input.user.organizationId,
-      entityType: input.entityType,
-      entityId: input.entityId,
-    },
-    _max: {
-      version: true,
-    },
-  });
-  const version = (latest._max.version ?? 0) + 1;
+  return prisma.$transaction(async (tx) => {
+    if (input.idempotencyKey) {
+      const existing = await tx.dataChangeVersion.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+        select: { version: true },
+      });
+      if (existing) {
+        return existing.version;
+      }
+    }
 
-  await prisma.$transaction([
-    prisma.dataChangeVersion.create({
-      data: {
+    // Serialize version allocation for one tenant/workspace/entity without
+    // holding a long application-level lock.
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(
+          ${`${input.user.organizationId}:${scope.workspaceId}:${input.entityType}:${input.entityId}`},
+          0
+        )
+      )
+    `;
+
+    const latest = await tx.dataChangeVersion.aggregate({
+      where: {
         organizationId: input.user.organizationId,
-        userId: input.user.id,
         workspaceId: scope.workspaceId,
-        accountId: scope.accountId,
-        marketplace: scope.marketplace,
         entityType: input.entityType,
         entityId: input.entityId,
-        version,
-        action: input.action,
-        summary: input.summary,
-        payload: input.payload,
       },
-    }),
-    prisma.auditLog.create({
-      data: {
-        organizationId: input.user.organizationId,
-        userId: input.user.id,
-        action: input.action,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        metadata: {
-          version,
+      _max: {
+        version: true,
+      },
+    });
+    const version = (latest._max.version ?? 0) + 1;
+
+    try {
+      await tx.dataChangeVersion.create({
+        data: {
+          organizationId: input.user.organizationId,
+          userId: input.user.id,
+          idempotencyKey: input.idempotencyKey,
           workspaceId: scope.workspaceId,
           accountId: scope.accountId,
           marketplace: scope.marketplace,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          version,
+          action: input.action,
           summary: input.summary,
+          payload: input.payload,
         },
-      },
-    }),
-  ]);
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.user.organizationId,
+          userId: input.user.id,
+          idempotencyKey: input.idempotencyKey,
+          action: input.action,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          metadata: {
+            version,
+            workspaceId: scope.workspaceId,
+            accountId: scope.accountId,
+            marketplace: scope.marketplace,
+            summary: input.summary,
+            ...(input.idempotencyKey ? { outboxEventId: input.idempotencyKey } : {}),
+          },
+        },
+      });
+    } catch (error) {
+      if (input.idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const existing = await tx.dataChangeVersion.findUnique({
+          where: { idempotencyKey: input.idempotencyKey },
+          select: { version: true },
+        });
+        if (existing) {
+          return existing.version;
+        }
+      }
+      throw error;
+    }
 
-  return version;
+    return version;
+  });
 }
-

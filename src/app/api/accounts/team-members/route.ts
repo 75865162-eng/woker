@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { Prisma, type OrganizationRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
-import { normalizeAccountRoleId, normalizeTeamAccounts, type TeamAccountRecord } from "@/lib/accounts/team-roster";
+import { normalizeAccountRoleId, normalizeTeamAccounts, toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 import { syncRosterLoginUsers } from "@/lib/accounts/roster-auth-sync";
+import { getTeamRosterSnapshot } from "@/lib/accounts/team-roster-server";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ type RosterAccountRow = {
   username?: string | null;
   name: string;
   email: string;
+  password?: string | null;
   department: string;
   title: string;
   roleId: string;
@@ -29,20 +31,11 @@ type RosterAccountRow = {
   updatedAt: Date;
 };
 
-type OrganizationMembershipWithUser = {
-  role: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    status: string;
-    lastLoginAt: Date | null;
-  };
-};
-
 type RosterSaveAccount = TeamAccountRecord & { organizationId: string; sortOrder: number };
 
 const rosterSaveMaxAttempts = 3;
+const rosterSaveTransactionMaxWaitMs = 10_000;
+const rosterSaveTransactionTimeoutMs = 60_000;
 
 function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
   return {
@@ -50,10 +43,11 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
     username: member.username ?? undefined,
     name: member.name,
     email: member.email,
+    password: member.password ?? undefined,
     department: member.department,
     title: member.title,
     roleId: normalizeAccountRoleId(member.roleId),
-    status: member.status === "disabled" || member.status === "pending" ? member.status : "active",
+    status: member.status === "disabled" || member.status === "pending" || member.status === "archived" ? member.status : "active",
     lastActiveAt: member.lastActiveAt ?? undefined,
     amazonStorePermissions: member.amazonStorePermissions ?? undefined,
     multiPlatformStorePermissions: member.multiPlatformStorePermissions ?? undefined,
@@ -65,14 +59,18 @@ function toAccountRecord(member: RosterAccountRow): TeamAccountRecord {
 }
 
 function toRosterWriteData(account: RosterSaveAccount) {
+  const status: "active" | "pending" | "disabled" | "archived" =
+    account.status === "pending" || account.status === "active" || account.status === "archived" ? account.status : "disabled";
+
   return {
     username: account.username ?? null,
     name: account.name,
     email: account.email,
+    ...(typeof account.password === "string" && account.password.trim() ? { password: account.password.trim() } : {}),
     department: account.department,
     title: account.title,
     roleId: account.roleId,
-    status: account.status,
+    status,
     lastActiveAt: account.lastActiveAt ?? null,
     amazonStorePermissions: account.amazonStorePermissions ?? null,
     multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? null,
@@ -84,12 +82,8 @@ function toRosterWriteData(account: RosterSaveAccount) {
   };
 }
 
-function mapOrganizationRoleToAccountRole(role: string): TeamAccountRecord["roleId"] {
-  return normalizeAccountRoleId(role);
-}
-
 function mapAccountRoleToOrganizationRole(roleId: TeamAccountRecord["roleId"]) {
-  return normalizeAccountRoleId(roleId) as OrganizationRole;
+  return toOrganizationRoleId(roleId);
 }
 
 function isDefaultSuperAccount(
@@ -186,25 +180,11 @@ function buildRosterRevision(members: Pick<RosterAccountRow, "id" | "updatedAt">
   return `${members.length}:${latestUpdatedAt}:${members.map((member) => member.id).sort().join(",")}`;
 }
 
-async function getRosterRevision(client: typeof prisma | Prisma.TransactionClient, organizationId: string) {
-  const members = await client.teamRosterMember.findMany({
-    where: {
-      organizationId,
-    },
-    select: {
-      id: true,
-      updatedAt: true,
-    },
-  });
-
-  return buildRosterRevision(members);
-}
-
 function isPrismaWriteConflict(error: unknown) {
   const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: unknown }).code : undefined;
   const message = error instanceof Error ? error.message : "";
 
-  return code === "P2034" || /write conflict|deadlock/i.test(message);
+  return code === "P2034" || code === "P2028" || /write conflict|deadlock|transaction (not found|already closed)|closed transaction/i.test(message);
 }
 
 async function waitForRetry(attempt: number) {
@@ -227,84 +207,19 @@ async function runRosterSaveTransaction<T>(operation: () => Promise<T>) {
   throw new Error("账号列表保存失败，请重试。");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUserFromRequest(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ accounts: [] });
-    }
-
-    let members: RosterAccountRow[] = await prisma.teamRosterMember.findMany({
-      where: {
-        organizationId: user.organizationId,
-      },
-      orderBy: {
-        sortOrder: "asc",
-      },
-    });
-
-    const existingRosterIds = new Set(members.map((member) => member.id));
-    const userMemberships = (await prisma.organizationMember.findMany({
-      where: {
-        organizationId: user.organizationId,
-      },
-      include: {
-        user: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    })) as OrganizationMembershipWithUser[];
-    const defaultSuperAccountIds = new Set(
-      userMemberships.filter((membership) => isBootstrapAdminEmail(membership.user.email)).map((membership) => membership.user.id),
-    );
-    const missingUserAccounts = userMemberships
-      .filter((membership) => !existingRosterIds.has(membership.user.id))
-      .map((membership, index) => ({
-        organizationId: user.organizationId,
-        id: membership.user.id,
-        name: membership.user.name,
-        email: membership.user.email,
-        department: "未分配",
-        title: "注册用户",
-        roleId: isBootstrapAdminEmail(membership.user.email) ? ("owner" as const) : mapOrganizationRoleToAccountRole(membership.role),
-        status: isBootstrapAdminEmail(membership.user.email) || membership.user.status !== "disabled" ? ("active" as const) : ("disabled" as const),
-        lastActiveAt: membership.user.lastLoginAt ? membership.user.lastLoginAt.toLocaleString("zh-CN", { hour12: false }) : "已注册",
-        sortOrder: members.length + index,
-      }));
-
-    if (missingUserAccounts.length) {
-      await prisma.teamRosterMember.createMany({
-        data: missingUserAccounts,
-        skipDuplicates: true,
-      });
-      members = await prisma.teamRosterMember.findMany({
-        where: {
-          organizationId: user.organizationId,
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      });
-    }
-
-    await syncRosterLoginUsers(
-      prisma,
-      members.map((member) => ({
-        ...toAccountRecord(member),
-        organizationId: user.organizationId,
-        roleId: normalizeAccountRoleId(member.roleId),
-      })),
-    );
+    const snapshot = await getTeamRosterSnapshot(user.organizationId);
 
     return NextResponse.json({
-      accounts: members.map(toAccountRecord).map((account) => lockDefaultSuperAccount(account, defaultSuperAccountIds)),
-      revision: buildRosterRevision(members),
+      accounts: snapshot.accounts,
+      revision: snapshot.revision,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load team members.";
@@ -314,7 +229,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUserFromRequest(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -326,9 +241,8 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
 
-    const body = (await request.json()) as { accounts?: unknown; members?: unknown; revision?: unknown };
+    const body = (await request.json()) as { accounts?: unknown; members?: unknown };
     const input = body.accounts ?? body.members;
-    const expectedRevision = typeof body.revision === "string" ? body.revision : "";
     const normalized = normalizeTeamAccounts(input).map((account, index) => ({
       ...account,
       organizationId: user.organizationId,
@@ -350,9 +264,8 @@ export async function PUT(request: Request) {
     const result = await runRosterSaveTransaction(() =>
       prisma.$transaction(
         async (tx) => {
-          await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${user.organizationId} FOR UPDATE`;
+          await tx.$queryRaw<{ locked: number }[]>`SELECT 1::int AS "locked" FROM "Organization" WHERE id = ${user.organizationId} FOR UPDATE`;
 
-          const currentRevision = await getRosterRevision(tx, user.organizationId);
           const currentMembers = (
             await tx.teamRosterMember.findMany({
               where: {
@@ -364,13 +277,7 @@ export async function PUT(request: Request) {
             })
           ).map(toAccountRecord);
           const defaultSuperAccountIds = await getDefaultSuperAccountIds(tx, user.organizationId);
-
-          if (!expectedRevision || expectedRevision !== currentRevision) {
-            return {
-              conflict: true as const,
-              revision: currentRevision,
-            };
-          }
+          const currentRoleByAccountId = new Map(currentMembers.map((account) => [account.id, account.roleId]));
 
           const scopedAccounts = mergeProtectedAccounts(user, user.organizationId, normalized, currentMembers, defaultSuperAccountIds);
           const scopedAccountIds = scopedAccounts.map((account) => account.id);
@@ -427,6 +334,44 @@ export async function PUT(request: Request) {
             })),
           );
 
+          const roleChanges = scopedAccounts
+            .map((account) => {
+              const before = currentRoleByAccountId.get(account.id);
+              return before && before !== account.roleId
+                ? {
+                    accountId: account.id,
+                    accountName: account.name,
+                    before,
+                    after: account.roleId,
+                  }
+                : null;
+            })
+            .filter(
+              (
+                item,
+              ): item is {
+                accountId: string;
+                accountName: string;
+                before: TeamAccountRecord["roleId"];
+                after: TeamAccountRecord["roleId"];
+              } => Boolean(item),
+            );
+
+          if (roleChanges.length) {
+            await tx.auditLog.create({
+              data: {
+                organizationId: user.organizationId,
+                userId: user.id,
+                action: "update_team_member_roles",
+                entityType: "TeamRosterMember",
+                entityId: user.id,
+                metadata: {
+                  changes: roleChanges,
+                },
+              },
+            });
+          }
+
           const members = await tx.teamRosterMember.findMany({
             where: {
               organizationId: user.organizationId,
@@ -437,23 +382,17 @@ export async function PUT(request: Request) {
           });
 
           return {
-            conflict: false as const,
             accounts: members.map(toAccountRecord).map((account) => lockDefaultSuperAccount(account, defaultSuperAccountIds)),
             revision: buildRosterRevision(members),
           };
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: rosterSaveTransactionMaxWaitMs,
+          timeout: rosterSaveTransactionTimeoutMs,
         },
       ),
     );
-
-    if (result.conflict) {
-      return NextResponse.json(
-        { error: "账号列表已被其他人更新，请刷新后重试。", revision: result.revision },
-        { status: 409 },
-      );
-    }
 
     return NextResponse.json({
       accounts: result.accounts,

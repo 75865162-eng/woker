@@ -9,15 +9,24 @@ import {
   type TitleGeneratorDraft,
   type TitleGeneratorField,
   type TitleGeneratorFieldKey,
+  type TitleGeneratorMode,
   type TitleGeneratorHistoryRecord,
 } from "@/lib/listing-ai/workspace-draft";
+
+const titleGeneratorModes: Array<{
+  value: TitleGeneratorMode;
+  label: string;
+}> = [
+  { value: "old", label: "老品优化" },
+  { value: "new", label: "新品编写" },
+];
 
 export function TitleGeneratorCard({
   generator,
   loading,
   error,
   promptOpen,
-  productFactsCount,
+  onModeChange,
   onFieldChange,
   onGeneratorChange,
   onPromptOpenChange,
@@ -28,7 +37,7 @@ export function TitleGeneratorCard({
   loading: boolean;
   error: string;
   promptOpen: boolean;
-  productFactsCount: number;
+  onModeChange: (mode: TitleGeneratorMode) => void;
   onFieldChange: (
     key: TitleGeneratorFieldKey,
     patch: Partial<Pick<TitleGeneratorField, "value" | "weight">>,
@@ -39,24 +48,46 @@ export function TitleGeneratorCard({
   onLoadHistory: (record: TitleGeneratorHistoryRecord) => void;
 }) {
   const [historySearch, setHistorySearch] = useState("");
-  const identityFieldKeys: TitleGeneratorFieldKey[] = [
-    "productChineseName",
-    "asin",
-  ];
-  const identityFields = identityFieldKeys
+  const isOldMode = generator.mode === "old";
+  const isNewMode = generator.mode === "new";
+  const productChineseNameField = generator.fields.find(
+    (field) => field.key === "productChineseName",
+  );
+  const asinField = generator.fields.find((field) => field.key === "asin");
+  const referenceFieldKeys: TitleGeneratorFieldKey[] = isNewMode
+    ? [
+        "productFeatures",
+        "coreAdWords",
+        "relatedKeywords",
+        "adData",
+        "competitorTitle1",
+        "competitorTitle2",
+        "competitorTitle3",
+      ]
+    : [
+        "currentProductTitle",
+        "productFeatures",
+        "coreAdWords",
+        "relatedKeywords",
+        "adData",
+        "competitorTitle1",
+        "competitorTitle2",
+        "competitorTitle3",
+      ];
+  const referenceFields = referenceFieldKeys
     .map((key) => generator.fields.find((field) => field.key === key))
     .filter((field): field is TitleGeneratorField => Boolean(field));
-  const referenceFields = generator.fields.filter(
-    (field) => !identityFieldKeys.includes(field.key),
-  );
   const totalWeight = referenceFields.reduce(
     (total, field) => total + field.weight,
     0,
   );
-  const hasRequiredIdentity = identityFields.every((field) =>
-    field.value.trim(),
-  );
+  const hasProductChineseName = Boolean(productChineseNameField?.value.trim());
+  const hasAsin = Boolean(asinField?.value.trim());
+  const hasRequiredIdentity = isOldMode
+    ? hasProductChineseName && hasAsin
+    : hasProductChineseName;
   const canGenerate =
+    Boolean(generator.mode) &&
     hasRequiredIdentity &&
     referenceFields.some((field) => field.value.trim()) &&
     !loading;
@@ -66,6 +97,7 @@ export function TitleGeneratorCard({
     ? history.filter((record) =>
         [
           record.createdAt,
+          record.mode === "new" ? "新品编写" : record.mode === "old" ? "老品优化" : "",
           record.prompt,
           ...record.results,
           ...record.fields.flatMap((field) => [
@@ -85,17 +117,37 @@ export function TitleGeneratorCard({
       <CardHeader className="border-b border-border">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>标题生成器</CardTitle>
+            <CardTitle>标题描述</CardTitle>
             <p className="mt-1 text-xs font-semibold text-muted">
               按参考资料与权重生成 3 条亚马逊标题。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="flex rounded-md border border-border bg-white p-1"
+              aria-label="标题生成模式"
+            >
+              {titleGeneratorModes.map((mode) => {
+                const active = generator.mode === mode.value;
+
+                return (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    className={`h-7 rounded px-3 text-xs font-bold transition ${
+                      active
+                        ? "bg-brand text-white shadow-sm"
+                        : "text-muted hover:bg-surface-muted hover:text-foreground"
+                    }`}
+                    onClick={() => onModeChange(mode.value)}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
             <Badge tone={totalWeight === 100 ? "green" : "amber"}>
               权重 {totalWeight}%
-            </Badge>
-            <Badge tone={productFactsCount >= 50 ? "green" : "amber"}>
-              Mine Facts {productFactsCount}/50
             </Badge>
             <Button
               size="sm"
@@ -117,46 +169,65 @@ export function TitleGeneratorCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-md border border-border bg-white p-3">
+        <div className="grid gap-2">
+          <div className="rounded-md border border-border bg-white p-2.5">
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className={labelClass}>产品信息</p>
-              <Badge tone={hasRequiredIdentity ? "green" : "amber"}>必填</Badge>
+              <Badge tone={hasRequiredIdentity ? "green" : "amber"}>
+                {isOldMode ? "必填" : "中文名称必填"}
+              </Badge>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {identityFields.map((field) => (
-                <label key={field.key} className="space-y-1">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {productChineseNameField ? (
+                <label className="space-y-1">
                   <span className="text-xs font-bold text-muted">
-                    {field.label}
+                    {productChineseNameField.label}
                   </span>
                   <input
                     className={fieldClass}
-                    value={field.value}
+                    value={productChineseNameField.value}
                     onChange={(event) =>
-                      onFieldChange(field.key, {
-                        value:
-                          field.key === "asin"
-                            ? event.target.value.trim()
-                            : event.target.value,
+                      onFieldChange(productChineseNameField.key, {
+                        value: event.target.value,
                       })
                     }
-                    placeholder={`${field.label}：必填`}
+                    placeholder={`${productChineseNameField.label}：必填`}
                   />
                 </label>
-              ))}
+              ) : null}
+              {asinField ? (
+                <label className="space-y-1">
+                  <span className="flex items-center gap-2 text-xs font-bold text-muted">
+                    {asinField.label}
+                    <span className="text-[10px] font-bold uppercase text-muted/70">
+                      {isOldMode ? "必填" : "选填"}
+                    </span>
+                  </span>
+                  <input
+                    className={fieldClass}
+                    value={asinField.value}
+                    onChange={(event) =>
+                      onFieldChange(asinField.key, {
+                        value: event.target.value.trim(),
+                      })
+                    }
+                    placeholder={`${asinField.label}：${isOldMode ? "必填" : "选填"}`}
+                  />
+                </label>
+              ) : null}
             </div>
           </div>
           {referenceFields.map((field) => (
             <div
               key={field.key}
-              className="rounded-md border border-border bg-white p-3"
+              className="rounded-md border border-border bg-white p-2.5"
             >
-              <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="mb-1.5 flex items-center justify-between gap-3">
                 <p className={labelClass}>{field.label}</p>
                 <div className="flex items-center gap-2">
                   <input
                     aria-label={`${field.label} 权重`}
-                    className="h-8 w-16 rounded-md border border-border bg-white px-2 text-right text-sm font-bold text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
+                    className="h-7 w-14 rounded-md border border-border bg-white px-2 text-right text-sm font-bold text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
                     max={100}
                     min={0}
                     inputMode="decimal"
@@ -175,7 +246,7 @@ export function TitleGeneratorCard({
                 </div>
               </div>
               <textarea
-                className={`${fieldClass} h-24 resize-none`}
+                className={`${fieldClass} h-20 resize-none`}
                 value={field.value}
                 onChange={(event) =>
                   onFieldChange(field.key, { value: event.target.value })
@@ -194,19 +265,28 @@ export function TitleGeneratorCard({
               </Badge>
             </div>
             <div className="space-y-3">
-              {[0, 1, 2].map((index) => (
-                <div
-                  key={index}
-                  className="min-h-24 rounded-md border border-border bg-white p-3"
-                >
-                  <p className="text-xs font-black text-brand">
-                    生成结果{index + 1}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
-                    {generator.results[index] || "等待生成"}
-                  </p>
-                </div>
-              ))}
+              {[0, 1, 2].map((index) => {
+                const result = generator.results[index] || "";
+
+                return (
+                  <div
+                    key={index}
+                    className="min-h-24 rounded-md border border-border bg-white p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-brand">
+                        生成结果{index + 1}
+                      </p>
+                      <Badge tone={result.length <= 200 ? "green" : "amber"}>
+                        {result.length} 字符
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
+                      {result || "等待生成"}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
             {error ? (
               <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
@@ -245,6 +325,12 @@ export function TitleGeneratorCard({
                     const reviewMeta = [recordChineseName, recordAsin]
                       .filter(Boolean)
                       .join(" · ");
+                    const modeLabel =
+                      record.mode === "new"
+                        ? "新品编写"
+                        : record.mode === "old"
+                          ? "老品优化"
+                          : "未选模式";
 
                     return (
                       <div
@@ -256,13 +342,27 @@ export function TitleGeneratorCard({
                             {record.createdAt}
                             {reviewMeta ? ` · ${reviewMeta}` : ""}
                           </p>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => onLoadHistory(record)}
-                          >
-                            复用
-                          </Button>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Badge
+                              tone={
+                                record.mode === "new"
+                                  ? "blue"
+                                  : record.mode === "old"
+                                    ? "green"
+                                    : "gray"
+                              }
+                            >
+                              {modeLabel}
+                            </Badge>
+                            <Button
+                              className="min-w-12 whitespace-nowrap"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => onLoadHistory(record)}
+                            >
+                              复用
+                            </Button>
+                          </div>
                         </div>
                         <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-foreground">
                           {record.results[0] || "无结果"}

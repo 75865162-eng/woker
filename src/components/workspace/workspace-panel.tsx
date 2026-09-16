@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, FileSpreadsheet, X } from "lucide-react";
 import { AdjustmentTable } from "@/components/workspace/adjustment-table";
@@ -8,7 +7,7 @@ import { PendingDraftQueue } from "@/components/workspace/pending-draft-queue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { defaultRules, lifecycleGroups } from "@/data/mock-data";
+import { defaultRules, lifecycleGroups } from "@/data/default-rules";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import type { OverallAdDataRow } from "@/lib/types";
 import { workspacePanelAnchorId } from "@/lib/workspace-events";
@@ -109,14 +108,14 @@ export function WorkspacePanel() {
   const overallCpc = overallTotals.clicks > 0 ? overallTotals.spend / overallTotals.clicks : undefined;
   const persistenceLabel =
     persistenceStatus === "loading"
-      ? "正在恢复本地工作区"
+      ? "正在恢复数据库工作区"
       : persistenceStatus === "saving"
-        ? "正在自动保存"
+        ? "正在自动保存到数据库"
         : persistenceStatus === "saved"
-          ? "已自动保存"
+          ? "已保存到数据库"
           : persistenceStatus === "failed"
             ? "自动保存异常"
-            : "本地保存已就绪";
+            : "数据库保存已就绪";
 
   return (
     <div id={workspacePanelAnchorId} className="min-w-0 flex-1 scroll-mt-24 space-y-5">
@@ -132,12 +131,12 @@ export function WorkspacePanel() {
               variant="secondary"
               size="sm"
               onClick={() => {
-                if (window.confirm("确定清空本地保存并恢复默认演示数据吗？")) {
+                if (window.confirm("确定清空当前工作区保存的数据吗？清空后会回到空工作区。")) {
                   void clearPersistedWorkspace();
                 }
               }}
             >
-              清空本地保存
+              清空数据库保存
             </Button>
           </div>
           <div className="rounded-lg border border-border bg-surface-muted p-4">
@@ -158,13 +157,12 @@ export function WorkspacePanel() {
               </div>
               <div className="flex flex-wrap gap-2">
               {activeRules.slice(0, 4).map((rule) => (
-                  <Link
+                  <span
                     key={rule.id}
-                    href={`/rules?lifecycle=${activeLifecycleGroup?.id ?? rule.lifecycleGroupId}`}
-                    className="rounded-md border border-border bg-white px-2 py-1 text-xs font-semibold text-muted transition-colors hover:border-brand hover:text-foreground"
+                    className="rounded-md border border-border bg-white px-2 py-1 text-xs font-semibold text-muted"
                   >
                     {rule.name}
-                  </Link>
+                  </span>
                 ))}
                 {workspaceMode === "workspace-unit" && activeWorkspaceUnit && (
                   <Button

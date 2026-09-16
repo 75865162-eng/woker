@@ -2,8 +2,10 @@ import "dotenv/config";
 import { Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { processImportJob } from "@/lib/jobs/processor";
+import { enqueueProductOutboxEvent } from "@/lib/queue";
+import { enqueuePendingProductOutboxEvents, markExpiredProductAttachmentsOrphaned, processProductOutboxEvent, recoverStaleProductOutboxEvents } from "@/lib/products/product-outbox";
 import { prisma } from "@/lib/db/prisma";
-import { createRedisConnectionOptions, importJobQueueName } from "@/lib/queue/redis-queue";
+import { createRedisConnectionOptions, getImportJobQueue, importJobQueueName, productOutboxQueueName } from "@/lib/queue/redis-queue";
 
 const workerName = process.env.WORKER_NAME?.trim() || `${importJobQueueName}-${process.pid}`;
 const workerId = process.env.WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -19,6 +21,58 @@ const worker = new Worker<{ jobId: string }>(
     concurrency,
   },
 );
+
+async function enqueuePendingImportJobs(limit = 50) {
+  const jobs = await prisma.importJob.findMany({
+    where: {
+      status: "queued",
+    },
+    select: {
+      id: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+    take: limit,
+  });
+
+  await Promise.all(jobs.map((job) => enqueueImportJobMessage(job.id)));
+}
+
+async function enqueueImportJobMessage(jobId: string) {
+  await getImportJobQueue().add(
+    "process-import-job",
+    { jobId },
+    {
+      jobId: `import-job-${jobId}`,
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 3000,
+      },
+      removeOnComplete: 100,
+      removeOnFail: 200,
+    },
+  );
+}
+
+const productOutboxWorker = new Worker<{ eventId: string }>(
+  productOutboxQueueName,
+  async (job) => {
+    await processProductOutboxEvent(job.data.eventId);
+  },
+  {
+    connection: createRedisConnectionOptions(),
+    concurrency: Math.max(1, Number(process.env.PRODUCT_OUTBOX_WORKER_CONCURRENCY ?? 2)),
+  },
+);
+
+async function enqueuePendingOutboxEvents() {
+  if (process.env.QUEUE_DRIVER !== "redis") return;
+  await recoverStaleProductOutboxEvents();
+  const events = await enqueuePendingProductOutboxEvents();
+  await Promise.all(events.map((event) => enqueueProductOutboxEvent(event.id)));
+}
 
 async function writeHeartbeat(status: "online" | "stopping" = "online") {
   if (!process.env.DATABASE_URL) return;
@@ -52,11 +106,35 @@ async function writeHeartbeat(status: "online" | "stopping" = "online") {
 }
 
 void writeHeartbeat();
+void enqueuePendingImportJobs().catch((error) => {
+  console.error("[worker] queued import job recovery failed:", error);
+});
+void enqueuePendingOutboxEvents().catch((error) => {
+  console.error("[worker] product outbox recovery failed:", error);
+});
+void markExpiredProductAttachmentsOrphaned().catch((error) => {
+  console.error("[worker] product attachment cleanup failed:", error);
+});
 const heartbeatTimer = setInterval(() => {
   void writeHeartbeat().catch((error) => {
     console.error("[worker] heartbeat failed:", error);
   });
 }, 30_000);
+const outboxRecoveryTimer = setInterval(() => {
+  void enqueuePendingOutboxEvents().catch((error) => {
+    console.error("[worker] product outbox recovery failed:", error);
+  });
+}, 15_000);
+const importJobRecoveryTimer = setInterval(() => {
+  void enqueuePendingImportJobs().catch((error) => {
+    console.error("[worker] queued import job recovery failed:", error);
+  });
+}, 15_000);
+const attachmentCleanupTimer = setInterval(() => {
+  void markExpiredProductAttachmentsOrphaned().catch((error) => {
+    console.error("[worker] product attachment cleanup failed:", error);
+  });
+}, 5 * 60_000);
 
 worker.on("completed", (job) => {
   console.log(`[worker] completed ${job.data.jobId}`);
@@ -68,15 +146,23 @@ worker.on("failed", (job, error) => {
 
 process.on("SIGINT", async () => {
   clearInterval(heartbeatTimer);
+  clearInterval(importJobRecoveryTimer);
+  clearInterval(outboxRecoveryTimer);
+  clearInterval(attachmentCleanupTimer);
   await writeHeartbeat("stopping").catch(() => undefined);
   await worker.close();
+  await productOutboxWorker.close();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
   clearInterval(heartbeatTimer);
+  clearInterval(importJobRecoveryTimer);
+  clearInterval(outboxRecoveryTimer);
+  clearInterval(attachmentCleanupTimer);
   await writeHeartbeat("stopping").catch(() => undefined);
   await worker.close();
+  await productOutboxWorker.close();
   process.exit(0);
 });
 

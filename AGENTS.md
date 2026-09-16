@@ -2,7 +2,36 @@
 
 这份文件给 Codex、Claude Code 和其他代码 agent 使用。进入本仓库后先读这里，再改代码。
 系统要做“可迁移设计”。
-也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。等要多人使用时，再把存储层从浏览器 IndexedDB 换成后端数据库，而不是把整个系统重写
+也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。等要多人使用时，再把存储层从浏览器 IndexedDB 换成后端数据库，而不是把整个系统重写。
+
+## 最高优先级操作原则：两端对齐、同步闭环、生产级交付
+
+每接到一个任务，都要默认按“本地 + GitHub 两端对齐、同步闭环、生产级”的标准执行；服务器备份、发布和恢复只在你明确要求时纳入任务范围：
+
+- 两端对齐：本地开发工作区与 GitHub 仓库的代码、配置、文档和脚本保持一致；涉及发布、配置、数据库、存储、worker、定时任务或外部服务时，只在任务明确要求时再考虑服务器影响。
+- 全改动区同步：执行备份到 GitHub、两端对齐、三端对齐或更新到服务器时，必须把当前工作区改动区里的所有已修改、已删除和未跟踪改动一起纳入盘点、提交、打包、发布或同步范围；不能只处理当前聊天窗口产生的改动。若发现与当前任务无关但已存在的改动，要在同步前说明并按用户确认的范围处理，不得悄悄遗漏。
+- 性能影响预告：如果一个要求或改动可能让系统变慢、增加明显资源消耗、降低 P95 性能、拖慢构建/导入/导出/查询/渲染/AI 请求等关键路径，必须先向用户说明影响、风险和替代方案，获得确认后再改动。
+- 全局影响预告：如果一个要求或改动可能影响全局行为、共享数据模型、权限体系、路由/API 契约、构建配置、部署流程、存储边界、worker/定时任务或多个业务模块，必须先向用户说明影响范围、回滚方式和验证计划，获得确认后再改动。
+- 同步闭环：任务不能只停留在代码修改；要同步必要的文档、脚本、配置、验证步骤和部署注意事项，确保下一个 agent 或人工接手时能继续执行。
+- 生产级交付：改动必须考虑构建、lint、兼容性、回滚、日志、错误处理、安全和数据保护；不能把临时方案当作最终生产方案。
+- 结果确认：每个任务结束前，要说明已完成什么、验证了什么、还剩什么风险或需要用户确认的事项。
+
+## 最小化处理和验证路线
+
+为了提高处理效率，每个任务默认走最小化处理和分级验证路线：
+
+- 先界定最小处理范围：只读取、分析和修改与当前任务直接相关的文件、模块、脚本和文档；不要展开无关重构、全局清理或大范围代码扫描。
+- 先找现有边界：优先复用当前模块、类型、store、repository、route、脚本和 UI 组件的既有模式；只有现有边界不足以完成任务时，才新增抽象。
+- 验证按风险分级：小改动优先运行最贴近改动的检查；涉及共享逻辑、构建链路、数据模型、导入导出、权限、安全、AI 请求或生产部署时，再升级到 `npm run lint`、`npm run build`、页面手动验证或服务器检查。
+- 避免重复验证：同一类验证不要机械重复；如果已有等价验证结果，要说明依据，把时间留给未覆盖风险。
+- 结尾给出验证路线：最终回复中简要说明本次选择了哪些验证、为什么足够、哪些更高成本验证未运行以及触发条件。
+
+## 更新分流
+
+- 代码量小、单点修补、纯逻辑改动：优先走 `ssh patch`，即通过 SSH 直接做小范围补丁。
+- 影响构建、依赖、Prisma、部署、worker、环境变量或生产数据结构：改走 CI。
+- 若用户明确只要求速度，默认先选最快且风险可控的路径，再按需要升级。
+
 # Development Principles
 
 1. Workspace First
@@ -15,6 +44,8 @@
 8. AI Assist Only
 9. Immutable Workbook
 10. Repository First
+11. Three-End Production Closure
+12. Minimum Scope Verification
 
 ## Minimum Change Principle
 
@@ -42,13 +73,15 @@ When introducing new functionality:
 
 ## 项目概览
 
-这是一个本地优先的 Amazon 运营工作台，基于 Next.js 15、React 19、TypeScript、Tailwind CSS 4 构建。当前主要业务模块：
+这是一个以本地优先工作流为基础、同时包含后端商品主数据域的 Amazon 运营工作台，基于 Next.js 15、React 19、TypeScript、Tailwind CSS 4 构建。PPC Workspace 仍可使用 IndexedDB snapshot 做本地恢复；Product Center 商品主数据已经以 PostgreSQL 为事实源，不要把两个域混为同一套存储策略。当前主要业务模块：
 
 - Amazon PPC Optimization Workspace：导入 Amazon Bulk workbook，按 Campaign / Ad Group / Lifecycle / Workspace Unit 组织优化工作流，生成可审阅的调整草稿。
-- Rule Center：维护 PPC 规则条件和动作，规则引擎输出 draft，不直接修改原始文件。
+- Workspace 内置规则中心：维护 PPC 规则条件和动作，规则引擎输出 draft，不直接修改原始文件。
 - Dashboard：展示广告指标、趋势和筛选。
 - Listing AI：根据商品、关键词、广告数据和竞品信息生成 Listing 优化建议、图片计划和 A+ 模块建议。
 - Logistics：处理物流相关 Excel / PDF 模板、箱规、货件对比和导出。
+
+商品域路径边界以 `docs/product-domain-phase0.md` 和 `docs/product-domain-simple-architecture-plan.md` 为准：`ProductRecord` 是商品核心资料唯一事实源，保存经过 PostgreSQL transaction、revision、Audit/DataChangeVersion 和 Outbox；Projection、Read Model 和 Cache 都是可重建的派生层。当前列表主读路径仍是 `ProductSummaryRecord + ProductTextRecord`，详情主路径是 `ProductDetailService` 直接聚合 `ProductRecord` 和必要关联数据，不要把所有商品查询强制经过 Redis 或 Projection。已废弃的独立 Sellfox 商品资料和图片文案 Gallery 路径不得作为备用读写实现恢复。Sellfox 店铺、小时指标和产品表现快照属于报表数据，单独管理。
 
 ## 技术栈
 
@@ -78,6 +111,12 @@ ls node_modules/next/dist/docs
 npm run dev
 npm run build
 npm run lint
+npm run test
+npm run test:e2e
+npm run check
+npm run products:refresh-derived
+npm run products:repair-projections
+npm run products:scan-statuses
 ```
 
 脚本说明：
@@ -85,6 +124,13 @@ npm run lint
 - `npm run dev` 使用 `.next-dev`，并启用 Turbopack。
 - `npm run build` 使用 `.next-build`，配置为 standalone 输出。
 - `npm run lint` 运行 ESLint flat config。
+- `npm run test` 运行不依赖数据库、外部服务或密钥的核心业务回归测试。
+- `npm run test:e2e` 使用 Playwright 模拟隔离测试账号完成登录、Bulk/Overall 上传、分组、规则运行、保存恢复和导出；必须设置 `E2E_TEST_EMAIL`、`E2E_TEST_PASSWORD`，可用 `E2E_BASE_URL` 指定测试环境。
+- `npm run check:fast` 运行核心测试、lint 和类型检查，适合每次小改动后的快速回归。
+- `npm run check` 依次运行测试、lint 和生产构建，适合作为每次更新后的完整本地健康检查。
+- `npm run products:refresh-derived` 刷新商品列表派生字段、重建商品摘要表并清理过期商品列表缓存；涉及商品状态、负责人、超期逻辑或生产定时维护时使用。
+- `npm run products:repair-projections` 以 `ProductRecord` 为事实源，分批重建 `ProductSummaryRecord` / `ProductTextRecord` 和列表汇总；只在人工维护或投影漂移排查时执行，不在服务启动时运行。
+- `npm run products:scan-statuses` 只读扫描 `ProductRecord.status` 是否属于产品状态枚举；发现非法状态时以退出码 2 结束，不自动修改数据。
 
 ## 目录地图
 
@@ -92,7 +138,7 @@ npm run lint
   - `page.tsx`：首页入口。
   - `dashboard/`：PPC 数据看板。
   - `workspace/`：Bulk 文件导入和广告优化工作台。
-  - `rules/`：规则编辑中心。
+  - `workspace/` 内已集成规则中心，不再保留独立 `/rules` 页面。
   - `listing-ai/`：Listing AI 工作台。
   - `logistics/`：物流文件处理工作台。
   - `settings/`：AI 模型配置等设置页。
@@ -114,6 +160,7 @@ npm run lint
 - `src/data/`：mock data 和默认规则。
 - `src/workers/`：浏览器 worker，目前用于 Excel 解析。
 - `docs/`：PPC 工作台、数据模型、导出、规则、UI、物流等规格文档。
+- `docs/product-domain-simple-architecture-plan.md`：Product Center 当前性能审计、读模型/缓存责任、benchmark 门槛和后续架构收口规划。
 - `public/logistics-templates/`：物流导出使用的模板文件。
 - `scripts/next-run.mjs`：为 Next dev/build 指定不同 distDir。
 
@@ -125,6 +172,38 @@ npm run lint
 - IndexedDB snapshot 是本地恢复机制。改 state shape 时要考虑旧 snapshot 的兼容性或降级处理。
 - Listing AI 的输出结构由 `src/lib/listing-ai/types.ts` 定义，改 prompt 或 client 时要保持 UI 消费字段稳定。
 - Logistics 模块依赖实际 Excel/PDF 模板和中文字段名，改解析逻辑前先看 `src/lib/logistics/types.ts`、`excel.ts`、`pdf.ts` 以及 `public/logistics-templates/`。
+
+## Product Center 当前规则与后续方向
+
+Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 功能扩张。处理商品列表、详情、图片、缓存或投影任务时，必须先以 `docs/product-domain-simple-architecture-plan.md` 的当前审计结论为准。
+
+### 当前已确认
+
+- `ProductRecord` 是商品核心资料唯一 Source of Truth；`payload` 不因性能优化直接删除。
+- 商品保存通过 PostgreSQL transaction、revision、审计记录和 `ProductOutboxEvent` 完成；Projection、Read Model 和 Cache 不得反向覆盖 `ProductRecord`。
+- 商品列表当前真实主读路径是 `ProductSummaryRecord + ProductTextRecord`，由数据库执行过滤、排序和分页；不要未经 benchmark 直接切换到 `ProductRecord` 直读。
+- 商品详情当前通过 `ProductDetailService` 统一聚合 `ProductRecord`、必要关联数据和投影状态；不要把详情拆成前端请求瀑布。
+- 列表当前使用分页、`useVirtualRows`、第一张 `thumbUrl`、lazy loading、异步解码和低优先级图片请求；不要默认加载全量商品、完整 payload 或原图。
+- `ProductMedia` 是媒体关系/元数据索引，不是商品核心资料事实源；二进制属于 Storage / FileObject。
+- Redis 当前主要用于 BullMQ 调度，不是商品事实源，也不是图片二进制缓存；商品详情 Redis 缓存尚未证明有收益。
+
+### 后续升级硬约束
+
+- 先做 1,000 / 5,000 / 10,000 SKU 的列表、详情、图片和并发 benchmark，记录 API/SQL/网络/浏览器的 P50、P95、P99，再决定是否改查询、索引、分页或缓存。
+- 没有真实性能证据时，不新增 Read Model，不强制接入 Redis，不把复杂筛选列表迁移到 Redis，不引入 Elasticsearch、微服务或新的图片处理服务。
+- Redis 只允许缓存高频、重算成本明显、可从 PostgreSQL 重建且允许短暂最终一致的数据；必须包含 organization/workspace/权限/版本维度，并具备 TTL、失效和 PostgreSQL fallback。
+- Redis 不保存原图、缩略图二进制、密钥、完整大 payload、库存扣减结果或金额结算结果。
+- 任何列表主读路径切换都必须保留旧路径回滚能力，并验证分页结果、筛选结果、权限边界、投影延迟和 P95。
+- 任何 Projection、Summary、Text、Media 或 Cache 的删除，都必须先完成调用方盘点、历史数据一致性校验、重建验证和回滚方案。
+- 发现 ProductRecord、ProductMedia、Summary 或缓存存在重复写入时，先收口写入边界；不要通过增加另一张表或手动同步继续放大多 Source of Truth。
+
+### 当前未完成项
+
+- 尚未形成 1,000 / 5,000 / 10,000 SKU 的真实 P50/P95/P99 benchmark；
+- 尚未证明 `ProductSummaryRecord` 是否应长期作为列表主读模型；
+- 尚未证明商品详情 Redis 缓存能改善 P95；
+- 深页 `OFFSET/LIMIT`、50 用户并发、图片 immutable/CDN 缓存和图片引用重复表示仍需专项验证；
+- `/api/products` 的关键词搜索语义必须以真实代码和测试为准，不要只根据 UI 文案判断已支持。
 
 ## 可迁移部署架构
 
@@ -143,6 +222,8 @@ npm run lint
 
 生产服务器当前资源较紧，部署时必须先按磁盘空间规划，避免把本地开发产物、旧修复目录或 Docker 构建缓存带上服务器。
 
+- 更新服务器前必须先执行完整改动区盘点：用 `git status --short` 确认所有已修改、已删除和未跟踪改动；只要这些改动属于本次要上线的工作范围，就必须全部纳入 GitHub 同步、artifact 打包和服务器发布，不能只发布当前聊天窗口或当前 agent 修改的文件。
+- 如果发现改动区里有不确定是否该上线的内容，先向用户说明文件清单和风险并等待确认；不要静默跳过，也不要用局部打包、局部 rsync 或局部提交制造本地、GitHub、服务器三端不一致。
 - 服务器 IP：`159.75.203.221`。
 - SSH 用户：`ubuntu`。
 - 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
@@ -166,14 +247,15 @@ npm run lint
 - 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
 - worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
 - 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
-- 服务器发布脚本负责启动 Docker infra、Prisma generate、Prisma migrate deploy、bootstrap admin seed、Next standalone build、生成 release 目录、切换 current symlink、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器。
+- 服务器发布脚本负责启动 Docker infra、校验 CI artifact SHA256、Prisma generate、Prisma migrate deploy、bootstrap admin seed、生成 release 目录、切换 current symlink、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器和本机 HTTP 健康检查；服务器不执行 Next standalone build。
 - 发布产物目录：`/opt/amazon-ad-bulk-releases/<timestamp>-<branch>-<commit>`。
 - 当前线上版本软链接：`/opt/amazon-ad-bulk-current`。`amazon-web` 和 `amazon-worker` 都从该 symlink 启动，保证 web/worker 版本一致。
 - 发布记录文件：`/opt/amazon-ad-bulk-release-log.jsonl`。每次部署和回滚都应追加记录。
 - release 目录只保存运行所需的 standalone、源码、脚本、Prisma 和 public；`node_modules` 通过 symlink 共享 `/opt/amazon-ad-bulk-operation/node_modules`，避免复制大依赖。
 - 默认只保留最近 5 个 release。可通过服务器环境变量 `KEEP_RELEASES` 临时调整；不要为了省空间删除当前 release 或 Docker volumes。
 - 小盘服务器上如果历史 Docker build cache 占用过高，可在服务启动并验证通过后运行 `docker builder prune -af`；不要清理 Docker volumes。
-- 每次部署后必须检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker`、`journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
+- 每次部署后优先读取 release 目录中的 `RELEASE-RESULT.json`；只有摘要显示失败时，再检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker` 和 `journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
+- 发布失败时只允许回滚应用代码、current symlink、systemd 进程和 Caddy 配置；数据库 migration 只向前执行，不自动执行 `migrate down`、删表或恢复数据库。`RELEASE-RESULT.json` 必须明确记录 `database: not_rolled_back`。
 
 推荐更新流程（优先 CI artifact 发布）：
 
@@ -181,12 +263,13 @@ npm run lint
 npm run lint
 npm run build
 bash scripts/package-ci-artifact.sh
+bash scripts/release-check.sh dist/amazon-ad-bulk-operation-release.tar.gz
 bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
 ```
 
-这条路径由 CI 或本机先完成 build，服务器只解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。
+这条路径由 CI 或本机先完成 build，服务器只校验 SHA256、解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。普通部署也不主动执行 `npm ci`；只有 `package-lock.json` 变化并明确设置 `INSTALL_DEPS_ON_SERVER=true` 时才更新服务器共享依赖。
 
-三端对齐、预发和生产只要走正式发布流程，默认都沿用这条 CI artifact 链路，不再把 build 放回服务器；只有明确的 fallback 或应急修复才走源码发布脚本。
+当任务明确需要发布到服务器时，默认沿用这条 CI artifact 链路，不再把 build 放回服务器；只有明确的 fallback 或应急修复才走源码发布脚本。
 
 服务器源码构建发布仍保留为 fallback：
 
@@ -263,7 +346,6 @@ npm run dev
 然后在浏览器检查对应页面：
 
 - `/workspace`
-- `/rules`
 - `/dashboard`
 - `/listing-ai`
 - `/logistics`
@@ -279,7 +361,9 @@ npm run dev
 C:\Users\Administrator\Desktop\AMAZON BULK AD
 ```
 
-只改和任务直接相关的文件。
+只改和任务直接相关的文件。若任务包含备份到 GitHub、两端对齐、三端对齐或更新到服务器，执行前必须先用 `git status --short` 盘点完整工作区，并把所有改动区内容作为一个整体同步闭环处理；不能只提交、推送、打包或发布当前 agent 自己刚改的文件。
+
+执行任何 `git stash`、`git stash push`、`git stash pop`、`git stash apply`、`git stash drop`、`git stash clear` 或等价暂存/恢复操作前，必须先向用户说明原因、影响范围和准备执行的命令，并获得用户明确同意；不得为了切分任务、部署、同步或清理工作区而擅自 stash 用户改动。
 
 ## 文档维护
 

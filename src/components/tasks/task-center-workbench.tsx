@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, RefreshCw, RotateCcw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,23 @@ type ImportJob = {
   marketplace: string;
   createdAt: string;
   updatedAt: string;
+  diagnostics?: {
+    queuePosition: number | null;
+    aheadCount: number | null;
+    queueMessageExists: boolean;
+    queueState: "active" | "delayed" | "waiting" | "missing";
+    workerOnline: boolean;
+    workerCount: number;
+    workerHasTask: boolean;
+    startedAt: string | null;
+    processedCount: number | null;
+    totalCount: number | null;
+    phase: string | null;
+    lastUpdatedAt: string;
+    ageMs: number;
+    suspectedStuck: boolean;
+    queueError: string | null;
+  };
   file?: {
     originalName: string;
     size?: number | null;
@@ -55,6 +72,11 @@ const statusLabel: Record<ImportJobStatus, string> = {
   failed: "失败",
 };
 
+const typeLabel: Record<string, string> = {
+  bulk_upload: "Bulk 导入",
+  product_export: "商品导出",
+};
+
 function formatDate(value: string) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
@@ -66,6 +88,29 @@ function formatSize(value?: number | null) {
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function formatDurationMs(value: number) {
+  const totalSeconds = Math.max(0, Math.floor(value / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}秒`;
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}分${seconds}秒`;
+
+  return `${Math.floor(minutes / 60)}小时${minutes % 60}分`;
+}
+
+function formatElapsedSince(value: string | undefined) {
+  return value ? formatDurationMs(Date.now() - new Date(value).getTime()) : "-";
+}
+
+function getJobDownloadUrl(job: ImportJob) {
+  if (job.type === "product_export") {
+    return `/api/products/export/${encodeURIComponent(job.id)}/download`;
+  }
+
+  return `/api/files/${encodeURIComponent(job.id)}/download`;
+}
+
 export function TaskCenterWorkbench() {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 25, total: 0, pageCount: 1 });
@@ -75,6 +120,7 @@ export function TaskCenterWorkbench() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retryingId, setRetryingId] = useState("");
+  const backgroundRefreshRef = useRef(false);
 
   const searchParams = useMemo(() => {
     const params = new URLSearchParams({
@@ -90,8 +136,13 @@ export function TaskCenterWorkbench() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError("");
+    const isBackgroundRefresh = backgroundRefreshRef.current;
+    backgroundRefreshRef.current = false;
+
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+      setError("");
+    }
 
     fetch(`/api/jobs?${searchParams.toString()}`)
       .then(async (response) => {
@@ -110,7 +161,7 @@ export function TaskCenterWorkbench() {
         if (!cancelled) setError(err instanceof Error ? err.message : "任务列表加载失败。");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !isBackgroundRefresh) setLoading(false);
       });
 
     return () => {
@@ -118,8 +169,28 @@ export function TaskCenterWorkbench() {
     };
   }, [query.page, query.refreshToken, searchParams]);
 
+  useEffect(() => {
+    const hasActiveJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
+    if (!hasActiveJobs) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      backgroundRefreshRef.current = true;
+      setQuery((current) => ({ ...current, refreshToken: current.refreshToken + 1 }));
+    }, 5_000);
+
+    return () => window.clearInterval(timer);
+  }, [jobs]);
+
   function submitSearch() {
+    backgroundRefreshRef.current = false;
     setQuery((current) => ({ ...current, status, search: search.trim(), page: 1 }));
+  }
+
+  function refreshTasks() {
+    backgroundRefreshRef.current = false;
+    setQuery((current) => ({ ...current, refreshToken: current.refreshToken + 1 }));
   }
 
   async function retryJob(jobId: string) {
@@ -134,7 +205,7 @@ export function TaskCenterWorkbench() {
         throw new Error(data.error || "任务重试失败。");
       }
 
-      setQuery((current) => ({ ...current, refreshToken: current.refreshToken + 1 }));
+      refreshTasks();
     } catch (err) {
       setError(err instanceof Error ? err.message : "任务重试失败。");
     } finally {
@@ -171,7 +242,7 @@ export function TaskCenterWorkbench() {
             <Search className="h-4 w-4" />
             查询
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setQuery((current) => ({ ...current, refreshToken: current.refreshToken + 1 }))}>
+          <Button type="button" size="sm" variant="ghost" onClick={refreshTasks}>
             <RefreshCw className="h-4 w-4" />
             刷新
           </Button>
@@ -185,16 +256,17 @@ export function TaskCenterWorkbench() {
               <tr>
                 <th className="px-3 py-2 text-left">文件</th>
                 <th className="px-3 py-2 text-left">类型</th>
-                <th className="px-3 py-2 text-left">状态</th>
-                <th className="px-3 py-2 text-left">进度</th>
-                <th className="px-3 py-2 text-left">更新时间</th>
+                <th className="px-3 py-2 text-left">队列状态</th>
+                <th className="px-3 py-2 text-left">Worker</th>
+                <th className="px-3 py-2 text-left">处理进度</th>
+                <th className="px-3 py-2 text-left">时间诊断</th>
                 <th className="px-3 py-2 text-right">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-sm font-semibold text-muted">加载中...</td>
+                  <td colSpan={8} className="px-3 py-8 text-center text-sm font-semibold text-muted">加载中...</td>
                 </tr>
               ) : jobs.length ? (
                 jobs.map((job) => (
@@ -204,20 +276,47 @@ export function TaskCenterWorkbench() {
                       <div className="text-xs text-muted">{formatSize(job.file?.size)} · {formatDate(job.createdAt)}</div>
                       {job.error ? <div className="mt-1 max-w-md truncate text-xs font-semibold text-danger">{job.error}</div> : null}
                     </td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{job.type}</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-muted">{typeLabel[job.type] ?? job.type}</td>
                     <td className="px-3 py-2">
-                      <Badge tone={statusTone[job.status]}>{statusLabel[job.status]}</Badge>
+                      <Badge tone={job.diagnostics?.suspectedStuck ? "red" : statusTone[job.status]}>{job.diagnostics?.suspectedStuck ? "疑似卡死" : statusLabel[job.status]}</Badge>
+                      <div className="mt-1 text-xs text-muted">
+                        {job.status === "queued"
+                          ? `排队 ${formatElapsedSince(job.createdAt)} · 前方 ${job.diagnostics?.aheadCount ?? "-"} 个`
+                          : job.diagnostics?.queueState === "active"
+                            ? "已进入 Worker"
+                            : job.status === "done"
+                              ? "队列已完成"
+                              : job.diagnostics?.queueState === "missing"
+                                ? "队列消息不存在"
+                                : job.diagnostics?.queueState}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge tone={job.diagnostics?.workerHasTask ? "green" : job.diagnostics?.workerOnline ? "blue" : "red"}>
+                        {job.diagnostics?.workerHasTask ? "已领取" : job.diagnostics?.workerOnline ? "Worker 在线" : "Worker 离线"}
+                      </Badge>
+                      <div className="mt-1 text-xs text-muted">{job.diagnostics?.workerCount ?? 0} 个在线</div>
                     </td>
                     <td className="px-3 py-2">
                       <div className="h-2 w-32 overflow-hidden rounded-full bg-surface-muted">
                         <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(Math.max(job.progress, 0), 100)}%` }} />
                       </div>
+                      <div className="mt-1 text-xs font-semibold text-muted">
+                        {job.diagnostics && job.diagnostics.processedCount != null && job.diagnostics.totalCount != null
+                          ? `${job.diagnostics.processedCount.toLocaleString("zh-CN")} / ${job.diagnostics.totalCount.toLocaleString("zh-CN")} 条`
+                          : `${job.progress}%`}
+                      </div>
+                      {job.diagnostics?.phase ? <div className="text-xs text-muted">{job.diagnostics.phase}</div> : null}
                     </td>
-                    <td className="px-3 py-2 text-xs font-semibold text-muted">{formatDate(job.updatedAt)}</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-muted">
+                      <div>创建：{formatDate(job.createdAt)}</div>
+                      <div>开始：{job.diagnostics?.startedAt ? formatDate(job.diagnostics.startedAt) : "-"}</div>
+                      <div>更新：{formatDate(job.updatedAt)} · {formatElapsedSince(job.updatedAt)}前</div>
+                    </td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex justify-end gap-2">
                         {job.status === "done" && job.resultKey ? (
-                          <a href={`/api/files/${job.id}/download`} className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground hover:bg-surface-muted">
+                          <a href={getJobDownloadUrl(job)} className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground hover:bg-surface-muted">
                             <Download className="h-4 w-4" />
                             下载
                           </a>
@@ -234,7 +333,7 @@ export function TaskCenterWorkbench() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-sm font-semibold text-muted">暂无任务</td>
+                  <td colSpan={8} className="px-3 py-8 text-center text-sm font-semibold text-muted">暂无任务</td>
                 </tr>
               )}
             </tbody>
@@ -243,8 +342,8 @@ export function TaskCenterWorkbench() {
         <div className="flex items-center justify-between text-xs font-semibold text-muted">
           <span>共 {pagination.total} 条，第 {pagination.page} / {pagination.pageCount} 页</span>
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant="secondary" disabled={pagination.page <= 1 || loading} onClick={() => setQuery((current) => ({ ...current, page: current.page - 1 }))}>上一页</Button>
-            <Button type="button" size="sm" variant="secondary" disabled={pagination.page >= pagination.pageCount || loading} onClick={() => setQuery((current) => ({ ...current, page: current.page + 1 }))}>下一页</Button>
+            <Button type="button" size="sm" variant="secondary" disabled={pagination.page <= 1 || loading} onClick={() => { backgroundRefreshRef.current = false; setQuery((current) => ({ ...current, page: current.page - 1 })); }}>上一页</Button>
+            <Button type="button" size="sm" variant="secondary" disabled={pagination.page >= pagination.pageCount || loading} onClick={() => { backgroundRefreshRef.current = false; setQuery((current) => ({ ...current, page: current.page + 1 })); }}>下一页</Button>
           </div>
         </div>
       </CardContent>

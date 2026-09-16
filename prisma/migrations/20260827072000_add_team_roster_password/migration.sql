@@ -1,0 +1,2 @@
+ALTER TABLE "TeamRosterMember"
+ADD COLUMN IF NOT EXISTS "password" TEXT;

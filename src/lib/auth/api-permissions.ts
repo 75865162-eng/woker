@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { roleCanPerformAction, type PermissionAction } from "@/lib/accounts/permissions";
-import { getCurrentUser, type CurrentUser } from "@/lib/auth/session";
+import { getCurrentUser, getCurrentUserFromRequest, type CurrentUser } from "@/lib/auth/session";
 
 export type ApiPermissionResult =
   | {
@@ -13,8 +13,8 @@ export type ApiPermissionResult =
       response: NextResponse;
     };
 
-export async function requireApiPermission(moduleId: string, action: PermissionAction): Promise<ApiPermissionResult> {
-  const user = await getCurrentUser();
+export async function requireApiPermission(moduleId: string, action: PermissionAction, request?: Request): Promise<ApiPermissionResult> {
+  const user = request ? await getCurrentUserFromRequest(request) : await getCurrentUser();
 
   if (!user) {
     return {
@@ -37,4 +37,3 @@ export async function requireApiPermission(moduleId: string, action: PermissionA
     user,
   };
 }
-

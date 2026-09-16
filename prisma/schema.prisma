@@ -6,102 +6,82 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserStatus {
-  active
-  disabled
-}
-
-enum TeamAccountStatus {
-  active
-  pending
-  disabled
-}
-
-enum OrganizationRole {
-  owner
-  admin
-  database_admin
-  operations_manager
-  ppc_specialist
-  listing_specialist
-  logistics_specialist
-  viewer
-}
-
-enum FileStorageType {
-  local
-  s3
-  r2
-}
-
-enum FileObjectStatus {
-  uploaded
-  processing
-  done
-  failed
-}
-
-enum ImportJobStatus {
-  queued
-  running
-  done
-  failed
-}
-
-enum WorkerHeartbeatStatus {
-  online
-  stopping
-  offline
-}
-
 model Organization {
-  id          String               @id @default(cuid())
-  name        String
-  slug        String               @unique
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  members     OrganizationMember[]
-  teamRoster  TeamRosterMember[]
-  rolePermissions OrganizationRolePermission?
-  auditLogs   AuditLog[]
-  workspaceScopes WorkspaceScope[]
+  id                 String                      @id @default(cuid())
+  name               String
+  slug               String                      @unique
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+  auditLogs          AuditLog[]
   dataChangeVersions DataChangeVersion[]
-  workerHeartbeats WorkerHeartbeat[]
+  externalIntegrationSettings ExternalIntegrationSetting[]
+  members            OrganizationMember[]
+  notifications      UserNotification[]
+  marketplaces       Marketplace[]
+  productListCacheRecords ProductListCacheRecord[]
+  rosterRoles        OrganizationRosterRole[]
+  wecomNotificationSettings WeComNotificationSetting[]
+  productListSummaryRecords ProductListSummaryRecord[]
+  rolePermissions    OrganizationRolePermission?
+  teamRoster         TeamRosterMember[]
+  workerHeartbeats   WorkerHeartbeat[]
+  workspaceScopes    WorkspaceScope[]
+  imageUpscaleJobs   ImageUpscaleJob[]
+  productAttachmentBindings ProductAttachmentBinding[]
+  productOutboxEvents ProductOutboxEvent[]
+  productSummaryRecords ProductSummaryRecord[]
+  productTextRecords ProductTextRecord[]
+  productProjectionStates ProductProjectionState[]
+  productProjectionFailures ProductProjectionFailure[]
+  sellerAccounts     SellerAccount[]
+  suppliers          Supplier[]
+  productMasters     ProductMaster[]
+  productVariants    ProductVariant[]
+  productListings    ProductListing[]
+  productSuppliers   ProductSupplier[]
+  productCosts       ProductCost[]
+  productMedia       ProductMedia[]
 }
 
 model User {
-  id           String               @id @default(cuid())
-  email        String               @unique
-  name         String
-  passwordHash String
-  status       UserStatus           @default(active)
-  lastLoginAt  DateTime?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  memberships  OrganizationMember[]
-  sessions     UserSession[]
-  auditLogs    AuditLog[]
-  aiModelSettings AiModelSetting[]
-  listingAiWorkspaces ListingAiWorkspace[]
-  workspaceSnapshots WorkspaceSnapshot[]
+  id                      String                          @id @default(cuid())
+  email                   String                          @unique
+  name                    String
+  passwordHash            String
+  status                  UserStatus                      @default(active)
+  lastLoginAt             DateTime?
+  createdAt               DateTime                        @default(now())
+  updatedAt               DateTime                        @updatedAt
+  aiModelSettings         AiModelSetting[]
+  auditLogs               AuditLog[]
+  dataChangeVersions      DataChangeVersion[]
+  DraftRun                DraftRun[]
+  externalIntegrationSettings ExternalIntegrationSetting[]
+  listingAiChatHistories  ListingAiChatHistory[]
+  listingAiWorkspaces     ListingAiWorkspace[]
+  wecomNotificationSettings WeComNotificationSetting[]
+  memberships             OrganizationMember[]
+  notifications           UserNotification[]
   saihuSearchMergeHistory SaihuSearchMergeHistoryRecord[]
-  dataChangeVersions DataChangeVersion[]
+  sessions                UserSession[]
+  WorkspaceDataset        WorkspaceDataset[]
+  workspaceSnapshots      WorkspaceSnapshot[]
+  imageUpscaleJobs        ImageUpscaleJob[]
+  productOutboxEvents     ProductOutboxEvent[]
 }
 
 model WorkspaceScope {
   organizationId String
   id             String
   name           String
-  accountId      String   @default("")
-  marketplace    String   @default("")
-  isDefault      Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  accountId      String       @default("")
+  marketplace    String       @default("")
+  isDefault      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@id([organizationId, id])
-  @@index([organizationId, accountId])
-  @@index([organizationId, marketplace])
 }
 
 model OrganizationMember {
@@ -120,19 +100,27 @@ model OrganizationMember {
 }
 
 model TeamRosterMember {
-  organizationId String
-  id             String
-  name           String
-  email          String
-  department     String
-  title          String
-  roleId         String
-  status         TeamAccountStatus @default(active)
-  lastActiveAt   String?
-  sortOrder      Int               @default(0)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId                String
+  id                            String
+  name                          String
+  email                         String
+  department                    String
+  title                         String
+  roleId                        String
+  status                        TeamAccountStatus @default(active)
+  lastActiveAt                  String?
+  sortOrder                     Int               @default(0)
+  createdAt                     DateTime          @default(now())
+  updatedAt                     DateTime          @updatedAt
+  username                      String?
+  amazonStorePermissions        String?
+  multiPlatformStorePermissions String?
+  phone                         String?
+  lastLoginIp                   String?
+  lastLoginAt                   String?
+  sourceCreatedAt               String?
+  password                      String?
+  organization                  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@id([organizationId, id])
   @@index([organizationId, sortOrder])
@@ -141,11 +129,44 @@ model TeamRosterMember {
 }
 
 model OrganizationRolePermission {
-  organizationId String   @id
+  organizationId String       @id
   permissions    Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model OrganizationRosterRole {
+  organizationId String
+  id             String
+  name           String
+  description    String
+  permissions    Json
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, id])
+  @@index([organizationId, sortOrder])
+}
+
+model WeComNotificationSetting {
+  organizationId String
+  userId         String
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
+  settings       Json
+  sentRecords    Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, userId])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([userId, updatedAt])
 }
 
 model UserSession {
@@ -164,13 +185,14 @@ model AuditLog {
   id             String        @id @default(cuid())
   organizationId String?
   userId         String?
+  idempotencyKey String?       @unique
   action         String
   entityType     String?
   entityId       String?
   metadata       Json?
   createdAt      DateTime      @default(now())
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  user           User?         @relation(fields: [userId], references: [id])
 
   @@index([organizationId, createdAt])
   @@index([userId, createdAt])
@@ -178,46 +200,55 @@ model AuditLog {
 }
 
 model FileObject {
-  id             String           @id @default(cuid())
-  organizationId String
-  userId         String
-  workspaceId    String           @default("default")
-  accountId      String           @default("")
-  marketplace    String           @default("")
-  originalName   String
-  mimeType       String?
-  size           Int?
-  storageKey     String
-  storageType    FileStorageType  @default(local)
-  status         FileObjectStatus @default(uploaded)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  jobs           ImportJob[]
-  exportRecords  ExportRecord[]
+  id               String             @id @default(cuid())
+  organizationId   String
+  userId           String
+  originalName     String
+  mimeType         String?
+  size             Int?
+  storageKey       String
+  storageType      FileStorageType    @default(local)
+  status           FileObjectStatus   @default(uploaded)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  workspaceId      String             @default("default")
+  accountId        String             @default("")
+  marketplace      String             @default("")
+  contentHash      String?
+  productBindingStatus ProductAttachmentStatus?
+  DraftRun         DraftRun[]
+  exportRecords    ExportRecord[]
+  jobs             ImportJob[]
+  WorkspaceDataset WorkspaceDataset[]
+  productBinding   ProductAttachmentBinding?
+  productMedia     ProductMedia[]
 
   @@index([organizationId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
   @@index([organizationId, accountId, marketplace, createdAt])
   @@index([userId, createdAt])
+  @@index([organizationId, workspaceId, accountId, marketplace, storageType, contentHash], map: "FileObject_contentHash_scope_idx")
 }
 
 model ImportJob {
-  id             String          @id @default(cuid())
-  organizationId String
-  userId         String
-  workspaceId    String          @default("default")
-  accountId      String          @default("")
-  marketplace    String          @default("")
-  fileId         String
-  type           String
-  status         ImportJobStatus @default(queued)
-  progress       Int             @default(0)
-  error          String?
-  resultKey      String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  file           FileObject      @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  exportRecords  ExportRecord[]
+  id               String            @id @default(cuid())
+  organizationId   String
+  userId           String
+  fileId           String
+  type             String
+  status           ImportJobStatus   @default(queued)
+  progress         Int               @default(0)
+  error            String?
+  resultKey        String?
+  payload          Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  workspaceId      String            @default("default")
+  accountId        String            @default("")
+  marketplace      String            @default("")
+  exportRecords    ExportRecord[]
+  file             FileObject        @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  WorkspaceDataset WorkspaceDataset?
 
   @@index([organizationId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
@@ -227,13 +258,53 @@ model ImportJob {
   @@index([status])
 }
 
+enum ImageUpscaleJobStatus {
+  queued
+  running
+  completed
+  failed
+}
+
+model ImageUpscaleJob {
+  id             String                @id @default(cuid())
+  organizationId String
+  userId         String
+  batchId        String
+  originalName   String
+  mimeType       String
+  inputKey       String
+  outputKey      String?
+  status         ImageUpscaleJobStatus @default(queued)
+  progress       Int                   @default(0)
+  scale          Int
+  imageKind      String
+  noiseLevel     String
+  model          String
+  inputWidth     Int?
+  inputHeight    Int?
+  outputWidth    Int?
+  outputHeight   Int?
+  inputSize      Int
+  outputSize     Int?
+  processingMs   Int?
+  error          String?
+  createdAt      DateTime              @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, batchId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
 model ExportRecord {
   id             String     @id @default(cuid())
   organizationId String
   userId         String
-  workspaceId    String     @default("default")
-  accountId      String     @default("")
-  marketplace    String     @default("")
   fileId         String
   jobId          String
   resultKey      String
@@ -241,6 +312,14 @@ model ExportRecord {
   mimeType       String?
   size           Int?
   createdAt      DateTime   @default(now())
+  workspaceId    String     @default("default")
+  accountId      String     @default("")
+  marketplace    String     @default("")
+  draftRunId     String?
+  draftIds       Json?
+  validation     Json?
+  lineage        Json?
+  DraftRun       DraftRun?  @relation(fields: [draftRunId], references: [id])
   file           FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
   job            ImportJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
@@ -250,68 +329,540 @@ model ExportRecord {
   @@index([organizationId, accountId, marketplace, createdAt])
   @@index([userId, createdAt])
   @@index([fileId])
+  @@index([draftRunId])
 }
 
 model ProductRecord {
-  id             String   @id
-  organizationId String
-  userId         String
-  workspaceId    String   @default("default")
-  accountId      String   @default("")
-  marketplace    String   @default("")
-  sku            String
-  payload        Json
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                           String    @id
+  organizationId               String
+  userId                       String
+  sku                          String
+  payload                      Json
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  workspaceId                  String    @default("default")
+  accountId                    String    @default("")
+  marketplace                  String    @default("")
+  chineseName                  String    @default("")
+  englishName                  String    @default("")
+  asin                         String    @default("")
+  status                       String    @default("")
+  source                       String    @default("dashboard")
+  supplierName                 String    @default("")
+  purchasePrice                Float     @default(0)
+  selectionOwner               String    @default("")
+  opsAssignee                  String    @default("")
+  designerAssignee             String    @default("")
+  currentOwner                 String    @default("")
+  workflowStage                String    @default("")
+  workflowDueAt                DateTime?
+  isOverdue                    Boolean   @default(false)
+  operationsProgressIncomplete Boolean   @default(false)
+  revision                     Int       @default(1)
+  summary                      ProductSummaryRecord?
+  texts                        ProductTextRecord[]
+  projectionStates             ProductProjectionState[]
+  projectionFailures           ProductProjectionFailure[]
+  productMaster                ProductMaster?
+  productVariants              ProductVariant[]
+  productListings              ProductListing[]
+  productMedia                 ProductMedia[]
 
   @@unique([organizationId, workspaceId, sku])
   @@index([organizationId, updatedAt])
   @@index([organizationId, workspaceId, updatedAt])
-  @@index([organizationId, accountId, marketplace, updatedAt])
+  @@index([organizationId, workspaceId, source, updatedAt])
+  @@index([organizationId, workspaceId, source, status, updatedAt], map: "ProductRecord_organizationId_workspaceId_source_status_updated")
+  @@index([organizationId, workspaceId, source, currentOwner, updatedAt], map: "ProductRecord_organizationId_workspaceId_source_owner_updated")
+  @@index([organizationId, workspaceId, source, isOverdue, updatedAt], map: "ProductRecord_organizationId_workspaceId_source_overdue_updat")
   @@index([organizationId, sku])
   @@index([userId, updatedAt])
+  @@index([organizationId, accountId, marketplace, updatedAt], map: "ProductRecord_organizationId_accountId_marketplace_updatedAt_id")
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, chineseName])
+  @@index([organizationId, workspaceId, designerAssignee])
+  @@index([organizationId, workspaceId, operationsProgressIncomplete], map: "ProductRecord_organizationId_workspaceId_operationsProgressInco")
+  @@index([organizationId, workspaceId, opsAssignee])
+  @@index([organizationId, workspaceId, purchasePrice])
+  @@index([organizationId, workspaceId, selectionOwner])
+  @@index([organizationId, workspaceId, status])
+  @@index([organizationId, workspaceId, supplierName])
+  @@index([organizationId, workspaceId, workflowDueAt])
+  @@index([organizationId, workspaceId, workflowStage])
 }
 
-model ProductImageCopyGalleryRecord {
-  id             String   @id @default(cuid())
+model Marketplace {
+  id             String           @id @default(cuid())
   organizationId String
-  userId         String
-  workspaceId    String   @default("default")
-  accountId      String   @default("")
-  marketplace    String   @default("")
-  sku            String
-  payload        Json
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  code           String
+  name           String           @default("")
+  countryCode    String           @default("")
+  region         String           @default("")
+  currency       String           @default("")
+  status         String           @default("active")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sellerAccounts SellerAccount[]
+  listings       ProductListing[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status, updatedAt])
+}
+
+model SellerAccount {
+  id              String           @id @default(cuid())
+  organizationId  String
+  workspaceId     String           @default("default")
+  accountKey      String
+  displayName     String           @default("")
+  marketplaceCode String           @default("")
+  marketplaceId   String?
+  status          String           @default("active")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  marketplace     Marketplace?     @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
+  listings        ProductListing[]
+
+  @@unique([organizationId, workspaceId, accountKey, marketplaceCode])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, marketplaceCode])
+}
+
+model Supplier {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  normalizedName String
+  contactName    String            @default("")
+  phone          String            @default("")
+  email          String            @default("")
+  website        String            @default("")
+  address        String            @default("")
+  notes          String            @default("")
+  payload        Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productLinks   ProductSupplier[]
+
+  @@unique([organizationId, normalizedName])
+  @@index([organizationId, name])
+  @@index([organizationId, updatedAt])
+}
+
+model ProductMaster {
+  id                String            @id @default(cuid())
+  productRecordId   String            @unique
+  organizationId    String
+  workspaceId       String            @default("default")
+  sku               String
+  chineseName       String            @default("")
+  englishName       String            @default("")
+  brand             String            @default("")
+  status            String            @default("")
+  source            String            @default("dashboard")
+  currentOwner      String            @default("")
+  sourceRevision    Int               @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord     @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  variants          ProductVariant[]
+  listings          ProductListing[]
+  suppliers         ProductSupplier[]
+  costs             ProductCost[]
+  media             ProductMedia[]
 
   @@unique([organizationId, workspaceId, sku])
-  @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, workspaceId, currentOwner, updatedAt])
+}
+
+model ProductVariant {
+  id                String          @id @default(cuid())
+  productMasterId   String
+  productRecordId   String
+  organizationId    String
+  workspaceId       String          @default("default")
+  sku               String
+  asin              String          @default("")
+  parentAsin        String          @default("")
+  variantName       String          @default("")
+  attributes        Json?
+  status            String          @default("")
+  sourceRevision    Int             @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster   @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord   @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  listings          ProductListing[]
+  costs             ProductCost[]
+
+  @@unique([organizationId, workspaceId, sku])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, productMasterId])
+  @@index([organizationId, workspaceId, status, updatedAt])
+}
+
+model ProductListing {
+  id                String          @id @default(cuid())
+  productMasterId   String
+  productVariantId  String?
+  productRecordId   String
+  organizationId    String
+  workspaceId       String          @default("default")
+  sellerAccountId   String?
+  marketplaceId     String?
+  listingKey        String
+  sku               String
+  asin              String          @default("")
+  listingStatus     String          @default("")
+  title             String          @default("")
+  currency          String          @default("")
+  price             Float?
+  inventory         Int?
+  fulfillmentType   String          @default("")
+  sourceRevision    Int             @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster   @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  productRecord     ProductRecord   @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  sellerAccount     SellerAccount?  @relation(fields: [sellerAccountId], references: [id], onDelete: SetNull)
+  marketplace       Marketplace?    @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, workspaceId, listingKey])
+  @@index([organizationId, workspaceId, sku])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, listingStatus, updatedAt])
+}
+
+model ProductSupplier {
+  id                String        @id @default(cuid())
+  productMasterId   String
+  supplierId        String
+  organizationId    String
+  workspaceId       String        @default("default")
+  supplierSku       String        @default("")
+  productUrl        String        @default("")
+  isPrimary         Boolean       @default(false)
+  purchaseLeadTime  String        @default("")
+  moq               Int?
+  notes             String        @default("")
+  sourceRevision    Int           @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  supplier          Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, productMasterId, supplierId])
+  @@index([organizationId, workspaceId, supplierId])
+  @@index([organizationId, workspaceId, isPrimary])
+}
+
+model ProductCost {
+  id                String          @id @default(cuid())
+  productMasterId   String
+  productVariantId  String?
+  organizationId    String
+  workspaceId       String          @default("default")
+  costType          ProductCostType @default(purchase)
+  amount            Float           @default(0)
+  currency          String          @default("CNY")
+  effectiveAt       DateTime?
+  sourceRevision    Int             @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster   @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workspaceId, productMasterId, costType, updatedAt])
+  @@index([organizationId, workspaceId, productVariantId, costType, updatedAt])
+}
+
+model ProductMedia {
+  id                String           @id @default(cuid())
+  productMasterId   String
+  productRecordId   String
+  fileId            String?
+  organizationId    String
+  workspaceId       String           @default("default")
+  mediaType         ProductMediaType @default(image)
+  role              String           @default("gallery")
+  url               String           @default("")
+  thumbUrl          String           @default("")
+  originalUrl       String           @default("")
+  fileName          String           @default("")
+  mimeType          String           @default("")
+  size              Int?
+  sortOrder         Int              @default(0)
+  sourceRevision    Int              @default(1)
+  sourceUpdatedAt   DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productMaster     ProductMaster    @relation(fields: [productMasterId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord    @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  file              FileObject?      @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workspaceId, productMasterId, mediaType, sortOrder])
+  @@index([organizationId, workspaceId, productRecordId])
+  @@index([fileId])
+}
+
+model ProductSummaryRecord {
+  id                           String        @id @default(cuid())
+  productRecordId              String        @unique
+  organizationId               String
+  workspaceId                  String        @default("default")
+  accountId                    String        @default("")
+  marketplace                  String        @default("")
+  sku                          String
+  asin                         String        @default("")
+  chineseName                  String        @default("")
+  englishName                  String        @default("")
+  source                       String        @default("dashboard")
+  primaryImageUrl              String        @default("")
+  status                       String        @default("")
+  supplierName                 String        @default("")
+  purchasePrice                Float         @default(0)
+  selectionOwner               String        @default("")
+  opsAssignee                  String        @default("")
+  designerAssignee             String        @default("")
+  currentOwner                 String        @default("")
+  workflowStage                String        @default("")
+  workflowDueAt                DateTime?
+  isOverdue                    Boolean       @default(false)
+  operationsProgressIncomplete Boolean       @default(false)
+  sourceRevision               Int           @default(1)
+  projectionVersion            Int           @default(1)
+  sourceUpdatedAt              DateTime?
+  createdAt                    DateTime      @default(now())
+  updatedAt                    DateTime      @updatedAt
+  organization                 Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord                ProductRecord @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, sku])
+  @@index([organizationId, workspaceId, createdAt])
   @@index([organizationId, workspaceId, updatedAt])
-  @@index([organizationId, accountId, marketplace, updatedAt])
-  @@index([userId, updatedAt])
+  @@index([organizationId, workspaceId, source, updatedAt])
+  @@index([organizationId, workspaceId, source, status, updatedAt], map: "ProductSummaryRecord_org_workspace_source_status_updated")
+  @@index([organizationId, workspaceId, source, currentOwner, updatedAt], map: "ProductSummaryRecord_org_workspace_source_owner_updated")
+  @@index([organizationId, workspaceId, source, isOverdue, updatedAt], map: "ProductSummaryRecord_org_workspace_source_overdue_updated")
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, chineseName])
+  @@index([organizationId, workspaceId, supplierName])
+  @@index([organizationId, workspaceId, purchasePrice])
+  @@index([organizationId, workspaceId, selectionOwner])
+  @@index([organizationId, workspaceId, opsAssignee])
+  @@index([organizationId, workspaceId, designerAssignee])
+  @@index([organizationId, workspaceId, workflowStage])
+  @@index([organizationId, workspaceId, workflowDueAt])
+  @@index([organizationId, workspaceId, operationsProgressIncomplete], map: "ProductSummaryRecord_org_workspace_operations_incomplete")
+}
+
+model ProductTextRecord {
+  id                 String        @id @default(cuid())
+  productRecordId    String
+  organizationId     String
+  workspaceId        String        @default("default")
+  language           String        @default("default")
+  developer          String        @default("")
+  supplierUrl        String        @default("")
+  specs              String        @default("")
+  purchaseLeadTime   String        @default("")
+  keywords           String        @default("")
+  note               String        @default("")
+  cancelReason       String        @default("")
+  hsCode             String        @default("")
+  sourceRevision     Int           @default(1)
+  projectionVersion  Int           @default(1)
+  sourceUpdatedAt    DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord      ProductRecord @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, productRecordId, language])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([organizationId, workspaceId, language, updatedAt])
+}
+
+model ProductProjectionState {
+  id                String                   @id @default(cuid())
+  productRecordId   String
+  organizationId    String
+  workspaceId       String                   @default("default")
+  projectionName    ProductProjectionName
+  status            ProductProjectionStatus @default(pending)
+  sourceRevision    Int?
+  projectionVersion Int?
+  attempts          Int                    @default(0)
+  lastError         String?
+  lastStartedAt     DateTime?
+  lastCompletedAt   DateTime?
+  nextRetryAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord           @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([productRecordId, projectionName])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, workspaceId, projectionName, status, updatedAt])
+}
+
+model ProductProjectionFailure {
+  id                String                 @id @default(cuid())
+  productRecordId   String
+  organizationId    String
+  workspaceId       String                 @default("default")
+  projectionName    ProductProjectionName
+  sourceRevision    Int?
+  projectionVersion Int?
+  attempt           Int
+  error             String
+  createdAt         DateTime               @default(now())
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord     ProductRecord           @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, productRecordId, createdAt])
+  @@index([organizationId, workspaceId, projectionName, createdAt])
+}
+
+model ProductAttachmentBinding {
+  id             String                   @id @default(cuid())
+  fileId         String                   @unique
+  organizationId String
+  workspaceId    String                   @default("default")
+  productSku     String
+  fieldPath      String
+  status         ProductAttachmentStatus  @default(temporary)
+  linkedAt       DateTime?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  file           FileObject               @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@index([organizationId, workspaceId, productSku, status])
+}
+
+model ProductOutboxEvent {
+  id             String                @id @default(cuid())
+  organizationId String
+  userId         String?
+  workspaceId    String                @default("default")
+  accountId      String                @default("")
+  marketplace    String                @default("")
+  eventType      String
+  entityType     String
+  entityId       String
+  payload        Json
+  status         ProductOutboxStatus   @default(queued)
+  attempts       Int                   @default(0)
+  availableAt    DateTime              @default(now())
+  lastError      String?
+  processedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?                 @relation(fields: [userId], references: [id])
+
+  @@index([status, availableAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([entityType, entityId, createdAt])
+}
+
+model ProductListSummaryRecord {
+  organizationId     String
+  workspaceId        String
+  source             String
+  total              Int       @default(0)
+  developing         Int       @default(0)
+  opsReview          Int       @default(0)
+  designInProgress    Int       @default(0)
+  operationsProgress  Int       @default(0)
+  overdue            Int       @default(0)
+  updatedAt          DateTime  @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, workspaceId, source])
+  @@index([organizationId, workspaceId, updatedAt])
+}
+
+model ProductListCacheRecord {
+  cacheKey       String    @id
+  organizationId String
+  workspaceId    String
+  scopeKey       String
+  payload        Json
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([scopeKey, expiresAt])
+  @@index([expiresAt])
+}
+
+model UserNotification {
+  id              String       @id @default(cuid())
+  organizationId  String
+  recipientUserId String
+  actorUserId     String?
+  dedupeKey       String?       @unique
+  type            String
+  title           String
+  message         String
+  entityType      String?
+  entityId        String?
+  metadata        Json?
+  readAt          DateTime?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipient       User         @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, recipientUserId, createdAt])
+  @@index([organizationId, recipientUserId, readAt, createdAt])
+  @@index([entityType, entityId])
 }
 
 model DataChangeVersion {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   userId         String?
-  workspaceId    String   @default("default")
-  accountId      String   @default("")
-  marketplace    String   @default("")
+  idempotencyKey String?       @unique
+  workspaceId    String       @default("default")
+  accountId      String       @default("")
+  marketplace    String       @default("")
   entityType     String
   entityId       String
   version        Int
   action         String
   summary        String?
   payload        Json
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user           User?        @relation(fields: [userId], references: [id])
 
-  @@unique([organizationId, entityType, entityId, version])
-  @@index([organizationId, entityType, entityId, createdAt])
-  @@index([organizationId, workspaceId, entityType, createdAt])
+  @@unique([organizationId, workspaceId, entityType, entityId, version], map: "DataChangeVersion_org_workspace_entity_version_key")
   @@index([userId, createdAt])
+  @@index([organizationId, entityType, entityId, createdAt], map: "DataChangeVersion_organizationId_entityType_entityId_createdAt_")
+  @@index([organizationId, workspaceId, entityType, createdAt], map: "DataChangeVersion_organizationId_workspaceId_entityType_created")
 }
 
 model WorkerHeartbeat {
@@ -335,14 +886,14 @@ model AiModelSetting {
   id              String   @id @default(cuid())
   organizationId  String
   userId          String
-  workspaceId     String   @default("default")
-  accountId       String   @default("")
-  marketplace     String   @default("")
   activeProfileId String?
   settings        Json
   profiles        Json
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  workspaceId     String   @default("default")
+  accountId       String   @default("")
+  marketplace     String   @default("")
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, workspaceId, userId])
@@ -351,18 +902,58 @@ model AiModelSetting {
   @@index([userId, updatedAt])
 }
 
+model ExternalIntegrationSetting {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  workspaceId    String       @default("default")
+  accountId      String       @default("")
+  marketplace    String       @default("")
+  provider       String
+  displayName    String
+  enabled        Boolean      @default(false)
+  config         Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, userId, provider])
+  @@index([organizationId, workspaceId, provider, updatedAt], map: "ExternalIntegrationSetting_org_workspace_provider_updated")
+  @@index([userId, updatedAt])
+}
+
 model ListingAiWorkspace {
   id             String   @id @default(cuid())
   organizationId String
   userId         String
-  workspaceId    String   @default("default")
-  accountId      String   @default("")
-  marketplace    String   @default("")
   draft          Json
   records        Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, workspaceId, userId])
+  @@index([organizationId, updatedAt])
+  @@index([organizationId, workspaceId, updatedAt])
+  @@index([userId, updatedAt])
+}
+
+model ListingAiChatHistory {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  userId               String
+  workspaceId          String   @default("default")
+  accountId            String   @default("")
+  marketplace          String   @default("")
+  activeConversationId String   @default("")
+  conversations        Json
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, workspaceId, userId])
   @@index([organizationId, updatedAt])
@@ -374,14 +965,14 @@ model WorkspaceSnapshot {
   id             String   @id @default(cuid())
   organizationId String
   userId         String
-  workspaceId    String   @default("default")
-  accountId      String   @default("")
-  marketplace    String   @default("")
   version        Int      @default(1)
   savedAt        DateTime @default(now())
   snapshot       Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, workspaceId, userId])
@@ -394,9 +985,6 @@ model SaihuSearchMergeHistoryRecord {
   id             String   @id
   organizationId String
   userId         String
-  workspaceId    String   @default("default")
-  accountId      String   @default("")
-  marketplace    String   @default("")
   action         String
   sourceFileName String
   outputFileName String?
@@ -404,10 +992,528 @@ model SaihuSearchMergeHistoryRecord {
   rows           Json
   createdAt      DateTime
   savedAt        DateTime @default(now())
+  workspaceId    String   @default("default")
+  accountId      String   @default("")
+  marketplace    String   @default("")
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([organizationId, accountId, marketplace, createdAt], map: "SaihuSearchMergeHistoryRecord_organizationId_accountId_marketpl")
+  @@index([organizationId, workspaceId, createdAt], map: "SaihuSearchMergeHistoryRecord_organizationId_workspaceId_create")
+}
+
+model DraftRun {
+  id                        String            @id
+  organizationId            String
+  userId                    String
+  workspaceId               String            @default("default")
+  accountId                 String            @default("")
+  marketplace               String            @default("")
+  datasetId                 String?
+  fileId                    String?
+  scopeType                 String
+  campaignGroupIds          Json
+  campaignGroupNames        Json
+  rulesSnapshot             Json
+  overallAdDataRows         Json
+  overallAdDataMatchSummary Json
+  drafts                    Json
+  selectedDraftIds          Json
+  summary                   Json
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime
+  exportedAt                DateTime?
+  exportFileName            String?
+  WorkspaceDataset          WorkspaceDataset? @relation(fields: [datasetId], references: [id])
+  FileObject                FileObject?       @relation(fields: [fileId], references: [id])
+  User                      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ExportRecord              ExportRecord[]
+
+  @@index([datasetId])
+  @@index([fileId])
+  @@index([organizationId, accountId, marketplace, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model SellfoxHourlyMetric {
+  id             String       @id
+  organizationId String
+  workspaceId    String       @default("default")
+  storeId        String
+  reportDate     String
+  hour           Int
+  adType         String
+  entityType     String
+  entityId       String
+  entityName     String       @default("")
+  impressions    Int          @default(0)
+  clicks         Int          @default(0)
+  cost           Float        @default(0)
+  sales          Float        @default(0)
+  orders         Int          @default(0)
+  payload        Json
+  syncedAt       DateTime     @default(now())
+  SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, reportDate, hour, adType, entityType, entityId], map: "SellfoxHourlyMetric_storeId_reportDate_hour_adType_entityType_e")
+  @@index([organizationId, workspaceId, reportDate])
+}
+
+model SellfoxProductBackfillState {
+  id             String    @id
+  organizationId String
+  workspaceId    String    @default("default")
+  nextReportDate String
+  emptyDayStreak Int       @default(0)
+  status         String    @default("running")
+  lastError      String?
+  lastRunAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime
+
+  @@unique([organizationId, workspaceId])
+  @@index([status, updatedAt])
+}
+
+model SellfoxProductDailySnapshot {
+  id              String       @id
+  organizationId  String
+  workspaceId     String       @default("default")
+  storeId         String
+  reportDate      String
+  sourceKey       String
+  sku             String       @default("")
+  msku            String       @default("")
+  asin            String       @default("")
+  parentAsin      String       @default("")
+  title           String       @default("")
+  currency        String       @default("")
+  saleQuantity    Int          @default(0)
+  fbaQuantity     Int          @default(0)
+  fbmQuantity     Int          @default(0)
+  saleRevenue     Float        @default(0)
+  grossProfit     Float        @default(0)
+  grossProfitRate Float        @default(0)
+  adCost          Float        @default(0)
+  refundRate      Float        @default(0)
+  payload         Json
+  syncedAt        DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime
+  SellfoxStore    SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, reportDate, sourceKey])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, msku])
+  @@index([organizationId, workspaceId, reportDate], map: "SellfoxProductDailySnapshot_organizationId_workspaceId_reportDa")
+  @@index([storeId, reportDate, saleRevenue])
+}
+
+model SellfoxStore {
+  id                          String                        @id
+  organizationId              String
+  workspaceId                 String                        @default("default")
+  externalId                  String
+  name                        String                        @default("")
+  marketplace                 String                        @default("")
+  country                     String                        @default("")
+  status                      String                        @default("")
+  payload                     Json
+  lastSyncedAt                DateTime                      @default(now())
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime
+  SellfoxHourlyMetric         SellfoxHourlyMetric[]
+  SellfoxProductDailySnapshot SellfoxProductDailySnapshot[]
+
+  @@unique([organizationId, workspaceId, externalId])
+  @@index([organizationId, workspaceId, updatedAt])
+}
+
+model SellfoxSyncRun {
+  id             String    @id
+  organizationId String
+  userId         String
+  workspaceId    String    @default("default")
+  resource       String
+  status         String    @default("running")
+  summary        Json?
+  error          String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  @@index([organizationId, workspaceId, startedAt])
+}
+
+model WorkspaceDataset {
+  id               String     @id
+  organizationId   String
+  userId           String
+  workspaceId      String     @default("default")
+  accountId        String     @default("")
+  marketplace      String     @default("")
+  fileId           String
+  jobId            String     @unique
+  sourceFileName   String
+  parserVersion    String
+  rowCount         Int        @default(0)
+  campaignCount    Int        @default(0)
+  campaignGroups   Json
+  performanceRows  Json
+  dataBatches      Json
+  parseDiagnostics Json
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime
+  DraftRun         DraftRun[]
+  FileObject       FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  ImportJob        ImportJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  User             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([organizationId, accountId, marketplace, createdAt], map: "WorkspaceDataset_organizationId_accountId_marketplace_createdAt")
+  @@index([organizationId, createdAt])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AgentDefinition {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  name               String
+  description        String
+  version            String
+  systemInstructions String
+  goals              Json
+  skills             Json
+  tools              Json
+  permissions        Json
+  inputSchema        Json
+  outputSchema       Json
+  approvalPolicy     Json
+  enabled            Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  executions         AgentExecution[]
+  evaluations        AgentEvaluationCase[]
+
+  @@index([organizationId, enabled, updatedAt])
+  @@index([organizationId, updatedAt])
+}
+
+model AgentTool {
+  id             String       @id @default(cuid())
+  organizationId String
+  toolId         String
+  name           String
+  description    String
+  inputSchema    Json
+  outputSchema   Json
+  permission     Json
+  riskLevel      String
+  timeoutMs      Int          @default(10000)
+  retryPolicy    Json
+  adapterType    String
+  config         Json?
+  enabled        Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, toolId])
+  @@index([organizationId, enabled, updatedAt])
+}
+
+model AgentExecution {
+  id                 String              @id @default(cuid())
+  organizationId     String
+  agentDefinitionId  String
+  requestedByUserId   String?
+  workspaceId        String              @default("default")
+  accountId          String              @default("")
+  marketplace        String              @default("")
+  sku                String?
+  asin               String?
+  projectId          String?
+  taskId             String?
+  status             String              @default("CREATED")
+  input              Json
+  context            Json
+  recommendation     Json?
+  decision           Json?
+  output             Json?
+  approvalStatus     String?
+  tokenUsage         Int                 @default(0)
+  toolCallCount      Int                 @default(0)
+  retryCount         Int                 @default(0)
+  costCents          Int                 @default(0)
+  error              Json?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  agentDefinition    AgentDefinition      @relation(fields: [agentDefinitionId], references: [id], onDelete: Cascade)
+  approvals          AgentApproval[]
+  events             AgentEvent[]
+  memoryItems        AgentMemory[]
+  tasks              AgentTask[]
+  traces             AgentExecutionTrace[]
+  toolCalls          AgentToolCall[]
+  evaluations        AgentEvaluationRun[]
+
+  @@index([organizationId, agentDefinitionId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
   @@index([organizationId, accountId, marketplace, createdAt])
-  @@index([userId, createdAt])
+  @@index([organizationId, sku, createdAt])
+  @@index([organizationId, asin, createdAt])
+  @@index([organizationId, status, createdAt])
+}
+
+model AgentExecutionTrace {
+  id             String          @id @default(cuid())
+  organizationId String
+  executionId    String
+  sequence       Int
+  eventType      String
+  message        String?
+  payload        Json?
+  redactedPayload Json?
+  createdAt      DateTime        @default(now())
+  execution      AgentExecution   @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, sequence])
+  @@index([organizationId, eventType, createdAt])
+}
+
+model AgentToolCall {
+  id              String          @id @default(cuid())
+  organizationId  String
+  executionId     String
+  toolId          String
+  toolName        String
+  adapterType     String
+  riskLevel       String
+  permission      Json
+  status          String
+  input           Json
+  redactedInput   Json
+  output          Json?
+  redactedOutput  Json?
+  latencyMs       Int?
+  retryCount      Int             @default(0)
+  error           Json?
+  createdAt       DateTime        @default(now())
+  execution       AgentExecution   @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, createdAt])
+  @@index([organizationId, toolId, createdAt])
+}
+
+model AgentApproval {
+  id               String           @id @default(cuid())
+  organizationId   String
+  executionId      String
+  toolCallId       String?
+  riskLevel        String
+  status           String           @default("REQUESTED")
+  recommendation   Json
+  action           Json
+  humanDecision    Json?
+  requestedByUserId String?
+  decidedByUserId  String?
+  requestedAt      DateTime         @default(now())
+  decidedAt        DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  execution        AgentExecution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, requestedAt])
+  @@index([organizationId, status, requestedAt])
+}
+
+model AgentEvent {
+  id             String        @id @default(cuid())
+  organizationId String
+  executionId    String
+  eventType      String
+  payload        Json
+  createdAt      DateTime      @default(now())
+  execution      AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, executionId, createdAt])
+  @@index([organizationId, eventType, createdAt])
+}
+
+model AgentMemory {
+  id               String           @id @default(cuid())
+  organizationId   String
+  agentDefinitionId String?
+  scope            String
+  scopeKey         String
+  summary          String
+  data             Json
+  sourceExecutionId String?
+  confidence       Float            @default(0.5)
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  sourceExecution  AgentExecution?   @relation(fields: [sourceExecutionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, scope, scopeKey, createdAt])
+  @@index([organizationId, agentDefinitionId, createdAt])
+}
+
+model AgentTask {
+  id             String        @id @default(cuid())
+  organizationId String
+  executionId    String?
+  title          String
+  description    String?
+  status         String        @default("queued")
+  priority       Int           @default(0)
+  payload        Json
+  result         Json?
+  dueAt          DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  execution     AgentExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, executionId, createdAt])
+}
+
+model AgentEvaluationCase {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  agentDefinitionId  String?
+  name               String
+  input              Json
+  expectedBehavior   Json
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  agentDefinition    AgentDefinition? @relation(fields: [agentDefinitionId], references: [id], onDelete: SetNull)
+  runs               AgentEvaluationRun[]
+
+  @@index([organizationId, agentDefinitionId, createdAt])
+}
+
+model AgentEvaluationRun {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  evaluationCaseId   String
+  executionId        String?
+  input              Json
+  expectedBehavior   Json
+  actualBehavior     Json
+  toolCalls          Json
+  finalOutput        Json
+  score              Float?
+  errors             Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  evaluationCase     AgentEvaluationCase @relation(fields: [evaluationCaseId], references: [id], onDelete: Cascade)
+  execution         AgentExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, evaluationCaseId, createdAt])
+  @@index([organizationId, executionId, createdAt])
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum TeamAccountStatus {
+  active
+  pending
+  disabled
+  archived
+}
+
+enum OrganizationRole {
+  owner
+  database_admin
+  operations_supervisor
+  operations
+  operations_assistant
+  developer
+  designer
+  warehouse
+  warehouse_supervisor
+  finance
+  procurement
+  viewer
+}
+
+enum FileStorageType {
+  local
+  s3
+  r2
+}
+
+enum FileObjectStatus {
+  uploaded
+  processing
+  done
+  failed
+}
+
+enum ProductAttachmentStatus {
+  temporary
+  linked
+  orphan
+}
+
+enum ProductOutboxStatus {
+  queued
+  running
+  done
+  failed
+}
+
+enum ProductProjectionName {
+  summary
+  text
+  list_summary
+  product_center
+}
+
+enum ProductProjectionStatus {
+  pending
+  processing
+  ready
+  failed
+}
+
+enum ProductCostType {
+  purchase
+  freight
+  packaging
+  tariff
+  storage
+  advertising
+  other
+}
+
+enum ProductMediaType {
+  image
+  video
+  document
+  workbook
+  other
+}
+
+enum ImportJobStatus {
+  queued
+  running
+  done
+  failed
+}
+
+enum WorkerHeartbeatStatus {
+  online
+  stopping
+  offline
 }

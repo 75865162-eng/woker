@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthDriver, publicApiPrefixes, publicRoutes, sessionCookieName } from "@/lib/auth/constants";
-import {
-  getModuleIdForPath,
-  parseRolePermissionsCookie,
-  roleCanAccessModule,
-  rolePermissionsCookieName,
-} from "@/lib/accounts/permissions";
 
 function base64UrlToBytes(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -28,6 +22,15 @@ async function verifySignature(payload: string, signature: string) {
   return crypto.subtle.verify("HMAC", key, base64UrlToBytes(signature), new TextEncoder().encode(payload));
 }
 
+function getPublicOrigin(request: NextRequest) {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.split(",")[0]?.trim() || request.nextUrl.host;
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || request.nextUrl.protocol.replace(":", "");
+
+  return `${protocol}://${host}`;
+}
+
 async function hasValidSessionCookie(request: NextRequest) {
   const cookie = request.cookies.get(sessionCookieName)?.value;
 
@@ -44,32 +47,19 @@ async function hasValidSessionCookie(request: NextRequest) {
   try {
     const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as { driver?: "database" | "local"; expiresAt?: string };
 
-    return Boolean(parsed.driver === getAuthDriver() && parsed.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now());
+    return Boolean(
+      (parsed.driver === "local" || parsed.driver === getAuthDriver()) &&
+        parsed.expiresAt &&
+        new Date(parsed.expiresAt).getTime() > Date.now(),
+    );
   } catch {
     return false;
   }
 }
 
-function parseSessionRole(request: NextRequest) {
-  const cookie = request.cookies.get(sessionCookieName)?.value;
-  const [payload] = cookie?.split(".") ?? [];
-
-  if (!payload) return undefined;
-
-  try {
-    const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as {
-      localUser?: { role?: string };
-      sessionUser?: { role?: string };
-    };
-
-    return parsed.localUser?.role ?? parsed.sessionUser?.role;
-  } catch {
-    return undefined;
-  }
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const publicOrigin = getPublicOrigin(request);
   const isPublicRoute = publicRoutes.includes(pathname);
   const isPublicApi = publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
 
@@ -81,18 +71,7 @@ export async function middleware(request: NextRequest) {
 
   if (validSession) {
     if (pathname === "/login") {
-      return NextResponse.redirect("/");
-    }
-
-    if (pathname !== "/forbidden" && !pathname.startsWith("/api/")) {
-      const role = parseSessionRole(request);
-      const rolePermissions = parseRolePermissionsCookie(request.cookies.get(rolePermissionsCookieName)?.value);
-      const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
-      const canOpenRequestedPage = pathname === "/" ? true : roleCanAccessModule(role, moduleId, rolePermissions);
-
-      if (!canOpenRequestedPage) {
-        return NextResponse.redirect(new URL("/forbidden", request.url));
-      }
+      return NextResponse.redirect(new URL("/", publicOrigin));
     }
 
     const requestHeaders = new Headers(request.headers);
@@ -109,10 +88,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = new URL("/login", publicOrigin);
   loginUrl.searchParams.set("next", pathname);
 
-  return NextResponse.redirect(loginUrl.pathname + loginUrl.search);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {

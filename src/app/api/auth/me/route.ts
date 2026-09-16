@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserFromRequest } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  const user = await getCurrentUser();
+export async function GET(request: Request) {
+  const user = await getCurrentUserFromRequest(request);
 
   if (!user) {
     return NextResponse.json({ user: null }, { status: 401 });

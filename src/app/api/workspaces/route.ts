@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserFromRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
+import { ensureOrganization } from "@/lib/organizations/organization-server";
+import { isWorkspaceScopeComplete, normalizeWorkspaceScope } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUserFromRequest(request);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -22,6 +23,8 @@ export async function GET() {
     });
 
     if (!scopes.some((scope) => scope.id === "default")) {
+      await ensureOrganization(user.organizationId, user.organizationName);
+
       const defaultScope = await prisma.workspaceScope.create({
         data: {
           organizationId: user.organizationId,
@@ -43,7 +46,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "edit");
+    const permission = await requireApiPermission("settings", "edit", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -57,6 +60,10 @@ export async function POST(request: Request) {
       marketplace: body.marketplace,
     });
     const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : scope.workspaceId;
+
+    if (!isWorkspaceScopeComplete(scope)) {
+      return NextResponse.json({ error: "请补齐 workspaceId、accountId 和 marketplace 后再保存工作区。" }, { status: 400 });
+    }
 
     const workspace = await prisma.workspaceScope.upsert({
       where: {

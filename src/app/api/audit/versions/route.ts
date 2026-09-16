@@ -2,21 +2,56 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { recordDataChangeVersion, type VersionedEntityType } from "@/lib/audit/versioning";
+import {
+  createAiProfileName,
+  createSavedAiModelProfilePair,
+  normalizeAiImageSettings,
+  normalizeAiSettings,
+  normalizeSavedAiModelProfiles,
+  type AiModelSettings,
+} from "@/lib/ai-settings";
+import { ensureCurrentUserRecord } from "@/lib/auth/ensure-user-record";
 import { prisma } from "@/lib/db/prisma";
+import { enqueueProductOutboxEvent } from "@/lib/queue";
+import {
+  invalidateProductListSummaryCaches,
+  invalidateProductListResponseCaches,
+} from "@/lib/products/product-list-cache";
+import {
+  findProductRecordBySku,
+  ProductRecordRevisionConflictError,
+} from "@/lib/products/product-record-repository";
+import { InvalidProductStatusError } from "@/lib/products/status-machine";
+import { saveProductAggregate } from "@/lib/products/product-aggregate-service";
 import type { Product } from "@/lib/products/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-const restorableEntityTypes = new Set<VersionedEntityType>([
+const visibleEntityTypes = new Set<VersionedEntityType>([
+  "ai_model_setting",
+  "external_integration_setting",
   "product",
   "listing_ai_workspace",
   "ppc_workspace_snapshot",
   "rule_config",
+  "file_object",
+  "import_job",
+  "export_record",
 ]);
 
 function isVersionedEntityType(value: string | null): value is VersionedEntityType {
-  return Boolean(value && restorableEntityTypes.has(value as VersionedEntityType));
+  return Boolean(value && visibleEntityTypes.has(value as VersionedEntityType));
+}
+
+function isRestorableEntityType(value: VersionedEntityType) {
+  return (
+    value === "ai_model_setting" ||
+    value === "product" ||
+    value === "listing_ai_workspace" ||
+    value === "ppc_workspace_snapshot" ||
+    value === "rule_config"
+  );
 }
 
 function clampPageSize(value: string | null) {
@@ -34,7 +69,7 @@ function toInputJsonValue(value: Prisma.JsonValue): Prisma.InputJsonValue {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view");
+    const permission = await requireApiPermission("versions", "view", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -80,15 +115,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "edit");
+    const permission = await requireApiPermission("versions", "edit", request);
 
     if (!permission.ok) {
       return permission.response;
     }
     const { user } = permission;
 
-    const body = (await request.json()) as { versionId?: unknown; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
+    const body = (await request.json()) as { versionId?: unknown };
     const versionId = typeof body.versionId === "string" ? body.versionId : "";
+    const requestScope = workspaceScopeFromRequest(request);
 
     if (!versionId) {
       return NextResponse.json({ error: "Version id is required." }, { status: 400 });
@@ -98,6 +134,7 @@ export async function POST(request: Request) {
       where: {
         id: versionId,
         organizationId: user.organizationId,
+        workspaceId: requestScope.workspaceId,
       },
     });
 
@@ -105,41 +142,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Version not found." }, { status: 404 });
     }
 
-    const scope = workspaceScopeFromRequest(request, {
-      workspaceId: body.workspaceId ?? version.workspaceId,
-      accountId: body.accountId ?? version.accountId,
-      marketplace: body.marketplace ?? version.marketplace,
-    });
+    if (!isRestorableEntityType(version.entityType)) {
+      return NextResponse.json({ error: "This version type is audit-only and cannot be restored." }, { status: 400 });
+    }
+
+    const scope = {
+      workspaceId: version.workspaceId,
+      accountId: version.accountId,
+      marketplace: version.marketplace,
+    };
     const payload = toInputJsonValue(version.payload);
 
     if (version.entityType === "product") {
       const product = version.payload as unknown as Product;
+      let productOutboxEventId: string | undefined;
+      let projectionEventId: string | undefined;
 
-      await prisma.productRecord.upsert({
-        where: {
-          organizationId_workspaceId_sku: {
-            organizationId: user.organizationId,
-            workspaceId: scope.workspaceId,
-            sku: product.sku,
-          },
-        },
-        create: {
-          id: product.id,
+      await prisma.$transaction(async (tx) => {
+        const existingRecord = await findProductRecordBySku(tx, {
           organizationId: user.organizationId,
-          userId: user.id,
           workspaceId: scope.workspaceId,
-          accountId: scope.accountId,
-          marketplace: scope.marketplace,
-          sku: product.sku,
-          payload: product as unknown as Prisma.InputJsonValue,
-        },
-        update: {
-          userId: user.id,
-          accountId: scope.accountId,
-          marketplace: scope.marketplace,
-          payload: product as unknown as Prisma.InputJsonValue,
-        },
+        }, product.sku);
+        const saved = await saveProductAggregate(tx, {
+          product: {
+            ...product,
+            id: existingRecord?.id ?? product.id,
+          },
+          user,
+          scope: { ...scope, organizationId: user.organizationId },
+          expectedRevision: existingRecord?.revision,
+          allowStatusRollback: true,
+          existingRecord,
+          eventType: "product_restored",
+        });
+        productOutboxEventId = saved.outboxEventId;
+        projectionEventId = saved.projectionEventId;
+
       });
+
+      if (productOutboxEventId) {
+        await enqueueProductOutboxEvent(productOutboxEventId);
+      }
+      if (projectionEventId) {
+        await enqueueProductOutboxEvent(projectionEventId);
+      }
+      await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`);
+      invalidateProductListSummaryCaches(`${user.organizationId}:${scope.workspaceId}:`);
     }
 
     if (version.entityType === "listing_ai_workspace" && isRecord(version.payload)) {
@@ -165,6 +213,49 @@ export async function POST(request: Request) {
           marketplace: scope.marketplace,
           draft: (version.payload.draft ?? {}) as Prisma.InputJsonValue,
           records: (version.payload.records ?? []) as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    if (version.entityType === "ai_model_setting" && isRecord(version.payload)) {
+      const settings = {
+        text: normalizeAiSettings(version.payload.settings as Partial<AiModelSettings> | undefined),
+        image: normalizeAiImageSettings(version.payload.imageSettings as Partial<AiModelSettings> | undefined),
+      };
+      const profiles = normalizeSavedAiModelProfiles(version.payload.profiles);
+      const nextProfiles = profiles.length
+        ? profiles
+        : createSavedAiModelProfilePair(settings.text, settings.image, createAiProfileName(settings.text));
+      const activeProfileId =
+        typeof version.payload.activeProfileId === "string"
+          ? version.payload.activeProfileId
+          : nextProfiles.find((profile) => profile.kind === "system")?.id || "";
+
+      await ensureCurrentUserRecord(user);
+      await prisma.aiModelSetting.upsert({
+        where: {
+          organizationId_workspaceId_userId: {
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            userId: user.id,
+          },
+        },
+        create: {
+          organizationId: user.organizationId,
+          userId: user.id,
+          workspaceId: scope.workspaceId,
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          activeProfileId,
+          settings: settings as unknown as Prisma.InputJsonValue,
+          profiles: nextProfiles as unknown as Prisma.InputJsonValue,
+        },
+        update: {
+          accountId: scope.accountId,
+          marketplace: scope.marketplace,
+          activeProfileId,
+          settings: settings as unknown as Prisma.InputJsonValue,
+          profiles: nextProfiles as unknown as Prisma.InputJsonValue,
         },
       });
     }
@@ -236,18 +327,29 @@ export async function POST(request: Request) {
       });
     }
 
-    await recordDataChangeVersion({
-      user,
-      entityType: version.entityType,
-      entityId: version.entityId,
-      action: `${version.entityType}_restore`,
-      summary: `恢复到版本 ${version.version}`,
-      payload,
-      scope,
-    });
+    if (version.entityType !== "product") {
+      await recordDataChangeVersion({
+        user,
+        entityType: version.entityType,
+        entityId: version.entityId,
+        action: `${version.entityType}_restore`,
+        summary: `恢复到版本 ${version.version}`,
+        payload,
+        scope,
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof ProductRecordRevisionConflictError) {
+      return NextResponse.json(
+        { error: error.message, conflict: true, currentRevision: error.currentRevision },
+        { status: 409 },
+      );
+    }
+    if (error instanceof InvalidProductStatusError) {
+      return NextResponse.json({ error: error.message, code: "INVALID_PRODUCT_STATUS_TRANSITION" }, { status: 400 });
+    }
     const message = error instanceof Error ? error.message : "Failed to restore version.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

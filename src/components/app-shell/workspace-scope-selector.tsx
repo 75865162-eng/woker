@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BriefcaseBusiness } from "lucide-react";
+import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
+import { fetchWorkspacesCached } from "@/lib/workspace/workspace-api-cache";
 
 const storageKey = "amazon_bulk_ad_workspace_scope";
 
@@ -45,6 +47,11 @@ function readSelectedScope(): SelectedScope {
 
 function writeSelectedScope(scope: SelectedScope) {
   window.localStorage.setItem(storageKey, JSON.stringify(scope));
+  document.cookie = `${storageKey}=${encodeURIComponent(JSON.stringify(scope))}; Path=/; Max-Age=31536000; SameSite=Lax`;
+}
+
+function isSameScope(left: SelectedScope, right: SelectedScope) {
+  return left.workspaceId === right.workspaceId && left.accountId === right.accountId && left.marketplace === right.marketplace;
 }
 
 function shouldScopeFetch(input: RequestInfo | URL) {
@@ -89,43 +96,83 @@ function scopeLabel(scope: WorkspaceScope) {
 export function WorkspaceScopeSelector() {
   const [workspaces, setWorkspaces] = useState<WorkspaceScope[]>([]);
   const [selected, setSelected] = useState(() => readSelectedScope());
+  const selectedRef = useRef(selected);
+
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
 
   useEffect(() => {
     patchFetchWithWorkspaceScope();
+    writeSelectedScope(selectedRef.current);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const supportsIdleCallback = typeof window.requestIdleCallback === "function";
 
-    fetch("/api/workspaces")
-      .then((response) => (response.ok ? response.json() : { workspaces: [] }))
-      .then((data: { workspaces?: WorkspaceScope[] }) => {
+    function applySelectedScope(nextSelected: SelectedScope, source: "manual" | "auto") {
+      if (isSameScope(selectedRef.current, nextSelected)) {
+        return;
+      }
+
+      setSelected(nextSelected);
+      writeSelectedScope(nextSelected);
+      emitWorkspaceScopeChanged({ ...nextSelected, source });
+    }
+
+    const loadWorkspaces = async () => {
+      try {
+        const data = await fetchWorkspacesCached();
+
         if (cancelled) return;
 
         const nextWorkspaces = Array.isArray(data.workspaces) ? data.workspaces : [];
         setWorkspaces(nextWorkspaces);
-        if (!nextWorkspaces.some((workspace) => workspace.id === selected.workspaceId)) {
-          const fallback = nextWorkspaces.find((workspace) => workspace.isDefault) ?? nextWorkspaces[0];
+        const currentWorkspace = nextWorkspaces.find((workspace) => workspace.id === selectedRef.current.workspaceId);
 
-          if (fallback) {
-            const nextSelected = {
+        if (currentWorkspace) {
+          applySelectedScope(
+            {
+              workspaceId: currentWorkspace.id,
+              accountId: currentWorkspace.accountId ?? "",
+              marketplace: currentWorkspace.marketplace ?? "",
+            },
+            "auto",
+          );
+          return;
+        }
+
+        const fallback = nextWorkspaces.find((workspace) => workspace.isDefault) ?? nextWorkspaces[0];
+
+        if (fallback) {
+          applySelectedScope(
+            {
               workspaceId: fallback.id,
               accountId: fallback.accountId ?? "",
               marketplace: fallback.marketplace ?? "",
-            };
-            setSelected(nextSelected);
-            writeSelectedScope(nextSelected);
-          }
+            },
+            "auto",
+          );
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setWorkspaces([]);
-      });
+      }
+    };
+
+    const idleCallbackId: number = supportsIdleCallback
+      ? window.requestIdleCallback(() => void loadWorkspaces(), { timeout: 1500 })
+      : window.setTimeout(() => void loadWorkspaces(), 900);
 
     return () => {
       cancelled = true;
+      if (supportsIdleCallback) {
+        window.cancelIdleCallback(idleCallbackId);
+      } else {
+        window.clearTimeout(idleCallbackId);
+      }
     };
-  }, [selected.workspaceId]);
+  }, []);
 
   const selectedValue = useMemo(() => selected.workspaceId || "default", [selected.workspaceId]);
 
@@ -137,9 +184,13 @@ export function WorkspaceScopeSelector() {
       marketplace: workspace?.marketplace ?? "",
     };
 
+    if (isSameScope(selectedRef.current, nextSelected)) {
+      return;
+    }
+
     setSelected(nextSelected);
     writeSelectedScope(nextSelected);
-    window.location.reload();
+    emitWorkspaceScopeChanged({ ...nextSelected, source: "manual" });
   }
 
   if (!workspaces.length) return null;

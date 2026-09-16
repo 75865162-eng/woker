@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { recordDataChangeVersion } from "@/lib/audit/versioning";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { enqueueImportJob } from "@/lib/queue";
 
 export const runtime = "nodejs";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function recordVersionSafely(input: Parameters<typeof recordDataChangeVersion>[0]) {
   try {
-    const permission = await requireApiPermission("workspace", "edit");
+    await recordDataChangeVersion(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to record retry version.";
+    console.warn(message);
+  }
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const permission = await requireApiPermission("workspace", "edit", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -39,8 +50,48 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       },
       include: { file: true },
     });
+    await recordVersionSafely({
+      user,
+      entityType: "import_job",
+      entityId: job.id,
+      action: "import_job_retry",
+      summary: `${job.file.originalName} 重新排队`,
+      payload: {
+        id: job.id,
+        fileId: job.fileId,
+        type: job.type,
+        status: job.status,
+        progress: job.progress,
+        workspaceId: job.workspaceId,
+        accountId: job.accountId,
+        marketplace: job.marketplace,
+      } as unknown as Prisma.InputJsonValue,
+      scope: {
+        workspaceId: job.workspaceId,
+        accountId: job.accountId,
+        marketplace: job.marketplace,
+      },
+    });
 
-    await enqueueImportJob(job.id);
+    try {
+      await enqueueImportJob(job.id);
+    } catch (enqueueError) {
+      const message = enqueueError instanceof Error ? enqueueError.message : "Failed to enqueue job.";
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: {
+          status: "failed",
+          progress: 0,
+          error: message,
+          file: {
+            update: {
+              status: "failed",
+            },
+          },
+        },
+      });
+      throw enqueueError;
+    }
 
     return NextResponse.json({ job });
   } catch (error) {

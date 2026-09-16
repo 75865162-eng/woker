@@ -1,0 +1,141 @@
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import sharp from "sharp";
+import { NextResponse } from "next/server";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { prisma } from "@/lib/db/prisma";
+import { getStorageDriver, getStorageType } from "@/lib/storage";
+import { PRODUCT_ATTACHMENT_MAX_BYTES } from "@/lib/products/file-assets";
+import { createProductImagePreview } from "@/lib/products/image-preview";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+
+export const runtime = "nodejs";
+
+const supportedImageTypes = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+const supportedImageExtensions = new Set([".avif", ".gif", ".jpg", ".jpeg", ".png", ".webp"]);
+const maxImageSize = PRODUCT_ATTACHMENT_MAX_BYTES;
+
+function createAssetKey(fileName: string, variant: "original" | "thumb" | "preview") {
+  const extension = variant === "original" ? path.extname(fileName).toLowerCase() || ".bin" : ".webp";
+  return `assets/products/images/${new Date().toISOString().slice(0, 10)}/${randomUUID()}-${variant}${extension}`;
+}
+
+function createAssetUrl(key: string) {
+  return `/api/assets/${key.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export async function POST(request: Request) {
+  try {
+    const permission = await requireApiPermission("products", "edit", request);
+
+    if (!permission.ok) {
+      return permission.response;
+    }
+    const { user } = permission;
+
+    const formData = await request.formData();
+    const file = formData.get("file");
+    const scope = workspaceScopeFromRequest(request, {
+      workspaceId: formData.get("workspaceId"),
+      accountId: formData.get("accountId"),
+      marketplace: formData.get("marketplace"),
+    });
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "缺少商品图片文件。" }, { status: 400 });
+    }
+
+    const extension = path.extname(file.name).toLowerCase();
+    if (!supportedImageExtensions.has(extension) || (file.type && !supportedImageTypes.has(file.type))) {
+      return NextResponse.json({ error: "商品图片仅支持 JPG、PNG、WEBP、GIF、AVIF。" }, { status: 400 });
+    }
+
+    if (file.size > maxImageSize) {
+      return NextResponse.json({ error: "商品图片不能超过 10MB。" }, { status: 400 });
+    }
+
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const thumbBuffer = await sharp(fileBuffer)
+      .rotate()
+      .resize({ width: 160, height: 160, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 78 })
+      .toBuffer();
+    const previewBuffer = await createProductImagePreview(fileBuffer);
+
+    const originalKey = createAssetKey(file.name, "original");
+    const thumbKey = createAssetKey(file.name, "thumb");
+    const previewKey = createAssetKey(file.name, "preview");
+    const [storedObject, thumbStoredObject, previewStoredObject] = await Promise.all([
+      getStorageDriver().putBuffer({ key: originalKey, buffer: fileBuffer, contentType: file.type || undefined }),
+      getStorageDriver().putBuffer({ key: thumbKey, buffer: thumbBuffer, contentType: "image/webp" }),
+      getStorageDriver().putBuffer({ key: previewKey, buffer: previewBuffer, contentType: "image/webp" }),
+    ]);
+    const fileObject = await prisma.fileObject.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
+        originalName: file.name,
+        mimeType: file.type || storedObject.contentType || undefined,
+        size: storedObject.size,
+        storageKey: storedObject.key,
+        storageType: getStorageType(),
+        status: "done",
+        productBindingStatus: "temporary",
+      },
+    });
+    const thumbFileObject = await prisma.fileObject.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
+        originalName: `${path.basename(file.name, path.extname(file.name))}-thumb.webp`,
+        mimeType: "image/webp",
+        size: thumbStoredObject.size,
+        storageKey: thumbStoredObject.key,
+        storageType: getStorageType(),
+        status: "done",
+        productBindingStatus: "temporary",
+      },
+    });
+    const previewFileObject = await prisma.fileObject.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: user.id,
+        workspaceId: scope.workspaceId,
+        accountId: scope.accountId,
+        marketplace: scope.marketplace,
+        originalName: `${path.basename(file.name, path.extname(file.name))}-preview.webp`,
+        mimeType: "image/webp",
+        size: previewStoredObject.size,
+        storageKey: previewStoredObject.key,
+        storageType: getStorageType(),
+        status: "done",
+        productBindingStatus: "temporary",
+      },
+    });
+
+    return NextResponse.json({
+      asset: {
+        id: fileObject.id,
+        name: fileObject.originalName,
+        mimeType: fileObject.mimeType || "application/octet-stream",
+        size: fileObject.size ?? storedObject.size,
+        storageType: fileObject.storageType,
+        uploadedAt: fileObject.createdAt.toISOString(),
+        url: createAssetUrl(thumbFileObject.storageKey),
+        thumbUrl: createAssetUrl(thumbFileObject.storageKey),
+        previewUrl: createAssetUrl(previewFileObject.storageKey),
+        originalUrl: createAssetUrl(fileObject.storageKey),
+        thumbFileId: thumbFileObject.id,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "商品图片上传失败。";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

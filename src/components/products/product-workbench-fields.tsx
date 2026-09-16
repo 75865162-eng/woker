@@ -1,5 +1,6 @@
-import { ExternalLink } from "lucide-react";
-import { buildAmazonLink } from "./product-workbench-utils";
+import { useEffect, useState } from "react";
+import { ArrowUpRight, ExternalLink } from "lucide-react";
+import { buildAmazonLink, buildAmazonSearchLink } from "./product-workbench-utils";
 
 export function LabeledInput({
   label,
@@ -7,25 +8,51 @@ export function LabeledInput({
   onChange,
   placeholder,
   type = "text",
+  size = "default",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
+  size?: "default" | "compact";
 }) {
   const isNumberInput = type === "number";
+  const heightClass = size === "compact" ? "h-8" : "h-10";
+  const [numberText, setNumberText] = useState(value);
+
+  useEffect(() => {
+    if (isNumberInput) {
+      setNumberText(value);
+    }
+  }, [isNumberInput, value]);
 
   return (
     <label className="text-xs font-semibold text-muted">
       {label}
       <input
-        className="mt-1 h-10 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand"
+        className={`mt-1 ${heightClass} w-full rounded-md border border-border bg-white px-3 text-sm text-foreground outline-none focus:border-brand`}
         type={isNumberInput ? "text" : type}
         inputMode={isNumberInput ? "decimal" : undefined}
-        value={value}
+        value={isNumberInput ? numberText : value}
         placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          if (isNumberInput) {
+            setNumberText(event.target.value);
+            return;
+          }
+          onChange(event.target.value);
+        }}
+        onBlur={() => {
+          if (isNumberInput) {
+            onChange(numberText);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (isNumberInput && event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
       />
     </label>
   );
@@ -48,14 +75,75 @@ export function SmallInput({
   compact?: boolean;
 }) {
   const isNumberInput = type === "number";
+  const [numberText, setNumberText] = useState(String(value));
+
+  useEffect(() => {
+    if (isNumberInput) {
+      setNumberText(String(value));
+    }
+  }, [isNumberInput, value]);
 
   return (
     <input
       className={`h-8 rounded-md border border-border bg-white px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
       type={isNumberInput ? "text" : type}
       inputMode={isNumberInput ? "decimal" : undefined}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
+      value={isNumberInput ? numberText : value}
+      onChange={(event) => {
+        if (isNumberInput) {
+          setNumberText(event.target.value);
+          return;
+        }
+        onChange(event.target.value);
+      }}
+      onBlur={() => {
+        if (isNumberInput) {
+          onChange(numberText);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (isNumberInput && event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
+
+export function DecimalInput({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  compact?: boolean;
+}) {
+  const [text, setText] = useState(String(value));
+
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
+  function commit(nextText: string) {
+    const normalized = nextText.trim();
+    const parsed = normalized === "" ? 0 : Number(normalized);
+    onChange(Number.isFinite(parsed) ? parsed : value);
+  }
+
+  return (
+    <input
+      className={`h-8 rounded-md border border-border bg-white px-2 text-xs text-foreground outline-none focus:border-brand ${compact ? "w-[60px] min-w-[60px]" : "w-full min-w-[88px]"}`}
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={() => commit(text)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
     />
   );
 }
@@ -123,6 +211,22 @@ export function AmazonLinkButton({ asin }: { asin: string }) {
     >
       <ExternalLink className="h-3.5 w-3.5" />
       打开
+    </a>
+  );
+}
+
+export function AmazonSearchLinkButton({ keyword }: { keyword: string }) {
+  const href = buildAmazonSearchLink(keyword);
+  return (
+    <a
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border ${href ? "text-brand hover:border-brand" : "pointer-events-none text-muted opacity-50"}`}
+      href={href || "#"}
+      target="_blank"
+      rel="noreferrer"
+      title="在 Amazon 搜索关键词"
+      aria-label="在 Amazon 搜索关键词"
+    >
+      <ArrowUpRight className="h-4 w-4" />
     </a>
   );
 }

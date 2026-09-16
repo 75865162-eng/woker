@@ -1,3 +1,5 @@
+import type { ProductVideoPlanDraft } from "@/lib/products/video-plan";
+
 export type ProductStatus =
   | "pending"
   | "developing"
@@ -37,9 +39,7 @@ export type ProductWorkflowEvent = {
 
 export type ProductOperationStageId =
   | "selection_data"
-  | "sample_confirmation"
   | "backend_upload"
-  | "system_entry"
   | "order"
   | "image_request"
   | "copywriting"
@@ -51,6 +51,17 @@ export type ProductOperationStageId =
 
 export type ProductOperationStageStatus = "not_started" | "in_progress" | "completed" | "blocked";
 
+export type ProductOperationStageEvidence = {
+  fileId?: string;
+  fileName: string;
+  fileType: string;
+  fileSize?: number;
+  downloadUrl?: string;
+  thumbUrl?: string;
+  fileDataUrl?: string;
+  uploadedAt: string;
+};
+
 export type ProductOperationStage = {
   id: ProductOperationStageId;
   status: ProductOperationStageStatus;
@@ -59,6 +70,7 @@ export type ProductOperationStage = {
   completedAt: string;
   note: string;
   updatedAt: string;
+  evidenceFile?: ProductOperationStageEvidence;
 };
 
 export type ProductOperationProgressEvent = {
@@ -69,11 +81,8 @@ export type ProductOperationProgressEvent = {
 };
 
 export type ProductOperationProgress = {
-  selectionDate: string;
   orderQuantity: number;
-  orderDate: string;
   shipDate: string;
-  dailyAdBudget: number;
   forecastMonthlySales: number;
   forecastPrice: number;
   stages: ProductOperationStage[];
@@ -82,15 +91,42 @@ export type ProductOperationProgress = {
   history: ProductOperationProgressEvent[];
 };
 
+export type ProductFileAsset = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  storageType: "local" | "s3" | "r2";
+  uploadedAt: string;
+  downloadUrl: string;
+};
+
+export type ProductImageAsset = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  storageType: "local" | "s3" | "r2";
+  uploadedAt: string;
+  thumbUrl: string;
+  previewUrl?: string;
+  originalUrl: string;
+  thumbFileId?: string;
+  downloadUrl?: string;
+};
+
 export type Product = {
   id: string;
+  revision?: number;
   sku: string;
   chineseName: string;
   englishName: string;
+  image?: string;
   asin: string;
   developer: string;
   purchasePrice: number;
   status: ProductStatus;
+  source?: "dashboard";
   supplierName: string;
   supplierUrl: string;
   specs: string;
@@ -101,6 +137,7 @@ export type Product = {
   cancelReason: string;
   hsCode: string;
   images: string[];
+  imageAssets?: ProductImageAsset[];
   competitorAsins: string[];
   productWeightG: number;
   packageWeightG: number;
@@ -119,9 +156,46 @@ export type Product = {
   workflowUpdatedAt?: string;
   workflowReminderAt?: string;
   workflowHistory?: ProductWorkflowEvent[];
+  currentOwner?: string;
+  isOverdue?: boolean;
   operationsProgress?: ProductOperationProgress;
+  conclusionExcelFile?: ProductFileAsset;
+  videoPlan?: ProductVideoPlanDraft;
 };
 
 export type ProductDraft = Omit<Product, "id"> & {
   id?: string;
+};
+
+export type ProductListItem = {
+  id: string;
+  sku: string;
+  chineseName: string;
+  englishName: string;
+  image?: string;
+  asin?: string;
+  status: ProductStatus;
+  currentOwner: string;
+  isOverdue?: boolean;
+  updatedAt: string;
+  createdAt?: string;
+  purchasePrice?: number;
+  supplierName?: string;
+  specs?: string;
+  keywords?: string;
+  note?: string;
+  selectionOwner?: string;
+  opsAssignee?: string;
+  designerAssignee?: string;
+  workflowStage?: ProductWorkflowStage;
+  workflowDueAt?: string;
+};
+
+export type ProductListSummary = {
+  total: number;
+  developing: number;
+  opsReview: number;
+  designInProgress: number;
+  operationsProgress: number;
+  overdue: number;
 };

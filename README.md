@@ -12,7 +12,7 @@ For a local database restore, create the bootstrap super account after migration
 npm run db:seed-admin
 ```
 
-The development bootstrap account follows `.env.example`: account `1`, password `1`. Change `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` before real company use.
+The development bootstrap account is configured through `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env`. Use a strong password before any shared or production-like environment.
 
 First, run the development server:
 

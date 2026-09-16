@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Download, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
+import { useVirtualRows } from "@/lib/hooks/use-virtual-rows";
 import { useWorkspaceStore } from "@/lib/stores/workspace-store";
 import type { AdjustmentDraft, PerformanceRow, OverallAdDataRow } from "@/lib/types";
 
@@ -26,6 +27,19 @@ function waitForPaint() {
   return new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+}
+
+async function loadWorkbookBuffer(fileId: string) {
+  try {
+    const response = await fetch(`/api/workspace/workbook-files/${encodeURIComponent(fileId)}/download`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.arrayBuffer();
+  } catch {
+    return null;
+  }
 }
 
 function normalizeMatchValue(value: string | undefined) {
@@ -204,6 +218,7 @@ export function AdjustmentTable() {
     performanceRows,
     overallAdDataRows,
     originalWorkbookBuffer,
+    originalWorkbookFileId,
     uploadedFileName,
     workspaceMode,
     overallAdDataStatus,
@@ -334,7 +349,14 @@ export function AdjustmentTable() {
   ]);
   const totalPages = Math.max(1, Math.ceil(tableRows.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const visibleRows = tableRows.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+  const pageRows = tableRows.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+  const virtualRows = useVirtualRows<HTMLDivElement>({
+    itemCount: pageRows.length,
+    rowHeight: 56,
+    overscan: 8,
+    enabled: pageRows.length > 0,
+  });
+  const visibleRows = pageRows.slice(virtualRows.startIndex, virtualRows.endIndex);
   const pageStart = tableRows.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
   const pageEnd = Math.min(safeCurrentPage * pageSize, tableRows.length);
   const matchedOverallCampaignGroupCount = useMemo(
@@ -533,7 +555,7 @@ export function AdjustmentTable() {
       return;
     }
 
-    if (!originalWorkbookBuffer) {
+    if (!originalWorkbookBuffer && !originalWorkbookFileId) {
       window.alert("请先上传原始 Bulk Operations 文件，再导出修改版。");
       return;
     }
@@ -546,8 +568,14 @@ export function AdjustmentTable() {
       setOperationProgress({ label: "写回勾选草稿", progress: 55 });
       await waitForPaint();
       const { exportSelectedDrafts } = await import("@/lib/excel/bulk-export");
+      const workbookBuffer = originalWorkbookBuffer ?? (originalWorkbookFileId ? await loadWorkbookBuffer(originalWorkbookFileId) : null);
+
+      if (!workbookBuffer) {
+        throw new Error("未找到原始 Bulk 文件，请重新上传后再导出。");
+      }
+
       const result = await exportSelectedDrafts({
-        workbookBuffer: originalWorkbookBuffer,
+        workbookBuffer,
         drafts: adjustmentDrafts,
         fileName: `已修改-${uploadedFileName ?? "bulk-operations.xlsx"}`,
       });
@@ -621,7 +649,8 @@ export function AdjustmentTable() {
         </div>
       </div>
       <div
-        className={`thin-scrollbar relative overflow-auto ${boxSelection?.active || dragSelectMode ? "select-none" : ""}`}
+        ref={virtualRows.containerRef}
+        className={`thin-scrollbar relative max-h-[min(72vh,760px)] overflow-auto ${boxSelection?.active || dragSelectMode ? "select-none" : ""}`}
         onMouseDown={beginBoxSelection}
         onMouseMove={updateBoxSelection}
         onMouseLeave={finishPointerSelection}
@@ -693,7 +722,13 @@ export function AdjustmentTable() {
                 </td>
               </tr>
             ) : (
-              visibleRows.map(({ draft, performanceRow, overallRow }) => {
+              <>
+                {virtualRows.beforeHeight > 0 ? (
+                  <tr aria-hidden="true">
+                    <td colSpan={20} style={{ height: `${virtualRows.beforeHeight}px`, padding: 0, border: 0 }} />
+                  </tr>
+                ) : null}
+                {visibleRows.map(({ draft, performanceRow, overallRow }) => {
                 const rowId = draft?.id;
                 const keyword = draft?.keyword ?? performanceRow?.keyword ?? overallRow?.keyword ?? "-";
                 const target = draft?.target ?? performanceRow?.target ?? overallRow?.target ?? "-";
@@ -802,11 +837,17 @@ export function AdjustmentTable() {
                   <td className="metric-tabular px-4 py-3 text-right font-bold text-danger">
                     {draft ? `${draft.deltaPercent}%` : "-"}
                   </td>
-                  <td className="px-4 py-3">{draft?.reason ?? "已匹配 Overall，未触发改价规则"}</td>
-                  <td className="px-4 py-3 text-muted">{draft?.matchedRule ?? "-"}</td>
+                  <td className="max-w-[280px] truncate px-4 py-3" title={draft?.reason ?? "已匹配 Overall，未触发改价规则"}>{draft?.reason ?? "已匹配 Overall，未触发改价规则"}</td>
+                  <td className="max-w-[220px] truncate px-4 py-3 text-muted" title={draft?.matchedRule ?? "-"}>{draft?.matchedRule ?? "-"}</td>
                 </tr>
                 );
-              })
+                })}
+                {virtualRows.afterHeight > 0 ? (
+                  <tr aria-hidden="true">
+                    <td colSpan={20} style={{ height: `${virtualRows.afterHeight}px`, padding: 0, border: 0 }} />
+                  </tr>
+                ) : null}
+              </>
             )}
           </tbody>
         </table>

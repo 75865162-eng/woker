@@ -1,9 +1,12 @@
-import type { Product } from "@/lib/products/types";
+import type { Product, ProductImageAsset, ProductListItem } from "@/lib/products/types";
 import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
 import { buildWorkflowEvent, createWorkflowDueAt, getProductWorkflowStage, normalizeAssigneeList } from "@/lib/products/workflow";
+import { getProductListImage, safeProductImageUrl } from "@/lib/products/image-assets";
 import { createEmptyImprovementRow } from "./product-workbook-detail-sections";
 import {
   emptySize,
+  createDefaultPeakSeasonWeights,
+  normalizePeakSeasonWeights,
   type ProductEditorDraft,
   type TrialCompetitorRow,
   type TrialImprovement,
@@ -14,7 +17,10 @@ import {
 } from "./product-workbench-model";
 import { formatDateTime, nextSku } from "./product-workbench-utils";
 
-export async function parseProductWorkbookFile(file: File, products: Product[]): Promise<Product> {
+type ProductListPreview = Pick<ProductListItem, "id" | "sku" | "chineseName" | "englishName" | "status"> &
+  Partial<Omit<ProductListItem, "id" | "sku" | "chineseName" | "englishName" | "status">>;
+
+export async function parseProductWorkbookFile(file: File, products: Array<Pick<Product, "sku">>, preferredSku?: string): Promise<Product> {
   const buffer = await file.arrayBuffer();
   const [XLSXModule, JSZipModule] = await Promise.all([import("xlsx"), import("jszip")]);
   const XLSX = XLSXModule;
@@ -61,7 +67,7 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
     detail.remarkImages.push(image.dataUrl);
   });
 
-  const sku = nextSku(products);
+  const sku = preferredSku || nextSku(products);
   const now = new Date();
   const developer = extractDeveloperName(file.name);
 
@@ -83,7 +89,7 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
     note: detail.remark,
     cancelReason: "",
     hsCode: "",
-    images: detail.remarkImages.slice(0, 1),
+    images: [],
     competitorAsins: detail.competitors.map((competitor) => competitor.asin.trim()).filter(Boolean),
     productWeightG: Math.round((detail.pricingRows[0]?.actualWeightKg ?? 0) * 1000),
     packageWeightG: Math.round((detail.pricingRows[0]?.actualWeightKg ?? 0) * 1000),
@@ -113,6 +119,47 @@ export async function parseProductWorkbookFile(file: File, products: Product[]):
     ],
     workbookDetail: detail,
   } as Product;
+}
+
+export function createProductShellFromListItem(product: ProductListPreview): Product {
+  return {
+    id: product.id,
+    sku: product.sku,
+    chineseName: product.chineseName,
+    englishName: product.englishName,
+    image: product.image,
+    asin: product.asin ?? "",
+    developer: "",
+    purchasePrice: product.purchasePrice ?? 0,
+    status: product.status,
+    supplierName: product.supplierName ?? "",
+    supplierUrl: "",
+    specs: product.specs ?? "",
+    purchaseLeadTime: "",
+    createdAt: product.createdAt ?? formatDateTime(new Date()),
+    keywords: product.keywords ?? "",
+    note: product.note ?? "",
+    cancelReason: "",
+    hsCode: "",
+    images: [],
+    competitorAsins: [],
+    productWeightG: 0,
+    packageWeightG: 0,
+    productSizeCm: emptySize,
+    packageSizeCm: emptySize,
+    selectionOwner: product.selectionOwner ?? "",
+    opsAssignee: product.opsAssignee ?? "",
+    opsAssignees: [],
+    designerAssignee: product.designerAssignee ?? "",
+    designerAssignees: [],
+    editableBy: [],
+    viewableBy: [],
+    workflowStage: product.workflowStage,
+    workflowDueAt: product.workflowDueAt,
+    workflowHistory: [],
+    currentOwner: product.currentOwner ?? "",
+    isOverdue: product.isOverdue,
+  };
 }
 
 function parsePricingRows(rows: string[][], headerIndex: number, endIndex: number): TrialPriceRow[] {
@@ -199,7 +246,7 @@ function parseImprovementRows(rows: string[][], headerIndex: number): TrialImpro
     packaging: read("包装改进"),
     manual: read("说明书"),
     imageCopySuggestion: read("文案"),
-    peakSeason: read("旺季月份"),
+    peakSeasonWeights: normalizePeakSeasonWeights(read("旺季月份")),
     peakSales: read("头部旺季平均销量"),
     offSeasonSales: read("头部淡季平均销量"),
     targetSales: read("目标销量"),
@@ -266,7 +313,7 @@ async function extractWorkbookImages(buffer: ArrayBuffer, JSZip: { loadAsync: (d
     images.push({
       col: Number(from.getElementsByTagNameNS("*", "col")[0]?.textContent ?? 0),
       row: Number(from.getElementsByTagNameNS("*", "row")[0]?.textContent ?? 0),
-      dataUrl: `data:${mimeFromPath(mediaPath)};base64,${bytes}`,
+      dataUrl: await compressDataUrl(`data:${mimeFromPath(mediaPath)};base64,${bytes}`),
     });
   }
 
@@ -336,34 +383,96 @@ function mimeFromPath(path: string) {
   return "image/png";
 }
 
+async function compressDataUrl(value: string) {
+  if (!value.startsWith("data:image/")) {
+    return value;
+  }
+
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
+    return value;
+  }
+
+  const response = await fetch(value);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+  const maxEdge = 1200;
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    bitmap.close();
+    return value;
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.78));
+  if (!compressed) {
+    return value;
+  }
+
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image."));
+    reader.readAsDataURL(compressed);
+  });
+}
+
 function extractDeveloperName(fileName: string) {
   const baseName = fileName.replace(/\.(xlsx|xls)$/i, "");
   const parts = baseName.split("-");
   return parts.length > 1 ? parts.at(-1) ?? "" : "";
 }
 
+function isEspressoMirrorSku(sku: string) {
+  return sku === "0000" || sku === "00001";
+}
 
-export function productToDraft(product: Product | null, products: Product[]): ProductEditorDraft {
+function normalizeSpecialSkuProductName(value: string) {
+  return value
+    .replace(/^SKU:\s*[^|]+\|\s*/i, "")
+    .replace(/\s*\+\s*(?:2|4)\s*pcs\s*$/i, "")
+    .trim();
+}
+
+export function productToDraft(product: Product | null, products: Array<Pick<ProductListItem, "sku">>, preferredSku?: string): ProductEditorDraft {
   if (product) {
     const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
+    const competitorAsins = Array.isArray(product.competitorAsins) ? product.competitorAsins : [];
+    const imageAssets = normalizeProductImageAssets(product);
+    const workbookDetail = normalizeWorkbookDetail(
+      productWithWorkbook.workbookDetail,
+      isEspressoMirrorSku(product.sku) ? createEspressoMirrorDetail() : createTrialProductDraft(),
+    );
+    const chineseName = product.sku === "0000"
+      ? normalizeSpecialSkuProductName(workbookDetail.title || product.chineseName)
+      : product.chineseName;
     return {
       ...product,
+      chineseName,
       cancelReason: product.cancelReason ?? "",
-      competitorAsins: product.competitorAsins.length ? product.competitorAsins : [""],
+      conclusionExcelFile: product.conclusionExcelFile,
+      images: imageAssets.map((asset) => getProductListImage({ imageAssets: [asset] })).filter(Boolean),
+      imageAssets,
+      competitorAsins: competitorAsins.length ? competitorAsins : [""],
       opsAssignees: normalizeAssigneeList(product.opsAssignee, product.opsAssignees),
       designerAssignees: normalizeAssigneeList(product.designerAssignee, product.designerAssignees),
       workflowStage: getProductWorkflowStage(product),
-      workflowHistory: product.workflowHistory ?? [],
+      workflowHistory: Array.isArray(product.workflowHistory) ? product.workflowHistory : [],
       operationsProgress: normalizeOperationsProgress(product.operationsProgress, product.opsAssignee || product.selectionOwner || ""),
-      workbookDetail: normalizeWorkbookDetail(
-        productWithWorkbook.workbookDetail,
-        product.sku === "00001" ? createEspressoMirrorDetail() : createTrialProductDraft(),
-      ),
+      workbookDetail,
     };
   }
 
   return {
-    sku: nextSku(products),
+    sku: preferredSku || nextSku(products),
     chineseName: "",
     englishName: "",
     asin: "",
@@ -378,8 +487,10 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
     keywords: "",
     note: "",
     cancelReason: "",
+    conclusionExcelFile: undefined,
     hsCode: "",
     images: [],
+    imageAssets: [],
     competitorAsins: ["", ""],
     productWeightG: 0,
     packageWeightG: 0,
@@ -389,13 +500,50 @@ export function productToDraft(product: Product | null, products: Product[]): Pr
     opsAssignees: [],
     designerAssignees: [],
     workflowHistory: [],
-    workbookDetail: createEspressoMirrorDetail(),
+    workbookDetail: createBlankWorkbookDetail(),
   };
+}
+
+function normalizeProductImageAssets(product: Product): ProductImageAsset[] {
+  const assets = Array.isArray(product.imageAssets) ? product.imageAssets : [];
+  if (assets.length) {
+    return assets.map((asset, index) => ({
+      id: asset.id || `product-image-${product.sku || "unknown"}-${index + 1}`,
+      name: asset.name || `${product.sku}-${index + 1}`,
+      mimeType: asset.mimeType || "image/jpeg",
+      size: asset.size || 0,
+      storageType: asset.storageType || "r2",
+      uploadedAt: asset.uploadedAt || product.createdAt || "",
+      thumbUrl: asset.thumbUrl || asset.originalUrl || "",
+      originalUrl: asset.originalUrl || asset.thumbUrl || "",
+      ...(asset.thumbFileId ? { thumbFileId: asset.thumbFileId } : {}),
+      ...(asset.previewUrl ? { previewUrl: asset.previewUrl } : {}),
+      ...(asset.downloadUrl ? { downloadUrl: asset.downloadUrl } : {}),
+    }));
+  }
+
+  return (Array.isArray(product.images) ? product.images : [])
+    .map((image, index): ProductImageAsset | null => {
+      const url = safeProductImageUrl(image);
+      return url
+        ? {
+            id: `product-image-${product.sku || "unknown"}-${index + 1}`,
+            name: `${product.sku || "product"}-${index + 1}`,
+            mimeType: "image/jpeg",
+            size: 0,
+            storageType: "local" as const,
+            uploadedAt: product.createdAt || "",
+            thumbUrl: url,
+            originalUrl: url,
+          }
+        : null;
+    })
+    .filter((asset): asset is ProductImageAsset => Boolean(asset));
 }
 
 export function hydrateProductFromExcelSeed(product: Product): Product {
   const productWithWorkbook = product as Product & { workbookDetail?: TrialProductDraft };
-  if (product.sku !== "00001" || productWithWorkbook.workbookDetail) {
+  if (!isEspressoMirrorSku(product.sku) || productWithWorkbook.workbookDetail) {
     return product;
   }
 
@@ -429,6 +577,9 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
     return fallback;
   }
 
+  const fallbackImprovement = createTrialProductDraft().improvement;
+  const sourceImprovement = detail.improvement ?? fallbackImprovement;
+
   return {
     ...fallback,
     ...detail,
@@ -436,24 +587,71 @@ function normalizeWorkbookDetail(detail: TrialProductDraft | undefined, fallback
       ? detail.pricingRows.map((row) => ({ ...row, oceanFreightUnitPrice: row.oceanFreightUnitPrice ?? 12 }))
       : fallback.pricingRows,
     competitors: detail.competitors?.length
-      ? detail.competitors.map((row) => ({
-          ...row,
-          hotVariantImage: row.hotVariantImage ?? "",
-          fbaFee: row.fbaFee ?? "",
-          negativePoint5: row.negativePoint5 ?? "",
-          noteImage: row.noteImage ?? "",
-        }))
+      ? detail.competitors.map((row, index) => normalizeWorkbookCompetitorRow(row, fallback.competitors[index], index))
       : fallback.competitors,
     suppliers: detail.suppliers?.length ? detail.suppliers : fallback.suppliers,
     improvement: {
-      ...fallback.improvement,
-      ...detail.improvement,
-      rows: detail.improvement?.rows?.length
-        ? detail.improvement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
-        : fallback.improvement.rows,
+      ...fallbackImprovement,
+      ...sourceImprovement,
+      peakSeasonWeights: normalizePeakSeasonWeights(
+        (sourceImprovement as TrialImprovement & { peakSeason?: unknown }).peakSeasonWeights
+          ?? (sourceImprovement as TrialImprovement & { peakSeason?: unknown }).peakSeason,
+      ),
+      rows: sourceImprovement.rows?.length
+        ? sourceImprovement.rows.map((row) => ({ ...createEmptyImprovementRow(), ...row }))
+        : fallbackImprovement.rows,
     },
-    remarkImages: detail.remarkImages ?? fallback.remarkImages ?? [],
+    remarkImages: detail.remarkImages?.length
+      ? detail.remarkImages.map((image, index) => detail.remarkImageAssets?.[index]?.thumbUrl || image)
+      : detail.remarkImageAssets?.length
+        ? detail.remarkImageAssets.map((asset) => asset.thumbUrl || asset.originalUrl)
+        : fallback.remarkImages ?? [],
+    remarkImageAssets: normalizeWorkbookImageAssets(detail.remarkImages, detail.remarkImageAssets),
     keywords: detail.keywords?.length ? detail.keywords : fallback.keywords,
+  };
+}
+
+function normalizeWorkbookImageAssets(images: string[] | undefined, assets: ProductImageAsset[] | undefined) {
+  const sourceImages = Array.isArray(images) ? images : [];
+  const sourceAssets = Array.isArray(assets) ? assets : [];
+  const length = Math.max(sourceImages.length, sourceAssets.length);
+
+  return Array.from({ length }, (_, index) => normalizeImageAsset(sourceAssets[index], sourceImages[index] || sourceAssets[index]?.thumbUrl || "", `remark-${index + 1}`));
+}
+
+function normalizeImageAsset(asset: ProductImageAsset | undefined, fallbackImage: string, nameSuffix: string): ProductImageAsset {
+  const thumbUrl = asset?.thumbUrl?.trim() || fallbackImage.trim();
+  const originalUrl = asset && Object.prototype.hasOwnProperty.call(asset, "originalUrl")
+    ? asset.originalUrl?.trim() || ""
+    : thumbUrl || fallbackImage.trim();
+
+  return {
+      id: asset?.id || `product-image-${nameSuffix}`,
+    name: asset?.name || `product-image-${nameSuffix}`,
+    mimeType: asset?.mimeType || "image/jpeg",
+    size: asset?.size || 0,
+    storageType: asset?.storageType || "r2",
+    uploadedAt: asset?.uploadedAt || "",
+    thumbUrl,
+    originalUrl,
+    previewUrl: asset?.previewUrl,
+    downloadUrl: asset?.downloadUrl,
+  };
+}
+
+function normalizeWorkbookCompetitorRow(row: TrialCompetitorRow, fallback: TrialCompetitorRow | undefined, index: number): TrialCompetitorRow {
+  const normalizedHotAsset = normalizeImageAsset(row.hotVariantImageAsset || fallback?.hotVariantImageAsset, row.hotVariantImage || fallback?.hotVariantImage || "", `competitor-${index + 1}-hot`);
+  const normalizedNoteAsset = normalizeImageAsset(row.noteImageAsset || fallback?.noteImageAsset, row.noteImage || fallback?.noteImage || "", `competitor-${index + 1}-note`);
+
+  return {
+    ...fallback,
+    ...row,
+    hotVariantImage: normalizedHotAsset.thumbUrl,
+    hotVariantImageAsset: normalizedHotAsset,
+    fbaFee: row.fbaFee ?? fallback?.fbaFee ?? "",
+    negativePoint5: row.negativePoint5 ?? fallback?.negativePoint5 ?? "",
+    noteImage: normalizedNoteAsset.thumbUrl,
+    noteImageAsset: normalizedNoteAsset,
   };
 }
 
@@ -471,7 +669,7 @@ export const trialImprovementLabels: Record<Exclude<keyof TrialImprovement, "row
   packaging: "包装改进",
   manual: "说明书",
   imageCopySuggestion: "文案/主/附图片建议",
-  peakSeason: "旺季月份",
+  peakSeasonWeights: "旺季月份",
   peakSales: "头部旺季平均销量",
   offSeasonSales: "头部淡季平均销量",
   targetSales: "目标销量",
@@ -480,65 +678,7 @@ export const trialImprovementLabels: Record<Exclude<keyof TrialImprovement, "row
 };
 
 export function createTrialProductDraft(): TrialProductDraft {
-  return {
-    title: "交易卡展示架",
-    pricingRows: [
-      { name: "交易卡展示架10pcs", lengthCm: 18.5, widthCm: 15, heightCm: 8, actualWeightKg: 0.6, suggestedPrice: 23.99, purchaseCost: 35, oceanFreightUnitPrice: 12, fbaFee: 5.42, exchangeRate: 6.8 },
-      { name: "交易卡展示架24pcs", lengthCm: 25, widthCm: 20, heightCm: 8, actualWeightKg: 1.2, suggestedPrice: 37.99, purchaseCost: 76.8, oceanFreightUnitPrice: 12, fbaFee: 6.67, exchangeRate: 6.8 },
-    ],
-    competitors: [
-      { type: "头部竞品", hotVariantImage: "", asin: "B0GL1XGNQM", sales30Days: "849 / 2026-02-14", variantCount: "5", variantType: "数量", hotVariantSpec: "17.5*8.5*2", hotVariantPrice: "40.88 / 750g", fbaFee: "5.76", priceChangeNote: "42.99-59.99", reviewCount: "13", rating: "4.5", negativePoint1: "希望它们再抬高一点", negativePoint2: "", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "18.29 x 13.72 x 8.64 cm", note: "杂", noteImage: "" },
-      { type: "直接竞品", hotVariantImage: "", asin: "B0GVSNLDYF", sales30Days: "160 / 2026-05-09", variantCount: "", variantType: "", hotVariantSpec: "16.2*8.4*1.3", hotVariantPrice: "25.99 / 680g", fbaFee: "5.61", priceChangeNote: "28.9-31.99", reviewCount: "19", rating: "4.3", negativePoint1: "", negativePoint2: "", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "42.67 x 17.78 x 9.91 cm", note: "杂", noteImage: "" },
-      { type: "参考竞品", hotVariantImage: "", asin: "B0GYF4D1B5", sales30Days: "201 / 2026-05-03", variantCount: "", variantType: "", hotVariantSpec: "16*8.5", hotVariantPrice: "59.97 / 1100g", fbaFee: "6.58", priceChangeNote: "69.97-59.97", reviewCount: "26", rating: "4.8", negativePoint1: "没这么牢固，有锁扣更好", negativePoint2: "黑色丙烯看起来非常干净", negativePoint3: "", negativePoint4: "", negativePoint5: "", packageSize: "18.80 x 15.75 x 9.65 cm", note: "收纳居多", noteImage: "" },
-    ],
-    suppliers: [
-      { productUrl: "", factoryName: "广州飞伦工艺品有限公司", configuration: "", moq: "1000", leadTime: "", domesticFreightIncluded: "否", certifications: "无", patentCountry: "", packagingMethod: "", cost100: 3.5, cost300: 35, taxPoint: "普票2%", invoiceName: "", invoiceSpecUnit: "", invoiceRegion: "" },
-    ],
-    improvement: {
-      audience: "卡片爱好者",
-      scenario: "家中",
-      painPoint1: "可以考虑怎么加锁扣或者防滑",
-      painPoint2: "去掉 logo，做差异化镂空之类的",
-      painPoint3: "采样看看品控",
-      material: "亚克力",
-      size: "17.5*8.5",
-      functionImprovement: "收纳整理、展示",
-      appearance: "",
-      accessories: "可以配一个收纳袋",
-      packaging: "前期先牛皮纸盒，后期看有没有必要加彩盒",
-      manual: "简单产品介绍显得专业",
-      imageCopySuggestion: "",
-      peakSeason: "产品较新",
-      peakSales: "400-500",
-      offSeasonSales: "",
-      targetSales: "100",
-      infringement: "",
-      certification: "",
-      rows: [
-        {
-          material: "亚克力",
-          size: "17.5*8.5",
-          functionImprovement: "收纳整理、展示",
-          appearance: "",
-          accessories: "可以配一个收纳袋",
-          packaging: "前期先牛皮纸盒，后期看有没有必要加彩盒",
-          manual: "简单产品介绍显得专业",
-          imageCopySuggestion: "",
-          certification: "",
-        },
-      ],
-    },
-    remark: "",
-    remarkImages: [],
-    keywords: [
-      { keyword: "card risers for display case", cpc: 0.4, monthlySearches: 4401, abaRank: 317832 },
-      { keyword: "graded card display", cpc: 1.53, monthlySearches: 11912, abaRank: 124848 },
-      { keyword: "sports card display", cpc: 0.72, monthlySearches: 9331, abaRank: 150351 },
-      { keyword: "sports card display case", cpc: 1.54, monthlySearches: 7112, abaRank: 213697 },
-      { keyword: "card display case", cpc: 1.84, monthlySearches: 31321, abaRank: 42337 },
-      { keyword: "pokemon card display", cpc: 0.86, monthlySearches: 10715, abaRank: 154350 },
-    ],
-  };
+  return createBlankWorkbookDetail();
 }
 
 function createEspressoMirrorDetail(): TrialProductDraft {
@@ -766,7 +906,7 @@ function createEspressoMirrorDetail(): TrialProductDraft {
       packaging: "飞机盒",
       manual: "做使用说明书",
       imageCopySuggestion: "",
-      peakSeason: "",
+      peakSeasonWeights: createDefaultPeakSeasonWeights(),
       peakSales: "",
       offSeasonSales: "500",
       targetSales: "150",
@@ -792,5 +932,93 @@ function createEspressoMirrorDetail(): TrialProductDraft {
       { keyword: "espresso shot mirror", cpc: 0.63, monthlySearches: 488, abaRank: 1756622 },
       { keyword: "espresso mirror", cpc: 0.49, monthlySearches: 1539, abaRank: 1155349 },
     ],
+  };
+}
+
+function createBlankWorkbookDetail(): TrialProductDraft {
+  const blankPriceRow: TrialPriceRow = {
+    name: "",
+    lengthCm: 0,
+    widthCm: 0,
+    heightCm: 0,
+    actualWeightKg: 0,
+    suggestedPrice: 0,
+    purchaseCost: 0,
+    oceanFreightUnitPrice: 12,
+    fbaFee: 0,
+    exchangeRate: 6.9,
+  };
+
+  const blankCompetitorRow: TrialCompetitorRow = {
+    type: "",
+    hotVariantImage: "",
+    asin: "",
+    sales30Days: "",
+    variantCount: "",
+    variantType: "",
+    hotVariantSpec: "",
+    hotVariantPrice: "",
+    fbaFee: "",
+    priceChangeNote: "",
+    reviewCount: "",
+    rating: "",
+    negativePoint1: "",
+    negativePoint2: "",
+    negativePoint3: "",
+    negativePoint4: "",
+    negativePoint5: "",
+    packageSize: "",
+    note: "",
+    noteImage: "",
+  };
+
+  const blankSupplierRow: TrialSupplierRow = {
+    productUrl: "",
+    factoryName: "",
+    configuration: "",
+    moq: "",
+    leadTime: "",
+    domesticFreightIncluded: "",
+    certifications: "",
+    patentCountry: "",
+    packagingMethod: "",
+    cost100: 0,
+    cost300: 0,
+    taxPoint: "",
+    invoiceName: "",
+    invoiceSpecUnit: "",
+    invoiceRegion: "",
+  };
+
+  return {
+    title: "",
+    pricingRows: [blankPriceRow],
+    competitors: [blankCompetitorRow],
+    suppliers: [blankSupplierRow],
+    improvement: {
+      audience: "",
+      scenario: "",
+      painPoint1: "",
+      painPoint2: "",
+      painPoint3: "",
+      material: "",
+      size: "",
+      functionImprovement: "",
+      appearance: "",
+      accessories: "",
+      packaging: "",
+      manual: "",
+      imageCopySuggestion: "",
+      peakSeasonWeights: createDefaultPeakSeasonWeights(),
+      peakSales: "",
+      offSeasonSales: "",
+      targetSales: "",
+      infringement: "",
+      certification: "",
+      rows: [createEmptyImprovementRow()],
+    },
+    remark: "",
+    remarkImages: [],
+    keywords: [],
   };
 }

@@ -13,7 +13,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("workspace", "view");
+    const permission = await requireApiPermission("workspace", "view", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const permission = await requireApiPermission("workspace", "edit");
+    const permission = await requireApiPermission("workspace", "edit", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -124,7 +124,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const permission = await requireApiPermission("workspace", "edit");
+    const permission = await requireApiPermission("workspace", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth/password";
-import { createSession } from "@/lib/auth/session";
+import { createSession, isSecureRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
@@ -137,22 +137,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
 
-    await createSession(result.user.id, {
+    const { sessionCookie, rolePermissionsCookie } = await createSession(
+      result.user.id,
+      {
       id: result.user.id,
       email: result.user.email,
       name: result.user.name,
       role: result.membership.role,
       organizationId: result.organization.id,
       organizationName: result.organization.name,
-    });
+      },
+      isSecureRequest(request),
+    );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         id: result.user.id,
         email: result.user.email,
         name: result.user.name,
       },
     });
+    response.cookies.set(sessionCookie.name, sessionCookie.value, sessionCookie.options);
+
+    if (rolePermissionsCookie) {
+      response.cookies.set(rolePermissionsCookie.name, rolePermissionsCookie.value, rolePermissionsCookie.options);
+    }
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "注册失败。";
     return NextResponse.json({ error: message }, { status: 500 });

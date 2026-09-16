@@ -1,10 +1,12 @@
 "use client";
 
 import { create } from "zustand";
-import { campaignGroups, dataBatches, defaultRules, performanceRows as mockPerformanceRows } from "@/data/mock-data";
+import { defaultRules } from "@/data/default-rules";
 import {
   deleteWorkspaceSnapshot,
+  readWorkspaceDraftRunHistory,
   readWorkspaceSnapshot,
+  writeWorkspaceDraftRun,
   writeWorkspaceSnapshot,
 } from "@/lib/repositories/workspace-repository";
 import { runRuleEngine } from "@/lib/rule-engine/engine";
@@ -83,6 +85,8 @@ interface WorkspaceState {
   parseStatus: ParseJobStatus;
   parseProgress: number;
   uploadedFileName?: string;
+  originalWorkbookFileId?: string;
+  originalWorkbookFileName?: string;
   originalWorkbookBuffer?: ArrayBuffer;
   activeBatchId?: string;
   parsedRowCount: number;
@@ -125,9 +129,10 @@ interface WorkspaceState {
   selectAllDrafts: () => void;
   invertDraftSelection: () => void;
   clearDraftSelection: () => void;
+  queueApprovedAgentDrafts: (drafts: AdjustmentDraft[]) => { draftCount: number; campaignGroupCount: number };
   removePendingDraftsForCampaignGroup: (campaignGroupId: string) => void;
   clearPendingAdjustmentDrafts: () => void;
-  setParseStarted: (fileName: string, originalWorkbookBuffer: ArrayBuffer) => void;
+  setParseStarted: (fileName: string, originalWorkbookBuffer: ArrayBuffer, originalWorkbookFileId?: string) => void;
   setParseProgress: (progress: number, sheets?: string[]) => void;
   ingestParsedRows: (sheetName: string, rows: SheetRow[], startRowIndex: number) => void;
   setParseCompleted: (rowCount: number, sheets: string[]) => void;
@@ -142,7 +147,9 @@ interface WorkspaceState {
   clearPersistedWorkspace: () => Promise<void>;
 }
 
-const initialActiveId = campaignGroups[0]?.id ?? "";
+const initialCampaignGroups: CampaignGroup[] = [];
+const initialPerformanceRows: PerformanceRow[] = [];
+const initialActiveId = "";
 
 const emptyDiagnostics: ParseDiagnostics = {
   totalRows: 0,
@@ -170,21 +177,59 @@ function countMatchedOverallRowsForCampaignGroups(rows: OverallAdDataRow[], camp
   return rows.filter((row) => row.matchStatus !== "unmatched" && row.campaignGroupId && scopeIds.has(row.campaignGroupId)).length;
 }
 
+function persistRuleRunHistoryRecords(records: RuleRunHistoryRecord[], rules: Rule[]) {
+  if (!records.length) {
+    return;
+  }
+
+  void Promise.all(records.map((record) => writeWorkspaceDraftRun({ record, rules }))).catch((error) => {
+    console.warn("Failed to persist workspace draft runs.", error);
+  });
+}
+
+function persistExportedRuleRunRecords(input: {
+  records: RuleRunHistoryRecord[];
+  rules: Rule[];
+  fileName: string;
+  exportedAt: string;
+  selectedDraftIdsByRecordId: Map<string, string[]>;
+}) {
+  if (!input.records.length) {
+    return;
+  }
+
+  void Promise.all(
+    input.records.map((record) =>
+      writeWorkspaceDraftRun({
+        record: { ...record, exportedAt: input.exportedAt, exportFileName: input.fileName },
+        rules: input.rules,
+        selectedDraftIds: input.selectedDraftIdsByRecordId.get(record.id) ?? [],
+        exportFileName: input.fileName,
+        exportedAt: input.exportedAt,
+      }),
+    ),
+  ).catch((error) => {
+    console.warn("Failed to persist exported workspace draft runs.", error);
+  });
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rules: defaultRules,
-  campaignGroups,
-  campaignSheetGroups: buildSheetGroups(campaignGroups),
+  campaignGroups: initialCampaignGroups,
+  campaignSheetGroups: buildSheetGroups(initialCampaignGroups),
   workspaceUnits: [],
-  performanceRows: mockPerformanceRows,
+  performanceRows: initialPerformanceRows,
   activeCampaignGroupId: initialActiveId,
   activeWorkspaceUnitId: undefined,
   activeLifecycleGroupId: undefined,
   workspaceMode: "campaign",
-  openTabIds: campaignGroups.slice(0, 4).map((group) => group.id),
+  openTabIds: initialCampaignGroups.slice(0, 4).map((group) => group.id),
   selectedDraftIds: [],
   parseStatus: "idle",
   parseProgress: 0,
   uploadedFileName: undefined,
+  originalWorkbookFileId: undefined,
+  originalWorkbookFileName: undefined,
   originalWorkbookBuffer: undefined,
   activeBatchId: undefined,
   parsedRowCount: 0,
@@ -483,10 +528,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         getRunnableRowsForCampaignGroup({
           performanceRows: state.performanceRows,
           activeBatchId: state.activeBatchId,
-          mockBatchIds: dataBatches
-            .filter((batch) => batch.campaignGroupId === group.id)
-            .slice(-1)
-            .map((batch) => batch.id),
+          mockBatchIds: [],
           campaignGroupId: group.id,
         }),
       ]),
@@ -528,6 +570,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -552,10 +595,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         getRunnableRowsForCampaignGroup({
           performanceRows: state.performanceRows,
           activeBatchId: state.activeBatchId,
-          mockBatchIds: dataBatches
-            .filter((batch) => batch.campaignGroupId === group.id)
-            .slice(-1)
-            .map((batch) => batch.id),
+          mockBatchIds: [],
           campaignGroupId: group.id,
         }),
       ]),
@@ -597,6 +637,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -646,10 +687,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const rows = getRunnableRowsForCampaignGroup({
         performanceRows: state.performanceRows,
         activeBatchId: state.activeBatchId,
-        mockBatchIds: dataBatches
-          .filter((batch) => batch.campaignGroupId === campaignGroup.id)
-          .slice(-1)
-          .map((batch) => batch.id),
+        mockBatchIds: [],
         campaignGroupId: campaignGroup.id,
       });
       runnableRowCount += rows.length;
@@ -685,6 +723,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -733,10 +772,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const rows = getRunnableRowsForCampaignGroup({
         performanceRows: state.performanceRows,
         activeBatchId: state.activeBatchId,
-        mockBatchIds: dataBatches
-          .filter((batch) => batch.campaignGroupId === campaignGroup.id)
-          .slice(-1)
-          .map((batch) => batch.id),
+        mockBatchIds: [],
         campaignGroupId: campaignGroup.id,
       });
 
@@ -772,6 +808,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ruleRunHistoryRecords: [...runHistory.records, ...current.ruleRunHistoryRecords],
       selectedDraftIds: runHistory.adjustmentDrafts.map((draft) => draft.id),
     }));
+    persistRuleRunHistoryRecords(runHistory.records, rules);
     return {
       draftCount: drafts.length,
       message:
@@ -834,6 +871,33 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       selectedDraftIds: [],
       adjustmentDrafts: state.adjustmentDrafts.map((draft) => ({ ...draft, selected: false })),
     })),
+  queueApprovedAgentDrafts: (drafts) => {
+    const sanitizedDrafts = drafts
+      .filter((draft) => draft.campaignGroupId && draft.rowId)
+      .map((draft) => ({
+        ...draft,
+        selected: true,
+        matchedRule: draft.matchedRule || "PPC Agent",
+      }));
+    const campaignGroupIds = Array.from(new Set(sanitizedDrafts.map((draft) => draft.campaignGroupId)));
+
+    if (!sanitizedDrafts.length) {
+      return { draftCount: 0, campaignGroupCount: 0 };
+    }
+
+    set((state) => ({
+      pendingAdjustmentDrafts: replacePendingDraftsForCampaignGroups(
+        state.pendingAdjustmentDrafts,
+        campaignGroupIds,
+        sanitizedDrafts,
+      ),
+    }));
+
+    return {
+      draftCount: sanitizedDrafts.length,
+      campaignGroupCount: campaignGroupIds.length,
+    };
+  },
   removePendingDraftsForCampaignGroup: (campaignGroupId) =>
     set((state) => ({
       pendingAdjustmentDrafts: state.pendingAdjustmentDrafts.filter(
@@ -841,7 +905,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ),
     })),
   clearPendingAdjustmentDrafts: () => set({ pendingAdjustmentDrafts: [] }),
-  setParseStarted: (fileName, originalWorkbookBuffer) => {
+  setParseStarted: (fileName, originalWorkbookBuffer, originalWorkbookFileId) => {
     const batchId = `batch-${Date.now()}`;
     set({
       campaignGroups: [],
@@ -860,6 +924,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       parseStatus: "parsing",
       parseProgress: 0,
       uploadedFileName: fileName,
+      originalWorkbookFileId,
+      originalWorkbookFileName: fileName,
       originalWorkbookBuffer,
       activeBatchId: batchId,
       parsedRowCount: 0,
@@ -1039,6 +1105,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         sourceDrafts.flatMap((draft) => draft.runHistoryId ? [draft.runHistoryId] : []),
       );
       const exportedAt = new Date().toISOString();
+      const selectedDraftIdsByRecordId = sourceDrafts.reduce<Map<string, string[]>>((map, draft) => {
+        if (!draft.runHistoryId) {
+          return map;
+        }
+
+        map.set(draft.runHistoryId, [...(map.get(draft.runHistoryId) ?? []), draft.id]);
+        return map;
+      }, new Map());
       const records: ExportHistoryRecord[] = campaignGroupIds.map((campaignGroupId) => {
         const campaignGroup = state.campaignGroups.find((group) => group.id === campaignGroupId);
         const groupDrafts = sourceDrafts.filter((draft) => draft.campaignGroupId === campaignGroupId);
@@ -1073,6 +1147,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         };
       });
       const exportedGroupIds = new Set(campaignGroupIds);
+      persistExportedRuleRunRecords({
+        records: state.ruleRunHistoryRecords.filter((runRecord) => exportedRunHistoryIds.has(runRecord.id)),
+        rules: state.rules,
+        fileName,
+        exportedAt,
+        selectedDraftIdsByRecordId,
+      });
 
       return {
         exportHistoryRecords: [...records, ...state.exportHistoryRecords].slice(0, 100),
@@ -1141,10 +1222,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }),
   hydratePersistedWorkspace: async () => {
     try {
-      const persisted = await readWorkspaceSnapshot<LegacyWorkspaceSnapshot>();
+      const [persisted, draftRunHistory] = await Promise.all([
+        readWorkspaceSnapshot<LegacyWorkspaceSnapshot>(),
+        readWorkspaceDraftRunHistory(),
+      ]);
 
       if (!persisted?.snapshot) {
-        set({ persistenceStatus: "ready", persistenceError: undefined });
+        set({
+          exportHistoryRecords: draftRunHistory.exportHistoryRecords,
+          ruleRunHistoryRecords: draftRunHistory.ruleRunHistoryRecords,
+          persistenceStatus: "ready",
+          persistenceError: undefined,
+        });
         return;
       }
 
@@ -1165,6 +1254,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         campaignSheetGroups: buildSheetGroups(snapshot.campaignGroups),
         overallAdDataRows: overallMatch?.rows ?? snapshot.overallAdDataRows,
         overallAdDataMatchSummary: overallMatch?.summary ?? snapshot.overallAdDataMatchSummary,
+        exportHistoryRecords: draftRunHistory.exportHistoryRecords.length
+          ? draftRunHistory.exportHistoryRecords
+          : snapshot.exportHistoryRecords,
+        ruleRunHistoryRecords: draftRunHistory.ruleRunHistoryRecords.length
+          ? draftRunHistory.ruleRunHistoryRecords
+          : snapshot.ruleRunHistoryRecords,
         persistenceStatus: "ready",
         persistenceError: undefined,
       });
@@ -1183,20 +1278,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
       await deleteWorkspaceSnapshot();
       set({
-        campaignGroups,
-        campaignSheetGroups: buildSheetGroups(campaignGroups),
+        campaignGroups: initialCampaignGroups,
+        campaignSheetGroups: buildSheetGroups(initialCampaignGroups),
         workspaceUnits: [],
         rules: defaultRules,
-        performanceRows: mockPerformanceRows,
+        performanceRows: initialPerformanceRows,
         activeCampaignGroupId: initialActiveId,
         activeWorkspaceUnitId: undefined,
         activeLifecycleGroupId: undefined,
         workspaceMode: "campaign",
-        openTabIds: campaignGroups.slice(0, 4).map((group) => group.id),
+        openTabIds: [],
         selectedDraftIds: [],
         parseStatus: "idle",
         parseProgress: 0,
         uploadedFileName: undefined,
+        originalWorkbookFileId: undefined,
+        originalWorkbookFileName: undefined,
         originalWorkbookBuffer: undefined,
         activeBatchId: undefined,
         parsedRowCount: 0,
@@ -1228,11 +1325,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let hydrated = false;
+let persistenceBootstrapStarted = false;
 
-if (typeof window !== "undefined") {
-  useWorkspaceStore.getState().hydratePersistedWorkspace().finally(() => {
-    hydrated = true;
-  });
+function attachWorkspacePersistenceSubscriptions() {
+  if (typeof window === "undefined") {
+    return;
+  }
 
   useWorkspaceStore.subscribe((state, previousState) => {
     if (!hydrated || state.persistenceStatus === "loading") {
@@ -1252,6 +1350,8 @@ if (typeof window !== "undefined") {
       state.parseStatus !== previousState.parseStatus ||
       state.parseProgress !== previousState.parseProgress ||
       state.uploadedFileName !== previousState.uploadedFileName ||
+      state.originalWorkbookFileId !== previousState.originalWorkbookFileId ||
+      state.originalWorkbookFileName !== previousState.originalWorkbookFileName ||
       state.originalWorkbookBuffer !== previousState.originalWorkbookBuffer ||
       state.activeBatchId !== previousState.activeBatchId ||
       state.parsedRowCount !== previousState.parsedRowCount ||
@@ -1290,7 +1390,18 @@ if (typeof window !== "undefined") {
             persistenceError: error instanceof Error ? error.message : "自动保存失败。",
           });
         });
-    }, 500);
+      }, 500);
   });
 }
 
+export function initializeWorkspaceStorePersistence() {
+  if (typeof window === "undefined" || persistenceBootstrapStarted) {
+    return;
+  }
+
+  persistenceBootstrapStarted = true;
+  useWorkspaceStore.getState().hydratePersistedWorkspace().finally(() => {
+    hydrated = true;
+  });
+  attachWorkspacePersistenceSubscriptions();
+}

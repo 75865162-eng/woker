@@ -1,54 +1,51 @@
-import { defaultRolePermissionMap, type PermissionAction, type RolePermissionMap } from "@/lib/accounts/permissions";
-import { prisma } from "@/lib/db/prisma";
+import { defaultRolePermissionMap, type RolePermissionMap } from "@/lib/accounts/permissions";
+import { getOrganizationRoleCatalogSnapshot, saveOrganizationRoleCatalog } from "@/lib/accounts/role-catalog-server";
+import { cloneRolePermissionMap, normalizeRolePermissionMap } from "@/lib/accounts/role-permissions-utils";
 
-const validActions = new Set<PermissionAction>(["view", "create", "edit", "approve", "export"]);
+export type RolePermissionsSnapshot = {
+  permissions: RolePermissionMap;
+  revision: string;
+};
 
-export function normalizeRolePermissionMap(value: unknown): RolePermissionMap {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return defaultRolePermissionMap;
-  }
+function buildRolePermissionsSnapshot(permissions: RolePermissionMap, revision: string): RolePermissionsSnapshot {
+  return { permissions, revision };
+}
 
-  const result: RolePermissionMap = {};
+function buildDefaultSnapshot() {
+  return buildRolePermissionsSnapshot(cloneRolePermissionMap(defaultRolePermissionMap), "local-default");
+}
 
-  for (const [roleId, modules] of Object.entries(value as Record<string, unknown>)) {
-    if (!modules || typeof modules !== "object" || Array.isArray(modules)) continue;
+export async function getOrganizationRolePermissionsSnapshot(organizationId: string): Promise<RolePermissionsSnapshot> {
+  if (!process.env.DATABASE_URL) return buildDefaultSnapshot();
 
-    result[roleId] = {};
+  const snapshot = await getOrganizationRoleCatalogSnapshot(organizationId);
 
-    for (const [moduleId, actions] of Object.entries(modules as Record<string, unknown>)) {
-      if (!Array.isArray(actions)) continue;
-
-      result[roleId][moduleId] = actions.filter((action): action is PermissionAction => validActions.has(action as PermissionAction));
-    }
-  }
-
-  return {
-    ...defaultRolePermissionMap,
-    ...result,
-  };
+  return buildRolePermissionsSnapshot(
+    Object.fromEntries(snapshot.roles.map((role) => [role.id, role.permissions])) as RolePermissionMap,
+    snapshot.revision,
+  );
 }
 
 export async function getOrganizationRolePermissions(organizationId: string): Promise<RolePermissionMap> {
-  if (!process.env.DATABASE_URL) return defaultRolePermissionMap;
-
-  const saved = await prisma.organizationRolePermission.findUnique({
-    where: { organizationId },
-  });
-
-  return normalizeRolePermissionMap(saved?.permissions);
+  const snapshot = await getOrganizationRolePermissionsSnapshot(organizationId);
+  return snapshot.permissions;
 }
 
-export async function saveOrganizationRolePermissions(organizationId: string, permissions: unknown) {
+export async function saveOrganizationRolePermissions(organizationId: string, permissions: unknown): Promise<RolePermissionsSnapshot> {
+  if (!process.env.DATABASE_URL) {
+    return buildDefaultSnapshot();
+  }
+
   const normalized = normalizeRolePermissionMap(permissions);
+  const snapshot = await getOrganizationRoleCatalogSnapshot(organizationId);
+  const nextRoles = snapshot.roles.map((role) => ({
+    ...role,
+    permissions: normalized[role.id] ?? role.permissions,
+  }));
+  const saved = await saveOrganizationRoleCatalog(organizationId, nextRoles);
 
-  await prisma.organizationRolePermission.upsert({
-    where: { organizationId },
-    update: { permissions: normalized },
-    create: {
-      organizationId,
-      permissions: normalized,
-    },
-  });
-
-  return normalized;
+  return buildRolePermissionsSnapshot(
+    Object.fromEntries(saved.roles.map((role) => [role.id, role.permissions])) as RolePermissionMap,
+    saved.revision,
+  );
 }

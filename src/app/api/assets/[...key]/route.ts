@@ -27,16 +27,15 @@ function isValidAssetKey(keyParts: string[]) {
   );
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   try {
-    const permission = await requireApiPermission("listingAi", "view");
+    const { key: keyParts } = await params;
+    const permission = await requireApiPermission(keyParts[1] === "products" ? "products" : "listingAi", "view", request);
 
     if (!permission.ok) {
       return permission.response;
     }
     const { user } = permission;
-
-    const { key: keyParts } = await params;
 
     if (!isValidAssetKey(keyParts)) {
       return NextResponse.json({ error: "Asset not found." }, { status: 404 });

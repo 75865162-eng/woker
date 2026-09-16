@@ -1,20 +1,25 @@
 import type { ProductWorkflowRole } from "@/lib/products/types";
 
-export type TeamMemberStatus = "active" | "pending" | "disabled";
+export type TeamMemberStatus = "active" | "pending" | "disabled" | "archived";
 
-export type AccountRoleId =
-  | "owner"
-  | "database_admin"
-  | "operations_supervisor"
-  | "operations"
-  | "operations_assistant"
-  | "developer"
-  | "designer"
-  | "warehouse"
-  | "warehouse_supervisor"
-  | "finance"
-  | "procurement"
-  | "viewer";
+export type AccountRoleId = string;
+
+export const organizationRoleIds = [
+  "owner",
+  "database_admin",
+  "operations_supervisor",
+  "operations",
+  "operations_assistant",
+  "developer",
+  "designer",
+  "warehouse",
+  "warehouse_supervisor",
+  "finance",
+  "procurement",
+  "viewer",
+] as const;
+
+export type OrganizationRoleId = (typeof organizationRoleIds)[number];
 
 export type TeamAccountRecord = {
   id: string;
@@ -52,7 +57,7 @@ export const teamRoleLabels: Record<ProductWorkflowRole, string> = {
   designer: "美工",
 };
 
-export const accountRoleToWorkflowRole: Partial<Record<AccountRoleId, ProductWorkflowRole>> = {
+export const accountRoleToWorkflowRole: Partial<Record<string, ProductWorkflowRole>> = {
   operations_supervisor: "operations_supervisor",
   operations: "operations",
   operations_assistant: "operations",
@@ -61,35 +66,42 @@ export const accountRoleToWorkflowRole: Partial<Record<AccountRoleId, ProductWor
 };
 
 const legacyRoleMap: Record<string, AccountRoleId> = {
-  admin: "operations_supervisor",
-  database_admin: "database_admin",
   selection: "procurement",
+  admin: "database_admin",
+  operations_manager: "operations_supervisor",
   ppc_manager: "operations",
+  ppc_specialist: "operations",
   listing_operator: "operations",
+  listing_specialist: "operations",
   logistics_operator: "warehouse",
+  logistics_specialist: "warehouse",
 };
-
-const knownRoleIds = new Set<AccountRoleId>([
-  "owner",
-  "database_admin",
-  "operations_supervisor",
-  "operations",
-  "operations_assistant",
-  "developer",
-  "designer",
-  "warehouse",
-  "warehouse_supervisor",
-  "finance",
-  "procurement",
-  "viewer",
-]);
 
 export function normalizeAccountRoleId(roleId: string | null | undefined): AccountRoleId {
   const normalized = String(roleId ?? "").trim();
 
   if (!normalized) return "viewer";
 
-  return legacyRoleMap[normalized] ?? (knownRoleIds.has(normalized as AccountRoleId) ? (normalized as AccountRoleId) : "viewer");
+  const legacyRole = legacyRoleMap[normalized];
+  if (legacyRole) return legacyRole;
+
+  if (normalized.includes("财务")) return "finance";
+  if (normalized.includes("仓库主管")) return "warehouse_supervisor";
+  if (normalized.includes("仓管")) return "warehouse";
+  if (normalized.includes("选品")) return "developer";
+  if (normalized.includes("采购")) return "procurement";
+  if (normalized.includes("美工")) return "designer";
+  if (normalized.includes("运营主管") || normalized.includes("主管")) return "operations_supervisor";
+  if (normalized.includes("运营")) return "operations";
+  if (normalized.includes("查看")) return "viewer";
+
+  return normalized;
+}
+
+export function toOrganizationRoleId(roleId: string | null | undefined): OrganizationRoleId {
+  const normalized = normalizeAccountRoleId(roleId);
+
+  return organizationRoleIds.includes(normalized as OrganizationRoleId) ? (normalized as OrganizationRoleId) : "viewer";
 }
 
 export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
@@ -110,7 +122,7 @@ export function normalizeTeamAccounts(value: unknown): TeamAccountRecord[] {
         department: String(account.department ?? ""),
         title: String(account.title ?? ""),
         roleId: normalizeAccountRoleId(String(account.roleId)),
-        status: account.status === "disabled" || account.status === "pending" ? account.status : "active",
+        status: account.status === "disabled" || account.status === "pending" || account.status === "archived" ? account.status : "active",
         lastActiveAt: account.lastActiveAt,
         amazonStorePermissions: typeof account.amazonStorePermissions === "string" ? account.amazonStorePermissions : undefined,
         multiPlatformStorePermissions: typeof account.multiPlatformStorePermissions === "string" ? account.multiPlatformStorePermissions : undefined,
@@ -144,7 +156,7 @@ export function accountsToTeamMembers(accounts: TeamAccountRecord[]): TeamMember
 export function filterTeamMembersByRoles(members: TeamMember[], roles: ProductWorkflowRole[]) {
   const roleSet = new Set(roles);
 
-  return members.filter((member) => member.status !== "disabled" && roleSet.has(member.role));
+  return members.filter((member) => member.status !== "disabled" && member.status !== "archived" && roleSet.has(member.role));
 }
 
 export function getTeamMemberNameOptionsFromAccounts(accounts: TeamAccountRecord[], roles: ProductWorkflowRole[]) {

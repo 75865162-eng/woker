@@ -19,7 +19,6 @@ import type { LogisticsLogEntry, LogisticsStatusTone, LogisticsTemplateOption, L
 import { downloadBlob, downloadFilesAsZip, formatMetricNumber, makeId } from "@/lib/logistics/utils";
 
 const SLOW_PARSE_WARNING_BYTES = 30 * 1024 * 1024;
-const HEAVY_PARSE_WARNING_BYTES = 80 * 1024 * 1024;
 
 const initialState: LogisticsWorkspaceState = {
   aFile: null,
@@ -75,6 +74,24 @@ export function LogisticsWorkbench() {
     uploadedAt: new Date().toISOString(),
   });
 
+  const loadAWorkbookForImageExports = async () => {
+    if (!rawFiles.a) {
+      return state.aSummary;
+    }
+
+    if (state.aSummary && !state.aSummary.imageParsingSkipped) {
+      return state.aSummary;
+    }
+
+    const { parseLogisticsAWorkbook } = await import("@/lib/logistics/jobs");
+    const aSummary = await parseLogisticsAWorkbook(rawFiles.a, { skipImages: false });
+    setState((current) => ({
+      ...current,
+      aSummary,
+    }));
+    return aSummary;
+  };
+
   const handleFileUpload = async (slot: FileSlot, file: File) => {
     setBusy(true);
     setProcessingSlot(slot);
@@ -96,20 +113,16 @@ export function LogisticsWorkbench() {
         }));
 
         const shouldWarnSlow = file.size > SLOW_PARSE_WARNING_BYTES;
-        const shouldSkipImages = file.size > HEAVY_PARSE_WARNING_BYTES;
 
         if (shouldWarnSlow) {
           pushLog({
             level: "warning",
-            message:
-              file.size > HEAVY_PARSE_WARNING_BYTES
-                ? "A表超过 80MB，建议精简图片或使用服务端处理。本次将优先解析核心数据，暂不立即读取图片。"
-                : "A表超过 30MB，解析可能较慢，请耐心等待。",
+            message: "A表超过 30MB，解析可能较慢，但图片会延后到 D 表/对比表生成时再读取。",
           });
         }
 
         const { parseLogisticsAWorkbook } = await import("@/lib/logistics/jobs");
-        const aSummary = await parseLogisticsAWorkbook(file, { skipImages: shouldSkipImages });
+        const aSummary = await parseLogisticsAWorkbook(file, { skipImages: true });
         setState((current) => ({
           ...current,
           aFile: setUploadedFileState(slot, file),
@@ -118,7 +131,7 @@ export function LogisticsWorkbench() {
         pushLog({
           level: "success",
           message: aSummary.imageParsingSkipped
-            ? `A表已快速解析，读取最后一个 sheet：${aSummary.latestSheetName}。已跳过图片读取以提升大文件处理速度。`
+            ? `A表已快速解析，读取最后一个 sheet：${aSummary.latestSheetName}。图片将在生成 D 表/对比表时再读取。`
             : `A表已解析，读取最后一个 sheet：${aSummary.latestSheetName}`,
         });
       }
@@ -234,8 +247,13 @@ export function LogisticsWorkbench() {
     setBusy(true);
     try {
       const { buildLogisticsDWorkbooks } = await import("@/lib/logistics/jobs");
+      const aSummary = await loadAWorkbookForImageExports();
+      if (!aSummary) {
+        pushLog({ level: "warning", message: "生成物流发票前请先上传 A 表" });
+        return;
+      }
       const results = await buildLogisticsDWorkbooks({
-        aSummary: state.aSummary,
+        aSummary,
         pdfSummaries: state.pdfSummaries,
         templateId: state.selectedLogisticsTemplate,
       });
@@ -258,7 +276,12 @@ export function LogisticsWorkbench() {
     setBusy(true);
     try {
       const { buildLogisticsComparisonWorkbook } = await import("@/lib/logistics/jobs");
-      const result = await buildLogisticsComparisonWorkbook(state.aSummary, state.pdfSummaries);
+      const aSummary = await loadAWorkbookForImageExports();
+      if (!aSummary) {
+        pushLog({ level: "warning", message: "生成创货件对比表前请先上传 A 表" });
+        return;
+      }
+      const result = await buildLogisticsComparisonWorkbook(aSummary, state.pdfSummaries);
       setState((current) => ({
         ...current,
         compareExport: result,

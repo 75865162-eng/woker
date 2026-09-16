@@ -42,6 +42,9 @@ function normalizeHistoryRecord(value: unknown): SaihuHistoryRecord {
     createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(),
     sourceFileName: value.sourceFileName,
     outputFileName: typeof value.outputFileName === "string" ? value.outputFileName : undefined,
+    workspaceId: typeof value.workspaceId === "string" ? value.workspaceId : undefined,
+    accountId: typeof value.accountId === "string" ? value.accountId : undefined,
+    marketplace: typeof value.marketplace === "string" ? value.marketplace : undefined,
     summary: value.summary as unknown as SaihuMergeSummary,
     rows: value.rows as SaihuMergedRow[],
   };
@@ -53,6 +56,9 @@ function toHistoryRecord(record: {
   createdAt: Date;
   sourceFileName: string;
   outputFileName: string | null;
+  workspaceId: string;
+  accountId: string;
+  marketplace: string;
   summary: unknown;
   rows: unknown;
 }): SaihuHistoryRecord {
@@ -62,6 +68,9 @@ function toHistoryRecord(record: {
     createdAt: record.createdAt.toISOString(),
     sourceFileName: record.sourceFileName,
     outputFileName: record.outputFileName ?? undefined,
+    workspaceId: record.workspaceId,
+    accountId: record.accountId,
+    marketplace: record.marketplace,
     summary: record.summary as SaihuMergeSummary,
     rows: Array.isArray(record.rows) ? (record.rows as SaihuMergedRow[]) : [],
   };
@@ -74,7 +83,7 @@ function clampPageSize(value: string | null) {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("searchMerge", "view");
+    const permission = await requireApiPermission("searchMerge", "view", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -102,9 +111,9 @@ export async function GET(request: Request) {
       prisma.saihuSearchMergeHistoryRecord.count({ where }),
       prisma.saihuSearchMergeHistoryRecord.findMany({
         where,
-      orderBy: {
-        createdAt: "desc",
-      },
+        orderBy: {
+          createdAt: "desc",
+        },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -127,7 +136,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("searchMerge", "create");
+    const permission = await requireApiPermission("searchMerge", "create", request);
 
     if (!permission.ok) {
       return permission.response;
@@ -180,7 +189,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const permission = await requireApiPermission("searchMerge", "edit");
+    const permission = await requireApiPermission("searchMerge", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

@@ -12,7 +12,9 @@ type ProductWorkflowLike = Pick<
   | "workflowStage"
   | "workflowDueAt"
   | "workflowHistory"
->;
+> & {
+  createdAt?: Product["createdAt"];
+};
 
 export const productWorkflowStageLabels: Record<ProductWorkflowStage, string> = {
   selection_pending: "选品待提交",
@@ -37,6 +39,7 @@ export const productWorkflowStageOptions: Array<{ value: ProductWorkflowStage; l
 ).map(([value, label]) => ({ value: value as ProductWorkflowStage, label }));
 
 export const productWorkflowSlaDays = 3;
+export const productWorkflowOverdueLookbackDays = 3;
 
 const dayMs = 24 * 60 * 60 * 1000;
 const closedStages = new Set<ProductWorkflowStage>(["done", "blocked"]);
@@ -63,7 +66,7 @@ export function getCurrentWorkflowAssignee(product: ProductWorkflowLike) {
 }
 
 export function normalizeAssigneeList(primary?: string, list?: string[]) {
-  const values = [...(list ?? []), ...(primary ? primary.split(/[，,]/u) : [])]
+  const values = [...(list ?? []), ...(primary ? primary.split(/[，,、；;]/u) : [])]
     .map((value) => value.trim())
     .filter(Boolean);
 
@@ -72,6 +75,17 @@ export function normalizeAssigneeList(primary?: string, list?: string[]) {
 
 export function formatAssigneeList(values?: string[]) {
   return (values ?? []).filter(Boolean).join("、");
+}
+
+export function formatAssigneePreview(value?: string | string[], maxItems = 3) {
+  const items = Array.isArray(value) ? value : normalizeAssigneeList(value);
+  const visible = items.slice(0, maxItems);
+
+  if (!visible.length) {
+    return "";
+  }
+
+  return items.length > maxItems ? `${visible.join("、")}…` : visible.join("、");
 }
 
 export function createWorkflowDueAt(startedAt = new Date(), days = productWorkflowSlaDays) {
@@ -86,7 +100,9 @@ export function isProductWorkflowOverdue(product: ProductWorkflowLike, now = new
   }
 
   if (!product.workflowDueAt) {
-    return false;
+    const createdAt = product.createdAt ? new Date(product.createdAt).getTime() : Number.NaN;
+    return Number.isFinite(createdAt)
+      && createdAt < now.getTime() - productWorkflowOverdueLookbackDays * dayMs;
   }
 
   return new Date(product.workflowDueAt).getTime() < now.getTime();
@@ -119,6 +135,26 @@ export function buildWorkflowEvent(input: {
     note: input.note,
     createdAt: createdAt.toISOString(),
   };
+}
+
+export function stampNewWorkflowEventActors(
+  product: Product,
+  existingProduct: Pick<Product, "workflowHistory"> | undefined,
+  actorName?: string,
+): Product {
+  const normalizedActorName = actorName?.trim();
+  if (!normalizedActorName || !product.workflowHistory?.length) {
+    return product;
+  }
+
+  const existingEventIds = new Set((existingProduct?.workflowHistory ?? []).map((event) => event.id));
+  const workflowHistory = product.workflowHistory.map((event) =>
+    existingEventIds.has(event.id)
+      ? event
+      : { ...event, actorName: normalizedActorName },
+  );
+
+  return { ...product, workflowHistory };
 }
 
 export function appendWorkflowEvent(product: Product, event: ProductWorkflowEvent): ProductWorkflowEvent[] {

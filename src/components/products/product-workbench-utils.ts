@@ -1,6 +1,63 @@
 import type { Product } from "@/lib/products/types";
 import { overdueThresholdDays, type TrialPriceRow } from "./product-workbench-model";
 
+const SKU_NUMERIC_LIMIT = 10_000;
+const SKU_SUFFIX_LIMIT = 999;
+
+function lettersToIndex(letters: string) {
+  let value = 0;
+  for (const char of letters) {
+    value = value * 26 + (char.charCodeAt(0) - 64);
+  }
+  return value - 1;
+}
+
+function indexToLetters(index: number) {
+  let value = index + 1;
+  let letters = "";
+  while (value > 0) {
+    value -= 1;
+    letters = String.fromCharCode(65 + (value % 26)) + letters;
+    value = Math.floor(value / 26);
+  }
+  return letters;
+}
+
+function parseSkuSequence(sku: string) {
+  const normalized = sku.trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    return Number(normalized);
+  }
+
+  const match = /^([A-Z]+)(\d{3})$/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+
+  const prefixIndex = lettersToIndex(match[1]);
+  const suffix = Number(match[2]);
+  if (!Number.isFinite(prefixIndex) || !Number.isFinite(suffix) || suffix < 1 || suffix > SKU_SUFFIX_LIMIT) {
+    return null;
+  }
+
+  return SKU_NUMERIC_LIMIT + prefixIndex * SKU_SUFFIX_LIMIT + (suffix - 1);
+}
+
+export function formatSkuSequence(sequence: number) {
+  if (sequence < SKU_NUMERIC_LIMIT) {
+    return String(sequence).padStart(4, "0");
+  }
+
+  const offset = sequence - SKU_NUMERIC_LIMIT;
+  const prefixIndex = Math.floor(offset / SKU_SUFFIX_LIMIT);
+  const suffix = (offset % SKU_SUFFIX_LIMIT) + 1;
+  return `${indexToLetters(prefixIndex)}${String(suffix).padStart(3, "0")}`;
+}
+
 export function calculateExcelPricing(row: TrialPriceRow) {
   const volumeWeightKg = (row.lengthCm * row.widthCm * row.heightCm) / 6000;
   const lengthIn = row.lengthCm / 2.54;
@@ -89,13 +146,13 @@ export function isOverdueProduct(product: Product) {
   return elapsedDays > overdueThresholdDays;
 }
 
-export function nextSku(products: Product[]) {
+export function nextSku(products: Array<Pick<Product, "sku">>) {
   const max = products.reduce((currentMax, product) => {
-    const numeric = Number(product.sku);
-    return Number.isFinite(numeric) ? Math.max(currentMax, numeric) : currentMax;
-  }, 0);
+    const sequence = parseSkuSequence(product.sku);
+    return sequence === null ? currentMax : Math.max(currentMax, sequence);
+  }, -1);
 
-  return String(max + 1).padStart(5, "0");
+  return formatSkuSequence(max + 1);
 }
 
 export function formatDateTime(date: Date) {
@@ -103,7 +160,12 @@ export function formatDateTime(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-export function buildAmazonLink(asin: string) {
-  const normalized = asin.trim();
+export function buildAmazonLink(asin?: string | null) {
+  const normalized = typeof asin === "string" ? asin.trim() : "";
   return normalized ? `https://www.amazon.com/dp/${encodeURIComponent(normalized)}` : "";
+}
+
+export function buildAmazonSearchLink(keyword?: string | null) {
+  const normalized = typeof keyword === "string" ? keyword.trim() : "";
+  return normalized ? `https://www.amazon.com/s?k=${encodeURIComponent(normalized)}` : "";
 }

@@ -10,6 +10,7 @@ type WorkerHealthPayload = {
   driver: string;
   queueName: string;
   queueCounts: Record<string, number>;
+  imageQueueCounts?: Record<string, number>;
   workers: Array<{
     id: string;
     workerName: string;
@@ -29,6 +30,49 @@ type WorkerHealthPayload = {
       originalName: string;
     };
   }>;
+  imageWorkers?: Array<{
+    id: string;
+    workerName: string;
+    status: string;
+    concurrency: number;
+    lastSeenAt: string;
+    online: boolean;
+  }>;
+  recentImageJobs?: Array<{
+    id: string;
+    status: string;
+    progress: number;
+    error?: string | null;
+    updatedAt: string;
+    originalName: string;
+  }>;
+  productHealth?: {
+    outbox: {
+      queued: number;
+      running: number;
+      failed: number;
+      staleRunning: number;
+      oldestQueuedAt: string | null;
+      oldestRunningAt: string | null;
+      oldestFailedAt: string | null;
+    };
+    projections: {
+      pending: number;
+      processing: number;
+      failed: number;
+      staleFailures: number;
+      oldestFailedAt: string | null;
+    };
+    consistency: {
+      productRecords: number;
+      missingSummary: number;
+      staleSummary: number;
+      missingText: number;
+      staleText: number;
+      missingProjectionStates: number;
+    };
+    staleAfterMs: number;
+  } | null;
   error?: string;
 };
 
@@ -66,6 +110,12 @@ export function WorkerHealthPanel() {
   }, []);
 
   const counts = data?.queueCounts ?? {};
+  const waiting = Number(counts.waiting ?? 0);
+  const active = Number(counts.active ?? 0);
+  const failed = Number(counts.failed ?? 0);
+  const delayed = Number(counts.delayed ?? 0);
+  const imageCounts = data?.imageQueueCounts ?? {};
+  const queueModeTone = data?.driver === "redis" ? "green" : "amber";
 
   return (
     <Card>
@@ -76,17 +126,27 @@ export function WorkerHealthPanel() {
           </div>
           <div>
             <CardTitle className="text-sm">Redis Worker 运维</CardTitle>
-            <p className="mt-0.5 text-xs font-medium text-muted">队列积压、worker 心跳和近期异常任务。</p>
+            <p className="mt-0.5 text-xs font-medium text-muted">查看任务队列是否积压、worker 是否在线，以及失败任务是否需要人工介入。</p>
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => void loadHealth()} disabled={loading}>
-          <RefreshCw className="h-4 w-4" />
-          刷新
-        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge tone={queueModeTone}>{data?.driver ?? "-"}</Badge>
+          <Badge tone={failed > 0 ? "red" : "green"}>失败 {failed}</Badge>
+          <Badge tone={waiting + active + delayed > 0 ? "amber" : "green"}>待处理 {waiting + active + delayed}</Badge>
+          <Button variant="secondary" size="sm" onClick={() => void loadHealth()} disabled={loading}>
+            <RefreshCw className="h-4 w-4" />
+            刷新
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 p-3">
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
         {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取 worker 状态...</div> : null}
+        {!loading && data?.driver !== "redis" ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
+            当前未启用 Redis 队列，导入与导出任务将按同步模式执行，不适合 30 人并发场景。
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-[repeat(auto-fit,104px)] justify-start gap-2">
           {["waiting", "active", "delayed", "failed", "completed", "paused"].map((key) => (
@@ -141,6 +201,81 @@ export function WorkerHealthPanel() {
                 <p className="py-6 text-center text-sm font-medium text-muted">暂无异常或运行中任务。</p>
               )}
             </div>
+          </div>
+          <div className="rounded-md border border-border bg-white">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <p className="text-sm font-bold text-foreground">图片放大 Worker</p>
+              <Badge tone={Number(imageCounts.failed ?? 0) > 0 ? "red" : "green"}>失败 {Number(imageCounts.failed ?? 0)}</Badge>
+            </div>
+            <div className="p-2.5">
+              <p className="text-xs font-medium text-muted">队列：待处理 {Number(imageCounts.waiting ?? 0)} · 处理中 {Number(imageCounts.active ?? 0)}</p>
+              {data?.imageWorkers?.map((worker) => (
+                <div key={worker.id} className="mt-2 rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-bold text-foreground">{worker.workerName}</p>
+                    <Badge tone={worker.online ? "green" : "red"}>{worker.online ? "online" : worker.status}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-muted">并发 {worker.concurrency} · {formatDate(worker.lastSeenAt)}</p>
+                </div>
+              ))}
+              {!data?.imageWorkers?.length ? <p className="mt-3 text-xs font-medium text-amber-700">图片 Worker 尚未上报心跳。</p> : null}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-white">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <p className="text-sm font-bold text-foreground">商品域一致性</p>
+              <Badge tone={(data?.productHealth?.projections.failed ?? 0) > 0 ? "red" : "green"}>
+                投影失败 {data?.productHealth?.projections.failed ?? 0}
+              </Badge>
+            </div>
+            {data?.productHealth ? (
+              <div className="grid grid-cols-2 gap-2 p-2.5 text-xs">
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">Outbox 待处理</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(data.productHealth.outbox.queued + data.productHealth.outbox.running).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    运行中 {data.productHealth.outbox.running} · 失败 {data.productHealth.outbox.failed}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">异常重试</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(data.productHealth.outbox.staleRunning + data.productHealth.projections.staleFailures).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    超时 Outbox · 投影失败
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">投影处理中</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(data.productHealth.projections.pending + data.productHealth.projections.processing).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    待开始 {data.productHealth.projections.pending} · 处理中 {data.productHealth.projections.processing}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-muted px-2.5 py-2">
+                  <p className="font-semibold text-muted">读模型漂移</p>
+                  <p className="mt-1 text-lg font-black metric-tabular text-foreground">
+                    {(
+                      data.productHealth.consistency.missingSummary
+                      + data.productHealth.consistency.staleSummary
+                      + data.productHealth.consistency.missingText
+                      + data.productHealth.consistency.staleText
+                      + data.productHealth.consistency.missingProjectionStates
+                    ).toLocaleString("zh-CN")}
+                  </p>
+                  <p className="mt-1 text-muted">
+                    商品记录 {data.productHealth.consistency.productRecords.toLocaleString("zh-CN")} · 缺少投影状态 {data.productHealth.consistency.missingProjectionStates}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="p-3 text-xs font-medium text-muted">数据库未启用，暂无商品域健康数据。</p>
+            )}
           </div>
         </div>
       </CardContent>

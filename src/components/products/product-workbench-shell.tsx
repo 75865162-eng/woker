@@ -1,18 +1,59 @@
-import { History, ImagePlus, RotateCcw, Search, X } from "lucide-react";
+import { useState } from "react";
+import { History, ImagePlus, LoaderCircle, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
+import { useVirtualRows } from "@/lib/hooks/use-virtual-rows";
 import { getProductListImage } from "@/lib/products/image-assets";
 import type { Product } from "@/lib/products/types";
 import {
   formatAssigneeList,
-  formatWorkflowDate,
+  formatAssigneePreview,
   getCurrentWorkflowAssignee,
   isProductWorkflowOverdue,
   normalizeAssigneeList,
 } from "@/lib/products/workflow";
 import { type ProductFilters } from "./product-workbench-model";
 import { LabeledInput } from "./product-workbench-fields";
+
+function formatProductCreatedAtDisplay(value?: string): string | { dateText: string; timeText: string } {
+  if (!value) return "--";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const dateText = date.toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  const timeText = date.toLocaleTimeString("zh-CN", {
+    hour12: false,
+  });
+
+  return { dateText, timeText };
+}
+
+function ProductListThumbnail({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return <ImagePlus className="h-5 w-5 text-muted" aria-label="暂无图片" />;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      fetchPriority="low"
+      className="h-full w-full object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 export function ProductFiltersBar({
   filters,
@@ -21,6 +62,7 @@ export function ProductFiltersBar({
   designerAssigneeOptions,
   onChange,
   onReset,
+  onSearch,
 }: {
   filters: ProductFilters;
   opsAssigneeOptions: string[];
@@ -28,13 +70,13 @@ export function ProductFiltersBar({
   designerAssigneeOptions: string[];
   onChange: (filters: ProductFilters) => void;
   onReset: () => void;
+  onSearch?: () => void;
 }) {
   const statusOptions = [
     { value: "all", label: "全部状态" },
     ...productStatusOptions,
-    { value: "design_in_progress", label: "美工处理中" },
-    { value: "operations_progress", label: "运营进程" },
-    { value: "overdue", label: "超期处理" },
+    { value: "operations_progress", label: "运营进度" },
+    { value: "overdue", label: "超期预警" },
   ];
 
   return (
@@ -70,7 +112,7 @@ export function ProductFiltersBar({
           <LabeledInput label="到" type="number" value={filters.maxPrice} placeholder="10" onChange={(value) => onChange({ ...filters, maxPrice: value })} />
         </div>
         <div className="flex items-end gap-2">
-          <Button className="h-10" size="icon" title="搜索" onClick={() => onChange({ ...filters })}>
+          <Button className="h-10" size="icon" title="搜索" onClick={onSearch ?? (() => onChange({ ...filters }))}>
             <Search className="h-4 w-4" />
           </Button>
           <Button className="h-10" size="icon" title="重置" variant="secondary" onClick={onReset}>
@@ -143,21 +185,39 @@ export function ProductTable({
   loading,
   onOpenProduct,
   onOpenHistory,
+  onPrefetchProduct,
 }: {
   products: Product[];
   totalCount: number;
   loading?: boolean;
-  onOpenProduct: (productId: string) => void;
+  onOpenProduct: (sku: string) => void;
   onOpenHistory: (product: Product) => void;
+  onPrefetchProduct?: (sku: string) => void;
 }) {
+  const virtualRows = useVirtualRows<HTMLDivElement>({
+    itemCount: products.length,
+    rowHeight: 61,
+    overscan: 6,
+    enabled: products.length > 0,
+  });
+  const visibleProducts = products.slice(virtualRows.startIndex, virtualRows.endIndex);
+
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <p className="text-sm font-bold text-foreground">筛选结果</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-bold text-foreground">筛选结果</p>
+          {loading && products.length ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              正在更新
+            </span>
+          ) : null}
+        </div>
         <span className="text-xs font-semibold text-muted">共 {totalCount.toLocaleString("zh-CN")} 个商品</span>
       </div>
-      <div className="thin-scrollbar overflow-auto">
-        <table className="w-[1876px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:break-words [&_tbody_td]:whitespace-normal [&_tbody_tr]:h-[61px]">
+      <div ref={virtualRows.containerRef} className="thin-scrollbar max-h-[min(68vh,720px)] overflow-auto">
+        <table className="w-[1734px] table-fixed text-left text-sm [&_th]:overflow-hidden [&_tbody_td]:h-[61px] [&_tbody_td]:max-h-[61px] [&_tbody_td]:py-0 [&_tbody_td]:overflow-hidden [&_tbody_td]:align-middle [&_tbody_tr]:h-[61px] [&_tbody_tr]:max-h-[61px]">
           <colgroup>
             <col className="w-[84px]" />
             <col className="w-[96px]" />
@@ -168,30 +228,26 @@ export function ProductTable({
             <col className="w-[96px]" />
             <col className="w-[84px]" />
             <col className="w-[84px]" />
-            <col className="w-[112px]" />
             <col className="w-[140px]" />
             <col className="w-[130px]" />
-            <col className="w-[84px]" />
-            <col className="w-[106px]" />
+            <col className="w-[160px]" />
             <col className="w-[180px]" />
             <col className="w-[140px]" />
             <col className="w-[72px]" />
           </colgroup>
-          <thead className="bg-surface-muted text-xs text-muted">
+          <thead className="sticky top-0 z-10 bg-surface-muted text-xs text-muted">
             <tr>
               <th className="px-3 py-3">图片</th>
               <th className="px-3 py-3">SKU</th>
               <th className="px-3 py-3">品名</th>
               <th className="px-3 py-3">ASIN</th>
               <th className="px-3 py-3">采购价格</th>
-              <th className="px-3 py-3">状态</th>
+              <th className="px-3 py-3">主状态</th>
               <th className="px-3 py-3">当前负责人</th>
               <th className="px-3 py-3">运营</th>
               <th className="px-3 py-3">美工</th>
-              <th className="px-3 py-3">流程截止</th>
               <th className="px-3 py-3">供应商名称</th>
               <th className="px-3 py-3">规格</th>
-              <th className="px-3 py-3">采购周期</th>
               <th className="px-3 py-3">创建日期</th>
               <th className="px-3 py-3">选品关键词</th>
               <th className="px-3 py-3">备注</th>
@@ -199,86 +255,114 @@ export function ProductTable({
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => {
-              const listImage = getProductListImage(product);
+            {products.length > 0 ? (
+              <>
+                {virtualRows.beforeHeight > 0 ? (
+                  <tr aria-hidden="true">
+                    <td colSpan={15} style={{ height: `${virtualRows.beforeHeight}px`, padding: 0, border: 0 }} />
+                  </tr>
+                ) : null}
+                {visibleProducts.map((product) => {
+                  const listImage = getProductListImage(product);
+                  const overdue = product.isOverdue ?? isProductWorkflowOverdue(product);
 
-              return (
-                <tr key={product.id} className="border-t border-border/70 align-middle hover:bg-surface-muted/60">
-                  <td className="px-3">
-                    <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
-                      {listImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={listImage} alt={product.chineseName} className="h-full w-full object-contain" />
-                      ) : (
-                        <ImagePlus className="h-5 w-5 text-muted" />
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3">
-                    <button className="block max-w-full break-all text-left font-bold text-brand hover:text-brand-dark" title={product.sku} onClick={() => onOpenProduct(product.id)}>
-                      {product.sku}
-                    </button>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-words font-semibold text-foreground">{product.chineseName || "--"}</p>
-                    <p className="mt-1 break-words text-xs text-muted">{product.englishName || "--"}</p>
-                  </td>
-                  <td className="px-3 font-mono text-xs">
-                    <p className="break-all" title={product.asin || "--"}>{product.asin || "--"}</p>
-                  </td>
-                  <td className="px-3 font-semibold metric-tabular">CNY {product.purchasePrice.toFixed(2)}</td>
-                  <td className="px-3">
-                    <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
-                    {isProductWorkflowOverdue(product) ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
-                  </td>
-                  <td className="px-3">
-                    <p className="break-words" title={getCurrentWorkflowAssignee(product) || "--"}>{getCurrentWorkflowAssignee(product) || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-words" title={formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-words" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
-                  </td>
-                  <td className="px-3 text-xs">
-                    <p className="break-words" title={formatWorkflowDate(product.workflowDueAt)}>{formatWorkflowDate(product.workflowDueAt)}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-all" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-all text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-words" title={product.purchaseLeadTime || "--"}>{product.purchaseLeadTime || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-words" title={product.createdAt}>{product.createdAt}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-all text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
-                  </td>
-                  <td className="px-3">
-                    <p className="break-all text-xs" title={product.note || "--"}>{product.note || "--"}</p>
-                  </td>
-                  <td className="px-3 text-right">
-                    <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>
-                      <History className="h-4 w-4" />
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
+                  return (
+                    <tr key={product.id} className="border-t border-border/70 align-middle hover:bg-surface-muted/60">
+                      <td className="px-3">
+                        <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
+                          {listImage ? (
+                            <ProductListThumbnail src={listImage} alt={product.chineseName} />
+                          ) : (
+                            <ImagePlus className="h-5 w-5 text-muted" />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3">
+                        <button
+                          className="block max-w-full truncate text-left font-bold text-brand hover:text-brand-dark"
+                          title={product.sku}
+                          onClick={() => onOpenProduct(product.sku)}
+                          onFocus={() => onPrefetchProduct?.(product.sku)}
+                          onMouseEnter={() => onPrefetchProduct?.(product.sku)}
+                        >
+                          {product.sku}
+                        </button>
+                      </td>
+                      <td className="px-3">
+                        <div className="min-w-0 overflow-hidden">
+                          <p className="truncate font-semibold text-foreground" title={product.chineseName || "--"}>{product.chineseName || "--"}</p>
+                          <p className="mt-1 truncate text-xs text-muted" title={product.englishName || "--"}>{product.englishName || "--"}</p>
+                        </div>
+                      </td>
+                      <td className="px-3 font-mono text-xs">
+                        <p className="truncate" title={product.asin || "--"}>{product.asin || "--"}</p>
+                      </td>
+                      <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
+                      <td className="px-3">
+                        <Badge tone={productStatusTones[product.status]}>{productStatusLabels[product.status]}</Badge>
+                        {overdue ? <p className="mt-1 text-xs font-semibold text-danger">已超时</p> : null}
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={getCurrentWorkflowAssignee(product) || "--"}>{formatAssigneePreview(getCurrentWorkflowAssignee(product)) || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.opsAssignee, product.opsAssignees)) || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}>{formatAssigneeList(normalizeAssigneeList(product.designerAssignee, product.designerAssignees)) || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate" title={product.supplierName || "--"}>{product.supplierName || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate text-xs" title={product.specs || "--"}>{product.specs || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        {(() => {
+                          const createdAt = formatProductCreatedAtDisplay(product.createdAt);
+                          if (typeof createdAt === "string") {
+                            return <p className="text-[11px] leading-tight text-foreground">--</p>;
+                          }
+
+                          return (
+                            <p className="text-[11px] leading-tight tabular-nums text-foreground" title={product.createdAt}>
+                              <span className="block">{createdAt.dateText}</span>
+                              <span className="block">{createdAt.timeText}</span>
+                            </p>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate text-xs" title={product.keywords || "--"}>{product.keywords || "--"}</p>
+                      </td>
+                      <td className="px-3">
+                        <p className="truncate text-xs" title={product.note || "--"}>{product.note || "--"}</p>
+                      </td>
+                      <td className="px-3 text-right">
+                        <Button size="icon" variant="ghost" title="版本历史" onClick={() => onOpenHistory(product)}>
+                          <History className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {virtualRows.afterHeight > 0 ? (
+                  <tr aria-hidden="true">
+                    <td colSpan={15} style={{ height: `${virtualRows.afterHeight}px`, padding: 0, border: 0 }} />
+                  </tr>
+                ) : null}
+              </>
+            ) : null}
             {!products.length && loading ? (
               <tr>
-                <td colSpan={17} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={15} className="px-3 py-14 text-center text-sm text-muted">
                   正在从数据库读取商品数据...
                 </td>
               </tr>
             ) : null}
             {!products.length && !loading ? (
               <tr>
-                <td colSpan={17} className="px-3 py-14 text-center text-sm text-muted">
+                <td colSpan={15} className="px-3 py-14 text-center text-sm text-muted">
                   没有匹配的商品，调整筛选条件后再试。
                 </td>
               </tr>

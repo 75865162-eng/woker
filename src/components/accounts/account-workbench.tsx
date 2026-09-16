@@ -3,18 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Archive,
   Building2,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Download,
-  Eye,
-  EyeOff,
   Filter,
-  KeyRound,
-  LockKeyhole,
-  Mail,
   Pencil,
+  Plus,
   Search,
   ShieldCheck,
+  Trash2,
   Upload,
   UserCog,
   UserPlus,
@@ -25,18 +25,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  createFullPermissions,
-  createPermissions,
   permissionActions,
   permissionModules,
-  rolePermissionsCookieName,
   type PermissionAction,
-  type RolePermissionMap,
 } from "@/lib/accounts/permissions";
-import { exportAccountWorkbook, parseAccountWorkbookFile } from "@/lib/accounts/account-workbook";
-import { normalizeTeamAccounts, type AccountRoleId } from "@/lib/accounts/team-roster";
+import { buildDefaultRoleCatalog, type RoleCatalogItem } from "@/lib/accounts/role-catalog";
+import { accountWorkbookColumns, createAccountWorkbookRows, exportAccountWorkbook, parseAccountWorkbookFile } from "@/lib/accounts/account-workbook";
+import { normalizeTeamAccounts, type AccountRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 
-type AccountStatus = "active" | "pending" | "disabled";
+type AccountStatus = "active" | "pending" | "disabled" | "archived";
 type RoleId = AccountRoleId;
 
 type Account = {
@@ -65,114 +62,15 @@ type Role = {
   description: string;
   memberCount: number;
   permissions: Record<string, PermissionAction[]>;
+  sortOrder: number;
 };
 
-const initialRoles: Role[] = [
-  {
-    id: "owner",
-    name: "超级管理员",
-    description: "全局配置、账号、权限与审计管理",
-    memberCount: 1,
-    permissions: createFullPermissions(),
-  },
-  {
-    id: "database_admin",
-    name: "数据库管理员",
-    description: "维护账号、权限、系统设置和数据治理，不默认拥有业务审批权",
-    memberCount: 0,
-    permissions: createPermissions(
-      ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules", "accounts", "settings"],
-      ["view", "create", "edit", "export"],
-    ),
-  },
-  {
-    id: "operations_supervisor",
-    name: "主管",
-    description: "管理业务流转、成员分工和审批",
-    memberCount: 1,
-    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
-  },
-  {
-    id: "operations",
-    name: "运营",
-    description: "负责 SKU 运营确认、资料完善和后续转交",
-    memberCount: 0,
-    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
-  },
-  {
-    id: "operations_assistant",
-    name: "运营助理",
-    description: "协助维护商品资料和运营任务",
-    memberCount: 0,
-    permissions: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
-  },
-  {
-    id: "developer",
-    name: "开发",
-    description: "负责新品开发、供应商资料和选品信息维护",
-    memberCount: 0,
-    permissions: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
-  },
-  {
-    id: "designer",
-    name: "美工",
-    description: "处理分配给自己的商品图片和视觉资料",
-    memberCount: 0,
-    permissions: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "edit", "export"]),
-  },
-  {
-    id: "warehouse",
-    name: "仓管",
-    description: "处理入库、出库、箱规和货件资料",
-    memberCount: 0,
-    permissions: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  },
-  {
-    id: "finance",
-    name: "财务",
-    description: "查看业务数据并导出财务所需资料",
-    memberCount: 0,
-    permissions: createPermissions(["workspace", "products", "logistics"], ["view", "export"]),
-  },
-  {
-    id: "warehouse_supervisor",
-    name: "仓库主管",
-    description: "管理仓库作业、物流资料和相关审批",
-    memberCount: 0,
-    permissions: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]),
-  },
-  {
-    id: "viewer",
-    name: "查看者",
-    description: "只查看工作台、商品、Listing AI 和物流基础数据",
-    memberCount: 0,
-    permissions: createPermissions(["workspace", "products", "listingAi", "logistics"], ["view"]),
-  },
-  {
-    id: "procurement",
-    name: "采购",
-    description: "维护采购商品资料并协同物流处理",
-    memberCount: 0,
-    permissions: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
-  },
-];
-
-const statusLabels: Record<AccountStatus, string> = {
-  active: "在线",
-  pending: "待激活",
-  disabled: "已停用",
-};
-
-const statusTones: Record<AccountStatus, "green" | "amber" | "gray"> = {
-  active: "green",
-  pending: "amber",
-  disabled: "gray",
-};
-
+const defaultRoleCatalog = buildDefaultRoleCatalog();
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
 const teamMembersApiPath = "/api/accounts/team-members";
-const rolePermissionsApiPath = "/api/accounts/role-permissions";
+const rolesApiPath = "/api/accounts/roles";
+const accountPageSize = 10;
 
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -185,13 +83,18 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-function isDefaultSuperAccount(account: { id?: string; email?: string; username?: string } | string) {
+function isDefaultSuperAccount(account: { id?: string; email?: string; username?: string; phone?: string } | string) {
   const identity = typeof account === "string" ? { id: account } : account;
 
-  return identity.id === "local-admin" || identity.email?.trim().toLowerCase() === "1" || identity.username?.trim().toLowerCase() === "1";
+  return (
+    identity.id === "local-admin" ||
+    identity.email?.trim().toLowerCase() === "1" ||
+    identity.username?.trim().toLowerCase() === "1" ||
+    identity.phone?.trim().toLowerCase() === "1"
+  );
 }
 
-function getFallbackPassword(account: { id?: string; email?: string; username?: string } | string) {
+function getFallbackPassword(account: { id?: string; email?: string; username?: string; phone?: string } | string) {
   return isDefaultSuperAccount(account) ? "1" : "12345678";
 }
 
@@ -203,10 +106,37 @@ function canManageAccount(account: Account) {
   return !isDefaultSuperAccount(account) && account.roleId !== "owner";
 }
 
+function normalizeRoleCatalogItem(role: RoleCatalogItem): Role {
+  return {
+    ...role,
+    id: role.id as RoleId,
+    memberCount: 0,
+  };
+}
+
+function normalizeRoleCatalogResponse(value: unknown): Role[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item, index) => {
+      const role = item as Partial<RoleCatalogItem> & { id?: string; name?: string; description?: string; permissions?: Record<string, PermissionAction[]> };
+
+      return {
+        id: String(role.id ?? `role-${index + 1}`) as RoleId,
+        name: String(role.name ?? "未命名角色"),
+        description: String(role.description ?? ""),
+        memberCount: 0,
+        permissions: role.permissions ?? {},
+        sortOrder: Number.isFinite(role.sortOrder) ? Number(role.sortOrder) : index,
+      };
+    })
+    .filter((role) => Boolean(role.id.trim()));
+}
+
 function withLoadedAccountState(account: Account): Account {
   return {
     ...account,
-    password: undefined,
     passwordDirty: false,
   };
 }
@@ -214,9 +144,6 @@ function withLoadedAccountState(account: Account): Account {
 function serializeAccountsForApi(accounts: Account[]) {
   return accounts.map((account) => {
     const record = { ...account };
-    if (!record.passwordDirty) {
-      delete record.password;
-    }
     delete record.passwordDirty;
     return record;
   });
@@ -233,7 +160,7 @@ async function loadAccountsFromApi() {
         ...account,
         lastActiveAt: account.lastActiveAt ?? "未记录",
         username: account.username ?? "",
-        password: undefined,
+        password: account.password ?? undefined,
         amazonStorePermissions: account.amazonStorePermissions ?? "",
         multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
         phone: account.phone ?? "",
@@ -248,14 +175,14 @@ async function loadAccountsFromApi() {
   }
 }
 
-async function saveAccountsToApi(accounts: Account[], revision: string) {
+async function saveAccountsToApi(accounts: Account[]) {
   try {
     const response = await fetch(teamMembersApiPath, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ accounts: serializeAccountsForApi(accounts), revision }),
+      body: JSON.stringify({ accounts: serializeAccountsForApi(accounts) }),
     });
     const payload = (await response.json()) as { accounts?: unknown; revision?: unknown; error?: string };
 
@@ -273,7 +200,7 @@ async function saveAccountsToApi(accounts: Account[], revision: string) {
         ...account,
         lastActiveAt: account.lastActiveAt ?? "未记录",
         username: account.username ?? "",
-        password: undefined,
+        password: account.password ?? undefined,
         amazonStorePermissions: account.amazonStorePermissions ?? "",
         multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
         phone: account.phone ?? "",
@@ -292,122 +219,193 @@ async function saveAccountsToApi(accounts: Account[], revision: string) {
   }
 }
 
-async function loadRolePermissionsFromApi() {
+async function loadRolesFromApi() {
   try {
-    const response = await fetch(rolePermissionsApiPath, { cache: "no-store" });
+    const response = await fetch(rolesApiPath, { cache: "no-store" });
     if (!response.ok) return null;
 
-    const payload = (await response.json()) as { permissions?: RolePermissionMap };
-    return payload.permissions ?? null;
+    const payload = (await response.json()) as { roles?: unknown; revision?: string };
+    return {
+      roles: normalizeRoleCatalogResponse(payload.roles),
+      revision: typeof payload.revision === "string" ? payload.revision : "",
+    };
   } catch {
     return null;
   }
 }
 
-async function saveRolePermissionsToApi(permissions: RolePermissionMap) {
-  const response = await fetch(rolePermissionsApiPath, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ permissions }),
-  });
+async function saveRolesToApi(roles: Role[]) {
+  try {
+    const response = await fetch(rolesApiPath, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ roles }),
+    });
 
-  return response.ok;
+    if (!response.ok) {
+      return {
+        ok: false as const,
+        revision: "",
+      };
+    }
+
+    const payload = (await response.json()) as { revision?: string; roles?: unknown };
+    return {
+      ok: true as const,
+      revision: typeof payload.revision === "string" ? payload.revision : "",
+      roles: normalizeRoleCatalogResponse(payload.roles),
+    };
+  } catch {
+    return {
+      ok: false as const,
+      revision: "",
+    };
+  }
 }
 
-export function AccountWorkbench() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [accountRevision, setAccountRevision] = useState("");
+export function AccountWorkbench({
+  initialAccounts,
+  initialRoles: serverRoles,
+}: {
+  initialAccounts?: TeamAccountRecord[];
+  initialRoles?: RoleCatalogItem[];
+}) {
+  const [accounts, setAccounts] = useState<Account[]>(() =>
+    (initialAccounts ?? []).map((account) => withLoadedAccountState({
+      ...account,
+      lastActiveAt: account.lastActiveAt ?? "未记录",
+      username: account.username ?? "",
+      password: account.password ?? undefined,
+      amazonStorePermissions: account.amazonStorePermissions ?? "",
+      multiPlatformStorePermissions: account.multiPlatformStorePermissions ?? "",
+      phone: account.phone ?? "",
+      lastLoginIp: account.lastLoginIp ?? "",
+      lastLoginAt: account.lastLoginAt ?? "",
+      sourceCreatedAt: account.sourceCreatedAt ?? "",
+    })) as Account[],
+  );
   const [accountSaveError, setAccountSaveError] = useState("");
-  const [roles, setRoles] = useState(initialRoles);
+  const [roles, setRoles] = useState<Role[]>(() =>
+    (serverRoles ?? defaultRoleCatalog).map((role) => ({
+      ...role,
+      id: role.id as RoleId,
+      memberCount: 0,
+    })),
+  );
   const [activeRoleId, setActiveRoleId] = useState<RoleId>("operations");
-  const [statusFilter, setStatusFilter] = useState<"all" | AccountStatus>("all");
   const [query, setQuery] = useState("");
   const [newAccountOpen, setNewAccountOpen] = useState(false);
-  const [passwordAccount, setPasswordAccount] = useState<Account | null>(null);
+  const [newRoleOpen, setNewRoleOpen] = useState(false);
+  const [roleMembersOpen, setRoleMembersOpen] = useState(false);
+  const [roleManageMode, setRoleManageMode] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
-  const [permissionSavedAt, setPermissionSavedAt] = useState("");
+  const [archivedAccountsOpen, setArchivedAccountsOpen] = useState(false);
+  const [roleSavedAt, setRoleSavedAt] = useState("");
+  const [roleRevision, setRoleRevision] = useState("");
   const [accountImportMessage, setAccountImportMessage] = useState("");
   const [accountImporting, setAccountImporting] = useState(false);
+  const [accountPage, setAccountPage] = useState(1);
   const accountImportInputRef = useRef<HTMLInputElement | null>(null);
-  const visibleAccounts = useMemo(() => accounts, [accounts]);
+  const visibleAccounts = useMemo(() => accounts.filter((account) => account.status !== "archived"), [accounts]);
   const visibleRoles = useMemo(
     () =>
       roles.map((role) => ({
         ...role,
-        memberCount: accounts.filter((account) => account.roleId === role.id).length,
+        memberCount: visibleAccounts.filter((account) => account.roleId === role.id).length,
       })),
-    [accounts, roles],
+    [roles, visibleAccounts],
   );
 
   useEffect(() => {
     let canceled = false;
 
+    if (initialAccounts) return;
+
     void loadAccountsFromApi().then((payload) => {
       if (canceled) return;
 
-      if (!payload?.accounts.length) {
+      if (!payload) {
         return;
       }
 
       setAccounts(payload.accounts);
-      setAccountRevision(payload.revision);
     });
 
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [initialAccounts]);
 
   useEffect(() => {
     let canceled = false;
 
-    void loadRolePermissionsFromApi().then((savedRolePermissions) => {
-      if (canceled || !savedRolePermissions) return;
+    if (serverRoles) return;
 
-      setRoles((current) =>
-        current.map((role) => ({
-          ...role,
-          permissions: savedRolePermissions[role.id] ?? role.permissions,
-        })),
-      );
+    void loadRolesFromApi().then((savedRoles) => {
+      if (canceled || !savedRoles) return;
+      setRoleRevision(savedRoles.revision);
+      setRoles(savedRoles.roles);
     });
 
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [serverRoles]);
 
   const activeRole = visibleRoles.find((role) => role.id === activeRoleId) ?? visibleRoles[0];
+  const activeRoleMembers = useMemo(
+    () => (activeRole ? visibleAccounts.filter((account) => account.roleId === activeRole.id) : []),
+    [activeRole, visibleAccounts],
+  );
+  const availableRoleTemplates = useMemo(
+    () => defaultRoleCatalog.filter((role) => !roles.some((item) => item.id === role.id) && canManageRole(role.id)),
+    [roles],
+  );
 
   const filteredAccounts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return accounts.filter((account) => {
-      const statusMatched = statusFilter === "all" || account.status === statusFilter;
+    return visibleAccounts.filter((account) => {
       const keywordMatched =
         !keyword ||
         account.name.toLowerCase().includes(keyword) ||
+        account.phone?.toLowerCase().includes(keyword) ||
         account.email.toLowerCase().includes(keyword) ||
+        account.username?.toLowerCase().includes(keyword) ||
         account.department.toLowerCase().includes(keyword) ||
-        account.title.toLowerCase().includes(keyword);
+        account.title.toLowerCase().includes(keyword) ||
+        account.id.toLowerCase().includes(keyword);
 
-      return statusMatched && keywordMatched;
+      return keywordMatched;
     });
-  }, [accounts, query, statusFilter]);
+  }, [query, visibleAccounts]);
 
-  const activeAccounts = accounts.filter((account) => account.status === "active").length;
-  const pendingAccounts = accounts.filter((account) => account.status === "pending").length;
-  const disabledAccounts = accounts.filter((account) => account.status === "disabled").length;
-  const departments = Array.from(new Set(accounts.map((account) => account.department)));
-  const roleMemberCount = accounts.filter((account) => account.roleId === activeRole.id).length;
+  const disabledAccounts = visibleAccounts.filter((account) => account.status === "disabled");
+  const archivedAccounts = accounts.filter((account) => account.status === "archived");
+  const departments = Array.from(new Set(visibleAccounts.map((account) => account.department)));
+  const roleMemberCount = activeRole ? visibleAccounts.filter((account) => account.roleId === activeRole.id).length : 0;
+  const accountPageCount = Math.max(1, Math.ceil(filteredAccounts.length / accountPageSize));
+  const currentAccountPage = Math.min(accountPage, accountPageCount);
+  const paginatedAccounts = filteredAccounts.slice((currentAccountPage - 1) * accountPageSize, currentAccountPage * accountPageSize);
+  const firstAccountIndex = filteredAccounts.length ? (currentAccountPage - 1) * accountPageSize + 1 : 0;
+  const lastAccountIndex = Math.min(currentAccountPage * accountPageSize, filteredAccounts.length);
+
+  useEffect(() => {
+    setAccountPage(1);
+  }, [query]);
+
+  useEffect(() => {
+    if (accountPage > accountPageCount) {
+      setAccountPage(accountPageCount);
+    }
+  }, [accountPage, accountPageCount]);
 
   function commitAccounts(updater: (current: Account[]) => Account[]) {
     setAccounts((current) => {
       const next = updater(current);
-      const revision = accountRevision;
       setAccountSaveError("");
-      void saveAccountsToApi(next, revision).then((result) => {
+      void saveAccountsToApi(next).then((result) => {
         if (!result) return;
 
         if (!result.ok) {
@@ -415,13 +413,11 @@ export function AccountWorkbench() {
           void loadAccountsFromApi().then((payload) => {
             if (!payload) return;
             setAccounts(payload.accounts);
-            setAccountRevision(payload.revision || result.revision);
           });
           return;
         }
 
         setAccounts(result.accounts);
-        setAccountRevision(result.revision);
       });
       return next;
     });
@@ -456,13 +452,6 @@ export function AccountWorkbench() {
     setEditAccount(null);
   }
 
-  function saveAccountPassword(accountId: string, password: string) {
-    commitAccounts((current) =>
-      current.map((account) => (account.id === accountId && canManageAccount(account) ? { ...account, password, passwordDirty: true } : account)),
-    );
-    setPasswordAccount(null);
-  }
-
   function toggleAccountStatus(accountId: string) {
     commitAccounts((current) =>
       current.map((account) =>
@@ -473,10 +462,21 @@ export function AccountWorkbench() {
     );
   }
 
+  function archiveAccount(accountId: string) {
+    commitAccounts((current) =>
+      current.map((account) =>
+        account.id === accountId && canManageAccount(account)
+          ? { ...account, status: "archived", lastActiveAt: account.lastActiveAt || "已归档" }
+          : account,
+      ),
+    );
+  }
+
   const roleLabels = useMemo(
     () => Object.fromEntries(roles.map((role) => [role.id, role.name])) as Record<RoleId, string>,
     [roles],
   );
+  const archivedAccountRows = useMemo(() => createAccountWorkbookRows(archivedAccounts, roleLabels), [archivedAccounts, roleLabels]);
 
   async function exportAccounts() {
     const blob = await exportAccountWorkbook(visibleAccounts, roleLabels);
@@ -506,6 +506,7 @@ export function AccountWorkbench() {
             (account) =>
               account.id === imported.id ||
               (Boolean(imported.username) && account.username === imported.username) ||
+              (Boolean(imported.phone) && account.phone === imported.phone) ||
               (Boolean(imported.email) && account.email.trim().toLowerCase() === imported.email?.toLowerCase()),
           );
           if (existingIndex >= 0) {
@@ -582,9 +583,11 @@ export function AccountWorkbench() {
     }
   }
   function togglePermission(moduleId: string, action: PermissionAction) {
+    if (!activeRole) return;
+
     setRoles((current) =>
-      current.map((role) => {
-        if (role.id !== activeRole.id) return role;
+    current.map((role) => {
+        if (!activeRole || role.id !== activeRole.id) return role;
 
         const currentActions = role.permissions[moduleId] ?? [];
         const nextActions = currentActions.includes(action)
@@ -602,38 +605,91 @@ export function AccountWorkbench() {
     );
   }
 
-  async function saveRolePermissions() {
-    const rolePermissionMap = Object.fromEntries(roles.map((role) => [role.id, role.permissions])) as RolePermissionMap;
-    const serialized = JSON.stringify(rolePermissionMap);
-    const savedToApi = await saveRolePermissionsToApi(rolePermissionMap);
+  function toggleModulePermissions(moduleId: string) {
+    if (!activeRole) return;
 
-    document.cookie = `${rolePermissionsCookieName}=${encodeURIComponent(serialized)}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
-    setPermissionSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi ? "" : "（仅本机）"}`);
-    window.setTimeout(() => window.location.reload(), 250);
+    setRoles((current) =>
+    current.map((role) => {
+        if (!activeRole || role.id !== activeRole.id) return role;
+
+        const currentActions = role.permissions[moduleId] ?? [];
+        const allSelected = permissionActions.every((action) => currentActions.includes(action.id));
+
+        return {
+          ...role,
+          permissions: {
+            ...role.permissions,
+            [moduleId]: allSelected ? [] : permissionActions.map((action) => action.id),
+          },
+        };
+      }),
+    );
+  }
+
+  function updateActiveRole(field: "name" | "description" | "sortOrder", value: string) {
+    if (!activeRole) return;
+
+    setRoles((current) =>
+      current.map((role) => {
+        if (!activeRole || role.id !== activeRole.id) return role;
+
+        return {
+          ...role,
+          [field]: field === "sortOrder" ? Number(value) || 0 : value,
+        };
+      }),
+    );
+  }
+
+  async function saveRoles() {
+    const savedToApi = await saveRolesToApi(roles);
+
+    setRoleRevision(savedToApi.revision);
+    setRoleSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi.ok ? "" : "（保存失败）"}`);
+    if (savedToApi.ok) {
+      setRoles(savedToApi.roles ?? roles);
+      window.setTimeout(() => window.location.reload(), 250);
+    }
+  }
+
+  function addRole(roleId: RoleId) {
+    const role = defaultRoleCatalog.find((item) => item.id === roleId);
+    if (!role) return;
+
+    setRoles((current) => (current.some((item) => item.id === role.id) ? current : [...current, normalizeRoleCatalogItem(role)]));
+    setActiveRoleId(role.id);
+    setNewRoleOpen(false);
+  }
+
+  function deleteRole(roleId: RoleId) {
+    const role = visibleRoles.find((item) => item.id === roleId);
+    if (!role || role.memberCount > 0 || !canManageRole(role.id)) return;
+
+    const nextRoles = roles.filter((item) => item.id !== roleId);
+    const nextActiveRoleId = activeRoleId === roleId ? nextRoles[0]?.id : activeRoleId;
+
+    setRoles(nextRoles);
+    if (nextActiveRoleId) {
+      setActiveRoleId(nextActiveRoleId);
+    }
+    setRoleMembersOpen(false);
+    void saveRolesToApi(nextRoles).then((savedToApi) => {
+      setRoleRevision(savedToApi.revision);
+      setRoleSavedAt(`${new Date().toLocaleString("zh-CN", { hour12: false })}${savedToApi.ok ? "" : "（保存失败）"}`);
+      if (savedToApi.ok) {
+        setRoles(savedToApi.roles ?? nextRoles);
+      } else {
+        void loadRolesFromApi().then((payload) => {
+          if (!payload) return;
+          setRoles(payload.roles);
+        });
+      }
+    });
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: "all", label: "全部账号" },
-            { id: "active", label: "在线" },
-            { id: "pending", label: "待激活" },
-            { id: "disabled", label: "已停用" },
-          ].map((item) => (
-            <button
-              key={item.id}
-              className={`h-9 rounded-md border px-3 text-sm font-bold transition ${
-                statusFilter === item.id ? "border-brand bg-brand text-white" : "border-border bg-white text-muted hover:text-foreground"
-              }`}
-              onClick={() => setStatusFilter(item.id as typeof statusFilter)}
-              type="button"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button variant="secondary">
             <Building2 className="h-4 w-4" />
@@ -675,14 +731,15 @@ export function AccountWorkbench() {
         </div>
       ) : null}
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="账号总数" value={accounts.length} note={`在线 ${activeAccounts}`} icon={UsersRound} tone="blue" />
-        <MetricCard title="业务部门" value={departments.length} note={departments.slice(0, 2).join(" / ")} icon={Building2} tone="green" />
-        <MetricCard title="待激活账号" value={pendingAccounts} note="新建后首次登录改密" icon={Mail} tone="amber" />
-        <MetricCard title="停用账号" value={disabledAccounts} note="保留审计记录" icon={LockKeyhole} tone="gray" />
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <MetricCard title="账号总数" value={visibleAccounts.length} note="当前可见账号" icon={UsersRound} tone="blue" />
+        <MetricCard title="停用账号" value={disabledAccounts.length} note="保留账号但禁止登录" icon={UserCog} tone="gray" />
+        <button className="text-left" onClick={() => setArchivedAccountsOpen(true)} type="button">
+          <MetricCard title="归档" value={archivedAccounts.length} note="查看已归档员工" icon={Archive} tone="gray" />
+        </button>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid grid-cols-1 gap-4">
         <Card>
           <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -696,7 +753,7 @@ export function AccountWorkbench() {
                   className={`${fieldClass} min-w-64 pl-9`}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索姓名、邮箱、部门"
+                  placeholder="搜索姓名、手机号、部门"
                 />
               </div>
               <Button variant="secondary">
@@ -711,16 +768,15 @@ export function AccountWorkbench() {
                 <thead className="bg-surface-muted text-xs font-bold text-muted">
                   <tr>
                     <th className="px-5 py-3 text-left">姓名</th>
-                    <th className="px-5 py-3 text-left">邮箱</th>
+                    <th className="px-5 py-3 text-left">手机号</th>
                     <th className="px-5 py-3 text-left">部门 / 岗位</th>
                     <th className="px-5 py-3 text-left">系统角色</th>
-                    <th className="px-5 py-3 text-left">状态</th>
                     <th className="px-5 py-3 text-left">最近活动</th>
                     <th className="px-5 py-3 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAccounts.map((account) => (
+                  {paginatedAccounts.map((account) => (
                     <tr key={account.id} className="border-t border-border">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
@@ -733,7 +789,7 @@ export function AccountWorkbench() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-muted">{account.email}</td>
+                      <td className="px-5 py-4 text-muted">{account.phone || account.username || account.email || "—"}</td>
                       <td className="px-5 py-4">
                         <p className="font-medium text-foreground">{account.department}</p>
                         <p className="text-xs text-muted">{account.title}</p>
@@ -748,21 +804,20 @@ export function AccountWorkbench() {
                         </select>
                       </td>
                       <td className="px-5 py-4">
-                        <Badge tone={statusTones[account.status]}>{statusLabels[account.status]}</Badge>
+                        <p className="font-medium text-foreground">{account.lastLoginIp || "IP 未记录"}</p>
+                        <p className="text-xs text-muted">{account.lastLoginAt || account.lastActiveAt || "时间未记录"}</p>
                       </td>
-                      <td className="px-5 py-4 text-muted">{account.lastActiveAt}</td>
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="secondary" onClick={() => setEditAccount(account)}>
                             <Pencil className="h-4 w-4" />
                             编辑
                           </Button>
-                          <Button size="sm" variant="secondary" onClick={() => setPasswordAccount(account)}>
-                            <KeyRound className="h-4 w-4" />
-                            账密
-                          </Button>
                           <Button size="sm" variant={account.status === "disabled" ? "secondary" : "danger"} onClick={() => toggleAccountStatus(account.id)}>
                             {account.status === "disabled" ? "启用" : "停用"}
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => archiveAccount(account.id)}>
+                            归档
                           </Button>
                         </div>
                       </td>
@@ -772,75 +827,192 @@ export function AccountWorkbench() {
               </table>
             </div>
             {filteredAccounts.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">没有找到匹配账号。</p> : null}
+            <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
+              <p className="text-sm text-muted">
+                第 {currentAccountPage} / {accountPageCount} 页，显示 {firstAccountIndex}-{lastAccountIndex} / {filteredAccounts.length} 个账号
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={currentAccountPage <= 1}
+                  onClick={() => setAccountPage((page) => Math.max(1, page - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  上一页
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={currentAccountPage >= accountPageCount}
+                  onClick={() => setAccountPage((page) => Math.min(accountPageCount, page + 1))}
+                >
+                  下一页
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <div className="space-y-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
-              <div>
-                <CardTitle className="text-sm">角色权限</CardTitle>
-                <p className="mt-0.5 text-xs text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
-              </div>
-                <Badge className="shrink-0" tone="blue">{visibleRoles.length} 个角色</Badge>
-            </CardHeader>
-            <CardContent className="space-y-1.5 p-3">
-              {visibleRoles.map((role) => (
-                <button
-                  key={role.id}
-                  className={`w-full rounded-md border px-2.5 py-2 text-left transition ${
-                    activeRole.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
-                  }`}
-                  onClick={() => setActiveRoleId(role.id)}
-                  type="button"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-foreground">{role.name}</p>
-                    <Badge tone={activeRole.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
+        <div className="overflow-x-auto">
+          <div className="grid min-w-[760px] grid-cols-[minmax(240px,1fr)_minmax(0,2fr)] gap-3">
+            <div className="space-y-3">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
+                  <div>
+                    <CardTitle className="text-sm">角色权限</CardTitle>
+                    <p className="mt-0.5 text-xs text-muted">按角色维护模块权限，新建账号时直接分配角色。</p>
                   </div>
-                  <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
-                </button>
-              ))}
-            </CardContent>
-          </Card>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge tone="blue">{visibleRoles.length} 个角色</Badge>
+                    <Button className="h-8 px-2" size="sm" variant="secondary" onClick={() => setNewRoleOpen(true)}>
+                      <Plus className="h-3.5 w-3.5" />
+                      添加
+                    </Button>
+                    <Button className="h-8 px-2" size="sm" variant="secondary" onClick={() => setRoleManageMode((value) => !value)}>
+                      {roleManageMode ? "完成" : "管理"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-1.5 p-3">
+                  {visibleRoles.map((role) => (
+                    <div
+                      key={role.id}
+                      className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-2 transition ${
+                        activeRole?.id === role.id ? "border-brand bg-brand/5" : "border-border bg-white hover:bg-surface-muted"
+                      }`}
+                    >
+                      <button
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => {
+                          setActiveRoleId(role.id);
+                          setRoleMembersOpen(true);
+                        }}
+                        type="button"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-bold text-foreground">{role.name}</p>
+                          <Badge tone={activeRole?.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
+                        </div>
+                        <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
+                      </button>
+                      {roleManageMode ? (
+                        <button
+                          aria-label={`删除${role.name}`}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted"
+                          disabled={role.memberCount > 0 || !canManageRole(role.id)}
+                          onClick={() => deleteRole(role.id)}
+                          title={role.memberCount > 0 ? "已有成员的角色不能删除" : "删除角色"}
+                          type="button"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
-              <div>
-                <CardTitle className="text-sm">{activeRole.name} 权限矩阵</CardTitle>
-                <p className="mt-0.5 text-xs text-muted">当前实际绑定 {roleMemberCount} 个账号。</p>
-              </div>
-              <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={saveRolePermissions}>
-                <ShieldCheck className="h-3.5 w-3.5" />
-                保存权限
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-1.5 p-3">
-              {permissionSavedAt ? <p className="text-xs font-medium text-green-700">权限已保存：{permissionSavedAt}，页面正在刷新。</p> : null}
-              {permissionModules.map((module) => (
-                <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
-                  <p className="text-xs font-bold text-foreground">{module.name}</p>
-                  <div className="grid grid-cols-5 gap-1">
-                    {permissionActions.map((action) => {
-                      const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
+                  <CardTitle className="text-sm">人员分布</CardTitle>
+                  <Badge tone="gray">按部门</Badge>
+                </CardHeader>
+                <CardContent className="space-y-2 p-4">
+                  {departments.map((department) => {
+                    const count = visibleAccounts.filter((account) => account.department === department).length;
+                    const percent = visibleAccounts.length ? Math.round((count / visibleAccounts.length) * 100) : 0;
 
-                      return (
-                        <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                    return <DepartmentBar key={department} name={department} count={count} percent={percent} />;
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
+                  <div>
+                    <CardTitle className="text-sm">权限管理</CardTitle>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {activeRole ? `${activeRole.name} 当前实际绑定 ${roleMemberCount} 个账号。` : "暂无可编辑角色。"}
+                      {roleRevision ? ` 版本 ${roleRevision}` : ""}
+                    </p>
+                  </div>
+                  <Button className="shrink-0 px-2" size="sm" variant="secondary" onClick={() => void saveRoles()}>
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    保存角色
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-1.5 p-3">
+                  {roleSavedAt ? <p className="text-xs font-medium text-green-700">角色已保存：{roleSavedAt}，页面正在刷新。</p> : null}
+                  {activeRole ? (
+                    <div className="space-y-3 rounded-md border border-border bg-surface-muted p-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="角色名称">
                           <input
-                            checked={checked}
-                            className="h-3.5 w-3.5 accent-brand"
-                            onChange={() => togglePermission(module.id, action.id)}
-                            type="checkbox"
+                            className={fieldClass}
+                            value={activeRole.name}
+                            onChange={(event) => updateActiveRole("name", event.target.value)}
                           />
-                          {action.label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                        </Field>
+                        <Field label="排序">
+                          <input
+                            className={fieldClass}
+                            inputMode="numeric"
+                            type="number"
+                            value={activeRole.sortOrder}
+                            onChange={(event) => updateActiveRole("sortOrder", event.target.value)}
+                          />
+                        </Field>
+                      </div>
+                      <Field label="角色说明">
+                        <textarea
+                          className={`${fieldClass} min-h-20 resize-y`}
+                          value={activeRole.description}
+                          onChange={(event) => updateActiveRole("description", event.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  ) : null}
+                  {activeRole ? (
+                    permissionModules.map((module) => (
+                      <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
+                        <p className="text-xs font-bold text-foreground">{module.name}</p>
+                        <div className="grid grid-cols-6 gap-1">
+                          <label className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                            <input
+                              checked={permissionActions.every((action) => activeRole.permissions[module.id]?.includes(action.id))}
+                              className="h-3.5 w-3.5 accent-brand"
+                              onChange={() => toggleModulePermissions(module.id)}
+                              type="checkbox"
+                            />
+                            全选
+                          </label>
+                          {permissionActions.map((action) => {
+                            const checked = activeRole.permissions[module.id]?.includes(action.id) ?? false;
+
+                            return (
+                              <label key={action.id} className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
+                                <input
+                                  checked={checked}
+                                  className="h-3.5 w-3.5 accent-brand"
+                                  onChange={() => togglePermission(module.id, action.id)}
+                                  type="checkbox"
+                                />
+                                {action.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-md border border-border bg-white px-3 py-8 text-center text-sm text-muted">没有可编辑的角色。</p>
+                  )}
+                </CardContent>
+              </Card>
+          </div>
         </div>
       </section>
 
@@ -864,22 +1036,7 @@ export function AccountWorkbench() {
         </CardContent>
       </Card>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
-            <CardTitle>人员分布</CardTitle>
-            <Badge tone="gray">按部门</Badge>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-2 p-4 md:grid-cols-2">
-            {departments.map((department) => {
-              const count = accounts.filter((account) => account.department === department).length;
-              const percent = Math.round((count / accounts.length) * 100);
-
-              return <DepartmentBar key={department} name={department} count={count} percent={percent} />;
-            })}
-          </CardContent>
-        </Card>
-
+      <section className="grid grid-cols-1 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
             <CardTitle>最近账号动态</CardTitle>
@@ -906,10 +1063,12 @@ export function AccountWorkbench() {
       </section>
 
       {newAccountOpen ? <AccountDialog roles={roles} title="新建同事账号" onClose={() => setNewAccountOpen(false)} onSubmit={createAccount} /> : null}
+      {newRoleOpen ? <RoleDialog roles={availableRoleTemplates} onClose={() => setNewRoleOpen(false)} onSubmit={addRole} /> : null}
+      {roleMembersOpen ? <RoleMembersDialog role={activeRole} accounts={activeRoleMembers} onClose={() => setRoleMembersOpen(false)} /> : null}
       {editAccount ? (
         <EditAccountDialog account={editAccount} roles={roles} onClose={() => setEditAccount(null)} onSubmit={saveAccount} />
       ) : null}
-      {passwordAccount ? <PasswordDialog account={passwordAccount} onClose={() => setPasswordAccount(null)} onSubmit={saveAccountPassword} /> : null}
+      {archivedAccountsOpen ? <ArchivedAccountsDialog rows={archivedAccountRows} onClose={() => setArchivedAccountsOpen(false)} /> : null}
     </div>
   );
 }
@@ -964,6 +1123,136 @@ function DepartmentBar({ name, count, percent }: { name: string; count: number; 
   );
 }
 
+function ArchivedAccountsDialog({ rows, onClose }: { rows: ReturnType<typeof createAccountWorkbookRows>; onClose: () => void }) {
+  return (
+    <Modal title="已归档员工信息" onClose={onClose} size="wide">
+      <div className="overflow-auto rounded-md border border-border">
+        <table className="w-full min-w-[1280px] border-collapse text-xs">
+          <thead className="bg-surface-muted font-bold text-muted">
+            <tr>
+              {accountWorkbookColumns.map((column) => (
+                <th key={column} className="whitespace-nowrap px-3 py-2 text-left">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t border-border">
+                {accountWorkbookColumns.map((column) => (
+                  <td key={column} className="whitespace-nowrap px-3 py-2 text-muted">
+                    {row[column]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {rows.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">暂无已归档员工。</p> : null}
+      </div>
+    </Modal>
+  );
+}
+
+function RoleDialog({
+  roles,
+  onClose,
+  onSubmit,
+}: {
+  roles: RoleCatalogItem[];
+  onClose: () => void;
+  onSubmit: (roleId: RoleId) => void;
+}) {
+  const [selectedRoleId, setSelectedRoleId] = useState<RoleId>(roles[0]?.id ?? "viewer");
+  const selectedRole = roles.find((role) => role.id === selectedRoleId);
+
+  return (
+    <Modal title="添加角色" onClose={onClose}>
+      {roles.length ? (
+        <div className="space-y-4">
+          <Field label="角色模板">
+            <select className={fieldClass} value={selectedRoleId} onChange={(event) => setSelectedRoleId(event.target.value as RoleId)}>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {selectedRole ? (
+            <div className="rounded-md border border-border bg-surface-muted px-3 py-2.5">
+              <p className="text-sm font-bold text-foreground">{selectedRole.name}</p>
+              <p className="mt-1 text-sm leading-5 text-muted">{selectedRole.description}</p>
+            </div>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>
+              取消
+            </Button>
+            <Button onClick={() => onSubmit(selectedRoleId)}>
+              <Plus className="h-4 w-4" />
+              添加角色
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="rounded-md border border-border bg-surface-muted px-3 py-8 text-center text-sm text-muted">暂无可添加的内置角色。</p>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={onClose}>
+              关闭
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function RoleMembersDialog({ role, accounts, onClose }: { role: Role; accounts: Account[]; onClose: () => void }) {
+  return (
+    <Modal title={`${role.name}成员`} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between rounded-md border border-border bg-surface-muted px-3 py-2.5">
+          <div>
+            <p className="text-sm font-bold text-foreground">{role.name}</p>
+            <p className="mt-0.5 text-xs text-muted">{role.description}</p>
+          </div>
+          <Badge tone="blue">{accounts.length} 人</Badge>
+        </div>
+        <div className="max-h-[420px] overflow-auto rounded-md border border-border">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
+            <thead className="bg-surface-muted text-xs font-bold text-muted">
+              <tr>
+                <th className="px-4 py-2.5 text-left">姓名</th>
+                <th className="px-4 py-2.5 text-left">手机号</th>
+                <th className="px-4 py-2.5 text-left">部门 / 岗位</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((account) => (
+                <tr key={account.id} className="border-t border-border">
+                  <td className="px-4 py-3">
+                    <p className="font-bold text-foreground">{account.name}</p>
+                    <p className="text-xs text-muted">{account.id}</p>
+                  </td>
+                  <td className="px-4 py-3 text-muted">{account.phone || account.username || account.email || "—"}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-foreground">{account.department}</p>
+                    <p className="text-xs text-muted">{account.title}</p>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {accounts.length === 0 ? <p className="px-5 py-10 text-center text-sm text-muted">当前角色暂无绑定成员。</p> : null}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function AccountDialog({
   roles,
   title,
@@ -978,18 +1267,22 @@ function AccountDialog({
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     department: "广告中心",
     title: "运营专员",
     roleId: "operations" as RoleId,
   });
 
-  const ready = form.name.trim() && form.email.trim();
+  const ready = form.name.trim() && (form.phone.trim() || form.email.trim());
 
   return (
     <Modal title={title} onClose={onClose}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="姓名">
           <input className={fieldClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        </Field>
+        <Field label="手机号">
+          <input className={fieldClass} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
         </Field>
         <Field label="邮箱">
           <input className={fieldClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
@@ -1035,12 +1328,20 @@ function EditAccountDialog({
   onSubmit: (account: Account) => void;
 }) {
   const [form, setForm] = useState(account);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const passwordChanged = password.trim().length > 0;
+  const passwordReady = !passwordChanged || (password === confirmPassword && password.trim().length > 0);
+  const submitDisabled = passwordChanged ? !passwordReady : false;
 
   return (
     <Modal title="编辑账号资料" onClose={onClose}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="姓名">
           <input className={fieldClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        </Field>
+        <Field label="手机号">
+          <input className={fieldClass} value={form.phone || ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
         </Field>
         <Field label="邮箱">
           <input className={fieldClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
@@ -1058,75 +1359,39 @@ function EditAccountDialog({
           </select>
         </Field>
       </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose}>
-          取消
-        </Button>
-        <Button onClick={() => onSubmit(form)}>
-          <Check className="h-4 w-4" />
-          保存修改
-        </Button>
-      </div>
-    </Modal>
-  );
-}
-
-function PasswordDialog({
-  account,
-  onClose,
-  onSubmit,
-}: {
-  account: Account;
-  onClose: () => void;
-  onSubmit: (accountId: string, password: string) => void;
-}) {
-  const currentPassword = account.password || getFallbackPassword(account);
-  const [showPassword, setShowPassword] = useState(false);
-  const [password, setPassword] = useState(currentPassword);
-  const [confirmPassword, setConfirmPassword] = useState(currentPassword);
-  const matched = password.length >= 1 && password === confirmPassword;
-  const loginName = account.email || account.username || account.id;
-
-  return (
-    <Modal title={`账密：${account.name}`} onClose={onClose}>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="登录账号">
-            <input className={fieldClass} readOnly value={loginName} />
+      <div className="mt-5 rounded-md border border-border bg-surface-muted px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-foreground">账号密码</p>
+            <p className="mt-0.5 text-xs text-muted">留空则不修改密码。</p>
+          </div>
+          <div className="text-xs text-muted">登录账号：{form.phone || form.username || form.email || form.id}</div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="新密码">
+            <input className={fieldClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
-          <Field label="当前密码">
-            <div className="flex rounded-md border border-border bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
-              <input
-                className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm text-foreground outline-none"
-                readOnly
-                type={showPassword ? "text" : "password"}
-                value={currentPassword}
-              />
-              <button
-                aria-label={showPassword ? "隐藏密码" : "显示密码"}
-                className="flex h-9 w-9 items-center justify-center rounded-r-md text-muted hover:bg-surface-muted hover:text-foreground"
-                onClick={() => setShowPassword((value) => !value)}
-                type="button"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+          <Field label="确认密码">
+            <input className={fieldClass} type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
           </Field>
         </div>
-        <Field label="新密码">
-          <input className={fieldClass} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </Field>
-        <Field label="确认密码">
-          <input className={fieldClass} type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
-        </Field>
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           取消
         </Button>
-        <Button disabled={!matched} onClick={() => onSubmit(account.id, password)}>
-          <KeyRound className="h-4 w-4" />
-          保存密码
+        <Button
+          disabled={submitDisabled}
+          onClick={() =>
+            onSubmit({
+              ...form,
+              password: passwordChanged ? password : account.password,
+              passwordDirty: passwordChanged || account.passwordDirty,
+            })
+          }
+        >
+          <Check className="h-4 w-4" />
+          保存修改
         </Button>
       </div>
     </Modal>
@@ -1141,10 +1406,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function Modal({
+  title,
+  children,
+  onClose,
+  size = "default",
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  size?: "default" | "wide";
+}) {
+  const widthClass = size === "wide" ? "max-w-6xl" : "max-w-2xl";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl" onClick={(event) => event.stopPropagation()} role="dialog">
+      <div className={`w-full ${widthClass} rounded-lg bg-white shadow-xl`} onClick={(event) => event.stopPropagation()} role="dialog">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand text-white">

@@ -34,7 +34,7 @@ export const RulesEditorShell = dynamic(
 
 export const ProductWorkbench = dynamic(
   () => import("@/components/products/product-workbench").then((module) => module.ProductWorkbench),
-  { loading, ssr: false },
+  { loading },
 );
 
 export const ListingAiWorkbench = dynamic(

@@ -1,26 +1,33 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
-import { getImportJobQueue, importJobQueueName } from "@/lib/queue/redis-queue";
+import { getImageUpscaleJobQueue, getImportJobQueue, imageUpscaleJobQueueName, importJobQueueName } from "@/lib/queue/redis-queue";
+import { getProductOutboxHealth } from "@/lib/products/product-outbox";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("settings", "view");
+    const permission = await requireApiPermission("settings", "view", request);
 
     if (!permission.ok) {
       return permission.response;
     }
     const { user } = permission;
+    const workspaceId = workspaceScopeFromRequest(request).workspaceId;
 
     const driver = process.env.QUEUE_DRIVER ?? "inline";
     const queueCounts =
       driver === "redis"
         ? await getImportJobQueue().getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused")
         : { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
+    const imageQueueCounts =
+      driver === "redis"
+        ? await getImageUpscaleJobQueue().getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused")
+        : { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
     const heartbeatCutoff = new Date(Date.now() - 90_000);
-    const [heartbeats, recentJobs] = await Promise.all([
+    const [heartbeats, imageWorkers, recentImageJobs, recentJobs, productHealth] = await Promise.all([
       process.env.DATABASE_URL
         ? prisma.workerHeartbeat.findMany({
             where: {
@@ -29,6 +36,20 @@ export async function GET() {
             orderBy: {
               lastSeenAt: "desc",
             },
+            take: 20,
+          })
+        : [],
+      process.env.DATABASE_URL
+        ? prisma.workerHeartbeat.findMany({
+            where: { queueName: imageUpscaleJobQueueName },
+            orderBy: { lastSeenAt: "desc" },
+            take: 20,
+          })
+        : [],
+      process.env.DATABASE_URL
+        ? prisma.imageUpscaleJob.findMany({
+            where: { organizationId: user.organizationId, OR: [{ status: "running" }, { status: "failed" }] },
+            orderBy: { updatedAt: "desc" },
             take: 20,
           })
         : [],
@@ -44,20 +65,33 @@ export async function GET() {
             orderBy: {
               updatedAt: "desc",
             },
-            take: 20,
-          })
+          take: 20,
+        })
         : [],
+      process.env.DATABASE_URL
+        ? getProductOutboxHealth({
+            organizationId: user.organizationId,
+            workspaceId,
+          })
+        : null,
     ]);
 
     return NextResponse.json({
       driver,
       queueName: importJobQueueName,
       queueCounts,
+      imageQueueCounts,
       workers: heartbeats.map((heartbeat) => ({
         ...heartbeat,
         online: heartbeat.status === "online" && heartbeat.lastSeenAt > heartbeatCutoff,
       })),
+      imageWorkers: imageWorkers.map((heartbeat) => ({
+        ...heartbeat,
+        online: heartbeat.status === "online" && heartbeat.lastSeenAt > heartbeatCutoff,
+      })),
       recentJobs,
+      recentImageJobs,
+      productHealth,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load worker health.";

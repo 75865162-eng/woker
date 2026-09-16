@@ -1,3 +1,5 @@
+import { buildRoleDefinitions } from "@/lib/accounts/role-definitions";
+
 export type PermissionAction = "view" | "create" | "edit" | "approve" | "export";
 
 export type RolePermissions = Record<string, PermissionAction[]>;
@@ -15,16 +17,36 @@ export const permissionActions: Array<{ id: PermissionAction; label: string }> =
 ];
 
 export const permissionModules = [
-  { id: "workspace", name: "PPC Workspace", paths: ["/workspace", "/history", "/tasks"] },
-  { id: "products", name: "Products", paths: ["/dashboard"] },
-  { id: "searchMerge", name: "Search Merge", paths: ["/saihu-search-merge"] },
-  { id: "listingAi", name: "Listing AI", paths: ["/listing-ai"] },
-  { id: "imageUpscale", name: "Image Upscale", paths: ["/image-upscale"] },
-  { id: "logistics", name: "Logistics", paths: ["/logistics"] },
-  { id: "rules", name: "Rule Center", paths: ["/rules"] },
-  { id: "accounts", name: "Accounts", paths: ["/accounts"] },
-  { id: "settings", name: "Settings", paths: ["/settings", "/versions"] },
+  { id: "products", name: "产品管理 /dashboard", paths: ["/dashboard"] },
+  { id: "sellfox", name: "Sellfox /sellfox", paths: ["/sellfox"] },
+  { id: "workspace", name: "PPC 优化 /workspace", paths: ["/workspace"] },
+  { id: "searchMerge", name: "赛狐搜词合并 /saihu-search-merge", paths: ["/saihu-search-merge"] },
+  { id: "listingAi", name: "Listing AI /listing-ai", paths: ["/listing-ai"] },
+  { id: "agents", name: "Amazon AI Agent Platform /agents", paths: ["/agents"] },
+  { id: "imageUpscale", name: "图片放大 /image-upscale", paths: ["/image-upscale"] },
+  { id: "logistics", name: "物流处理 /logistics", paths: ["/logistics"] },
+  { id: "tasks", name: "任务中心 /tasks", paths: ["/tasks"] },
+  { id: "history", name: "历史记录 /history", paths: ["/history"] },
+  { id: "versions", name: "版本审计 /versions", paths: ["/versions"] },
+  { id: "accounts", name: "账号权限 /accounts", paths: ["/accounts"] },
+  { id: "settings", name: "系统设置 /settings", paths: ["/settings"] },
 ];
+
+export const defaultAccessiblePaths = [
+  { href: "/", moduleId: null },
+  { href: "/dashboard", moduleId: "products" },
+  { href: "/sellfox", moduleId: "sellfox" },
+  { href: "/workspace", moduleId: "workspace" },
+  { href: "/saihu-search-merge", moduleId: "searchMerge" },
+  { href: "/listing-ai", moduleId: "listingAi" },
+  { href: "/agents", moduleId: "agents" },
+  { href: "/logistics", moduleId: "logistics" },
+  { href: "/tasks", moduleId: "tasks" },
+  { href: "/history", moduleId: "history" },
+  { href: "/versions", moduleId: "versions" },
+  { href: "/accounts", moduleId: "accounts" },
+  { href: "/settings", moduleId: "settings" },
+] as const;
 
 export const routeModuleIds = permissionModules.flatMap((module) =>
   module.paths.map((path) => ({
@@ -33,32 +55,12 @@ export const routeModuleIds = permissionModules.flatMap((module) =>
   })),
 );
 
-export const defaultRolePermissionMap: RolePermissionMap = {
-  owner: createFullPermissions(),
-  database_admin: createPermissions(
-    ["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules", "accounts", "settings"],
-    ["view", "create", "edit", "export"],
-  ),
-  admin: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
-  operations_manager: createPermissions(["workspace", "products", "searchMerge", "listingAi", "imageUpscale", "logistics", "rules"], allActions()),
-  operations_supervisor: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "approve", "export"]),
-  operations: createPermissions(["products", "listingAi"], ["view", "create", "edit", "export"]),
-  operations_assistant: createPermissions(["products", "listingAi"], ["view", "create", "edit"]),
-  developer: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
-  warehouse: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  warehouse_supervisor: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]),
-  finance: createPermissions(["workspace", "products", "logistics"], ["view", "export"]),
-  procurement: createPermissions(["products", "logistics"], ["view", "create", "edit", "export"]),
-  selection: createPermissions(["products"], ["view", "create", "edit"]),
-  designer: createPermissions(["products", "listingAi", "imageUpscale"], ["view"]),
-  ppc_specialist: createPermissions(["workspace", "searchMerge", "rules"], ["view", "create", "edit", "export"]),
-  ppc_manager: createPermissions(["workspace", "searchMerge", "rules"], ["view", "create", "edit", "export"]),
-  listing_specialist: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
-  listing_operator: createPermissions(["products", "listingAi", "imageUpscale"], ["view", "create", "edit", "export"]),
-  logistics_specialist: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  logistics_operator: createPermissions(["logistics"], ["view", "create", "edit", "export"]),
-  viewer: {},
-};
+export const defaultRolePermissionMap: RolePermissionMap = Object.fromEntries(
+  buildRoleDefinitions(permissionActions.map((action) => action.id), permissionModules.map((module) => module.id)).map((role) => [
+    role.id,
+    role.permissions,
+  ]),
+);
 
 export function allActions() {
   return permissionActions.map((action) => action.id);
@@ -75,10 +77,16 @@ export function createPermissions(moduleIds: string[], actions: PermissionAction
 export function getEffectiveRolePermissionMap(overrides?: RolePermissionMap | null): RolePermissionMap {
   if (!overrides) return defaultRolePermissionMap;
 
-  return {
-    ...defaultRolePermissionMap,
-    ...overrides,
-  };
+  const merged = { ...defaultRolePermissionMap };
+
+  for (const [roleId, rolePermissions] of Object.entries(overrides)) {
+    merged[roleId] = {
+      ...(defaultRolePermissionMap[roleId] ?? {}),
+      ...rolePermissions,
+    };
+  }
+
+  return merged;
 }
 
 export function getModuleIdForPath(pathname: string): string | null {
@@ -112,6 +120,22 @@ export function roleHasAnyPage(role: string | undefined, permissions?: RolePermi
   const rolePermissions = getEffectiveRolePermissionMap(permissions)[role ?? ""] ?? {};
 
   return permissionModules.some((module) => (rolePermissions[module.id] ?? []).length > 0);
+}
+
+export function getFirstAccessiblePath(role: string | undefined, permissions?: RolePermissionMap | null) {
+  return defaultAccessiblePaths.find((item) => roleCanAccessModule(role, item.moduleId, permissions))?.href ?? "/";
+}
+
+export function getAccessiblePathOrFallback(pathname: string | null | undefined, role: string | undefined, permissions?: RolePermissionMap | null) {
+  if (pathname && pathname.startsWith("/") && !pathname.startsWith("//")) {
+    const moduleId = pathname === "/" ? null : getModuleIdForPath(pathname);
+
+    if (roleCanAccessModule(role, moduleId, permissions)) {
+      return pathname;
+    }
+  }
+
+  return getFirstAccessiblePath(role, permissions);
 }
 
 export function parseRolePermissionsCookie(value?: string): RolePermissionMap | null {

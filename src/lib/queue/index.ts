@@ -1,5 +1,6 @@
 import { processImportJob } from "@/lib/jobs/processor";
-import { getImportJobQueue } from "@/lib/queue/redis-queue";
+import { getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue } from "@/lib/queue/redis-queue";
+import { processProductOutboxEvent } from "@/lib/products/product-outbox";
 
 export async function enqueueImportJob(jobId: string) {
   const driver = process.env.QUEUE_DRIVER ?? "inline";
@@ -14,6 +15,7 @@ export async function enqueueImportJob(jobId: string) {
       "process-import-job",
       { jobId },
       {
+        jobId: `import-job-${jobId}`,
         attempts: 3,
         backoff: {
           type: "exponential",
@@ -27,4 +29,39 @@ export async function enqueueImportJob(jobId: string) {
   }
 
   throw new Error(`Unsupported queue driver: ${driver}`);
+}
+
+export async function enqueueImageUpscaleJob(jobId: string) {
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    throw new Error("图片放大必须启用 Redis Worker。请配置 QUEUE_DRIVER=redis。");
+  }
+
+  await getImageUpscaleJobQueue().add(
+    "process-image-upscale-job",
+    { jobId },
+    {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: 100,
+      removeOnFail: 200,
+    },
+  );
+}
+
+export async function enqueueProductOutboxEvent(eventId: string) {
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    await processProductOutboxEvent(eventId);
+    return;
+  }
+
+  await getProductOutboxQueue().add(
+    "process-product-outbox-event",
+    { eventId },
+    {
+      attempts: 5,
+      backoff: { type: "exponential", delay: 1000 },
+      removeOnComplete: 100,
+      removeOnFail: 200,
+    },
+  );
 }

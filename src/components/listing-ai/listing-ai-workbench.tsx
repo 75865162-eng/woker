@@ -12,9 +12,11 @@ import {
   Layers3,
   Loader2,
   Minus,
+  MessageSquarePlus,
   Plus,
   Search,
   Sparkles,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,19 +31,16 @@ import {
   InfoField,
 } from "@/components/listing-ai/gallery-primitives";
 import { MiniUploader } from "@/components/listing-ai/image-upload-primitives";
+import { ListingAiChatPanel } from "@/components/listing-ai/listing-ai-chat-panel";
 import { ListingAiAplusPanel } from "@/components/listing-ai/listing-ai-aplus-panel";
 import { ListingAiInputPanel } from "@/components/listing-ai/listing-ai-input-panel";
+import { createBrowserId } from "@/lib/browser/random-id";
 import {
   AnalysisSection,
   ImagePlanSection,
   ListingSection,
 } from "@/components/listing-ai/listing-ai-output-panels";
 import { ReviewHistorySection } from "@/components/listing-ai/review-history-section";
-import {
-  aiSettingsStorageKey,
-  normalizeAiSettings,
-  type AiModelSettings,
-} from "@/lib/ai-settings";
 import {
   blobToDataUrl,
   readListingAiImageAsset,
@@ -67,19 +66,22 @@ import {
   buildImageRequirements,
   createEmptyCompetitor,
   createPersistableDraft,
+  createTitleGeneratorModeDraft,
   defaultImageGeneratorPrompt,
-  draftStorageKey,
+  initialDescriptionGenerator,
   fieldClass,
-  galleryCellStylesStorageKey,
   imageGeneratorViews,
   initialCompetitors,
   initialImageGenerator,
   initialInput,
   initialTitleGenerator,
-  storageKey,
   type CompetitorDraft,
   type GalleryCellStyle,
   type GalleryInfoRow,
+  type DescriptionGeneratorDraft,
+  type DescriptionGeneratorField,
+  type DescriptionGeneratorFieldKey,
+  type DescriptionGeneratorHistoryRecord,
   type ImageGeneratorDraft,
   type ImagePreview,
   type OwnImageDraft,
@@ -88,16 +90,25 @@ import {
   type TitleGeneratorDraft,
   type TitleGeneratorField,
   type TitleGeneratorFieldKey,
+  type TitleGeneratorMode,
+  type TitleGeneratorModeDraft,
   type TitleGeneratorHistoryRecord,
   type WorkspaceDraft,
 } from "@/lib/listing-ai/workspace-draft";
+import {
+  aiImageSettingsStorageKey,
+  aiSettingsStorageKey,
+  type AiModelSettings,
+  normalizeAiSettings,
+} from "@/lib/ai-settings";
 
 const tabs = [
-  { id: "input", label: "Title", icon: Search },
+  { id: "input", label: "标题描述", icon: Search },
   { id: "visual", label: "Images & A+", icon: ImageIcon },
   { id: "analysis", label: "AI Analysis", icon: BarChart3 },
   { id: "listing", label: "Listing", icon: Sparkles },
   { id: "imagePlan", label: "Image Plan", icon: Layers3 },
+  { id: "chat", label: "对话", icon: MessageSquarePlus },
   { id: "review", label: "Review & History", icon: History },
   { id: "upscale", label: "图片放大", icon: ImageUp },
 ] as const;
@@ -139,6 +150,18 @@ async function hydrateImages(images: ImagePreview[] | undefined) {
   return hydratedImages.filter((image) => image.url);
 }
 
+function compactImageForRequest(image: ImagePreview): ImagePreview {
+  if (image.assetId) {
+    return {
+      name: image.name,
+      url: "",
+      assetId: image.assetId,
+    };
+  }
+
+  return image;
+}
+
 async function hydrateCompetitorDraft(competitor: CompetitorDraft) {
   return {
     ...competitor,
@@ -170,6 +193,163 @@ async function hydrateImageGeneratorDraft(draft: ImageGeneratorDraft) {
     ownViews,
     competitorImages: await hydrateImages(draft.competitorImages),
     generatedImages: await hydrateImages(draft.generatedImages),
+    history: await Promise.all(
+      (Array.isArray(draft.history) ? draft.history : []).map(async (record) => ({
+        ...record,
+        images: await hydrateImages(record.images),
+      })),
+    ),
+  };
+}
+
+function stripCompetitorImages(competitor: CompetitorDraft): CompetitorDraft {
+  return {
+    ...competitor,
+    mainImage: [],
+    screenshot: [],
+    images: [],
+  };
+}
+
+function stripOwnImageDraftImages(ownImages: OwnImageDraft): OwnImageDraft {
+  return {
+    ...ownImages,
+    mainImage: [],
+    images: [],
+  };
+}
+
+function stripImageGeneratorDraftImages(draft: ImageGeneratorDraft): ImageGeneratorDraft {
+  return {
+    ...draft,
+    ownViews: imageGeneratorViews.reduce((acc, view) => {
+      acc[view.key] = [];
+      return acc;
+    }, { ...initialImageGenerator.ownViews }),
+    competitorImages: [],
+    generatedImages: [],
+    history: Array.isArray(draft.history)
+      ? draft.history.map((record) => ({
+          ...record,
+          images: [],
+        }))
+      : [],
+  };
+}
+
+function readLocalAiSettings(storageKey: string) {
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+
+    if (!saved) return null;
+
+    const parsed = JSON.parse(saved) as Partial<AiModelSettings>;
+    return typeof parsed.apiKey === "string" && parsed.apiKey.trim()
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function mergeTitleGeneratorFields(fields: TitleGeneratorField[] | undefined) {
+  return initialTitleGenerator.fields.map((field) => ({
+    ...field,
+    ...fields?.find((savedField) => savedField.key === field.key),
+  }));
+}
+
+function mergeDescriptionGeneratorFields(
+  fields: DescriptionGeneratorField[] | undefined,
+) {
+  return initialDescriptionGenerator.fields.map((field) => ({
+    ...field,
+    ...fields?.find((savedField) => savedField.key === field.key),
+  }));
+}
+
+function normalizeTitleGeneratorModeDraft(
+  draft: Partial<TitleGeneratorModeDraft> | undefined,
+  legacyDraft?: Partial<TitleGeneratorDraft>,
+): TitleGeneratorModeDraft {
+  return {
+    fields: mergeTitleGeneratorFields(draft?.fields ?? legacyDraft?.fields),
+    results: Array.isArray(draft?.results)
+      ? draft.results
+      : Array.isArray(legacyDraft?.results)
+        ? legacyDraft.results
+        : [],
+    history: Array.isArray(draft?.history)
+      ? draft.history
+      : Array.isArray(legacyDraft?.history)
+        ? legacyDraft.history
+        : [],
+  };
+}
+
+function normalizeTitleGeneratorDraft(
+  draft: Partial<TitleGeneratorDraft>,
+): TitleGeneratorDraft {
+  const mode: TitleGeneratorMode = draft.mode === "new" ? "new" : "old";
+  const oldDraft = normalizeTitleGeneratorModeDraft(
+    draft.modes?.old,
+    mode === "old" ? draft : undefined,
+  );
+  const newDraft = normalizeTitleGeneratorModeDraft(
+    draft.modes?.new,
+    mode === "new" ? draft : undefined,
+  );
+  const activeDraft = mode === "new" ? newDraft : oldDraft;
+
+  return {
+    ...initialTitleGenerator,
+    ...draft,
+    mode,
+    prompt: draft.prompt?.trim() ? draft.prompt : initialTitleGenerator.prompt,
+    fields: activeDraft.fields,
+    results: activeDraft.results,
+    history: activeDraft.history,
+    modes: {
+      old: oldDraft,
+      new: newDraft,
+    },
+  };
+}
+
+function normalizeDescriptionGeneratorDraft(
+  draft: Partial<DescriptionGeneratorDraft>,
+): DescriptionGeneratorDraft {
+  return {
+    ...initialDescriptionGenerator,
+    ...draft,
+    prompt:
+      draft.prompt?.trim() ? draft.prompt : initialDescriptionGenerator.prompt,
+    fields: mergeDescriptionGeneratorFields(draft.fields),
+    results: Array.isArray(draft.results) ? draft.results : [],
+    history: Array.isArray(draft.history)
+      ? draft.history
+          .filter((record): record is DescriptionGeneratorHistoryRecord =>
+            Boolean(record && typeof record === "object"),
+          )
+          .map((record) => ({
+            id: typeof record.id === "string" ? record.id : createBrowserId(),
+            createdAt:
+              typeof record.createdAt === "string"
+                ? record.createdAt
+                : new Date().toLocaleString("zh-CN", { hour12: false }),
+            mode: record.mode === "new" ? "new" : "old",
+            fields: mergeDescriptionGeneratorFields(record.fields),
+            prompt:
+              typeof record.prompt === "string"
+                ? record.prompt
+                : initialDescriptionGenerator.prompt,
+            results: Array.isArray(record.results)
+              ? record.results.filter(
+                  (item): item is string => typeof item === "string",
+                )
+              : [],
+          }))
+      : [],
   };
 }
 
@@ -193,12 +373,19 @@ export function ListingAiWorkbench() {
   const [titleGenerator, setTitleGenerator] = useState<TitleGeneratorDraft>(
     initialTitleGenerator,
   );
+  const [descriptionGenerator, setDescriptionGenerator] =
+    useState<DescriptionGeneratorDraft>(initialDescriptionGenerator);
   const [imageGenerator, setImageGenerator] = useState<ImageGeneratorDraft>(
     initialImageGenerator,
   );
+  const [cellStyles, setCellStyles] = useState<Record<string, GalleryCellStyle>>({});
   const [titlePromptOpen, setTitlePromptOpen] = useState(false);
+  const [descriptionPromptOpen, setDescriptionPromptOpen] = useState(false);
   const [titleGenerating, setTitleGenerating] = useState(false);
+  const [descriptionGenerating, setDescriptionGenerating] = useState(false);
   const [titleGeneratorError, setTitleGeneratorError] = useState("");
+  const [descriptionGeneratorError, setDescriptionGeneratorError] =
+    useState("");
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageGeneratorError, setImageGeneratorError] = useState("");
   const [result, setResult] = useState<ListingOptimizationResult | null>(null);
@@ -211,20 +398,58 @@ export function ListingAiWorkbench() {
   useEffect(() => {
     let cancelled = false;
 
+    async function syncAiSettingsCache() {
+      try {
+        const response = await fetch("/api/ai-settings", { cache: "no-store" });
+
+        if (!response.ok) return;
+
+        const data = (await response.json()) as {
+          settings?: Partial<AiModelSettings> | null;
+          imageSettings?: Partial<AiModelSettings> | null;
+        };
+
+        if (cancelled) return;
+        if (data.settings) {
+          window.localStorage.setItem(aiSettingsStorageKey, JSON.stringify(data.settings));
+        }
+        if (data.imageSettings) {
+          window.localStorage.setItem(aiImageSettingsStorageKey, JSON.stringify(data.imageSettings));
+        }
+      } catch (error) {
+        console.warn("Failed to sync Listing AI settings cache.", error);
+      }
+    }
+
     async function applyWorkspaceDraft(draft: Partial<WorkspaceDraft>) {
       if (draft.input && !cancelled) setInput({ ...initialInput, ...draft.input });
-      if (draft.competitors) {
-        const restoredCompetitors = await Promise.all(
+      if (draft.titleGenerator && !cancelled) {
+        setTitleGenerator(normalizeTitleGeneratorDraft(draft.titleGenerator));
+      }
+      if (draft.descriptionGenerator && !cancelled) {
+        setDescriptionGenerator(
+          normalizeDescriptionGeneratorDraft(draft.descriptionGenerator),
+        );
+      }
+      if (draft.galleryCellStyles && !cancelled) {
+        setCellStyles(draft.galleryCellStyles);
+      }
+      if (draft.activeTab && !cancelled && !requestedTab) {
+        setActiveTab(draft.activeTab);
+      }
+
+      if (draft.competitors && !cancelled) {
+        setCompetitors(
           initialCompetitors.map((emptyCompetitor, index) =>
-            hydrateCompetitorDraft({
+            stripCompetitorImages({
               ...emptyCompetitor,
               ...draft.competitors?.[index],
             }),
           ),
         );
-        if (!cancelled) setCompetitors(restoredCompetitors);
       }
-      if (draft.ownImages) {
+
+      if (draft.ownImages && !cancelled) {
         const emptyOwnImages: OwnImageDraft = {
           structureNotes: "",
           mainImage: [],
@@ -235,52 +460,113 @@ export function ListingAiWorkbench() {
           rating: "",
           reviewCount: "",
         };
-        const restoredOwnImages = await hydrateOwnImageDraft({
-          ...emptyOwnImages,
-          ...draft.ownImages,
-        });
-        if (!cancelled) setOwnImages(restoredOwnImages);
+        setOwnImages(
+          stripOwnImageDraftImages({
+            ...emptyOwnImages,
+            ...draft.ownImages,
+          }),
+        );
       }
-      if (draft.titleGenerator && !cancelled) {
-        setTitleGenerator({
-          ...initialTitleGenerator,
-          ...draft.titleGenerator,
-          fields: initialTitleGenerator.fields.map((field) => ({
-            ...field,
-            ...draft.titleGenerator?.fields?.find(
-              (savedField) => savedField.key === field.key,
+
+      if (draft.imageGenerator && !cancelled) {
+        setImageGenerator(
+          stripImageGeneratorDraftImages({
+            ...initialImageGenerator,
+            ...draft.imageGenerator,
+            ownViews: {
+              ...initialImageGenerator.ownViews,
+              ...draft.imageGenerator.ownViews,
+            },
+            competitorImages: Array.isArray(
+              draft.imageGenerator.competitorImages,
+            )
+              ? draft.imageGenerator.competitorImages
+              : [],
+            generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
+              ? draft.imageGenerator.generatedImages
+              : [],
+            history: Array.isArray(draft.imageGenerator.history)
+              ? draft.imageGenerator.history
+              : [],
+            prompt: draft.imageGenerator.prompt?.trim()
+              ? draft.imageGenerator.prompt
+              : defaultImageGeneratorPrompt,
+          }),
+        );
+      }
+
+      const restoreImages = async () => {
+        if (cancelled) return;
+
+        if (draft.competitors) {
+          const restoredCompetitors = await Promise.all(
+            initialCompetitors.map((emptyCompetitor, index) =>
+              hydrateCompetitorDraft({
+                ...emptyCompetitor,
+                ...draft.competitors?.[index],
+              }),
             ),
-          })),
-          history: Array.isArray(draft.titleGenerator.history)
-            ? draft.titleGenerator.history
-            : [],
+          );
+          if (!cancelled) setCompetitors(restoredCompetitors);
+        }
+
+        if (draft.ownImages) {
+          const emptyOwnImages: OwnImageDraft = {
+            structureNotes: "",
+            mainImage: [],
+            images: [],
+            imageNotes: [],
+            sales: "",
+            price: "",
+            rating: "",
+            reviewCount: "",
+          };
+          const restoredOwnImages = await hydrateOwnImageDraft({
+            ...emptyOwnImages,
+            ...draft.ownImages,
+          });
+          if (!cancelled) setOwnImages(restoredOwnImages);
+        }
+
+        if (draft.imageGenerator) {
+          const restoredImageGenerator = await hydrateImageGeneratorDraft({
+            ...initialImageGenerator,
+            ...draft.imageGenerator,
+            ownViews: {
+              ...initialImageGenerator.ownViews,
+              ...draft.imageGenerator.ownViews,
+            },
+            competitorImages: Array.isArray(
+              draft.imageGenerator.competitorImages,
+            )
+              ? draft.imageGenerator.competitorImages
+              : [],
+            generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
+              ? draft.imageGenerator.generatedImages
+              : [],
+            history: Array.isArray(draft.imageGenerator.history)
+              ? draft.imageGenerator.history
+              : [],
+            prompt: draft.imageGenerator.prompt?.trim()
+              ? draft.imageGenerator.prompt
+              : defaultImageGeneratorPrompt,
+          });
+          if (!cancelled) setImageGenerator(restoredImageGenerator);
+        }
+      };
+
+      const waitForIdle = () =>
+        new Promise<void>((resolve) => {
+          if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(() => resolve());
+            return;
+          }
+
+          window.setTimeout(resolve, 0);
         });
-      }
-      if (draft.imageGenerator) {
-        const restoredImageGenerator = await hydrateImageGeneratorDraft({
-          ...initialImageGenerator,
-          ...draft.imageGenerator,
-          ownViews: {
-            ...initialImageGenerator.ownViews,
-            ...draft.imageGenerator.ownViews,
-          },
-          competitorImages: Array.isArray(
-            draft.imageGenerator.competitorImages,
-          )
-            ? draft.imageGenerator.competitorImages
-            : [],
-          generatedImages: Array.isArray(draft.imageGenerator.generatedImages)
-            ? draft.imageGenerator.generatedImages
-            : [],
-          prompt: draft.imageGenerator.prompt?.trim()
-            ? draft.imageGenerator.prompt
-            : defaultImageGeneratorPrompt,
-        });
-        if (!cancelled) setImageGenerator(restoredImageGenerator);
-      }
-      if (draft.activeTab && !cancelled && !requestedTab) {
-        setActiveTab(draft.activeTab);
-      }
+
+      await waitForIdle();
+      await restoreImages();
     }
 
     async function restoreDraft() {
@@ -298,34 +584,14 @@ export function ListingAiWorkbench() {
 
         if (data.records?.length && !cancelled) {
           setRecords(data.records);
-          window.localStorage.setItem(storageKey, JSON.stringify(data.records));
         }
 
         if (data.draft) {
           await applyWorkspaceDraft(data.draft);
-          window.localStorage.setItem(draftStorageKey, JSON.stringify(data.draft));
           return;
-        }
-
-        const localRecords = readLocalListingAiRecords();
-        const localDraft = readLocalListingAiDraft();
-
-        if (localRecords.length && !cancelled) setRecords(localRecords);
-        if (localDraft) await applyWorkspaceDraft(localDraft);
-
-        if (localDraft || localRecords.length) {
-          await saveListingAiWorkspace(
-            normalizeWorkspaceDraft(localDraft),
-            localRecords,
-          );
         }
       } catch (storageError) {
         console.warn("Failed to restore Listing AI draft.", storageError);
-        const localRecords = readLocalListingAiRecords();
-        const localDraft = readLocalListingAiDraft();
-
-        if (localRecords.length && !cancelled) setRecords(localRecords);
-        if (localDraft) await applyWorkspaceDraft(localDraft);
       } finally {
         if (!cancelled) setDraftReady(true);
       }
@@ -335,6 +601,7 @@ export function ListingAiWorkbench() {
       setActiveTab(requestedTab);
     }
 
+    void syncAiSettingsCache();
     void restoreDraft();
 
     return () => {
@@ -349,13 +616,13 @@ export function ListingAiWorkbench() {
       competitors,
       ownImages,
       titleGenerator,
+      descriptionGenerator,
       imageGenerator,
+      galleryCellStyles: cellStyles,
       activeTab,
     };
     try {
       const persistableDraft = createPersistableDraft(draft);
-      window.localStorage.setItem(draftStorageKey, JSON.stringify(persistableDraft));
-      window.localStorage.setItem(storageKey, JSON.stringify(records));
       const timeout = window.setTimeout(() => {
         void saveListingAiWorkspace(persistableDraft, records).then(
           undefined,
@@ -368,27 +635,29 @@ export function ListingAiWorkbench() {
       return () => window.clearTimeout(timeout);
     } catch (storageError) {
       console.warn("Failed to persist Listing AI draft.", storageError);
-      window.localStorage.removeItem(draftStorageKey);
     }
-  }, [
-    activeTab,
-    competitors,
-    draftReady,
-    imageGenerator,
-    input,
-    ownImages,
-    records,
-    titleGenerator,
-  ]);
+  }, [activeTab, cellStyles, competitors, draftReady, imageGenerator, input, ownImages, records, descriptionGenerator, titleGenerator]);
 
   const productName =
     input.asin ||
     input.productEnglishName ||
     input.productChineseName ||
     "Untitled Product";
-  const productFactsCount = input.productFacts.trim().length;
-  const canSubmit =
-    input.asin.trim().length > 1 && productFactsCount >= 50 && !loading;
+  const activeTitleGeneratorModeDraft =
+    titleGenerator.modes[titleGenerator.mode] ??
+    createTitleGeneratorModeDraft();
+  const activeTitleGenerator: TitleGeneratorDraft = {
+    ...titleGenerator,
+    fields: activeTitleGeneratorModeDraft.fields,
+    results: activeTitleGeneratorModeDraft.results,
+    history: activeTitleGeneratorModeDraft.history,
+  };
+  const descriptionSharedFields = activeTitleGenerator.fields.filter((field) =>
+    ["productFeatures", "coreAdWords", "relatedKeywords", "adData"].includes(
+      field.key,
+    ),
+  );
+  const canSubmit = !loading;
   const competitorInfo = useMemo(
     () => buildCompetitorInfo(competitors, ownImages.structureNotes),
     [competitors, ownImages.structureNotes],
@@ -441,43 +710,100 @@ export function ListingAiWorkbench() {
   ) {
     setTitleGenerator((current) => ({
       ...current,
-      fields: current.fields.map((field) =>
+      fields: current.modes[current.mode].fields.map((field) =>
         field.key === key ? { ...field, ...patch } : field,
+      ),
+      modes: {
+        ...current.modes,
+        [current.mode]: {
+          ...current.modes[current.mode],
+          fields: current.modes[current.mode].fields.map((field) =>
+            field.key === key ? { ...field, ...patch } : field,
+          ),
+        },
+      },
+    }));
+  }
+
+  function updateTitleGeneratorMode(mode: TitleGeneratorMode) {
+    setTitleGenerator((current) => ({
+      ...current,
+      mode,
+      fields: current.modes[mode].fields,
+      results: current.modes[mode].results,
+      history: current.modes[mode].history,
+    }));
+    setTitleGeneratorError("");
+  }
+
+  function updateDescriptionGeneratorField(
+    key: DescriptionGeneratorFieldKey,
+    value: string,
+  ) {
+    setDescriptionGenerator((current) => ({
+      ...current,
+      fields: current.fields.map((field) =>
+        field.key === key ? { ...field, value } : field,
       ),
     }));
   }
 
   function loadTitleGeneratorHistory(record: TitleGeneratorHistoryRecord) {
+    const mode = record.mode === "new" ? "new" : "old";
+
     setTitleGenerator((current) => ({
       ...current,
-      fields: initialTitleGenerator.fields.map((field) => ({
-        ...field,
-        ...record.fields.find((savedField) => savedField.key === field.key),
-      })),
+      mode,
+      fields: mergeTitleGeneratorFields(record.fields),
       prompt: record.prompt,
       results: record.results,
+      history: current.modes[mode].history,
+      modes: {
+        ...current.modes,
+        [mode]: {
+          ...current.modes[mode],
+          fields: mergeTitleGeneratorFields(record.fields),
+          results: record.results,
+        },
+      },
     }));
     setTitleGeneratorError("");
+  }
+
+  function loadDescriptionGeneratorHistory(
+    record: DescriptionGeneratorHistoryRecord,
+  ) {
+    if (titleGenerator.mode !== record.mode) {
+      updateTitleGeneratorMode(record.mode);
+    }
+    setDescriptionGenerator((current) => ({
+      ...current,
+      prompt: record.prompt,
+      fields: mergeDescriptionGeneratorFields(record.fields),
+      results: record.results,
+      history: [
+        {
+          ...record,
+          fields: mergeDescriptionGeneratorFields(record.fields),
+        },
+        ...current.history.filter((item) => item.id !== record.id),
+      ].slice(0, 30),
+    }));
+    setDescriptionGeneratorError("");
   }
 
   async function handleGenerateTitles() {
     setTitleGenerating(true);
     setTitleGeneratorError("");
 
-    const savedAiSettings = window.localStorage.getItem(aiSettingsStorageKey);
-    const aiSettings = savedAiSettings
-      ? normalizeAiSettings(
-          JSON.parse(savedAiSettings) as Partial<AiModelSettings>,
-        )
-      : null;
-
     try {
+      const aiSettings = readLocalAiSettings(aiSettingsStorageKey);
       const response = await fetch("/api/listing-ai/generate-title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...titleGenerator,
-          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
+          ...activeTitleGenerator,
+          aiSettings: aiSettings ?? undefined,
         }),
       });
       const data = (await response.json()) as {
@@ -490,9 +816,72 @@ export function ListingAiWorkbench() {
 
       const nextResults = data.results!.slice(0, 3);
       setTitleGenerator((current) => {
+        const currentModeDraft = current.modes[current.mode];
         const record: TitleGeneratorHistoryRecord = {
-          id: crypto.randomUUID(),
+          id: createBrowserId(),
           createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+          mode: current.mode,
+          fields: currentModeDraft.fields.map((field) => ({ ...field })),
+          prompt: current.prompt,
+          results: nextResults,
+        };
+        const nextModeDraft = {
+          ...currentModeDraft,
+          results: nextResults,
+          history: [record, ...currentModeDraft.history].slice(0, 30),
+        };
+
+        return {
+          ...current,
+          fields: nextModeDraft.fields,
+          results: nextResults,
+          history: nextModeDraft.history,
+          modes: {
+            ...current.modes,
+            [current.mode]: nextModeDraft,
+          },
+        };
+      });
+    } catch (err) {
+      setTitleGeneratorError(
+        err instanceof Error ? err.message : "标题生成失败",
+      );
+    } finally {
+      setTitleGenerating(false);
+    }
+  }
+
+  async function handleGenerateDescriptions() {
+    setDescriptionGenerating(true);
+    setDescriptionGeneratorError("");
+
+    try {
+      const aiSettings = readLocalAiSettings(aiSettingsStorageKey);
+      const response = await fetch("/api/listing-ai/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: titleGenerator.mode,
+          prompt: descriptionGenerator.prompt,
+          titleFields: activeTitleGenerator.fields,
+          descriptionFields: descriptionGenerator.fields,
+          aiSettings: aiSettings ?? undefined,
+        }),
+      });
+      const data = (await response.json()) as {
+        results?: string[];
+        error?: string;
+      };
+
+      if (!response.ok || !data.results?.length)
+        throw new Error(data.error || "五点描述生成失败");
+
+      const nextResults = data.results!.slice(0, 5);
+      setDescriptionGenerator((current) => {
+        const record: DescriptionGeneratorHistoryRecord = {
+          id: createBrowserId(),
+          createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+          mode: titleGenerator.mode,
           fields: current.fields.map((field) => ({ ...field })),
           prompt: current.prompt,
           results: nextResults,
@@ -505,28 +894,38 @@ export function ListingAiWorkbench() {
         };
       });
     } catch (err) {
-      setTitleGeneratorError(
-        err instanceof Error ? err.message : "标题生成失败",
+      setDescriptionGeneratorError(
+        err instanceof Error ? err.message : "五点描述生成失败",
       );
     } finally {
-      setTitleGenerating(false);
+      setDescriptionGenerating(false);
     }
   }
 
   async function handleOptimize() {
     setLoading(true);
     setError("");
+    const aiSettings = readLocalAiSettings(aiSettingsStorageKey);
 
-    const savedAiSettings = window.localStorage.getItem(aiSettingsStorageKey);
-    const aiSettings = savedAiSettings
-      ? normalizeAiSettings(
-          JSON.parse(savedAiSettings) as Partial<AiModelSettings>,
-        )
-      : null;
+    const titleAsin =
+      activeTitleGenerator.fields
+        .find((field) => field.key === "asin")
+        ?.value.trim() ?? "";
+    const titleChineseName =
+      activeTitleGenerator.fields
+        .find((field) => field.key === "productChineseName")
+        ?.value.trim() ?? "";
+    const titleProductFacts =
+      activeTitleGenerator.fields
+        .find((field) => field.key === "productFeatures")
+        ?.value.trim() ?? "";
 
     const payload: ListingOptimizationRequest = {
       ...input,
-      productType: input.productType || input.productEnglishName || input.asin,
+      asin: input.asin.trim() || titleAsin,
+      productChineseName: input.productChineseName.trim() || titleChineseName,
+      productFacts: input.productFacts.trim() || titleProductFacts,
+      productType: input.productType || input.productEnglishName || titleAsin,
       competitorInfo,
       imageRequirements,
     };
@@ -537,7 +936,7 @@ export function ListingAiWorkbench() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
+          aiSettings: aiSettings ? normalizeAiSettings(aiSettings) : undefined,
         } satisfies ListingOptimizationApiRequest),
       });
       const data = (await response.json()) as {
@@ -566,7 +965,7 @@ export function ListingAiWorkbench() {
       (records.filter((record) => record.productName === productName).length ||
         0) + 1;
     const record: SavedRecord = {
-      id: crypto.randomUUID(),
+      id: createBrowserId(),
       version,
       createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
       submitter: payload.submitter || "未填写",
@@ -610,23 +1009,29 @@ export function ListingAiWorkbench() {
       return;
     }
 
-    const savedAiSettings = window.localStorage.getItem(aiSettingsStorageKey);
-    const aiSettings = savedAiSettings
-      ? normalizeAiSettings(
-          JSON.parse(savedAiSettings) as Partial<AiModelSettings>,
-        )
-      : null;
-
     setImageGenerating(true);
     setImageGeneratorError("");
 
     try {
+      const aiSettings = readLocalAiSettings(aiImageSettingsStorageKey);
       const response = await fetch("/api/listing-ai/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...imageGenerator,
-          aiSettings: aiSettings?.apiKey.trim() ? aiSettings : undefined,
+          prompt: imageGenerator.prompt,
+          ownViews: imageGeneratorViews.reduce(
+            (views, view) => ({
+              ...views,
+              [view.key]: imageGenerator.ownViews[view.key].map(
+                compactImageForRequest,
+              ),
+            }),
+            {} as ImageGeneratorDraft["ownViews"],
+          ),
+          competitorImages: imageGenerator.competitorImages.map(
+            compactImageForRequest,
+          ),
+          aiSettings: aiSettings ?? undefined,
         }),
       });
       const data = (await response.json()) as {
@@ -638,13 +1043,25 @@ export function ListingAiWorkbench() {
         throw new Error(data.error || "图片生成失败，请检查模型是否支持图片生成。");
       }
 
+      const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
       setImageGenerator((current) => ({
         ...current,
         generatedImages: [...data.images!, ...current.generatedImages].slice(
           0,
           12,
         ),
-        lastRunAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+        history: [
+          {
+            id: createBrowserId(),
+            createdAt,
+            prompt: current.prompt,
+            ownViewCount: viewCount,
+            competitorImageCount: current.competitorImages.length,
+            images: data.images!,
+          },
+          ...current.history,
+        ].slice(0, 30),
+        lastRunAt: createdAt,
       }));
     } catch (error) {
       setImageGeneratorError(
@@ -685,16 +1102,26 @@ export function ListingAiWorkbench() {
       <main>
         {activeTab === "input" ? (
           <ListingAiInputPanel
-            productFactsCount={productFactsCount}
-            titleGenerator={titleGenerator}
+            titleGenerator={activeTitleGenerator}
+            descriptionGenerator={descriptionGenerator}
+            descriptionSharedFields={descriptionSharedFields}
             titleGenerating={titleGenerating}
+            descriptionGenerating={descriptionGenerating}
             titleGeneratorError={titleGeneratorError}
+            descriptionGeneratorError={descriptionGeneratorError}
             titlePromptOpen={titlePromptOpen}
+            descriptionPromptOpen={descriptionPromptOpen}
+            updateTitleGeneratorMode={updateTitleGeneratorMode}
             updateTitleGeneratorField={updateTitleGeneratorField}
+            updateDescriptionGeneratorField={updateDescriptionGeneratorField}
             setTitleGenerator={setTitleGenerator}
+            setDescriptionGenerator={setDescriptionGenerator}
             setTitlePromptOpen={setTitlePromptOpen}
+            setDescriptionPromptOpen={setDescriptionPromptOpen}
             onGenerateTitles={handleGenerateTitles}
+            onGenerateDescriptions={handleGenerateDescriptions}
             onLoadTitleGeneratorHistory={loadTitleGeneratorHistory}
+            onLoadDescriptionGeneratorHistory={loadDescriptionGeneratorHistory}
           />
         ) : null}
         {activeTab === "visual" ? (
@@ -703,6 +1130,8 @@ export function ListingAiWorkbench() {
             ownImages={ownImages}
             setCompetitors={setCompetitors}
             setOwnImages={setOwnImages}
+            cellStyles={cellStyles}
+            setCellStyles={setCellStyles}
             input={input}
             update={update}
             error={error}
@@ -738,6 +1167,7 @@ export function ListingAiWorkbench() {
             onRunImageGenerator={handleRunImageGenerator}
           />
         ) : null}
+        {activeTab === "chat" ? <ListingAiChatPanel /> : null}
         {activeTab === "review" ? (
           <ReviewHistorySection
             result={result}
@@ -749,68 +1179,6 @@ export function ListingAiWorkbench() {
       </main>
     </div>
   );
-}
-
-function readLocalListingAiRecords() {
-  try {
-    const saved = window.localStorage.getItem(storageKey);
-
-    return saved ? (JSON.parse(saved) as SavedRecord[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function readLocalListingAiDraft() {
-  try {
-    const draft = window.localStorage.getItem(draftStorageKey);
-
-    return draft ? (JSON.parse(draft) as Partial<WorkspaceDraft>) : null;
-  } catch {
-    window.localStorage.removeItem(draftStorageKey);
-    return null;
-  }
-}
-
-function normalizeWorkspaceDraft(draft?: Partial<WorkspaceDraft> | null): WorkspaceDraft {
-  return createPersistableDraft({
-    input: {
-      ...initialInput,
-      ...draft?.input,
-    },
-    competitors: initialCompetitors.map((competitor, index) => ({
-      ...competitor,
-      ...draft?.competitors?.[index],
-    })),
-    ownImages: {
-      structureNotes: "",
-      mainImage: [],
-      images: [],
-      imageNotes: [],
-      sales: "",
-      price: "",
-      rating: "",
-      reviewCount: "",
-      ...draft?.ownImages,
-    },
-    titleGenerator: {
-      ...initialTitleGenerator,
-      ...draft?.titleGenerator,
-      fields: initialTitleGenerator.fields.map((field) => ({
-        ...field,
-        ...draft?.titleGenerator?.fields?.find((savedField) => savedField.key === field.key),
-      })),
-    },
-    imageGenerator: {
-      ...initialImageGenerator,
-      ...draft?.imageGenerator,
-      ownViews: {
-        ...initialImageGenerator.ownViews,
-        ...draft?.imageGenerator?.ownViews,
-      },
-    },
-    activeTab: draft?.activeTab ?? "input",
-  });
 }
 
 async function saveListingAiWorkspace(draft: WorkspaceDraft, records: SavedRecord[]) {
@@ -933,6 +1301,8 @@ function ImagesSection({
   ownImages,
   setCompetitors,
   setOwnImages,
+  cellStyles,
+  setCellStyles,
   input,
   update,
   handleImageUpload,
@@ -941,6 +1311,8 @@ function ImagesSection({
   ownImages: OwnImageDraft;
   setCompetitors: React.Dispatch<React.SetStateAction<CompetitorDraft[]>>;
   setOwnImages: React.Dispatch<React.SetStateAction<OwnImageDraft>>;
+  cellStyles: Record<string, GalleryCellStyle>;
+  setCellStyles: React.Dispatch<React.SetStateAction<Record<string, GalleryCellStyle>>>;
   input: ListingOptimizationRequest;
   update: <K extends keyof ListingOptimizationRequest>(
     key: K,
@@ -962,7 +1334,7 @@ function ImagesSection({
   const [excelError, setExcelError] = useState("");
   const [excelNotice, setExcelNotice] = useState("");
   const [focusedCellKey, setFocusedCellKey] = useState("");
-  const [cellStyles, setCellStyles] = useState<Record<string, GalleryCellStyle>>({});
+  const [clearGalleryConfirmOpen, setClearGalleryConfirmOpen] = useState(false);
   const selectedTextRangeRef = useRef<{
     styleKey: string;
     range: { start: number; end: number };
@@ -988,21 +1360,6 @@ function ImagesSection({
   };
   const imageColumns = [...competitorColumns, mineColumn];
   const tableWidth = 144 + competitorColumns.length * 260 + 260;
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(galleryCellStylesStorageKey);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as Record<string, GalleryCellStyle>;
-      if (parsed && typeof parsed === "object") setCellStyles(parsed);
-    } catch {
-      window.localStorage.removeItem(galleryCellStylesStorageKey);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(galleryCellStylesStorageKey, JSON.stringify(cellStyles));
-  }, [cellStyles]);
 
   function toggleFocusedCellStyle(styleKey: keyof GalleryCellStyle) {
     if (!focusedCellKey) return;
@@ -1178,6 +1535,34 @@ function ImagesSection({
     setCompetitors((current) =>
       current.length > 1 ? current.slice(0, current.length - 1) : current,
     );
+  }
+
+  function clearGallery() {
+    setCompetitors((current) => current.map(() => createEmptyCompetitor()));
+    setOwnImages((current) => ({
+      ...current,
+      structureNotes: "",
+      mainImage: [],
+      images: [],
+      imageNotes: [],
+      sales: "",
+      price: "",
+      rating: "",
+      reviewCount: "",
+    }));
+    setCellStyles({});
+    const clearInputKeys: Array<keyof ListingOptimizationRequest> = [
+      "asin",
+      "mainSellingPoint1",
+      "variationInfo",
+      "currentTitle",
+      "currentBullets",
+      "aplusRequirements",
+    ];
+    clearInputKeys.forEach((key) => update(key, ""));
+    setFocusedCellKey("");
+    selectedTextRangeRef.current = null;
+    setClearGalleryConfirmOpen(false);
   }
 
   function updateImageNote(index: number, value: string) {
@@ -1859,6 +2244,16 @@ function ImagesSection({
               )}
               导出 Excel
             </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={excelBusy}
+              onClick={() => setClearGalleryConfirmOpen(true)}
+              title="清空当前图片表格中的图片和文字"
+            >
+              <Trash2 className="h-4 w-4" />
+              清空图片和文字
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -2080,6 +2475,41 @@ function ImagesSection({
           onClose={() => setPreviewImage(null)}
         />
       ) : null}
+      {clearGalleryConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-6 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => setClearGalleryConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-gallery-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="clear-gallery-title" className="text-lg font-bold text-foreground">
+              确认清空图片和文字？
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              将清空当前 Images &amp; A+ 页中的所有图片、备注、竞品资料、标题、五点和 A+ 内容。此操作只影响当前草稿，不能自动恢复。
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setClearGalleryConfirmOpen(false)}
+              >
+                取消
+              </Button>
+              <Button variant="danger" size="sm" onClick={clearGallery}>
+                <Trash2 className="h-4 w-4" />
+                确认清空
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2089,6 +2519,8 @@ function VisualAplusSection({
   ownImages,
   setCompetitors,
   setOwnImages,
+  cellStyles,
+  setCellStyles,
   input,
   update,
   error,
@@ -2102,6 +2534,8 @@ function VisualAplusSection({
   ownImages: OwnImageDraft;
   setCompetitors: React.Dispatch<React.SetStateAction<CompetitorDraft[]>>;
   setOwnImages: React.Dispatch<React.SetStateAction<OwnImageDraft>>;
+  cellStyles: Record<string, GalleryCellStyle>;
+  setCellStyles: React.Dispatch<React.SetStateAction<Record<string, GalleryCellStyle>>>;
   input: ListingOptimizationRequest;
   update: <K extends keyof ListingOptimizationRequest>(
     key: K,
@@ -2124,6 +2558,8 @@ function VisualAplusSection({
         ownImages={ownImages}
         setCompetitors={setCompetitors}
         setOwnImages={setOwnImages}
+        cellStyles={cellStyles}
+        setCellStyles={setCellStyles}
         input={input}
         update={update}
         handleImageUpload={handleImageUpload}
@@ -2357,7 +2793,7 @@ function MineColumn({
           </p>
         </InfoField>
 
-        <InfoField label="ASIN" className="overflow-hidden">
+        <InfoField label="ASIN（可选）" className="overflow-hidden">
           <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
             <input
               className={fieldClass}

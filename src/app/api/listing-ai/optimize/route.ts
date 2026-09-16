@@ -5,11 +5,16 @@ import type { ListingOptimizationApiRequest, ListingOptimizationRequest } from "
 
 export const runtime = "nodejs";
 
-const requiredFields: Array<keyof ListingOptimizationRequest> = ["marketplace", "language", "tone", "asin", "productFacts"];
+const requiredFields: Array<keyof ListingOptimizationRequest> = [
+  "marketplace",
+  "language",
+  "tone",
+  "productFacts",
+];
 
 export async function POST(request: Request) {
   try {
-    const permission = await requireApiPermission("listingAi", "create");
+    const permission = await requireApiPermission("listingAi", "create", request);
 
     if (!permission.ok) {
       return permission.response;

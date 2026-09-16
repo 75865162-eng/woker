@@ -5,11 +5,16 @@ APP_DIR="${APP_DIR:-/opt/amazon-ad-bulk-operation}"
 RELEASES_DIR="${RELEASES_DIR:-/opt/amazon-ad-bulk-releases}"
 CURRENT_LINK="${CURRENT_LINK:-/opt/amazon-ad-bulk-current}"
 RELEASE_LOG="${RELEASE_LOG:-/opt/amazon-ad-bulk-release-log.jsonl}"
+VERSION_STATE_FILE="${VERSION_STATE_FILE:-/opt/amazon-ad-bulk-version.json}"
+RELEASE_RESULT_FILE="${RELEASE_RESULT_FILE:-}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 SOURCE_BRANCH="${SOURCE_BRANCH:-unknown}"
 SOURCE_COMMIT="${SOURCE_COMMIT:-unknown}"
+EXPECTED_ARTIFACT_SHA256="${EXPECTED_ARTIFACT_SHA256:-}"
 INSTALL_DEPS_ON_SERVER="${INSTALL_DEPS_ON_SERVER:-false}"
 RUN_BOOTSTRAP_SEED="${RUN_BOOTSTRAP_SEED:-false}"
+HEALTH_CHECK_ATTEMPTS="${HEALTH_CHECK_ATTEMPTS:-30}"
+HEALTH_CHECK_INTERVAL_SECONDS="${HEALTH_CHECK_INTERVAL_SECONDS:-2}"
 ARTIFACT_PATH="${1:-}"
 
 if [ -z "$ARTIFACT_PATH" ]; then
@@ -22,12 +27,39 @@ if [ ! -f "$ARTIFACT_PATH" ]; then
   exit 1
 fi
 
+actual_artifact_sha256="$(sha256sum "$ARTIFACT_PATH" | awk '{print $1}')"
+if [ -n "$EXPECTED_ARTIFACT_SHA256" ] && [ "$actual_artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+  echo "Artifact SHA256 verification failed." >&2
+  exit 1
+fi
+
 release_started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 release_stamp="$(date -u +"%Y%m%d-%H%M%S")"
 safe_branch="$(printf '%s' "$SOURCE_BRANCH" | tr -c 'A-Za-z0-9._-' '-')"
 release_id="${release_stamp}-${safe_branch}-${SOURCE_COMMIT}"
 release_dir="${RELEASES_DIR}/${release_id}"
 extract_dir="${release_dir}.extracting"
+app_version_label=""
+previous_release_dir=""
+release_switched="false"
+
+read_previous_version() {
+  if [ -f "$VERSION_STATE_FILE" ]; then
+    sed -n 's/.*"appVersion":"\([^"]*\)".*/\1/p' "$VERSION_STATE_FILE" | tail -n 1
+  fi
+}
+
+next_version_label() {
+  local current="${1:-}"
+  if [[ "$current" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local patch="${BASH_REMATCH[3]}"
+    echo "v${major}.${minor}.$((patch + 1))"
+  else
+    echo "v0.0.1"
+  fi
+}
 
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -55,7 +87,118 @@ cleanup_failed_release() {
   fi
 }
 
-trap 'write_release_log failed "artifact release failed before service switch"; cleanup_failed_release' ERR
+write_release_result() {
+  local result_path="$1"
+  local status="$2"
+  local failure_phase="$3"
+  local rollback_status="$4"
+  local rollback_release="$5"
+  local error_message="$6"
+  local health_status="$7"
+  cat > "$result_path" <<JSON
+{
+  "status": "$(json_escape "$status")",
+  "releaseId": "$(json_escape "$release_id")",
+  "commit": "$(json_escape "$SOURCE_COMMIT")",
+  "artifactSha256": "$actual_artifact_sha256",
+  "healthUrl": "$(json_escape "${health_url:-}")",
+  "health": "$(json_escape "$health_status")",
+  "failurePhase": "$(json_escape "$failure_phase")",
+  "rollback": {
+    "status": "$(json_escape "$rollback_status")",
+    "releaseId": "$(json_escape "$rollback_release")",
+    "database": "not_rolled_back"
+  },
+  "error": "$(json_escape "$error_message")",
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+JSON
+}
+
+wait_for_health() {
+  local attempt
+
+  for ((attempt = 1; attempt <= HEALTH_CHECK_ATTEMPTS; attempt += 1)); do
+    if curl --fail --silent --show-error --max-time 15 "$health_url" >/dev/null; then
+      return 0
+    fi
+
+    if [ "$attempt" -lt "$HEALTH_CHECK_ATTEMPTS" ]; then
+      sleep "$HEALTH_CHECK_INTERVAL_SECONDS"
+    fi
+  done
+
+  return 1
+}
+
+install_runtime_from_release() {
+  local runtime_release="$1"
+  install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
+  install -m 0644 "$runtime_release/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
+  install -m 0644 "$runtime_release/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service
+  systemctl daemon-reload
+  systemctl enable amazon-web amazon-worker amazon-image-upscale-worker
+  systemctl restart amazon-web amazon-worker amazon-image-upscale-worker
+  sh "$runtime_release/deploy/caddy/run-caddy.sh"
+}
+
+rollback_application_release() {
+  local failed_phase="$1"
+  local failure_message="$2"
+  local result_path="${RELEASE_RESULT_FILE:-$release_dir/RELEASE-RESULT.json}"
+  local rollback_status="not_attempted"
+  local rollback_release=""
+  local rollback_health="not_checked"
+
+  if [ ! -d "$release_dir" ]; then
+    result_path="${RELEASE_RESULT_FILE:-$RELEASES_DIR/${release_id}.RELEASE-RESULT.json}"
+  fi
+  mkdir -p "$(dirname "$result_path")"
+
+  if [ "$release_switched" != "true" ]; then
+    cleanup_failed_release
+    write_release_log failed "$failed_phase: $failure_message; database not rolled back"
+    write_release_result "$result_path" "failed" "$failed_phase" "$rollback_status" "$rollback_release" "$failure_message" "failed"
+    return 1
+  fi
+
+  if [ -z "$previous_release_dir" ] || [ ! -d "$previous_release_dir" ]; then
+    rollback_status="unavailable"
+    write_release_log failed "$failed_phase: $failure_message; no previous release available; database not rolled back"
+    write_release_result "$result_path" "failed" "$failed_phase" "$rollback_status" "$rollback_release" "$failure_message" "failed"
+    return 1
+  fi
+
+  rollback_release="$(basename "$previous_release_dir")"
+  if ln -sfn "$previous_release_dir" "$CURRENT_LINK" \
+    && install_runtime_from_release "$previous_release_dir" \
+    && wait_for_health; then
+    rollback_status="succeeded"
+    rollback_health="passed"
+    write_release_log rolled_back "$failed_phase: $failure_message; application rolled back to $rollback_release; database not rolled back"
+    write_release_result "$result_path" "failed" "$failed_phase" "$rollback_status" "$rollback_release" "$failure_message" "$rollback_health"
+  else
+    rollback_status="failed"
+    rollback_health="failed"
+    write_release_log rollback_failed "$failed_phase: $failure_message; application rollback to $rollback_release failed; database not rolled back"
+    write_release_result "$result_path" "failed" "$failed_phase" "$rollback_status" "$rollback_release" "$failure_message" "$rollback_health"
+  fi
+
+  return 1
+}
+
+on_release_error() {
+  local exit_code="$?"
+  trap - ERR
+  if [ "${release_switched:-false}" = "true" ] && [ -n "${health_url:-}" ]; then
+    rollback_application_release "runtime_verification" "release command failed with exit code $exit_code" || true
+  else
+    rollback_application_release "pre_switch" "release command failed with exit code $exit_code" || true
+  fi
+  exit "$exit_code"
+}
+
+trap on_release_error ERR
 
 cd "$APP_DIR"
 
@@ -66,8 +209,19 @@ rm -rf "$extract_dir"
 mkdir -p "$extract_dir"
 tar -xzf "$ARTIFACT_PATH" -C "$extract_dir"
 
-if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ]; then
+previous_version="$(read_previous_version)"
+app_version_label="$(next_version_label "${previous_version:-}")"
+previous_release_dir="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+health_url="${HEALTH_URL:-http://127.0.0.1:3000/login}"
+
+if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ] || [ ! -f "$extract_dir/RELEASE-METADATA.json" ]; then
   echo "Artifact is not a complete release package." >&2
+  exit 1
+fi
+
+metadata_commit="$(node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(data.commit || "")' "$extract_dir/RELEASE-METADATA.json")"
+if [ "$SOURCE_COMMIT" != "unknown" ] && [ "$metadata_commit" != "$SOURCE_COMMIT" ]; then
+  echo "Artifact commit does not match requested source commit." >&2
   exit 1
 fi
 
@@ -112,29 +266,96 @@ escaped_release_id="$(json_escape "$release_id")"
 escaped_source_branch="$(json_escape "$SOURCE_BRANCH")"
 escaped_source_commit="$(json_escape "$SOURCE_COMMIT")"
 escaped_app_dir="$(json_escape "$APP_DIR")"
+escaped_app_version_label="$(json_escape "$app_version_label")"
 cat > "$extract_dir/RELEASE.json" <<JSON
 {
   "releaseId": "$escaped_release_id",
   "branch": "$escaped_source_branch",
   "commit": "$escaped_source_commit",
   "builtAt": "$release_started_at",
+  "artifactSha256": "$actual_artifact_sha256",
+  "appVersion": "$escaped_app_version_label",
   "appDir": "$escaped_app_dir",
   "source": "ci-artifact"
 }
 JSON
 
+cat > "$VERSION_STATE_FILE" <<JSON
+{
+  "appVersion": "$escaped_app_version_label",
+  "releaseId": "$escaped_release_id",
+  "updatedAt": "$release_started_at"
+}
+JSON
+
 mv "$extract_dir" "$release_dir"
 ln -sfn "$release_dir" "$CURRENT_LINK"
+release_switched="true"
+install_runtime_from_release "$release_dir"
 
-install -m 0644 "$release_dir/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
-install -m 0644 "$release_dir/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
-systemctl daemon-reload
-systemctl enable amazon-web amazon-worker
-systemctl restart amazon-web amazon-worker
+if ! wait_for_health; then
+  trap - ERR
+  rollback_application_release "health_check" "HTTP health check failed: $health_url"
+  exit 1
+fi
 
-sh "$release_dir/deploy/caddy/run-caddy.sh"
+trap - ERR
 
-write_release_log deployed "artifact deployed and services restarted successfully"
+web_status="$(systemctl is-active amazon-web 2>/dev/null || true)"
+worker_status="$(systemctl is-active amazon-worker 2>/dev/null || true)"
+image_worker_status="$(systemctl is-active amazon-image-upscale-worker 2>/dev/null || true)"
+postgres_container="$(docker compose ps -q postgres)"
+redis_container="$(docker compose ps -q redis)"
+if [ -n "$postgres_container" ]; then
+  postgres_status="$(docker inspect --format='{{.State.Status}}' "$postgres_container" 2>/dev/null || true)"
+else
+  postgres_status="missing"
+fi
+if [ -n "$redis_container" ]; then
+  redis_status="$(docker inspect --format='{{.State.Status}}' "$redis_container" 2>/dev/null || true)"
+else
+  redis_status="missing"
+fi
+disk_available_kb="$(df -Pk / | awk 'NR == 2 {print $4}')"
+runtime_status="passed"
+if [ "$web_status" != "active" ] || [ "$worker_status" != "active" ] || [ "$image_worker_status" != "active" ] || [ "$postgres_status" != "running" ] || [ "$redis_status" != "running" ]; then
+  runtime_status="failed"
+fi
+if [ "$runtime_status" != "passed" ]; then
+  trap - ERR
+  rollback_application_release "runtime_status" "one or more runtime services are not healthy"
+  exit 1
+fi
+result_path="${RELEASE_RESULT_FILE:-$release_dir/RELEASE-RESULT.json}"
+cat > "$result_path" <<JSON
+{
+  "status": "$runtime_status",
+  "releaseId": "$(json_escape "$release_id")",
+  "commit": "$(json_escape "$SOURCE_COMMIT")",
+  "artifactSha256": "$actual_artifact_sha256",
+  "healthUrl": "$(json_escape "$health_url")",
+  "health": "passed",
+  "rollback": {
+    "status": "not_needed",
+    "database": "not_rolled_back"
+  },
+  "services": {
+    "amazon-web": "$(json_escape "$web_status")",
+    "amazon-worker": "$(json_escape "$worker_status")",
+    "amazon-image-upscale-worker": "$(json_escape "$image_worker_status")",
+    "postgres": "$(json_escape "$postgres_status")",
+    "redis": "$(json_escape "$redis_status")"
+  },
+  "diskAvailableKb": $disk_available_kb,
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+JSON
+
+if [ "$runtime_status" = "passed" ]; then
+  write_release_log deployed "artifact deployed and services restarted successfully"
+else
+  write_release_log failed "artifact passed HTTP health check but runtime status verification failed; database not rolled back"
+fi
 
 find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r | awk "NR>${KEEP_RELEASES}" | while read -r old_release; do
   if [ "$(readlink -f "$CURRENT_LINK")" != "$(readlink -f "$old_release")" ]; then
@@ -142,9 +363,5 @@ find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r | awk "NR>${KEEP_
   fi
 done
 
-trap - ERR
-
-systemctl --no-pager --full status amazon-web amazon-worker
-docker compose ps
-df -h /
+cat "$result_path"
 echo "Current release: $release_id"
