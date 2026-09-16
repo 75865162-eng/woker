@@ -13,6 +13,8 @@ SOURCE_COMMIT="${SOURCE_COMMIT:-unknown}"
 EXPECTED_ARTIFACT_SHA256="${EXPECTED_ARTIFACT_SHA256:-}"
 INSTALL_DEPS_ON_SERVER="${INSTALL_DEPS_ON_SERVER:-false}"
 RUN_BOOTSTRAP_SEED="${RUN_BOOTSTRAP_SEED:-false}"
+HEALTH_CHECK_ATTEMPTS="${HEALTH_CHECK_ATTEMPTS:-30}"
+HEALTH_CHECK_INTERVAL_SECONDS="${HEALTH_CHECK_INTERVAL_SECONDS:-2}"
 ARTIFACT_PATH="${1:-}"
 
 if [ -z "$ARTIFACT_PATH" ]; then
@@ -113,6 +115,22 @@ write_release_result() {
 JSON
 }
 
+wait_for_health() {
+  local attempt
+
+  for ((attempt = 1; attempt <= HEALTH_CHECK_ATTEMPTS; attempt += 1)); do
+    if curl --fail --silent --show-error --max-time 15 "$health_url" >/dev/null; then
+      return 0
+    fi
+
+    if [ "$attempt" -lt "$HEALTH_CHECK_ATTEMPTS" ]; then
+      sleep "$HEALTH_CHECK_INTERVAL_SECONDS"
+    fi
+  done
+
+  return 1
+}
+
 install_runtime_from_release() {
   local runtime_release="$1"
   install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
@@ -154,7 +172,7 @@ rollback_application_release() {
   rollback_release="$(basename "$previous_release_dir")"
   if ln -sfn "$previous_release_dir" "$CURRENT_LINK" \
     && install_runtime_from_release "$previous_release_dir" \
-    && curl --fail --silent --show-error --max-time 15 "$health_url" >/dev/null; then
+    && wait_for_health; then
     rollback_status="succeeded"
     rollback_health="passed"
     write_release_log rolled_back "$failed_phase: $failure_message; application rolled back to $rollback_release; database not rolled back"
@@ -275,7 +293,7 @@ ln -sfn "$release_dir" "$CURRENT_LINK"
 release_switched="true"
 install_runtime_from_release "$release_dir"
 
-if ! curl --fail --silent --show-error --max-time 15 "$health_url" >/dev/null; then
+if ! wait_for_health; then
   trap - ERR
   rollback_application_release "health_check" "HTTP health check failed: $health_url"
   exit 1
