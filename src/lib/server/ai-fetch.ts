@@ -7,8 +7,12 @@ let cachedDispatcher: ProxyAgent | undefined;
 export interface AiFetchResponse {
   ok: boolean;
   status: number;
+  headers: {
+    get(name: string): string | null;
+  };
   json(): Promise<unknown>;
   text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
 }
 
 export interface AiFetchInit {

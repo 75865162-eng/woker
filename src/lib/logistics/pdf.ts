@@ -209,9 +209,12 @@ function normalizePdfText(text: string) {
 }
 
 function getPageCount(pdfText: string) {
-  const matched = pdfText.match(/\/Count\s+(\d+)/);
-  const parsed = matched ? Number(matched[1]) : null;
-  return parsed && Number.isFinite(parsed) ? parsed : 1;
+  // PDF page trees contain a /Count on every subtree. The first one is
+  // commonly a child count rather than the document's total page count.
+  const counts = Array.from(pdfText.matchAll(/\/Count\s+(\d+)/g))
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return counts.length ? Math.max(...counts) : 1;
 }
 
 function parseShipmentTitle(titleText: string) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { generateListingAiImages, type ImageGeneratorRequest } from "@/lib/listing-ai/image-generation";
+import { resolveUserAiImageSettings } from "@/lib/server/user-ai-settings";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -16,7 +17,10 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as ImageGeneratorRequest;
     const scope = workspaceScopeFromRequest(request);
-    const images = await generateListingAiImages(body, user, scope);
+    const aiSettings = body.aiSettings?.apiKey?.trim()
+      ? body.aiSettings
+      : await resolveUserAiImageSettings(user, scope);
+    const images = await generateListingAiImages({ ...body, aiSettings }, user, scope);
     return NextResponse.json({ images });
   } catch (error) {
     const message =

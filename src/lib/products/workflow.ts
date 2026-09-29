@@ -119,6 +119,7 @@ export function formatWorkflowDate(value?: string) {
 
 export function buildWorkflowEvent(input: {
   stage: ProductWorkflowStage;
+  actorUserId?: string;
   actorName?: string;
   assigneeName?: string;
   note?: string;
@@ -130,6 +131,7 @@ export function buildWorkflowEvent(input: {
     id: `flow-${createdAt.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
     stage: input.stage,
     stageLabel: productWorkflowStageLabels[input.stage],
+    actorUserId: input.actorUserId,
     actorName: input.actorName,
     assigneeName: input.assigneeName,
     note: input.note,
@@ -137,24 +139,14 @@ export function buildWorkflowEvent(input: {
   };
 }
 
-export function stampNewWorkflowEventActors(
-  product: Product,
-  existingProduct: Pick<Product, "workflowHistory"> | undefined,
-  actorName?: string,
-): Product {
-  const normalizedActorName = actorName?.trim();
-  if (!normalizedActorName || !product.workflowHistory?.length) {
-    return product;
+export function formatWorkflowActor(event: Pick<ProductWorkflowEvent, "actorUserId" | "actorName">) {
+  if (event.actorUserId) {
+    return event.actorName?.trim() || "未知账号";
   }
 
-  const existingEventIds = new Set((existingProduct?.workflowHistory ?? []).map((event) => event.id));
-  const workflowHistory = product.workflowHistory.map((event) =>
-    existingEventIds.has(event.id)
-      ? event
-      : { ...event, actorName: normalizedActorName },
-  );
-
-  return { ...product, workflowHistory };
+  return event.actorName?.trim()
+    ? `${event.actorName.trim()}（历史数据 / 身份不可追溯）`
+    : "历史数据 / 身份不可追溯";
 }
 
 export function appendWorkflowEvent(product: Product, event: ProductWorkflowEvent): ProductWorkflowEvent[] {

@@ -18,6 +18,7 @@ import type { Product, ProductDraft, ProductImageAsset, ProductListItem, Product
 import {
   buildWorkflowEvent,
   createWorkflowDueAt,
+  formatWorkflowActor,
   formatWorkflowDate,
   getCurrentWorkflowAssignee,
   getProductWorkflowStage,
@@ -368,6 +369,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   const listSummaryRef = useRef(listSummary);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
   const shellUser = useAppShellUser();
+  const currentUserId = shellUser?.userId || "";
   const creatorName = shellUser?.userName?.trim() || "当前创建人";
   const currentUserName = creatorName === "当前创建人" ? "" : creatorName.trim();
   const teamMembers = useMemo(() => accountsToTeamMembers(teamAccounts), [teamAccounts]);
@@ -1318,6 +1320,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               products={products}
               nextSku={getNextSku(products)}
               creatorName={creatorName}
+              creatorUserId={currentUserId}
               detailReady={detailReady}
             opsOptions={opsOptions}
             designerOptions={designerOptions}
@@ -1342,6 +1345,7 @@ function ProductEditor({
   products,
   nextSku,
   creatorName,
+  creatorUserId,
   detailReady,
   opsOptions,
   designerOptions,
@@ -1352,6 +1356,7 @@ function ProductEditor({
   products: Product[];
   nextSku: string;
   creatorName: string;
+  creatorUserId: string;
   detailReady: boolean;
   opsOptions: string[];
   designerOptions: string[];
@@ -1470,6 +1475,7 @@ function ProductEditor({
 
     const event = buildWorkflowEvent({
       stage,
+      actorUserId: creatorUserId || undefined,
       actorName: creatorName,
       assigneeName,
       note,
@@ -1508,6 +1514,7 @@ function ProductEditor({
       : [
           buildWorkflowEvent({
             stage: normalizedStage,
+            actorUserId: creatorUserId || undefined,
             actorName: creatorName,
             assigneeName:
               normalizedStage === "ops_confirming"
@@ -2079,7 +2086,7 @@ function ProductEditor({
                             <span className="text-muted">{formatWorkflowDate(event.createdAt)}</span>
                           </div>
                           <p className="mt-1 text-muted">
-                            操作人：{event.actorName || "系统"}
+                            操作人：{formatWorkflowActor(event)}
                             {event.assigneeName ? `；负责人：${event.assigneeName}` : ""}
                             {event.note ? `；${event.note}` : ""}
                           </p>
@@ -2123,6 +2130,7 @@ function ProductEditor({
           productName={draft.chineseName}
           value={draft.operationsProgress}
           currentUser={creatorName}
+          currentUserId={creatorUserId}
           defaultOwner={formatAssigneeList(selectedOps) || selectionOwner}
           onClose={() => setOperationsProgressOpen(false)}
           onApply={(operationsProgress) => {

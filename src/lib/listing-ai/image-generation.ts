@@ -288,7 +288,7 @@ async function getRemoteImagePayload(url: string) {
     return undefined;
   }
 
-  const response = await fetch(url);
+  const response = await fetchAiApi(url, { method: "GET" });
 
   if (!response.ok) {
     throw new Error(`生成图片下载失败：${response.status}`);

@@ -19,3 +19,13 @@ test("logistics PDF parser prefers real warehouse codes over internal UCS2 encod
   assert.equal(summary.renamedFileName, "MDW2-FBA19NV9PY97-7箱.pdf");
   assert.equal(summary.totalBoxes, 7);
 });
+
+test("logistics PDF parser uses the document page count when page tree counts are nested", async () => {
+  const summary = await parsePdfBuffer(
+    textToArrayBuffer("%PDF-1.4\n/Count 10\n/Pages 10\n/Count 20\n%%EOF"),
+    "FBA19RJ9L8ZK-1790673551739.pdf",
+  );
+
+  assert.equal(summary.totalBoxes, 20);
+  assert.equal(summary.pages.length, 20);
+});

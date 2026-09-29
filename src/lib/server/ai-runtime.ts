@@ -1,4 +1,8 @@
-import { normalizeAiSettings, type AiModelSettings } from "@/lib/ai-settings";
+import {
+  normalizeAiImageSettings,
+  normalizeAiSettings,
+  type AiModelSettings,
+} from "@/lib/ai-settings";
 
 type AiSettingsPurpose = "text" | "image";
 
@@ -61,15 +65,19 @@ function resolveEnvAiSettings(purpose: AiSettingsPurpose) {
 
 export function resolveAiSettings(aiSettings?: Partial<AiModelSettings> | null, purpose: AiSettingsPurpose = "text"): AiModelSettings {
   if (aiSettings?.apiKey?.trim()) {
-    return normalizeAiSettings(aiSettings);
+    return purpose === "image" ? normalizeAiImageSettings(aiSettings) : normalizeAiSettings(aiSettings);
   }
 
   const envSettings = resolveEnvAiSettings(purpose);
 
-  return normalizeAiSettings({
+  const mergedSettings = {
     ...envSettings,
     ...aiSettings,
-  });
+  };
+
+  return purpose === "image"
+    ? normalizeAiImageSettings(mergedSettings)
+    : normalizeAiSettings(mergedSettings);
 }
 
 export function buildAiTextEndpoint(settings: Pick<AiModelSettings, "baseUrl" | "wireApi">) {

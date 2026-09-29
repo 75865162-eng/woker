@@ -124,6 +124,30 @@ export function summarizeOperationsProgressChanges(before: ProductOperationProgr
   return changes.length > 6 ? `更新 ${visible} 等 ${changes.length} 项` : `更新 ${visible}`;
 }
 
+function formatProgressActor(input: { actorUserId?: string; name?: string }) {
+  if (input.actorUserId) {
+    return input.name?.trim() || "未知账号";
+  }
+
+  return input.name?.trim()
+    ? `${input.name.trim()}（历史数据 / 身份不可追溯）`
+    : "历史数据 / 身份不可追溯";
+}
+
+export function formatOperationsProgressUpdatedBy(progress: Pick<ProductOperationProgress, "updatedBy" | "updatedByUserId">) {
+  return formatProgressActor({
+    actorUserId: progress.updatedByUserId,
+    name: progress.updatedBy,
+  });
+}
+
+export function formatOperationsProgressChangedBy(event: { changedBy: string; changedByUserId?: string }) {
+  return formatProgressActor({
+    actorUserId: event.changedByUserId,
+    name: event.changedBy,
+  });
+}
+
 function createEmptyStage(id: ProductOperationStageId, owner: string): ProductOperationStage {
   return {
     id,

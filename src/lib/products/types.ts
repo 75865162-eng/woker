@@ -31,6 +31,7 @@ export type ProductWorkflowEvent = {
   id: string;
   stage: ProductWorkflowStage;
   stageLabel: string;
+  actorUserId?: string;
   actorName?: string;
   assigneeName?: string;
   note?: string;
@@ -76,6 +77,7 @@ export type ProductOperationStage = {
 export type ProductOperationProgressEvent = {
   id: string;
   changedAt: string;
+  changedByUserId?: string;
   changedBy: string;
   summary: string;
 };
@@ -87,6 +89,7 @@ export type ProductOperationProgress = {
   forecastPrice: number;
   stages: ProductOperationStage[];
   updatedAt: string;
+  updatedByUserId?: string;
   updatedBy: string;
   history: ProductOperationProgressEvent[];
 };

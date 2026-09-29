@@ -38,6 +38,26 @@ export async function resolveUserAiTextSettings(user: UserScope, scope: Workspac
   }
 }
 
+export async function resolveUserAiImageSettings(user: UserScope, scope: WorkspaceScope): Promise<AiModelSettings> {
+  try {
+    const record = await prisma.aiModelSetting.findUnique({
+      where: {
+        organizationId_workspaceId_userId: {
+          organizationId: user.organizationId,
+          workspaceId: scope.workspaceId,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (!record) return createDefaultAiSettingsBundle().image;
+
+    return normalizeAiSettingsBundle(record.settings as Partial<{ image: AiModelSettings }>).image;
+  } catch {
+    return createDefaultAiSettingsBundle().image;
+  }
+}
+
 export async function resolvePublicUserAiTextSettings(user: UserScope, scope: WorkspaceScope): Promise<AiModelSettingsPublic> {
   return toPublicAiSettings(await resolveUserAiTextSettings(user, scope));
 }

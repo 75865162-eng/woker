@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { uploadProductAttachmentAsset } from "@/lib/products/image-assets";
 import {
   calculateForecastMonthlyRevenue,
+  formatOperationsProgressChangedBy,
+  formatOperationsProgressUpdatedBy,
   isOperationStageComplete,
   isOperationsProgressComplete,
   normalizeOperationsProgress,
@@ -22,6 +24,7 @@ const inputClass = "h-9 w-full rounded-md border border-border bg-white px-2 tex
 export function ProductOperationsProgress({
   productName,
   value,
+  currentUserId,
   currentUser,
   defaultOwner,
   onClose,
@@ -29,6 +32,7 @@ export function ProductOperationsProgress({
 }: {
   productName: string;
   value?: ProductOperationProgress;
+  currentUserId: string;
   currentUser: string;
   defaultOwner: string;
   onClose: () => void;
@@ -115,9 +119,10 @@ export function ProductOperationsProgress({
     onApply({
       ...draft,
       updatedAt: now,
+      updatedByUserId: currentUserId,
       updatedBy: currentUser,
       history: [
-        { id: `ops-${Date.now()}`, changedAt: now, changedBy: currentUser, summary },
+        { id: `ops-${Date.now()}`, changedAt: now, changedByUserId: currentUserId, changedBy: currentUser, summary },
         ...(draft.history ?? []),
       ].slice(0, 50),
     });
@@ -183,7 +188,7 @@ export function ProductOperationsProgress({
                 <h3 className="text-sm font-bold text-foreground">阶段追踪</h3>
                 <p className="mt-1 text-xs text-muted">受阻时请在备注写明原因。</p>
               </div>
-              {draft.updatedAt ? <p className="text-xs text-muted">最近更新：{formatDateTime(draft.updatedAt)} · {draft.updatedBy || "未知"}</p> : null}
+              {draft.updatedAt ? <p className="text-xs text-muted">最近更新：{formatDateTime(draft.updatedAt)} · {formatOperationsProgressUpdatedBy(draft)}</p> : null}
             </div>
             <div className="mt-3 overflow-x-auto rounded-md border border-border">
               <table className="w-full min-w-[1240px] text-left text-xs">
@@ -278,7 +283,7 @@ export function ProductOperationsProgress({
                 <div key={event.id} className="flex flex-wrap justify-between gap-2 border-b border-border pb-2 text-xs">
                   <span className="font-semibold text-foreground">{event.summary}</span>
                   <span className="text-muted">
-                    {event.changedBy} · {formatDateTime(event.changedAt)}
+                    {formatOperationsProgressChangedBy(event)} · {formatDateTime(event.changedAt)}
                   </span>
                 </div>
               ))}

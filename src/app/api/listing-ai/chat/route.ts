@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { generateListingAiChatReply, type ListingAiChatRequest } from "@/lib/listing-ai/chat";
 import { generateListingAiImages, hydrateImagePreviews } from "@/lib/listing-ai/image-generation";
-import { resolveUserAiTextSettings } from "@/lib/server/user-ai-settings";
+import {
+  resolveUserAiImageSettings,
+  resolveUserAiTextSettings,
+} from "@/lib/server/user-ai-settings";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -48,6 +51,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "请先添加图片附件，再生成图片。" }, { status: 400 });
       }
 
+      const aiSettings = await resolveUserAiImageSettings(user, scope);
       const images = await generateListingAiImages(
         {
           prompt,
@@ -56,6 +60,7 @@ export async function POST(request: Request) {
             url: image.url || "",
             assetId: image.assetId,
           })),
+          aiSettings,
         },
         user,
         scope,
