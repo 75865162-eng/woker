@@ -89,3 +89,37 @@ export function buildAiTextEndpoint(settings: Pick<AiModelSettings, "baseUrl" | 
 
   return `${baseUrl}${baseUrl.endsWith("/v1") ? "/responses" : "/v1/responses"}`;
 }
+
+export function buildAiRequestHeaders(settings: Pick<AiModelSettings, "apiKey" | "baseUrl" | "provider">) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${settings.apiKey}`,
+    "Content-Type": "application/json",
+  };
+  const isOpenRouter =
+    settings.provider === "openrouter" || settings.baseUrl.includes("openrouter.ai");
+  const isTogoApi = settings.baseUrl.includes("api.togoapi.com");
+
+  if (isOpenRouter) {
+    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "http://localhost:3000";
+    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "Amazon Bulk Ad Workspace";
+  }
+
+  if (isTogoApi) {
+    headers["x-openai-actor-authorization"] =
+      process.env.TOGOAPI_ACTOR_AUTHORIZATION || "local-image-extension";
+  }
+
+  return headers;
+}
+
+export function buildResponsesRequestOptions(
+  settings: Pick<AiModelSettings, "baseUrl" | "provider" | "model">,
+) {
+  const isTogoGpt55 =
+    settings.baseUrl.includes("api.togoapi.com") && settings.model === "gpt-5.5";
+
+  return {
+    store: false,
+    ...(isTogoGpt55 ? { reasoning: { effort: "xhigh" as const } } : {}),
+  };
+}

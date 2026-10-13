@@ -353,6 +353,44 @@ function normalizeDescriptionGeneratorDraft(
   };
 }
 
+interface ListingAiGenerationResponse {
+  results?: string[];
+  error?: string;
+}
+
+async function readListingAiGenerationResponse(
+  response: Response,
+): Promise<ListingAiGenerationResponse> {
+  const raw = await response.text();
+
+  if (!raw.trim()) {
+    return {
+      error: `接口没有返回内容（HTTP ${response.status}）。请检查服务端日志和 AI 配置。`,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (parsed && typeof parsed === "object") {
+      const payload = parsed as Record<string, unknown>;
+      return {
+        results: Array.isArray(payload.results)
+          ? payload.results.filter((item): item is string => typeof item === "string")
+          : undefined,
+        error: typeof payload.error === "string" ? payload.error : undefined,
+      };
+    }
+  } catch {
+    // Some proxy/server failures return HTML or plain text instead of JSON.
+  }
+
+  const plainText = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return {
+    error: `接口返回了无法识别的内容（HTTP ${response.status}）：${plainText.slice(0, 300)}`,
+  };
+}
+
 export function ListingAiWorkbench() {
   const searchParams = useSearchParams();
   const requestedTab = normalizeTabId(searchParams.get("tab"));
@@ -793,6 +831,35 @@ export function ListingAiWorkbench() {
   }
 
   async function handleGenerateTitles() {
+    const fields = activeTitleGenerator.fields;
+    const productChineseName = fields
+      .find((field) => field.key === "productChineseName")
+      ?.value.trim();
+    const asin = fields.find((field) => field.key === "asin")?.value.trim();
+    const hasReference = fields.some(
+      (field) =>
+        field.key !== "productChineseName" &&
+        field.key !== "asin" &&
+        field.value.trim(),
+    );
+
+    if (!productChineseName) {
+      setTitleGeneratorError("请先填写中文名称。");
+      return;
+    }
+    if (titleGenerator.mode === "old" && !asin) {
+      setTitleGeneratorError("老品优化模式必须填写 ASIN。");
+      return;
+    }
+    if (!hasReference) {
+      setTitleGeneratorError("请至少填写一项参考资料，例如产品特点、核心广告词或关键词。");
+      return;
+    }
+    if (!activeTitleGenerator.prompt.trim()) {
+      setTitleGeneratorError("标题提示词不能为空，请打开“提示词修改”检查。");
+      return;
+    }
+
     setTitleGenerating(true);
     setTitleGeneratorError("");
 
@@ -806,10 +873,7 @@ export function ListingAiWorkbench() {
           aiSettings: aiSettings ?? undefined,
         }),
       });
-      const data = (await response.json()) as {
-        results?: string[];
-        error?: string;
-      };
+      const data = await readListingAiGenerationResponse(response);
 
       if (!response.ok || !data.results?.length)
         throw new Error(data.error || "标题生成失败");
@@ -852,6 +916,29 @@ export function ListingAiWorkbench() {
   }
 
   async function handleGenerateDescriptions() {
+    const hasSharedReference = activeTitleGenerator.fields.some(
+      (field) =>
+        ["productFeatures", "coreAdWords", "relatedKeywords", "adData"].includes(
+          field.key,
+        ) && field.value.trim(),
+    );
+    const hasCompetitorDescription = descriptionGenerator.fields.some((field) =>
+      field.value.trim(),
+    );
+
+    if (!hasSharedReference) {
+      setDescriptionGeneratorError("请先在上方填写至少一项产品特点、广告词、关键词或广告数据。");
+      return;
+    }
+    if (!hasCompetitorDescription) {
+      setDescriptionGeneratorError("请至少填写一条竞品描述参考。");
+      return;
+    }
+    if (!descriptionGenerator.prompt.trim()) {
+      setDescriptionGeneratorError("描述提示词不能为空，请打开“提示词修改”检查。");
+      return;
+    }
+
     setDescriptionGenerating(true);
     setDescriptionGeneratorError("");
 
@@ -868,10 +955,7 @@ export function ListingAiWorkbench() {
           aiSettings: aiSettings ?? undefined,
         }),
       });
-      const data = (await response.json()) as {
-        results?: string[];
-        error?: string;
-      };
+      const data = await readListingAiGenerationResponse(response);
 
       if (!response.ok || !data.results?.length)
         throw new Error(data.error || "五点描述生成失败");

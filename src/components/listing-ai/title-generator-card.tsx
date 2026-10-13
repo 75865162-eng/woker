@@ -86,11 +86,6 @@ export function TitleGeneratorCard({
   const hasRequiredIdentity = isOldMode
     ? hasProductChineseName && hasAsin
     : hasProductChineseName;
-  const canGenerate =
-    Boolean(generator.mode) &&
-    hasRequiredIdentity &&
-    referenceFields.some((field) => field.value.trim()) &&
-    !loading;
   const history = generator.history ?? [];
   const normalizedHistorySearch = historySearch.trim().toLowerCase();
   const visibleHistory = normalizedHistorySearch
@@ -157,7 +152,7 @@ export function TitleGeneratorCard({
               <Settings2 className="h-4 w-4" />
               提示词修改
             </Button>
-            <Button size="sm" disabled={!canGenerate} onClick={onGenerate}>
+            <Button size="sm" disabled={loading} onClick={onGenerate}>
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

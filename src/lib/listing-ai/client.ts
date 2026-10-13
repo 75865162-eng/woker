@@ -1,7 +1,12 @@
 import { buildListingOptimizationPrompt } from "./prompt";
 import { type AiModelSettings } from "@/lib/ai-settings";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
-import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
+import {
+  buildAiRequestHeaders,
+  buildAiTextEndpoint,
+  buildResponsesRequestOptions,
+  resolveAiSettings,
+} from "@/lib/server/ai-runtime";
 import type { ListingOptimizationRequest, ListingOptimizationResult } from "./types";
 
 export interface ResponsesApiOutput {
@@ -31,25 +36,6 @@ export function extractOutputText(data: ResponsesApiOutput) {
 
 export function extractChatCompletionText(data: ChatCompletionsApiOutput) {
   return data.choices?.map((choice) => choice.message?.content).filter(Boolean).join("\n") ?? "";
-}
-
-function buildAiHeaders(settings: {
-  apiKey: string;
-  baseUrl: string;
-  provider?: AiModelSettings["provider"];
-}) {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${settings.apiKey}`,
-    "Content-Type": "application/json",
-  };
-  const isOpenRouter = settings.provider === "openrouter" || settings.baseUrl.includes("openrouter.ai");
-
-  if (isOpenRouter) {
-    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "http://localhost:3000";
-    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "Amazon Bulk Ad Workspace";
-  }
-
-  return headers;
 }
 
 function parseJsonResult(text: string): ListingOptimizationResult {
@@ -125,7 +111,7 @@ export async function optimizeListing(input: ListingOptimizationRequest, aiSetti
       method: "POST",
       signal: controller.signal,
       headers: {
-        ...buildAiHeaders({ apiKey, baseUrl, provider }),
+        ...buildAiRequestHeaders({ apiKey, baseUrl, provider }),
       },
       body: JSON.stringify(
         isChatCompletions
@@ -140,6 +126,7 @@ export async function optimizeListing(input: ListingOptimizationRequest, aiSetti
               response_format: { type: "json_object" },
             }
           : {
+              ...buildResponsesRequestOptions(requestSettings),
               model,
               input: buildListingOptimizationPrompt(input),
               text: {

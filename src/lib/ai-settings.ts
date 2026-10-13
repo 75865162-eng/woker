@@ -131,9 +131,9 @@ export const aiProviderOptions: AiProviderOption[] = [
     label: "TogoAPI",
     shortLabel: "TG",
     accentClass: "bg-cyan-50 text-cyan-700",
-    baseUrl: "https://api.togoapi.com/v1",
+    baseUrl: "https://api.togoapi.com",
     model: "gpt-5.5",
-    wireApi: "chat_completions",
+    wireApi: "responses",
     recommended: true,
   },
   {
@@ -191,12 +191,17 @@ function normalizeModelName(value: Partial<AiModelSettings> | null | undefined) 
 }
 
 export function normalizeAiSettings(value: Partial<AiModelSettings> | null | undefined): AiModelSettings {
+  const isTogoApiGpt55 =
+    value?.provider === "togoapi" &&
+    (value.baseUrl || "").includes("api.togoapi.com") &&
+    (value.model || "") === "gpt-5.5";
+
   return {
     ...defaultAiModelSettings,
     ...value,
     baseUrl: (value?.baseUrl || defaultAiModelSettings.baseUrl).replace(/\/+$/, ""),
     model: normalizeModelName(value),
-    wireApi: value?.wireApi || defaultAiModelSettings.wireApi,
+    wireApi: isTogoApiGpt55 ? "responses" : value?.wireApi || defaultAiModelSettings.wireApi,
     timeoutSeconds: Math.max(10, Math.min(240, Number(value?.timeoutSeconds) || defaultAiModelSettings.timeoutSeconds)),
   };
 }

@@ -71,11 +71,6 @@ export function DescriptionGeneratorCard({
       )
     : history;
 
-  const canGenerate =
-    weightedFields.some((field) => field.value.trim()) &&
-    visibleFields.some((field) => field.value.trim()) &&
-    !loading;
-
   return (
     <Card>
       <CardHeader className="border-b border-border">
@@ -92,7 +87,7 @@ export function DescriptionGeneratorCard({
               <Settings2 className="h-4 w-4" />
               提示词修改
             </Button>
-            <Button size="sm" disabled={!canGenerate} onClick={onGenerate}>
+            <Button size="sm" disabled={loading} onClick={onGenerate}>
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

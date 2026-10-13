@@ -4,7 +4,12 @@ import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
 import { type TitleGeneratorMode } from "@/lib/listing-ai/workspace-draft";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
-import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
+import {
+  buildAiRequestHeaders,
+  buildAiTextEndpoint,
+  buildResponsesRequestOptions,
+  resolveAiSettings,
+} from "@/lib/server/ai-runtime";
 
 export const runtime = "nodejs";
 
@@ -25,21 +30,6 @@ interface TitleGeneratorRequest {
 function getModeLabel(mode: TitleGeneratorMode) {
   if (mode === "old") return "老品优化";
   return "新品编写";
-}
-
-function buildAiHeaders(settings: AiModelSettings) {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${settings.apiKey}`,
-    "Content-Type": "application/json",
-  };
-  const isOpenRouter = settings.provider === "openrouter" || settings.baseUrl.includes("openrouter.ai");
-
-  if (isOpenRouter) {
-    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "http://localhost:3000";
-    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "Amazon Bulk Ad Workspace";
-  }
-
-  return headers;
 }
 
 function buildUserInput(mode: TitleGeneratorMode, fields: TitleGeneratorField[]) {
@@ -153,7 +143,7 @@ export async function POST(request: Request) {
       response = await fetchAiApi(buildAiTextEndpoint(settings), {
         method: "POST",
         signal: controller.signal,
-        headers: buildAiHeaders(settings),
+        headers: buildAiRequestHeaders(settings),
         body: JSON.stringify(
           isChatCompletions
             ? {
@@ -164,6 +154,7 @@ export async function POST(request: Request) {
                 ],
               }
             : {
+                ...buildResponsesRequestOptions(settings),
                 model: settings.model,
                 input: [
                   { role: "system", content: prompt },

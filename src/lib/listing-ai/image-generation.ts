@@ -4,7 +4,11 @@ import { type AiModelSettings } from "@/lib/ai-settings";
 import { type CurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
-import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
+import {
+  buildAiRequestHeaders,
+  buildAiTextEndpoint,
+  resolveAiSettings,
+} from "@/lib/server/ai-runtime";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import { type WorkspaceScopeInput } from "@/lib/workspace/scope";
 import { imageGeneratorViews } from "@/lib/listing-ai/workspace-draft";
@@ -212,6 +216,7 @@ function buildImagesGenerationsRequest(
   return {
     url: `${settings.baseUrl}/images/generations`,
     body: {
+      store: false,
       model: settings.model,
       prompt: buildImagePrompt(prompt, viewSummary),
       image_url: imageUrls[0],
@@ -233,6 +238,7 @@ function buildResponsesRequest(
   return {
     url: buildAiTextEndpoint(settings),
     body: {
+      store: false,
       model: settings.model,
       tools: [{ type: "image_generation" }],
       input: [
@@ -252,22 +258,6 @@ function buildResponsesRequest(
       ],
     },
   };
-}
-
-function buildAiHeaders(settings: AiModelSettings) {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${settings.apiKey}`,
-    "Content-Type": "application/json",
-  };
-  const isOpenRouter =
-    settings.provider === "openrouter" || settings.baseUrl.includes("openrouter.ai");
-
-  if (isOpenRouter) {
-    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "http://localhost:3000";
-    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "Amazon Bulk Ad Workspace";
-  }
-
-  return headers;
 }
 
 function getBase64ImagePayload(url: string) {
@@ -395,7 +385,7 @@ export async function generateListingAiImages(
     response = await fetchAiApi(imageRequest.url, {
       method: "POST",
       signal: controller.signal,
-      headers: buildAiHeaders(settings),
+      headers: buildAiRequestHeaders(settings),
       body: JSON.stringify(imageRequest.body),
     });
   } catch (error) {

@@ -1,6 +1,11 @@
 import { type AiModelSettings } from "@/lib/ai-settings";
 import { fetchAiApi, type AiFetchResponse } from "@/lib/server/ai-fetch";
-import { buildAiTextEndpoint, resolveAiSettings } from "@/lib/server/ai-runtime";
+import {
+  buildAiRequestHeaders,
+  buildAiTextEndpoint,
+  buildResponsesRequestOptions,
+  resolveAiSettings,
+} from "@/lib/server/ai-runtime";
 import { extractChatCompletionText, extractOutputText, type ResponsesApiOutput } from "@/lib/listing-ai/client";
 import type { ImagePreviewPayload } from "@/lib/listing-ai/image-generation";
 
@@ -20,22 +25,6 @@ export interface ListingAiChatResult {
   reply: string;
   model: string;
   baseUrl: string;
-}
-
-function buildAiHeaders(settings: AiModelSettings) {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${settings.apiKey}`,
-    "Content-Type": "application/json",
-  };
-  const isOpenRouter =
-    settings.provider === "openrouter" || settings.baseUrl.includes("openrouter.ai");
-
-  if (isOpenRouter) {
-    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "http://localhost:3000";
-    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "Amazon Bulk Ad Workspace";
-  }
-
-  return headers;
 }
 
 export function buildListingAiChatSystemPrompt() {
@@ -101,7 +90,7 @@ export async function generateListingAiChatReply(
       {
         method: "POST",
         signal: controller.signal,
-        headers: buildAiHeaders(settings),
+        headers: buildAiRequestHeaders(settings),
         body: JSON.stringify(
           isChatCompletions
             ? {
@@ -123,6 +112,7 @@ export async function generateListingAiChatReply(
                   : requestMessages,
               }
             : {
+                ...buildResponsesRequestOptions(settings),
                 model: settings.model,
                 input: referenceImages.length
                   ? [
