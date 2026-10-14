@@ -239,9 +239,27 @@ function findPackageCount(matrix: (string | number | null)[][]) {
   return null;
 }
 
+function hasAWorkbookHeaders(matrix: (string | number | null)[][]) {
+  return matrix.some((row) =>
+    row.some((cell) => {
+      const text = toText(cell).replace(/\s+/g, "").toUpperCase();
+      return text === "SKU" || text === "FNSKU" || text.includes("发货总数");
+    }),
+  );
+}
+
+function resolveAWorkbookSheetName(workbook: XLSX.WorkBook) {
+  const sheetNames = [...workbook.SheetNames].reverse();
+  return (
+    sheetNames.find((sheetName) => hasAWorkbookHeaders(getSheetMatrix(workbook.Sheets[sheetName]))) ??
+    workbook.SheetNames.at(-1) ??
+    ""
+  );
+}
+
 export async function parseAWorkbookBuffer(input: WorkbookInput, options: ParseAWorkbookOptions = {}): Promise<AWorkbookSummary> {
   const { workbook } = readWorkbookBuffer(input);
-  const latestSheetName = workbook.SheetNames.at(-1) ?? "";
+  const latestSheetName = resolveAWorkbookSheetName(workbook);
 
   if (!latestSheetName) {
     throw new Error("A表没有可读取的 sheet");

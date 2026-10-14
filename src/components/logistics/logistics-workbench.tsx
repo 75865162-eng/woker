@@ -131,8 +131,8 @@ export function LogisticsWorkbench() {
         pushLog({
           level: "success",
           message: aSummary.imageParsingSkipped
-            ? `A表已快速解析，读取最后一个 sheet：${aSummary.latestSheetName}。图片将在生成 D 表/对比表时再读取。`
-            : `A表已解析，读取最后一个 sheet：${aSummary.latestSheetName}`,
+            ? `A表已快速解析，读取业务 sheet：${aSummary.latestSheetName}。图片将在生成 D 表/对比表时再读取。`
+            : `A表已解析，读取业务 sheet：${aSummary.latestSheetName}`,
         });
       }
 
@@ -451,7 +451,7 @@ export function LogisticsWorkbench() {
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <UploadCard
               title="装箱表 A"
-              description="读取最后一个 sheet，提取 SKU、发货总数、箱号分布"
+              description="读取业务 sheet，提取 SKU、发货总数、箱号分布"
               file={state.aFile}
               isProcessing={processingSlot === "a"}
               status={
