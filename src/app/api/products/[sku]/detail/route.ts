@@ -27,9 +27,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
 
     return NextResponse.json(detail, {
       headers: {
-        "Cache-Control": detail.projection.status !== "ready"
-          ? "no-store"
-          : "private, max-age=0, stale-while-revalidate=30",
+        // The editor uses this as its authoritative optimistic-lock baseline.
+        "Cache-Control": "no-store",
       },
     });
   } catch (error) {

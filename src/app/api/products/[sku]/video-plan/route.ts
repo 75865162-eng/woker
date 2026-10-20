@@ -41,8 +41,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ sku:
     const product = record ? productRecordPayloadToProduct(record.payload) : null;
 
     return NextResponse.json({
+      revision: record?.revision,
       videoPlan: normalizeProductVideoPlan(product?.videoPlan as Partial<ProductVideoPlanDraft> | null),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load product video plan.";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -60,7 +61,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sku:
 
     const { sku } = await params;
     const normalizedSku = normalizeSku(sku);
-    const body = (await request.json()) as { videoPlan?: Partial<ProductVideoPlanDraft>; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
+    const body = (await request.json()) as { videoPlan?: Partial<ProductVideoPlanDraft>; revision?: number; workspaceId?: unknown; accountId?: unknown; marketplace?: unknown };
     const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
     const record = await findProductRecordBySku(
       prisma,
@@ -70,6 +71,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sku:
 
     if (!record) {
       return NextResponse.json({ error: "商品不存在，无法保存视频策划。" }, { status: 404 });
+    }
+    if (!Number.isInteger(body.revision) || body.revision !== record.revision) {
+      throw new ProductRecordRevisionConflictError(record.revision);
     }
 
     const product = productRecordPayloadToProduct(record.payload) as Product;
@@ -87,7 +91,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ sku:
         product: nextProduct,
         user,
         scope: { ...scope, organizationId: user.organizationId },
-        expectedRevision: record.revision,
+        expectedRevision: body.revision,
         existingRecord: record,
       });
 

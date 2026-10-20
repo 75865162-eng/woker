@@ -89,6 +89,7 @@ export async function POST(request: Request) {
     let thumbUrl: string | undefined;
     let thumbFileId: string | undefined;
     let previewUrl: string | undefined;
+    let previewFileId: string | undefined;
     if (isImage) {
       const thumbBuffer = await sharp(fileBuffer)
         .rotate()
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
       thumbUrl = createAssetUrl(thumbFileObject.storageKey);
       thumbFileId = thumbFileObject.id;
       previewUrl = createAssetUrl(previewFileObject.storageKey);
+      previewFileId = previewFileObject.id;
     }
 
     const originalUrl = createAssetUrl(fileObject.storageKey);
@@ -153,6 +155,7 @@ export async function POST(request: Request) {
       uploadedAt: fileObject.createdAt.toISOString(),
       thumbUrl: thumbUrl || originalUrl,
       ...(previewUrl ? { previewUrl } : {}),
+      ...(previewFileId ? { previewFileId } : {}),
       originalUrl,
       ...(thumbFileId ? { thumbFileId } : {}),
       downloadUrl: createDownloadUrl(fileObject.id),

@@ -132,6 +132,7 @@ export async function POST(request: Request) {
         previewUrl: createAssetUrl(previewFileObject.storageKey),
         originalUrl: createAssetUrl(fileObject.storageKey),
         thumbFileId: thumbFileObject.id,
+        previewFileId: previewFileObject.id,
       },
     });
   } catch (error) {

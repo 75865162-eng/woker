@@ -12,38 +12,75 @@ on:
         required: true
         type: boolean
         default: false
+      base_sha:
+        description: Exact commit currently running on production
+        type: string
+        required: true
+      deployment_reviewed:
+        description: Deployment infrastructure and database migrations have been manually reviewed
+        type: boolean
+        default: false
+      install_dependencies:
+        description: Allow server dependency installation if lockfile changed
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analyze release impact
+        id: plan
+        env:
+          BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/deployment-plan.mjs
+
+      - name: Enforce deployment review
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_production && steps.plan.outputs.manual_review == 'true' && !inputs.deployment_reviewed
+        run: echo 'Deployment infrastructure changes require explicit review.' >&2; exit 1
 
       - name: Setup Node.js
+        if: steps.plan.outputs.release == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
+        if: steps.plan.outputs.release == 'true'
         run: npm ci
 
       - name: Generate Prisma Client
+        if: steps.plan.outputs.release == 'true'
         run: npm run db:generate
 
       - name: Test
+        if: steps.plan.outputs.release == 'true'
         run: npm run test
 
       - name: Lint
+        if: steps.plan.outputs.release == 'true'
         run: npm run lint
 
       - name: Build
+        if: steps.plan.outputs.release == 'true'
         run: npm run build
 
       - name: Package release artifact
+        if: steps.plan.outputs.release == 'true'
         env:
           SOURCE_COMMIT: ${{ github.sha }}
           SOURCE_BRANCH: ${{ github.ref_name }}
@@ -53,11 +90,13 @@ jobs:
         run: bash scripts/package-ci-artifact.sh
 
       - name: Check release artifact
+        if: steps.plan.outputs.release == 'true'
         env:
           SOURCE_COMMIT: ${{ github.sha }}
         run: bash scripts/release-check.sh dist/amazon-ad-bulk-operation-release.tar.gz
 
       - name: Upload release artifact
+        if: steps.plan.outputs.release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: amazon-ad-bulk-operation-release
@@ -65,12 +104,13 @@ jobs:
             dist/amazon-ad-bulk-operation-release.tar.gz
             dist/release-manifest.json
             dist/release-check.json
+            dist/deployment-plan.json
           if-no-files-found: error
           retention-days: 14
 
   deploy-production:
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy_production
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_production && needs.build.outputs.release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
@@ -100,7 +140,7 @@ jobs:
           SERVER_USER: ${{ secrets.PRODUCTION_SERVER_USER }}
           SERVER_DIR: ${{ secrets.PRODUCTION_SERVER_DIR }}
           SSH_OPTS: -o StrictHostKeyChecking=yes
-          INSTALL_DEPS_ON_SERVER: "false"
+          INSTALL_DEPS_ON_SERVER: ${{ inputs.install_dependencies && 'true' || 'false' }}
           RUN_BOOTSTRAP_SEED: "false"
           SOURCE_BRANCH: ${{ github.ref_name }}
           SOURCE_COMMIT: ${{ github.sha }}

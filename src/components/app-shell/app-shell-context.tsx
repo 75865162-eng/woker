@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 
 type AppShellUserContextValue = {
+  organizationId?: string;
   userId?: string;
   userName?: string;
   userRole?: string;

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import sharp from "sharp";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { saveProductAggregate } from "@/lib/products/product-aggregate-service";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import type { Product, ProductImageAsset } from "@/lib/products/types";
 
@@ -21,6 +21,11 @@ type ProductWithWorkbook = Product & {
 
 const batchSize = 50;
 const applyChanges = process.argv.includes("--apply");
+const argument = (name: string) => process.argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3).trim();
+const organizationId = argument("organization-id");
+const workspaceId = argument("workspace-id");
+const actorUserId = argument("actor-user-id");
+type BackfillScope = { organizationId: string; userId: string; workspaceId: string; accountId: string; marketplace: string };
 
 function createAssetKey(fileName: string, variant: "original" | "thumb") {
   const extension = variant === "thumb" ? ".webp" : path.extname(fileName).toLowerCase() || ".bin";
@@ -43,11 +48,16 @@ function parseDataUrl(value: string) {
   };
 }
 
-async function createProductImageAssetFromDataUrl(fileName: string, value: string): Promise<ProductImageAsset | null> {
+async function createProductImageAssetFromDataUrl(fileName: string, value: string, scope: BackfillScope): Promise<ProductImageAsset | null> {
   const parsed = parseDataUrl(value);
   if (!parsed) {
     return null;
   }
+  // Dry-run must not create objects or database rows.
+  if (!applyChanges) return {
+    id: `product-image-dry-run-${fileName}`, name: fileName, mimeType: parsed.mimeType,
+    size: parsed.buffer.length, storageType: getStorageType(), uploadedAt: "", thumbUrl: value, originalUrl: value,
+  };
 
   const storage = getStorageDriver();
   const originalKey = createAssetKey(fileName, "original");
@@ -63,9 +73,20 @@ async function createProductImageAssetFromDataUrl(fileName: string, value: strin
     storage.putBuffer({ key: originalKey, buffer: parsed.buffer, contentType: originalContentType }),
     storage.putBuffer({ key: thumbKey, buffer: thumbBuffer, contentType: "image/webp" }),
   ]);
+  const [originalFile, thumbFile] = await prisma.$transaction([
+    prisma.fileObject.create({ data: {
+      ...scope, originalName: fileName, mimeType: originalContentType, size: original.size,
+      storageKey: original.key, storageType: getStorageType(), status: "done", productBindingStatus: "temporary",
+    } }),
+    prisma.fileObject.create({ data: {
+      ...scope, originalName: `${fileName}-thumb.webp`, mimeType: "image/webp", size: thumb.size,
+      storageKey: thumb.key, storageType: getStorageType(), status: "done", productBindingStatus: "temporary",
+    } }),
+  ]);
 
   return {
-    id: originalKey,
+    id: originalFile.id,
+    thumbFileId: thumbFile.id,
     name: fileName,
     mimeType: originalContentType,
     size: original.size,
@@ -82,7 +103,7 @@ function isDataUrl(value: string | undefined) {
 
 function createSyntheticAssetFromUrl(fileName: string, value: string): ProductImageAsset {
   return {
-    id: fileName,
+    id: `product-image-${fileName}`,
     name: fileName,
     mimeType: "image/jpeg",
     size: 0,
@@ -93,25 +114,26 @@ function createSyntheticAssetFromUrl(fileName: string, value: string): ProductIm
   };
 }
 
-async function backfillProduct(product: ProductWithWorkbook) {
-  const imageAssets: ProductImageAsset[] = [];
+async function backfillProduct(product: ProductWithWorkbook, scope: BackfillScope) {
+  const imageAssets: ProductImageAsset[] = [...(product.imageAssets ?? [])];
   let changed = false;
   let originalDataUrlBytes = 0;
 
   const nextImages = await Promise.all(
     (Array.isArray(product.images) ? product.images : []).map(async (image, index) => {
       if (!isDataUrl(image)) {
+        if (!imageAssets[index] && image.trim()) imageAssets[index] = createSyntheticAssetFromUrl(`${product.sku || "product"}-${index + 1}`, image);
         return image;
       }
 
-      const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-${index + 1}.png`, image);
+      const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-${index + 1}.png`, image, scope);
       if (!asset) {
         return image;
       }
 
       changed = true;
       originalDataUrlBytes += image.length;
-      imageAssets.push(asset);
+      imageAssets[index] = asset;
       return asset.thumbUrl;
     }),
   );
@@ -136,7 +158,7 @@ async function backfillProduct(product: ProductWithWorkbook) {
         return image;
       }
 
-      const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-remark-${index + 1}.png`, image);
+      const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-remark-${index + 1}.png`, image, scope);
       if (!asset) {
         return image;
       }
@@ -153,7 +175,7 @@ async function backfillProduct(product: ProductWithWorkbook) {
       let nextCompetitor = { ...competitor };
 
       if (isDataUrl(competitor.hotVariantImage)) {
-        const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-competitor-${index + 1}.png`, competitor.hotVariantImage || "");
+        const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-competitor-${index + 1}.png`, competitor.hotVariantImage || "", scope);
         if (asset) {
           changed = true;
           originalDataUrlBytes += (competitor.hotVariantImage || "").length;
@@ -176,7 +198,7 @@ async function backfillProduct(product: ProductWithWorkbook) {
       }
 
       if (isDataUrl(competitor.noteImage)) {
-        const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-competitor-note-${index + 1}.png`, competitor.noteImage || "");
+        const asset = await createProductImageAssetFromDataUrl(`${product.sku || "product"}-competitor-note-${index + 1}.png`, competitor.noteImage || "", scope);
         if (asset) {
           changed = true;
           originalDataUrlBytes += (competitor.noteImage || "").length;
@@ -217,7 +239,7 @@ async function backfillProduct(product: ProductWithWorkbook) {
   const nextPayload: ProductWithWorkbook = {
     ...product,
     images: nextImages,
-    imageAssets: imageAssets.length ? imageAssets : product.imageAssets,
+    imageAssets: imageAssets.length ? imageAssets.filter(Boolean) : product.imageAssets,
     ...(nextWorkbookDetail ? { workbookDetail: nextWorkbookDetail } : {}),
   };
 
@@ -236,6 +258,17 @@ async function backfillProduct(product: ProductWithWorkbook) {
 }
 
 async function main() {
+  if (applyChanges && (!organizationId || !actorUserId)) {
+    throw new Error("--apply 必须同时指定 --organization-id=<id> 和 --actor-user-id=<id>；可用 --workspace-id=<id> 缩小范围。默认仅 dry-run。");
+  }
+  const actor = applyChanges ? await prisma.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId: organizationId!, userId: actorUserId! } },
+    include: { user: { select: { id: true, name: true, status: true } } },
+  }) : null;
+  if (applyChanges && (!actor || actor.user.status !== "active" || !["owner", "database_admin"].includes(actor.role))) {
+    throw new Error("维护操作者必须是目标组织的有效 owner/database_admin，未执行任何上传或事实修改。");
+  }
+  console.log(`[products] image backfill mode=${applyChanges ? "apply" : "dry-run"}; organization=${organizationId ?? "all"}; workspace=${workspaceId ?? "all"}; actor=${actorUserId ?? "none"}`);
   let offset = 0;
   let scanned = 0;
   let changedRecords = 0;
@@ -244,6 +277,7 @@ async function main() {
 
   while (true) {
     const records = await prisma.productRecord.findMany({
+      where: { ...(organizationId ? { organizationId } : {}), ...(workspaceId ? { workspaceId } : {}) },
       select: {
         id: true,
         organizationId: true,
@@ -275,10 +309,15 @@ async function main() {
       }
 
       const product = payload as ProductWithWorkbook;
-      const result = await backfillProduct(product);
+      const result = await backfillProduct(product, {
+        organizationId: record.organizationId, userId: actor?.user.id ?? record.userId, workspaceId: record.workspaceId,
+        accountId: record.accountId, marketplace: record.marketplace,
+      });
       if (!result.changed || !("nextPayload" in result)) {
         continue;
       }
+      const nextPayload = result.nextPayload;
+      if (!nextPayload) continue;
 
       changedRecords += 1;
       changedImages += result.imageCount;
@@ -286,35 +325,13 @@ async function main() {
 
       if (applyChanges) {
         await prisma.$transaction(async (tx) => {
-          const updated = await tx.productRecord.updateMany({
-            where: {
-              id: record.id,
-              revision: record.revision,
-            },
-            data: {
-              payload: result.nextPayload as Prisma.InputJsonValue,
-              revision: record.revision + 1,
-            },
-          });
-          if (updated.count !== 1) {
-            throw new Error(`Product ${record.sku} changed during image backfill.`);
-          }
-
-          await tx.productOutboxEvent.create({
-            data: {
-              organizationId: record.organizationId,
-              userId: record.userId,
-              workspaceId: record.workspaceId,
-              accountId: record.accountId,
-              marketplace: record.marketplace,
-              eventType: "product_projection_requested",
-              entityType: "product",
-              entityId: record.id,
-              payload: {
-                productRecordId: record.id,
-                revision: record.revision + 1,
-                projectionVersion: 1,
-              },
+          await saveProductAggregate(tx, {
+            product: { ...nextPayload, id: record.id, sku: record.sku },
+            expectedRevision: record.revision,
+            user: { id: actor!.user.id, organizationId: record.organizationId, name: `${actor!.user.name}（图片资产回填）` },
+            scope: {
+              organizationId: record.organizationId, workspaceId: record.workspaceId,
+              accountId: record.accountId, marketplace: record.marketplace,
             },
           });
         });
@@ -326,7 +343,7 @@ async function main() {
 
   const mode = applyChanges ? "applied" : "dry-run";
   console.log(
-    `[products] image asset backfill ${mode}: scanned ${scanned.toLocaleString("zh-CN")} records, ` +
+    `[products] organization=${organizationId ?? "all"}; workspace=${workspaceId ?? "all"}; image asset backfill ${mode} (fact writes use aggregate CAS/audit/outbox): scanned ${scanned.toLocaleString("zh-CN")} records, ` +
       `changed ${changedRecords.toLocaleString("zh-CN")} records, ` +
       `converted ${changedImages.toLocaleString("zh-CN")} image groups, ` +
       `replaced roughly ${(estimatedBytes / 1024 / 1024).toFixed(1)} MB of inline data URLs`,

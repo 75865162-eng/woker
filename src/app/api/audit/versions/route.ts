@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     }
     const { user } = permission;
 
-    const body = (await request.json()) as { versionId?: unknown };
+    const body = (await request.json()) as { versionId?: unknown; expectedRevision?: number };
     const versionId = typeof body.versionId === "string" ? body.versionId : "";
     const requestScope = workspaceScopeFromRequest(request);
 
@@ -163,6 +163,10 @@ export async function POST(request: Request) {
           organizationId: user.organizationId,
           workspaceId: scope.workspaceId,
         }, product.sku);
+        if (!existingRecord) throw new Error("商品不存在，不能通过版本恢复重新创建。");
+        if (!Number.isInteger(body.expectedRevision) || body.expectedRevision !== existingRecord.revision) {
+          throw new ProductRecordRevisionConflictError(existingRecord.revision);
+        }
         const saved = await saveProductAggregate(tx, {
           product: {
             ...product,
@@ -170,7 +174,7 @@ export async function POST(request: Request) {
           },
           user,
           scope: { ...scope, organizationId: user.organizationId },
-          expectedRevision: existingRecord?.revision,
+          expectedRevision: body.expectedRevision,
           allowStatusRollback: true,
           existingRecord,
           eventType: "product_restored",
@@ -180,13 +184,12 @@ export async function POST(request: Request) {
 
       });
 
-      if (productOutboxEventId) {
-        await enqueueProductOutboxEvent(productOutboxEventId);
-      }
-      if (projectionEventId) {
-        await enqueueProductOutboxEvent(projectionEventId);
-      }
-      await invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`);
+      // The transaction has committed. Durable Outbox can retry dispatch; do not report a false save failure.
+      await Promise.all([
+        ...(productOutboxEventId ? [enqueueProductOutboxEvent(productOutboxEventId)] : []),
+        ...(projectionEventId ? [enqueueProductOutboxEvent(projectionEventId)] : []),
+        invalidateProductListResponseCaches(`${user.organizationId}:${scope.workspaceId}:`),
+      ]).catch((error: unknown) => console.warn("[versions] post-commit refresh/dispatch failed", error instanceof Error ? error.message : "unknown"));
       invalidateProductListSummaryCaches(`${user.organizationId}:${scope.workspaceId}:`);
     }
 

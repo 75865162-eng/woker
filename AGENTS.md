@@ -179,6 +179,9 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 
 ### 当前已确认
 
+- 商品编辑草稿与正式商品分离：`src/lib/products/product-edit-draft-repository.ts` 的 IndexedDB 仅保存当前设备未提交表单，按 organization/workspace/user/SKU/editor/session 隔离；刷新或卸载不得删除草稿。明确取消/关闭确认后清理，主编辑器点击保存才调用正式 API；视频、运营进度和 Excel 导入均先进入表单草稿。详情初始化只使用权威完整数据，冲突后加载最新再由用户恢复并核对，不自动重试。规格与验收见 `specs/003-product-edit-drafts/`；独立模拟接口的浏览器回归：`npm run test:products:browser`（不需要账号、不访问生产）。
+- `products:backfill-image-assets` 默认只读 dry-run；正式执行必须携带 `--apply --organization-id=<id> --actor-user-id=<id>`，操作者须为目标组织有效 owner/database_admin；建议额外传 `--workspace-id=<id>` 缩小范围。事实源改动经过聚合 CAS/审计/Outbox，不能恢复直接更新 payload 的实现。无用户明确维护/部署请求时不得对生产运行该脚本。
+
 - `ProductRecord` 是商品核心资料唯一 Source of Truth；`payload` 不因性能优化直接删除。
 - 商品保存通过 PostgreSQL transaction、revision、审计记录和 `ProductOutboxEvent` 完成；Projection、Read Model 和 Cache 不得反向覆盖 `ProductRecord`。
 - 商品列表当前真实主读路径是 `ProductSummaryRecord + ProductTextRecord`，由数据库执行过滤、排序和分页；不要未经 benchmark 直接切换到 `ProductRecord` 直读。
@@ -247,9 +250,14 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 - 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
 - worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
 - 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
-- 服务器发布脚本负责启动 Docker infra、校验 CI artifact SHA256、Prisma generate、Prisma migrate deploy、bootstrap admin seed、生成 release 目录、切换 current symlink、重启 `amazon-web` / `amazon-worker`、重建 Caddy 容器和本机 HTTP 健康检查；服务器不执行 Next standalone build。
+- 发布最高原则：根据实际改动按需迁移和重启。禁止每次发布默认迁移数据库、重启全部 worker、重建 Caddy 或更新 infra。
+- CI 使用明确的 BASE_SHA 与目标 commit 生成 `deployment-plan.json`，随校验产物发布；服务器核对 headSha 与产物一致、baseSha 与当前线上 RELEASE.json 的 commit 一致。清单缺失、字段无效或基线不一致时停止，不默认全量操作。
+- 仅文档改动只同步 GitHub；应用改动由 CI 构建并重启 web。普通 worker、图片 worker 各按入口、共享依赖和运行配置决定重启；`src/lib` 变化目前保守重启两类 worker，不能仅检查入口文件。
+- 仅 Prisma schema、migration 或依赖锁文件变化才执行服务器 Prisma generate；仅 migration 变化才执行 migrate deploy。schema 变化缺少配套 migration 时禁止发布，迁移必须人工审核。服务器 npm ci 仍需锁文件变化和明确安装授权。
+- systemd、Caddy 和 Docker infra 分别按清单更新；发布脚本和基础设施变化必须人工审核并显式确认。普通发布不执行 bootstrap seed 或商品维护脚本，不触碰 .env、上传文件或 volumes。
+- 服务器校验 CI artifact SHA256、按清单执行必要操作、生成 release、切换 current symlink、健康检查并记录结果；不执行 Next standalone build。失败只回滚应用及本次涉及的运行配置，不自动回滚数据库。
 - 发布产物目录：`/opt/amazon-ad-bulk-releases/<timestamp>-<branch>-<commit>`。
-- 当前线上版本软链接：`/opt/amazon-ad-bulk-current`。`amazon-web` 和 `amazon-worker` 都从该 symlink 启动，保证 web/worker 版本一致。
+- 当前发布版本软链接：`/opt/amazon-ad-bulk-current`。web 和 worker 均从此链接启动；不涉及变更的 worker 可以继续运行旧 release，清理时必须保留仍被进程使用的版本目录。
 - 发布记录文件：`/opt/amazon-ad-bulk-release-log.jsonl`。每次部署和回滚都应追加记录。
 - release 目录只保存运行所需的 standalone、源码、脚本、Prisma 和 public；`node_modules` 通过 symlink 共享 `/opt/amazon-ad-bulk-operation/node_modules`，避免复制大依赖。
 - 默认只保留最近 5 个 release。可通过服务器环境变量 `KEEP_RELEASES` 临时调整；不要为了省空间删除当前 release 或 Docker volumes。
@@ -257,42 +265,20 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 - 每次部署后优先读取 release 目录中的 `RELEASE-RESULT.json`；只有摘要显示失败时，再检查 `df -h /`、`docker compose ps`、`systemctl status amazon-web amazon-worker` 和 `journalctl -u amazon-web -u amazon-worker -n 100 --no-pager`。
 - 发布失败时只允许回滚应用代码、current symlink、systemd 进程和 Caddy 配置；数据库 migration 只向前执行，不自动执行 `migrate down`、删表或恢复数据库。`RELEASE-RESULT.json` 必须明确记录 `database: not_rolled_back`。
 
-推荐更新流程（优先 CI artifact 发布）：
+推荐更新流程（只使用 GitHub Actions CI artifact 发布）：
 
 ```bash
-npm run lint
-npm run build
-bash scripts/package-ci-artifact.sh
-bash scripts/release-check.sh dist/amazon-ad-bulk-operation-release.tar.gz
-bash scripts/deploy-ci-artifact.sh dist/amazon-ad-bulk-operation-release.tar.gz
+# 先盘点完整改动区，确认范围并提交、推送。
+# base_sha 必须来自当前线上 RELEASE.json 的 commit。
+gh workflow run ci-cd.yml --ref main -f base_sha=<线上commit> -f deploy_production=true
+# 涉及发布脚本/基础设施：审核后追加 -f deployment_reviewed=true
 ```
 
-这条路径由 CI 或本机先完成 build，服务器只校验 SHA256、解压 artifact、执行 Prisma migrate、切换 release 并重启 systemd，不在服务器执行 `npm run build`。普通部署默认不执行 bootstrap seed；只有初始化环境时才临时设置 `RUN_BOOTSTRAP_SEED=true`。普通部署也不主动执行 `npm ci`；只有 `package-lock.json` 变化并明确设置 `INSTALL_DEPS_ON_SERVER=true` 时才更新服务器共享依赖。
+GitHub CI 负责测试、lint、build、打包和 release-check；本机不重复生产构建，服务器只接收校验产物按清单发布。普通发布不运行 bootstrap seed；初始化需单独授权。
 
 当任务明确需要发布到服务器时，默认沿用这条 CI artifact 链路，不再把 build 放回服务器；只有明确的 fallback 或应急修复才走源码发布脚本。
 
-服务器源码构建发布仍保留为 fallback：
-
-```bash
-npm run lint
-npm run build
-
-bash scripts/deploy-native-server.sh
-```
-
-如果包含 Prisma migration，部署后要确认迁移执行成功：
-
-```bash
-cd /opt/amazon-ad-bulk-operation
-npm run db:migrate
-```
-
-服务器侧快速手动发布流程：
-
-```bash
-cd /opt/amazon-ad-bulk-operation
-bash scripts/server-native-release.sh
-```
+不再引用已不存在的源码发布脚本。CI 失败不得改成本机或服务器构建；应急旁路必须单独说明并获得授权。迁移结果读取发布摘要确认，不为验证重复执行迁移。
 
 
 ## UI 与交互约定

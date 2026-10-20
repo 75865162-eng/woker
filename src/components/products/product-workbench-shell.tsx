@@ -269,13 +269,21 @@ export function ProductTable({
                   return (
                     <tr key={product.id} className="border-t border-border/70 align-middle hover:bg-surface-muted/60">
                       <td className="px-3">
-                        <div className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted">
+                        <button
+                          type="button"
+                          className="flex h-[60px] w-[60px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted transition-colors hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                          title={`打开商品详情：${product.sku}`}
+                          aria-label={`打开商品详情：${product.sku}`}
+                          onClick={() => onOpenProduct(product.sku)}
+                          onFocus={() => onPrefetchProduct?.(product.sku)}
+                          onMouseEnter={() => onPrefetchProduct?.(product.sku)}
+                        >
                           {listImage ? (
                             <ProductListThumbnail src={listImage} alt={product.chineseName} />
                           ) : (
                             <ImagePlus className="h-5 w-5 text-muted" />
                           )}
-                        </div>
+                        </button>
                       </td>
                       <td className="px-3">
                         <button

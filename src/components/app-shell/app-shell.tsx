@@ -59,6 +59,7 @@ export async function AppShell({
       subtitle={subtitle}
       userInitials={initials}
       userId={user.id}
+      organizationId={user.organizationId}
       userName={user?.name}
       userRole={user?.role}
       rolePermissions={rolePermissions}

@@ -518,6 +518,7 @@ function normalizeProductImageAssets(product: Product): ProductImageAsset[] {
       originalUrl: asset.originalUrl || asset.thumbUrl || "",
       ...(asset.thumbFileId ? { thumbFileId: asset.thumbFileId } : {}),
       ...(asset.previewUrl ? { previewUrl: asset.previewUrl } : {}),
+      ...(asset.previewFileId ? { previewFileId: asset.previewFileId } : {}),
       ...(asset.downloadUrl ? { downloadUrl: asset.downloadUrl } : {}),
     }));
   }

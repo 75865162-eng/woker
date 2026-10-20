@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Product } from "@/lib/products/types";
+import { ProductEditDialog } from "./product-edit-dialog";
 
 type ProductVersionRecord = {
   id: string;
@@ -27,6 +28,8 @@ export function ProductVersionModal({
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
+  const [confirmation, setConfirmation] = useState<{ version: ProductVersionRecord; revision: number } | null>(null);
+  const restoring = useRef(false);
 
   const loadVersions = useCallback(async () => {
     setLoading(true);
@@ -53,10 +56,21 @@ export function ProductVersionModal({
     }
   }, [product.sku]);
 
-  async function restoreVersion(version: ProductVersionRecord) {
-    if (!window.confirm(`确定恢复 ${product.sku} 到版本 ${version.version} 吗？`)) {
-      return;
-    }
+  async function confirmRestore(version: ProductVersionRecord) {
+    setBusyId(version.id);
+    setError("");
+    try {
+      const response = await fetch(`/api/products/${encodeURIComponent(product.sku)}/detail`, { cache: "no-store" });
+      const data = await response.json() as { product?: Product; error?: string };
+      if (!response.ok || !data.product || !Number.isInteger(data.product.revision)) throw new Error(data.error || "最新版本读取失败");
+      setConfirmation({ version, revision: data.product.revision! });
+    } catch (error) { setError(error instanceof Error ? error.message : "最新版本读取失败"); }
+    finally { setBusyId(""); }
+  }
+
+  async function restoreVersion(version: ProductVersionRecord, expectedRevision: number) {
+    if (restoring.current) return;
+    restoring.current = true;
 
     setBusyId(version.id);
     setError("");
@@ -65,12 +79,12 @@ export function ProductVersionModal({
       const response = await fetch("/api/audit/versions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ versionId: version.id }),
+        body: JSON.stringify({ versionId: version.id, expectedRevision }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string };
 
       if (!response.ok) {
-        throw new Error(data.error || "版本恢复失败。");
+        throw new Error(response.status === 409 ? "商品已更新，未恢复历史版本。请重新读取并确认后再操作。" : data.error || "版本恢复失败。");
       }
 
       onRestored();
@@ -78,6 +92,8 @@ export function ProductVersionModal({
     } catch (restoreError) {
       setError(restoreError instanceof Error ? restoreError.message : "版本恢复失败。");
     } finally {
+      restoring.current = false;
+      setConfirmation(null);
       setBusyId("");
     }
   }
@@ -108,7 +124,7 @@ export function ProductVersionModal({
                 <p className="text-sm font-bold text-foreground">版本 {version.version} · {version.action}</p>
                 <p className="mt-1 truncate text-xs font-medium text-muted">{version.summary || "无摘要"} · {new Date(version.createdAt).toLocaleString("zh-CN", { hour12: false })}</p>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => void restoreVersion(version)} disabled={Boolean(busyId)}>
+              <Button size="sm" variant="secondary" onClick={() => void confirmRestore(version)} disabled={Boolean(busyId)}>
                 <RotateCcw className="h-4 w-4" />
                 {busyId === version.id ? "恢复中" : "恢复"}
               </Button>
@@ -119,6 +135,13 @@ export function ProductVersionModal({
           ) : null}
         </div>
       </div>
+      {confirmation ? <ProductEditDialog title="确认恢复历史版本" onDismiss={() => { if (!busyId) setConfirmation(null); }}>
+        <p className="text-sm">将 {product.sku} 当前版本 {confirmation.revision} 恢复为历史版本 {confirmation.version.version} 的内容，生成新的正式版本。此操作不是恢复本地编辑草稿。</p>
+        <div className="mt-4 flex gap-2">
+          <Button disabled={Boolean(busyId)} onClick={() => void restoreVersion(confirmation.version, confirmation.revision)}>确认恢复</Button>
+          <Button variant="secondary" disabled={Boolean(busyId)} onClick={() => setConfirmation(null)}>取消</Button>
+        </div>
+      </ProductEditDialog> : null}
     </div>
   );
 }

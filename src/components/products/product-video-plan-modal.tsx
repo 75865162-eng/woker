@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { ExternalLink, Minus, Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { appendCurrentWorkspaceScope } from "@/lib/products/image-assets";
 import {
-  createEmptyProductVideoPlan,
   createVideoProp,
   createVideoShot,
   normalizeProductVideoPlan,
@@ -22,89 +22,22 @@ const textareaClass = "w-full resize-y rounded-md border border-border bg-white 
 export function ProductVideoPlanModal({
   sku,
   productName,
+  value,
+  onChange,
   onClose,
 }: {
   sku: string;
   productName: string;
+  value?: ProductVideoPlanDraft;
+  onChange: Dispatch<SetStateAction<ProductVideoPlanDraft>>;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<ProductVideoPlanDraft>(() => createEmptyProductVideoPlan());
-  const [ready, setReady] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const draft = normalizeProductVideoPlan(value);
+  const setDraft = onChange;
   const [error, setError] = useState("");
   const [uploadingField, setUploadingField] = useState("");
   const [previewAsset, setPreviewAsset] = useState<ProductVideoAsset | null>(null);
   const totalPropsCost = useMemo(() => draft.props.reduce((total, item) => total + item.totalPrice, 0), [draft.props]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadVideoPlan() {
-      setReady(false);
-      setError("");
-
-      try {
-        const response = await fetch(`/api/products/${encodeURIComponent(sku)}/video-plan`, { cache: "no-store" });
-        const data = (await response.json()) as { videoPlan?: Partial<ProductVideoPlanDraft>; error?: string };
-
-        if (!response.ok) {
-          throw new Error(data.error || "视频策划草稿读取失败");
-        }
-
-        if (!cancelled) {
-          setDraft(normalizeProductVideoPlan(data.videoPlan));
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "视频策划草稿读取失败");
-          setDraft(createEmptyProductVideoPlan());
-        }
-      } finally {
-        if (!cancelled) {
-          setReady(true);
-        }
-      }
-    }
-
-    void loadVideoPlan();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sku]);
-
-  useEffect(() => {
-    if (!ready) return;
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => {
-      setSaveStatus("saving");
-      fetch(`/api/products/${encodeURIComponent(sku)}/video-plan`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoPlan: draft }),
-        signal: controller.signal,
-      })
-        .then(async (response) => {
-          const data = (await response.json()) as { error?: string };
-          if (!response.ok) {
-            throw new Error(data.error || "视频策划草稿保存失败");
-          }
-          setSaveStatus("saved");
-          setError("");
-        })
-        .catch((saveError) => {
-          if (controller.signal.aborted) return;
-          setSaveStatus("failed");
-          setError(saveError instanceof Error ? saveError.message : "视频策划草稿保存失败");
-        });
-    }, 500);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeoutId);
-    };
-  }, [draft, ready, sku]);
 
   function updateReference(index: number, field: keyof ProductVideoReference, value: string) {
     setDraft((current) => ({
@@ -144,11 +77,10 @@ export function ProductVideoPlanModal({
 
     setUploadingField(field);
     try {
-      const uploaded: ProductVideoAsset[] = [];
-
       for (const file of uploadFiles) {
         const formData = new FormData();
         formData.append("file", file);
+        appendCurrentWorkspaceScope(formData);
 
         const response = await fetch("/api/products/video-assets/upload", {
           method: "POST",
@@ -160,10 +92,9 @@ export function ProductVideoPlanModal({
           throw new Error(data.error || "素材上传失败");
         }
 
-        uploaded.push(data.asset);
+        const asset = data.asset;
+        setDraft((current) => ({ ...current, [field]: isImageField ? [...current[field], asset].slice(0, 5) : [...current[field], asset] }));
       }
-
-      setDraft((current) => ({ ...current, [field]: isImageField ? [...current[field], ...uploaded].slice(0, 5) : [...current[field], ...uploaded] }));
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "素材上传失败");
     } finally {
@@ -183,11 +114,10 @@ export function ProductVideoPlanModal({
     const uploadKey = `${type}-${index}`;
     setUploadingField(uploadKey);
     try {
-      const uploaded: ProductVideoAsset[] = [];
-
       for (const file of uploadFiles) {
         const formData = new FormData();
         formData.append("file", file);
+        appendCurrentWorkspaceScope(formData);
 
         const response = await fetch("/api/products/video-assets/upload", {
           method: "POST",
@@ -199,24 +129,23 @@ export function ProductVideoPlanModal({
           throw new Error(data.error || "图片上传失败");
         }
 
-        uploaded.push(data.asset);
-      }
-
-      setDraft((current) =>
+        const asset = data.asset;
+        setDraft((current) =>
         type === "shot"
           ? {
               ...current,
               shots: current.shots.map((shot, shotIndex) =>
-                shotIndex === index ? { ...shot, images: [...(shot.images ?? []), ...uploaded].slice(0, 5) } : shot,
+                shotIndex === index ? { ...shot, images: [...(shot.images ?? []), asset].slice(0, 5) } : shot,
               ),
             }
           : {
               ...current,
               props: current.props.map((item, itemIndex) =>
-                itemIndex === index ? { ...item, images: [...(item.images ?? []), ...uploaded].slice(0, 5) } : item,
+                itemIndex === index ? { ...item, images: [...(item.images ?? []), asset].slice(0, 5) } : item,
               ),
             },
       );
+      }
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "图片上传失败");
     } finally {
@@ -254,11 +183,11 @@ export function ProductVideoPlanModal({
             <h2 className="text-lg font-bold text-foreground">视频策划</h2>
             <p className="mt-1 text-xs font-medium text-muted">SKU {sku} {productName ? `· ${productName}` : ""}</p>
             <p className="mt-1 text-xs font-semibold text-muted">
-              {ready ? saveStatus === "saving" ? "正在保存到数据库" : saveStatus === "failed" ? "保存失败" : "已连接数据库草稿" : "正在读取数据库草稿"}
+              修改保留在商品编辑草稿中，点击主编辑器“保存”才正式提交；关闭此面板不会提交。
             </p>
             {error ? <p className="mt-1 text-xs font-semibold text-danger">{error}</p> : null}
           </div>
-          <Button variant="secondary" size="sm" onClick={onClose}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={Boolean(uploadingField)}>
             <X className="h-4 w-4" />
             关闭
           </Button>

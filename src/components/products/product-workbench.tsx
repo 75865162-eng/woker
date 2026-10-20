@@ -33,6 +33,13 @@ import { isOperationsProgressComplete } from "@/lib/products/operations-progress
 import { getProductAssetDownloadUrl } from "@/lib/products/image-assets";
 import { toLightweightProduct } from "@/lib/products/lightweight-product";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
+import { appendCurrentWorkspaceScope } from "@/lib/products/image-assets";
+import { restoreProductEdits } from "@/lib/products/product-edit-draft-repository";
+import { normalizeProductVideoPlan } from "@/lib/products/video-plan";
+import { normalizeOperationsProgress } from "@/lib/products/operations-progress";
+import { useProductEditDraft } from "./use-product-edit-draft";
+import { ProductEditDialog } from "./product-edit-dialog";
+import { ProductAttachmentActivityContext } from "./product-attachment-activity";
 
 import {
   initialFilters,
@@ -329,6 +336,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     hasServerInitialData ? normalizeProductFilters() : normalizeProductFilters(initialCachedWorkbench?.filters)
   ));
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+  const [importedEditorDraft, setImportedEditorDraft] = useState<Product | null>(null);
   const [detailReady, setDetailReady] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
@@ -832,6 +840,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
 
   function openNewProduct() {
     productDetailRequestSeq.current += 1;
+    setImportedEditorDraft(null);
     setActiveProduct(null);
     setDetailReady(true);
     setIsEditorOpen(true);
@@ -843,6 +852,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   }
 
   async function openProduct(sku: string) {
+    setImportedEditorDraft(null);
     const normalizedSku = sku.trim();
     const workspaceId = readCurrentWorkspaceId();
     const fullCacheKey = getProductDetailCacheKeyWithMode(workspaceId, normalizedSku, true);
@@ -853,14 +863,8 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
 
     setProductsError("");
     setActiveProduct(cachedDetail ?? cachedTextDetail ?? listProduct);
-    setDetailReady(Boolean(cachedDetail ?? cachedTextDetail ?? listProduct));
+    setDetailReady(false);
     setIsEditorOpen(true);
-
-    if (cachedDetail) {
-      setActiveProduct(cachedDetail);
-      setDetailReady(true);
-      return;
-    }
 
     const requestId = ++productDetailRequestSeq.current;
     setDetailReady(false);
@@ -884,15 +888,15 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       }
       const message = error instanceof Error ? error.message : "商品详情读取失败";
       setProductsError(message);
-      setDetailReady(true);
+      setDetailReady(false);
     }
   }
 
-  async function persistProduct(product: Product) {
+  async function persistProduct(product: Product, workspaceId = readCurrentWorkspaceId()) {
     const response = await fetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product }),
+      body: JSON.stringify({ product, workspaceId }),
     });
     const data = (await response.json()) as { product?: Product; error?: string; conflict?: boolean; currentRevision?: number };
 
@@ -907,7 +911,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     return data.product;
   }
 
-  async function handleSaveProduct(draft: ProductDraft) {
+  async function handleSaveProduct(draft: ProductDraft, workspaceId = readCurrentWorkspaceId()) {
     productDetailRequestSeq.current += 1;
     const existing = activeProduct;
     const normalizedStatus = existing || newProductStatusValues.has(draft.status) ? draft.status : "pending";
@@ -920,15 +924,13 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       createdAt: existing?.createdAt ?? formatDateTime(new Date()),
     };
     try {
-      const savedProduct = await persistProduct(nextProduct);
+      const savedProduct = await persistProduct(nextProduct, workspaceId);
       invalidateProductRequestCaches();
-      productDetailCache.set(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), savedProduct.sku, true), savedProduct);
+      productDetailCache.set(getProductDetailCacheKeyWithMode(workspaceId, savedProduct.sku, true), savedProduct);
       pendingProductRef.current = {
         product: toLightweightProduct(savedProduct),
         isNew: !existing,
       };
-      setActiveProduct(savedProduct);
-      setDetailReady(true);
       setProducts((current) => {
         const savedSku = savedProduct.sku.trim();
         const savedLightweightProduct = toLightweightProduct(savedProduct);
@@ -944,7 +946,6 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       if (!existing) {
         setPage(1);
       }
-      closeProductEditor();
       void reloadProducts({ page: existing ? page : 1 }).catch((reloadError) => {
         const message = reloadError instanceof Error ? reloadError.message : "商品列表刷新失败";
         setProductsError(message);
@@ -953,10 +954,8 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
       setActivityLog((current) => [`${existing ? "保存" : "新增"}商品 ${savedProduct.sku} 到数据库`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "商品保存失败";
-      window.alert(error instanceof Error && error.name === "ProductRevisionConflictError"
-        ? `${message}\n\n当前页面数据已过期，请关闭后重新打开商品再保存。`
-        : message);
       setActivityLog((current) => [`商品保存失败：${message}`, ...current].slice(0, 8));
+      throw error;
     }
   }
 
@@ -985,21 +984,14 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         developer: "",
       };
       const importedWithAssets = await uploadEmbeddedProductImages(importedWithOwner);
-      const savedProduct = await persistProduct(importedWithAssets);
-      invalidateProductRequestCaches();
-      productDetailCache.set(getProductDetailCacheKeyWithMode(readCurrentWorkspaceId(), savedProduct.sku, true), savedProduct);
-      setActiveProduct(savedProduct);
+      setImportedEditorDraft(importedWithAssets);
+      setActiveProduct(null);
       setDetailReady(true);
       setIsEditorOpen(true);
-      void reloadProducts({ page: 1 }).catch((reloadError) => {
-        const message = reloadError instanceof Error ? reloadError.message : "商品列表刷新失败";
-        setProductsError(message);
-        setActivityLog((current) => [`商品已导入并保存，但列表刷新失败：${message}`, ...current].slice(0, 8));
-      });
-      setActivityLog((current) => [`已导入 ${file.name} 并保存到数据库`, ...current].slice(0, 8));
+      setActivityLog((current) => [`已导入 ${file.name} 到编辑草稿，请检查后点击保存才正式创建商品`, ...current].slice(0, 8));
     } catch (error) {
       const message = error instanceof Error ? error.message : "导入失败";
-      window.alert(message);
+      setProductsError(message);
       setActivityLog((current) => [`导入失败：${message}`, ...current].slice(0, 8));
     }
   }
@@ -1308,6 +1300,8 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
             product={versionProduct}
             onClose={() => setVersionProduct(null)}
             onRestored={() => {
+              invalidateProductRequestCaches();
+              productDetailCache.clear();
               void reloadProducts();
               setActivityLog((current) => [`已恢复商品 ${versionProduct.sku} 的历史版本`, ...current].slice(0, 8));
             }}
@@ -1316,7 +1310,9 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
 
         {isEditorOpen ? (
             <ProductEditor
+              key={`${readCurrentWorkspaceId()}:${activeProduct?.sku ?? "new"}:${currentUserId}`}
               product={activeProduct}
+              initialDraft={importedEditorDraft}
               products={products}
               nextSku={getNextSku(products)}
               creatorName={creatorName}
@@ -1340,8 +1336,9 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
   );
 }
 
-function ProductEditor({
+export function ProductEditor({
   product,
+  initialDraft,
   products,
   nextSku,
   creatorName,
@@ -1353,6 +1350,7 @@ function ProductEditor({
   onSave,
 }: {
   product: Product | null;
+  initialDraft?: Product | null;
   products: Product[];
   nextSku: string;
   creatorName: string;
@@ -1361,14 +1359,35 @@ function ProductEditor({
   opsOptions: string[];
   designerOptions: string[];
   onClose: () => void;
-  onSave: (draft: ProductDraft) => void | Promise<void>;
+  onSave: (draft: ProductDraft, workspaceId: string) => void | Promise<void>;
 }) {
-  const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(product, products, nextSku));
+  const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(initialDraft ?? product, products, nextSku));
+  const initialDraftRef = useRef(initialDraft);
+  const [editorWorkspaceId] = useState(readCurrentWorkspaceId);
   const [saving, setSaving] = useState(false);
+  const [committed, setCommitted] = useState(false);
+  const saveInFlight = useRef(false);
+  const [baseSnapshot, setBaseSnapshot] = useState<ProductEditorDraft>(() => productToDraft(product, products, nextSku));
+  const [editorError, setEditorError] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [latest, setLatest] = useState<ProductEditorDraft | null>(null);
+  const [latestLoading, setLatestLoading] = useState(false);
+  const conflictDraft = useRef<{ original: ProductEditorDraft; form: ProductEditorDraft } | null>(null);
+  const shellUser = useAppShellUser();
+  const localDraft = useProductEditDraft({
+    organizationId: shellUser?.organizationId ?? "",
+    workspaceId: editorWorkspaceId, userId: creatorUserId,
+    entityId: product?.sku || "new", editorType: "product",
+  }, baseSnapshot, draft, detailReady);
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
   const [conclusionUploading, setConclusionUploading] = useState(false);
   const [imageUploads, setImageUploads] = useState<ProductImageUploadProgress[]>([]);
+  const [workbookUploads, setWorkbookUploads] = useState(0);
+  const trackWorkbookUpload = useCallback((delta: number) => setWorkbookUploads((current) => Math.max(0, current + delta)), []);
+  const attachmentsBusy = conclusionUploading || imageUploads.length > 0 || workbookUploads > 0;
+  const childEditorOpen = operationsProgressOpen || videoPlanOpen;
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const conclusionInputRef = useRef<HTMLInputElement | null>(null);
@@ -1415,16 +1434,50 @@ function ProductEditor({
 
   useEffect(() => {
     const productKey = product?.id || product?.sku || "";
-    const imageAssetCount = Array.isArray(product?.imageAssets) ? product.imageAssets.length : 0;
     const sourceKey = !isEditing
-      ? `new:${nextSkuRef.current}`
-      : `${productKey}:${detailReady ? "detail" : "preview"}:${imageAssetCount}`;
+      ? "new"
+      : `${productKey}:detail`;
 
-    if (draftSourceKeyRef.current !== sourceKey) {
+    if (detailReady && draftSourceKeyRef.current !== sourceKey) {
       draftSourceKeyRef.current = sourceKey;
-      setDraft(productToDraft(productRef.current, productsRef.current, nextSkuRef.current));
+      const initial = productToDraft(productRef.current, productsRef.current, nextSkuRef.current);
+      setDraft(!isEditing && initialDraftRef.current ? productToDraft(initialDraftRef.current, productsRef.current, nextSkuRef.current) : initial);
+      setBaseSnapshot(initial);
     }
   }, [detailReady, isEditing, product]);
+
+  async function requestClose() {
+    if (saving || attachmentsBusy || childEditorOpen) return;
+    if (localDraft.dirty || localDraft.candidates.length || conflictDraft.current) setConfirmClose(true);
+    else onClose();
+  }
+
+  async function discardAndClose() {
+    if (await localDraft.clear()) onClose();
+  }
+
+  async function loadLatest() {
+    setLatestLoading(true);
+    setEditorError("");
+    try {
+      await localDraft.flush();
+      const response = await fetch(`/api/products/${encodeURIComponent(draft.sku)}/detail`, { cache: "no-store", headers: { "x-workspace-id": editorWorkspaceId } });
+      const data = await response.json() as { product?: Product; error?: string };
+      if (!response.ok || !data.product || !Number.isInteger(data.product.revision)) throw new Error(data.error || "最新商品读取失败");
+      setLatest(productToDraft(data.product, products, nextSku));
+    } catch (error) {
+      setEditorError(error instanceof Error ? error.message : "最新商品读取失败");
+    } finally { setLatestLoading(false); }
+  }
+
+  function restoreAfterConflict() {
+    if (!latest || !conflictDraft.current) return;
+    setBaseSnapshot(latest);
+    setDraft(restoreProductEdits(conflictDraft.current.original, conflictDraft.current.form, latest));
+    conflictDraft.current = null;
+    setConflictOpen(false);
+    setEditorError("已恢复你的修改，未自动保存。请核对最新数据和表单后点击保存；修改过的数组/复合字段会整体恢复。");
+  }
 
   function setField<K extends keyof ProductDraft>(field: K, value: ProductDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -1557,41 +1610,56 @@ function ProductEditor({
             ? ""
             : nextDraft.workflowDueAt || createWorkflowDueAt(now),
         workflowHistory,
-      }),
+      }, editorWorkspaceId),
     );
   }
 
   async function handleSubmit(override?: Partial<ProductEditorDraft>) {
-    if (saving) {
+    if (committed || saveInFlight.current || attachmentsBusy || childEditorOpen || !detailReady || !localDraft.checked || localDraft.candidates.length || conflictDraft.current) {
       return;
     }
 
     const nextDraft = { ...draft, ...override };
 
     if (!nextDraft.chineseName.trim() || !nextDraft.englishName.trim()) {
-      window.alert("中文名和英文名为必填项。");
+      setEditorError("中文名和英文名为必填项。");
       return;
     }
 
     if ((nextDraft.status === "canceled" || nextDraft.status === "listed") && !nextDraft.conclusionExcelFile?.id) {
-      window.alert("状态为已取消或已上架时，请先上传结论 Excel 表。");
+      setEditorError("状态为已取消或已上架时，请先上传结论 Excel 表。");
       return;
     }
 
     if (nextDraft.status === "ops_review" && selectedOps.length === 0) {
-      window.alert("状态为运营确认时，请至少选择一位运营负责人。");
+      setEditorError("状态为运营确认时，请至少选择一位运营负责人。");
       return;
     }
 
     if (nextDraft.status === "design_in_progress" && selectedDesigners.length === 0) {
-      window.alert("状态为美工处理中时，请至少选择一位美工负责人。");
+      setEditorError("状态为美工处理中时，请至少选择一位美工负责人。");
       return;
     }
 
+    saveInFlight.current = true;
     setSaving(true);
+    setEditorError("");
     try {
-      await saveDraft(nextDraft);
+      await localDraft.flush();
+      await saveDraft({ ...nextDraft, revision: baseSnapshot.revision });
+      setCommitted(true);
+      // Cleanup failure must not turn a committed transaction into a failed save.
+      if (await localDraft.clear()) onClose();
+      else setEditorError("商品已正式保存，但本地草稿清理失败。请点击取消重试清理，不要重复保存。");
+    } catch (error) {
+      await localDraft.flush();
+      if (error instanceof Error && error.name === "ProductRevisionConflictError") {
+        conflictDraft.current = { original: baseSnapshot, form: nextDraft };
+        setLatest(null);
+        setConflictOpen(true);
+      } else setEditorError(error instanceof Error ? error.message : "商品保存失败，你的修改仍保留在表单中。");
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
   }
@@ -1599,7 +1667,6 @@ function ProductEditor({
   function moveWorkflow(stage: ProductWorkflowStage, note: string) {
     const nextDraft = buildWorkflowDraft(stage, note);
     setDraft(nextDraft);
-    void saveDraft(nextDraft);
   }
 
   function setWorkbookDetail(updater: (current: TrialProductDraft) => TrialProductDraft) {
@@ -1855,7 +1922,7 @@ function ProductEditor({
         }));
       }
       if (firstError?.status === "rejected") {
-        window.alert(firstError.reason instanceof Error ? firstError.reason.message : "商品图片上传失败。");
+        setEditorError(firstError.reason instanceof Error ? firstError.reason.message : "商品图片上传失败。");
       }
     } finally {
       setImageUploads([]);
@@ -1875,7 +1942,7 @@ function ProductEditor({
       return;
     }
     if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) {
-      window.alert(productAttachmentSizeError(file.name, file.size));
+      setEditorError(productAttachmentSizeError(file.name, file.size));
       return;
     }
 
@@ -1883,6 +1950,7 @@ function ProductEditor({
     try {
       const formData = new FormData();
       formData.append("file", file);
+      appendCurrentWorkspaceScope(formData);
 
       const response = await fetch("/api/products/conclusion-files/upload", {
         method: "POST",
@@ -1896,7 +1964,7 @@ function ProductEditor({
 
       setDraft((current) => ({ ...current, conclusionExcelFile: data.file }));
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "结论 Excel 上传失败。");
+      setEditorError(error instanceof Error ? error.message : "结论 Excel 上传失败。");
     } finally {
       setConclusionUploading(false);
     }
@@ -1908,7 +1976,13 @@ function ProductEditor({
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-foreground">{isEditing ? `商品详情 ${draft.sku}` : "新增商品"}</h2>
-            <p className="mt-1 text-xs font-medium text-muted">保存后会回到产品列表，SKU 页面与新增页面使用同一套字段。</p>
+            <p className="mt-1 text-xs font-medium text-muted" role="status">{localDraft.status}</p>
+            <p className="mt-1 text-xs text-muted">图片、视频和 Excel 上传仅暂存文件；点击保存才绑定到正式商品。取消不会删除已被引用的文件。</p>
+            {editorError ? <p role="alert" className="mt-1 text-xs text-danger">{editorError}</p> : null}
+            {committed ? <Button size="sm" variant="secondary" onClick={onClose}>关闭（商品已保存）</Button> : null}
+            {!detailReady ? <p className="mt-1 text-xs text-danger">正在读取权威详情。读取失败时请暂时离开后重新打开；加载完成前不能编辑或保存。</p> : null}
+            {conflictDraft.current ? <Button size="sm" variant="secondary" onClick={() => setConflictOpen(true)}>处理并发冲突</Button> : null}
+            {latest ? <details className="text-xs"><summary>查看最新服务器数据（版本 {latest.revision}）</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{JSON.stringify(latest, null, 2)}</pre></details> : null}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <input
@@ -1928,17 +2002,17 @@ function ProductEditor({
                   size="sm"
                   className={compactToolbarButtonClass}
                   onClick={() => conclusionInputRef.current?.click()}
-                  disabled={conclusionUploading}
+                  disabled={committed || saving || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current) || conclusionUploading}
                 >
                   <FileUp className="h-4 w-4" />
                   {conclusionUploading ? "上传中" : "结论 Excel（必传）"}
                 </Button>
-                <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setOperationsProgressOpen(true)}>
+                <Button variant="secondary" size="sm" className={compactToolbarButtonClass} disabled={committed || saving || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current)} onClick={() => setOperationsProgressOpen(true)}>
                   运营进度
                 </Button>
                 {showHeavyDetail ? (
                   <>
-                    <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => setVideoPlanOpen(true)}>
+                    <Button variant="secondary" size="sm" className={compactToolbarButtonClass} disabled={committed || saving || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current)} onClick={() => setVideoPlanOpen(true)}>
                       <Video className="h-4 w-4" />
                       视频
                     </Button>
@@ -1946,18 +2020,19 @@ function ProductEditor({
                 ) : null}
               </>
             ) : null}
-            <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={onClose}>
+            <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => void requestClose()} disabled={saving || attachmentsBusy || childEditorOpen}>
               <X className="h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" className={compactToolbarButtonClass} onClick={() => void handleSubmit()} disabled={saving}>
+            <Button variant="ghost" size="sm" className={compactToolbarButtonClass} disabled={saving || attachmentsBusy || childEditorOpen} onClick={onClose}>暂时离开（保留草稿）</Button>
+            <Button size="sm" className={compactToolbarButtonClass} onClick={() => void handleSubmit()} disabled={committed || saving || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current) || attachmentsBusy || childEditorOpen}>
               {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "保存中" : "保存"}
             </Button>
           </div>
         </div>
 
-        <div className="thin-scrollbar flex-1 overflow-auto p-5">
+        <fieldset disabled={committed || saving || attachmentsBusy || childEditorOpen || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current)} className="thin-scrollbar min-w-0 flex-1 overflow-auto p-5">
           <section className="space-y-4">
             <Card>
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -2103,6 +2178,7 @@ function ProductEditor({
                 </div>
               </CardContent>
             </Card>
+            <ProductAttachmentActivityContext.Provider value={trackWorkbookUpload}>
             <ProductWorkbookDetailSections
               detail={workbookDetail}
               onPricingChange={updateWorkbookPricingRow}
@@ -2122,9 +2198,53 @@ function ProductEditor({
               onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
               onRemarkImagesChange={updateWorkbookRemarkImages}
             />
+            </ProductAttachmentActivityContext.Provider>
           </section>
-        </div>
+        </fieldset>
       </div>
+      {localDraft.checked && detailReady && localDraft.candidates.length > 0 ? (
+        <ProductEditDialog title="发现未提交的编辑内容" onDismiss={() => { /* Explicit restore/discard is required before editing. */ }}>
+          <p className="text-sm">发现 {localDraft.candidates.length} 份草稿，最近修改于 {new Date(localDraft.candidates[0].updatedAt).toLocaleString("zh-CN")}。</p>
+          {localDraft.candidates[0].baseRevision !== baseSnapshot.revision ? <p className="my-3 text-sm text-danger">商品数据已经更新。恢复将保留原始版本号，保存前必须处理版本冲突；不会静默覆盖最新商品。</p> : null}
+          <details className="mt-3 text-xs"><summary>查看最新商品数据 · 版本 {baseSnapshot.revision ?? "新商品"}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{JSON.stringify(baseSnapshot, null, 2)}</pre></details>
+          <div className="mt-4 flex gap-2">
+            <Button onClick={() => {
+              const record = localDraft.acceptCandidate();
+              if (record) {
+                if (record.baseRevision !== baseSnapshot.revision) setLatest(baseSnapshot);
+                setBaseSnapshot({ ...record.original, revision: record.baseRevision });
+                setDraft({ ...record.form, revision: record.baseRevision });
+              }
+            }}>恢复草稿</Button>
+            <Button variant="secondary" onClick={() => void localDraft.clear().then((ok) => { if (ok) localDraft.resume(); })}>放弃草稿</Button>
+            <Button variant="ghost" onClick={onClose}>暂时离开（保留草稿）</Button>
+          </div>
+        </ProductEditDialog>
+      ) : null}
+      {confirmClose ? (
+        <ProductEditDialog title="放弃修改并关闭？" onDismiss={() => setConfirmClose(false)}>
+          <p className="text-sm">只放弃本次未提交修改，不影响已正式保存的商品数据。暂时离开或刷新会保留草稿。</p>
+          <p className="mt-2 text-xs text-muted" role="status">{localDraft.status}</p>
+          <div className="mt-4 flex gap-2">
+            <Button onClick={() => void discardAndClose()}>放弃修改并关闭</Button>
+            <Button variant="secondary" onClick={() => setConfirmClose(false)}>继续编辑</Button>
+          </div>
+        </ProductEditDialog>
+      ) : null}
+      {conflictOpen ? (
+        <ProductEditDialog title="商品版本冲突" onDismiss={() => setConflictOpen(false)}>
+          <p className="text-sm">该商品已被其他用户修改。你的编辑内容已保留，请加载最新数据后继续。</p>
+          {latest ? <details open className="mt-3 text-xs"><summary>最新数据 · 版本 {latest.revision}（供核对）</summary><pre className="max-h-72 overflow-auto whitespace-pre-wrap">{JSON.stringify(latest, null, 2)}</pre></details> : null}
+          {editorError ? <p role="alert" className="mt-2 text-sm text-danger">{editorError}</p> : null}
+          <p className="mt-3 text-xs text-muted">恢复仅重新应用你修改过的字段，数组和复合字段整体恢复。不会自动保存，请人工检查。附件引用会保留，不会重复上传。</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button onClick={() => void loadLatest()} disabled={latestLoading}>{latestLoading ? "正在读取" : "加载最新数据"}</Button>
+            <Button onClick={restoreAfterConflict} disabled={!latest || latestLoading}>恢复我的修改</Button>
+            <Button variant="secondary" onClick={() => setConflictOpen(false)}>暂不处理</Button>
+            <Button variant="ghost" onClick={() => { setConflictOpen(false); setConfirmClose(true); }}>放弃草稿</Button>
+          </div>
+        </ProductEditDialog>
+      ) : null}
       {operationsProgressOpen ? (
         <ProductOperationsProgress
           productName={draft.chineseName}
@@ -2132,6 +2252,7 @@ function ProductEditor({
           currentUser={creatorName}
           currentUserId={creatorUserId}
           defaultOwner={formatAssigneeList(selectedOps) || selectionOwner}
+          onChange={(update) => setDraft((current) => ({ ...current, operationsProgress: typeof update === "function" ? update(normalizeOperationsProgress(current.operationsProgress, formatAssigneeList(selectedOps) || selectionOwner)) : update }))}
           onClose={() => setOperationsProgressOpen(false)}
           onApply={(operationsProgress) => {
             setDraft((current) => ({ ...current, operationsProgress }));
@@ -2143,6 +2264,8 @@ function ProductEditor({
         <ProductVideoPlanModal
           sku={draft.sku}
           productName={draft.chineseName}
+          value={draft.videoPlan}
+          onChange={(update) => setDraft((current) => ({ ...current, videoPlan: typeof update === "function" ? update(normalizeProductVideoPlan(current.videoPlan)) : update }))}
           onClose={() => setVideoPlanOpen(false)}
         />
       ) : null}

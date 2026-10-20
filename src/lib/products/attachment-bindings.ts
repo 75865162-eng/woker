@@ -32,6 +32,9 @@ export function collectProductAttachmentReferences(product: Product): ProductAtt
         fieldPath: `${path}.thumbFileId`,
       });
     }
+    if (typeof record.previewFileId === "string" && record.previewFileId.trim()) {
+      references.set(record.previewFileId.trim(), { fileId: record.previewFileId.trim(), fieldPath: `${path}.previewFileId` });
+    }
 
     const hasAssetShape =
       typeof record.id === "string"

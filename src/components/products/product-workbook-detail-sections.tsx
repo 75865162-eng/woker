@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useProductAttachmentActivity } from "./product-attachment-activity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getProductAssetDownloadUrl, uploadProductAttachmentAsset, uploadProductImageAsset } from "@/lib/products/image-assets";
+import {
+  getProductAssetDownloadUrl,
+  isPlaceholderProductImageAssetId,
+  uploadProductAttachmentAsset,
+  uploadProductImageAsset,
+} from "@/lib/products/image-assets";
 import type { ProductImageAsset } from "@/lib/products/types";
 import {
   compactCompetitorFields,
@@ -389,9 +395,22 @@ function ImageUploadSquare({
   const [previewSource, setPreviewSource] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  useProductAttachmentActivity(isUploading);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageSources = Array.from(new Set([
+    previewImage,
+    image,
+    asset?.thumbUrl,
+    asset?.downloadUrl,
+  ].map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+  const [failedImageSources, setFailedImageSources] = useState<string[]>([]);
+  const displayedImageSource = imageSources.find((source) => !failedImageSources.includes(source)) ?? "";
+
+  useEffect(() => {
+    setFailedImageSources([]);
+  }, [image, previewImage, asset?.id, asset?.thumbUrl, asset?.downloadUrl]);
 
   async function handleFile(file: File | undefined) {
     if (!file) {
@@ -428,7 +447,8 @@ function ImageUploadSquare({
     setPreviewOpen(true);
   }
 
-  const hasFile = Boolean(image || asset?.id);
+  const hasUploadedAsset = Boolean(asset?.id && !isPlaceholderProductImageAssetId(asset.id));
+  const hasFile = Boolean(image || hasUploadedAsset);
   const isPdf = asset?.mimeType === "application/pdf" || isPdfDataUrl(image) || image.toLowerCase().endsWith(".pdf");
 
   return (
@@ -446,8 +466,19 @@ function ImageUploadSquare({
               <span className="max-w-[112px] truncate px-2 text-xs font-semibold text-foreground">{asset?.name || "PDF"}</span>
             </div>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewImage || image} alt="竞品图片" className="h-full w-full object-contain p-1" />
+            displayedImageSource ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={displayedImageSource}
+                alt="竞品图片"
+                className="h-full w-full object-contain p-1"
+                onError={() => setFailedImageSources((current) => current.includes(displayedImageSource)
+                  ? current
+                  : [...current, displayedImageSource])}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted">图片加载失败</div>
+            )
           )}
         </button>
       ) : (
@@ -513,6 +544,7 @@ function RemarkImagesUploader({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  useProductAttachmentActivity(isUploading);
   const [uploadError, setUploadError] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState<ProductImageUploadProgress[]>([]);
 
@@ -830,6 +862,7 @@ function ImprovementTable({
   const tableWidth = 412 + improvementColumnWidths.reduce((total, width) => total + width, 0);
   const remarkUploadRef = useRef<HTMLInputElement | null>(null);
   const [remarkUploading, setRemarkUploading] = useState(false);
+  useProductAttachmentActivity(remarkUploading);
   const [remarkUploadError, setRemarkUploadError] = useState("");
   const [remarkUploadingFiles, setRemarkUploadingFiles] = useState<ProductImageUploadProgress[]>([]);
 

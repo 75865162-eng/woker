@@ -42,6 +42,15 @@ extract_dir="${release_dir}.extracting"
 app_version_label=""
 previous_release_dir=""
 release_switched="false"
+requires_migration=false
+migration_status=skipped
+requires_generate=false
+restart_web=false
+restart_worker=false
+restart_image_worker=false
+runtime_config=false
+caddy_reload=false
+infra_update=false
 
 read_previous_version() {
   if [ -f "$VERSION_STATE_FILE" ]; then
@@ -103,6 +112,7 @@ write_release_result() {
   "artifactSha256": "$actual_artifact_sha256",
   "healthUrl": "$(json_escape "${health_url:-}")",
   "health": "$(json_escape "$health_status")",
+  "migration": "$migration_status",
   "failurePhase": "$(json_escape "$failure_phase")",
   "rollback": {
     "status": "$(json_escape "$rollback_status")",
@@ -133,13 +143,16 @@ wait_for_health() {
 
 install_runtime_from_release() {
   local runtime_release="$1"
-  install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
-  install -m 0644 "$runtime_release/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
-  install -m 0644 "$runtime_release/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service
-  systemctl daemon-reload
-  systemctl enable amazon-web amazon-worker amazon-image-upscale-worker
-  systemctl restart amazon-web amazon-worker amazon-image-upscale-worker
-  sh "$runtime_release/deploy/caddy/run-caddy.sh"
+  if [ "$runtime_config" = "true" ]; then
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
+    install -m 0644 "$runtime_release/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service
+    systemctl daemon-reload
+  fi
+  if [ "$restart_web" = "true" ]; then systemctl restart amazon-web; fi
+  if [ "$restart_worker" = "true" ]; then systemctl restart amazon-worker; fi
+  if [ "$restart_image_worker" = "true" ]; then systemctl restart amazon-image-upscale-worker; fi
+  if [ "$caddy_reload" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
 }
 
 rollback_application_release() {
@@ -202,8 +215,6 @@ trap on_release_error ERR
 
 cd "$APP_DIR"
 
-docker compose up -d --remove-orphans postgres redis
-
 mkdir -p "$RELEASES_DIR"
 rm -rf "$extract_dir"
 mkdir -p "$extract_dir"
@@ -225,10 +236,30 @@ if [ "$SOURCE_COMMIT" != "unknown" ] && [ "$metadata_commit" != "$SOURCE_COMMIT"
   exit 1
 fi
 
+# The reviewed CI plan is embedded in the SHA256-verified artifact. Fail closed.
+plan_flags="$(node - "$extract_dir/deployment-plan.json" "$metadata_commit" "$previous_release_dir/RELEASE.json" <<'NODE'
+const fs = require('fs');
+const [path, commit, previousPath] = process.argv.slice(2);
+const plan = JSON.parse(fs.readFileSync(path, 'utf8'));
+if (plan.headSha !== commit || !plan.requiresDeploy) throw new Error('Invalid deployment plan identity');
+const previous = JSON.parse(fs.readFileSync(previousPath, 'utf8'));
+if (previous.commit !== plan.baseSha) throw new Error('Deployment base differs from running release; regenerate CI plan');
+const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
+for (const key of keys) if (typeof plan[key] !== 'boolean') throw new Error(`Missing plan flag: ${key}`);
+console.log(keys.map(key => String(plan[key])).join(' '));
+NODE
+)"
+read -r requires_migration requires_generate restart_web restart_worker restart_image_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
+
 package_lock_checksum="$(sha256sum "$extract_dir/package-lock.json" | awk '{print $1}')"
 cached_package_lock_checksum="$(cat "$APP_DIR/node_modules/.package-lock.sha256" 2>/dev/null || true)"
 
 if [ ! -d "$APP_DIR/node_modules" ] || [ "$package_lock_checksum" != "$cached_package_lock_checksum" ]; then
+  plan_install="$(node -e 'const p=require(process.argv[1]); if(typeof p.requiresInstall!=="boolean") process.exit(1); process.stdout.write(String(p.requiresInstall))' "$extract_dir/deployment-plan.json")"
+  if [ "$plan_install" != "true" ]; then
+    echo "Dependency mismatch without a lockfile change in deployment plan; stop for review." >&2
+    exit 1
+  fi
   if [ "$INSTALL_DEPS_ON_SERVER" != "true" ]; then
     echo "Server node_modules do not match artifact package-lock.json." >&2
     echo "Set INSTALL_DEPS_ON_SERVER=true to allow npm ci on the server, or update dependencies before deploying." >&2
@@ -249,9 +280,14 @@ cp -a "$extract_dir/prisma" "$APP_DIR/prisma"
 cp -a "$extract_dir/scripts" "$APP_DIR/scripts"
 cp -a "$extract_dir/deploy" "$APP_DIR/deploy"
 cp "$extract_dir/docker-compose.yml" "$APP_DIR/docker-compose.yml"
+if [ "$infra_update" = "true" ]; then docker compose up -d postgres redis; fi
 
-npm run db:generate
-npm run db:migrate
+if [ "$requires_generate" = "true" ]; then npm run db:generate; fi
+if [ "$requires_migration" = "true" ]; then
+  migration_status=started
+  npm run db:migrate
+  migration_status=passed
+fi
 
 if [ "$RUN_BOOTSTRAP_SEED" = "true" ]; then
   node --env-file="$APP_DIR/.env" scripts/seed-admin.mjs
@@ -335,6 +371,8 @@ cat > "$result_path" <<JSON
   "artifactSha256": "$actual_artifact_sha256",
   "healthUrl": "$(json_escape "$health_url")",
   "health": "passed",
+  "migration": "$migration_status",
+  "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker },
   "rollback": {
     "status": "not_needed",
     "database": "not_rolled_back"
@@ -358,6 +396,14 @@ else
 fi
 
 find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r | awk "NR>${KEEP_RELEASES}" | while read -r old_release; do
+  # A worker intentionally not restarted may still be executing an older release.
+  in_use=false
+  for service in amazon-web amazon-worker amazon-image-upscale-worker; do
+    runtime_pid="$(systemctl show "$service" --property=MainPID --value)"
+    runtime_cwd="$(readlink -f "/proc/${runtime_pid}/cwd" 2>/dev/null || true)"
+    case "$runtime_cwd" in "$old_release"|"$old_release"/*) in_use=true ;; esac
+  done
+  if [ "$in_use" = "true" ]; then continue; fi
   if [ "$(readlink -f "$CURRENT_LINK")" != "$(readlink -f "$old_release")" ]; then
     rm -rf "$old_release"
   fi

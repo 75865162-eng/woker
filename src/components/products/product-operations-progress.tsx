@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { Check, CheckSquare, FileSpreadsheet, History, ImagePlus, Square, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export function ProductOperationsProgress({
   defaultOwner,
   onClose,
   onApply,
+  onChange,
 }: {
   productName: string;
   value?: ProductOperationProgress;
@@ -37,9 +38,11 @@ export function ProductOperationsProgress({
   defaultOwner: string;
   onClose: () => void;
   onApply: (value: ProductOperationProgress) => void;
+  onChange: Dispatch<SetStateAction<ProductOperationProgress>>;
 }) {
-  const initialValue = useMemo(() => normalizeOperationsProgress(value, defaultOwner), [defaultOwner, value]);
-  const [draft, setDraft] = useState(initialValue);
+  const [initialValue] = useState(() => normalizeOperationsProgress(value, defaultOwner));
+  const draft = normalizeOperationsProgress(value, defaultOwner);
+  const setDraft = onChange;
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const revenue = calculateForecastMonthlyRevenue(draft);
   const completedCount = draft.stages.filter(isOperationStageComplete).length;
@@ -139,14 +142,14 @@ export function ProductOperationsProgress({
                 {completedCount}/{draft.stages.length} 阶段完成
               </Badge>
             </div>
-            <p className="mt-1 text-sm text-muted">{productName || "未命名商品"}</p>
+            <p className="mt-1 text-sm text-muted">{productName || "未命名商品"} · 修改暂存在商品草稿，主编辑器保存后生效。</p>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={onClose}>
+            <Button size="sm" variant="secondary" onClick={onClose} disabled={uploadingIndex !== null}>
               <X className="h-4 w-4" />
-              取消
+              返回（保留修改）
             </Button>
-            <Button size="sm" onClick={applyChanges}>
+            <Button size="sm" onClick={applyChanges} disabled={uploadingIndex !== null}>
               <Check className="h-4 w-4" />
               应用到商品
             </Button>

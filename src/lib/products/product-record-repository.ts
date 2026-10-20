@@ -96,6 +96,11 @@ export async function saveProductRecord(
       ? await findProductRecordBySku(tx, input.scope, input.product.sku)
       : input.existingRecord;
 
+  // An editor with a base revision is updating, never recreating a deleted record.
+  if (!existingRecord && input.expectedRevision !== undefined) {
+    throw new ProductRecordRevisionConflictError(0);
+  }
+
   if (existingRecord && input.expectedRevision === undefined) {
     throw new ProductRecordRevisionConflictError(existingRecord.revision);
   }
@@ -150,8 +155,9 @@ export async function saveProductRecord(
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        const current = await findProductRecordBySku(tx, input.scope, productToSave.sku);
-        throw new ProductRecordRevisionConflictError(current?.revision ?? nextRevision);
+        // PostgreSQL has aborted this transaction after the constraint violation.
+        // Do not query it again; the client must read authoritative detail outside it.
+        throw new ProductRecordRevisionConflictError(nextRevision);
       }
       throw error;
     }

@@ -44,6 +44,7 @@ required_paths=(
   ".next-build/standalone/public/"
   "prisma/migrations/"
   "RELEASE-METADATA.json"
+  "deployment-plan.json"
 )
 for required_path in "${required_paths[@]}"; do
   if ! grep -Fq "$required_path" <<< "$tar_listing"; then

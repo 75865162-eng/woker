@@ -2,6 +2,9 @@ import { prisma } from "@/lib/db/prisma";
 import { repairProductProjections } from "@/lib/products/product-projection-repair";
 
 async function refreshDerivedFields() {
+  // Pure derived columns only. Expressions read the same locked row; never replay a stale
+  // payload snapshot, change revision, or update business facts from this maintenance job.
+  // Whole-database scope is intentional; projection repair below has the same scope.
   const updated = await prisma.$executeRaw`
     UPDATE "ProductRecord"
     SET
@@ -28,7 +31,7 @@ async function main() {
   const durationMs = Math.round(performance.now() - startedAt);
 
   console.log(
-    `[products] refreshed derived fields for ${updatedProducts.toLocaleString("zh-CN")} records, ` +
+    `[products] scope=all-organizations/all-workspaces; columns=source,currentOwner,isOverdue; payload/revision unchanged; refreshed derived fields for ${updatedProducts.toLocaleString("zh-CN")} records, ` +
       `repaired ${projectionRepair.repaired.toLocaleString("zh-CN")} projections and rebuilt ` +
       `${projectionRepair.scopes.toLocaleString("zh-CN")} summary scopes in ${durationMs}ms`,
   );

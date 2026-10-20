@@ -38,6 +38,7 @@ copy_without_macos_metadata prisma "$PACKAGE_DIR/"
 copy_without_macos_metadata public "$PACKAGE_DIR/"
 copy_without_macos_metadata scripts "$PACKAGE_DIR/"
 copy_without_macos_metadata src "$PACKAGE_DIR/"
+copy_without_macos_metadata dist/deployment-plan.json "$PACKAGE_DIR/"
 copy_without_macos_metadata .next-build/standalone "$PACKAGE_DIR/.next-build/"
 
 # Next output tracing can pick up local build artifacts that exist under the

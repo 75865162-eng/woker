@@ -51,6 +51,7 @@ export function AppShellClient({
   actions,
   userInitials = "AM",
   userId,
+  organizationId,
   userName,
   userRole,
   rolePermissions,
@@ -62,6 +63,7 @@ export function AppShellClient({
   actions?: React.ReactNode;
   userInitials?: string;
   userId?: string;
+  organizationId?: string;
   userName?: string;
   userRole?: string;
   rolePermissions?: RolePermissionMap | null;
@@ -142,7 +144,7 @@ export function AppShellClient({
   }, [pathname]);
 
   return (
-    <AppShellUserProvider value={{ userId, userInitials, userName, userRole }}>
+    <AppShellUserProvider value={{ organizationId, userId, userInitials, userName, userRole }}>
       <div className="min-h-screen bg-background">
       {enableShellEnhancements ? <WeComNotificationRunner /> : null}
       <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col items-center border-r border-border bg-white">

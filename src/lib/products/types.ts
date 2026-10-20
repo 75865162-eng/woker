@@ -113,6 +113,7 @@ export type ProductImageAsset = {
   uploadedAt: string;
   thumbUrl: string;
   previewUrl?: string;
+  previewFileId?: string;
   originalUrl: string;
   thumbFileId?: string;
   downloadUrl?: string;
