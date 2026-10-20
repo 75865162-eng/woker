@@ -18,3 +18,4 @@
 - [x] T006 增加草稿/并发回归测试，运行 test/lint/typecheck/build，记录未覆盖风险。
 - [x] T007 真实 Chromium + mock API 浏览器回归（恢复/取消/附件），不触碰生产。
 - [ ] T008 隔离 PostgreSQL 双用户竞争、事务回滚及完整登录/列表筛选分页端到端验收；需要隔离数据库/测试账号。
+- [x] T009 HTTP/旧浏览器缺少 randomUUID 时复用兼容 ID，补会话唯一性与编辑器刷新恢复回归；验证/发布结果追加 validation.md。

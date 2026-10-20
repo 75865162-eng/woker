@@ -21,6 +21,13 @@
 
 ## 自动化结果
 
+### 2026-10-21 浏览器兼容性热修
+
+- 现象：HTTP IP 访问时草稿 effect 直接调用缺失的 crypto.randomUUID，造成客户端页面异常。P1，有 HTTPS 域名绕行方案，未发现正式商品数据写入受影响的证据。
+- 修复：仅草稿 hook 复用现有 createBrowserId；不改草稿结构、权限、revision、共享工具或数据库。不删除/迁移任何 origin 的草稿。
+- 回归：禁用 randomUUID 的单元测试通过，100 个会话 ID 均不同；真实 Chromium 编辑器禁用 randomUUID 后可加载、暂存、刷新和恢复草稿，0 次正式提交且无 pageerror（1/1通过）。正式构建和完整单元/lint由 CI 执行。
+- 发布方案：CI artifact，线上基线 e992ac5bc82ba440d9f81505156dd68f2cd3fe9e；仅需 web 重启，不迁移数据库、不安装依赖、不重启 worker、不更新 Caddy/infra。失败回滚应用，不删除草稿。HTTP/HTTPS 草稿不互通，推荐正式 HTTPS 入口。
+
 - npm run test：91/91 通过（新增7项身份隔离、无IndexedDB、人工恢复、附件引用、实际更新CAS模拟、缺失版本/删除、唯一键竞争回归）。
 - npm run test:products:browser：9/9通过；实际商品编辑器+真实 Chromium IndexedDB，API mock，不触碰数据库/存储。覆盖刷新恢复、确认放弃/继续、保存成功/失败、重复409、跨身份隔离、上传引用/视频恢复、取消与防抖竞争、还原修改、IndexedDB不可用降级、导入初始草稿、SKU及会话条件删除、工作簿上传等待边界。
 - npm run lint、npx tsc --noEmit、npm run build：均通过；最终构建完成83个页面生成。git diff --check通过。不以构建成功替代真实数据库并发和生产性能验收。

@@ -27,4 +27,6 @@ TypeScript strict、React 19、Next.js 15、Prisma/PostgreSQL；浏览器 Indexe
 
 ## Implementation sequence
 
+兼容性热修：use-product-edit-draft 复用现有 createBrowserId，不改共享 ID 工具、数据库/API 或草稿结构；补无 randomUUID 的单元和实际编辑器浏览器测试。CI artifact 发布，仅重启 web，回滚仅应用版本，保留原 origin 草稿。
+
 本地仓储 → 编辑器集成 → 写入入口修复 → 维护脚本 → 测试及回归。无 schema migration。回滚代码即可；不要删除浏览器草稿库或服务器文件。上线前真实双用户 PostgreSQL 与浏览器验收不能由 mock 测试替代。

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createBrowserId } from "@/lib/browser/random-id";
 import {
   deleteProductDraft, productDraftIdentityKey, readProductDrafts, writeProductDraft,
   type LocalProductDraft, type ProductDraftIdentity,
@@ -42,7 +43,7 @@ export function useProductEditDraft<T extends { revision?: number }>(identity: P
   useEffect(() => {
     let active = true;
     stopped.current = false;
-    session.current = crypto.randomUUID();
+    session.current = createBrowserId();
     setChecked(false);
     const parsed = JSON.parse(identityKey) as ProductDraftIdentity;
     void readProductDrafts<T>(parsed).then((records) => {

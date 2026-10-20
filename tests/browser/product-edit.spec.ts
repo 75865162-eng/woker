@@ -44,6 +44,24 @@ async function setup(page: Page) {
 function nameInput(page: Page) { return page.locator("label").filter({ hasText: "中文名（必填）" }).locator("input"); }
 async function savedLocally(page: Page) { await expect(page.getByRole("status")).toContainText("草稿已暂存"); }
 
+test("without randomUUID the editor loads and preserves drafts across refresh", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis.crypto, "randomUUID", { value: undefined, configurable: true });
+  });
+  const state = await setup(page);
+  expect(await page.evaluate(() => typeof globalThis.crypto.randomUUID)).toBe("undefined");
+  await nameInput(page).fill("兼容浏览器草稿");
+  await savedLocally(page);
+  await page.reload();
+  await expect(page.getByRole("dialog")).toContainText("发现未提交的编辑内容");
+  await page.getByRole("button", { name: "恢复草稿", exact: true }).click();
+  await expect(nameInput(page)).toHaveValue("兼容浏览器草稿");
+  expect(state.saves).toBe(0);
+  expect(errors).toEqual([]);
+});
+
 test("autosave, refresh restore, continue editing and explicit discard never commit", async ({ page }) => {
   const state = await setup(page);
   await nameInput(page).fill("我的未提交商品");
