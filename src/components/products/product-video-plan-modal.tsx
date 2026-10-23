@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { ExternalLink, Minus, Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { appendCurrentWorkspaceScope } from "@/lib/products/image-assets";
+import { useProductImageUrls } from "@/lib/products/signed-image-urls";
 import {
   createVideoProp,
   createVideoShot,
@@ -37,6 +38,9 @@ export function ProductVideoPlanModal({
   const [error, setError] = useState("");
   const [uploadingField, setUploadingField] = useState("");
   const [previewAsset, setPreviewAsset] = useState<ProductVideoAsset | null>(null);
+  const { urls: previewImageUrls } = useProductImageUrls(
+    previewAsset?.mimeType.startsWith("image/") ? [previewAsset.id] : [],
+  );
   const totalPropsCost = useMemo(() => draft.props.reduce((total, item) => total + item.totalPrice, 0), [draft.props]);
 
   function updateReference(index: number, field: keyof ProductVideoReference, value: string) {
@@ -427,7 +431,7 @@ export function ProductVideoPlanModal({
           <div className="max-h-full max-w-5xl overflow-hidden rounded-lg bg-white p-3 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mt-2 flex items-center justify-center" onClick={() => setPreviewAsset(null)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewAsset.url} alt={previewAsset.name} className="max-h-[82vh] max-w-full object-contain" onClick={(event) => event.stopPropagation()} />
+              <img src={previewImageUrls[previewAsset.id] || previewAsset.url} alt={previewAsset.name} className="max-h-[82vh] max-w-full object-contain" onClick={(event) => event.stopPropagation()} />
             </div>
             <div className="mt-2 flex items-center justify-between gap-3">
               <p className="truncate text-sm font-semibold text-foreground">{previewAsset.name}</p>
@@ -540,13 +544,29 @@ function ImageAppendUploader({
   onPreview: (asset: ProductVideoAsset) => void;
   onRemove: (assetId: string) => void;
 }) {
+  const imageIds = images.filter((asset) => asset.mimeType.startsWith("image/")).map((asset) => asset.id);
+  const imageIdsKey = imageIds.join("|");
+  const { urls, refresh } = useProductImageUrls(imageIds);
+  const [retriedIds, setRetriedIds] = useState<string[]>([]);
+  useEffect(() => setRetriedIds([]), [imageIdsKey]);
+
   return (
     <div className="flex flex-wrap gap-2">
       {images.map((asset) => (
         <div key={asset.id} className="group relative h-20 w-20 overflow-hidden rounded-md border border-border bg-white">
           <button className="h-full w-full" type="button" onClick={() => onPreview(asset)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={asset.url} alt={asset.name} className="h-full w-full object-cover" />
+            <img
+              src={urls[asset.id] || asset.url}
+              alt={asset.name}
+              className="h-full w-full object-cover"
+              onError={() => {
+                if (!retriedIds.includes(asset.id)) {
+                  setRetriedIds((current) => [...current, asset.id]);
+                  void refresh([asset.id]).catch(() => undefined);
+                }
+              }}
+            />
           </button>
           <button
             className="absolute bottom-1 right-1 rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-bold text-danger shadow"

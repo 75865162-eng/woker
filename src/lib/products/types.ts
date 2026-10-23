@@ -126,6 +126,7 @@ export type Product = {
   chineseName: string;
   englishName: string;
   image?: string;
+  imageFileId?: string;
   asin: string;
   developer: string;
   purchasePrice: number;
@@ -177,6 +178,7 @@ export type ProductListItem = {
   chineseName: string;
   englishName: string;
   image?: string;
+  imageFileId?: string;
   asin?: string;
   status: ProductStatus;
   currentOwner: string;

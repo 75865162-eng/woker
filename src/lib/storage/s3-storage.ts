@@ -1,4 +1,5 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageDriver, StoredObject } from "@/lib/storage/types";
 
 function getRequiredEnv(name: string) {
@@ -11,7 +12,7 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
-function createS3Client() {
+export function createS3Client() {
   return new S3Client({
     endpoint: process.env.S3_ENDPOINT,
     region: process.env.S3_REGION ?? "us-east-1",
@@ -21,6 +22,15 @@ function createS3Client() {
       secretAccessKey: getRequiredEnv("S3_SECRET_ACCESS_KEY"),
     },
   });
+}
+
+export async function createS3PresignedGetUrl(key: string, expiresIn = 600) {
+  const bucket = getRequiredEnv("S3_BUCKET");
+  return getSignedUrl(
+    createS3Client(),
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+    { expiresIn: Math.min(Math.max(expiresIn, 60), 900) },
+  );
 }
 
 async function streamToBuffer(body: unknown): Promise<Buffer> {

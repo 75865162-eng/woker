@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ImagePlus, LoaderCircle, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getProductListImage } from "@/lib/products/image-assets";
+import { isPlaceholderProductImageAssetId } from "@/lib/products/image-assets";
+import { useProductImageUrls } from "@/lib/products/signed-image-urls";
 import type { ProductImageAsset } from "@/lib/products/types";
 
 export type ProductImageUploadProgress = {
@@ -25,7 +28,26 @@ export function ProductEditorImagePanel({
   onRemove: (index: number) => void;
 }) {
   const primaryImageAsset = imageAssets?.[0];
-  const primaryImage = primaryImageAsset ? getProductListImage({ imageAssets: [primaryImageAsset] }) : "";
+  const imageFileIds = (imageAssets ?? []).map((asset) => {
+    const fileId = asset.thumbFileId || asset.id;
+    return isPlaceholderProductImageAssetId(fileId) ? undefined : fileId;
+  });
+  const imageFileIdsKey = imageFileIds.join("|");
+  const { urls: signedImageUrls, refresh: refreshSignedImageUrls } = useProductImageUrls(imageFileIds);
+  const [retriedFileIds, setRetriedFileIds] = useState<string[]>([]);
+  useEffect(() => setRetriedFileIds([]), [imageFileIdsKey]);
+  const retrySignedImage = (fileId: string) => {
+    if (retriedFileIds.includes(fileId)) return;
+    setRetriedFileIds((current) => [...current, fileId]);
+    void refreshSignedImageUrls([fileId]).catch(() => undefined);
+  };
+  const sourceForAsset = (asset: ProductImageAsset) => {
+    const fileId = asset.thumbFileId || asset.id;
+    return !isPlaceholderProductImageAssetId(fileId)
+      ? signedImageUrls[fileId] || ""
+      : getProductListImage({ imageAssets: [asset] });
+  };
+  const primaryImage = primaryImageAsset ? sourceForAsset(primaryImageAsset) : "";
 
   return (
     <div>
@@ -38,7 +60,15 @@ export function ProductEditorImagePanel({
           title="点击查看大图"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={primaryImage} alt="商品主图预览" className="h-full w-full object-contain p-2" />
+          <img
+            src={primaryImage}
+            alt="商品主图预览"
+            className="h-full w-full object-contain p-2"
+            onError={() => {
+              const fileId = primaryImageAsset.thumbFileId || primaryImageAsset.id;
+              if (!isPlaceholderProductImageAssetId(fileId)) retrySignedImage(fileId);
+            }}
+          />
         </button>
       ) : (
         <label className="mt-4 flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted text-center transition-colors hover:border-brand hover:bg-white">
@@ -81,7 +111,7 @@ export function ProductEditorImagePanel({
             <ProductImageUploadProgressCard key={upload.id} upload={upload} />
           ))}
           {imageAssets?.map((asset, index) => {
-            const image = getProductListImage({ imageAssets: [asset] });
+            const image = sourceForAsset(asset);
             return (
               <div key={`${asset.id || image.slice(0, 24)}-${index}`} className="flex w-[104px] items-center gap-1">
                 <button
@@ -91,7 +121,15 @@ export function ProductEditorImagePanel({
                   title="点击查看大图"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={image} alt={`商品图片 ${index + 1}`} className="h-full w-full object-contain p-1" />
+                  <img
+                    src={image}
+                    alt={`商品图片 ${index + 1}`}
+                    className="h-full w-full object-contain p-1"
+                    onError={() => {
+                      const fileId = asset.thumbFileId || asset.id;
+                      if (!isPlaceholderProductImageAssetId(fileId)) retrySignedImage(fileId);
+                    }}
+                  />
                 </button>
                 <Button type="button" variant="secondary" size="icon" className="h-8 w-8 shrink-0" title="删除图片" onClick={() => onRemove(index)}>
                   <Minus className="h-4 w-4" />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
+import { Copy, FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProductAttachmentActivity } from "./product-attachment-activity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import {
   uploadProductAttachmentAsset,
   uploadProductImageAsset,
 } from "@/lib/products/image-assets";
+import { refreshProductImageUrls, useProductImageUrls } from "@/lib/products/signed-image-urls";
 import type { ProductImageAsset } from "@/lib/products/types";
 import {
   compactCompetitorFields,
@@ -49,9 +50,37 @@ function isPdfDataUrl(value: string) {
   return value.startsWith("data:application/pdf");
 }
 
+function PricingNameInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const resize = (element: HTMLTextAreaElement) => {
+    element.style.height = "32px";
+    element.style.height = `${Math.max(32, Math.min(element.scrollHeight, 60))}px`;
+  };
+
+  useEffect(() => {
+    if (inputRef.current) {
+      resize(inputRef.current);
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={inputRef}
+      rows={1}
+      style={{ height: 32 }}
+      className="max-h-[60px] w-full resize-none overflow-y-auto rounded-md border border-border bg-white px-2 py-1 text-xs leading-5 text-foreground outline-none focus:border-brand"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onInput={(event) => resize(event.currentTarget)}
+    />
+  );
+}
+
 export function ProductWorkbookDetailSections({
   detail,
   onPricingChange,
+  onPricingCopy,
   onPricingAdd,
   onPricingRemove,
   onCompetitorChange,
@@ -70,6 +99,7 @@ export function ProductWorkbookDetailSections({
 }: {
   detail: TrialProductDraft;
   onPricingChange: (index: number, field: keyof TrialPriceRow, value: string | number) => void;
+  onPricingCopy: (index: number) => void;
   onPricingAdd: () => void;
   onPricingRemove: () => void;
   onCompetitorChange: (index: number, field: keyof TrialCompetitorRow, value: string, asset?: ProductImageAsset) => void;
@@ -86,6 +116,38 @@ export function ProductWorkbookDetailSections({
   onRemarkChange: (value: string) => void;
   onRemarkImagesChange: (images: string[], imageAssets?: ProductImageAsset[]) => void;
 }) {
+  const [showOptionalPricingMetrics, setShowOptionalPricingMetrics] = useState(false);
+  const optionalPricingMetricLabels = new Set([
+    "3.5%燃油$",
+    "佣金(USD)",
+    "月仓储费(USD)",
+    "保本价(USD)",
+    "体积重量/磅",
+    "重量/磅",
+  ]);
+  const pricingHeaders = [
+    "品名",
+    "长cm",
+    "宽cm",
+    "高cm",
+    "实际重Kg",
+    "材积重Kg",
+    "建议售价(USD)",
+    "采购成本（RMB）",
+    "FBA配送费$",
+    "3.5%燃油$",
+    "海运单价（RMB）",
+    "海运头程（RMB）",
+    "佣金(USD)",
+    "月仓储费(USD)",
+    "汇率",
+    "保本价(USD)",
+    "海运毛利润(USD)",
+    "海运毛利润率",
+    "体积重量/磅",
+    "重量/磅",
+  ];
+
   return (
     <div className="space-y-4">
       <Card>
@@ -101,35 +163,30 @@ export function ProductWorkbookDetailSections({
           </div>
         </CardHeader>
         <CardContent className="thin-scrollbar overflow-auto">
-          <table className="min-w-[1540px] text-left text-xs">
+          <table className={`${showOptionalPricingMetrics ? "min-w-[1540px]" : "min-w-[1160px]"} text-left text-xs`}>
             <thead className="bg-surface-muted text-muted">
               <tr>
-                {[
-                  "品名",
-                  "长cm",
-                  "宽cm",
-                  "高cm",
-                  "实际重Kg",
-                  "材积重Kg",
-                  "建议售价(USD)",
-                  "采购成本（RMB）",
-                  "FBA配送费$",
-                  "3.5% 的燃油和物流相关附加费（USD)",
-                  "海运单价（RMB）",
-                  "海运头程（RMB）",
-                  "佣金(USD)",
-                  "月仓储费(USD)",
-                  "汇率",
-                  "保本价(USD)",
-                  "海运毛利润(USD)",
-                  "海运毛利润率",
-                  "体积重量/磅",
-                  "重量/磅",
-                ].map((label) => (
-                  <th key={label} className="px-2 py-2 font-bold">
+                {pricingHeaders
+                  .filter((label) => showOptionalPricingMetrics || !optionalPricingMetricLabels.has(label))
+                  .map((label) => (
+                  <th
+                    key={label}
+                    className={`px-2 py-2 font-bold ${label === "品名" ? "w-[140px] min-w-[140px]" : ""} ${label === "3.5%燃油$" ? "w-[60px] min-w-[60px]" : ""} ${["建议售价(USD)", "采购成本（RMB）", "海运毛利润率"].includes(label) ? "text-danger" : ""}`}
+                  >
                     {label}
                   </th>
                 ))}
+                <th className="w-10 min-w-10 px-1 py-2 text-center">
+                  <button
+                    type="button"
+                    className="rounded p-1 text-foreground hover:bg-surface"
+                    title={showOptionalPricingMetrics ? "隐藏计算列" : "显示隐藏的计算列"}
+                    aria-label={showOptionalPricingMetrics ? "隐藏计算列" : "显示隐藏的计算列"}
+                    onClick={() => setShowOptionalPricingMetrics((current) => !current)}
+                  >
+                    {showOptionalPricingMetrics ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -138,7 +195,12 @@ export function ProductWorkbookDetailSections({
 
                 return (
                   <tr key={index} className="border-t border-border align-top">
-                    <td className="px-2 py-2"><SmallInput value={row.name} onChange={(value) => onPricingChange(index, "name", value)} /></td>
+                    <td className="w-[140px] min-w-[140px] px-2 py-2">
+                      <PricingNameInput
+                        value={row.name}
+                        onChange={(value) => onPricingChange(index, "name", value)}
+                      />
+                    </td>
                     <td className="px-2 py-2"><DecimalInput compact value={row.lengthCm} onChange={(value) => onPricingChange(index, "lengthCm", value)} /></td>
                     <td className="px-2 py-2"><DecimalInput compact value={row.widthCm} onChange={(value) => onPricingChange(index, "widthCm", value)} /></td>
                     <td className="px-2 py-2"><DecimalInput compact value={row.heightCm} onChange={(value) => onPricingChange(index, "heightCm", value)} /></td>
@@ -147,17 +209,28 @@ export function ProductWorkbookDetailSections({
                     <td className="px-2 py-2"><DecimalInput compact value={row.suggestedPrice} onChange={(value) => onPricingChange(index, "suggestedPrice", value)} /></td>
                     <td className="px-2 py-2"><DecimalInput compact value={row.purchaseCost} onChange={(value) => onPricingChange(index, "purchaseCost", value)} /></td>
                     <td className="px-2 py-2"><DecimalInput compact value={row.fbaFee} onChange={(value) => onPricingChange(index, "fbaFee", value)} /></td>
-                    <ReadonlyMetric value={calc.fuelFee} />
+                    {showOptionalPricingMetrics && <td className="w-[60px] min-w-[60px] px-2 py-2 font-semibold text-muted metric-tabular">{calc.fuelFee.toFixed(2)}</td>}
                     <td className="px-2 py-2"><DecimalInput compact value={row.oceanFreightUnitPrice} onChange={(value) => onPricingChange(index, "oceanFreightUnitPrice", value)} /></td>
                     <ReadonlyMetric value={calc.oceanFreight} />
-                    <ReadonlyMetric value={calc.commission} />
-                    <ReadonlyMetric value={calc.monthlyStorageFee} />
+                    {showOptionalPricingMetrics && <ReadonlyMetric value={calc.commission} />}
+                    {showOptionalPricingMetrics && <ReadonlyMetric value={calc.monthlyStorageFee} />}
                     <td className="px-2 py-2"><DecimalInput compact value={row.exchangeRate} onChange={(value) => onPricingChange(index, "exchangeRate", value)} /></td>
-                    <ReadonlyMetric value={calc.breakEvenPrice} />
+                    {showOptionalPricingMetrics && <ReadonlyMetric value={calc.breakEvenPrice} />}
                     <ReadonlyMetric value={calc.profit} />
                     <ReadonlyMetric value={`${(calc.profitRate * 100).toFixed(1)}%`} />
-                    <ReadonlyMetric value={calc.volumeWeightLb} />
-                    <ReadonlyMetric value={calc.actualWeightLb} />
+                    {showOptionalPricingMetrics && <ReadonlyMetric value={calc.volumeWeightLb} />}
+                    {showOptionalPricingMetrics && <ReadonlyMetric value={calc.actualWeightLb} />}
+                    <td className="w-10 min-w-10 px-1 py-2 text-center">
+                      <button
+                        type="button"
+                        className="rounded p-1 text-muted hover:bg-surface hover:text-foreground"
+                        title="复制当前行并新增"
+                        aria-label={`复制第 ${index + 1} 行并新增`}
+                        onClick={() => onPricingCopy(index)}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -399,17 +472,21 @@ function ImageUploadSquare({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const thumbFileId = asset && !isPlaceholderProductImageAssetId(asset.thumbFileId || asset.id)
+    ? asset.thumbFileId || asset.id
+    : undefined;
+  const { urls: signedImageUrls, refresh: refreshSignedImageUrls } = useProductImageUrls([thumbFileId]);
+  const [retriedSignedImage, setRetriedSignedImage] = useState(false);
   const imageSources = Array.from(new Set([
-    previewImage,
-    image,
-    asset?.thumbUrl,
-    asset?.downloadUrl,
+    thumbFileId ? signedImageUrls[thumbFileId] : undefined,
+    ...(thumbFileId ? [] : [previewImage, image, asset?.thumbUrl, asset?.downloadUrl]),
   ].map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
   const [failedImageSources, setFailedImageSources] = useState<string[]>([]);
   const displayedImageSource = imageSources.find((source) => !failedImageSources.includes(source)) ?? "";
 
   useEffect(() => {
     setFailedImageSources([]);
+    setRetriedSignedImage(false);
   }, [image, previewImage, asset?.id, asset?.thumbUrl, asset?.downloadUrl]);
 
   async function handleFile(file: File | undefined) {
@@ -437,8 +514,19 @@ function ImageUploadSquare({
     }
   }
 
-  function openPreview() {
-    const source = getProductAssetDownloadUrl(asset) || (image.startsWith("data:") ? "" : previewImage || image);
+  async function openPreview() {
+    const fileId = asset && !isPlaceholderProductImageAssetId(asset.previewFileId || asset.id)
+      ? asset.previewFileId || asset.id
+      : undefined;
+    let source = "";
+    if (fileId) {
+      try {
+        source = (await refreshProductImageUrls([fileId])).get(fileId) || "";
+      } catch {
+        // Legacy references continue through the compatibility route below.
+      }
+    }
+    source ||= getProductAssetDownloadUrl(asset) || (image.startsWith("data:") ? "" : previewImage || image);
     if (!source) {
       return;
     }
@@ -457,7 +545,7 @@ function ImageUploadSquare({
         <button
           type="button"
           className="flex h-[130px] w-[130px] items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted"
-          onClick={openPreview}
+          onClick={() => void openPreview()}
           title="查看大图"
         >
           {isPdf ? (
@@ -472,9 +560,16 @@ function ImageUploadSquare({
                 src={displayedImageSource}
                 alt="竞品图片"
                 className="h-full w-full object-contain p-1"
-                onError={() => setFailedImageSources((current) => current.includes(displayedImageSource)
-                  ? current
-                  : [...current, displayedImageSource])}
+                onError={() => {
+                  if (thumbFileId && !retriedSignedImage) {
+                    setRetriedSignedImage(true);
+                    void refreshSignedImageUrls([thumbFileId]).catch(() => undefined);
+                  } else {
+                    setFailedImageSources((current) => current.includes(displayedImageSource)
+                      ? current
+                      : [...current, displayedImageSource]);
+                  }
+                }}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted">图片加载失败</div>

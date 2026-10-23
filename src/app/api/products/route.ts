@@ -244,6 +244,7 @@ function mapProductListRow(record: Record<string, unknown>): ProductListItem {
     chineseName: String(record.chineseName ?? ""),
     englishName: String(record.englishName ?? ""),
     image: toOptionalImageUrl(record.image),
+    imageFileId: toOptionalString(record.imageFileId),
     asin: toOptionalString(record.asin),
     status: String(record.status ?? "pending"),
     selectionOwner: toOptionalString(record.selectionOwner) ?? "",
@@ -516,6 +517,10 @@ export async function getProductsResponse(
               END,
               ''
             ) AS "image"
+            ,COALESCE(
+              CASE WHEN LOWER(LEFT(COALESCE(image_asset.asset->>'thumbFileId', ''), 14)) <> 'product-image-' THEN NULLIF(image_asset.asset->>'thumbFileId', '') END,
+              CASE WHEN LOWER(LEFT(COALESCE(image_asset.asset->>'id', ''), 14)) <> 'product-image-' THEN NULLIF(image_asset.asset->>'id', '') END
+            ) AS "imageFileId"
           FROM "ProductRecord" r
           LEFT JOIN "ProductSummaryRecord" s
             ON s."productRecordId" = r."id"

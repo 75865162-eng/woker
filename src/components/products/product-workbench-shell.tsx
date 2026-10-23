@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { History, ImagePlus, LoaderCircle, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { productStatusLabels, productStatusOptions, productStatusTones } from "@/data/products";
 import { useVirtualRows } from "@/lib/hooks/use-virtual-rows";
 import { getProductListImage } from "@/lib/products/image-assets";
+import { useProductImageUrls } from "@/lib/products/signed-image-urls";
 import type { Product } from "@/lib/products/types";
 import {
   formatAssigneeList,
@@ -34,8 +35,14 @@ function formatProductCreatedAtDisplay(value?: string): string | { dateText: str
   return { dateText, timeText };
 }
 
-function ProductListThumbnail({ src, alt }: { src: string; alt: string }) {
+function ProductListThumbnail({ src, alt, onRefresh }: { src: string; alt: string; onRefresh?: () => void }) {
   const [failed, setFailed] = useState(false);
+  const [refreshed, setRefreshed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+    setRefreshed(false);
+  }, [src]);
 
   if (!src || failed) {
     return <ImagePlus className="h-5 w-5 text-muted" aria-label="暂无图片" />;
@@ -50,7 +57,14 @@ function ProductListThumbnail({ src, alt }: { src: string; alt: string }) {
       decoding="async"
       fetchPriority="low"
       className="h-full w-full object-contain"
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (!refreshed && onRefresh) {
+          setRefreshed(true);
+          onRefresh();
+          return;
+        }
+        setFailed(true);
+      }}
     />
   );
 }
@@ -201,6 +215,9 @@ export function ProductTable({
     enabled: products.length > 0,
   });
   const visibleProducts = products.slice(virtualRows.startIndex, virtualRows.endIndex);
+  const { urls: signedImageUrls, refresh: refreshSignedImageUrls, error: signedImageError } = useProductImageUrls(
+    visibleProducts.map((product) => product.imageFileId),
+  );
 
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-white">
@@ -264,6 +281,7 @@ export function ProductTable({
                 ) : null}
                 {visibleProducts.map((product) => {
                   const listImage = getProductListImage(product);
+                  const imageSource = product.imageFileId ? signedImageUrls[product.imageFileId] || "" : listImage;
                   const overdue = product.isOverdue ?? isProductWorkflowOverdue(product);
 
                   return (
@@ -278,8 +296,14 @@ export function ProductTable({
                           onFocus={() => onPrefetchProduct?.(product.sku)}
                           onMouseEnter={() => onPrefetchProduct?.(product.sku)}
                         >
-                          {listImage ? (
-                            <ProductListThumbnail src={listImage} alt={product.chineseName} />
+                          {imageSource ? (
+                            <ProductListThumbnail
+                              src={imageSource}
+                              alt={product.chineseName}
+                              onRefresh={product.imageFileId ? () => void refreshSignedImageUrls([product.imageFileId!]).catch(() => undefined) : undefined}
+                            />
+                          ) : product.imageFileId ? (
+                            signedImageError ? <ImagePlus className="h-5 w-5 text-danger" aria-label="图片授权或加载失败" /> : <LoaderCircle className="h-4 w-4 animate-spin text-muted" aria-label="图片加载中" />
                           ) : (
                             <ImagePlus className="h-5 w-5 text-muted" />
                           )}
