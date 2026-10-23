@@ -189,6 +189,7 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 - 列表当前使用分页、`useVirtualRows`、第一张 `thumbUrl`、lazy loading、异步解码和低优先级图片请求；不要默认加载全量商品、完整 payload 或原图。
 - `ProductMedia` 是媒体关系/元数据索引，不是商品核心资料事实源；二进制属于 Storage / FileObject。
 - Redis 当前主要用于 BullMQ 调度，不是商品事实源，也不是图片二进制缓存；商品详情 Redis 缓存尚未证明有收益。
+- 商品编辑器能力保留与入口级回归门槛见 `docs/product-domain-simple-architecture-plan.md` §3.6；修改主编辑器或详情区块前先盘点功能，未经明确确认不得删除既有入口，测试需验证用户路径可达和可操作。
 
 ### 后续升级硬约束
 

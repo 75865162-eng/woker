@@ -2027,7 +2027,6 @@ export function ProductEditor({
           <div>
             <h2 className="text-lg font-bold text-foreground">{isEditing ? `商品详情 ${draft.sku}` : "新增商品"}</h2>
             <p className="mt-1 text-xs font-medium text-muted" role="status">{localDraft.status}</p>
-            <p className="mt-1 text-xs text-muted">图片、视频和 Excel 上传仅暂存文件；点击保存才绑定到正式商品。取消不会删除已被引用的文件。</p>
             {editorError ? <p role="alert" className="mt-1 text-xs text-danger">{editorError}</p> : null}
             {committed ? <Button size="sm" variant="secondary" onClick={onClose}>关闭（商品已保存）</Button> : null}
             {!detailReady ? <p className="mt-1 text-xs text-danger">正在读取权威详情。读取失败时请暂时离开后重新打开；加载完成前不能编辑或保存。</p> : null}

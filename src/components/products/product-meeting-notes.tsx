@@ -23,6 +23,7 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
   const [loading, setLoading] = useState(false);
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const saveTimers = useRef<Map<string, number>>(new Map());
   const loaded = useRef(false);
   const endpoint = `/api/products/${encodeURIComponent(sku)}/meeting-notes`;
@@ -36,8 +37,10 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
       if (!response.ok || !data.note) throw new Error(data.error || "保存会议记录失败。");
       setNotes((current) => current.map((note) => note.id === id && note.content === content ? { ...note, updatedAt: data.note!.updatedAt } : note));
       setError(null);
+      setSaveNotice("已保存");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "保存会议记录失败。");
+      setSaveNotice(null);
     } finally {
       setSavingIds((current) => {
         const next = new Set(current);
@@ -99,6 +102,7 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
       if (!response.ok || !data.note) throw new Error(data.error || "新建会议记录失败。");
       setNotes((current) => [...current, data.note!]);
       setError(null);
+      setSaveNotice("已保存");
       window.setTimeout(() => document.getElementById(`product-meeting-note-${data.note!.id}`)?.focus(), 0);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "新建会议记录失败。");
@@ -125,15 +129,21 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
     }
   }
 
-  function saveAll() {
+  async function saveAll() {
+    if (notes.length === 0) {
+      setSaveNotice("暂无可保存的记录");
+      return;
+    }
+    setSaveNotice("保存中…");
+    const pendingNotes = [...notes];
     notes.forEach((note) => {
       const timer = saveTimers.current.get(note.id);
       if (timer) {
         window.clearTimeout(timer);
         saveTimers.current.delete(note.id);
-        void updateNote(note.id, note.content);
       }
     });
+    await Promise.all(pendingNotes.map((note) => updateNote(note.id, note.content)));
   }
 
   return (
@@ -149,11 +159,12 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
               <Button type="button" size="icon" variant="ghost" title="新增记录" aria-label="新增记录" onClick={() => void addNote()} disabled={savingIds.has("new")}>
                 {savingIds.has("new") ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               </Button>
-              <Button type="button" size="icon" variant="ghost" title="立即保存" aria-label="立即保存" onClick={saveAll}><Save className="h-4 w-4" /></Button>
+              <Button type="button" size="icon" variant="ghost" title="立即保存" aria-label="立即保存" onClick={() => void saveAll()} disabled={savingIds.size > 0}><Save className="h-4 w-4" /></Button>
               <Button type="button" size="icon" variant="ghost" title="关闭" aria-label="关闭" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
             </div>
           </header>
           {error ? <p role="alert" className="border-b border-danger/30 bg-red-50 px-4 py-2 text-xs text-danger">{error}</p> : null}
+          {saveNotice ? <p role="status" className="border-b border-border bg-surface-muted px-4 py-1 text-xs text-muted">{saveNotice}</p> : null}
           <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
             {loading ? <div className="flex h-full items-center justify-center text-sm text-muted"><LoaderCircle className="mr-2 h-4 w-4 animate-spin" />加载中</div> : null}
             {!loading && notes.length === 0 ? <div className="flex h-full items-center justify-center text-sm text-muted">暂无会议记录，点击右上角新增。</div> : null}

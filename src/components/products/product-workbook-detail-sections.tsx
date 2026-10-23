@@ -1366,23 +1366,32 @@ function KeywordBulkInput({ onApply }: { onApply: (keywords: TrialKeywordRow[]) 
 
 function parseKeywordBulkText(value: string): TrialKeywordRow[] {
   const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const keywords: TrialKeywordRow[] = [];
-  const rows = lines.map(parseKeywordSingleLine).filter((row): row is TrialKeywordRow => Boolean(row));
+  const rows = lines.map(parseKeywordSingleLine);
 
-  if (rows.length === lines.length) {
+  if (rows.every((row): row is TrialKeywordRow => Boolean(row))) {
     return rows;
   }
 
-  for (let index = 0; index + 3 < lines.length; index += 4) {
-    keywords.push({
-      keyword: lines[index],
-      cpc: Number(lines[index + 1]) || 0,
-      monthlySearches: Number(lines[index + 2]) || 0,
-      abaRank: Number(lines[index + 3]) || 0,
+  // Preserve the legacy four-lines-per-keyword format when every metric line is numeric.
+  const isLegacyFormat = lines.length > 0 && lines.length % 4 === 0 && Array.from({ length: lines.length / 4 }, (_, index) => {
+    const offset = index * 4;
+    return [lines[offset + 1], lines[offset + 2], lines[offset + 3]].every((line) => Number.isFinite(Number(line)));
+  }).every(Boolean);
+
+  if (isLegacyFormat) {
+    return Array.from({ length: lines.length / 4 }, (_, index) => {
+      const offset = index * 4;
+      return {
+        keyword: lines[offset],
+        cpc: Number(lines[offset + 1]) || 0,
+        monthlySearches: Number(lines[offset + 2]) || 0,
+        abaRank: Number(lines[offset + 3]) || 0,
+      };
     });
   }
 
-  return keywords;
+  // Plain keyword input maps one non-empty line to one generated row.
+  return lines.map((line, index) => rows[index] ?? ({ keyword: line, cpc: 0, monthlySearches: 0, abaRank: 0 }));
 }
 
 function parseKeywordSingleLine(line: string): TrialKeywordRow | null {
