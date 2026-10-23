@@ -1,5 +1,5 @@
 import { processImportJob } from "@/lib/jobs/processor";
-import { getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue } from "@/lib/queue/redis-queue";
+import { getAmazonSyncQueue, getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue } from "@/lib/queue/redis-queue";
 import { processProductOutboxEvent } from "@/lib/products/product-outbox";
 
 export async function enqueueImportJob(jobId: string) {
@@ -61,6 +61,24 @@ export async function enqueueProductOutboxEvent(eventId: string) {
       attempts: 5,
       backoff: { type: "exponential", delay: 1000 },
       removeOnComplete: 100,
+      removeOnFail: 200,
+    },
+  );
+}
+
+export async function enqueueAmazonSyncRun(runId: string) {
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    throw new Error("Amazon 数据同步必须启用 Redis Worker。请配置 QUEUE_DRIVER=redis。");
+  }
+
+  await getAmazonSyncQueue().add(
+    "process-amazon-sync-run",
+    { runId },
+    {
+      jobId: `amazon-sync-${runId}`,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5_000 },
+      removeOnComplete: true,
       removeOnFail: 200,
     },
   );

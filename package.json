@@ -19,6 +19,7 @@
     "products:backfill-image-assets": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/backfill-product-image-assets.ts",
     "worker": "tsx scripts/import-worker.ts",
     "worker:image-upscale": "tsx scripts/image-upscale-worker.ts",
+    "worker:amazon-sync": "tsx scripts/amazon-sync-worker.ts",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",
     "lint": "eslint",

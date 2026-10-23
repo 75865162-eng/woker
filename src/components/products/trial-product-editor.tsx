@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Save, X } from "lucide-react";
+import { Copy, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -60,6 +60,17 @@ export function TrialProductEditor({
           : row,
       ),
     }));
+  }
+
+  function copyPricingRow(index: number) {
+    setDraft((current) => {
+      const row = current.pricingRows[index];
+      if (!row) return current;
+
+      const pricingRows = [...current.pricingRows];
+      pricingRows.splice(index + 1, 0, { ...row });
+      return { ...current, pricingRows };
+    });
   }
 
   function updateCompetitor(index: number, field: keyof TrialCompetitorRow, value: string) {
@@ -161,6 +172,7 @@ export function TrialProductEditor({
                     {["品名", "长 cm", "宽 cm", "高 cm", "实际重量 g", "材积重量 g", "建议售价(USD)", "采购成本(RMB)", "FBA配送费$", "3.5% 燃油及物流附加费(USD)", "海运单价(RMB)", "海运头程(RMB)", "佣金(USD)", "月仓储费(USD)", "汇率", "保本价(USD)", "海运毛利(USD)", "海运毛利率", "体积重量/", "重量/"].map((label) => (
                       <th key={label} className="px-2 py-2 font-bold">{label}</th>
                     ))}
+                    <th className="w-10 min-w-10 px-1 py-2 text-center" aria-label="复制试算行" />
                   </tr>
                 </thead>
                 <tbody>
@@ -188,6 +200,17 @@ export function TrialProductEditor({
                         <ReadonlyMetric value={`${(calc.profitRate * 100).toFixed(1)}%`} />
                         <ReadonlyMetric value={calc.volumeWeightLb} />
                         <ReadonlyMetric value={calc.actualWeightLb} />
+                        <td className="w-10 min-w-10 px-1 py-2 text-center">
+                          <button
+                            type="button"
+                            className="rounded p-1 text-muted hover:bg-surface hover:text-foreground"
+                            title="复制当前行并新增"
+                            aria-label={`复制第 ${index + 1} 行并新增`}
+                            onClick={() => copyPricingRow(index)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

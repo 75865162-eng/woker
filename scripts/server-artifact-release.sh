@@ -48,6 +48,7 @@ requires_generate=false
 restart_web=false
 restart_worker=false
 restart_image_worker=false
+restart_amazon_sync_worker=false
 runtime_config=false
 caddy_reload=false
 infra_update=false
@@ -147,11 +148,19 @@ install_runtime_from_release() {
     install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
     install -m 0644 "$runtime_release/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
     install -m 0644 "$runtime_release/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service
+    if [ -f "$runtime_release/deploy/systemd/amazon-sync-worker.service" ]; then
+      install -m 0644 "$runtime_release/deploy/systemd/amazon-sync-worker.service" /etc/systemd/system/amazon-sync-worker.service
+    else
+      systemctl disable --now amazon-sync-worker 2>/dev/null || true
+      rm -f /etc/systemd/system/amazon-sync-worker.service
+      restart_amazon_sync_worker=false
+    fi
     systemctl daemon-reload
   fi
   if [ "$restart_web" = "true" ]; then systemctl restart amazon-web; fi
   if [ "$restart_worker" = "true" ]; then systemctl restart amazon-worker; fi
   if [ "$restart_image_worker" = "true" ]; then systemctl restart amazon-image-upscale-worker; fi
+  if [ "$restart_amazon_sync_worker" = "true" ]; then systemctl enable --now amazon-sync-worker; fi
   if [ "$caddy_reload" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
 }
 
@@ -244,12 +253,12 @@ const plan = JSON.parse(fs.readFileSync(path, 'utf8'));
 if (plan.headSha !== commit || !plan.requiresDeploy) throw new Error('Invalid deployment plan identity');
 const previous = JSON.parse(fs.readFileSync(previousPath, 'utf8'));
 if (previous.commit !== plan.baseSha) throw new Error('Deployment base differs from running release; regenerate CI plan');
-const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
+const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresAmazonSyncWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
 for (const key of keys) if (typeof plan[key] !== 'boolean') throw new Error(`Missing plan flag: ${key}`);
 console.log(keys.map(key => String(plan[key])).join(' '));
 NODE
 )"
-read -r requires_migration requires_generate restart_web restart_worker restart_image_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
+read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
 
 package_lock_checksum="$(sha256sum "$extract_dir/package-lock.json" | awk '{print $1}')"
 cached_package_lock_checksum="$(cat "$APP_DIR/node_modules/.package-lock.sha256" 2>/dev/null || true)"
@@ -340,6 +349,7 @@ trap - ERR
 web_status="$(systemctl is-active amazon-web 2>/dev/null || true)"
 worker_status="$(systemctl is-active amazon-worker 2>/dev/null || true)"
 image_worker_status="$(systemctl is-active amazon-image-upscale-worker 2>/dev/null || true)"
+amazon_sync_worker_status="$(systemctl is-active amazon-sync-worker 2>/dev/null || true)"
 postgres_container="$(docker compose ps -q postgres)"
 redis_container="$(docker compose ps -q redis)"
 if [ -n "$postgres_container" ]; then
@@ -354,7 +364,7 @@ else
 fi
 disk_available_kb="$(df -Pk / | awk 'NR == 2 {print $4}')"
 runtime_status="passed"
-if [ "$web_status" != "active" ] || [ "$worker_status" != "active" ] || [ "$image_worker_status" != "active" ] || [ "$postgres_status" != "running" ] || [ "$redis_status" != "running" ]; then
+if [ "$web_status" != "active" ] || [ "$worker_status" != "active" ] || [ "$image_worker_status" != "active" ] || { [ "$restart_amazon_sync_worker" = "true" ] && [ "$amazon_sync_worker_status" != "active" ]; } || [ "$postgres_status" != "running" ] || [ "$redis_status" != "running" ]; then
   runtime_status="failed"
 fi
 if [ "$runtime_status" != "passed" ]; then
@@ -372,7 +382,7 @@ cat > "$result_path" <<JSON
   "healthUrl": "$(json_escape "$health_url")",
   "health": "passed",
   "migration": "$migration_status",
-  "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker },
+  "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker, "amazonSyncWorker": $restart_amazon_sync_worker },
   "rollback": {
     "status": "not_needed",
     "database": "not_rolled_back"
@@ -381,6 +391,7 @@ cat > "$result_path" <<JSON
     "amazon-web": "$(json_escape "$web_status")",
     "amazon-worker": "$(json_escape "$worker_status")",
     "amazon-image-upscale-worker": "$(json_escape "$image_worker_status")",
+    "amazon-sync-worker": "$(json_escape "$amazon_sync_worker_status")",
     "postgres": "$(json_escape "$postgres_status")",
     "redis": "$(json_escape "$redis_status")"
   },
@@ -398,7 +409,7 @@ fi
 find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r | awk "NR>${KEEP_RELEASES}" | while read -r old_release; do
   # A worker intentionally not restarted may still be executing an older release.
   in_use=false
-  for service in amazon-web amazon-worker amazon-image-upscale-worker; do
+  for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker; do
     runtime_pid="$(systemctl show "$service" --property=MainPID --value)"
     runtime_cwd="$(readlink -f "/proc/${runtime_pid}/cwd" 2>/dev/null || true)"
     case "$runtime_cwd" in "$old_release"|"$old_release"/*) in_use=true ;; esac

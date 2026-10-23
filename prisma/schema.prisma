@@ -18,6 +18,7 @@ model Organization {
   members            OrganizationMember[]
   notifications      UserNotification[]
   marketplaces       Marketplace[]
+  productMeetingNotes ProductMeetingNote[]
   productListCacheRecords ProductListCacheRecord[]
   rosterRoles        OrganizationRosterRole[]
   wecomNotificationSettings WeComNotificationSetting[]
@@ -59,6 +60,7 @@ model User {
   externalIntegrationSettings ExternalIntegrationSetting[]
   listingAiChatHistories  ListingAiChatHistory[]
   listingAiWorkspaces     ListingAiWorkspace[]
+  productMeetingNotes     ProductMeetingNote[]
   wecomNotificationSettings WeComNotificationSetting[]
   memberships             OrganizationMember[]
   notifications           UserNotification[]
@@ -367,6 +369,7 @@ model ProductRecord {
   productVariants              ProductVariant[]
   productListings              ProductListing[]
   productMedia                 ProductMedia[]
+  meetingNotes                 ProductMeetingNote[]
 
   @@unique([organizationId, workspaceId, sku])
   @@index([organizationId, updatedAt])
@@ -841,6 +844,22 @@ model UserNotification {
   @@index([entityType, entityId])
 }
 
+model ProductMeetingNote {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  productRecordId String
+  userId         String
+  content        String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productRecord  ProductRecord @relation(fields: [productRecordId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, productRecordId, createdAt])
+}
+
 model DataChangeVersion {
   id             String       @id @default(cuid())
   organizationId String
@@ -1146,6 +1165,92 @@ model SellfoxSyncRun {
   finishedAt     DateTime?
 
   @@index([organizationId, workspaceId, startedAt])
+}
+
+model AmazonIntegrationConnection {
+  id              String    @id
+  organizationId  String
+  workspaceId     String    @default("default")
+  provider        String    @default("amazon_sp_api")
+  status          String    @default("NOT_CONFIGURED")
+  enabledDomains  Json      @default("[]")
+  marketplaceParticipations Json @default("[]")
+  statusMessage   String?
+  lastValidatedAt DateTime?
+  lastSyncAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, workspaceId, provider])
+  @@index([organizationId, workspaceId, updatedAt])
+}
+
+model AmazonSyncRun {
+  id                String    @id
+  organizationId    String
+  workspaceId       String    @default("default")
+  requestedByUserId String
+  resource          String    @default("readiness")
+  idempotencyKey    String?
+  status            String    @default("QUEUED")
+  summary           Json?
+  error             String?
+  startedAt         DateTime  @default(now())
+  finishedAt        DateTime?
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, workspaceId, startedAt])
+  @@index([organizationId, workspaceId, status, updatedAt])
+  @@unique([organizationId, workspaceId, idempotencyKey])
+}
+
+model AmazonInventorySnapshot {
+  id                       String   @id
+  organizationId           String
+  workspaceId              String   @default("default")
+  syncRunId                String
+  marketplaceId            String
+  sellerSku                String
+  asin                     String   @default("")
+  fnSku                    String   @default("")
+  condition                String   @default("")
+  fulfillableQuantity      Int      @default(0)
+  inboundWorkingQuantity   Int      @default(0)
+  inboundShippedQuantity   Int      @default(0)
+  inboundReceivingQuantity Int      @default(0)
+  reservedQuantity         Int      @default(0)
+  unfulfillableQuantity    Int      @default(0)
+  researchingQuantity      Int      @default(0)
+  capturedAt               DateTime
+  createdAt                DateTime @default(now())
+
+  @@unique([syncRunId, marketplaceId, sellerSku, condition])
+  @@index([organizationId, workspaceId, marketplaceId, capturedAt])
+  @@index([organizationId, workspaceId, sellerSku, capturedAt])
+  @@index([syncRunId])
+}
+
+model AmazonAgentActionAudit {
+  id              String    @id
+  organizationId  String
+  workspaceId     String    @default("default")
+  actorUserId     String
+  actionType      String
+  targetType      String
+  targetId        String
+  status          String    @default("PREVIEW")
+  idempotencyKey  String?
+  preview         Json
+  oldValues       Json?
+  newValues       Json?
+  confirmedAt     DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, workspaceId, idempotencyKey])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([organizationId, workspaceId, targetType, targetId, createdAt])
 }
 
 model WorkspaceDataset {
@@ -1516,4 +1621,20 @@ enum WorkerHeartbeatStatus {
   online
   stopping
   offline
+}
+
+model AmazonSyncSchedule {
+  id                String   @id
+  organizationId    String
+  workspaceId       String   @default("default")
+  resource          String
+  intervalMinutes   Int      @default(60)
+  enabled           Boolean  @default(false)
+  lastEnqueuedAt    DateTime?
+  updatedByUserId   String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, resource], map: "AmazonSchedule_scope_resource_key")
+  @@index([enabled, lastEnqueuedAt], map: "AmazonSchedule_due_idx")
 }

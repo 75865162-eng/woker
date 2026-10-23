@@ -1,4 +1,4 @@
-import type { ProductImageAsset } from "@/lib/products/types";
+import type { ProductImageAsset, ProductPatentAttachment } from "@/lib/products/types";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 
 export function safeProductImageUrl(value?: string) {
@@ -142,6 +142,15 @@ export async function uploadProductAttachmentAsset(file: File, options?: Product
 
 export async function uploadProductImageAsset(file: File, options?: ProductUploadOptions) {
   return uploadProductAttachmentAsset(file, options);
+}
+
+export async function uploadProductPatentAttachment(file: File, options?: ProductUploadOptions): Promise<ProductPatentAttachment> {
+  if (file.size > PRODUCT_ATTACHMENT_MAX_BYTES) throw new Error(productAttachmentSizeError(file.name, file.size));
+  const formData = appendCurrentWorkspaceScope(new FormData());
+  formData.append("file", file);
+  const data = await uploadProductFormData("/api/products/patent-files/upload", formData, options);
+  if (!data.response.ok || !data.body.asset?.id) throw new Error(data.body.error || "专利附件上传失败。");
+  return data.body.asset as ProductPatentAttachment;
 }
 
 export async function uploadDataUrlAsProductAttachment(value: string, fileName: string) {

@@ -146,7 +146,7 @@ export function buildRoleDefinitions(permissionActions: PermissionAction[], modu
         return {
           ...role,
           permissions: createPermissions(
-            ["products", "sellfox", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "tasks", "history", "versions", "accounts", "settings"],
+            ["products", "sellfox", "workspace", "searchMerge", "listingAi", "imageUpscale", "logistics", "operations", "tasks", "history", "versions", "accounts", "settings"],
             ["view", "create", "edit", "export"],
           ),
         };
@@ -155,16 +155,16 @@ export function buildRoleDefinitions(permissionActions: PermissionAction[], modu
         return {
           ...role,
           permissions: createPermissions(
-            ["products", "sellfox", "workspace", "searchMerge", "listingAi", "agents", "imageUpscale", "logistics", "tasks", "history"],
+            ["products", "sellfox", "workspace", "searchMerge", "listingAi", "agents", "imageUpscale", "logistics", "operations", "tasks", "history"],
             allActions,
           ),
         };
       case "operations_supervisor":
-        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "imageUpscale", "tasks"], ["view", "create", "edit", "approve", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "imageUpscale", "operations", "tasks"], ["view", "create", "edit", "approve", "export"]) };
       case "operations":
-        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents"], ["view", "create", "edit", "export"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "operations"], ["view", "create", "edit", "export"]) };
       case "operations_assistant":
-        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents"], ["view", "create", "edit"]) };
+        return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "operations"], ["view", "create", "edit"]) };
       case "developer":
         return { ...role, permissions: createPermissions(["products", "sellfox", "logistics", "agents"], ["view", "create", "edit", "export"]) };
       case "designer":

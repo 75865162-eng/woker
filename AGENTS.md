@@ -355,3 +355,10 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 - `CLAUDE.md` 目前只包含 `@AGENTS.md`，用于让 Claude Code 复用本文件。除非确有需要，不要复制一份独立规则。
 - 新增重要命令、目录、业务约定或外部服务时，同步更新本文件。
+
+## 经营中台定时同步
+
+- `/operations?tab=sync` 计划按组织/工作区/域隔离，默认关闭，仅 inventory 可启用。
+- `npm run worker:amazon-sync` 运行专用 Amazon 只读队列和 30 秒计划检查；不由页面启动调度器。
+- 生产专用服务为 `amazon-sync-worker` systemd unit；部署计划仅在 worker 入口/共享依赖/schema/迁移/unit 变化时重启它。
+- 计划、幂等、防重与验收说明见 `docs/amazon-operations-hub.md`。新增计划表后先按受控迁移流程应用，禁止在代码任务中自动迁移生产。

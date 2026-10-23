@@ -18,6 +18,7 @@ const deploymentChanged = matches(/^(\.github\/workflows\/|deploy\/|docker-compo
 const sharedChanged = matches(/^src\/lib\//);
 const workerChanged = matches(/^(src\/workers\/|scripts\/import-worker\.ts$)/);
 const imageWorkerChanged = matches(/^scripts\/image-upscale-worker\.ts$/);
+const amazonSyncWorkerChanged = matches(/^scripts\/amazon-sync-worker\.ts$/);
 // Shared library dependency analysis is conservative: both workers consume src/lib.
 const runtimeChanged = !docsOnly;
 const checksum = (ref) => createHash("sha256").update(execFileSync("git", ["show", `${ref}:package-lock.json`])).digest("hex");
@@ -31,6 +32,7 @@ const plan = {
   requiresWebRestart: runtimeChanged,
   requiresWorkerRestart: workerChanged || sharedChanged || lockfileChanged || prismaSchemaChanged || prismaMigrationChanged || matches(/^deploy\/systemd\/amazon-worker\.service$/),
   requiresImageWorkerRestart: imageWorkerChanged || sharedChanged || lockfileChanged || prismaSchemaChanged || prismaMigrationChanged || matches(/^deploy\/systemd\/amazon-image-upscale-worker\.service$/),
+  requiresAmazonSyncWorkerRestart: amazonSyncWorkerChanged || sharedChanged || lockfileChanged || prismaSchemaChanged || prismaMigrationChanged || matches(/^deploy\/systemd\/amazon-sync-worker\.service$/),
   requiresRuntimeConfig: matches(/^deploy\/systemd\//),
   requiresCaddyReload: matches(/^deploy\/caddy\//),
   requiresInfraUpdate: matches(/^docker-compose\.yml$/),

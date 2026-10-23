@@ -57,6 +57,11 @@ test("individual worker entry changes do not restart the other worker", () => {
   const plan = generate({ "scripts/image-upscale-worker.ts": "worker" });
   assert.equal(plan.requiresWorkerRestart, false);
   assert.equal(plan.requiresImageWorkerRestart, true);
+  assert.equal(plan.requiresAmazonSyncWorkerRestart, false);
+  const amazonPlan = generate({ "scripts/amazon-sync-worker.ts": "worker" });
+  assert.equal(amazonPlan.requiresWorkerRestart, false);
+  assert.equal(amazonPlan.requiresImageWorkerRestart, false);
+  assert.equal(amazonPlan.requiresAmazonSyncWorkerRestart, true);
 });
 
 test("schema without migration and invalid base fail closed", () => {

@@ -3,6 +3,7 @@ import { Queue } from "bullmq";
 export const importJobQueueName = "import-jobs";
 export const imageUpscaleJobQueueName = "image-upscale-jobs";
 export const productOutboxQueueName = "product-outbox-jobs";
+export const amazonSyncQueueName = "amazon-sync-jobs";
 
 export function createRedisConnectionOptions() {
   const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
@@ -16,6 +17,7 @@ export function createRedisConnectionOptions() {
 let importJobQueue: Queue<{ jobId: string }> | undefined;
 let imageUpscaleJobQueue: Queue<{ jobId: string }> | undefined;
 let productOutboxQueue: Queue<{ eventId: string }> | undefined;
+let amazonSyncQueue: Queue<{ runId: string }> | undefined;
 
 export function getImportJobQueue() {
   importJobQueue ??= new Queue<{ jobId: string }>(importJobQueueName, {
@@ -39,4 +41,11 @@ export function getProductOutboxQueue() {
   });
 
   return productOutboxQueue;
+}
+
+export function getAmazonSyncQueue() {
+  amazonSyncQueue ??= new Queue<{ runId: string }>(amazonSyncQueueName, {
+    connection: createRedisConnectionOptions(),
+  });
+  return amazonSyncQueue;
 }

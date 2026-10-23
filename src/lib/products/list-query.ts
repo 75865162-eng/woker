@@ -148,6 +148,7 @@ export function createProductListItem(record: {
   chineseName: string;
   englishName: string;
   image?: string;
+  imageFileId?: string;
   asin?: string;
   status: string;
   selectionOwner: string;
@@ -174,6 +175,7 @@ export function createProductListItem(record: {
     chineseName: record.chineseName,
     englishName: record.englishName,
     image: record.image,
+    imageFileId: record.imageFileId,
     asin: record.asin,
     status,
     currentOwner: record.currentOwner ?? "",

@@ -119,6 +119,36 @@ export type ProductImageAsset = {
   downloadUrl?: string;
 };
 
+export type ProductPatentAttachment = ProductFileAsset & {
+  thumbUrl?: string;
+  originalUrl?: string;
+  thumbFileId?: string;
+  previewUrl?: string;
+  previewFileId?: string;
+};
+
+export type ProductPatentSearchChannel = {
+  id: string;
+  name: string;
+  keywords: string[];
+  note: string;
+  imageAssets: ProductPatentAttachment[];
+};
+
+export type ProductPatentRecord = {
+  id: string;
+  patentNumber: string;
+  patentType: string;
+  relatedUrl: string;
+  note: string;
+  attachments: ProductPatentAttachment[];
+};
+
+export type ProductPatentInformation = {
+  searchChannels: ProductPatentSearchChannel[];
+  patents: ProductPatentRecord[];
+};
+
 export type Product = {
   id: string;
   revision?: number;
@@ -165,6 +195,7 @@ export type Product = {
   isOverdue?: boolean;
   operationsProgress?: ProductOperationProgress;
   conclusionExcelFile?: ProductFileAsset;
+  patentInformation?: ProductPatentInformation;
   videoPlan?: ProductVideoPlanDraft;
 };
 
