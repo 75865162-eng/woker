@@ -83,6 +83,8 @@ import {
 } from "./product-attachment-upload";
 import { ProductVersionModal } from "./product-version-modal";
 import { TrialProductEditor as ExtractedTrialProductEditor } from "./trial-product-editor";
+import { ProductPatentInformationSection } from "./product-patent-information";
+import { ProductMeetingNotes } from "./product-meeting-notes";
 
 type ProductWorkbenchCache = {
   products: Product[];
@@ -1412,8 +1414,9 @@ export function ProductEditor({
   const [conclusionUploading, setConclusionUploading] = useState(false);
   const [imageUploads, setImageUploads] = useState<ProductImageUploadProgress[]>([]);
   const [workbookUploads, setWorkbookUploads] = useState(0);
+  const [patentUploadBusy, setPatentUploadBusy] = useState(false);
   const trackWorkbookUpload = useCallback((delta: number) => setWorkbookUploads((current) => Math.max(0, current + delta)), []);
-  const attachmentsBusy = conclusionUploading || imageUploads.length > 0 || workbookUploads > 0;
+  const attachmentsBusy = conclusionUploading || imageUploads.length > 0 || workbookUploads > 0 || patentUploadBusy;
   const childEditorOpen = operationsProgressOpen || videoPlanOpen;
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -1728,6 +1731,17 @@ export function ProductEditor({
         : { name: "", lengthCm: 0, widthCm: 0, heightCm: 0, actualWeightKg: 0, suggestedPrice: 0, purchaseCost: 0, oceanFreightUnitPrice: 12, fbaFee: 0, exchangeRate: 6.9 };
 
       return { ...current, pricingRows: [...current.pricingRows, nextRow] };
+    });
+  }
+
+  function copyWorkbookPricingRow(index: number) {
+    setWorkbookDetail((current) => {
+      const row = current.pricingRows[index];
+      if (!row) return current;
+
+      const pricingRows = [...current.pricingRows];
+      pricingRows.splice(index + 1, 0, { ...row });
+      return { ...current, pricingRows };
     });
   }
 
@@ -2056,6 +2070,7 @@ export function ProductEditor({
                 ) : null}
               </>
             ) : null}
+            {isEditing ? <ProductMeetingNotes sku={draft.sku} workspaceId={editorWorkspaceId} disabled={!detailReady || committed} /> : null}
             <Button variant="secondary" size="sm" className={compactToolbarButtonClass} onClick={() => void requestClose()} disabled={saving || attachmentsBusy || childEditorOpen}>
               <X className="h-4 w-4" />
               取消
@@ -2214,10 +2229,16 @@ export function ProductEditor({
                 </div>
               </CardContent>
             </Card>
+            <ProductPatentInformationSection
+              value={draft.patentInformation}
+              onChange={(patentInformation) => setField("patentInformation", patentInformation)}
+              onUploadStateChange={setPatentUploadBusy}
+            />
             <ProductAttachmentActivityContext.Provider value={trackWorkbookUpload}>
             <ProductWorkbookDetailSections
               detail={workbookDetail}
               onPricingChange={updateWorkbookPricingRow}
+              onPricingCopy={copyWorkbookPricingRow}
               onPricingAdd={addWorkbookPricingRow}
               onPricingRemove={removeWorkbookPricingRow}
               onCompetitorChange={updateWorkbookCompetitor}

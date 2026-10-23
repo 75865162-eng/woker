@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
+import { Copy, FileText, ImagePlus, Minus, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProductAttachmentActivity } from "./product-attachment-activity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +80,7 @@ function PricingNameInput({ value, onChange }: { value: string; onChange: (value
 export function ProductWorkbookDetailSections({
   detail,
   onPricingChange,
+  onPricingCopy,
   onPricingAdd,
   onPricingRemove,
   onCompetitorChange,
@@ -98,6 +99,7 @@ export function ProductWorkbookDetailSections({
 }: {
   detail: TrialProductDraft;
   onPricingChange: (index: number, field: keyof TrialPriceRow, value: string | number) => void;
+  onPricingCopy: (index: number) => void;
   onPricingAdd: () => void;
   onPricingRemove: () => void;
   onCompetitorChange: (index: number, field: keyof TrialCompetitorRow, value: string, asset?: ProductImageAsset) => void;
@@ -218,6 +220,17 @@ export function ProductWorkbookDetailSections({
                     <ReadonlyMetric value={`${(calc.profitRate * 100).toFixed(1)}%`} />
                     {showOptionalPricingMetrics && <ReadonlyMetric value={calc.volumeWeightLb} />}
                     {showOptionalPricingMetrics && <ReadonlyMetric value={calc.actualWeightLb} />}
+                    <td className="w-10 min-w-10 px-1 py-2 text-center">
+                      <button
+                        type="button"
+                        className="rounded p-1 text-muted hover:bg-surface hover:text-foreground"
+                        title="复制当前行并新增"
+                        aria-label={`复制第 ${index + 1} 行并新增`}
+                        onClick={() => onPricingCopy(index)}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
