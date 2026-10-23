@@ -42,3 +42,10 @@ Validation:
 - `npm run build`: passed again on the final implementation (2026-10-23).
 
 Not run: migration against a real PostgreSQL instance; authenticated browser/403/workspace switching with current new screens; Redis multi-process and Amazon calls; representative P95 dataset benchmarks. Prior browser inspection reached login and no credentials were provided. Seller ID binding is explicitly pending the user; no inference from accountKey, no fake successful runs. Actual rate-limit behavior and authorized catalog role acceptance must be verified in the seller's controlled environment. No production config/migration/deployment.
+
+## Final correctness hardening (2026-10-23)
+
+- Inventory quantities must be explicit nonnegative safe integers; missing/invalid quantities fail the run instead of being converted to zero. Valid zero and an explicit empty response remain supported.
+- Plans retain the exact inventory run from the rows used, without a second latest-run query. Under the scoped transaction lock, older calculations cannot overwrite newer results for the same policy version. Failed calculations clear the inventory-run reference and preserve NEW lifecycle.
+- Added exhaustive invalid/missing quantity regression and a stubbed service concurrency/provenance/failure regression; no external services or credentials used. The existing 137-test suite plus these two new tests pass (139 total).
+- Typecheck and lint pass. Production build already passed on the P0 implementation; this follow-up changes only server validation/provenance and tests, with no schema, dependency, route or UI build changes, so it does not repeat that build. Live database lock behavior still requires the controlled multi-worker acceptance listed above.

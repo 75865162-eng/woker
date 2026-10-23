@@ -6,6 +6,7 @@ export type AmazonProductReadRow = {
   listingStatus: string | null; available: number | null; inbound: number | null;
   reserved: number | null; unfulfillable: number | null;
   catalogUpdatedAt: string | null; inventoryUpdatedAt: string | null;
+  inventoryRunId: string | null;
   freshness: "FRESH" | "STALE" | "NOT_SYNCED";
   fieldSources: Record<string, string>; lastError: string | null;
 };
@@ -30,7 +31,7 @@ export async function readAmazonProductsForSkus(organizationId: string, workspac
   const rows = new Map<string, AmazonProductReadRow>();
   const ensure = (row: { sellerAccountId: string; marketplaceId: string; sellerSku: string }) => {
     const key = amazonProductKey(row);
-    if (!rows.has(key)) rows.set(key, { sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, sellerSku: row.sellerSku, asin: null, listingStatus: null, available: null, inbound: null, reserved: null, unfulfillable: null, catalogUpdatedAt: null, inventoryUpdatedAt: null, freshness: "NOT_SYNCED", fieldSources: {}, lastError });
+    if (!rows.has(key)) rows.set(key, { sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, sellerSku: row.sellerSku, asin: null, listingStatus: null, available: null, inbound: null, reserved: null, unfulfillable: null, catalogUpdatedAt: null, inventoryUpdatedAt: null, inventoryRunId: null, freshness: "NOT_SYNCED", fieldSources: {}, lastError });
     return rows.get(key)!;
   };
   for (const row of catalog) {
@@ -47,6 +48,7 @@ export async function readAmazonProductsForSkus(organizationId: string, workspac
     result.reserved = (result.reserved ?? 0) + row.reservedQuantity;
     result.unfulfillable = (result.unfulfillable ?? 0) + row.unfulfillableQuantity;
     result.inventoryUpdatedAt = row.capturedAt.toISOString();
+    result.inventoryRunId = row.syncRunId;
     result.freshness = inventorySnapshotStatus(row.capturedAt);
     result.fieldSources = { ...result.fieldSources, available: "Amazon SP-API FBA Inventory Summaries", inbound: "Amazon SP-API FBA Inventory Summaries", reserved: "Amazon SP-API FBA Inventory Summaries", unfulfillable: "Amazon SP-API FBA Inventory Summaries" };
   }

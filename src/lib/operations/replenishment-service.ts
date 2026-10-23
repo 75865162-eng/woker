@@ -31,24 +31,27 @@ export async function refreshDueReplenishmentPlans(now = new Date()) {
       const rows = await readAmazonProductsForSkus(policy.organizationId, policy.workspaceId, [policy.sellerSku]);
       const inventory = rows.find((row) => row.sellerAccountId === policy.sellerAccountId && row.marketplaceId === policy.marketplaceId);
       const result = calculateReplenishment(inputs, { available: inventory?.available ?? null, inbound: inventory?.inbound ?? null, fresh: inventory?.freshness === "FRESH" }, today);
-      const run = await prisma.amazonSyncRun.findFirst({ where: { organizationId: policy.organizationId, workspaceId: policy.workspaceId, resource: "inventory", status: "SUCCEEDED" }, orderBy: { finishedAt: "desc" }, select: { id: true } });
       const data = { organizationId: policy.organizationId, workspaceId: policy.workspaceId, sellerAccountId: policy.sellerAccountId, marketplaceId: policy.marketplaceId,
-        sellerSku: policy.sellerSku, policyUpdatedAt: policy.updatedAt, inventoryRunId: run?.id ?? null,
+        sellerSku: policy.sellerSku, policyUpdatedAt: policy.updatedAt, inventoryRunId: inventory?.inventoryRunId ?? null,
         lastError: null, inputSnapshot: { inputs, inventory: inventory ?? null, asOf: today } as unknown as Prisma.InputJsonValue,
         result: result as unknown as Prisma.InputJsonValue, generatedAt: now, nextCalculationAt: new Date(now.getTime() + 24 * 60 * 60_000) };
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${policy.id}, 1))`;
         const current = await tx.amazonReplenishmentPolicy.findUnique({ where: { id: policy.id } });
         if (!current?.enabled || current.updatedAt.getTime() !== policy.updatedAt.getTime()) return;
+        const existing = await tx.amazonReplenishmentPlan.findUnique({ where: { policyId: policy.id }, select: { generatedAt: true, policyUpdatedAt: true } });
+        if (existing?.policyUpdatedAt.getTime() === policy.updatedAt.getTime() && existing.generatedAt.getTime() >= now.getTime()) return;
         await tx.amazonReplenishmentPlan.upsert({ where: { policyId: policy.id }, create: { id: randomUUID(), policyId: policy.id, ...data }, update: data });
       });
     } catch {
-      const failure = { version: "1", status: "NEEDS_DATA", lifecycle: "MATURE", dailyDemand: null, daysOfCover: null, estimatedStockoutDate: null, suggestedQuantity: null, suggestedOrderDate: null, urgency: "UNKNOWN", reasons: ["补货计算失败，请检查参数、数据库及库存快照。"], missingInputs: ["可用计算输入"] };
-      const failureData = { organizationId: policy.organizationId, workspaceId: policy.workspaceId, sellerAccountId: policy.sellerAccountId, marketplaceId: policy.marketplaceId, sellerSku: policy.sellerSku, policyUpdatedAt: policy.updatedAt, inputSnapshot: policy.inputs as Prisma.InputJsonValue, lastError: "补货计算失败，请检查参数、数据库及库存快照。", result: failure, generatedAt: now, nextCalculationAt: new Date(now.getTime() + 30 * 60_000) };
+      const failure = { version: "1", status: "NEEDS_DATA", lifecycle: typeof policy.inputs === "object" && policy.inputs !== null && !Array.isArray(policy.inputs) && policy.inputs.lifecycle === "NEW" ? "NEW" : "MATURE", dailyDemand: null, daysOfCover: null, estimatedStockoutDate: null, suggestedQuantity: null, suggestedOrderDate: null, urgency: "UNKNOWN", reasons: ["补货计算失败，请检查参数、数据库及库存快照。"], missingInputs: ["可用计算输入"] };
+      const failureData = { organizationId: policy.organizationId, workspaceId: policy.workspaceId, sellerAccountId: policy.sellerAccountId, marketplaceId: policy.marketplaceId, sellerSku: policy.sellerSku, policyUpdatedAt: policy.updatedAt, inventoryRunId: null, inputSnapshot: policy.inputs as Prisma.InputJsonValue, lastError: "补货计算失败，请检查参数、数据库及库存快照。", result: failure, generatedAt: now, nextCalculationAt: new Date(now.getTime() + 30 * 60_000) };
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${policy.id}, 1))`;
         const current = await tx.amazonReplenishmentPolicy.findUnique({ where: { id: policy.id } });
         if (!current?.enabled || current.updatedAt.getTime() !== policy.updatedAt.getTime()) return;
+        const existing = await tx.amazonReplenishmentPlan.findUnique({ where: { policyId: policy.id }, select: { generatedAt: true, policyUpdatedAt: true } });
+        if (existing?.policyUpdatedAt.getTime() === policy.updatedAt.getTime() && existing.generatedAt.getTime() >= now.getTime()) return;
         await tx.amazonReplenishmentPlan.upsert({ where: { policyId: policy.id }, create: { id: randomUUID(), policyId: policy.id, ...failureData }, update: failureData });
       });
     }

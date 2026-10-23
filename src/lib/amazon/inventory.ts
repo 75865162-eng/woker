@@ -36,13 +36,13 @@ export function extractAmazonInventorySnapshots(value: unknown): AmazonInventory
       asin: text(item.asin),
       fnSku: text(item.fnSku),
       condition,
-      fulfillableQuantity: nonNegativeInteger(details.fulfillableQuantity),
-      inboundWorkingQuantity: nonNegativeInteger(details.inboundWorkingQuantity),
-      inboundShippedQuantity: nonNegativeInteger(details.inboundShippedQuantity),
-      inboundReceivingQuantity: nonNegativeInteger(details.inboundReceivingQuantity),
-      reservedQuantity: nonNegativeInteger(isRecord(details.reservedQuantity) ? details.reservedQuantity.totalReservedQuantity : details.reservedQuantity),
-      unfulfillableQuantity: nonNegativeInteger(isRecord(details.unfulfillableQuantity) ? details.unfulfillableQuantity.totalUnfulfillableQuantity : details.unfulfillableQuantity),
-      researchingQuantity: nonNegativeInteger(isRecord(details.researchingQuantity) ? details.researchingQuantity.totalResearchingQuantity : details.researchingQuantity),
+      fulfillableQuantity: inventoryQuantity(details.fulfillableQuantity),
+      inboundWorkingQuantity: inventoryQuantity(details.inboundWorkingQuantity),
+      inboundShippedQuantity: inventoryQuantity(details.inboundShippedQuantity),
+      inboundReceivingQuantity: inventoryQuantity(details.inboundReceivingQuantity),
+      reservedQuantity: inventoryQuantity(isRecord(details.reservedQuantity) ? details.reservedQuantity.totalReservedQuantity : details.reservedQuantity),
+      unfulfillableQuantity: inventoryQuantity(isRecord(details.unfulfillableQuantity) ? details.unfulfillableQuantity.totalUnfulfillableQuantity : details.unfulfillableQuantity),
+      researchingQuantity: inventoryQuantity(isRecord(details.researchingQuantity) ? details.researchingQuantity.totalResearchingQuantity : details.researchingQuantity),
     });
   }
 
@@ -71,7 +71,9 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 500) : "";
 }
 
-function nonNegativeInteger(value: unknown): number {
-  const numberValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numberValue) ? Math.max(0, Math.floor(numberValue)) : 0;
+function inventoryQuantity(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error("Amazon 库存数量缺失或无效，不能补零保存；请检查授权、响应字段并重新同步。");
+  }
+  return value;
 }
