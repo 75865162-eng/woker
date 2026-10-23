@@ -138,7 +138,7 @@ export function ProductEditorImagePanel({
                     }}
                   />
                 </button>
-                <Button type="button" variant="secondary" size="icon" className="h-8 w-8 shrink-0" title="删除图片" onClick={() => onRemove(index)}>
+                <Button type="button" variant="secondary" size="icon" className="h-8 w-8 shrink-0" title="删除图片" disabled={uploadingFiles.length > 0} onClick={() => onRemove(index)}>
                   <Minus className="h-4 w-4" />
                 </Button>
               </div>

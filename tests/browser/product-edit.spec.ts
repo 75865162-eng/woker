@@ -5,15 +5,18 @@ import type { Product } from "@/lib/products/types";
 import type * as DraftRepository from "@/lib/products/product-edit-draft-repository";
 
 let bundle: string;
+let productionBundle: string;
 test.beforeAll(async () => {
   const result = await build({ entryPoints: ["tests/browser/product-edit-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' }, alias: { exceljs: "exceljs/dist/exceljs.min.js" } });
   bundle = result.outputFiles[0].text;
+  const production = await build({ entryPoints: ["tests/browser/product-edit-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' }, alias: { exceljs: "exceljs/dist/exceljs.min.js" } });
+  productionBundle = production.outputFiles[0].text;
 });
 
-async function setup(page: Page) {
+async function setup(page: Page, mode = "") {
   const state = {
     product: { ...productToDraft(null, [], "SKU-1"), id: "product-1", revision: 1, chineseName: "原商品", englishName: "Original product", status: "listing_confirming" } as Product,
-    saves: 0, uploads: 0, fail: false,
+    saves: 0, uploads: 0, fail: false, detailFail: false, detailGate: null as Promise<void> | null,
   };
   await page.route("http://127.0.0.1:43219/**", async (route) => {
     const request = route.request();
@@ -26,17 +29,25 @@ async function setup(page: Page) {
       state.product = { ...product, revision: state.product.revision! + 1 };
       return route.fulfill({ json: { product: state.product } });
     }
-    if (url.pathname.endsWith("/detail")) return route.fulfill({ json: { product: state.product } });
+    if (url.pathname.endsWith("/detail")) {
+      if (state.detailGate) await state.detailGate;
+      if (state.detailFail) return route.fulfill({ status: 500, json: { error: "模拟详情失败" } });
+      return route.fulfill({ json: { product: state.product } });
+    }
     if (url.pathname.endsWith("/upload")) {
       state.uploads++;
       return route.fulfill({ json: { asset: { id: `file-${state.uploads}`, name: "test.png", mimeType: "image/png", size: 1, storageType: "local", uploadedAt: "2026-10-20", thumbUrl: "/test.png", originalUrl: "/test.png" } } });
     }
+    if (url.pathname === "/api/products/image-urls") {
+      const { fileIds } = request.postDataJSON() as { fileIds: string[] };
+      return route.fulfill({ json: { urls: fileIds.map((fileId) => ({ fileId, url: "/test.png" })), expiresAt: "2099-01-01T00:00:00Z" } });
+    }
     if (url.pathname.startsWith("/api/")) throw new Error(`Unexpected API call: ${request.method()} ${url.pathname}`);
     if (url.pathname === "/") return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
-    if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
+    if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: mode === "production" ? productionBundle : bundle });
     return route.fulfill({ status: 404, body: "" });
   });
-  await page.goto("http://127.0.0.1:43219/");
+  await page.goto(`http://127.0.0.1:43219/${mode ? `?mode=${mode}` : ""}`);
   await expect(nameInput(page)).toBeEditable();
   return state;
 }
@@ -238,7 +249,7 @@ test("workbook attachment uploads block save/close until the uploaded reference 
     await route.fulfill({ json: { asset: { id: "workbook-file", name: "evidence.pdf", mimeType: "application/pdf", size: 1, storageType: "local", uploadedAt: "2026-10-20", thumbUrl: "/evidence.pdf", originalUrl: "/evidence.pdf", downloadUrl: "/evidence.pdf" } } });
   });
   await page.locator('input[type="file"][accept="image/*,.pdf"]').last().setInputFiles({ name: "evidence.pdf", mimeType: "application/pdf", buffer: Buffer.from("pdf") });
-  await expect(page.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "附件上传中", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "取消", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "暂时离开（保留草稿）", exact: true })).toBeDisabled();
   expect(state.saves).toBe(0);
@@ -249,4 +260,83 @@ test("workbook attachment uploads block save/close until the uploaded reference 
   await expect(page.getByRole("heading", { name: /商品详情/ })).toHaveCount(0);
   const saved = state.product as Product & { workbookDetail: { remarkImageAssets: Array<{ id: string }> } };
   expect(saved.workbookDetail.remarkImageAssets[0].id).toBe("workbook-file");
+});
+
+
+test("cold shell edits survive authority alignment and failed-detail retry without losing attachments", async ({ page }) => {
+  const state = await setup(page);
+  let release!: () => void;
+  state.detailGate = new Promise<void>((resolve) => { release = resolve; });
+  state.detailFail = true;
+  state.product = { ...state.product, revision: 7, imageAssets: [{ id: "server-file", name: "server.png", thumbUrl: "/server.png" } as NonNullable<Product["imageAssets"]>[number]] };
+  await page.goto("http://127.0.0.1:43219/?mode=shell");
+  await expect(nameInput(page)).toBeEditable();
+  await nameInput(page).fill("先编辑壳");
+  await savedLocally(page);
+  await expect(page.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByRole("button", { name: "重试加载" })).toBeVisible();
+  await expect(nameInput(page)).toHaveValue("先编辑壳");
+  state.detailFail = false;
+  await page.getByRole("button", { name: "重试加载" }).click();
+  await expect(page.getByRole("button", { name: "保存", exact: true })).toBeEnabled();
+  await expect(nameInput(page)).toHaveValue("先编辑壳");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /商品详情/ })).toHaveCount(0);
+  expect(state.product.revision).toBe(8);
+  expect(state.product.imageAssets?.[0].id).toBe("server-file");
+});
+
+test("shell edits remain recoverable after refresh before detail succeeds", async ({ page }) => {
+  const state = await setup(page);
+  state.detailFail = true;
+  await page.goto("http://127.0.0.1:43219/?mode=shell");
+  await nameInput(page).fill("断网草稿");
+  await savedLocally(page);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "重试加载" })).toBeVisible();
+  state.detailFail = false;
+  state.product = { ...state.product, revision: 9, purchasePrice: 72 };
+  await page.getByRole("button", { name: "重试加载" }).click();
+  await page.getByRole("button", { name: "恢复草稿", exact: true }).click();
+  await expect(nameInput(page)).toHaveValue("断网草稿");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /商品详情/ })).toHaveCount(0);
+  expect(state.product.purchasePrice).toBe(72);
+  expect(state.product.revision).toBe(10);
+});
+
+test("image uploads leave title and assignees editable", async ({ page }) => {
+  const state = await setup(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/products/image-assets/upload", async (route) => {
+    await gate;
+    await route.fulfill({ json: { asset: { id: "image-file", name: "test.png", mimeType: "image/png", thumbUrl: "/test.png" } } });
+  });
+  await page.locator('input[type="file"][accept="image/*"]').first().setInputFiles({ name: "test.png", mimeType: "image/png", buffer: Buffer.from("image") });
+  await expect(page.getByRole("button", { name: "附件上传中" })).toBeDisabled();
+  await nameInput(page).fill("上传时编辑");
+  await page.getByRole("button", { name: "请选择", exact: true }).first().click();
+  await page.getByRole("button", { name: "运营甲", exact: true }).click();
+  await page.getByRole("button", { name: "确定", exact: true }).click();
+  release();
+  await expect(page.getByRole("button", { name: "保存", exact: true })).toBeEnabled();
+  await expect(nameInput(page)).toHaveValue("上传时编辑");
+  expect(state.saves).toBe(0);
+});
+
+
+test("production conflict UI omits full JSON and supports using the server version", async ({ page }) => {
+  const state = await setup(page, "production");
+  await nameInput(page).fill("本地修改");
+  state.product = { ...state.product, revision: 2, chineseName: "服务器版本" };
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await page.getByRole("button", { name: "加载最新数据", exact: true }).click();
+  await expect(page.getByRole("button", { name: "使用服务器版本" })).toBeEnabled();
+  await expect(page.locator("pre")).toHaveCount(0);
+  await expect(page.getByText("查看最新服务器数据", { exact: false })).toHaveCount(0);
+  await page.getByRole("button", { name: "使用服务器版本" }).click();
+  await expect(nameInput(page)).toHaveValue("服务器版本");
+  expect(state.saves).toBe(1);
 });

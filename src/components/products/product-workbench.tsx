@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Bell, ExternalLink, FileDown, FileUp, History, LoaderCircle, PackagePlus, Save, Video, X } from "lucide-react";
@@ -342,6 +342,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [importedEditorDraft, setImportedEditorDraft] = useState<Product | null>(null);
   const [detailReady, setDetailReady] = useState(true);
+  const [detailError, setDetailError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTrialEditorOpen, setIsTrialEditorOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
@@ -845,6 +846,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   function openNewProduct() {
     productDetailRequestSeq.current += 1;
     setImportedEditorDraft(null);
+    setDetailError("");
     setActiveProduct(null);
     setDetailReady(true);
     setIsEditorOpen(true);
@@ -898,13 +900,19 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
 
     setProductsError("");
     setActiveProduct(cachedDetail ?? cachedTextDetail ?? listProduct);
+    setDetailError("");
     setDetailReady(false);
     setIsEditorOpen(true);
 
+    await alignProductDetail(workspaceId, normalizedSku);
+  }
+
+  async function alignProductDetail(workspaceId: string, sku: string) {
+    setDetailError("");
     const requestId = ++productDetailRequestSeq.current;
     setDetailReady(false);
     try {
-      const product = await loadProductDetail(workspaceId, normalizedSku);
+      const product = await loadProductDetail(workspaceId, sku);
       if (requestId !== productDetailRequestSeq.current) {
         return;
       }
@@ -915,7 +923,7 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
         return;
       }
       const message = error instanceof Error ? error.message : "商品详情读取失败";
-      setProductsError(message);
+      setDetailError(message);
       setDetailReady(false);
     }
   }
@@ -1347,6 +1355,8 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               creatorName={creatorName}
               creatorUserId={currentUserId}
               detailReady={detailReady}
+              detailError={detailError}
+              onRetryDetail={() => { if (activeProduct) void alignProductDetail(readCurrentWorkspaceId(), activeProduct.sku); }}
             opsOptions={opsOptions}
             designerOptions={designerOptions}
             onClose={closeProductEditor}
@@ -1373,6 +1383,8 @@ export function ProductEditor({
   creatorName,
   creatorUserId,
   detailReady,
+  detailError = "",
+  onRetryDetail,
   opsOptions,
   designerOptions,
   onClose,
@@ -1385,18 +1397,20 @@ export function ProductEditor({
   creatorName: string;
   creatorUserId: string;
   detailReady: boolean;
+  detailError?: string;
+  onRetryDetail?: () => void;
   opsOptions: string[];
   designerOptions: string[];
   onClose: () => void;
   onSave: (draft: ProductDraft, workspaceId: string) => void | Promise<void>;
 }) {
-  const [draft, setDraft] = useState<ProductEditorDraft>(() => productToDraft(initialDraft ?? product, products, nextSku));
+  const [draft, setDraft] = useState<ProductEditorDraft>(() => ({ ...productToDraft(initialDraft ?? product, products, nextSku), ...(!detailReady ? { revision: undefined } : {}) }));
   const initialDraftRef = useRef(initialDraft);
   const [editorWorkspaceId] = useState(readCurrentWorkspaceId);
   const [saving, setSaving] = useState(false);
   const [committed, setCommitted] = useState(false);
   const saveInFlight = useRef(false);
-  const [baseSnapshot, setBaseSnapshot] = useState<ProductEditorDraft>(() => productToDraft(product, products, nextSku));
+  const [baseSnapshot, setBaseSnapshot] = useState<ProductEditorDraft>(() => ({ ...productToDraft(product, products, nextSku), ...(!detailReady ? { revision: undefined } : {}) }));
   const [editorError, setEditorError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const [conflictOpen, setConflictOpen] = useState(false);
@@ -1408,7 +1422,7 @@ export function ProductEditor({
     organizationId: shellUser?.organizationId ?? "",
     workspaceId: editorWorkspaceId, userId: creatorUserId,
     entityId: product?.sku || "new", editorType: "product",
-  }, baseSnapshot, draft, detailReady);
+  }, baseSnapshot, draft, true);
   const [operationsProgressOpen, setOperationsProgressOpen] = useState(false);
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
   const [conclusionUploading, setConclusionUploading] = useState(false);
@@ -1485,10 +1499,13 @@ export function ProductEditor({
     if (detailReady && draftSourceKeyRef.current !== sourceKey) {
       draftSourceKeyRef.current = sourceKey;
       const initial = productToDraft(productRef.current, productsRef.current, nextSkuRef.current);
-      setDraft(!isEditing && initialDraftRef.current ? productToDraft(initialDraftRef.current, productsRef.current, nextSkuRef.current) : initial);
+      // Align authority without replacing edits made while the list shell was open.
+      setDraft((current) => !isEditing && initialDraftRef.current
+        ? productToDraft(initialDraftRef.current, productsRef.current, nextSkuRef.current)
+        : restoreProductEdits(baseSnapshot, current, initial));
       setBaseSnapshot(initial);
     }
-  }, [detailReady, isEditing, product]);
+  }, [detailReady, isEditing, product, baseSnapshot]);
 
   async function requestClose() {
     if (saving || attachmentsBusy || childEditorOpen) return;
@@ -2080,9 +2097,12 @@ export function ProductEditor({
             <p className="mt-1 text-xs font-medium text-muted" role="status">{localDraft.status}</p>
             {editorError ? <p role="alert" className="mt-1 text-xs text-danger">{editorError}</p> : null}
             {committed ? <Button size="sm" variant="secondary" onClick={onClose}>关闭（商品已保存）</Button> : null}
-            {!detailReady ? <p className="mt-1 text-xs text-danger">正在读取权威详情。读取失败时请暂时离开后重新打开；加载完成前不能编辑或保存。</p> : null}
+            {!detailReady ? <div className="mt-1 text-xs text-muted">
+              {detailError ? <><p role="alert">详情加载失败：{detailError}。可继续编辑基础信息，保存需等待详情对齐。</p><Button size="sm" variant="secondary" onClick={onRetryDetail}>重试加载</Button></>
+                : <p>正在读取权威详情，可先编辑基础信息；附件和保存待详情对齐后开放。</p>}
+            </div> : null}
             {conflictDraft.current ? <Button size="sm" variant="secondary" onClick={() => setConflictOpen(true)}>处理并发冲突</Button> : null}
-            {latest ? <details className="text-xs"><summary>查看最新服务器数据（版本 {latest.revision}）</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{JSON.stringify(latest, null, 2)}</pre></details> : null}
+            {process.env.NODE_ENV === "development" && latest ? <details className="text-xs"><summary>查看最新服务器数据（版本 {latest.revision}）</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{JSON.stringify(latest, null, 2)}</pre></details> : null}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <input
@@ -2128,15 +2148,17 @@ export function ProductEditor({
             <Button variant="ghost" size="sm" className={compactToolbarButtonClass} disabled={saving || attachmentsBusy || childEditorOpen} onClick={onClose}>暂时离开（保留草稿）</Button>
             <Button size="sm" className={compactToolbarButtonClass} onClick={() => void handleSubmit()} disabled={committed || saving || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current) || attachmentsBusy || childEditorOpen}>
               {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? "保存中" : "保存"}
+              {saving ? "保存中" : attachmentsBusy ? "附件上传中" : "保存"}
             </Button>
           </div>
         </div>
 
-        <fieldset disabled={committed || saving || attachmentsBusy || childEditorOpen || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current)} className="thin-scrollbar min-w-0 flex-1 overflow-auto p-5">
+        <fieldset disabled={committed || saving || childEditorOpen || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current)} className="thin-scrollbar min-w-0 flex-1 overflow-auto p-5">
           <section className="space-y-4">
             <Card>
               <CardContent className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+                <fieldset disabled={!showHeavyDetail} className="min-w-0">
+                {!showHeavyDetail ? <p className="text-xs text-muted">完整图片附件待详情对齐</p> : null}
                 <ProductEditorImagePanel
                   imageAssets={draft.imageAssets}
                   uploadingFiles={imageUploads}
@@ -2146,6 +2168,7 @@ export function ProductEditor({
                   onRetryUpload={retryImageUpload}
                   onRemove={removeImage}
                 />
+                </fieldset>
 
                 <div>
                   <h3 className="text-lg font-bold text-foreground">基础信息</h3>
@@ -2195,11 +2218,13 @@ export function ProductEditor({
                       </label>
                     </div>
                     {draft.status === "canceled" ? (
+                      <fieldset disabled={!showHeavyDetail || conclusionUploading}>
                       <ConclusionExcelField
                         file={draft.conclusionExcelFile}
                         uploading={conclusionUploading}
                         onUpload={() => conclusionInputRef.current?.click()}
                       />
+                      </fieldset>
                     ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <ReadonlyField label="选品负责人" value={selectionOwner || "--"} />
@@ -2207,7 +2232,8 @@ export function ProductEditor({
                     </div>
                     <MultiSelectField label="运营负责人" value={selectedOps} options={opsOptions} onChange={(value) => updateAssigneeList("opsAssignees", value)} />
                     <MultiSelectField label="美工负责人" value={selectedDesigners} options={designerOptions} onChange={(value) => updateAssigneeList("designerAssignees", value)} />
-                    <div className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-4">
+                    <fieldset disabled={!showHeavyDetail} className="rounded-md border border-border bg-surface-muted px-3 py-3 md:col-span-2 xl:col-span-4">
+                    {!showHeavyDetail ? <p className="text-xs text-muted">业务流转记录待详情对齐</p> : null}
                       <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -2276,17 +2302,21 @@ export function ProductEditor({
                         </div>
                       ) : null}
                     </div>
-                  </div>
+                  </fieldset>
                   </div>
                 </div>
               </CardContent>
             </Card>
+            {!showHeavyDetail ? <p className="text-xs text-muted">专利资料和 workbook 待详情对齐</p> : null}
+            <fieldset disabled={!showHeavyDetail || patentUploadBusy} className="min-w-0">
             <ProductPatentInformationSection
               value={draft.patentInformation}
               onChange={(patentInformation) => setField("patentInformation", patentInformation)}
               onUploadStateChange={setPatentUploadBusy}
             />
+            </fieldset>
             <ProductAttachmentActivityContext.Provider value={trackWorkbookUpload}>
+            <fieldset disabled={!showHeavyDetail} className="min-w-0">
             <ProductWorkbookDetailSections
               detail={workbookDetail}
               onPricingChange={updateWorkbookPricingRow}
@@ -2307,6 +2337,7 @@ export function ProductEditor({
               onRemarkChange={(value) => setWorkbookDetail((current) => ({ ...current, remark: value }))}
               onRemarkImagesChange={updateWorkbookRemarkImages}
             />
+            </fieldset>
             </ProductAttachmentActivityContext.Provider>
           </section>
         </fieldset>
@@ -2314,12 +2345,17 @@ export function ProductEditor({
       {localDraft.checked && detailReady && localDraft.candidates.length > 0 ? (
         <ProductEditDialog title="发现未提交的编辑内容" onDismiss={() => { /* Explicit restore/discard is required before editing. */ }}>
           <p className="text-sm">发现 {localDraft.candidates.length} 份草稿，最近修改于 {new Date(localDraft.candidates[0].updatedAt).toLocaleString("zh-CN")}。</p>
-          {localDraft.candidates[0].baseRevision !== baseSnapshot.revision ? <p className="my-3 text-sm text-danger">商品数据已经更新。恢复将保留原始版本号，保存前必须处理版本冲突；不会静默覆盖最新商品。</p> : null}
-          <details className="mt-3 text-xs"><summary>查看最新商品数据 · 版本 {baseSnapshot.revision ?? "新商品"}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{JSON.stringify(baseSnapshot, null, 2)}</pre></details>
+          {localDraft.candidates[0].baseRevision !== undefined && localDraft.candidates[0].baseRevision !== baseSnapshot.revision ? <p className="my-3 text-sm text-danger">商品数据已经更新。恢复将保留原始版本号，保存前必须处理版本冲突；不会静默覆盖最新商品。</p> : null}
+          {process.env.NODE_ENV === "development" ? <details className="mt-3 text-xs"><summary>查看最新商品数据 · 版本 {baseSnapshot.revision ?? "新商品"}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{JSON.stringify(baseSnapshot, null, 2)}</pre></details> : null}
           <div className="mt-4 flex gap-2">
             <Button onClick={() => {
               const record = localDraft.acceptCandidate();
               if (record) {
+                // Shell drafts have no authoritative revision; reapply only their edits.
+                if (isEditing && record.baseRevision === undefined) {
+                  setDraft(restoreProductEdits(record.original, record.form, baseSnapshot));
+                  return;
+                }
                 if (record.baseRevision !== baseSnapshot.revision) setLatest(baseSnapshot);
                 setBaseSnapshot({ ...record.original, revision: record.baseRevision });
                 setDraft({ ...record.form, revision: record.baseRevision });
@@ -2343,11 +2379,19 @@ export function ProductEditor({
       {conflictOpen ? (
         <ProductEditDialog title="商品版本冲突" onDismiss={() => setConflictOpen(false)}>
           <p className="text-sm">该商品已被其他用户修改。你的编辑内容已保留，请加载最新数据后继续。</p>
-          {latest ? <details open className="mt-3 text-xs"><summary>最新数据 · 版本 {latest.revision}（供核对）</summary><pre className="max-h-72 overflow-auto whitespace-pre-wrap">{JSON.stringify(latest, null, 2)}</pre></details> : null}
+          {process.env.NODE_ENV === "development" && latest ? <details open className="mt-3 text-xs"><summary>最新数据 · 版本 {latest.revision}（供核对）</summary><pre className="max-h-72 overflow-auto whitespace-pre-wrap">{JSON.stringify(latest, null, 2)}</pre></details> : null}
           {editorError ? <p role="alert" className="mt-2 text-sm text-danger">{editorError}</p> : null}
           <p className="mt-3 text-xs text-muted">恢复仅重新应用你修改过的字段，数组和复合字段整体恢复。不会自动保存，请人工检查。附件引用会保留，不会重复上传。</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button onClick={() => void loadLatest()} disabled={latestLoading}>{latestLoading ? "正在读取" : "加载最新数据"}</Button>
+            <Button variant="secondary" disabled={!latest || latestLoading} onClick={() => {
+              if (!latest) return;
+              setBaseSnapshot(latest);
+              setDraft(latest);
+              conflictDraft.current = null;
+              setConflictOpen(false);
+              setEditorError("");
+            }}>使用服务器版本</Button>
             <Button onClick={restoreAfterConflict} disabled={!latest || latestLoading}>恢复我的修改</Button>
             <Button variant="secondary" onClick={() => setConflictOpen(false)}>暂不处理</Button>
             <Button variant="ghost" onClick={() => { setConflictOpen(false); setConfirmClose(true); }}>放弃草稿</Button>
