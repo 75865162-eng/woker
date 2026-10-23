@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-22
 
-**Status**: Approved for MVP implementation
+**Status**: P0 catalog/inventory and replenishment implementation; controlled acceptance pending
 
 **Input**: Extend the internal Amazon Operations Hub so operators can see connection health, inventory freshness, existing daily advertising/sales reports, and sync history, with only read-only Amazon inventory synchronization enabled.
 
@@ -28,7 +28,7 @@ An authorized operator opens the existing primary navigation entry and sees the 
 
 ### User Story 2 - Start a safe synchronization request (Priority: P1)
 
-An authorized operator requests an Amazon data sync and receives an auditable, deterministic result. Only inventory can enter the Amazon worker; all other domains are blocked without external requests.
+An authorized operator requests an Amazon data sync and receives an auditable, deterministic result. Inventory and catalog may enter the Amazon worker only with explicit server-side SellerAccount/Seller ID/Marketplace and authorized-resource bindings. Other domains are blocked.
 
 **Why this priority**: The UI must not imply that a sync occurred when the integration is not ready.
 
@@ -72,7 +72,7 @@ An authorized operator filters daily sales and ad spend by SKU or ASIN and date 
 - **FR-001**: The system MUST expose Operations Hub as a first-level navigable module protected by its own role permission.
 - **FR-002**: The system MUST scope connection and sync records by organization and workspace.
 - **FR-003**: The system MUST return a consistent freshness summary for ads, orders, inventory, catalog, finance, and fulfillment, including non-secret reasons and recommended actions.
-- **FR-004**: The system MUST allow only configured, scope-bound, read-only inventory synchronization; unimplemented domains MUST be recorded `BLOCKED` and MUST NOT contact Amazon.
+- **FR-004**: The system MUST allow only configured, scope-bound, read-only inventory and catalog synchronization with explicit seller binding; unimplemented domains MUST be recorded `BLOCKED` and MUST NOT contact Amazon.
 - **FR-005**: The system MUST retain a structured sync-run record for accepted or blocked requests.
 - **FR-006**: The MVP MUST remain read-only toward Amazon and must not collect or persist credentials in browser state.
 - **FR-007**: The system MUST continue to preserve existing Product Center, PPC, Logistics, and Agent workflows.
@@ -105,3 +105,8 @@ An authorized operator filters daily sales and ad spend by SKU or ASIN and date 
 ## Scheduled internal operations extension (2026-10-23)
 
 Seven tabs in the existing /operations workbench: overview/sync/inventory/ads/orders/catalog/runs. AmazonSyncSchedule stores scoped resource, intervalMinutes, enabled, lastEnqueuedAt and actor timestamps. All schedules default disabled; inventory alone supports execution. The dedicated worker polls every 30 seconds, only enqueues runs, shares manual enqueue locks and uses session locks for cross-run execution. Unsupported domains stay NOT_SYNCED/BLOCKED. Existing PPC data lacks trustworthy daily SKU/ASIN mapping, so the daily API explicitly returns NOT_SYNCED with nullable metrics and a PPC deep link. No ProductRecord writes or Amazon mutations. See docs/amazon-operations-hub.md for contracts, rollback and acceptance.
+
+
+## P0 extension — approved 2026-10-23
+
+User authorized implementation while Seller ID/accountKey mapping will be supplied separately. No inferred seller identity or real Amazon configuration changes. Add independent AmazonCatalogSnapshot and store-scoped inventory, and attach page-bounded DB snapshots to Product Center without changing its source of truth. Add daily/changed-policy read-only replenishment plans, with explicit store/market/SKU identity, source annotations, complete dated sales, new/mature separation, known-ETA receipts, production/domestic/ocean lead times and optional documented seasonality/profit/ACOS. Unknown required inputs => NEEDS_DATA, never fake units. Manual reference maintenance lives outside ProductRecord. Existing ERP daily history is opt-in with sellfox:view and exact original-field presence validation. P1 profit/Ads writes and P2 notifications remain out of scope. See current docs/amazon-operations-hub.md, which supersedes the historical inventory-only sections above.

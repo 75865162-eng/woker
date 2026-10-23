@@ -13,7 +13,7 @@ export async function getSyncSchedules(organizationId: string, workspaceId: stri
       intervalMinutes: row?.intervalMinutes ?? defaultSyncIntervals[resource],
       lastEnqueuedAt: row?.lastEnqueuedAt?.toISOString() ?? null,
       nextScheduledAt: row ? nextScheduledAt(row)?.toISOString() ?? null : null,
-      supported: resource === "inventory",
+      supported: resource === "inventory" || resource === "catalog",
       source: resource === "ads" ? "sourced_from_ppc" : "amazon_sp_api",
     };
   });
@@ -23,7 +23,7 @@ export async function getSyncSchedules(organizationId: string, workspaceId: stri
 export async function enqueueDueAmazonSchedules(now = new Date()) {
   if (!process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis") return 0;
   const due = await prisma.amazonSyncSchedule.findMany({
-    where: { enabled: true, resource: "inventory" }, orderBy: { lastEnqueuedAt: "asc" }, take: 100,
+    where: { enabled: true, resource: { in: ["inventory", "catalog"] } }, orderBy: { lastEnqueuedAt: "asc" }, take: 100,
   });
   let enqueued = 0;
   for (const candidate of due) {

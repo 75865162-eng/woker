@@ -59,3 +59,17 @@
 - [X] T033 Add seven tabs, schedule controls, placeholders, run filters/details and truthful PPC missing-source state
 - [X] T034 Add policy/lock regression tests, fix persisted marketplace mapping and document internal acceptance
 - [ ] T035 Execute controlled PostgreSQL/Redis multi-worker, logged-in browser and Amazon acceptance (requires configured environment)
+
+
+## Phase 9: P0 catalog/inventory and replenishment (authorized 2026-10-23)
+
+- [X] T036 Add explicit server seller/resource bindings; never infer Seller ID from accountKey
+- [X] T037 Add store-scoped inventory, independent catalog snapshot and additive migration
+- [X] T038 Integrate official Listings Items read worker, catalog schedule support, staging/cleanup/blocked metadata
+- [X] T039 Add bounded local DB product snapshot API and current-page Product Center decoration (no master write)
+- [X] T040 Add source-aware new/mature replenishment pure model, explicit periods/ETA, nullable results and risks
+- [X] T041 Add scoped policies, persisted daily plans, input snapshots/errors and worker recalculation
+- [X] T042 Add online-product/replenishment UI and protected policy API, ERP exact-MSKU history adapter
+- [X] T043 Add parsing/history/replenishment regressions, source/rollback/worker docs
+- [ ] T044 Controlled migration, Seller ID binding, live DB/Redis/Amazon and logged-in UI/403/isolation acceptance
+- [ ] T045 Real representative SKU list latency/P95 comparison before claiming speed improvements

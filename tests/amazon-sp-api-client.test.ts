@@ -38,6 +38,13 @@ test("SP-API client obtains LWA token and signs the marketplace request without 
   assert.equal(inventoryUrl.searchParams.get("granularityType"), "Marketplace");
   assert.equal(inventoryUrl.searchParams.get("marketplaceIds"), "ATVPDKIKX0DER");
   assert.equal(inventoryUrl.searchParams.get("nextToken"), "page-token");
+  await client.searchListingsItems({ sellerId: "SELLER/ID", marketplaceId: "ATVPDKIKX0DER", nextToken: "next page" });
+  const catalogUrl = new URL(calls[3].url);
+  assert.equal(catalogUrl.pathname, "/listings/2021-08-01/items/SELLER%2FID");
+  assert.equal(catalogUrl.searchParams.get("marketplaceIds"), "ATVPDKIKX0DER");
+  assert.equal(catalogUrl.searchParams.get("includedData"), "summaries,fulfillmentAvailability");
+  assert.equal(catalogUrl.searchParams.get("pageToken"), "next page");
+  assert.equal(calls[3].init?.method, "GET");
 });
 
 test("SP-API client sanitizes an upstream error and marks throttling retryable", async () => {

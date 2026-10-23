@@ -1,3 +1,4 @@
+import type { AmazonProductReadRow } from "@/lib/operations/amazon-products";
 import type { ProductVideoPlanDraft } from "@/lib/products/video-plan";
 
 export type ProductStatus =
@@ -150,6 +151,8 @@ export type ProductPatentInformation = {
 };
 
 export type Product = {
+  amazonSnapshots?: AmazonProductReadRow[];
+  amazonSnapshotError?: string;
   id: string;
   revision?: number;
   sku: string;
@@ -204,6 +207,8 @@ export type ProductDraft = Omit<Product, "id"> & {
 };
 
 export type ProductListItem = {
+  amazonSnapshots?: AmazonProductReadRow[];
+  amazonSnapshotError?: string;
   id: string;
   sku: string;
   chineseName: string;

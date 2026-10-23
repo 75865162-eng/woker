@@ -30,3 +30,9 @@ test("Amazon marketplace resolution requires one verified marketplace", () => {
   assert.equal(resolveAmazonMarketplaceId("ATVPDKIKX0DER", participations), "ATVPDKIKX0DER");
   assert.throws(() => resolveAmazonMarketplaceId("DE", participations), /未匹配/);
 });
+
+test("official payload envelope and nested quantity totals are parsed without losing stock", () => {
+  const rows = extractAmazonInventorySnapshots({ payload: { inventorySummaries: [{ sellerSku: "SKU", inventoryDetails: { fulfillableQuantity: 4, reservedQuantity: { totalReservedQuantity: 6 }, unfulfillableQuantity: { totalUnfulfillableQuantity: 2 }, researchingQuantity: { totalResearchingQuantity: 1 } } }] } });
+  assert.equal(rows[0].reservedQuantity, 6); assert.equal(rows[0].unfulfillableQuantity, 2); assert.equal(rows[0].researchingQuantity, 1);
+  assert.throws(() => extractAmazonInventorySnapshots({ payload: {} }), /不能视为空快照成功/);
+});

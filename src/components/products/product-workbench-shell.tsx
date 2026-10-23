@@ -328,6 +328,7 @@ export function ProductTable({
                       </td>
                       <td className="px-3 font-mono text-xs">
                         <p className="truncate" title={product.asin || "--"}>{product.asin || "--"}</p>
+                        {product.amazonSnapshotError ? <p className="text-[10px] text-amber-800" title={product.amazonSnapshotError}>Amazon 快照暂不可读</p> : product.amazonSnapshots ? <a href="/operations?tab=catalog" className="block truncate text-[10px] text-brand" title={product.amazonSnapshots.map((row) => `${row.sellerAccountId}/${row.marketplaceId}: ${row.listingStatus ?? "刊登未同步"} · 可售 ${row.available ?? "未知"} · ${row.freshness} · 库存更新 ${row.inventoryUpdatedAt ?? "未同步"} · ${row.lastError ?? ""}`).join("\n")}>{product.amazonSnapshots.length ? `Amazon ${product.amazonSnapshots.length} 店铺/站点 · 可售 ${product.amazonSnapshots.some((row) => row.available === null) ? "资料不全" : product.amazonSnapshots.reduce((sum, row) => sum + (row.available ?? 0), 0)}` : "Amazon 未同步"}</a> : null}
                       </td>
                       <td className="px-3 font-semibold metric-tabular">{product.purchasePrice.toFixed(2)}</td>
                       <td className="px-3">

@@ -8,6 +8,8 @@ import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-
 import { amazonReadDomains, type AmazonReadDomain, type AmazonSyncResource, type DomainFreshnessSummary, type OperationsDailyMetric, type OperationsReadiness, type OperationsSyncRun } from "@/lib/operations/types";
 
 import { SyncSchedulesPanel } from "./sync-schedules-panel";
+import { ReplenishmentPanel } from "./replenishment-panel";
+import { AmazonProductsPanel } from "./amazon-products-panel";
 
 type BadgeTone = "blue" | "green" | "amber" | "red" | "gray";
 type InventorySnapshot = {
@@ -244,7 +246,7 @@ export function OperationsHubWorkbench() {
       const response = await fetch("/api/operations/connection/validate", { method: "POST", headers: workspaceHeaders() });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Amazon 连接校验失败。");
-      setNotice("Amazon 连接校验完成。仅库存域具备 Amazon 同步执行器。");
+      setNotice("Amazon 连接校验完成。商品与库存执行器已就绪；未绑定 Seller ID/店铺/站点时同步将明确阻断。");
       await refreshAll();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Amazon 连接校验失败。");
@@ -263,11 +265,13 @@ export function OperationsHubWorkbench() {
   return (
     <div className="space-y-5">
       <nav aria-label="经营中台分区" className="flex flex-wrap gap-2 border-b border-border pb-3">
-        {[["overview", "概览"], ["sync", "同步与计划"], ["inventory", "库存"], ["ads", "广告联看"], ["orders", "订单"], ["catalog", "在线产品"], ["runs", "同步历史"]].map(([key, label]) => <a key={key} href={`?tab=${key}`} aria-current={tab === key ? "page" : undefined} className={`rounded px-3 py-2 text-sm ${tab === key ? "bg-brand text-white" : "text-muted"}`} onClick={(event) => { event.preventDefault(); window.history.pushState(null, "", `?tab=${key}`); setTab(key); }}>{label}</a>)}
+        {[["overview", "概览"], ["sync", "同步与计划"], ["inventory", "库存"], ["ads", "广告联看"], ["orders", "订单"], ["catalog", "在线产品"], ["replenishment", "补货计划"], ["runs", "同步历史"]].map(([key, label]) => <a key={key} href={`?tab=${key}`} aria-current={tab === key ? "page" : undefined} className={`rounded px-3 py-2 text-sm ${tab === key ? "bg-brand text-white" : "text-muted"}`} onClick={(event) => { event.preventDefault(); window.history.pushState(null, "", `?tab=${key}`); setTab(key); }}>{label}</a>)}
         <Button size="sm" variant="secondary" onClick={() => void refreshAll()} disabled={requesting}>刷新数据</Button>
       </nav>
-      {tab === "sync" && <SyncSchedulesPanel key={scopeRevision} headers={workspaceHeaders} onSync={() => void requestSync("inventory")} onChanged={() => void refreshAll()} />}
-      {(tab === "orders" || tab === "catalog") && <section className="border border-border p-5"><h3 className="text-sm font-bold">{tab === "orders" ? "订单 · NOT_SYNCED" : "在线产品 · NOT_SYNCED"}</h3><p className="mt-2 text-sm text-muted">{tab === "orders" ? "订单 worker 尚未接入。计划频率 15–30 分钟；接入后提供近 7/30 天订单量、件数、销售额，Pending 订单口径另行标注。" : "Amazon Listing 快照，非公司主数据，不写入产品中心。计划日更，worker 未就绪前保持关闭。"}</p></section>}
+      {tab === "sync" && <SyncSchedulesPanel key={scopeRevision} headers={workspaceHeaders} onSync={(resource) => void requestSync(resource ?? "inventory")} onChanged={() => void refreshAll()} />}
+      {tab === "replenishment" && <ReplenishmentPanel key={scopeRevision} headers={workspaceHeaders} />}
+      {tab === "catalog" && <AmazonProductsPanel key={scopeRevision} headers={workspaceHeaders} />}
+      {tab === "orders" && <section className="border border-border p-5"><h3 className="text-sm font-bold">{tab === "orders" ? "订单 · NOT_SYNCED" : "在线产品 · NOT_SYNCED"}</h3><p className="mt-2 text-sm text-muted">{tab === "orders" ? "订单 worker 尚未接入。计划频率 15–30 分钟；接入后提供近 7/30 天订单量、件数、销售额，Pending 订单口径另行标注。" : "Amazon Listing 快照，非公司主数据，不写入产品中心。计划日更，worker 未就绪前保持关闭。"}</p></section>}
 
       {notice ? (
         <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
@@ -283,7 +287,7 @@ export function OperationsHubWorkbench() {
             <div>
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-bold text-foreground">连接健康</h2><Badge tone={connectionTone.tone}>{connectionTone.label}</Badge></div>
               <p className="mt-1 text-sm text-muted">工作区：{readiness?.scope.workspaceId ?? "读取中"} · {[readiness?.scope.marketplace, readiness?.scope.accountId].filter(Boolean).join(" / ") || "未限定站点与账号"}</p>
-              <p className="mt-1 text-xs text-muted">Amazon 凭证仅由服务端使用；本中台仅执行只读校验和库存同步。</p>
+              <p className="mt-1 text-xs text-muted">Amazon 凭证仅由服务端使用；本中台只执行读取与同步，不写回 Amazon。</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">

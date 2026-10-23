@@ -27,3 +27,18 @@
 - Targeted `npm run lint -- src/lib/amazon/sp-api-client.ts src/lib/amazon/sp-api-config.ts tests/amazon-sp-api-client.test.ts`: passed.
 - `npm run build`: passed after the read-only connection-validation route was enabled.
 - Database migration and Amazon connectivity were not run. Migration requires the normal reviewed deployment path; Amazon connectivity requires user-provided SP-API authorization in a later phase.
+
+## 2026-10-23 P0 catalog/inventory + replenishment validation
+
+Implemented store-scoped Amazon catalog/inventory snapshots, explicit server seller/resource binding, page-bounded Product Center snapshot decoration, daily/changed-policy replenishment persistence and UI, and opt-in existing ERP historical sales mapping. No Amazon mutations or ProductRecord sync writes.
+
+Validation:
+
+- `npm run db:generate`: passed (client generation only).
+- `npx prisma validate`: passed.
+- `prisma migrate diff --from-schema <HEAD schema> --to-schema prisma/schema.prisma --script`: reviewed additive tables/columns/indexes. Migration handles both original SQL and Prisma index-name truncation variants; catalog schedule CHECK explicitly extended.
+- `npm run test`: 137 passed, including official inventory envelope/nested totals, read-only catalog request shape, explicit seller mappings, schedule policy, full/partial history, new/mature demand, ETA shortage and source-presence validation.
+- `npm run lint`, `npm run typecheck`, `git diff --check`: passed.
+- `npm run build`: passed again on the final implementation (2026-10-23).
+
+Not run: migration against a real PostgreSQL instance; authenticated browser/403/workspace switching with current new screens; Redis multi-process and Amazon calls; representative P95 dataset benchmarks. Prior browser inspection reached login and no credentials were provided. Seller ID binding is explicitly pending the user; no inference from accountKey, no fake successful runs. Actual rate-limit behavior and authorized catalog role acceptance must be verified in the seller's controlled environment. No production config/migration/deployment.

@@ -115,7 +115,8 @@ export async function getOperationsReadiness(input: {
     prisma.amazonSyncRun.findFirst({ where: { ...where, resource: "inventory", status: "SUCCEEDED" }, orderBy: { finishedAt: "desc" } }),
     Promise.all(amazonReadDomains.filter((resource) => resource !== "ads").map(async (resource) => {
       const latestAttempt = await prisma.amazonSyncRun.findFirst({ where: { ...where, resource }, orderBy: { startedAt: "desc" } });
-      return [resource, { latestAttempt }] as const;
+      const latestSuccess = resource === "catalog" ? await prisma.amazonSyncRun.findFirst({ where: { ...where, resource, status: "SUCCEEDED" }, orderBy: { finishedAt: "desc" } }) : null;
+      return [resource, { latestAttempt, latestSuccess }] as const;
     })),
     getSyncSchedules(input.organizationId, input.scope.workspaceId),
   ]);
@@ -128,7 +129,9 @@ export async function getOperationsReadiness(input: {
   const latest = latestByDomain.get("inventory")?.latestAttempt;
   if (latest?.status === "RUNNING" || latest?.status === "QUEUED") domains.inventory.status = "SYNCING";
   else if (latest?.status === "FAILED" || latest?.status === "BLOCKED") domains.inventory.status = latest.status;
-  if (connection?.status === "DISABLED") domains.inventory.status = "DISABLED";
+  const catalogAttempt = latestByDomain.get("catalog")?.latestAttempt;
+  if (catalogAttempt?.status === "RUNNING" || catalogAttempt?.status === "QUEUED") domains.catalog.status = "SYNCING";
+  if (connection?.status === "DISABLED") { domains.inventory.status = "DISABLED"; domains.catalog.status = "DISABLED"; }
 
   return {
     ...base,
@@ -187,6 +190,7 @@ type DomainRunState = {
     startedAt: Date;
     finishedAt: Date | null;
   } | null;
+  latestSuccess?: { id: string; finishedAt: Date | null } | null;
 };
 
 export function emptyDomainFreshnessSummaries(inventory: OperationsInventorySnapshotSummary): Record<AmazonReadDomain, DomainFreshnessSummary> {
@@ -201,7 +205,7 @@ export function emptyDomainFreshnessSummaries(inventory: OperationsInventorySnap
     lastAttemptError: null,
     reason: resource === "inventory"
       ? inventory.status === "NOT_SYNCED" ? "当前工作区尚无成功的库存快照。" : inventory.status === "STALE" ? "最近一次库存快照已超过新鲜度阈值。" : null
-      : resource === "ads" ? "PPC 日粒度 SKU/ASIN 投影未接通。" : "该数据域尚未接入 Amazon 同步执行器。",
+      : resource === "ads" ? "PPC 日粒度 SKU/ASIN 投影未接通。" : resource === "catalog" ? "刊登同步执行器已就绪，等待店铺身份及授权绑定。" : "该数据域尚未接入 Amazon 同步执行器。",
     recommendedAction: resource === "inventory"
       ? inventory.status === "FRESH" ? null : "检查 Amazon 连接与 Worker 后重新请求库存同步。"
       : resource === "ads" ? "在现有 PPC 工作台查看广告指标；本页不另建广告同步。" : "无需重试；该数据域尚未开放同步。",
@@ -225,6 +229,13 @@ export function buildDomainFreshnessSummaries(input: {
     if (resource === "ads" || resource === "inventory") continue;
     const state = input.latestByDomain.get(resource);
     const latest = state?.latestAttempt;
+    const success = state?.latestSuccess;
+    if (resource === "catalog" && success?.finishedAt) {
+      const failed = latest && (latest.status === "FAILED" || latest.status === "BLOCKED") && latest.startedAt >= success.finishedAt;
+      const stale = Date.now() - success.finishedAt.getTime() > 48 * 60 * 60_000;
+      summaries.catalog = { ...summaries.catalog, status: failed ? latest!.status as "FAILED" | "BLOCKED" : stale ? "STALE" : "FRESH", source: "Amazon Listings Items API", syncRunId: success.id, lastSuccessAt: success.finishedAt.toISOString(), lastAttemptAt: latest?.startedAt.toISOString() ?? null, lastAttemptStatus: latest ? syncRunStatus(latest.status) : null, lastAttemptError: latest?.error ?? null, reason: failed ? latest?.error ?? "刊登同步失败" : stale ? "刊登快照已超过 48 小时。" : null, recommendedAction: failed || stale ? "检查店铺绑定/API 授权和 worker 后同步在线产品。" : null };
+      continue;
+    }
     const attemptStatus = latest ? syncRunStatus(latest.status) : null;
     const newerFailure = latest && (latest.status === "FAILED" || latest.status === "BLOCKED");
     const status = newerFailure ? latest.status as "FAILED" | "BLOCKED" : "NOT_SYNCED";
@@ -237,8 +248,8 @@ export function buildDomainFreshnessSummaries(input: {
       lastAttemptAt: latest?.startedAt.toISOString() ?? null,
       lastAttemptStatus: attemptStatus,
       lastAttemptError: latest?.error ?? null,
-      reason: newerFailure ? latest?.error ?? "最近一次同步失败。" : "该数据域尚未接入 Amazon 同步执行器。",
-      recommendedAction: newerFailure ? "查看同步历史中的失败原因，再由系统管理员处理。" : "无需重试；该数据域尚未开放同步。",
+      reason: newerFailure ? latest?.error ?? "最近一次同步失败。" : resource === "catalog" ? "刊登执行器已就绪，等待店铺身份/授权绑定与首次同步。" : "该数据域尚未接入 Amazon 同步执行器。",
+      recommendedAction: newerFailure ? "查看同步历史中的失败原因，再由系统管理员处理。" : resource === "catalog" ? "配置已授权的 Seller ID、店铺和站点后启用刊登计划。" : "无需重试；该数据域尚未开放同步。",
     };
   }
 
@@ -313,7 +324,7 @@ export async function requestAmazonSync(input: {
     },
   });
 
-  if (connection?.status === "CONFIGURED" && input.resource === "inventory" && process.env.QUEUE_DRIVER === "redis") {
+  if (connection?.status === "CONFIGURED" && (input.resource === "inventory" || input.resource === "catalog") && process.env.QUEUE_DRIVER === "redis") {
     try {
       assertAmazonSpApiScopeAllowed({ organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId });
     } catch (error) {
@@ -325,10 +336,10 @@ export async function requestAmazonSync(input: {
         reason: error instanceof Error ? error.message : "当前作用域未获准使用 Amazon 连接。",
       });
     }
-    return createQueuedRun({ ...input, resource: "inventory", id, now, idempotencyKey });
+    return createQueuedRun({ ...input, resource: input.resource, id, now, idempotencyKey });
   }
-  if (connection?.status === "CONFIGURED" && input.resource === "inventory") {
-    return await createBlockedRun({ ...input, id, now, idempotencyKey, reason: "库存同步需要 Redis Worker。当前未启用 QUEUE_DRIVER=redis，未向 Amazon 发起同步请求。" });
+  if (connection?.status === "CONFIGURED" && (input.resource === "inventory" || input.resource === "catalog")) {
+    return await createBlockedRun({ ...input, id, now, idempotencyKey, reason: "Amazon 商品/库存同步需要 Redis Worker。当前未启用 QUEUE_DRIVER=redis，未向 Amazon 发起同步请求。" });
   }
   if (connection?.status === "CONFIGURED") {
     return await createBlockedRun({ ...input, id, now, idempotencyKey, reason: "所选 Amazon 同步执行器尚未启用，未向 Amazon 发起同步请求。" });
@@ -340,7 +351,7 @@ export async function requestAmazonSync(input: {
 async function createQueuedRun(input: {
   user: CurrentUser;
   scope: WorkspaceScopeInput;
-  resource: "inventory";
+  resource: "inventory" | "catalog";
   id: string;
   now: Date;
   idempotencyKey?: string;

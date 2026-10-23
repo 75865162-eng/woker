@@ -3,9 +3,9 @@ import test from "node:test";
 import { defaultSyncIntervals, nextScheduledAt, parseSchedulePatch } from "@/lib/operations/schedule-policy";
 import { withAmazonSyncLock, type LockClient } from "@/lib/operations/sync-lock";
 
-test("only inventory schedules can be enabled, with bounded intervals", () => {
+test("only inventory and catalog schedules can be enabled, with bounded intervals", () => {
   assert.deepEqual(parseSchedulePatch({ resource: "inventory", enabled: true }), { resource: "inventory", enabled: true, intervalMinutes: 60 });
-  for (const resource of ["orders", "ads", "catalog", "finance", "fulfillment"]) {
+  for (const resource of ["orders", "ads", "finance", "fulfillment"]) {
     assert.throws(() => parseSchedulePatch({ resource, enabled: true }));
     assert.equal(parseSchedulePatch({ resource, enabled: false }).enabled, false);
   }
@@ -13,6 +13,7 @@ test("only inventory schedules can be enabled, with bounded intervals", () => {
     assert.throws(() => parseSchedulePatch({ resource: "inventory", enabled: true, intervalMinutes }));
   }
   assert.throws(() => parseSchedulePatch({ resource: "inventory", enabled: "true" }));
+  assert.equal(parseSchedulePatch({ resource: "catalog", enabled: true }).intervalMinutes, 1440);
   assert.equal(defaultSyncIntervals.ads, 120);
   assert.equal(defaultSyncIntervals.orders, 15);
 });

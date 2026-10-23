@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { extractAmazonInventorySnapshots, resolveAmazonMarketplaceId } from "@/lib/amazon/inventory";
 import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
@@ -5,6 +7,8 @@ import { assertAmazonSpApiScopeAllowed, getAmazonSpApiServerConfiguration } from
 import { prisma } from "@/lib/db/prisma";
 import { extractMarketplaceParticipations } from "./readiness";
 import { withAmazonSyncLock } from "./sync-lock";
+import { getSellerBindings } from "@/lib/amazon/seller-bindings";
+import { extractCatalogPage } from "@/lib/amazon/catalog";
 
 const amazonProvider = "amazon_sp_api";
 const maxInventoryPages = 1_000;
@@ -27,7 +31,7 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
   const run = await prisma.amazonSyncRun.findUnique({ where: { id: runId } });
   if (!run) return;
 
-  if (run.resource !== "inventory") {
+  if (run.resource !== "inventory" && run.resource !== "catalog") {
     await prisma.amazonInventorySnapshot.deleteMany({
       where: { syncRunId: run.id, organizationId: run.organizationId, workspaceId: run.workspaceId },
     });
@@ -43,6 +47,7 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
     return;
   }
 
+  let externalRequestAttempted = false;
   try {
     const connection = await prisma.amazonIntegrationConnection.findUnique({
       where: {
@@ -56,36 +61,61 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
     if (!connection || connection.status !== "CONFIGURED") throw new Error("Amazon 连接未验证或已停用。");
 
     assertAmazonSpApiScopeAllowed({ organizationId: run.organizationId, workspaceId: run.workspaceId });
-    const marketplaceId = resolveAmazonMarketplaceId(
-      // The active workspace identifier must be a real Marketplace ID or match a verified country/domain mapping.
-      await workspaceMarketplace(run.organizationId, run.workspaceId),
-      extractMarketplaceParticipations({ payload: connection.marketplaceParticipations }),
-    );
-    const snapshots = await fetchAllInventorySnapshots(new AmazonSpApiClient(getAmazonSpApiServerConfiguration()), marketplaceId);
+    const bindings = await getSellerBindings(run.organizationId, run.workspaceId, run.resource);
+    if (!bindings.length) throw new Error("当前工作区没有显式配置 Amazon Seller ID、SellerAccount、站点及该同步域授权；accountKey 不会被当作 Seller ID。");
+    const participations = extractMarketplaceParticipations({ payload: connection.marketplaceParticipations });
+    const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration());
     const capturedAt = new Date();
     const enabledDomains = Array.isArray(connection.enabledDomains)
       ? connection.enabledDomains.filter((domain): domain is string => typeof domain === "string")
       : [];
 
-    await prisma.$transaction(async (tx) => {
-      await tx.amazonInventorySnapshot.deleteMany({ where: { syncRunId: run.id } });
-      for (let offset = 0; offset < snapshots.length; offset += snapshotInsertChunkSize) {
-        const chunk = snapshots.slice(offset, offset + snapshotInsertChunkSize).map((snapshot) => ({
-          id: `amazon-inventory-${randomUUID()}`,
-          organizationId: run.organizationId,
-          workspaceId: run.workspaceId,
-          syncRunId: run.id,
-          marketplaceId,
-          ...snapshot,
+    const inventoryRows: Prisma.AmazonInventorySnapshotCreateManyInput[] = [];
+    const catalogRows: Prisma.AmazonCatalogSnapshotCreateManyInput[] = [];
+    const outcomes: Array<{ sellerAccountId: string; marketplaceId: string; count: number }> = [];
+    for (const binding of bindings) {
+      const marketplaceId = resolveAmazonMarketplaceId(binding.marketplaceId, participations);
+      externalRequestAttempted = true;
+      if (run.resource === "inventory") {
+        const snapshots = await fetchAllInventorySnapshots(client, marketplaceId);
+        inventoryRows.push(...snapshots.map((snapshot) => ({
+          id: `amazon-inventory-${randomUUID()}`, organizationId: run.organizationId,
+          workspaceId: run.workspaceId, syncRunId: run.id, sellerAccountId: binding.sellerAccountId,
+          marketplaceId, ...snapshot, capturedAt,
+        })));
+        outcomes.push({ sellerAccountId: binding.sellerAccountId, marketplaceId, count: snapshots.length });
+      } else {
+        const rows = await fetchAllCatalogItems(client, binding.amazonSellerId, marketplaceId);
+        catalogRows.push(...rows.map((item) => ({
+          id: `amazon-catalog-${randomUUID()}`, organizationId: run.organizationId,
+          workspaceId: run.workspaceId, sellerAccountId: binding.sellerAccountId, marketplaceId,
+          sellerSku: item.sellerSku, asin: item.asin, listingStatus: item.listingStatus,
+          fulfillmentType: item.fulfillmentType, sourceRunId: run.id,
+          fieldSources: { sellerSku: "Listings Items API", asin: "Listings Items API", listingStatus: "Listings Items API", fulfillmentType: "Listings Items API" },
           capturedAt,
-        }));
-        await tx.amazonInventorySnapshot.createMany({ data: chunk });
+        })));
+        outcomes.push({ sellerAccountId: binding.sellerAccountId, marketplaceId, count: rows.length });
+      }
+      if (inventoryRows.length + catalogRows.length > maxInventoryRows) throw new Error("当前工作区同步超过总行数安全上限。");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (run.resource === "inventory") {
+        await tx.amazonInventorySnapshot.deleteMany({ where: { syncRunId: run.id, organizationId: run.organizationId, workspaceId: run.workspaceId } });
+        for (let offset = 0; offset < inventoryRows.length; offset += snapshotInsertChunkSize) {
+          await tx.amazonInventorySnapshot.createMany({ data: inventoryRows.slice(offset, offset + snapshotInsertChunkSize) });
+        }
+      } else {
+        await tx.amazonCatalogSnapshot.deleteMany({ where: { sourceRunId: run.id, organizationId: run.organizationId, workspaceId: run.workspaceId } });
+        for (let offset = 0; offset < catalogRows.length; offset += snapshotInsertChunkSize) {
+          await tx.amazonCatalogSnapshot.createMany({ data: catalogRows.slice(offset, offset + snapshotInsertChunkSize) });
+        }
       }
       await tx.amazonSyncRun.update({
         where: { id: run.id },
         data: {
           status: "SUCCEEDED",
-          summary: { provider: amazonProvider, externalRequestAttempted: true, marketplaceId, snapshotCount: snapshots.length },
+          summary: { provider: amazonProvider, externalRequestAttempted: true, resource: run.resource, outcomes, snapshotCount: outcomes.reduce((total, row) => total + row.count, 0) },
           error: null,
           finishedAt: new Date(),
         },
@@ -93,15 +123,16 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
       await tx.amazonIntegrationConnection.update({
         where: { organizationId_workspaceId_provider: { organizationId: run.organizationId, workspaceId: run.workspaceId, provider: amazonProvider } },
         data: {
-          enabledDomains: [...new Set([...enabledDomains, "inventory"])],
+          enabledDomains: [...new Set([...enabledDomains, run.resource])],
           lastSyncAt: new Date(),
-          statusMessage: `库存同步已完成：${snapshots.length} 条快照。`,
+          statusMessage: `${run.resource === "inventory" ? "库存" : "商品刊登"}同步已完成：${outcomes.reduce((total, row) => total + row.count, 0)} 条快照。`,
         },
       });
     }, { timeout: 60_000 });
   } catch (error) {
     const message = error instanceof AmazonSpApiError ? error.message : error instanceof Error ? error.message : "Amazon 库存同步失败。";
-    await prisma.amazonInventorySnapshot.deleteMany({ where: { syncRunId: run.id } });
+    await prisma.amazonInventorySnapshot.deleteMany({ where: { syncRunId: run.id, organizationId: run.organizationId, workspaceId: run.workspaceId } });
+    await prisma.amazonCatalogSnapshot.deleteMany({ where: { sourceRunId: run.id, organizationId: run.organizationId, workspaceId: run.workspaceId } });
     if (!options.isFinalAttempt && error instanceof AmazonSpApiError && error.retryable) {
       await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { status: "QUEUED", error: message } });
       throw error;
@@ -109,8 +140,8 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
     await prisma.amazonSyncRun.update({
       where: { id: run.id },
       data: {
-        status: "FAILED",
-        summary: { provider: amazonProvider, externalRequestAttempted: error instanceof AmazonSpApiError },
+        status: externalRequestAttempted ? "FAILED" : "BLOCKED",
+        summary: { provider: amazonProvider, externalRequestAttempted },
         error: message.slice(0, 500),
         finishedAt: new Date(),
       },
@@ -120,7 +151,7 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
 
 export async function enqueuePendingAmazonSyncRuns(limit = 50): Promise<string[]> {
   const runs = await prisma.amazonSyncRun.findMany({
-    where: { status: "QUEUED", resource: "inventory" },
+    where: { status: "QUEUED", resource: { in: ["inventory", "catalog"] } },
     select: { id: true },
     orderBy: { startedAt: "asc" },
     take: limit,
@@ -131,7 +162,7 @@ export async function enqueuePendingAmazonSyncRuns(limit = 50): Promise<string[]
 export async function recoverStaleAmazonSyncRuns(staleAfterMs = 15 * 60_000): Promise<number> {
   const cutoff = new Date(Date.now() - staleAfterMs);
   const stale = await prisma.amazonSyncRun.findMany({
-    where: { status: "RUNNING", resource: "inventory", updatedAt: { lt: cutoff } },
+    where: { status: "RUNNING", resource: { in: ["inventory", "catalog"] }, updatedAt: { lt: cutoff } },
     take: 50,
   });
   let count = 0;
@@ -141,20 +172,14 @@ export async function recoverStaleAmazonSyncRuns(staleAfterMs = 15 * 60_000): Pr
         where: { id: run.id, status: "RUNNING", updatedAt: { lt: cutoff } },
         data: { status: "FAILED", error: "同步 worker 中断；本次运行已终止，请重新同步。", finishedAt: new Date() },
       });
-      if (updated.count) await prisma.amazonInventorySnapshot.deleteMany({ where: { syncRunId: run.id } });
+      if (updated.count) {
+        await prisma.amazonInventorySnapshot.deleteMany({ where: { syncRunId: run.id } });
+        await prisma.amazonCatalogSnapshot.deleteMany({ where: { sourceRunId: run.id } });
+      }
       return updated.count;
     }) ?? 0;
   }
   return count;
-}
-
-async function workspaceMarketplace(organizationId: string, workspaceId: string): Promise<string> {
-  const workspace = await prisma.workspaceScope.findUnique({
-    where: { organizationId_id: { organizationId, id: workspaceId } },
-    select: { marketplace: true },
-  });
-  if (!workspace?.marketplace.trim()) throw new Error("当前工作区未配置 Amazon 站点，无法同步库存。");
-  return workspace.marketplace;
 }
 
 async function fetchAllInventorySnapshots(client: AmazonSpApiClient, marketplaceId: string) {
@@ -168,8 +193,23 @@ async function fetchAllInventorySnapshots(client: AmazonSpApiClient, marketplace
     }
     nextToken = nextPageToken(response);
     if (!nextToken) return [...snapshots.values()];
+    await delay(600);
   }
   throw new Error(`库存同步超过 ${maxInventoryPages} 页安全上限。`);
+}
+
+async function fetchAllCatalogItems(client: AmazonSpApiClient, sellerId: string, marketplaceId: string) {
+  const rows = new Map<string, ReturnType<typeof extractCatalogPage>["items"][number]>();
+  let nextToken: string | undefined;
+  for (let page = 0; page < maxInventoryPages; page += 1) {
+    const result = extractCatalogPage(await client.searchListingsItems({ sellerId, marketplaceId, nextToken }), marketplaceId);
+    for (const row of result.items) rows.set(row.sellerSku, row);
+    if (rows.size > maxInventoryRows) throw new Error(`刊登同步超过 ${maxInventoryRows} 条安全上限。`);
+    nextToken = result.nextToken;
+    if (!nextToken) return [...rows.values()];
+    await delay(600);
+  }
+  throw new Error(`刊登同步超过 ${maxInventoryPages} 页安全上限。`);
 }
 
 function nextPageToken(value: unknown): string | undefined {

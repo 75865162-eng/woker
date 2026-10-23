@@ -1,3 +1,4 @@
+import { readAmazonProductsForSkus } from "@/lib/operations/amazon-products";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -59,8 +60,11 @@ function isProduct(value: unknown): value is Product {
 }
 
 function normalizeProduct(product: Product): Product {
+  const clean = { ...product };
+  delete clean.amazonSnapshots;
+  delete clean.amazonSnapshotError;
   return {
-    ...product,
+    ...clean,
     id: product.id || `prod-${product.sku}`,
     sku: product.sku.trim(),
     competitorAsins: Array.isArray(product.competitorAsins) ? product.competitorAsins : [],
@@ -355,7 +359,21 @@ export async function getProductsResponse(
       detail: false,
       includeSummary,
     });
-    const createTimedResponse = (payload: unknown, result: "cache-hit" | "ok" | "unavailable", init?: ResponseInit) => {
+    const createTimedResponse = async (payload: unknown, result: "cache-hit" | "ok" | "unavailable", init?: ResponseInit) => {
+      // Add only the current page's Amazon projection after the master-data cache.
+      // Permissions are evaluated per request; snapshot data never enters shared list caches.
+      if (payload && typeof payload === "object" && "products" in payload) {
+        const list = payload as ProductListResponse;
+        const rolePermissions = permissions ?? await import("@/lib/accounts/role-permissions-server").then((module) => module.getOrganizationRolePermissions(user.organizationId));
+        if (roleCanPerformAction(user.role, "operations", "view", rolePermissions) && list.products.length) {
+          try {
+            const snapshots = await measure("amazonSnapshots", readAmazonProductsForSkus(user.organizationId, scope.workspaceId, list.products.map((row) => row.sku)));
+            payload = { ...list, products: list.products.map((row) => ({ ...row, amazonSnapshots: snapshots.filter((snapshot) => snapshot.sellerSku === row.sku) })) };
+          } catch {
+            payload = { ...list, products: list.products.map((row) => ({ ...row, amazonSnapshotError: "Amazon 快照暂不可读；公司商品资料正常。" })) };
+          }
+        }
+      }
       const totalMs = roundDuration(performance.now() - startedAt);
       if (!debugTiming && totalMs < 500) {
         const response = NextResponse.json(payload, init);

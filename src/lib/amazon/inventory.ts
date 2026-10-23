@@ -16,11 +16,13 @@ export type AmazonInventorySnapshotInput = {
 
 /** Extracts only the inventory fields required by the ERP snapshot contract. */
 export function extractAmazonInventorySnapshots(value: unknown): AmazonInventorySnapshotInput[] {
-  if (!isRecord(value) || !Array.isArray(value.inventorySummaries)) return [];
+  if (!isRecord(value)) throw new Error("Amazon 库存响应格式无效。");
+  const response = isRecord(value.payload) ? value.payload : value;
+  if (!Array.isArray(response.inventorySummaries)) throw new Error("Amazon 库存响应缺少 inventorySummaries，不能视为空快照成功。");
   const seen = new Set<string>();
   const snapshots: AmazonInventorySnapshotInput[] = [];
 
-  for (const item of value.inventorySummaries) {
+  for (const item of response.inventorySummaries) {
     if (!isRecord(item)) continue;
     const sellerSku = text(item.sellerSku);
     const condition = text(item.condition);
@@ -38,9 +40,9 @@ export function extractAmazonInventorySnapshots(value: unknown): AmazonInventory
       inboundWorkingQuantity: nonNegativeInteger(details.inboundWorkingQuantity),
       inboundShippedQuantity: nonNegativeInteger(details.inboundShippedQuantity),
       inboundReceivingQuantity: nonNegativeInteger(details.inboundReceivingQuantity),
-      reservedQuantity: nonNegativeInteger(details.reservedQuantity),
-      unfulfillableQuantity: nonNegativeInteger(details.unfulfillableQuantity),
-      researchingQuantity: nonNegativeInteger(details.researchingQuantity),
+      reservedQuantity: nonNegativeInteger(isRecord(details.reservedQuantity) ? details.reservedQuantity.totalReservedQuantity : details.reservedQuantity),
+      unfulfillableQuantity: nonNegativeInteger(isRecord(details.unfulfillableQuantity) ? details.unfulfillableQuantity.totalUnfulfillableQuantity : details.unfulfillableQuantity),
+      researchingQuantity: nonNegativeInteger(isRecord(details.researchingQuantity) ? details.researchingQuantity.totalResearchingQuantity : details.researchingQuantity),
     });
   }
 

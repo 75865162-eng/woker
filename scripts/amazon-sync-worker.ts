@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { enqueueAmazonSyncRun } from "@/lib/queue";
 import { createRedisConnectionOptions, amazonSyncQueueName } from "@/lib/queue/redis-queue";
 import { prisma } from "@/lib/db/prisma";
+import { refreshDueReplenishmentPlans } from "@/lib/operations/replenishment-service";
 import { enqueueDueAmazonSchedules } from "@/lib/operations/schedules";
 import { enqueuePendingAmazonSyncRuns, processAmazonSyncRun, recoverStaleAmazonSyncRuns } from "@/lib/operations/sync-processor";
 
@@ -24,10 +25,11 @@ async function recoverQueuedRuns() {
   if (recovering) return;
   recovering = true;
   try {
-  await enqueueDueAmazonSchedules();
-  await recoverStaleAmazonSyncRuns();
-  const runIds = await enqueuePendingAmazonSyncRuns();
-  await Promise.all(runIds.map((runId) => enqueueAmazonSyncRun(runId)));
+    await enqueueDueAmazonSchedules();
+    await recoverStaleAmazonSyncRuns();
+    const runIds = await enqueuePendingAmazonSyncRuns();
+    await Promise.all(runIds.map((runId) => enqueueAmazonSyncRun(runId)));
+    await refreshDueReplenishmentPlans();
   } finally { recovering = false; }
 }
 

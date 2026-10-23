@@ -44,6 +44,12 @@ export class AmazonSpApiClient {
     return this.request("GET", "/sellers/v1/marketplaceParticipations");
   }
 
+  async searchListingsItems(input: { sellerId: string; marketplaceId: string; nextToken?: string }): Promise<unknown> {
+    const query = new URLSearchParams({ marketplaceIds: input.marketplaceId, includedData: "summaries,fulfillmentAvailability", pageSize: "20" });
+    if (input.nextToken) query.set("pageToken", input.nextToken);
+    return this.request("GET", `/listings/2021-08-01/items/${encodeURIComponent(input.sellerId)}?${query}`);
+  }
+
   async getInventorySummaries(input: { marketplaceId: string; nextToken?: string }): Promise<unknown> {
     const query = new URLSearchParams({
       granularityType: "Marketplace",

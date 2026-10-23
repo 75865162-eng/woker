@@ -12,7 +12,7 @@ export function parseSchedulePatch(body: Record<string, unknown>) {
   if (typeof intervalMinutes !== "number" || !Number.isInteger(intervalMinutes) || intervalMinutes < 15 || intervalMinutes > 10080) {
     throw new Error("同步间隔须为 15–10080 的整数分钟。");
   }
-  if (body.enabled && resource !== "inventory") throw new Error("该域未接入同步 worker，不能启用计划；广告使用现有 PPC 数据。");
+  if (body.enabled && resource !== "inventory" && resource !== "catalog") throw new Error("该域未接入同步 worker，不能启用计划；广告使用现有 PPC 数据。");
   return { resource, enabled: body.enabled, intervalMinutes };
 }
 

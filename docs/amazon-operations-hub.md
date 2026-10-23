@@ -1,75 +1,97 @@
 # Amazon 经营中台（内部 ERP）
 
-入口 `/operations?tab=overview`，沿用登录、组织与工作区权限。Amazon 凭证仅在服务端，所有同步只读，不写 `ProductRecord`，不写回 Amazon。
+入口 `/operations`。保持现有登录、organizationId + workspaceId 和模块权限。页面只查本地数据库，Amazon 凭证只在服务端；不写 Amazon，不向 `ProductRecord` 写同步字段。
 
-## 页面与数据范围
+## 页面
 
-| Tab | 内容 |
-|---|---|
-| overview | 当前工作区/站点、六域状态、真实库存摘要、最近失败 |
-| sync | 计划间隔/开关/下一次时间、立即同步库存、最近 20 次运行 |
-| inventory | 最新成功库存快照，可售/在途/预留/不可售、SKU 搜索、分页 |
-| ads | 现有 PPC 来源说明、日指标缺失状态、跳转 `/workspace` 查看出价/预算/花费/ACOS |
-| orders | NOT_SYNCED，占位并说明计划频率及 Pending 口径尚未接通 |
-| catalog | NOT_SYNCED；Amazon Listing 快照，非公司商品主数据 |
-| runs | 最近 20 次运行按域/状态/起始日期筛选，summary/error/耗时/条数详情 |
+- overview：当前工作区/站点、六域健康、最近成功、下次计划与失败。
+- sync：间隔、启停、立即同步、最近 20 次运行。库存与在线产品具备执行器，其它域仍未接通。
+- inventory：最新成功库存快照汇总、SKU 搜索/分页、STALE 提示。
+- catalog：按 Seller SKU + SellerAccount + Amazon Marketplace 展示刊登/库存、来源、更新时间和错误。
+- replenishment：新品/成熟品策略、历史销量及周期维护、每天生成的只读补货建议和风险依据。
+- ads：现有 PPC 入口；缺少日粒度 SKU/ASIN 关联时明确 NOT_SYNCED，不把别的报表冒充 PPC。
+- orders：NOT_SYNCED 占位。
+- runs：最近 20 次运行的域/状态/日期筛选、summary/error/耗时。
 
-六域中只有 inventory 已有 Amazon 执行器。ads 标记来自现有 PPC；目前 `WorkspaceDataset.performanceRows` 缺少可靠的日粒度 SKU/ASIN 关联，不能把上传日期当作报告日期。因此日指标返回 `NOT_SYNCED`、空行及 null 字段说明，广告指标继续在现有 PPC 工作台查看。订单、目录、财务、履约均未实现，手动请求会 BLOCKED，意外进入 worker 会 FAILED，不能伪造成功。库存数量是最新成功快照而非今日累计数。
+Product Center 主列表保留原分页/过滤/缓存路径，在返回当前页时批量读取 Amazon 快照，附加 `amazonSnapshots`；只有同时拥有 `operations:view` 才返回附加字段。这些字段不进入主数据响应缓存，保存入口剔除这些只读字段。列表不逐 SKU 请求、不请求 Amazon，也不覆盖公司主数据中的 ASIN 或状态。每页最多 200 SKU，快照关联最多 4000 行，超出或未迁移时以附加错误提示降级，不影响公司商品列表。列表既有浏览器短缓存仍可能短暂展示旧快照，精确新鲜度以快照时间为准。
 
-库存新鲜度由 `AMAZON_INVENTORY_FRESHNESS_MINUTES` 控制，默认 360 分钟，允许 15–1440。STALE 会显示原因及检查连接/worker 后重新同步的建议；最新尝试失败与旧快照新鲜度分开保留。六域 summary 提供 `lastSuccessAt`、`nextScheduledAt`、最近尝试及失败原因。
+## 同步与店铺绑定
 
-## 定时与手动同步
+`AmazonSyncSchedule` 按组织/工作区/域唯一。默认全部停用；库存建议 60 分钟，在线产品建议 1440 分钟。广告预留 120 分钟（实际来自 PPC，不另建同步），订单预留 15 分钟，其它域日更预留但不可启用。间隔允许 15–10080 整数分钟。修改计划重置计时；启用一个间隔后首次执行。停用只阻止后续任务，不取消已排队任务。
 
-新增 `AmazonSyncSchedule` 按 `organizationId + workspaceId + resource` 唯一。保存 intervalMinutes、enabled、lastEnqueuedAt、修改者及时间。全部默认关闭，只有库存可以启用；广告不另建同步。建议间隔如下：
+专用 worker 每 30 秒检查计划，只创建 AmazonSyncRun，再由原队列派发和 processAmazonSyncRun 拉数。多调度器事务锁 + 幂等键、手动/计划共享入队锁、同工作区/域跨 HTTP session advisory lock 防双跑。任务完成从 BullMQ 移除，结果保存在数据库。最多 3 次指数退避，429/5xx 才自动重试；每页之间至少等待 600ms，Amazon 返回限流仍按错误处理。最多 1000 页、单工作区一次 50000 行、最多 10 条店铺映射；全部拉取完成后事务写入，失败删除本次半成品，保留以前成功快照。超过 15 分钟 RUNNING 且原 session 锁已释放才终止 FAILED 清理，不抢占活跃运行。
 
-| 域 | 默认分钟 | 当前可启用 |
-|---|---:|---|
-| inventory | 60（后续可调 15–30） | 是 |
-| orders | 15（接通后可调 15–30） | 否 |
-| ads | 120（PPC 投影预留） | 否，sourced_from_ppc |
-| catalog / finance / fulfillment | 1440 | 否 |
+当前仍是一组进程凭证绑定一个组织/工作区和一个真实 Seller ID；不支持把同一 token 用于多个 Seller ID。多 seller 凭证库属于后续工作，不通过 accountKey 猜身份。每个 Seller ID + Marketplace 只能映射一个 SellerAccount。允许同一 seller 的多个站点。
 
-间隔可配置为 15–10080 的整数分钟。启用或修改计划后等待一个完整间隔首次执行；修改会重置计时。停用立即阻止后续入队，不取消已排队/运行任务。计划不补齐停机期间所有历史时点，只产生一次到期运行；订单历史窗口留待订单执行器实现。
+必须在服务端配置（不在浏览器填写）：
 
-`npm run worker:amazon-sync` 每 30 秒检查到期计划，调度器仅在数据库建立 `AmazonSyncRun`，随后现有队列恢复逻辑入队，真正拉数仍由 `processAmazonSyncRun` 执行。多实例调度采用事务 advisory lock、到期时间幂等键及重新读取计划。手动/定时入队共享 org/workspace/resource 锁，已有 QUEUED/RUNNING 时复用或跳过；执行器再以 PostgreSQL session advisory lock 跨 HTTP 请求串行化相同作用域，进程崩溃后连接断开即释放锁。锁占用时不宣告同步成功，仍保留 QUEUED，下一次恢复再派发。已完成 BullMQ job 自动移除以允许这个恢复路径；真实结果由数据库 SyncRun 保存。
+- DATABASE_URL、QUEUE_DRIVER=redis、REDIS_URL。
+- AMAZON_SP_API_LWA_CLIENT_ID / LWA_CLIENT_SECRET / REFRESH_TOKEN / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY（均带 AMAZON_SP_API_ 前缀）。可选 AWS_SESSION_TOKEN、AWS_REGION、ENDPOINT；使用官方对应区域 endpoint。
+- AMAZON_SP_API_ALLOWED_ORGANIZATION_ID、AMAZON_SP_API_ALLOWED_WORKSPACE_ID 精确绑定。
+- `AMAZON_SP_API_SELLER_BINDINGS` JSON 数组。字段：organizationId、workspaceId、sellerAccountId（ERP SellerAccount.id）、marketplaceId（Amazon ID）、amazonSellerId（真实卖家 ID）、authorizedResources（实际已授权的 inventory/catalog 域）。accountKey 不作 Seller ID 使用。
 
-专用 worker 并发默认 1、最大 2；每个在运行任务额外使用一条 PostgreSQL 锁连接。调度检查有界每轮 100 个计划，待入队恢复每轮 50 条；当前面向内部少量工作区。扩展到大量计划前应补数据库到期索引/游标与负载测试。失败最多 3 次指数退避。超过 15 分钟的 RUNNING 只有在取得同一执行锁（原任务已不运行）后才终止为 FAILED，并清理半成品，供人工重新同步；不会重新启动仍活跃的 HTTP 任务。
+配置模板仅用占位符：
 
-Amazon 限流、广告归因延迟与库存快照短暂差异应按页面提示理解。页面仅查库，手动按钮只负责 enqueue。
+```json
+[{"organizationId":"<org>","workspaceId":"<workspace>","sellerAccountId":"<ERP store id>","marketplaceId":"<Amazon marketplace id>","amazonSellerId":"<authorized seller id>","authorizedResources":["inventory","catalog"]}]
+```
 
-## API 与权限
-
-全部接口沿用 session 组织与 workspace scope；不接收浏览器提供的组织覆盖，不返回凭证。
-
-- `GET /api/operations/freshness`：`operations:view`，六域/连接/库存/最近 20 次运行，no-store。
-- `GET /api/operations/readiness`：兼容旧入口，同样按作用域查询。
-- `GET /api/operations/inventory/snapshots?page=1&pageSize=50&sku=SKU-1`：`operations:view`，最新成功运行，页大小上限 200。
-- `GET /api/operations/metrics/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&sku=SKU&asin=ASIN`：`operations:view`，最多 90 天；当前日投影未接通，返回空行与 null 原因，不以其它报表冒充 PPC。
-- `GET /api/operations/schedules`：`operations:view`，返回六域默认/持久计划及 canEdit。
-- `PATCH /api/operations/schedules`：`operations:edit`，body `{ "resource": "inventory", "intervalMinutes": 60, "enabled": true }`；其它域不能启用。
-- `POST /api/operations/sync-runs`：`operations:create`，body resource + idempotencyKey；QUEUED 为 202，BLOCKED 为 409。只读用户是否可手动触发由既有 create 权限决定。
-
-内部 Agent 只读接口留在上述查询面；没有公开 MCP/CLI。`AmazonAgentActionAudit` 仅预留 preview/confirm/idempotency/old/new，没有真实 Amazon 写入口。
-
-## 环境与启动
-
-需审核应用相关 Prisma migrations 后，在受控环境按既有迁移流程应用；本轮代码修改没有执行 migrate、生产部署或改写环境文件。新增计划表为追加结构，回退应用保留表即可；先停用计划再停 worker。不会自动回滚数据库。
-
-服务端环境：DATABASE_URL、QUEUE_DRIVER=redis、REDIS_URL，以及 `AMAZON_SP_API_LWA_CLIENT_ID`、`AMAZON_SP_API_LWA_CLIENT_SECRET`、`AMAZON_SP_API_REFRESH_TOKEN`、`AMAZON_SP_API_AWS_ACCESS_KEY_ID`、`AMAZON_SP_API_AWS_SECRET_ACCESS_KEY`。可选 AWS_SESSION_TOKEN/AWS_REGION/ENDPOINT。必须以 `AMAZON_SP_API_ALLOWED_ORGANIZATION_ID` 和 `AMAZON_SP_API_ALLOWED_WORKSPACE_ID` 精确绑定授权作用域。不要在浏览器填写密钥。
+SellerAccount 必须在当前组织/工作区且 active。先校验 Marketplace Participations，再执行只读 Inventory Summaries 或 Listings Items API（searchListingsItems /listings/2021-08-01/items/{sellerId}）。只在应用实际取得对应官方接口授权时将该域加入 authorizedResources；配置声明不授予 Amazon 权限，403 会可追踪失败，不能绕过角色或限流。缺绑定时 worker 标为 BLOCKED，不发外部请求。Seller ID 映射尚待用户提供，未开展真实请求验收。
 
 ```bash
 npm run worker:amazon-sync
 ```
 
-先在对应工作区完成 Marketplace Participations 连接校验，站点须唯一匹配真实 Marketplace ID。连接未验证时计划运行会记录 FAILED，可追踪错误；不得为了演示配置假数据。
+历史无 sellerAccountId 的库存行保留，但新商品联看/补货不猜测它属于哪个店铺。首次补齐绑定后重新同步。库存使用官方 payload.inventorySummaries，兼容历史解析输入；预留/不可售/调查中使用嵌套 total 字段，格式异常不得当作空同步成功。
 
-## 验收
+## 新鲜度与字段来源
 
-1. 授权账号访问七个 Tab，六域状态与工作区/站点正确；无权 API 返回 403（未登录 401）。
-2. 配置受控测试 Amazon、Redis、数据库；连接校验后手动库存同步，检查快照/分页/SKU，失败清除该 run 半成品。
-3. 启用库存 15 分钟测试间隔，等待到期加最多约 30 秒；观察自动 SyncRun、lastEnqueuedAt、nextScheduledAt 与成功/失败。关闭计划后确认不再产生新任务。
-4. 在到期附近手动同步、并开两个 worker 验证同域无双跑；中止 worker 后验证锁释放与失败恢复。已排队任务不因停用计划取消。
-5. 切 workspace 后状态及表格不残留旧数据；数据库查询均保持 organization/workspace 过滤，浏览器 Network 无 Amazon token/secret。
-6. Ads 明确日投影未接，PPC 深链可用；订单/目录灰态明确，不把 null 显示为销量 0。
+库存默认 360 分钟 STALE，`AMAZON_INVENTORY_FRESHNESS_MINUTES` 允许 15–1440。刊登快照超过 48 小时 STALE。六域 summary 返回 lastSuccessAt、nextScheduledAt、最近尝试/错误。刊登成功不代表库存新鲜；表格分别显示两个快照时间。
 
-自动回归：`npx tsx --test tests/operations*.test.ts tests/amazon*.test.ts`、`npm run lint`、`npm run typecheck`、`npm run build`。数据库锁与调度测试含模拟连接；真实 PostgreSQL/Redis 多进程、权限账号及 Amazon 验收须在受控环境补跑。
+AmazonCatalogSnapshot 存字段来源 JSON、sourceRunId、capturedAt；库存存 syncRunId、capturedAt，字段来源固定为 SP-API FBA Inventory Summaries。只读投影按复合键合并，保留 null（缺刊登状态/缺库存），不把未同步显示为 0。使用最近一次完整成功运行，防止新运行缺失的 SKU 被旧快照“补活”。失败详情由对应 AmazonSyncRun 查询。
+
+## 补货建议
+
+策略按组织/工作区/店铺/Marketplace/SKU 唯一，operations:edit 人员维护。可以手动粘贴每日销量（日期,件数），或显式绑定当前工作区已有 SellfoxProductDailySnapshot 的报表店铺。读取内部历史不发起第三方同步；报表来源额外需要 sellfox:view，并在建议页面/API 权限不足时隐藏相关策略。只接收精确单 MSKU，原始 payload.saleNum 必须存在且为非负整数；同日期多条、多 MSKU 汇总、缺失字段不累加、不补零。当前利润/ACOS 由人工维护参考值，不自动把报表 grossProfit 当净利润。
+
+worker 对启用策略首次/修改后重算，以后每 24 小时重算。每轮最多 50 条；页面 GET 只读计划表。修改参数并保存可触发按需重算，正常 worker 下一轮约 30 秒内开始。失败记录 lastError、空建议并 30 分钟后再算；不覆盖新版本策略的结果。停用保留旧计划但标注停用。保留本次输入快照、策略版本时间、库存运行 ID、生成时间与下次计算时间，方便追踪。
+
+- 新品：人工试销日需求；不套用成熟品 28 天均值。
+- 成熟品：上海日期口径、昨日结束的完整 28 天日均销量；缺一天就是待补资料，零销量不能推断未来需求。
+- 去年同期：只使用显式维护、有来源和对比窗口的季节性系数；缺失时不调整并提示旺季风险。当前不自动推算同比系数。
+- 周期：生产 + 国内运输 + 海运，必须维护，缺项不输出补货量。
+- 可售天数：当前可售 / 预测日需求（不将预留、不可售计入）。
+- 目标量：日需求 ×（总周期 + 安全天数 + 复核天数）－当前可售－窗口内已知 ETA 在途，向上取整且不小于零。默认安全 14 天、复核 30 天，可维护。
+- 库存模拟按日加入明确 ETA 到货，首次不能满足一天需求即预计缺货日；建议下单日倒推周期及安全天数，可能已过期，必须保留以提示紧急。
+- Amazon 总在途仅作风险提示；没有 ETA 不扣减，逾期未确认到货也不当作可售。
+- 单位利润/币种、ACOS/归因窗口是参考与风险说明，不重复计广告销量，不认定净利润，不自动抑制或执行采购。
+
+当前是可解释的基础计划，不包含仓库/PO 系统自动 ETA、自动同比、统一利润核算或预测模型。数据缺失统一 NEEDS_DATA；READY 仅表示基础计算输入齐，不是采购批准。
+
+## API
+
+所有查询 no-store，组织来自 session，workspace 来自既有 scope；未登录 401、无权 403。
+
+- GET /api/operations/freshness、readiness：operations:view。
+- GET /api/operations/inventory/snapshots?page=1&pageSize=50&sku=SKU：最新成功库存，页大小最多 200。
+- GET /api/operations/products?page=1&sku=SKU：最新完整刊登/库存运行，50 个 SKU 一页，店铺/站点分行。
+- GET /api/operations/metrics/daily：当前 PPC 日投影未接，空行/null + 说明。
+- GET/PATCH /api/operations/schedules：view/edit；POST sync-runs：create，资源 inventory 或 catalog，幂等键必用。
+- GET/PATCH /api/operations/replenishment：view/edit；策略输入维护在 ERP，Amazon 仍只读；历史报表额外权限见上文。
+
+AmazonAgentActionAudit 仅预留未来 preview-confirm，不提供真实写回入口。P1 利润统一口径、Amazon Ads 接入、P2 通知+对账补偿均未在本轮开放。
+
+## 迁移、回滚与验收
+
+新增 migration `20261023010000_add_amazon_catalog_replenishment`：库存店铺列/索引、刊登快照、补货策略与计划、开放 catalog 计划约束。迁移先人工审核，再按既有 CI 流程应用；本轮未执行本地/生产 migrate。回退前停用计划与策略，再回退应用，保留表及数据；数据库不自动 down。
+
+性能预算：主列表仅为当前页附加批量 DB 查询，不切换主读路径；专用 worker 有界处理，但更频繁同步增加 API 和快照存储量，每个运行额外持有一个 PG session 锁连接。本轮没有 1000/5000/10000 SKU 真实 P95 benchmark，不声称已经加速；扩容前应验证分页 SQL/P95 和快照保留策略。
+
+验收：
+
+1. 审核并应用迁移、填写授权绑定；先以受控测试店铺校验连接。启动专用 worker。
+2. 启用 inventory/catalog 计划，验证到期自动 SyncRun、手动/定时无双跑；错误/403/限流可追踪、失败不留半成品。
+3. 商品页不请求 Amazon、公司字段不变；在线快照按店铺/站点分行，切 workspace 不串数据。旧无店铺库存不参与联看。
+4. 有数据/无数据、失效授权、不同权限/组织/工作区及 Network 无 token 检查。
+5. 新品/成熟品维护、完整/缺日历史、缺周期、STALE、未知 ETA、到货前缺货、利润/季节性缺失都给真实说明。保存后等 worker，结果带输入快照与时间，不自动创建采购单。
+6. 原库存及产品模块回归。测试与构建结果见 specs/004-amazon-operations-hub/quickstart.md；真实 Seller ID、DB/Redis/Amazon 及登录浏览器验收待受控配置。

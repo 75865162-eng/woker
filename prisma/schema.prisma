@@ -1209,6 +1209,7 @@ model AmazonInventorySnapshot {
   organizationId           String
   workspaceId              String   @default("default")
   syncRunId                String
+  sellerAccountId          String?
   marketplaceId            String
   sellerSku                String
   asin                     String   @default("")
@@ -1224,10 +1225,31 @@ model AmazonInventorySnapshot {
   capturedAt               DateTime
   createdAt                DateTime @default(now())
 
-  @@unique([syncRunId, marketplaceId, sellerSku, condition])
+  @@unique([syncRunId, marketplaceId, sellerAccountId, sellerSku, condition], map: "AmazonInventorySnapshot_run_store_sku_key")
   @@index([organizationId, workspaceId, marketplaceId, capturedAt])
+  @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, sellerSku, capturedAt], map: "AmazonInventorySnapshot_store_sku_captured_idx")
   @@index([organizationId, workspaceId, sellerSku, capturedAt])
   @@index([syncRunId])
+}
+
+model AmazonCatalogSnapshot {
+  id               String   @id
+  organizationId   String
+  workspaceId      String   @default("default")
+  sellerAccountId  String
+  marketplaceId    String
+  sellerSku        String
+  asin             String   @default("")
+  listingStatus    String?
+  fulfillmentType  String?
+  sourceRunId      String
+  fieldSources     Json
+  capturedAt       DateTime
+  createdAt        DateTime @default(now())
+
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, sellerSku, sourceRunId], map: "AmazonCatalogSnapshot_run_store_sku_key")
+  @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, sellerSku, capturedAt], map: "AmazonCatalogSnapshot_store_sku_captured_idx")
+  @@index([sourceRunId])
 }
 
 model AmazonAgentActionAudit {
@@ -1637,4 +1659,40 @@ model AmazonSyncSchedule {
 
   @@unique([organizationId, workspaceId, resource], map: "AmazonSchedule_scope_resource_key")
   @@index([enabled, lastEnqueuedAt], map: "AmazonSchedule_due_idx")
+}
+
+model AmazonReplenishmentPolicy {
+  id                 String   @id
+  organizationId     String
+  workspaceId        String   @default("default")
+  sellerAccountId    String
+  marketplaceId      String
+  sellerSku          String
+  enabled            Boolean  @default(false)
+  inputs             Json
+  updatedByUserId    String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, sellerSku], map: "AmazonReplenishmentPolicy_store_sku_key")
+  @@index([enabled, updatedAt], map: "AmazonReplenishmentPolicy_enabled_idx")
+}
+
+model AmazonReplenishmentPlan {
+  id                 String   @id
+  policyId           String   @unique
+  organizationId     String
+  workspaceId        String   @default("default")
+  sellerAccountId    String
+  marketplaceId      String
+  sellerSku          String
+  policyUpdatedAt    DateTime
+  inventoryRunId     String?
+  inputSnapshot      Json
+  lastError          String?
+  result             Json
+  generatedAt        DateTime
+  nextCalculationAt  DateTime
+
+  @@index([organizationId, workspaceId, generatedAt], map: "AmazonReplenishmentPlan_scope_generated_idx")
 }
