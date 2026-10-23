@@ -224,7 +224,7 @@ function getProductListRequestCacheKey(input: {
   if (input.filters.opsAssignees.length) params.set("opsAssignees", input.filters.opsAssignees.join(","));
   if (input.filters.selectionOwners.length) params.set("selectionOwners", input.filters.selectionOwners.join(","));
   if (input.filters.designerAssignees.length) params.set("designerAssignees", input.filters.designerAssignees.join(","));
-  if (input.filters.mySkuOwner.trim()) params.set("createdByMe", "true");
+  if (input.filters.mySkuOwner.trim()) params.set("mySkuOwner", input.filters.mySkuOwner.trim());
   if (input.filters.minPrice.trim()) params.set("minPrice", input.filters.minPrice.trim());
   if (input.filters.maxPrice.trim()) params.set("maxPrice", input.filters.maxPrice.trim());
 
@@ -1126,7 +1126,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         opsAssignees: filters.opsAssignees.join(","),
         selectionOwners: filters.selectionOwners.join(","),
         designerAssignees: filters.designerAssignees.join(","),
-        createdByMe: filters.mySkuOwner.trim() ? "true" : "",
+        mySkuOwner: filters.mySkuOwner.trim(),
         minPrice: filters.minPrice.trim(),
         maxPrice: filters.maxPrice.trim(),
       });
@@ -1193,9 +1193,9 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
         <section className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           <SummaryTile
             label="全部商品"
-            value={productsTotalCount.toLocaleString("zh-CN")}
-            active={filters.status === "all"}
-            onClick={() => patchFilters((current) => ({ ...current, status: "all" }))}
+            value={summaryValue(listSummary.total)}
+            active={filters.status === "all" && !filters.mySkuOwner.trim()}
+            onClick={() => patchFilters((current) => ({ ...current, status: "all", mySkuOwner: "" }))}
           />
           <SummaryTile
             label="开发中"
@@ -2015,8 +2015,6 @@ export function ProductEditor({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     imagePreviewUrls.current.delete(id);
     setImageUploads((current) => {
-      const canceled = current.find((item) => item.id === id);
-      if (canceled) URL.revokeObjectURL(canceled.previewUrl);
       return current.filter((item) => item.id !== id);
     });
   }
