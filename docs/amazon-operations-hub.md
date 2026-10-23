@@ -97,3 +97,9 @@ AmazonAgentActionAudit 仅预留未来 preview-confirm，不提供真实写回�
 4. 有数据/无数据、失效授权、不同权限/组织/工作区及 Network 无 token 检查。
 5. 新品/成熟品维护、完整/缺日历史、缺周期、STALE、未知 ETA、到货前缺货、利润/季节性缺失都给真实说明。保存后等 worker，结果带输入快照与时间，不自动创建采购单。
 6. 原库存及产品模块回归。测试与构建结果见 specs/004-amazon-operations-hub/quickstart.md；真实 Seller ID、DB/Redis/Amazon 及登录浏览器验收待受控配置。
+
+## 隔离浏览器回归
+
+运行 `npm run test:operations:browser`。沿用商品草稿浏览器测试的 esbuild + Playwright 隔离方式，测试数据和模拟 API 仅存在于 tests/browser，不创建应用演示数据、不访问数据库、Amazon 或生产，不需要登录凭证。
+
+覆盖六域概览及 STALE 原因/建议、未同步库存各数量不补 0、刊登缺字段、PPC/订单占位、计划只读/编辑控件、手动同步工作区及幂等键、模拟 403 展示，以及切工作区后库存/指标/状态/手动同步迟到失败不污染新工作区。真实登录、403 服务端权限检查、DB/Redis 多进程锁、Seller ID 和 Amazon 联调仍按上方受控验收执行。

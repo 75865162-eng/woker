@@ -20,7 +20,7 @@ function readiness(workspaceId: string): OperationsReadiness {
 
 async function setup(page: Page, tab = "overview") {
   const calls: Array<{ path: string; method: string; workspace: string | undefined; body: unknown }> = [];
-  const state = { canEdit: false, stale: false, denied: false, delayInventory: false, releaseInventory: () => {}, inventoryStarted: false, enabled: false };
+  const state = { canEdit: false, stale: false, denied: false, delayPath: "", releaseInventory: () => {}, inventoryStarted: false, enabled: false };
   await page.route("**/*", async (route) => {
     const request = route.request(); const url = new URL(request.url());
     expect(url.origin, "browser must never call Amazon or another external host").toBe("http://127.0.0.1:43220");
@@ -30,17 +30,17 @@ async function setup(page: Page, tab = "overview") {
     expect(request.headers()["authorization"]).toBeUndefined();
     calls.push({ path: url.pathname, method: request.method(), workspace, body: request.method() === "GET" ? null : request.postDataJSON() });
     if (state.denied) return route.fulfill({ status: 403, json: { error: "无经营中台权限" } });
+    if (state.delayPath === url.pathname && workspace === "workspace-a") {
+      state.inventoryStarted = true;
+      await new Promise<void>((resolve) => { state.releaseInventory = resolve; });
+      return route.fulfill({ status: 403, json: { error: "旧工作区请求失败" } });
+    }
     if (url.pathname.endsWith("/freshness")) {
       const result = readiness(workspace ?? "missing");
       if (state.stale) { result.inventory.status = "STALE"; result.domains.inventory.status = "STALE"; result.domains.inventory.reason = "库存快照已超过 120 分钟"; result.domains.inventory.recommendedAction = "立即同步库存并检查 worker"; }
       return route.fulfill({ json: result });
     }
     if (url.pathname.endsWith("/inventory/snapshots")) {
-      if (state.delayInventory && workspace === "workspace-a") {
-        state.inventoryStarted = true;
-        await new Promise<void>((resolve) => { state.releaseInventory = resolve; });
-        return route.fulfill({ status: 403, json: { error: "旧工作区库存读取失败" } });
-      }
       return route.fulfill({ json: { rows: [], pagination: { page: 1, pageSize: 20, total: 0, pageCount: 0 }, snapshot: { status: "NOT_SYNCED", syncRunId: null, capturedAt: null } } });
     }
     if (url.pathname.endsWith("/metrics/daily")) return route.fulfill({ json: { rows: [], pagination: { page: 1, pageSize: 30, hasNextPage: false }, sourceNote: "现有 PPC 日投影尚未接通", emptyReason: "缺少同步数据" } });
@@ -105,17 +105,18 @@ test("edit schedules persist explicit domain/interval and unsupported domains st
   expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ resource: "inventory", intervalMinutes: 60, enabled: true });
 });
 
-test("late failures from the previous workspace cannot contaminate the current workspace", async ({ page }) => {
+for (const path of ["/inventory/snapshots", "/metrics/daily", "/freshness", "/sync-runs"]) {
+ test(`late ${path} failures cannot contaminate the current workspace`, async ({ page }) => {
   const { state } = await setup(page);
-  state.delayInventory = true;
-  await page.getByRole("button", { name: "刷新数据", exact: true }).click();
+  state.delayPath = `/api/operations${path}`;
+  await page.getByRole("button", { name: path === "/sync-runs" ? "请求只读同步" : "刷新数据", exact: true }).click();
   await expect.poll(() => state.inventoryStarted).toBe(true);
   await page.evaluate(() => {
     localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "workspace-b", marketplace: "US" }));
     window.dispatchEvent(new Event("amazon-bulk-ad:workspace-scope-changed"));
   });
   await expect(page.getByText(/工作区：workspace-b/)).toBeVisible();
-  const oldResponse = page.waitForResponse((response) => response.url().includes("/inventory/snapshots") && response.status() === 403);
+  const oldResponse = page.waitForResponse((response) => new URL(response.url()).pathname === state.delayPath && response.status() === 403);
   state.releaseInventory();
   await oldResponse;
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -123,6 +124,7 @@ test("late failures from the previous workspace cannot contaminate the current w
   await page.getByRole("link", { name: "补货计划", exact: true }).click();
   await expect(page.getByText("尚无人工维护的补货策略。", { exact: true })).toBeVisible();
 });
+}
 
 test("403 is visible and does not become a successful empty-data state", async ({ page }) => {
   const { state } = await setup(page);

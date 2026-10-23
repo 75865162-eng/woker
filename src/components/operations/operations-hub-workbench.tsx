@@ -108,7 +108,7 @@ export function OperationsHubWorkbench() {
   const [runResource, setRunResource] = useState("");
   const [runStatus, setRunStatus] = useState("");
   const [runDate, setRunDate] = useState("");
-  const requests = useRef({ readiness: 0, inventory: 0, metrics: 0 });
+  const requests = useRef({ readiness: 0, inventory: 0, metrics: 0, scope: 0 });
   useEffect(() => {
     const update = () => setTab(new URLSearchParams(window.location.search).get("tab") || "overview");
     update(); window.addEventListener("popstate", update);
@@ -139,11 +139,15 @@ export function OperationsHubWorkbench() {
   const loadReadiness = useCallback(async () => {
     const sequence = ++requests.current.readiness;
     const scopeKey = workspaceHeaders().get("x-workspace-id");
-    const response = await fetch("/api/operations/freshness", { cache: "no-store", headers: workspaceHeaders() });
-    const payload = (await response.json()) as OperationsReadiness & { error?: string };
-    if (!response.ok) throw new Error(payload.error || "经营中台状态读取失败。");
-    if (sequence !== requests.current.readiness || scopeKey !== workspaceHeaders().get("x-workspace-id")) return;
-    setReadiness(payload);
+    try {
+      const response = await fetch("/api/operations/freshness", { cache: "no-store", headers: workspaceHeaders() });
+      const payload = (await response.json()) as OperationsReadiness & { error?: string };
+      if (sequence !== requests.current.readiness || scopeKey !== workspaceHeaders().get("x-workspace-id")) return;
+      if (!response.ok) throw new Error(payload.error || "经营中台状态读取失败。");
+      setReadiness(payload);
+    } catch (error) {
+      if (sequence === requests.current.readiness && scopeKey === workspaceHeaders().get("x-workspace-id")) throw error;
+    }
   }, []);
 
   const loadInventory = useCallback(async () => {
@@ -159,9 +163,11 @@ export function OperationsHubWorkbench() {
       if (sequence !== requests.current.inventory || scopeKey !== workspaceHeaders().get("x-workspace-id")) return;
       setInventory(payload);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "库存快照读取失败。");
+      if (sequence === requests.current.inventory && scopeKey === workspaceHeaders().get("x-workspace-id")) {
+        setNotice(error instanceof Error ? error.message : "库存快照读取失败。");
+      }
     } finally {
-      setInventoryLoading(false);
+      if (sequence === requests.current.inventory && scopeKey === workspaceHeaders().get("x-workspace-id")) setInventoryLoading(false);
     }
   }, [inventoryPage, inventorySku]);
 
@@ -179,9 +185,11 @@ export function OperationsHubWorkbench() {
       if (sequence !== requests.current.metrics || scopeKey !== workspaceHeaders().get("x-workspace-id")) return;
       setMetrics(payload);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "日经营指标读取失败。");
+      if (sequence === requests.current.metrics && scopeKey === workspaceHeaders().get("x-workspace-id")) {
+        setNotice(error instanceof Error ? error.message : "日经营指标读取失败。");
+      }
     } finally {
-      setMetricsLoading(false);
+      if (sequence === requests.current.metrics && scopeKey === workspaceHeaders().get("x-workspace-id")) setMetricsLoading(false);
     }
   }, [metricAsin, metricFrom, metricPage, metricSku, metricTo]);
 
@@ -205,7 +213,8 @@ export function OperationsHubWorkbench() {
   useEffect(() => { void loadMetrics(); }, [loadMetrics, scopeRevision]);
   useEffect(() => {
     const reload = () => {
-      requests.current.readiness++; requests.current.inventory++; requests.current.metrics++;
+      requests.current.readiness++; requests.current.inventory++; requests.current.metrics++; requests.current.scope++;
+      setRequesting(false); setValidating(false);
       setReadiness(null); setInventory(null); setMetrics(null); setNotice("");
       setInventoryPage(1); setMetricPage(1); setScopeRevision((current) => current + 1);
     };
@@ -220,6 +229,7 @@ export function OperationsHubWorkbench() {
   }
 
   async function requestSync(resource = selectedResource) {
+    const scope = requests.current.scope;
     setRequesting(true);
     setNotice("");
     try {
@@ -229,31 +239,36 @@ export function OperationsHubWorkbench() {
         body: JSON.stringify({ resource, idempotencyKey: `manual-${resource}-${crypto.randomUUID()}` }),
       });
       const payload = (await response.json()) as { run?: OperationsSyncRun; error?: string };
-      if (!payload.run) throw new Error(payload.error || "同步请求创建失败。");
+      if (scope !== requests.current.scope) return;
+      if (!response.ok || !payload.run) throw new Error(payload.error || "同步请求创建失败。");
       setNotice(payload.run.error || "同步请求已创建。");
       await refreshAll();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "同步请求创建失败。");
+      if (scope === requests.current.scope) setNotice(error instanceof Error ? error.message : "同步请求创建失败。");
     } finally {
-      setRequesting(false);
+      if (scope === requests.current.scope) setRequesting(false);
     }
   }
 
   async function validateConnection() {
+    const scope = requests.current.scope;
     setValidating(true);
     setNotice("");
     try {
       const response = await fetch("/api/operations/connection/validate", { method: "POST", headers: workspaceHeaders() });
       const payload = (await response.json()) as { error?: string };
+      if (scope !== requests.current.scope) return;
       if (!response.ok) throw new Error(payload.error || "Amazon 连接校验失败。");
       setNotice("Amazon 连接校验完成。商品与库存执行器已就绪；未绑定 Seller ID/店铺/站点时同步将明确阻断。");
       await refreshAll();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Amazon 连接校验失败。");
+      if (scope === requests.current.scope) setNotice(error instanceof Error ? error.message : "Amazon 连接校验失败。");
     } finally {
-      setValidating(false);
+      if (scope === requests.current.scope) setValidating(false);
     }
   }
+
+  const inventoryQuantity = (value?: number) => readiness && readiness.inventory.status !== "NOT_SYNCED" && value !== undefined ? value.toLocaleString("zh-CN") : "未同步";
 
   const connectionTone: { tone: BadgeTone; label: string } = readiness
     ? readiness.connection.status === "CONFIGURED" ? { tone: "green", label: "连接已验证" }
@@ -334,7 +349,7 @@ export function OperationsHubWorkbench() {
       <section hidden={tab !== "inventory"} className="border-b border-border pb-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div><div className="flex items-center gap-2"><PackageSearch className="h-4 w-4 text-brand" /><h3 className="text-sm font-bold text-foreground">库存</h3><Badge tone={freshnessBadge(readiness?.inventory.status === "FRESH" ? "FRESH" : readiness?.inventory.status === "STALE" ? "STALE" : "NOT_SYNCED").tone}>{readiness?.inventory.status === "FRESH" ? "新鲜" : readiness?.inventory.status === "STALE" ? "已过期" : "未同步"}</Badge></div>
-            <p className="mt-1 text-xs text-muted">可售 {readiness?.inventory.status === "NOT_SYNCED" ? "未同步" : readiness?.inventory.fulfillableQuantity.toLocaleString("zh-CN") ?? "—"} · 在途 {readiness?.inventory.inboundQuantity.toLocaleString("zh-CN") ?? "—"} · 预留 {readiness?.inventory.reservedQuantity.toLocaleString("zh-CN") ?? "—"} · 不可售 {readiness?.inventory.unfulfillableQuantity.toLocaleString("zh-CN") ?? "—"}</p>
+            <p className="mt-1 text-xs text-muted">可售 {inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 在途 {inventoryQuantity(readiness?.inventory.inboundQuantity)} · 预留 {inventoryQuantity(readiness?.inventory.reservedQuantity)} · 不可售 {inventoryQuantity(readiness?.inventory.unfulfillableQuantity)}</p>
             <p className="mt-1 text-xs text-muted">快照时间：{formatDateTime(readiness?.inventory.capturedAt ?? null)} · 新鲜度沿用服务端阈值 · {readiness?.inventory.snapshotCount.toLocaleString("zh-CN") ?? 0} 个 SKU</p>
             {readiness?.domains.inventory.reason ? <p className="mt-1 text-xs text-amber-800">{readiness.domains.inventory.reason} {readiness.domains.inventory.recommendedAction}</p> : null}
             {readiness?.domains.inventory.lastAttemptError ? <p className="mt-1 text-xs text-red-700">最近同步失败：{readiness.domains.inventory.lastAttemptError}</p> : null}

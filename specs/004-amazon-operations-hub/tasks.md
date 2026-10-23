@@ -72,5 +72,6 @@
 - [X] T042 Add online-product/replenishment UI and protected policy API, ERP exact-MSKU history adapter
 - [X] T043 Add parsing/history/replenishment regressions, source/rollback/worker docs
 - [X] T046 Reject incomplete inventory quantities, preserve exact plan inventory run provenance and prevent older calculations overwriting newer results
+- [X] T047 Add isolated Operations browser regressions; fix unknown quantity display and stale-workspace error/loading/mutation feedback
 - [ ] T044 Controlled migration, Seller ID binding, live DB/Redis/Amazon and logged-in UI/403/isolation acceptance
 - [ ] T045 Real representative SKU list latency/P95 comparison before claiming speed improvements

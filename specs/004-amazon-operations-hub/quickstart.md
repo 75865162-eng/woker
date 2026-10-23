@@ -49,3 +49,9 @@ Not run: migration against a real PostgreSQL instance; authenticated browser/403
 - Plans retain the exact inventory run from the rows used, without a second latest-run query. Under the scoped transaction lock, older calculations cannot overwrite newer results for the same policy version. Failed calculations clear the inventory-run reference and preserve NEW lifecycle.
 - Added exhaustive invalid/missing quantity regression and a stubbed service concurrency/provenance/failure regression; no external services or credentials used. The existing 137-test suite plus these two new tests pass (139 total).
 - Typecheck and lint pass. Production build already passed on the P0 implementation; this follow-up changes only server validation/provenance and tests, with no schema, dependency, route or UI build changes, so it does not repeat that build. Live database lock behavior still requires the controlled multi-worker acceptance listed above.
+
+## Isolated Operations browser regression (2026-10-23)
+
+`npm run test:operations:browser` passes all 9 scenarios in Chromium using the real Operations component bundled by esbuild and test-only intercepted API responses. Coverage: six-domain freshness and STALE action; unknown inventory/catalog fields; PPC/orders placeholders; schedule read/edit controls; scoped manual idempotency; simulated 403; late inventory, metrics, readiness and manual-sync failures after a workspace switch. This exposed and fixed zero placeholders for unsynced quantities and stale error/loading feedback from a previous workspace. Late mutation responses also cannot set the new workspace's notice or busy state.
+
+The harness does not run the Next auth middleware or route handlers. This is UI regression evidence only, not completed real-login/403/isolation or DB/Redis/Amazon acceptance. No credentials or network requests to external services. T035/T044/T045 remain open.
