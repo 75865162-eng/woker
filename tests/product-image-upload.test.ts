@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import sharp from "sharp";
 import {
   selectProductImageFiles,
   uploadProductImageFile,
 } from "@/components/products/product-attachment-upload";
 import { getProductAssetDownloadUrl, getProductListImage, getProductOriginalImage } from "@/lib/products/image-assets";
+import { createProductImagePreview } from "@/lib/products/image-preview";
 
 function createImageFile(name = "hero.png", size = 10) {
   return new File([new Uint8Array(size)], name, { type: "image/png" });
@@ -17,6 +19,19 @@ test("product image selection respects the remaining ten-image limit", () => {
   assert.equal(selectProductImageFiles(files, 8).length, 2);
   assert.equal(selectProductImageFiles(files, 10).length, 0);
   assert.equal(selectProductImageFiles(files, 3, 4).length, 1);
+});
+
+test("product image preview uses a single WebP size capped at 1600 pixels", async () => {
+  const source = await sharp({ create: { width: 2400, height: 1200, channels: 3, background: "#8aa" } })
+    .png()
+    .toBuffer();
+
+  const preview = await createProductImagePreview(source);
+  const metadata = await sharp(preview).metadata();
+
+  assert.equal(metadata.format, "webp");
+  assert.equal(metadata.width, 1600);
+  assert.equal(metadata.height, 800);
 });
 
 test("product image upload rejects non-image files before making a request", async () => {

@@ -19,9 +19,11 @@ export async function uploadProductImageFile(file: File, options?: ProductUpload
   formData.append("file", file);
   appendCurrentWorkspaceScope(formData);
   if (typeof XMLHttpRequest === "undefined") {
+    if (options?.signal?.aborted) throw new Error("商品图片上传已取消。");
     const response = await fetch("/api/products/image-assets/upload", {
       method: "POST",
       body: formData,
+      signal: options?.signal,
     });
     const body = (await response.json().catch(() => ({}))) as {
       asset?: ProductImageAsset & { url?: string };
@@ -41,6 +43,8 @@ export async function uploadProductImageFile(file: File, options?: ProductUpload
     body: { asset?: ProductImageAsset & { url?: string }; error?: string };
   }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    const abortUpload = () => xhr.abort();
+    options?.signal?.addEventListener("abort", abortUpload, { once: true });
     xhr.open("POST", "/api/products/image-assets/upload");
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
@@ -48,6 +52,7 @@ export async function uploadProductImageFile(file: File, options?: ProductUpload
       }
     };
     xhr.onload = () => {
+      options?.signal?.removeEventListener("abort", abortUpload);
       let body: { asset?: ProductImageAsset & { url?: string }; error?: string } = {};
       try {
         body = JSON.parse(xhr.responseText) as typeof body;
@@ -56,8 +61,14 @@ export async function uploadProductImageFile(file: File, options?: ProductUpload
       }
       resolve({ ok: xhr.status >= 200 && xhr.status < 300, body });
     };
-    xhr.onerror = () => reject(new Error("商品图片上传失败。"));
-    xhr.onabort = () => reject(new Error("商品图片上传已取消。"));
+    xhr.onerror = () => {
+      options?.signal?.removeEventListener("abort", abortUpload);
+      reject(new Error("商品图片上传失败。"));
+    };
+    xhr.onabort = () => {
+      options?.signal?.removeEventListener("abort", abortUpload);
+      reject(new Error("商品图片上传已取消。"));
+    };
     xhr.send(formData);
   });
   if (!data.ok || !data.body.asset?.id) {

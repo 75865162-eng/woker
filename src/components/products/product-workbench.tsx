@@ -1413,6 +1413,11 @@ export function ProductEditor({
   const [videoPlanOpen, setVideoPlanOpen] = useState(false);
   const [conclusionUploading, setConclusionUploading] = useState(false);
   const [imageUploads, setImageUploads] = useState<ProductImageUploadProgress[]>([]);
+  const imageUploadControllers = useRef(new Map<string, AbortController>());
+  const pendingImageFiles = useRef(new Map<string, File>());
+  const imagePreviewUrls = useRef(new Map<string, string>());
+  const imageUploadQueue = useRef<string[]>([]);
+  const activeImageUploadCount = useRef(0);
   const [workbookUploads, setWorkbookUploads] = useState(0);
   const [patentUploadBusy, setPatentUploadBusy] = useState(false);
   const trackWorkbookUpload = useCallback((delta: number) => setWorkbookUploads((current) => Math.max(0, current + delta)), []);
@@ -1948,34 +1953,82 @@ export function ProductEditor({
     const uploads = selected.map((file, index) => ({
       id: `product-image-upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
       file,
+      previewUrl: URL.createObjectURL(file),
     }));
-    setImageUploads(uploads.map(({ id, file }) => ({ id, name: file.name, progress: 0 })));
+    uploads.forEach(({ id, file, previewUrl }) => {
+      pendingImageFiles.current.set(id, file);
+      imagePreviewUrls.current.set(id, previewUrl);
+    });
+    imageUploadQueue.current.push(...uploads.map(({ id }) => id));
+    setImageUploads((current) => [...current, ...uploads.map(({ id, file, previewUrl }) => ({ id, name: file.name, progress: 0, status: "queued" as const, previewUrl }))]);
+    void pumpImageUploadQueue();
+  }
 
+  async function pumpImageUploadQueue() {
+    while (activeImageUploadCount.current < 2) {
+      const nextId = imageUploadQueue.current.shift();
+      if (!nextId) return;
+      const file = pendingImageFiles.current.get(nextId);
+      if (!file) return;
+      activeImageUploadCount.current += 1;
+      void runImageUpload(nextId, file).finally(() => {
+        activeImageUploadCount.current -= 1;
+        void pumpImageUploadQueue();
+      });
+      await Promise.resolve();
+    }
+  }
+
+  async function runImageUpload(id: string, file: File) {
+    setImageUploads((current) => current.map((item) => item.id === id ? { ...item, status: "uploading", error: undefined } : item));
+    const controller = new AbortController();
+    imageUploadControllers.current.set(id, controller);
     try {
-      const results = await Promise.allSettled(
-        uploads.map(({ id, file }) =>
-          uploadProductImageFile(file, {
-            onUploadProgress: (progress) => {
-              setImageUploads((current) => current.map((item) => (item.id === id ? { ...item, progress } : item)));
-            },
-          }),
-        ),
-      );
-      const images = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-      const firstError = results.find((result) => result.status === "rejected");
-
-      if (images.length) {
-        setDraft((current) => ({
-          ...current,
-          images: [...current.images, ...images.map((image) => image.thumbUrl)].slice(0, 10),
-          imageAssets: [...(current.imageAssets ?? []), ...images].slice(0, 10),
-        }));
-      }
-      if (firstError?.status === "rejected") {
-        setEditorError(firstError.reason instanceof Error ? firstError.reason.message : "商品图片上传失败。");
+      const asset = await uploadProductImageFile(file, {
+        signal: controller.signal,
+        onUploadProgress: (progress) => setImageUploads((current) => current.map((item) => item.id === id ? { ...item, progress } : item)),
+      });
+      setDraft((current) => ({
+        ...current,
+        images: [...current.images, asset.thumbUrl].slice(0, 10),
+        imageAssets: [...(current.imageAssets ?? []), asset].slice(0, 10),
+      }));
+      setImageUploads((current) => current.filter((item) => item.id !== id));
+      pendingImageFiles.current.delete(id);
+      const previewUrl = imagePreviewUrls.current.get(id);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      imagePreviewUrls.current.delete(id);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setImageUploads((current) => current.map((item) => item.id === id ? { ...item, status: "failed", error: error instanceof Error ? error.message : "上传失败" } : item));
       }
     } finally {
-      setImageUploads([]);
+      imageUploadControllers.current.delete(id);
+    }
+  }
+
+  function cancelImageUpload(id: string) {
+    imageUploadControllers.current.get(id)?.abort();
+    pendingImageFiles.current.delete(id);
+    imageUploadQueue.current = imageUploadQueue.current.filter((queuedId) => queuedId !== id);
+    const previewUrl = imagePreviewUrls.current.get(id);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    imagePreviewUrls.current.delete(id);
+    setImageUploads((current) => {
+      const canceled = current.find((item) => item.id === id);
+      if (canceled) URL.revokeObjectURL(canceled.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  }
+
+  function retryImageUpload(id: string) {
+    const upload = imageUploads.find((item) => item.id === id);
+    if (!upload) return;
+    const file = pendingImageFiles.current.get(id);
+    if (file) {
+      setImageUploads((current) => current.map((item) => item.id === id ? { ...item, status: "queued", progress: 0 } : item));
+      imageUploadQueue.current.push(id);
+      void pumpImageUploadQueue();
     }
   }
 
@@ -2091,6 +2144,8 @@ export function ProductEditor({
                   uploadingFiles={imageUploads}
                   onPreview={(asset) => openImagePreview(asset, asset.thumbUrl)}
                   onUpload={handleImageUpload}
+                  onCancelUpload={cancelImageUpload}
+                  onRetryUpload={retryImageUpload}
                   onRemove={removeImage}
                 />
 

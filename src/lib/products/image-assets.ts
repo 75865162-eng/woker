@@ -98,6 +98,7 @@ export function getProductAssetDownloadUrl(
 
 export type ProductUploadOptions = {
   onUploadProgress?: (progress: number) => void;
+  signal?: AbortSignal;
 };
 
 export function appendCurrentWorkspaceScope(formData: FormData) {

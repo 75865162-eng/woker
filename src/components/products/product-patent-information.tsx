@@ -63,18 +63,31 @@ function AutoGrowInput({ value, onChange, onBlur, className = "" }: { value: str
 
 export function ProductPatentInformationSection({ value, onChange, onUploadStateChange }: { value?: ProductPatentInformation; onChange: (value: ProductPatentInformation) => void; onUploadStateChange: (busy: boolean) => void }) {
   const info = normalizePatentInformation(value);
-  const [keywordDrafts, setKeywordDrafts] = useState<Record<string, string>>({});
+  const [keywordColumnCount, setKeywordColumnCount] = useState(4);
   const [uploading, setUploading] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const uploadTarget = useRef<{ kind: "channel" | "patent"; id: string } | null>(null);
+  const maxSavedKeywordCount = info.searchChannels.reduce((count, channel) => Math.max(count, channel.keywords.length), 0);
+  const visibleKeywordCount = Math.max(4, keywordColumnCount, maxSavedKeywordCount);
+  useEffect(() => {
+    if (maxSavedKeywordCount > keywordColumnCount) setKeywordColumnCount(maxSavedKeywordCount);
+  }, [keywordColumnCount, maxSavedKeywordCount]);
   const update = (mutate: (current: ProductPatentInformation) => ProductPatentInformation) => onChange(mutate(info));
   const setChannel = (id: string, patch: Partial<ProductPatentSearchChannel>) => update((current) => ({ ...current, searchChannels: current.searchChannels.map((channel) => channel.id === id ? { ...channel, ...patch } : channel) }));
   const setPatent = (id: string, patch: Partial<ProductPatentRecord>) => update((current) => ({ ...current, patents: current.patents.map((patent) => patent.id === id ? { ...patent, ...patch } : patent) }));
-  const addKeyword = (channel: ProductPatentSearchChannel) => {
-    const keyword = (keywordDrafts[channel.id] ?? "").trim();
-    if (!keyword || channel.keywords.includes(keyword)) return;
-    setChannel(channel.id, { keywords: [...channel.keywords, keyword] });
-    setKeywordDrafts((current) => ({ ...current, [channel.id]: "" }));
+  const updateKeyword = (channel: ProductPatentSearchChannel, index: number, value: string) => {
+    const keywords = [...channel.keywords];
+    keywords[index] = value;
+    while (keywords.length > 0 && !keywords[keywords.length - 1]) keywords.pop();
+    setChannel(channel.id, { keywords });
+  };
+  const addKeywordColumn = () => setKeywordColumnCount((count) => count + 1);
+  const removeKeywordColumn = () => {
+    setKeywordColumnCount((count) => Math.max(4, count - 1));
+    update((current) => ({
+      ...current,
+      searchChannels: current.searchChannels.map((channel) => ({ ...channel, keywords: channel.keywords.slice(0, Math.max(4, visibleKeywordCount - 1)) })),
+    }));
   };
   const chooseUpload = (kind: "channel" | "patent", id: string) => { uploadTarget.current = { kind, id }; inputRef.current?.click(); };
   async function upload(file?: File) {
@@ -99,12 +112,12 @@ export function ProductPatentInformationSection({ value, onChange, onUploadState
     <CardContent className="p-3">
       <div className="overflow-x-auto rounded border border-border">
         <div className="min-w-[900px]">
-          <div className="grid grid-cols-[150px_repeat(4,minmax(110px,1fr))_minmax(150px,1.25fr)_180px_42px] border-b border-border bg-surface-muted text-[13px] font-medium text-foreground">
-            <div className="flex items-center justify-between border-r border-border px-2 py-1.5"><span>搜索渠道</span><Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" aria-label="新增搜索渠道" title="新增搜索渠道" onClick={() => update((current) => ({ ...current, searchChannels: [...current.searchChannels, createChannel()] }))}><Plus className="h-4 w-4" /></Button></div><div className="border-r border-border px-2 py-2">关键词 1</div><div className="border-r border-border px-2 py-2">关键词 2</div><div className="border-r border-border px-2 py-2">关键词 3</div><div className="border-r border-border px-2 py-2">关键词 4</div><div className="border-r border-border px-2 py-2">备注</div><div className="border-r border-border px-2 py-2">图片（160×160）</div><div />
+          <div className="border-b border-border bg-surface-muted text-[13px] font-medium text-foreground" style={{ display: "grid", gridTemplateColumns: `150px repeat(${visibleKeywordCount}, minmax(110px, 1fr)) minmax(150px, 1.25fr) 180px 42px` }}>
+            <div className="flex items-center justify-between border-r border-border px-2 py-1.5"><span>搜索渠道</span><Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" aria-label="新增搜索渠道" title="新增搜索渠道" onClick={() => update((current) => ({ ...current, searchChannels: [...current.searchChannels, createChannel()] }))}><Plus className="h-4 w-4" /></Button></div>{Array.from({ length: visibleKeywordCount }, (_, index) => <div key={index} className="border-r border-border px-2 py-2">关键词 {index + 1}</div>)}<div className="border-r border-border px-2 py-2">备注</div><div className="border-r border-border px-2 py-2">图片（160×160）</div><div className="flex items-center justify-center gap-1"><Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" aria-label="新增关键词列" title="新增关键词列" onClick={addKeywordColumn}><Plus className="h-4 w-4" /></Button><Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0" aria-label="减少关键词列" title="减少关键词列" onClick={removeKeywordColumn} disabled={visibleKeywordCount <= 4}>−</Button></div>
           </div>
-          {info.searchChannels.map((channel) => <div key={channel.id} className="grid grid-cols-[150px_repeat(4,minmax(110px,1fr))_minmax(150px,1.25fr)_180px_42px] border-b border-border last:border-b-0">
+          {info.searchChannels.map((channel) => <div key={channel.id} className="border-b border-border last:border-b-0" style={{ display: "grid", gridTemplateColumns: `150px repeat(${visibleKeywordCount}, minmax(110px, 1fr)) minmax(150px, 1.25fr) 180px 42px` }}>
             <div className="border-r border-border p-2"><AutoGrowInput value={channel.name} onChange={(name) => setChannel(channel.id, { name })} /></div>
-            {[0, 1, 2, 3].map((index) => <div key={index} className="border-r border-border p-2"><AutoGrowInput value={channel.keywords[index] ?? (index === 3 ? keywordDrafts[channel.id] ?? "" : "")} onChange={(value) => { if (index < 3) { const keywords = [...channel.keywords]; keywords[index] = value; setChannel(channel.id, { keywords: keywords.filter(Boolean) }); } else setKeywordDrafts((current) => ({ ...current, [channel.id]: value })); }} onBlur={index === 3 ? () => addKeyword(channel) : undefined} /></div>)}
+            {Array.from({ length: visibleKeywordCount }, (_, index) => <div key={index} className="border-r border-border p-2"><AutoGrowInput value={channel.keywords[index] ?? ""} onChange={(value) => updateKeyword(channel, index, value)} /></div>)}
             <div className="border-r border-border p-2"><AutoGrowInput value={channel.note} onChange={(note) => setChannel(channel.id, { note })} /></div>
             <div className="border-r border-border px-2 py-1"><CompactAttachments assets={channel.imageAssets} onRemove={(id) => setChannel(channel.id, { imageAssets: channel.imageAssets.filter((asset) => asset.id !== id) })} /><Button type="button" size="sm" variant="ghost" className="h-6 px-1 text-[11px]" disabled={uploading === channel.id} onClick={() => chooseUpload("channel", channel.id)}>{uploading === channel.id ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}图片</Button></div>
             <div className="flex items-center justify-center"><Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted hover:text-danger" title="删除渠道" onClick={() => update((current) => ({ ...current, searchChannels: current.searchChannels.filter((item) => item.id !== channel.id) }))}><Trash2 className="h-3.5 w-3.5" /></Button></div>
