@@ -47,8 +47,8 @@ test("daily sales requests specify MSKU dimension and distinct volume/revenue me
 
 test("unverified snapshot resources remain unavailable for sync while legacy domains stay supported", async () => {
   const { sellfoxSyncDisabledReason } = await import("@/lib/sellfox/sync-contract");
-  for (const domain of ["inventory", "sales", "listings"]) assert.match(sellfoxSyncDisabledReason(domain) ?? "", /成功响应契约待验证/);
-  for (const domain of ["stores", "performance", "hourly"]) assert.equal(sellfoxSyncDisabledReason(domain), null);
+  for (const domain of ["listings"]) assert.match(sellfoxSyncDisabledReason(domain) ?? "", /成功响应契约待验证/);
+  for (const domain of ["stores", "inventory", "sales", "performance", "hourly"]) assert.equal(sellfoxSyncDisabledReason(domain), null);
   assert.match(sellfoxSyncDisabledReason("ads_report") ?? "", /尚未接入/);
 });
 

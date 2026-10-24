@@ -2,9 +2,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
 import { sellfoxPost } from "@/lib/sellfox/client";
-import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxReportDates, SellfoxSyncInputError, nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxReportDates, sellfoxDateAt, SellfoxSyncInputError, nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
-import { sellfoxInventoryRequest, sellfoxSalesRequest } from "@/lib/sellfox/sync-requests";
+import { syncSellfoxSnapshotStores, type SnapshotCheckpoint } from "@/lib/sellfox/snapshot-sync";
 
 export const sellfoxResources = sellfoxSyncResources;
 export type SyncResource = SellfoxSyncResource;
@@ -92,79 +92,29 @@ async function syncStores(input: SyncInput) {
   return count;
 }
 
-async function syncInventory(input: SyncInput) {
-  const stores = await storesFor(input); let count = 0; let failures = 0; let pageCursor: Record<string, unknown> | null = null;
-  const syncedAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
-  const reportDate = input.reportDate ?? syncedAt.toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
-  const cursor = asRecord(input.progress?.cursor);
-  const startStoreIndex = Math.max(0, Number(cursor?.storeIndex) || 0);
-  const startPageNo = Math.max(1, Number(cursor?.pageNo) || 1);
-  let firstFailedCursor: Record<string, unknown> | null = null;
-  for (let storeIndex = startStoreIndex; storeIndex < stores.length; storeIndex += 1) {
-    const store = stores[storeIndex];
-    try {
-      for (let pageNo = storeIndex === startStoreIndex ? startPageNo : 1; pageNo <= 10_000; pageNo += 1) {
-        const payload = await sellfoxPost<unknown>("/api/inventoryManage/fba/pageList.json", sellfoxInventoryRequest(store.externalId, pageNo));
-        const rows = rowsFrom(payload);
-        if (!Array.isArray(payload) && rows.length === 0) throw new Error("库存接口返回结构无法识别。");
-        for (const row of rows) {
-          const sku = field(row, "sku", "sellerSku"); const msku = field(row, "msku"); const asin = field(row, "asin"); const fnsku = field(row, "fnsku", "fnSku");
-          const sourceKey = field(row, "inventoryId", "id") || [asin, msku, sku, fnsku, field(row, "condition", "inventoryCondition"), field(row, "fulfillmentChannel", "warehouseType")].filter(Boolean).join("|");
-          if (!sourceKey) continue;
-          await prisma.sellfoxFbaInventorySnapshot.upsert({
-            where: { storeId_capturedAt_sourceKey: { storeId: store.id, capturedAt: syncedAt, sourceKey } },
-            create: { id: `sellfox-inventory-${store.id}-${syncedAt.getTime()}-${sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, capturedAt: syncedAt, sourceKey, sku, msku, asin, fnsku, quantity: num(row, "quantity", "availableQuantity", "afnFulfillableQuantity", "totalQuantity"), payload: row as Prisma.InputJsonValue, syncedAt, updatedAt: syncedAt },
-            update: { sku, msku, asin, fnsku, quantity: num(row, "quantity", "availableQuantity", "afnFulfillableQuantity", "totalQuantity"), payload: row as Prisma.InputJsonValue, syncedAt, updatedAt: syncedAt },
-          }); count += 1;
-        }
-        const nextPage = nextSellfoxPage(rows.length, pageNo, pageCount(payload));
-        const hasMore = nextPage !== null;
-        pageCursor = hasMore ? { shopExternalId: store.externalId, storeIndex, pageNo: nextPage } : { shopExternalId: stores[storeIndex + 1]?.externalId ?? "", storeIndex: storeIndex + 1, pageNo: 1 };
-        await saveProgress(input, { count, storeExternalId: store.externalId, pageNo, cursor: pageCursor, failures });
-        if (!hasMore) break;
-      }
-    } catch { failures += 1; firstFailedCursor ??= pageCursor ?? { shopExternalId: store.externalId, storeIndex, pageNo: storeIndex === startStoreIndex ? startPageNo : 1 }; await saveProgress(input, { count, storeExternalId: store.externalId, cursor: firstFailedCursor, failures }); }
+async function syncSnapshots(input: SyncInput) {
+  if (input.resource !== "inventory" && input.resource !== "sales") throw new SellfoxSyncInputError("快照资源无效。");
+  const dates = input.resource === "inventory" ? [input.reportDate!] : sellfoxReportDates(input.startDate!, input.endDate!);
+  let writes = 0; let storeCount = 0;
+  for (const date of dates) {
+    const latest = await prisma.sellfoxSyncRun.findUnique({ where: { id: input.runId }, select: { summary: true } });
+    const states = asRecord(asRecord(asRecord(latest?.summary)?.progress)?.snapshots) ?? {};
+    const result = await syncSellfoxSnapshotStores({
+      resource: input.resource, organizationId: input.organizationId, workspaceId: input.workspaceId,
+      shopExternalIds: input.shopExternalIds!, reportDate: date, capturedAt: input.capturedAt!,
+      checkpoint: states[date] as SnapshotCheckpoint | undefined,
+      onProgress: async (update, tx) => {
+        const db = tx ?? prisma;
+        const current = await db.sellfoxSyncRun.findUnique({ where: { id: input.runId }, select: { summary: true } });
+        const progress = asRecord(asRecord(current?.summary)?.progress) ?? {};
+        const checkpoints = { ...asRecord(progress.snapshots), [date]: update.checkpoint };
+        const count = Object.values(checkpoints).reduce<number>((sum, checkpoint) => sum + Object.values((checkpoint as SnapshotCheckpoint).stores).reduce((value, store) => value + Object.values(store).reduce((total, metric) => total + (metric?.writes ?? 0), 0), 0), 0);
+        await saveProgress(input, { ...progress, reportDate: date, snapshots: checkpoints, count }, db);
+      },
+    });
+    writes += result.writes; storeCount = Math.max(storeCount, result.storeCount);
   }
-  if (failures) { await saveProgress(input, { count, cursor: firstFailedCursor, failures }); throw new Error(`${failures} 个店铺库存同步失败，已记录已完成数据和运行进度。`); }
-  return { count, storeCount: stores.length, reportDate };
-}
-
-async function syncSales(input: SyncInput) {
-  const stores = await storesFor(input); let count = 0; let failures = 0; const reportDate = input.reportDate ?? defaultSellfoxReportDate(); const startDate = input.startDate ?? input.reportDate ?? defaultSellfoxReportDate(); const endDate = input.endDate ?? input.startDate ?? input.reportDate ?? defaultSellfoxReportDate(); const syncedAt = new Date();
-  const cursor = asRecord(input.progress?.cursor);
-  const startStoreIndex = Math.max(0, Number(cursor?.storeIndex) || 0);
-  const startPageNo = Math.max(1, Number(cursor?.pageNo) || 1);
-  let firstFailedCursor: Record<string, unknown> | null = null;
-  for (let storeIndex = startStoreIndex; storeIndex < stores.length; storeIndex += 1) {
-    const store = stores[storeIndex];
-    try {
-      for (let pageNo = storeIndex === startStoreIndex ? startPageNo : 1; pageNo <= 10_000; pageNo += 1) {
-        // This adapter stays disabled until the daily response and metric join are verified.
-        const payload = await sellfoxPost<unknown>("/api/productSale/page.json", sellfoxSalesRequest(store.externalId, startDate, pageNo, "productNum"));
-        const rows = rowsFrom(payload);
-        if (!Array.isArray(payload) && rows.length === 0) throw new Error("销量接口返回结构无法识别。");
-        for (const row of rows) {
-          const sku = field(row, "sku", "sellerSku"); const msku = field(row, "msku"); const asin = field(row, "asin");
-          const rowDate = field(row, "reportDate", "saleDate", "date") || (startDate === endDate ? startDate : "");
-          if (!rowDate) throw new Error("销量日期区间响应缺少逐日日期字段，已停止写入以避免将多日数据合并。");
-          const sourceKey = field(row, "sourceKey", "id") || [asin, msku, sku].filter(Boolean).join("|");
-          if (!sourceKey) continue;
-          await prisma.sellfoxSalesDailySnapshot.upsert({
-            where: { storeId_reportDate_sourceKey: { storeId: store.id, reportDate: rowDate, sourceKey } },
-            create: { id: `sellfox-sales-${store.id}-${rowDate}-${sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate: rowDate, sourceKey, sku, msku, asin, quantity: num(row, "quantity", "saleQuantity", "saleNum", "salesVolume"), revenue: num(row, "revenue", "saleRevenue", "saleAmount", "salesAmount"), currency: field(row, "currency", "currencyCode"), payload: row as Prisma.InputJsonValue, syncedAt, updatedAt: syncedAt },
-            update: { sku, msku, asin, quantity: num(row, "quantity", "saleQuantity", "saleNum", "salesVolume"), revenue: num(row, "revenue", "saleRevenue", "saleAmount", "salesAmount"), currency: field(row, "currency", "currencyCode"), payload: row as Prisma.InputJsonValue, syncedAt, updatedAt: syncedAt },
-          }); count += 1;
-        }
-        const nextPage = nextSellfoxPage(rows.length, pageNo, pageCount(payload));
-        const hasMore = nextPage !== null;
-        const nextCursor = hasMore ? { shopExternalId: store.externalId, storeIndex, pageNo: nextPage } : { shopExternalId: stores[storeIndex + 1]?.externalId ?? "", storeIndex: storeIndex + 1, pageNo: 1 };
-        await saveProgress(input, { count, storeExternalId: store.externalId, pageNo, cursor: nextCursor, failures });
-        if (!hasMore) break;
-      }
-    } catch { failures += 1; firstFailedCursor ??= { shopExternalId: store.externalId, storeIndex, pageNo: storeIndex === startStoreIndex ? startPageNo : 1 }; await saveProgress(input, { count, storeExternalId: store.externalId, cursor: firstFailedCursor, failures }); }
-  }
-  if (failures) { await saveProgress(input, { count, cursor: firstFailedCursor, failures }); throw new Error(`${failures} 个店铺销量同步失败，已记录已完成数据和运行进度。`); }
-  return { count, storeCount: stores.length, reportDate };
+  return { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, writes };
 }
 
 async function syncHourly(input: SyncInput) {
@@ -209,6 +159,10 @@ export async function processSellfoxSyncRun(runId: string) {
       if (requested.length && stores.length !== new Set(requested).size) throw new SellfoxSyncInputError("所选店铺不属于当前工作区。");
       summary = { ...summary, shopExternalIds: stores.map((store) => store.externalId), storesFrozen: true };
     }
+    if ((run.resource === "inventory" || run.resource === "sales") && !summary.capturedAt) {
+      const capturedAt = new Date();
+      summary = { ...summary, capturedAt: capturedAt.toISOString(), ...(run.resource === "inventory" ? { reportDate: sellfoxDateAt(capturedAt) } : {}) };
+    }
     if (run.resource !== "stores" && (!Array.isArray(summary.shopExternalIds) || !summary.shopExternalIds.length || summary.shopExternalIds.some((id) => typeof id !== "string" || !id.trim()))) {
       throw new SellfoxSyncInputError("同步任务缺少有效的已冻结店铺范围。");
     }
@@ -246,8 +200,7 @@ export async function processSellfoxSyncRun(runId: string) {
       }
       result = { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, synced: count };
     }
-    else if (input.resource === "inventory") result = await syncInventory(input);
-    else if (input.resource === "sales") result = await syncSales(input);
+    else if (input.resource === "inventory" || input.resource === "sales") result = await syncSnapshots(input);
     else if (input.resource === "hourly") result = await syncHourly(input);
     else throw new SellfoxSyncInputError("此赛狐数据域暂未接入 Open API。");
     // Re-read after page commits; never overwrite current progress with the initial summary.

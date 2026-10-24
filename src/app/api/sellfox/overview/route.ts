@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       })(),
       latestMetricAt: latestMetric?.syncedAt ?? null,
     });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to load Sellfox overview." }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "读取赛狐概览失败，请稍后重试。" }, { status: 500 });
   }
 }

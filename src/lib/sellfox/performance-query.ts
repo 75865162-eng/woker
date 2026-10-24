@@ -1,22 +1,7 @@
-import { Prisma } from "@prisma/client";
-import { defaultSellfoxReportDate } from "@/lib/sellfox/product-performance";
+import type { Prisma } from "@prisma/client";
+import { sellfoxBrowseQuery, sellfoxSnapshotWhere } from "@/lib/sellfox/browse-query";
 
 export function performanceQuery(url: URL, organizationId: string, workspaceId: string): Prisma.SellfoxProductDailySnapshotWhereInput {
-  const storeId = url.searchParams.get("storeId")?.trim();
-  const reportDate = url.searchParams.get("reportDate")?.trim();
-  const from = url.searchParams.get("from")?.trim();
-  const to = url.searchParams.get("to")?.trim();
-  const search = url.searchParams.get("search")?.trim();
-
-  return {
-    organizationId,
-    workspaceId,
-    ...(from || to ? { reportDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : { reportDate: reportDate || defaultSellfoxReportDate() }),
-    ...(storeId ? { storeId } : {}),
-    ...(search
-      ? {
-          OR: ["sku", "msku", "asin", "title"].map((field) => ({ [field]: { contains: search, mode: "insensitive" } })),
-        }
-      : {}),
-  };
+  const query = sellfoxBrowseQuery(url);
+  return { ...sellfoxSnapshotWhere(query, organizationId, workspaceId, undefined, true), ...(query.storeId ? { storeId: query.storeId } : {}) };
 }

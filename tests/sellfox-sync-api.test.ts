@@ -23,7 +23,7 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
   globals.prisma = {
     sellfoxSyncRun: {
       create: async () => { runWrites += 1; return {}; },
-      findUnique: async () => ({ id: "old-run", resource: "sales", organizationId: "org-a", workspaceId: "default", userId: "actor", status: "queued", summary: {} }),
+      findUnique: async () => ({ id: "old-run", resource: "listings", organizationId: "org-a", workspaceId: "default", userId: "actor", status: "queued", summary: {} }),
       update: async ({ data }: { data: { status?: string; error?: string } }) => { status = data.status; lastError = data.error; return {}; },
     },
   } as unknown as PrismaClient;
@@ -50,7 +50,7 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
       { resource: "inventory", reportDate: "2000-01-01" },
       { resource: "hourly", reportDate: "2000-01-01" },
     ]) assert.equal((await sync(await request("owner", body))).status, 400);
-    for (const resource of ["inventory", "sales", "listings"]) {
+    for (const resource of ["listings"]) {
       const response = await sync(await request("owner", { resource }));
       assert.equal(response.status, 409);
       assert.match((await response.json()).error, /成功响应契约待验证/);
@@ -58,7 +58,7 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
       // Listing has no scheduler yet; the existing route rejects it as invalid.
       assert.equal(planned.status, resource === "listings" ? 400 : 409);
     }
-    assert.equal(runWrites, 3);
+    assert.equal(runWrites, 1);
     await assert.rejects(() => processSellfoxSyncRun("old-run"), /成功响应契约待验证/);
     assert.equal(status, "failed");
     assert.match(lastError ?? "", /成功响应契约待验证/);

@@ -389,8 +389,9 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 - 凭据仅由服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 读取；overview 只返回 configured。所有 Open API 请求必须在 Node Worker 中经 `src/lib/sellfox/client.ts` 发起。
 - 使用专用 `npm run worker:sellfox-sync` 和 `amazon-sellfox-sync-worker.service`；BullMQ concurrency 固定为 1。客户端对 token、重试和资源请求统一串行，间隔不少于 1200ms。
-- 官方 token `expires_in` 单位为毫秒。库存/销量/Listing 的响应 schema 尚待核验，当前由 `sellfoxSyncDisabledReason` 统一禁止手动/定时/已入队任务发起该域同步；历史查询和导出保留。不得仅删除检查恢复猜字段落库，须先补契约 fixture、解析与店铺归属验证。
+- 官方 token `expires_in` 单位为毫秒。库存/销量已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。Listing 响应仍待核验，由 `sellfoxSyncDisabledReason` 禁止手动/定时/已入队任务同步；不得删除检查恢复猜字段落库。
 - 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
 - ProductRecord 保持唯一商品主档事实源。赛狐快照只服务报表、列表和只读分析。
 - 手动与定时任务共用 SellfoxSyncRun 和 sync service；计划需在当前工作区由有 `sellfox:create` 权限的用户显式启用。同步 Worker 与 Redis 不可用时 API 返回服务端错误，不退化为请求内同步。
 - 库存、销量、表现、店铺和运行记录按 organization/workspace 隔离；详细接口契约与验证步骤见 `docs/sellfox-sync-workbench-plan.md`。
+- `npm run test:sellfox:browser`：隔离模拟接口验证多店/日期/站点、URL 导航、导出链接、按需详情、日志轮询与切工作区迟到响应；不访问真实赛狐或生产库。浏览器不持有 token；列表与导出复用 browse-query，导出超过 10,000 条明确拒绝，不能静默截断。
