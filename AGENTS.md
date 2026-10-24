@@ -393,5 +393,6 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
 - ProductRecord 保持唯一商品主档事实源。赛狐快照只服务报表、列表和只读分析。
 - 手动与定时任务共用 SellfoxSyncRun 和 sync service；计划需在当前工作区由有 `sellfox:create` 权限的用户显式启用。同步 Worker 与 Redis 不可用时 API 返回服务端错误，不退化为请求内同步。
+- Sellfox 计划与手动提交按组织/工作区/资源共用事务防重锁；执行开始重新检查 active 用户和 sellfox:create。`/settings?tab=operations` 赛狐面板显示 Worker 心跳及当前工作区计划，schedules API 返回 lastEnqueuedAt/nextRunAt；时间为 Asia/Shanghai，计划默认关闭，页面不启动 Worker。创建防重不等于多副本执行租约，生产接管验证见 `docs/sellfox-sync-workbench-plan.md` §10。
 - 库存、销量、表现、店铺和运行记录按 organization/workspace 隔离；详细接口契约与验证步骤见 `docs/sellfox-sync-workbench-plan.md`。
 - `npm run test:sellfox:browser`：隔离模拟接口验证多店/日期/站点、URL 导航、导出链接、按需详情、日志轮询与切工作区迟到响应；不访问真实赛狐或生产库。浏览器不持有 token；列表与导出复用 browse-query，导出超过 10,000 条明确拒绝，不能静默截断。

@@ -16,6 +16,8 @@ test("stores resume the failed page and final run summary keeps transactional pr
     return { findUnique: async () => structuredClone(get()), update: async ({ data }: { data: Record<string, unknown> }) => { put({ ...get(), ...data }); return get(); } };
   }
   globals.prisma = {
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
     sellfoxSyncRun: runs(() => run, (value) => { run = value; }),
     $transaction: async (callback: (tx: unknown) => Promise<void>) => {
       let pendingRun = structuredClone(run); const pendingStores = new Map(stores);
@@ -63,6 +65,8 @@ test("legacy performance runs freeze dates from creation and keep completed chec
     summary: { shopExternalIds: ["shop-a"], progress: { performance: { "2026-10-23": { stores: { "shop-a": { pageNo: 1, synced: 12, done: true } } } } } },
   };
   globals.prisma = {
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
     sellfoxStore: { findMany: async () => [{ id: "store-a", externalId: "shop-a" }] },
     sellfoxSyncRun: { findUnique: async () => structuredClone(run), update: async ({ data }: { data: Record<string, unknown> }) => { run = { ...run, ...data }; return run; } },
   } as unknown as PrismaClient;

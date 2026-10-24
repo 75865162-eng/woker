@@ -264,3 +264,18 @@
 新表/增量约束由 CI 受控迁移；本次不改服务器 .env。已有错误数据如需修复，先只读盘点并保留溯源，再单独批准，不删原始记录冒充历史正确。
 
 回滚先关闭计划和停止赛狐 Worker，再回退应用；新增表/历史保留，不 down migration、不级联删除、不回滚 ProductRecord。记录 `database: not_rolled_back`。本次已完成本机受控只读同步，不执行上述服务器部署操作。
+
+
+## 10. 定时同步加固进展（2026-10-25）
+
+本轮未改 Prisma schema、未再请求赛狐外网、未修改任何环境文件或启用计划，已入库历史保持不变。
+
+- 手动提交、计划入队和计划开关共用 organization/workspace/resource 的 PostgreSQL 事务锁。同域已有 queued/running 时手动 API 返回 409 与现有 runId，明确拒绝新日期/店铺范围，避免错误地把不同请求当作已接受。
+- 计划持锁后重新读取当前启用者；入队和实际执行均检查 active 用户、组织成员当前 sellfox:create 权限及工作区存在性。排队期间撤权的任务失败退出，不调用 Open API。该复核是执行开始时检查，不承诺运行中即时撤销。
+- 统一每日 06:30 Asia/Shanghai 与间隔计划的 due/nextRunAt 算法。错过当日时间可补入一次；已入队当天不再次每日入队。不自动补过去多日缺口。
+- schedules API 补充 configured、queueEnabled、Worker 心跳、lastEnqueuedAt、nextRunAt。启用计划缺少服务端凭据返回 503。`/sellfox` 展示下次计划；`/settings?tab=operations` 增加受 sellfox:view 保护的独立状态面板，按当前工作区读取计划，每 30 秒刷新并取消旧工作区响应。Worker 心跳是本应用的共享执行进程状态，不暴露主机名或进程元数据。
+- 回滚：关闭计划，回退本轮应用提交；不涉及数据库变更或历史清理。默认仍需 Redis + 专用 `worker:sellfox-sync`，页面不启动调度器。
+
+验证：新增每日时区/边界/错过时刻、间隔、防锁键碰撞、权限撤销、缺凭据计划、手动防重测试；5 项隔离浏览器烟测通过。check:fast 的测试阶段通过，lint 仍被既有 `tmp/create-kayak-sku.ts:75` 的 no-explicit-any 阻断；另独立执行 TypeScript 与本轮文件 ESLint。无 schema 变化，不重复 generate/migrate；不做生产构建和服务器操作。
+
+尚未闭环：running 任务的数据库原子 claim/lease、多副本接管与 Redis 丢失恢复、缺日回补、Listing 契约核验及完整批次覆盖模型。当前创建防重不能替代执行租约；定时生产启用前需继续专项验证。

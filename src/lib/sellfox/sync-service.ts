@@ -1,3 +1,4 @@
+import { canExecuteSellfoxSync } from "@/lib/sellfox/sync-authorization";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
@@ -143,6 +144,7 @@ export async function processSellfoxSyncRun(runId: string) {
   if (!run || run.status === "done") return;
   await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "running", error: null, finishedAt: null } });
   try {
+    if (!(await canExecuteSellfoxSync(run))) throw new SellfoxSyncInputError("同步已停止：发起用户或工作区已失去有效权限。");
     if (!isSellfoxSyncResource(run.resource)) throw new SellfoxSyncInputError("请选择有效的赛狐同步资源。");
     if (sellfoxSyncDisabledReason(run.resource)) throw new SellfoxSyncUnavailableError(run.resource);
     let summary = asRecord(run.summary) ?? {};

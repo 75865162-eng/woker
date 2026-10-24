@@ -3,9 +3,8 @@ import { randomUUID } from "node:crypto";
 import { UnrecoverableError, Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
-import { roleCanPerformAction } from "@/lib/accounts/permissions";
-import { assertWorkspaceAccess } from "@/lib/workspace/access";
+import { canExecuteSellfoxSync } from "@/lib/sellfox/sync-authorization";
+import { isSellfoxScheduleDue as due, sellfoxSyncScopeLock } from "@/lib/sellfox/schedule-time";
 import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/redis-queue";
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
@@ -27,17 +26,6 @@ const worker = new Worker<{ runId: string }>(sellfoxSyncQueueName, async (job) =
   }
 }, { connection: createRedisConnectionOptions(), concurrency: 1 });
 
-function shanghaiDate(now: Date) { return now.toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" }); }
-function isDailyResource(resource: string) { return resource === "sales" || resource === "performance"; }
-function due(schedule: { resource: string; intervalMinutes: number; lastEnqueuedAt: Date | null }, now: Date) {
-  if (isDailyResource(schedule.resource)) {
-    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
-    const clock = Number(parts.find((part) => part.type === "hour")?.value ?? 0) * 60 + Number(parts.find((part) => part.type === "minute")?.value ?? 0);
-    return clock >= 390 && (!schedule.lastEnqueuedAt || shanghaiDate(schedule.lastEnqueuedAt) !== shanghaiDate(now));
-  }
-  return !schedule.lastEnqueuedAt || now.getTime() - schedule.lastEnqueuedAt.getTime() >= schedule.intervalMinutes * 60_000;
-}
-
 let recovering = false;
 async function recoverAndSchedule() {
   if (recovering) return;
@@ -56,20 +44,16 @@ async function recoverAndSchedule() {
       }
       const now = new Date();
       if (!due(candidate, now)) continue;
-      const [member, permissions, workspaceExists] = await Promise.all([
-        prisma.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: candidate.organizationId, userId: candidate.userId } }, select: { role: true } }),
-        getOrganizationRolePermissions(candidate.organizationId),
-        assertWorkspaceAccess(candidate.organizationId, candidate.workspaceId),
-      ]);
-      if (!member || !workspaceExists || !roleCanPerformAction(member.role, "sellfox", "create", permissions)) {
-        await prisma.sellfoxSyncSchedule.update({ where: { id: candidate.id }, data: { enabled: false } });
-        await prisma.sellfoxSyncRun.create({ data: { id: `sellfox-sync-${randomUUID()}`, organizationId: candidate.organizationId, workspaceId: candidate.workspaceId, userId: candidate.userId, resource: candidate.resource, status: "failed", error: "定时同步已暂停：启用计划的用户或工作区已失去有效权限。", summary: { trigger: "schedule", scheduleId: candidate.id }, finishedAt: now } });
-        continue;
-      }
       await prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${candidate.id}, 0))`;
+        const lockKey = sellfoxSyncScopeLock(candidate.organizationId, candidate.workspaceId, candidate.resource);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
         const schedule = await tx.sellfoxSyncSchedule.findUnique({ where: { id: candidate.id } });
         if (!schedule?.enabled || !due(schedule, now)) return;
+        if (!(await canExecuteSellfoxSync(schedule))) {
+          await tx.sellfoxSyncSchedule.update({ where: { id: schedule.id }, data: { enabled: false } });
+          await tx.sellfoxSyncRun.create({ data: { id: `sellfox-sync-${randomUUID()}`, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "failed", error: "定时同步已暂停：启用计划的用户或工作区已失去有效权限。", summary: { trigger: "schedule", scheduleId: schedule.id }, finishedAt: now } });
+          return;
+        }
         const active = await tx.sellfoxSyncRun.findFirst({ where: { organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, resource: schedule.resource, status: { in: ["queued", "running"] } } });
         if (active) return;
         const runId = `sellfox-sync-${randomUUID()}`;

@@ -1,3 +1,4 @@
+import { sellfoxScheduleIntervals, nextSellfoxScheduleAt, sellfoxSyncScopeLock } from "@/lib/sellfox/schedule-time";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -6,7 +7,7 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
 
 export const runtime = "nodejs";
-const intervals = { stores: 480, inventory: 180, sales: 1440, performance: 1440 } as const;
+const intervals = sellfoxScheduleIntervals;
 type ScheduledResource = keyof typeof intervals;
 
 export async function GET(request: Request) {
@@ -14,9 +15,12 @@ export async function GET(request: Request) {
   if (!permission.ok) return permission.response;
   const scope = workspaceScopeFromRequest(request);
   const schedules = await prisma.sellfoxSyncSchedule.findMany({ where: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId } });
-  return NextResponse.json({ schedules: Object.entries(intervals).map(([resource, intervalMinutes]) => {
+  const now = new Date();
+  const heartbeat = await prisma.workerHeartbeat.findFirst({ where: { queueName: "sellfox-sync-jobs" }, orderBy: { lastSeenAt: "desc" }, select: { lastSeenAt: true, status: true } });
+  const worker = { online: Boolean(heartbeat?.status === "online" && now.getTime() - heartbeat.lastSeenAt.getTime() <= 90_000), lastSeenAt: heartbeat?.lastSeenAt ?? null };
+  return NextResponse.json({ configured: Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET), queueEnabled: process.env.QUEUE_DRIVER === "redis", worker, schedules: Object.entries(intervals).map(([resource, intervalMinutes]) => {
     const schedule = schedules.find((item) => item.resource === resource);
-    return { resource, enabled: schedule?.enabled ?? false, intervalMinutes, disabledReason: sellfoxSyncDisabledReason(resource) };
+    return { resource, enabled: schedule?.enabled ?? false, intervalMinutes, lastEnqueuedAt: schedule?.lastEnqueuedAt ?? null, nextRunAt: schedule?.enabled ? nextSellfoxScheduleAt(schedule, now).toISOString() : null, disabledReason: sellfoxSyncDisabledReason(resource) };
   }) });
 }
 
@@ -28,15 +32,21 @@ export async function POST(request: Request) {
   if (typeof body?.resource !== "string" || !Object.prototype.hasOwnProperty.call(intervals, body.resource) || typeof body.enabled !== "boolean") {
     return NextResponse.json({ error: "无效的定时同步设置。" }, { status: 400 });
   }
+  if (body.enabled && (!process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET)) return NextResponse.json({ error: "服务端未配置赛狐凭据。请联系管理员检查服务端环境变量。" }, { status: 503 });
   const scope = workspaceScopeFromRequest(request);
   const resource = body.resource as ScheduledResource;
   const disabledReason = sellfoxSyncDisabledReason(resource);
   if (body.enabled && disabledReason) return NextResponse.json({ error: disabledReason }, { status: 409 });
+  const enabled = body.enabled;
   const id = `sellfox-schedule-${permission.user.organizationId}-${scope.workspaceId}-${resource}`;
-  const schedule = await prisma.sellfoxSyncSchedule.upsert({
-    where: { organizationId_workspaceId_resource: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, resource } },
-    create: { id: `${id}-${randomUUID()}`, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, userId: permission.user.id, resource, intervalMinutes: intervals[resource], enabled: body.enabled, updatedAt: new Date() },
-    update: { userId: permission.user.id, intervalMinutes: intervals[resource], enabled: body.enabled },
+  const schedule = await prisma.$transaction(async (tx) => {
+    const lockKey = sellfoxSyncScopeLock(permission.user.organizationId, scope.workspaceId, resource);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    return tx.sellfoxSyncSchedule.upsert({
+      where: { organizationId_workspaceId_resource: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, resource } },
+      create: { id: `${id}-${randomUUID()}`, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, userId: permission.user.id, resource, intervalMinutes: intervals[resource], enabled, updatedAt: new Date() },
+      update: { userId: permission.user.id, intervalMinutes: intervals[resource], enabled },
+    });
   });
-  return NextResponse.json({ resource: schedule.resource, enabled: schedule.enabled, intervalMinutes: schedule.intervalMinutes });
+  return NextResponse.json({ resource: schedule.resource, enabled: schedule.enabled, intervalMinutes: schedule.intervalMinutes, lastEnqueuedAt: schedule.lastEnqueuedAt, nextRunAt: schedule.enabled ? nextSellfoxScheduleAt(schedule).toISOString() : null });
 }

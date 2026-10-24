@@ -1,3 +1,4 @@
+import { SellfoxHealthPanel } from "@/components/settings/sellfox-health-panel";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { SettingsWorkbench } from "@/components/app-shell/lazy-workbenches";
@@ -22,6 +23,7 @@ export default function SettingsPage() {
               <SystemDataStatusPanel />
             </Suspense>
             <WorkerHealthPanel />
+            <SellfoxHealthPanel />
           </div>
         }
       />

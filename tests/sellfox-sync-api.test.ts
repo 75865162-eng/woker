@@ -21,6 +21,8 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
   let lastError: string | undefined;
   let status: string | undefined;
   globals.prisma = {
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
     sellfoxSyncRun: {
       create: async () => { runWrites += 1; return {}; },
       findUnique: async () => ({ id: "old-run", resource: "listings", organizationId: "org-a", workspaceId: "default", userId: "actor", status: "queued", summary: {} }),
@@ -38,6 +40,9 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
     assert.equal((await schedule(await request("designer", { resource: "stores", enabled: true }))).status, 403);
     delete process.env.SELLFOX_CLIENT_ID;
     delete process.env.SELLFOX_CLIENT_SECRET;
+    const missingPlan = await schedule(await request("owner", { resource: "inventory", enabled: true }));
+    assert.equal(missingPlan.status, 503);
+    assert.match((await missingPlan.json()).error, /服务端未配置赛狐凭据/);
     const missing = await sync(await request("owner", { resource: "stores" }));
     assert.equal(missing.status, 503);
     assert.match((await missing.json()).error, /服务端未配置赛狐凭据/);
@@ -75,4 +80,33 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
 test("snapshot browsing remains an independent authenticated route", async () => {
   const response = await snapshots(new Request("http://localhost/api/sellfox/inventory"), { params: Promise.resolve({ domain: "inventory" }) });
   assert.equal(response.status, 401);
+});
+
+test("manual sync rejects an active resource without losing the requested scope or sending transport", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient };
+  const previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET, QUEUE_DRIVER: process.env.QUEUE_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local"; process.env.QUEUE_DRIVER = "redis";
+  process.env.SELLFOX_CLIENT_ID = "fixture-id"; process.env.SELLFOX_CLIENT_SECRET = "fixture-secret";
+  let lockAcquired = false;
+  globals.prisma = {
+    $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
+      $executeRaw: async () => { lockAcquired = true; },
+      sellfoxSyncRun: { findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        assert.equal(lockAcquired, true); assert.equal(where.organizationId, "org-a");
+        assert.equal(where.workspaceId, "default"); assert.equal(where.resource, "sales");
+        return { id: "existing-run" };
+      }, create: async () => { throw new Error("Must not create duplicate run"); } },
+    }),
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org-a", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const response = await sync(new Request("http://localhost/api/sellfox/sync", { method: "POST", headers: { "Content-Type": "application/json", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` }, body: JSON.stringify({ resource: "sales", reportDate: "2026-10-24" }) }));
+    assert.equal(response.status, 409);
+    const payload = await response.json();
+    assert.equal(payload.runId, "existing-run"); assert.match(payload.error, /等待完成/);
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
 });

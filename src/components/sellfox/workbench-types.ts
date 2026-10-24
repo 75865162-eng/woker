@@ -3,7 +3,7 @@ export type Pagination = { page: number; pageSize: number; total: number };
 export type StoreRow = { id: string; externalId: string; name: string; marketplace: string; country: string; status: string; lastSyncedAt: string };
 export type Run = { id: string; resource: string; status: string; summary?: Row | null; error?: string | null; startedAt: string; finishedAt?: string | null };
 export type Overview = { configured: boolean; stores: StoreRow[]; counts: Record<string, number>; coverage?: { inventoryStores: number; inventoryMissingStores: number; salesStores: number; salesMissingStores: number }; latestRuns: Run[]; latestSuccessByResource?: Record<string, Run>; workerOnline?: boolean };
-export type Schedule = { resource: string; enabled: boolean; intervalMinutes: number };
+export type Schedule = { resource: string; enabled: boolean; intervalMinutes: number; lastEnqueuedAt?: string | null; nextRunAt?: string | null };
 export const resourceLabels: Record<string, string> = { stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "产品表现", hourly: "SP 小时样本", listings: "在线 Listing", ads_report: "广告下载报告" };
 export const captions: Record<string, string> = {
   reportDate: "业务日期", capturedAt: "抓取时间", externalId: "Shop ID", name: "店铺", marketplace: "站点", country: "国家", status: "状态",

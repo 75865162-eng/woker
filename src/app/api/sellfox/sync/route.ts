@@ -1,3 +1,4 @@
+import { sellfoxSyncScopeLock } from "@/lib/sellfox/schedule-time";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -43,12 +44,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: disabledReason, runId }, { status: 409 });
   }
 
-  const runId = `sellfox-sync-${randomUUID()}`;
-  await prisma.sellfoxSyncRun.create({ data: {
-    id: runId, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId,
-    userId: permission.user.id, resource, status: "queued",
-    summary: { shopExternalIds: shopExternalIds ?? [], ...dates, datesFrozen: true, requestVersion: 2 },
-  } });
+  const created = await prisma.$transaction(async (tx) => {
+    const lockKey = sellfoxSyncScopeLock(permission.user.organizationId, scope.workspaceId, resource);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    const active = await tx.sellfoxSyncRun.findFirst({ where: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, resource, status: { in: ["queued", "running"] } }, select: { id: true } });
+    if (active) return { runId: active.id, existing: true };
+    const runId = `sellfox-sync-${randomUUID()}`;
+    await tx.sellfoxSyncRun.create({ data: {
+      id: runId, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId,
+      userId: permission.user.id, resource, status: "queued",
+      summary: { trigger: "manual", shopExternalIds: shopExternalIds ?? [], ...dates, datesFrozen: true, requestVersion: 2 },
+    } });
+    return { runId, existing: false };
+  });
+  const { runId } = created;
+  if (created.existing) return NextResponse.json({ error: "此数据域已有排队或进行中的同步，请等待完成后再提交新的店铺或日期范围。", runId }, { status: 409 });
   try {
     await enqueueSellfoxSyncRun(runId);
   } catch {
