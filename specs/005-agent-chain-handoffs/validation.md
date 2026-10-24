@@ -19,7 +19,7 @@
 ## 适用限制
 
 - 本轮收尾未访问真实 SellerSprite、Amazon/1688、AI、生产数据库或服务器；浏览器使用隔离接口。其他并行任务的真实赛狐验收见 `docs/sellfox-agent-read.md`，不可混同为本轮浏览器的证据。
-- Round B 本机 CLI 已有，但 Agent runner/job/多租户隔离与 Opportunity 证据映射仍缺；`market.selection.run` 明确 NOT_IMPLEMENTED。Market 真实机会验收仍未完成。
+- 此处为 P0 初始验收快照：当时 Round B 仅有挂点。后续已实现受控产物上传与 Opportunity 证据映射，见下方补充；后台实时采集 runner/job 仍未接入。
 - 部分既有业务 Agent 仍有模拟适配器；通过接线回归不代表真实研究、文案生成、采购、上架或广告执行验收。
 - Orchestrator 无业务写权限；不增加顺序执行 P0+、自动建 SKU、真实上架或广告 transport。SKU 正式资料继续使用现有 Product 聚合与 /dashboard。
 - Launch 入站审批仅解锁 PPC 建议，广告执行需要独立审批；独立 PPC 诊断入口保留。
@@ -40,3 +40,15 @@ git diff --check
 ```
 
 迁移检查只使用随机命名、loopback 端口、tmpfs 存储的独立 PostgreSQL 容器；以原提交 schema/迁移和当前 schema/迁移分别对比，不连接既有数据库。全改动区盘点见 workspace-inventory.txt。
+
+## Round B 证据桥接补充验收
+
+- `npm run check` 再次通过：238 项核心测试、ESLint、Next.js 生产构建。仅保留商品工作台原有 hook dependency warning；`npm run typecheck` 通过。
+- Agent 浏览器 5/5 通过：原六段链与审批不回退，新增上传→生成真实结构报告→带 null 指标交接 Product，以及切工作区丢弃迟到上传。迟到上传用例后来修正为实际 workspace 事件，并针对新事件复核；不要求新工作区保留旧请求的瞬时错误文本。
+- 证据上传/API/Runtime 4/4 定向用例通过，额外覆盖 viewer/未登录拒绝、有无 Content-Length 的超限拒绝、规范化丢弃产品字段、失败清理和读取前跨组织/工作区拒绝。
+- 本机已有 `selections/kayak-cockpit-cover/derived/draft.json` 只读映射成功：1 个竞品→1 个证据机会，字段完整度 75，商业机会分 null；不上传、不写现有数据库、不访问外网。该草稿真实差评/供应商缺口仍沿用 Round B 说明。
+- 本轮使用受控上传文件作为输入，真实性仍需人审；fixture=false 是来源声明，不是可信认证。未观测的需求/竞争/趋势/利润/风险保留 null；字段覆盖率绝不作为商业机会分。
+- 无 Prisma、依赖、队列、worker、部署配置改动；未运行生产数据库或服务器操作。自动实时采集、Supplier 真实消费和业务写入未在此轮实现。
+- 并行任务在共享工作区提交 `b48850e`，包含本轮证据桥接代码及其赛狐/选品修改；收尾在此基础上同步全部未提交变更。
+
+命令补充：`npx tsx --test tests/selection-evidence-api.test.ts tests/selection-evidence.test.ts`；浏览器继续使用原 agent-chain 配置。后续发布与真实接口验收需独立执行，本轮未部署。

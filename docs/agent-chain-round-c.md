@@ -35,16 +35,20 @@ Orchestrator 可先准备缺少报告的 brief；业务 Agent 的出站必须携
 6. `launchApproved` 请求字段（包括 context.currentData 中的同名字段）不再授予权限。既有独立 PPC 诊断入口保留；它不代表通过全链 Launch。广告/Bulk 写操作继续走原有独立审批与执行策略。
 7. 全链批准后允许无历史广告行的新品进入建议流程；无数据不代表已有真实投放结果，仍需收集与人工复核。
 
-## Round B 当前接线缺口
+## Round B 已有产物接线
 
-`market.selection.run` 已注册到默认 Market definition/Tool Gateway；持久化的旧 Market definition 在运行时补充该只读工具，仍须满足 market.read.category 权限。Market UI 有明确入口；缺桥接时 FAILED/NOT_IMPLEMENTED，零次采集、零次商品创建、零付费请求，不回落成模拟机会。
+`market.selection.run` 复用默认 Market definition/Tool Gateway，只读消费实际 Round B `derived/draft.json`。持久化旧 definition 在运行时补充该工具，仍检查 `market.read.category`。Market 页面上传后点击“从 Round B 证据生成机会”，沿原 Runtime 保存执行/工具/Trace，并可人工发送到 Product。
 
-实施期间工作区新增 `scripts/selection-pipeline/`，本机 CLI 已存在；其 `selections/{slug}` 文件、共享 SQLite 和进程参数尚不是多租户 Agent job 接口。本期不直接在 Next 请求里启动 Playwright，不调用 CLI `--write`。后续接真需：
+- `POST /api/agents/market/selection-evidence` 需要 `agents:create`，继承现有组织与工作区鉴权。请求为原始 `application/octet-stream` JSON 文件，流式限制 2 MB，超限 413。
+- 仅接收 schemaVersion=1、fixture=false 的非空竞品草稿；检查 Amazon US ASIN/链接、采集时间、有限数值、标签引用和 1688 商品 URL。导入是操作者提供的采集线索，不是独立真实性认证。测试中的 fixture=false 样本仅供隔离契约回归，不代表真实采数。
+- 仅保留 brief/竞品观测/评论引用/供应商线索；丢弃正式 product payload、fileId、本地路径及任意附加字段。通过 storage adapter + 既有 FileObject 保存规范化研究 JSON，数据库失败清理新对象。
+- 工具只接受 fileId，加载时精确过滤 organization/workspace、done/JSON 及专用存储前缀；身份由鉴权 route 闭包传入，不能从客户端 context 覆盖。Trace/report 保存 fileId、规范化证据 SHA256、原采集时间；超过 7 天提示重新核实。刷新可读取原执行报告，工作区切换丢弃迟到上传/执行。
+- 不把 BSR 转成真实销量，也不由小样本推断市场需求、趋势、利润或风险；缺失信号及商业机会分为 null。保留真实零值。`evidenceCompleteness` 单独表示竞品 price/rating/reviewsCount/bsr 字段覆盖率，不作为 `opportunityScore` 传给下一段；置信度保守为 0，UI 标待评估。旧数字型报告继续兼容。
+- 机会与报告通过原 Opportunity v1 handoff 传给 Product，供应商线索保留在 `report.selectionSource.suppliers`。Supplier 当前业务适配器的真实消费仍待后续接线，不能声称供应询价已自动完成。
 
-- 受控 runner/jobId、组织/工作区/用户隔离、配额/防重/取消与超时；
-- 将 CLI draft/tags/quality/snapshot 映射成版本化 Opportunity/evidence，区分真实、fixture、估算和缺失值；
-- 附件走 storage adapter/FileAsset，Trace 只引用受控证据，不信任任意本机路径或跨组织 slug；
-- Market 报告与 Supplier shortlist 消费同一批真实证据；SKU 仍走 `POST /api/products` 与 `/dashboard`；CLI 的受控维护写入不扩展为编排器权限。
+**操作**：本机 Round B 生成实际草稿 → 在 `/agents/market` 选择 `selections/<slug>/derived/draft.json` → 生成机会 → 人工核对证据 → 发送到 Product。研究原始文件仍不提交 GitHub；上传只保存规范化证据。
+
+**后台实时采集仍未接入**：未在 Next 请求启动 Playwright/CLI，未增加任务/worker/定时计划，未上传竞品图片或创建 SKU；未提供 evidence fileId 的旧入口仍明确 NOT_IMPLEMENTED。后续实时采集须另接受控 job、配额、防重、取消和超时，再决定专用 worker 资源上限。SKU 正式资料仍走 Product 聚合与 `/dashboard`，Orchestrator 无业务写工具。
 
 现有 Market/Product/Supplier/Listing adapter 仍包含模拟生成能力。隔离回归用这些模拟数据验证接线，不作为 Round B 真实证据或真实 AI/业务执行验收。本期未实现 P0+ 顺序 POST、真实上架、真实 Ads transport，也未新增自动建 SKU。
 
@@ -53,11 +57,12 @@ Orchestrator 可先准备缺少报告的 brief；业务 Agent 的出站必须携
 ```bash
 npx tsx --test tests/agent-chain-handoff.test.ts tests/agent-launch-api.test.ts tests/agent-platform.test.ts tests/orchestrator-agent.test.ts tests/market-agent.test.ts tests/product-agent.test.ts tests/supplier-agent.test.ts tests/listing-agent.test.ts tests/ppc-agent.test.ts
 npx playwright test --config tests/browser/agent-chain.config.ts
+npx tsx --test tests/selection-evidence.test.ts tests/selection-evidence-api.test.ts
 npm run typecheck
 npm run check:fast
 ```
 
-浏览器回归使用真实六个工作台与 Runtime，框架导航和后端由隔离 harness 替代，不需要账号，不访问外部网络或生产库。实际 API 测试另外覆盖 Launch 审批入口与 PPC 拒绝路径。详见 feature validation.md。
+浏览器回归使用真实六个工作台与 Runtime，框架导航和后端由隔离 harness 替代，不需要账号，不访问外部网络或生产库。实际 API 测试另外覆盖证据上传/隔离加载、Launch 审批入口与 PPC 拒绝路径。详见 feature validation.md。
 
 ## 回滚与发布
 

@@ -22,7 +22,7 @@ test("scoped upload and read sanitize research fields, reject unauthorized/overs
   globals.prisma = {
     workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
     fileObject: {
-      create: async ({ data }: { data: Record<string, unknown> }) => { if (failDb) throw new Error("private failure"); file = { ...data, id: "file" }; return file; },
+      create: async ({ data }: { data: Record<string, unknown> }) => { assert.equal(data.organizationId, "org"); assert.equal(data.workspaceId, "workspace"); if (failDb) throw new Error("private failure"); file = { ...data, id: "file" }; return file; },
       findFirst: async ({ where }: { where: { id: string; organizationId: string; workspaceId: string } }) => file?.id === where.id && file?.organizationId === where.organizationId && file?.workspaceId === where.workspaceId ? file : null,
     },
   } as unknown as PrismaClient;
@@ -32,9 +32,16 @@ test("scoped upload and read sanitize research fields, reject unauthorized/overs
     const request = (body: unknown) => new Request("http://localhost/api/agents/market/selection-evidence", { method: "POST", headers, body: JSON.stringify(body) });
     const unauthorized = new Request("http://localhost/api/agents/market/selection-evidence", { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: "{}" });
     assert.equal((await upload(unauthorized)).status, 401);
+    const viewer = await createLocalSession({ id: "viewer", organizationId: "org", organizationName: "Test", role: "viewer", email: "viewer@example.test", name: "Viewer" });
+    const viewerRequest = request(sample);
+    viewerRequest.headers.set("cookie", `${viewer.sessionCookie.name}=${viewer.sessionCookie.value}`);
+    assert.equal((await upload(viewerRequest)).status, 403);
     assert.equal((await upload(request({ ...sample, fixture: true }))).status, 400);
     const over = request(sample); over.headers.set("content-length", String(2 * 1024 * 1024 + 1));
     assert.equal((await upload(over)).status, 413);
+    assert.equal((await upload(new Request("http://localhost/api/agents/market/selection-evidence", {
+      method: "POST", headers, body: " ".repeat(2 * 1024 * 1024 + 1),
+    }))).status, 413);
     assert.equal(objects.size, 0);
     const accepted = await upload(request({ ...sample, product: { secret: "discard", imageFileId: "foreign" }, localPath: "/private" }));
     assert.equal(accepted.status, 201);

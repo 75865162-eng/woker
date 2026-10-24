@@ -413,5 +413,5 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 - 交接合同和 Launch/PPC 服务端闸门见 `docs/agent-chain-round-c.md`、`specs/005-agent-chain-handoffs/`；sessionStorage 只作导航交接，带组织/用户/工作区/来源 execution，不是业务事实源。
 - `launchApproved` 请求布尔值不授予权限。Launch 批准引用真实 Approval/原计划，PPC 入站在工具执行前核验；Orchestrator 仍只有编排工具，无 Ads/上架/商品写权限。
-- `market.selection.run` 已注册，但本机 Round B CLI 尚缺受控多租户 runner/job 与机会证据映射；当前返回 NOT_IMPLEMENTED，禁止回落成模拟机会或请求内调用 `--write`。
+- `market.selection.run` 可读取当前组织/工作区上传的 Round B draft 证据（Market 页，agents:create，2 MB）；通过既有 FileObject/storage 保存规范化研究切片，商业评分与未观测指标保留 null，证据完整度单列，不创建商品。后台实时采集 runner/job 仍未接入，缺 fileId 时 NOT_IMPLEMENTED；禁止回落模拟机会、请求内启动采集或调用 `--write`。
 - `npx playwright test --config tests/browser/agent-chain.config.ts`：隔离六段 UI/Runtime 交接与 Launch 前后 PPC 门禁，不访问外部服务/生产库，不替代真实选品/上架/广告验收。

@@ -203,10 +203,10 @@ test("workspace switch cannot revive a late Round B upload", async ({ page }) =>
   await started;
   await page.evaluate(() => {
     localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "workspace-b", marketplace: "US" }));
-    window.dispatchEvent(new Event("amazon-workspace-scope-changed"));
+    window.dispatchEvent(new Event("amazon-bulk-ad:workspace-scope-changed"));
   });
   state.delay.releaseUpload();
-  await expect(page.getByText("工作区已变化，已丢弃上一工作区的响应。", { exact: true })).toBeVisible();
+  // The new workspace reload may clear the transient error; it must never restore old evidence.
   await expect(page.getByRole("button", { name: "从 Round B 证据生成机会", exact: true })).toBeDisabled();
   await expect(page.getByText("草稿已上传，可以生成机会。", { exact: true })).toHaveCount(0);
 });

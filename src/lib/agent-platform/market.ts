@@ -194,6 +194,8 @@ export const marketAgentDefinition: AgentDefinition = {
     type: "object",
     properties: {
       naturalLanguageGoal: { type: "string" },
+      selectionRun: { type: "boolean" },
+      selectionFileId: { type: "string" },
       marketplace: { type: "string" },
       keyword: { type: "string" },
       category: { type: "string" },

@@ -23,7 +23,7 @@ test("imported evidence retains real zero, missing metrics, source time and quot
   assert.equal(output.report.selectionSource?.fileId, "file");
   assert.equal(buildSelectionMarketOutput(sample, { fileId: "file", sha256: "hash" }, new Date("2026-11-02")).report.selectionSource?.stale, true);
 });
-test("evidence rejects fixture/future schemas, duplicate identities, foreign URLs, fabricated quotes and invalid measurements", () => {
+test("evidence rejects fixture/future schemas, duplicate identities, foreign URLs, orphaned quotes and invalid measurements", () => {
   for (const patch of [{ fixture: true }, { fixture: undefined }, { schemaVersion: 2 }, { competitors: [] }, { competitors: [...sample.competitors, ...sample.competitors] }]) {
     assert.throws(() => parseSelectionEvidence({ ...sample, ...patch }, now));
   }
