@@ -251,7 +251,11 @@ tar -xzf "$ARTIFACT_PATH" -C "$extract_dir"
 
 previous_version="$(read_previous_version)"
 app_version_label="$(next_version_label "${previous_version:-}")"
-previous_release_dir="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+if [ -e "$CURRENT_LINK" ] || [ -L "$CURRENT_LINK" ]; then
+  previous_release_dir="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+else
+  previous_release_dir=""
+fi
 health_url="${HEALTH_URL:-http://127.0.0.1:3000/}"
 
 if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ] || [ ! -f "$extract_dir/RELEASE-METADATA.json" ]; then
