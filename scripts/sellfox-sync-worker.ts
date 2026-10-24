@@ -9,20 +9,21 @@ import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/redis-queue";
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
+import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { SellfoxRequestError } from "@/lib/sellfox/client";
-import { sellfoxSyncDisabledReason, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
+import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
 const worker = new Worker<{ runId: string }>(sellfoxSyncQueueName, async (job) => {
   try { await processSellfoxSyncRun(job.data.runId); }
   catch (error) {
-    if (error instanceof SellfoxSyncUnavailableError || (error instanceof SellfoxRequestError && !error.retryable)) {
+    if (error instanceof SellfoxSyncUnavailableError || error instanceof SellfoxSyncInputError || (error instanceof SellfoxStoreSyncError && !error.retryable) || (error instanceof SellfoxRequestError && !error.retryable)) {
       throw new UnrecoverableError(error.message);
     }
-    if (job.attemptsMade >= (job.opts.attempts ?? 4) - 1) throw error;
+    if (job.attemptsMade >= (job.opts.attempts ?? 4) - 1) throw new Error(sellfoxStoreFailure(error).error);
     await prisma.sellfoxSyncRun.updateMany({ where: { id: job.data.runId, status: "failed" }, data: { status: "queued", error: "同步暂时失败，系统将按退避策略重试。", finishedAt: null } });
-    throw error;
+    throw new Error(sellfoxStoreFailure(error).error);
   }
 }, { connection: createRedisConnectionOptions(), concurrency: 1 });
 
@@ -72,7 +73,7 @@ async function recoverAndSchedule() {
         const active = await tx.sellfoxSyncRun.findFirst({ where: { organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, resource: schedule.resource, status: { in: ["queued", "running"] } } });
         if (active) return;
         const runId = `sellfox-sync-${randomUUID()}`;
-        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule" } } });
+        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", ...normalizeSellfoxDates(schedule.resource as "stores" | "inventory" | "sales" | "performance", {}, now), datesFrozen: true, requestVersion: 2 } } });
         await tx.sellfoxSyncSchedule.update({ where: { id: schedule.id }, data: { lastEnqueuedAt: now } });
       });
     }
@@ -90,12 +91,12 @@ async function heartbeat(status: "online" | "stopping" = "online") {
   });
 }
 
-void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule recovery failed", error instanceof Error ? error.message : "unknown"));
-const recoveryTimer = setInterval(() => void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule tick failed", error instanceof Error ? error.message : "unknown")), 30_000);
-const heartbeatTimer = setInterval(() => void heartbeat().catch((error) => console.error("[sellfox-sync-worker] heartbeat failed", error instanceof Error ? error.message : "unknown")), 30_000);
+void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule recovery failed", sellfoxStoreFailure(error).error));
+const recoveryTimer = setInterval(() => void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule tick failed", sellfoxStoreFailure(error).error)), 30_000);
+const heartbeatTimer = setInterval(() => void heartbeat().catch((error) => console.error("[sellfox-sync-worker] heartbeat failed", sellfoxStoreFailure(error).error)), 30_000);
 void heartbeat().catch(() => undefined);
 worker.on("completed", (job) => console.log(`[sellfox-sync-worker] completed ${job.data.runId}`));
-worker.on("failed", (job, error) => console.error(`[sellfox-sync-worker] failed ${job?.data.runId ?? "unknown"}: ${error.message}`));
+worker.on("failed", (job, error) => console.error(`[sellfox-sync-worker] failed ${job?.data.runId ?? "unknown"}: ${sellfoxStoreFailure(error).error}`));
 
 async function shutdown() {
   clearInterval(recoveryTimer); clearInterval(heartbeatTimer);

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { prisma } from "@/lib/db/prisma";
-import { isSellfoxDate, isSellfoxSyncResource, sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
+import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -28,14 +28,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "shopExternalIds 必须是非空店铺 ID 数组。" }, { status: 400 });
   }
   const shopExternalIds = Array.isArray(body?.shopExternalIds) ? [...new Set(body.shopExternalIds.map((value) => (value as string).trim()))] : undefined;
-  const reportDate = body?.reportDate;
-  const startDate = body?.startDate;
-  const endDate = body?.endDate;
-  if (reportDate !== undefined && !isSellfoxDate(reportDate)) return NextResponse.json({ error: "reportDate 必须使用有效 YYYY-MM-DD 日期。" }, { status: 400 });
-  if ((startDate !== undefined && !isSellfoxDate(startDate)) || (endDate !== undefined && !isSellfoxDate(endDate))) return NextResponse.json({ error: "日期范围必须使用有效 YYYY-MM-DD 日期。" }, { status: 400 });
-  if (startDate && endDate && (Date.parse(`${endDate}T00:00:00Z`) < Date.parse(`${startDate}T00:00:00Z`) || Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`) > 90 * 86_400_000)) {
-    return NextResponse.json({ error: "日期范围最多 90 天，结束日期不得早于开始日期。" }, { status: 400 });
-  }
+  let dates: ReturnType<typeof normalizeSellfoxDates>;
+  try { dates = normalizeSellfoxDates(resource, body ?? {}); }
+  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "同步日期无效。" }, { status: 400 }); }
   if (shopExternalIds?.length) {
     const count = await prisma.sellfoxStore.count({ where: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, externalId: { in: shopExternalIds } } });
     if (count !== shopExternalIds.length) return NextResponse.json({ error: "所选店铺不属于当前工作区。" }, { status: 403 });
@@ -52,7 +47,7 @@ export async function POST(request: Request) {
   await prisma.sellfoxSyncRun.create({ data: {
     id: runId, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId,
     userId: permission.user.id, resource, status: "queued",
-    summary: { shopExternalIds: shopExternalIds ?? [], ...(reportDate ? { reportDate } : {}), ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) },
+    summary: { shopExternalIds: shopExternalIds ?? [], ...dates, datesFrozen: true, requestVersion: 2 },
   } });
   try {
     await enqueueSellfoxSyncRun(runId);

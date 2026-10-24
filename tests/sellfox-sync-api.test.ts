@@ -44,6 +44,12 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
     process.env.SELLFOX_CLIENT_ID = "fixture-id";
     process.env.SELLFOX_CLIENT_SECRET = "fixture-secret";
     assert.equal((await sync(await request("owner", { resource: "invalid" }))).status, 400);
+    for (const body of [
+      { resource: "performance", startDate: "2026-01-01", endDate: "2026-04-01" },
+      { resource: "performance", dateRange: { from: "2026-10-24", to: "2026-10-23" } },
+      { resource: "inventory", reportDate: "2000-01-01" },
+      { resource: "hourly", reportDate: "2000-01-01" },
+    ]) assert.equal((await sync(await request("owner", body))).status, 400);
     for (const resource of ["inventory", "sales", "listings"]) {
       const response = await sync(await request("owner", { resource }));
       assert.equal(response.status, 409);

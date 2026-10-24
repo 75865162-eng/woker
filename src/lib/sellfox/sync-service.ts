@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots } from "@/lib/sellfox/product-performance";
+import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
 import { sellfoxPost } from "@/lib/sellfox/client";
-import { nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxReportDates, SellfoxSyncInputError, nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { sellfoxInventoryRequest, sellfoxSalesRequest } from "@/lib/sellfox/sync-requests";
 
 export const sellfoxResources = sellfoxSyncResources;
@@ -13,18 +14,17 @@ function asRecord(value: unknown): RecordLike | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as RecordLike : null;
 }
 function rowsFrom(value: unknown): RecordLike[] {
-  if (Array.isArray(value)) return value.map(asRecord).filter((row): row is RecordLike => Boolean(row));
+  if (Array.isArray(value)) {
+    if (value.some((row) => !asRecord(row))) throw new SellfoxSyncInputError("赛狐列表含有无效记录。");
+    return value as RecordLike[];
+  }
   const record = asRecord(value);
-  if (!record) return [];
+  if (!record) throw new SellfoxSyncInputError("赛狐列表响应结构无法识别。");
   for (const key of ["rows", "records", "list", "itemList", "data", "result"]) {
     const nested = record[key];
-    if (Array.isArray(nested)) return nested.map(asRecord).filter((row): row is RecordLike => Boolean(row));
-    if (asRecord(nested)) {
-      const rows = rowsFrom(nested);
-      if (rows.length) return rows;
-    }
+    if (Array.isArray(nested) || asRecord(nested)) return rowsFrom(nested);
   }
-  return [];
+  throw new SellfoxSyncInputError("赛狐列表响应缺少有效记录列表。");
 }
 function field(row: RecordLike, ...keys: string[]) {
   for (const key of keys) {
@@ -47,18 +47,13 @@ function pageCount(payload: unknown) {
   if (Number.isFinite(totalSize) && totalSize >= 0) return Math.ceil(totalSize / 100);
   return null;
 }
-function datesBetween(start: string, end: string) {
-  const dates: string[] = [];
-  for (let time = Date.parse(`${start}T00:00:00Z`), endTime = Date.parse(`${end}T00:00:00Z`); time <= endTime && dates.length < 90; time += 86_400_000) dates.push(new Date(time).toISOString().slice(0, 10));
-  return dates;
-}
 
 type SyncInput = { organizationId: string; workspaceId: string; runId: string; userId: string; resource: SyncResource; shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string };
 
-async function saveProgress(input: SyncInput, summary: Record<string, unknown>) {
-  const current = await prisma.sellfoxSyncRun.findUnique({ where: { id: input.runId }, select: { summary: true } });
+async function saveProgress(input: SyncInput, summary: Record<string, unknown>, db: Pick<Prisma.TransactionClient, "sellfoxSyncRun"> = prisma) {
+  const current = await db.sellfoxSyncRun.findUnique({ where: { id: input.runId }, select: { summary: true } });
   const request = (current?.summary ?? {}) as Record<string, unknown>;
-  await prisma.sellfoxSyncRun.update({ where: { id: input.runId }, data: { summary: { ...request, progress: summary } as Prisma.InputJsonValue } });
+  await db.sellfoxSyncRun.update({ where: { id: input.runId }, data: { summary: { ...request, progress: summary } as Prisma.InputJsonValue } });
 }
 
 async function storesFor(input: SyncInput) {
@@ -69,24 +64,30 @@ async function storesFor(input: SyncInput) {
 }
 
 async function syncStores(input: SyncInput) {
-  let count = 0;
-  const resumePage = Math.max(1, Number(input.progress?.pageNo) || 1);
+  let count = Math.max(0, Number(input.progress?.count) || 0);
+  const cursor = asRecord(input.progress?.cursor);
+  if (cursor?.done === true) return count;
+  const resumePage = Number(cursor?.pageNo ?? input.progress?.pageNo ?? 1);
+  if (!Number.isInteger(resumePage) || resumePage < 1 || resumePage > 1_000) throw new SellfoxSyncInputError("店铺同步断点页码无效。");
   for (let pageNo = resumePage; pageNo <= 1_000; pageNo += 1) {
-    const payload = await sellfoxPost<unknown>("/api/shop/pageList.json", { pageNo, pageSize: 100 });
+    const payload = await sellfoxPost<unknown>("/api/shop/pageList.json", { pageNo: String(pageNo), pageSize: "100" });
     const rows = rowsFrom(payload);
-    for (const row of rows) {
-      const externalId = field(row, "shopId", "id", "storeId");
-      if (!externalId) continue;
-      const now = new Date();
-      await prisma.sellfoxStore.upsert({
-        where: { organizationId_workspaceId_externalId: { organizationId: input.organizationId, workspaceId: input.workspaceId, externalId } },
-        create: { id: `sellfox-store-${input.organizationId}-${input.workspaceId}-${externalId}`, organizationId: input.organizationId, workspaceId: input.workspaceId, externalId, name: field(row, "shopName", "name", "storeName"), marketplace: field(row, "marketplace", "marketplaceName", "marketplaceId"), country: field(row, "country", "countryName"), status: field(row, "status", "shopStatus"), payload: row as Prisma.InputJsonValue, updatedAt: now },
-        update: { name: field(row, "shopName", "name", "storeName"), marketplace: field(row, "marketplace", "marketplaceName", "marketplaceId"), country: field(row, "country", "countryName"), status: field(row, "status", "shopStatus"), payload: row as Prisma.InputJsonValue, lastSyncedAt: now, updatedAt: now },
-      });
-      count += 1;
-    }
-    await saveProgress(input, { count, pageNo, cursor: { pageNo: pageNo + 1 } });
-    if (nextSellfoxPage(rows.length, pageNo, pageCount(payload)) === null) break;
+    const identities = rows.map((row) => field(row, "shopId", "id", "storeId"));
+    if (identities.some((id) => !id) || new Set(identities).size !== identities.length) throw new SellfoxSyncInputError("店铺响应缺少唯一店铺身份。");
+    const nextPage = nextSellfoxPage(rows.length, pageNo, pageCount(payload), 100, 1_000);
+    await prisma.$transaction(async (tx) => {
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index]; const externalId = identities[index]; const now = new Date();
+        const data = { name: field(row, "shopName", "name", "storeName"), marketplace: field(row, "marketplace", "marketplaceName", "marketplaceId"), country: field(row, "country", "countryName"), status: field(row, "status", "shopStatus"), payload: row as Prisma.InputJsonValue, lastSyncedAt: now, updatedAt: now };
+        await tx.sellfoxStore.upsert({
+          where: { organizationId_workspaceId_externalId: { organizationId: input.organizationId, workspaceId: input.workspaceId, externalId } },
+          create: { id: `sellfox-store-${input.organizationId}-${input.workspaceId}-${externalId}`, organizationId: input.organizationId, workspaceId: input.workspaceId, externalId, ...data }, update: data,
+        });
+      }
+      await saveProgress(input, { count: count + rows.length, pageNo, cursor: { pageNo: nextPage ?? pageNo, done: nextPage === null } }, tx);
+    });
+    count += rows.length;
+    if (nextPage === null) break;
   }
   return count;
 }
@@ -190,43 +191,70 @@ async function syncHourly(input: SyncInput) {
 export async function processSellfoxSyncRun(runId: string) {
   const run = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId } });
   if (!run || run.status === "done") return;
-  await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "running", error: null } });
-  let summary = (run.summary ?? {}) as Record<string, unknown>;
-  if (run.resource === "inventory" && typeof summary.capturedAt !== "string") {
-    summary = { ...summary, capturedAt: new Date().toISOString() };
-    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { summary: summary as Prisma.InputJsonValue } });
-  }
-  const request = summary as { shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string };
-  const input: SyncInput = { organizationId: run.organizationId, workspaceId: run.workspaceId, userId: run.userId, runId, resource: run.resource as SyncResource, ...request };
+  await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "running", error: null, finishedAt: null } });
   try {
-    if (sellfoxSyncDisabledReason(input.resource)) throw new SellfoxSyncUnavailableError(input.resource);
+    if (!isSellfoxSyncResource(run.resource)) throw new SellfoxSyncInputError("请选择有效的赛狐同步资源。");
+    if (sellfoxSyncDisabledReason(run.resource)) throw new SellfoxSyncUnavailableError(run.resource);
+    let summary = asRecord(run.summary) ?? {};
+    if (summary.datesFrozen !== true) {
+      const dates = normalizeSellfoxDates(run.resource, summary, run.startedAt ?? new Date());
+      summary = { ...summary, ...dates, datesFrozen: true, requestVersion: 2 };
+    }
+    if (run.resource !== "stores" && summary.storesFrozen !== true) {
+      const requested = Array.isArray(summary.shopExternalIds) ? summary.shopExternalIds.filter((id): id is string => typeof id === "string") : [];
+      const stores = await prisma.sellfoxStore.findMany({ where: {
+        organizationId: run.organizationId, workspaceId: run.workspaceId, ...(requested.length ? { externalId: { in: requested } } : {}),
+      }, select: { externalId: true }, orderBy: { externalId: "asc" } });
+      if (!stores.length) throw new SellfoxSyncInputError("当前工作区没有可同步店铺，请先同步店铺。");
+      if (requested.length && stores.length !== new Set(requested).size) throw new SellfoxSyncInputError("所选店铺不属于当前工作区。");
+      summary = { ...summary, shopExternalIds: stores.map((store) => store.externalId), storesFrozen: true };
+    }
+    if (run.resource !== "stores" && (!Array.isArray(summary.shopExternalIds) || !summary.shopExternalIds.length || summary.shopExternalIds.some((id) => typeof id !== "string" || !id.trim()))) {
+      throw new SellfoxSyncInputError("同步任务缺少有效的已冻结店铺范围。");
+    }
+    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { summary: summary as Prisma.InputJsonValue } });
+    const request = summary as { shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string };
+    const input: SyncInput = {
+      organizationId: run.organizationId, workspaceId: run.workspaceId, userId: run.userId, runId, resource: run.resource,
+      shopExternalIds: request.shopExternalIds, reportDate: request.reportDate, startDate: request.startDate,
+      endDate: request.endDate, progress: request.progress, capturedAt: request.capturedAt,
+    };
     let result: unknown;
     if (input.resource === "stores") result = { count: await syncStores(input) };
     else if (input.resource === "performance") {
-      const startDate = request.startDate ?? request.reportDate ?? defaultSellfoxReportDate();
-      const endDate = request.endDate ?? request.startDate ?? request.reportDate ?? defaultSellfoxReportDate();
-      const dates = datesBetween(startDate, endDate);
-      const dateIndexStart = Math.max(0, Number(request.progress?.dateIndex) || 0);
+      const dates = sellfoxReportDates(request.startDate ?? request.reportDate!, request.endDate ?? request.reportDate!);
       let count = 0; let storeCount = 0;
-      for (let dateIndex = dateIndexStart; dateIndex < dates.length; dateIndex += 1) {
+      for (let dateIndex = 0; dateIndex < dates.length; dateIndex += 1) {
         const date = dates[dateIndex];
+        const latest = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
+        const progress = asRecord(asRecord(latest?.summary)?.progress);
+        const states = asRecord(progress?.performance) ?? {};
         const resultForDate = await syncSellfoxProductDailySnapshots({
           organizationId: run.organizationId, workspaceId: run.workspaceId, storeExternalIds: request.shopExternalIds, reportDate: date,
-          cursor: dateIndex === dateIndexStart ? asRecord(request.progress?.cursor) as { storeIndex?: number; pageNo?: number } | null ?? undefined : undefined,
-          onProgress: async (progress) => saveProgress(input, { dateIndex, reportDate: date, cursor: progress.cursor, count: count + progress.synced, ...(progress.failedStores ? { failedStores: progress.failedStores } : {}) }),
+          checkpoint: states[date] as PerformanceCheckpoint | undefined,
+          cursor: !states[date] && dateIndex === Number(request.progress?.dateIndex ?? 0) ? asRecord(request.progress?.cursor) as { storeIndex?: number; pageNo?: number } | null ?? undefined : undefined,
+          onProgress: async (update, tx) => {
+            const db = tx ?? prisma;
+            const current = await db.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
+            const currentProgress = asRecord(asRecord(current?.summary)?.progress) ?? {};
+            const checkpoints = { ...asRecord(currentProgress.performance), [date]: update.checkpoint };
+            const total = Object.values(checkpoints).reduce<number>((sum, state) => sum + Object.values((state as PerformanceCheckpoint).stores).reduce((value, store) => value + store.synced, 0), 0);
+            await saveProgress(input, { ...currentProgress, dateIndex, reportDate: date, performance: checkpoints, count: total }, db);
+          },
         });
         count += resultForDate.synced; storeCount = Math.max(storeCount, resultForDate.storeCount);
-        await saveProgress(input, { dateIndex: dateIndex + 1, reportDate: date, cursor: { storeIndex: 0, pageNo: 1 }, count });
       }
       result = { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, synced: count };
     }
     else if (input.resource === "inventory") result = await syncInventory(input);
     else if (input.resource === "sales") result = await syncSales(input);
     else if (input.resource === "hourly") result = await syncHourly(input);
-    else throw new Error("此赛狐数据域暂未接入 Open API。");
-    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "done", summary: { ...summary, result } as Prisma.InputJsonValue, finishedAt: new Date() } });
+    else throw new SellfoxSyncInputError("此赛狐数据域暂未接入 Open API。");
+    // Re-read after page commits; never overwrite current progress with the initial summary.
+    const current = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
+    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "done", summary: { ...asRecord(current?.summary), result } as Prisma.InputJsonValue, finishedAt: new Date() } });
   } catch (error) {
-    const message = error instanceof Error ? error.message.replace(/[\r\n]/g, " ").slice(0, 300) : "赛狐同步失败。";
+    const message = error instanceof SellfoxSyncUnavailableError || error instanceof SellfoxStoreSyncError ? error.message : sellfoxStoreFailure(error).error;
     await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "failed", error: message, finishedAt: new Date() } });
     throw error;
   }
