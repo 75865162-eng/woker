@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { prisma } from "@/lib/db/prisma";
-import { isSellfoxDate, isSellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { isSellfoxDate, isSellfoxSyncResource, sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
@@ -41,10 +41,11 @@ export async function POST(request: Request) {
     if (count !== shopExternalIds.length) return NextResponse.json({ error: "所选店铺不属于当前工作区。" }, { status: 403 });
   }
 
-  if (["listings", "ads_report"].includes(resource)) {
+  const disabledReason = sellfoxSyncDisabledReason(resource);
+  if (disabledReason) {
     const runId = `sellfox-sync-${randomUUID()}`;
-    await prisma.sellfoxSyncRun.create({ data: { id: runId, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, userId: permission.user.id, resource, status: "failed", error: "此数据域尚未接入赛狐 Open API。", summary: { shopExternalIds: shopExternalIds ?? [] }, finishedAt: new Date() } });
-    return NextResponse.json({ error: "此数据域尚未接入赛狐 Open API。", runId }, { status: 409 });
+    await prisma.sellfoxSyncRun.create({ data: { id: runId, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, userId: permission.user.id, resource, status: "failed", error: disabledReason, summary: { shopExternalIds: shopExternalIds ?? [] }, finishedAt: new Date() } });
+    return NextResponse.json({ error: disabledReason, runId }, { status: 409 });
   }
 
   const runId = `sellfox-sync-${randomUUID()}`;

@@ -2,7 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots } from "@/lib/sellfox/product-performance";
 import { sellfoxPost } from "@/lib/sellfox/client";
-import { nextSellfoxPage, sellfoxSyncResources, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
+import { sellfoxInventoryRequest, sellfoxSalesRequest } from "@/lib/sellfox/sync-requests";
 
 export const sellfoxResources = sellfoxSyncResources;
 export type SyncResource = SellfoxSyncResource;
@@ -102,7 +103,7 @@ async function syncInventory(input: SyncInput) {
     const store = stores[storeIndex];
     try {
       for (let pageNo = storeIndex === startStoreIndex ? startPageNo : 1; pageNo <= 10_000; pageNo += 1) {
-        const payload = await sellfoxPost<unknown>("/api/inventoryManage/fba/pageList.json", { shopId: store.externalId, pageNo, pageSize: 100 });
+        const payload = await sellfoxPost<unknown>("/api/inventoryManage/fba/pageList.json", sellfoxInventoryRequest(store.externalId, pageNo));
         const rows = rowsFrom(payload);
         if (!Array.isArray(payload) && rows.length === 0) throw new Error("库存接口返回结构无法识别。");
         for (const row of rows) {
@@ -137,7 +138,8 @@ async function syncSales(input: SyncInput) {
     const store = stores[storeIndex];
     try {
       for (let pageNo = storeIndex === startStoreIndex ? startPageNo : 1; pageNo <= 10_000; pageNo += 1) {
-        const payload = await sellfoxPost<unknown>("/api/productSale/page.json", { shopId: store.externalId, pageNo, pageSize: 100, startDate, endDate });
+        // This adapter stays disabled until the daily response and metric join are verified.
+        const payload = await sellfoxPost<unknown>("/api/productSale/page.json", sellfoxSalesRequest(store.externalId, startDate, pageNo, "productNum"));
         const rows = rowsFrom(payload);
         if (!Array.isArray(payload) && rows.length === 0) throw new Error("销量接口返回结构无法识别。");
         for (const row of rows) {
@@ -197,6 +199,7 @@ export async function processSellfoxSyncRun(runId: string) {
   const request = summary as { shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string };
   const input: SyncInput = { organizationId: run.organizationId, workspaceId: run.workspaceId, userId: run.userId, runId, resource: run.resource as SyncResource, ...request };
   try {
+    if (sellfoxSyncDisabledReason(input.resource)) throw new SellfoxSyncUnavailableError(input.resource);
     let result: unknown;
     if (input.resource === "stores") result = { count: await syncStores(input) };
     else if (input.resource === "performance") {

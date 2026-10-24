@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { Worker } from "bullmq";
+import { UnrecoverableError, Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
@@ -9,12 +9,17 @@ import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/redis-queue";
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
+import { SellfoxRequestError } from "@/lib/sellfox/client";
+import { sellfoxSyncDisabledReason, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
 const worker = new Worker<{ runId: string }>(sellfoxSyncQueueName, async (job) => {
   try { await processSellfoxSyncRun(job.data.runId); }
   catch (error) {
+    if (error instanceof SellfoxSyncUnavailableError || (error instanceof SellfoxRequestError && !error.retryable)) {
+      throw new UnrecoverableError(error.message);
+    }
     if (job.attemptsMade >= (job.opts.attempts ?? 4) - 1) throw error;
     await prisma.sellfoxSyncRun.updateMany({ where: { id: job.data.runId, status: "failed" }, data: { status: "queued", error: "同步暂时失败，系统将按退避策略重试。", finishedAt: null } });
     throw error;
@@ -42,6 +47,12 @@ async function recoverAndSchedule() {
     if (process.env.QUEUE_DRIVER !== "redis" || !process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET) return;
     const schedules = await prisma.sellfoxSyncSchedule.findMany({ where: { enabled: true }, orderBy: { lastEnqueuedAt: "asc" }, take: 100 });
     for (const candidate of schedules) {
+      const disabledReason = sellfoxSyncDisabledReason(candidate.resource);
+      if (disabledReason) {
+        await prisma.sellfoxSyncSchedule.update({ where: { id: candidate.id }, data: { enabled: false } });
+        await prisma.sellfoxSyncRun.create({ data: { id: `sellfox-sync-${randomUUID()}`, organizationId: candidate.organizationId, workspaceId: candidate.workspaceId, userId: candidate.userId, resource: candidate.resource, status: "failed", error: disabledReason, summary: { trigger: "schedule", scheduleId: candidate.id }, finishedAt: new Date() } });
+        continue;
+      }
       const now = new Date();
       if (!due(candidate, now)) continue;
       const [member, permissions, workspaceExists] = await Promise.all([

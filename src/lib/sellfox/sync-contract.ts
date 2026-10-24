@@ -1,6 +1,19 @@
 export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report"] as const;
 export type SellfoxSyncResource = (typeof sellfoxSyncResources)[number];
 
+export function sellfoxSyncDisabledReason(resource: string): string | null {
+  if (["inventory", "sales", "listings"].includes(resource)) return "此数据域的成功响应契约待验证，暂不能同步。历史数据仍可查询和导出。";
+  if (resource === "ads_report") return "广告下载报告尚未接入。";
+  return null;
+}
+
+export class SellfoxSyncUnavailableError extends Error {
+  constructor(resource: string) {
+    super(sellfoxSyncDisabledReason(resource) ?? "赛狐数据域不可用。");
+    this.name = "SellfoxSyncUnavailableError";
+  }
+}
+
 export function isSellfoxSyncResource(value: unknown): value is SellfoxSyncResource {
   return typeof value === "string" && sellfoxSyncResources.includes(value as SellfoxSyncResource);
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
 
 export const runtime = "nodejs";
 const intervals = { stores: 480, inventory: 180, sales: 1440, performance: 1440 } as const;
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   const schedules = await prisma.sellfoxSyncSchedule.findMany({ where: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId } });
   return NextResponse.json({ schedules: Object.entries(intervals).map(([resource, intervalMinutes]) => {
     const schedule = schedules.find((item) => item.resource === resource);
-    return { resource, enabled: schedule?.enabled ?? false, intervalMinutes };
+    return { resource, enabled: schedule?.enabled ?? false, intervalMinutes, disabledReason: sellfoxSyncDisabledReason(resource) };
   }) });
 }
 
@@ -29,6 +30,8 @@ export async function POST(request: Request) {
   }
   const scope = workspaceScopeFromRequest(request);
   const resource = body.resource as ScheduledResource;
+  const disabledReason = sellfoxSyncDisabledReason(resource);
+  if (body.enabled && disabledReason) return NextResponse.json({ error: disabledReason }, { status: 409 });
   const id = `sellfox-schedule-${permission.user.organizationId}-${scope.workspaceId}-${resource}`;
   const schedule = await prisma.sellfoxSyncSchedule.upsert({
     where: { organizationId_workspaceId_resource: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, resource } },

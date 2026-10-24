@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 
 type Domain = "overview" | "stores" | "inventory" | "sales" | "performance" | "listings" | "ads" | "runs";
@@ -159,6 +160,8 @@ export function SellfoxWorkbench() {
   }, [domain, from, to, search, selectedShops]);
 
   async function sync(resource = syncResource) {
+    const disabledReason = sellfoxSyncDisabledReason(resource);
+    if (disabledReason) { setError(disabledReason); return; }
     setWorking(true); setNotice(""); setError("");
     try {
       const dateInput = resource === "inventory" ? { reportDate: shanghaiDate(0) }
@@ -201,13 +204,14 @@ export function SellfoxWorkbench() {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select aria-label="立即同步资源" value={syncResource} onChange={(event) => setSyncResource(event.target.value)} className="h-9 border border-border bg-white px-2 text-sm">
-          {["stores", "inventory", "sales", "performance", "hourly"].map((resource) => <option key={resource} value={resource}>{({ stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "产品表现", hourly: "SP 小时样本" } as Record<string, string>)[resource]}</option>)}
+          {["stores", "inventory", "sales", "performance", "hourly"].map((resource) => <option key={resource} value={resource} disabled={Boolean(sellfoxSyncDisabledReason(resource))}>{({ stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "产品表现", hourly: "SP 小时样本" } as Record<string, string>)[resource]}{sellfoxSyncDisabledReason(resource) ? "（待验证）" : ""}</option>)}
         </select>
-        <Button size="sm" onClick={() => void sync()} disabled={!canSync || !overview?.configured || working}><RefreshCw className={`h-4 w-4 ${working ? "animate-spin" : ""}`} />立即同步</Button>
+        <Button size="sm" onClick={() => void sync()} disabled={!canSync || !overview?.configured || working || Boolean(sellfoxSyncDisabledReason(syncResource))}><RefreshCw className={`h-4 w-4 ${working ? "animate-spin" : ""}`} />立即同步</Button>
         <Button size="sm" variant="secondary" onClick={() => void loadOverview().catch((cause) => setError(cause instanceof Error ? cause.message : "读取概览失败。"))}><RefreshCw className="h-4 w-4" />刷新</Button>
         {exportHref ? <a className="inline-flex h-9 items-center gap-2 border border-border px-3 text-sm font-medium hover:bg-surface-muted" href={exportHref}><Download className="h-4 w-4" />CSV</a> : null}
       </div>
     </header>
+    {sellfoxSyncDisabledReason(syncResource) ? <p role="status" className="border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{sellfoxSyncDisabledReason(syncResource)}</p> : null}
 
     {overview && !overview.configured ? <div className="flex items-center gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><AlertCircle className="h-4 w-4 shrink-0" /><span>请管理员在服务端配置赛狐凭据。此页面不会收集或显示密钥。</span><a className="font-semibold underline" href="/settings">设置与运维</a></div> : null}
     {overview?.configured && overview.stores.length === 0 ? <div className="flex flex-wrap items-center justify-between gap-3 border border-border bg-white px-4 py-3"><div><p className="text-sm font-semibold">当前工作区尚无赛狐店铺</p><p className="mt-1 text-xs text-muted">同步店铺后即可按店铺拉取库存、销量和表现。</p></div><Button size="sm" disabled={!canSync || working} onClick={() => void sync("stores")}><Store className="h-4 w-4" />同步店铺</Button></div> : null}
@@ -224,7 +228,7 @@ export function SellfoxWorkbench() {
         {domain === "overview" ? <div className="space-y-5">
           <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{["stores", "inventory", "sales", "performance", "hourly"].map((key) => <div key={key} className="border border-border bg-white px-4 py-3"><p className="text-xs text-muted">{({ stores: "店铺", inventory: "库存快照", sales: "销量快照", performance: "表现快照", hourly: "小时样本" } as Record<string, string>)[key]}</p><p className="mt-1 text-xl font-semibold tabular-nums">{overview?.counts[key] ?? 0}</p></div>)}</section>
           <section className="grid gap-2 sm:grid-cols-2"><div className="border border-border bg-white px-4 py-3 text-sm">库存覆盖 {overview?.coverage?.inventoryStores ?? 0}/{overview?.counts.stores ?? 0} 店<span className="ml-2 text-muted">缺 {overview?.coverage?.inventoryMissingStores ?? 0} 店</span></div><div className="border border-border bg-white px-4 py-3 text-sm">销量覆盖 {overview?.coverage?.salesStores ?? 0}/{overview?.counts.stores ?? 0} 店<span className="ml-2 text-muted">缺 {overview?.coverage?.salesMissingStores ?? 0} 店</span></div></section>
-          <section className="border border-border bg-white"><div className="border-b border-border px-4 py-3"><h2 className="text-sm font-semibold">定时同步</h2></div><div className="divide-y divide-border">{schedules.map((schedule) => <label key={schedule.resource} className="flex items-center justify-between gap-3 px-4 py-3 text-sm"><span><span className="font-medium">{({ stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "产品表现" } as Record<string, string>)[schedule.resource]}</span><span className="ml-2 text-xs text-muted">{schedule.resource === "sales" || schedule.resource === "performance" ? "每日 06:30（北京时间）" : `每 ${Math.round(schedule.intervalMinutes / 60)} 小时`}</span></span><input type="checkbox" checked={schedule.enabled} disabled={!canSync || !overview?.configured} onChange={() => void toggleSchedule(schedule)} className="h-4 w-4 accent-brand" /></label>)}</div></section>
+          <section className="border border-border bg-white"><div className="border-b border-border px-4 py-3"><h2 className="text-sm font-semibold">定时同步</h2></div><div className="divide-y divide-border">{schedules.map((schedule) => <label key={schedule.resource} className="flex items-center justify-between gap-3 px-4 py-3 text-sm"><span><span className="font-medium">{({ stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "产品表现" } as Record<string, string>)[schedule.resource]}{sellfoxSyncDisabledReason(schedule.resource) ? "（待验证）" : ""}</span><span className="ml-2 text-xs text-muted">{schedule.resource === "sales" || schedule.resource === "performance" ? "每日 06:30（北京时间）" : `每 ${Math.round(schedule.intervalMinutes / 60)} 小时`}</span></span><input type="checkbox" checked={schedule.enabled} disabled={!canSync || !overview?.configured || (!schedule.enabled && Boolean(sellfoxSyncDisabledReason(schedule.resource)))} onChange={() => void toggleSchedule(schedule)} className="h-4 w-4 accent-brand" /></label>)}</div></section>
           <section className="border border-border bg-white"><div className="flex items-center justify-between border-b border-border px-4 py-3"><h2 className="text-sm font-semibold">最近同步</h2><button className="text-xs font-semibold text-brand" onClick={() => setDomain("runs")}>全部日志</button></div><div className="divide-y divide-border">{latestRuns.slice(0, 6).map((run) => <div key={run.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"><span className="font-medium">{run.resource}</span><span className="text-xs text-muted">{dateTime(run.startedAt)}</span><Badge tone={run.status === "done" ? "green" : run.status === "failed" ? "red" : "amber"}>{run.status}</Badge>{run.error ? <span className="basis-full text-xs text-red-700">{run.error}</span> : null}</div>)}{latestRuns.length === 0 ? <p className="px-4 py-8 text-center text-sm text-muted">暂无同步记录。</p> : null}</div></section>
         </div> : unavailable ? <section className="border border-border bg-white px-5 py-10"><h2 className="text-sm font-semibold">{currentDomain}尚未接入</h2><p className="mt-2 text-sm text-muted">未核验赛狐接口契约前不会发起请求或展示模拟数据。Listing Open API 与广告报告接口暂不可用。</p><p className="mt-3 text-xs text-muted">广告小时视图展示现有 SP campaign 浅同步样本，可通过顶部资源菜单手动拉取。</p></section> : <section className="border border-border bg-white">
           <div className="grid gap-2 border-b border-border p-3 sm:grid-cols-[minmax(220px,1fr)_minmax(140px,200px)_minmax(140px,200px)]">
