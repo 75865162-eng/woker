@@ -113,7 +113,7 @@ stdin 为最多 50 条词典未命中短句：`[{"asin":"B012345678","quote":"or
 
 保留目标工作区既有账户/站点设置，新默认工作区使用仓库默认空账户/站点。事务中分配 SKU（复用 nextSku），使用 PostgreSQL advisory lock 序列化本 CLI，且 existingRecord=null 强制创建；并发其他入口仍由唯一键阻止覆盖。`saveProductAggregate` 负责 revision、审计、DataChangeVersion、附件绑定、Outbox。事务后用现有 processProductOutboxEvent 处理投影/通知，不要求新增 Redis 服务；失败会保留 durable Outbox，created.json 标 `queuePending`，由既有 worker/受控重试修复。检查可见性时要确认投影成功与目标组织/工作区。
 
-草稿 UUID 在 workbook 重建时保留；数据库按 UUID 查重，同一草稿重跑 `--write` 不创建第二个 SKU，也不更新原商品；新选品请使用新 slug。创建收据写 created.json；不把产品改回 DRAFT。原始 draft 保留用于追溯。空竞品和 fixture 草稿拒绝创建。
+草稿 UUID 在 workbook 重建时保留；聚合会生成正式商品 ID，草稿 UUID 另存于 `payload.selectionPipeline.draftId`，数据库按此来源标记在事务锁内查重，同一草稿重跑 `--write` 不创建第二个 SKU，也不更新原商品；新选品请使用新 slug。创建收据写 created.json；不把产品改回 DRAFT。原始 draft 保留用于追溯。空竞品和 fixture 草稿拒绝创建。
 
 回滚：本次不修改主 schema、现有 API 或 UI，移除脚本及 package scripts 即可停用。正式商品误创建后使用 ERP 已有审核/取消流程处理，禁止本脚本自动删事实记录、审计或附件。图片上传是独立动作；数据库创建失败不会自动删除已上传资产。
 
@@ -133,6 +133,6 @@ fixture 模式无外网请求、禁止 --write/--upload-images，使用独立 sq
 
 2026-10-25 本机试跑 `kayak cockpit cover`：一次搜索为空，另一次受控验证获得 1 个真实竞品 `B0GH7CKL75`、BSR/评分/评论数/要点与真实下载 JPEG；价格缺失。评论页进入登录/风控，当前站点熔断；1688 进入登录/风控，尚无真实供应商。因此真实 workbook/draft 已产出，但真实差评标签与 ≥3 家供应商仍未验收；人工 JSON 兜底和离线标签链路可独立验证。
 
-未提供目标数据库的组织/操作者身份和 ERP session，**未执行真实上传/写库，也没有声称创建了可见 SKU/fileId**。下一步由具备权限的操作者审查 draft，提供同作用域的上传会话和上述数据库环境变量，运行 create --write 并检查 created.json/ERP 列表。生产使用前还需在隔离数据库验收创建、并发 SKU 唯一性、跨组织附件拒绝和 Outbox 恢复。
+未提供目标数据库的组织/操作者身份和 ERP session，**未执行真实上传/写库，也没有声称创建了可见 SKU/fileId**。下一步由具备权限的操作者审查 draft，提供同作用域的上传会话和上述数据库环境变量，运行 create --write 并检查 created.json/ERP 列表。已在一次性 PostgreSQL 容器中通过 7 项集成验收：聚合创建及列表投影、重复草稿幂等、并发 SKU、角色/停用身份拒绝、旧主图跨组织附件拒绝及事务回滚、并发同草稿去重、Outbox 恢复。仍未对现有开发/生产数据实际执行写入；真实上传会话与用户页面验收仍需授权身份。
 
 Amazon/1688 页面结构、地区、登录及风控会变化；HTML fixtures 不是活网站点稳定性的保证。只采集自己有权访问的数据，遵守目标站点 ToS、robots 与访问限制，不绕过登录/验证码，不提高并发碰撞站点。竞品图片仅用于内部研究；对外使用需另行确认版权。本功能不部署服务器、不迁移数据库、不安排后台定时采集。

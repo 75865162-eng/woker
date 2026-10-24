@@ -90,3 +90,7 @@ CSV：`GET /api/sellfox/{inventory|sales|listings|performance|ads_report}/export
 - check:fast 的232项测试通过；全局lint因已忽略的本地 `tmp/create-kayak-sku.ts:75` 原有any错误停止。另行完成TypeScript及本轮文件ESLint；生产构建/完整check未运行。补货长窗全店补数、SB/SD真实报告和真实浏览器登录后的网页逐项对账未执行。
 - 所有计划仍关闭；未改服务器、未发布、不自动回填全店冬季历史。本机旧Amazon分支迁移历史差异不属于此次任务，未做重置或自动修复。
 - 全改动区GitHub同步盘点期间，本机node_modules出现pnpm安装树变化；随后附加的全局ESLint因依赖配置加载失败，选品额外测试因当前Playwright浏览器缺失而失败。此环境变化发生在上述成功验证之后；不据此宣称当前运行环境全套校验通过。未为本任务改写依赖版本或全局lint配置。
+
+### 全改动区后续复核
+
+本轮 Agent Round C 收尾已重新完成 `npm run check`（232项核心测试、ESLint、生产构建）、TypeScript、6项赛狐浏览器、3项Agent浏览器及Round B 9项fixture/7项临时库创建集成测试。新增附件测试另行2/2通过。`tmp/`已按Git忽略边界排除ESLint；目前仅保留商品工作台既有hook dependency warning。两条新增迁移在独立临时库执行成功，schema漂移与原基线相同；未修复历史漂移或操作生产。此记录更新上面的暂态全局检查阻碍；详细证据见 `specs/005-agent-chain-handoffs/validation.md`。

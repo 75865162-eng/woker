@@ -1,35 +1,42 @@
 # Round C P0 Validation — 2026-10-25
 
-## 本次结果
+## 全改动区收尾结果
 
-- Agent 相关回归：28/28 通过（含六段既有 Agent、契约、Launch 服务端 API、伪造/跨范围/过期审批）。
-- 隔离浏览器：3/3 通过。真实六个工作台 + Runtime 完成编排→Market→Product→Supplier→Listing→Launch批准→PPC；无广告历史仍能出建议；Orchestrator 显示每段 execution 下钻链接；未来版本/跨工作区/未批准被拦截；切工作区丢弃迟到执行且不能交接其报告。
-- 本次修改文件 ESLint：通过，无错误/警告。
-- 仓库 TypeScript：通过（最后一次 `npm run typecheck`）。
+用户确认将 Agent Round C、Round B CLI、赛狐窄表/租约、Prisma 与依赖改动整体验证并同步 GitHub。代码整体提交为 `b6774be`；本记录补充该提交的验证结果。服务器发布不在本次范围。
+
+- `npm run check`：通过，包含 232 项核心测试、全局 ESLint 和 Next.js 生产构建。ESLint 无错误；商品工作台既有 `openProduct` hook dependency warning 保留，未扩展为无关重构。
+- `npm run typecheck`：通过。
+- Agent 隔离浏览器：3/3 通过。真实六个工作台 + Runtime 完成编排→Market→Product→Supplier→Listing→Launch 批准→PPC；无广告历史仍能出建议；Orchestrator 显示每段 execution 下钻链接；未来版本/跨工作区/未批准被拦截；切工作区丢弃迟到执行。
+- 赛狐隔离浏览器：6/6 通过，覆盖列表、导出、按需详情、切域、工作区迟到响应和窄表导出。
+- `npm run test:selection`：9/9 通过，覆盖 HTML 解析、标签、SQLite 配额、熔断、1688、ERP workbook 与写库拒绝。
+- `npm run test:selection:create`：临时 PostgreSQL 7/7 通过，覆盖聚合创建、幂等、独立进程并发 SKU、权限拒绝、跨组织附件回滚、Outbox 恢复。测试结束删除独立容器，不使用既有数据库。
+- 并行任务收尾新增附件引用用例后，另行运行 `tests/product-consistency.test.ts`：2/2 通过。
+- Prisma validate：通过。临时库先执行 HEAD 原基线的全部迁移，再执行两条新增迁移，均成功。迁移数据库与 schema 的 diff 与原 `2d2794f` 基线逐字一致；存在历史索引命名、默认值和约束漂移，本次未自动修复，也未宣称全库零漂移。
 - `git diff --check`：通过。
 
-## 工作区全量检查阻碍（本次执行时快照）
+先前 3 项赛狐回归失败已修复；Git 忽略的 `tmp/` 临时文件已按目录边界排除 ESLint。先前失败快照不再作为当前检查结论。生产构建与浏览器回归均已实际完成；不再以本机临时依赖变化推断检查状态。
 
-已尝试 `npm run check:fast`：核心测试 222 项，219 通过、3 失败，因此该命令未继续 lint/typecheck。另行执行了仓库 lint/typecheck。
+## 适用限制
 
-失败均位于并行修改中的赛狐模块，未归因到本次 Agent 变更，未擅自修改：
+- 本轮收尾未访问真实 SellerSprite、Amazon/1688、AI、生产数据库或服务器；浏览器使用隔离接口。其他并行任务的真实赛狐验收见 `docs/sellfox-agent-read.md`，不可混同为本轮浏览器的证据。
+- Round B 本机 CLI 已有，但 Agent runner/job/多租户隔离与 Opportunity 证据映射仍缺；`market.selection.run` 明确 NOT_IMPLEMENTED。Market 真实机会验收仍未完成。
+- 部分既有业务 Agent 仍有模拟适配器；通过接线回归不代表真实研究、文案生成、采购、上架或广告执行验收。
+- Orchestrator 无业务写权限；不增加顺序执行 P0+、自动建 SKU、真实上架或广告 transport。SKU 正式资料继续使用现有 Product 聚合与 /dashboard。
+- Launch 入站审批仅解锁 PPC 建议，广告执行需要独立审批；独立 PPC 诊断入口保留。
+- 未部署服务器、未运行生产迁移、未合并 main。未来发布应人工审核本次迁移及历史漂移，再走现有 CI artifact 流程。
 
-1. `tests/sellfox-browse-api.test.ts`：跨 workspace 用例期望 403，实际 500。
-2. `tests/sellfox-sync-api.test.ts`：隔离 Prisma stub 缺 `$transaction`。
-3. `tests/sellfox-sync-contract.test.ts`：用例仍期望“成功响应契约待验证”，实际返回空字符串。
+## 可复现命令
 
-仓库 `npm run lint` 另有 `tmp/create-kayak-sku.ts:75` 的 explicit-any 错误，以及商品 workbench、赛狐契约各一个 warning。本次修改文件的定向 lint 全部通过。实施中的暂态赛狐类型错误在最后一次仓库 typecheck 已消失。
+```bash
+npm run check
+npm run typecheck
+npx playwright test --config tests/browser/agent-chain.config.ts
+npm run test:sellfox:browser
+npm run test:selection
+npm run test:selection:create
+npx tsx --test tests/product-consistency.test.ts
+npx prisma validate
+git diff --check
+```
 
-上述结果反映共享工作区检查时的状态，其他并行任务仍可能继续改动；同步/合码前必须重新核对并修复全量阻碍，不可宣称 check:fast 全通过。
-
-## 未执行与适用限制
-
-- 未运行生产 build/完整 npm run check：当前任务为未合码的 API/UI 接线，按最小分级验证使用相关测试、lint、TypeScript 和明确需要的隔离浏览器；准备合码/上线且全量阻碍修复后再运行完整检查。
-- 未访问真实 SellerSprite、Amazon/1688、AI 服务、生产数据库或服务器；未进行真实选品/上架/广告执行。
-- Round B 本机 CLI 已有，但 Agent runner/job/多租户隔离与 Opportunity 证据映射仍缺；selection.run 明确 NOT_IMPLEMENTED，属于本期文档化缺口。
-- 未新增 SKU 自动创建/商品 API/Prisma migration，未替代 /dashboard 商品事实源。
-- 尚未提交/推送。共享工作区含赛狐、Round B、依赖与 Prisma 等并行改动；按 AGENTS.md 完整改动区同步规则，需先确认范围并完成相应验证。见 workspace-inventory.txt，只读快照不代表这些文件已被本次审核。
-
-## 回归命令
-
-见 `docs/agent-chain-round-c.md`；浏览器命令 `npx playwright test --config tests/browser/agent-chain.config.ts`。
+迁移检查只使用随机命名、loopback 端口、tmpfs 存储的独立 PostgreSQL 容器；以原提交 schema/迁移和当前 schema/迁移分别对比，不连接既有数据库。全改动区盘点见 workspace-inventory.txt。
