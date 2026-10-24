@@ -160,3 +160,12 @@ PPC 仅读当前操作者、组织和工作区最新 `WorkspaceDataset`。不读
 本轮不新增 schema/migration，不调整 SyncRun/Schedule/worker，不执行生产维护/迁移/部署。回滚：关闭开关并回退应用代码，保留审批及审计数据；不自动删除记录或数据库 down。旧应用不支持的新审计记录不应由旧入口继续执行。
 
 自动验证：`npm test` 覆盖 CLI 全命令只读 smoke、权限/参数、PPC 建议、审计事务服务及 stub 集成；`npm run test:operations:browser` 包含审计 old/new、确认/dry_run、空/失败及工作区切换，沿用库存/刊登同步页面回归；另跑 lint、typecheck 和生产 build。事务服务测试使用内存 delegate double，浏览器使用隔离模拟接口；它们不替代真实 PostgreSQL advisory lock/唯一约束、多进程并发、受控账号和 Amazon 联调。尚无真实 P95 benchmark，不宣称性能提升。新增分析按需、有 10000 行上限；更大数据集或并发使用前需测内存/延迟。
+
+## 本地配置步骤
+
+1. 本地 `.env` 配置 `AMAZON_SP_API_ENCRYPTION_KEY`（`openssl rand -base64 32`），重启开发进程；保留主密钥，不能随意重新生成。先应用已有的经营中台、同步计划、刊登补货、店铺绑定和凭证表迁移；不要在页面请求中自动建表。
+2. 打开 `/settings?tab=integrations`，填写 LWA Client ID、Client Secret、卖家授权得到的 Refresh Token，选择 API 区域并保存。当前 SP-API 不要求 AWS IAM；AWS 字段放在可选的旧版配置区，历史密文仍可解密，完整旧 AWS 凭证仍支持原签名方式。已保存的凭证留空保留，不回显。
+3. 添加当前工作区的有效 ERP 店铺、真实 Seller ID、Marketplace ID 和实际获授权的库存/在线产品域，保存后验证 Amazon 连接。网页配置需 `settings:edit`，连接验证和同步需 `operations:edit`。
+4. 保存凭证不会开启同步。手动同步成功后按需开启计划；本地运行 `npm run worker:amazon-sync`，并确保 Redis 配置可用。当前仍只支持一组凭证对应一个组织/工作区和一个 Seller ID。
+
+回滚认证变更时恢复代码，保留数据库密文、绑定表及加密主密钥；LWA-only 配置不能交给仍强制 AWS 的旧客户端使用。真实连接需卖家提供凭证后验收，模拟回归不等于已取得 Amazon 授权。

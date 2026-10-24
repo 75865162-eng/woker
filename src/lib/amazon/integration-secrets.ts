@@ -3,13 +3,11 @@ import { prisma } from "@/lib/db/prisma";
 import { assertAmazonSpApiScopeAllowed, getAmazonSpApiConfigurationStatus, getAmazonSpApiServerConfiguration, type AmazonSpApiAllowedScope, type AmazonSpApiConfigurationStatus, type AmazonSpApiServerConfiguration } from "@/lib/amazon/sp-api-config";
 
 const encryptionKeyName = "AMAZON_SP_API_ENCRYPTION_KEY";
-const requiredCredentialFields = ["lwaClientId", "lwaClientSecret", "refreshToken", "awsAccessKeyId", "awsSecretAccessKey"] as const;
+const requiredCredentialFields = ["lwaClientId", "lwaClientSecret", "refreshToken"] as const;
 const credentialLabels: Record<(typeof requiredCredentialFields)[number], string> = {
   lwaClientId: "LWA Client ID",
   lwaClientSecret: "LWA Client Secret",
   refreshToken: "Refresh Token",
-  awsAccessKeyId: "AWS Access Key ID",
-  awsSecretAccessKey: "AWS Secret Access Key",
 };
 
 export type AmazonSpApiCredentials = Pick<AmazonSpApiServerConfiguration, "lwaClientId" | "lwaClientSecret" | "refreshToken" | "awsAccessKeyId" | "awsSecretAccessKey" | "awsSessionToken">;
@@ -56,8 +54,8 @@ export function decryptAmazonSpApiCredentials(value: string, scope: AmazonSpApiA
       lwaClientId: parsed.lwaClientId as string,
       lwaClientSecret: parsed.lwaClientSecret as string,
       refreshToken: parsed.refreshToken as string,
-      awsAccessKeyId: parsed.awsAccessKeyId as string,
-      awsSecretAccessKey: parsed.awsSecretAccessKey as string,
+      awsAccessKeyId: typeof parsed.awsAccessKeyId === "string" ? parsed.awsAccessKeyId : "",
+      awsSecretAccessKey: typeof parsed.awsSecretAccessKey === "string" ? parsed.awsSecretAccessKey : "",
       awsSessionToken: typeof parsed.awsSessionToken === "string" && parsed.awsSessionToken ? parsed.awsSessionToken : undefined,
     };
   } catch {

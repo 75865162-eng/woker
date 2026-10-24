@@ -5,7 +5,7 @@ import { PUT as saveCredentials } from "@/app/api/integrations/amazon/sp-api/cre
 import { createLocalSession } from "@/lib/auth/session";
 import { validateAmazonConnection } from "@/lib/operations/readiness";
 import type { CurrentUser } from "@/lib/auth/session";
-import { decryptAmazonSpApiCredentials, encryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
+import { decryptAmazonSpApiCredentials, encryptAmazonSpApiCredentials, mergeAmazonSpApiSettings } from "@/lib/amazon/integration-secrets";
 import { parseSellerBindings, resolveSellerBindingSource, validateSellerBindingRows, type AmazonSellerBinding } from "@/lib/amazon/seller-bindings";
 
 const row = (overrides: Partial<AmazonSellerBinding> = {}): AmazonSellerBinding => ({
@@ -199,7 +199,7 @@ test("credential API stores ciphertext and returns no submitted secret values", 
     const response = await saveCredentials(new Request("http://localhost/api/integrations/amazon/sp-api/credentials", {
       method: "PUT",
       headers: { "Content-Type": "application/json", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` },
-      body: JSON.stringify({ lwaClientId: secretValues[0], lwaClientSecret: secretValues[1], refreshToken: secretValues[2], awsAccessKeyId: secretValues[3], awsSecretAccessKey: secretValues[4], region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com" }),
+      body: JSON.stringify({ lwaClientId: secretValues[0], lwaClientSecret: secretValues[1], refreshToken: secretValues[2], region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com" }),
     }));
     const responseText = await response.text();
     const persistedRecord = stored as Record<string, unknown> | null;
@@ -214,4 +214,17 @@ test("credential API stores ciphertext and returns no submitted secret values", 
     if (previousKey === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = previousKey;
     if (previousPrisma === undefined) delete globalObject.prisma; else globalObject.prisma = previousPrisma;
   }
+});
+
+
+test("LWA-only credentials round-trip and blank submissions retain saved secrets", () => {
+  const scope = { organizationId: "org-1", workspaceId: "workspace-1" };
+  const key = { AMAZON_SP_API_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") };
+  const settings = mergeAmazonSpApiSettings(null, { lwaClientId: "client", lwaClientSecret: "secret", refreshToken: "refresh" });
+  const decrypted = decryptAmazonSpApiCredentials(encryptAmazonSpApiCredentials(settings, scope, key), scope, key);
+  assert.equal(decrypted.awsAccessKeyId, "");
+  assert.equal(decrypted.awsSecretAccessKey, "");
+  assert.equal(mergeAmazonSpApiSettings(decrypted, { lwaClientSecret: "", refreshToken: "new-refresh" }).lwaClientSecret, "secret");
+  assert.equal(mergeAmazonSpApiSettings(decrypted, { refreshToken: "new-refresh" }).refreshToken, "new-refresh");
+  assert.throws(() => mergeAmazonSpApiSettings(null, { lwaClientId: "client" }), /Client Secret/);
 });

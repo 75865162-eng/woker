@@ -2,8 +2,6 @@ const requiredEnvironmentVariables = [
   "AMAZON_SP_API_LWA_CLIENT_ID",
   "AMAZON_SP_API_LWA_CLIENT_SECRET",
   "AMAZON_SP_API_REFRESH_TOKEN",
-  "AMAZON_SP_API_AWS_ACCESS_KEY_ID",
-  "AMAZON_SP_API_AWS_SECRET_ACCESS_KEY",
 ] as const;
 
 export type AmazonSpApiConfigurationStatus = {
@@ -64,8 +62,8 @@ export function getAmazonSpApiServerConfiguration(
     lwaClientId: environment.AMAZON_SP_API_LWA_CLIENT_ID!.trim(),
     lwaClientSecret: environment.AMAZON_SP_API_LWA_CLIENT_SECRET!.trim(),
     refreshToken: environment.AMAZON_SP_API_REFRESH_TOKEN!.trim(),
-    awsAccessKeyId: environment.AMAZON_SP_API_AWS_ACCESS_KEY_ID!.trim(),
-    awsSecretAccessKey: environment.AMAZON_SP_API_AWS_SECRET_ACCESS_KEY!.trim(),
+    awsAccessKeyId: environment.AMAZON_SP_API_AWS_ACCESS_KEY_ID?.trim() || "",
+    awsSecretAccessKey: environment.AMAZON_SP_API_AWS_SECRET_ACCESS_KEY?.trim() || "",
     awsSessionToken: environment.AMAZON_SP_API_AWS_SESSION_TOKEN?.trim() || undefined,
     region: status.region,
     endpoint: url.origin,

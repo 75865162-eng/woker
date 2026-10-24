@@ -77,3 +77,23 @@ test("SP-API process credentials require an exact organization and workspace bin
   assert.throws(() => assertAmazonSpApiScopeAllowed({ organizationId: "org-2", workspaceId: "warehouse-us" }, scopedEnvironment), /未获准/);
   assert.throws(() => assertAmazonSpApiScopeAllowed({ organizationId: "org-1", workspaceId: "warehouse-us" }, environment), /必须配置/);
 });
+
+test("LWA-only configuration validates and sends requests without AWS signing", async () => {
+  const config = getAmazonSpApiServerConfiguration({
+    AMAZON_SP_API_LWA_CLIENT_ID: "client",
+    AMAZON_SP_API_LWA_CLIENT_SECRET: "secret",
+    AMAZON_SP_API_REFRESH_TOKEN: "refresh",
+  });
+  const calls: RequestInit[] = [];
+  const client = new AmazonSpApiClient(config, { fetch: async (_url, init) => {
+    calls.push(init!);
+    return calls.length === 1
+      ? new Response(JSON.stringify({ access_token: "lwa-token", expires_in: 3600 }))
+      : new Response(JSON.stringify({ payload: [] }));
+  } });
+  await client.getMarketplaceParticipations();
+  const headers = new Headers(calls[1].headers);
+  assert.equal(headers.get("x-amz-access-token"), "lwa-token");
+  assert.equal(headers.has("authorization"), false);
+  assert.equal(headers.has("x-amz-security-token"), false);
+});

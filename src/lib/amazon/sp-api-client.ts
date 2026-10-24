@@ -76,9 +76,10 @@ export class AmazonSpApiClient {
       "x-amz-date": formatAmzDate(timestamp),
     };
     if (requestBody !== undefined) headers["content-type"] = "application/json";
-    if (this.config.awsSessionToken) headers["x-amz-security-token"] = this.config.awsSessionToken;
+    if (this.config.awsAccessKeyId && this.config.awsSecretAccessKey && this.config.awsSessionToken) headers["x-amz-security-token"] = this.config.awsSessionToken;
 
-    headers.authorization = createAuthorizationHeader({
+    // Legacy configurations can still sign; current SP-API only requires the LWA token.
+    if (this.config.awsAccessKeyId && this.config.awsSecretAccessKey) headers.authorization = createAuthorizationHeader({
       method,
       url,
       headers,
