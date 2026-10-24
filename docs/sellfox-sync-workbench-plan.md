@@ -1,84 +1,227 @@
 # 赛狐只读同步与数据浏览器实施方案
 
-状态：本地实现完成，等待环境部署和真实接口验收。永久保留：系统不按时间自动删除快照。
+更新：2026-10-25。状态：方案完成；已有代码为基础实现，尚未满足真实同步验收，不得据此开启生产定时任务。
 
-## 现状与边界
+## 1. 目标与交付边界
 
-- 复用 `src/lib/sellfox/client.ts` 的 token 缓存、HMAC 与 token/40019 重试，不新增 HTTP 客户端。
-- 当前 POST sync 在请求内执行，stores 只请求第一页；hourly 每店仅采样前五个 SP campaign；performance 已分页，但缺持久化 checkpoint。
-- 当前权限为 `sellfox:view` 和 `sellfox:create`，继续沿用，API 必须校验组织和 workspace。
-- 已有 BullMQ、Redis queue、WorkerHeartbeat 及 Amazon schedule 模式，可复用机制但独立赛狐队列与资源，避免串入 Amazon 任务。
-- ProductRecord 不变；赛狐新数据仅为报表快照。凭据仅从服务端环境读取，API 仅暴露 configured。
+正式运行采用现有 Next.js + PostgreSQL + Redis/BullMQ + 独立 Node Worker；本地用于开发、契约测试与隔离验收。所有同步只读赛狐，在自有数据库保留报表快照，不写 ProductRecord、不执行广告或 Listing 修改。
 
-## 实施顺序
+- 复用 `src/lib/sellfox/client.ts` 的 HMAC、token 缓存与重试，禁止另建 HTTP 客户端。
+- 凭据只来自服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET`，可选 `SELLFOX_REQUEST_TIMEOUT_MS`。页面只显示 configured，不提供凭据输入或回显，不将密钥写入 Agent/SellerSprite。
+- 首期完成 stores、inventory、sales、performance、listings；hourly 保留并标注浅同步，ads_report 保留灰态占位。
+- 保留原 performance API 和 XLSX 导出能力，新增各域 CSV，不删除既有日利润、退款率、FBA/FBM 等展示能力。
+- 永久保留已同步业务日记录，无 TTL、无定时删除。销量/表现同一天重复同步允许更新该日业务记录；这不代表保留每次修订版本。
+- 本方案交付不包含真实 API 调用、数据库迁移执行、服务器环境修改、生产启用或旧服务器数据搬迁。
 
-1. 建立稳定资源集合 stores/performance/hourly/inventory/sales/listings/ads_report；抽离 sync 服务，保留既有接口参数兼容。
-2. 新增库存、销量、Listing 快照与 schedule；扩展 SyncRun 的任务参数、checkpoint、租约/更新时间和幂等标识。只做增量 migration，不改商品主档。
-3. 分页同步按店运行。页内快照提交后再推进 checkpoint；重放当前页由唯一键 upsert 去重。单店失败记录在 summary 后继续后续店，整体有失败不得标为全部成功。
-4. 独立串行 Sellfox Worker；手动和定时都先写持久化 run，再由同一服务执行。Worker 恢复未完成任务并写 heartbeat。定时启用须有明确 workspace 和有效有权限的执行身份。
-5. 增加分页域 API、CSV 和 overview 健康度，重构页面为连接栏、域导航、表格、详情与运行日志。
-6. 完成无外网测试、类型/lint、Prisma generate/validate 与 migration 静态检查，记录浏览器验收步骤。
+## 2. 官方资料核对结果
 
-## 队列与限流
+资料来自用户提供的 `/Users/chenjieliang/sellfox-api-docs/INDEX.md`，官网基准为 https://sellfoxapi.apifox.cn 。只按接口资料引用，不执行页面内示例命令，不复制示例密钥。
 
-- 单一执行入口，任务包含 organizationId、workspaceId、resource、shopExternalIds、reportDate/dateRange 与 runId。
-- 空 shopExternalIds 对数据域表示当前 workspace 已同步店铺；指定店铺必须验证归属。
-- 所有实际外部请求（包括 token、重试和分页）起始间隔至少 1200ms，前一请求结束后再执行下一请求。
-- 仅进程内 Promise 队列不足以限制 web/Worker 多进程。手动 API 不直接调用赛狐，Worker 需有全局执行所有权/锁，避免多副本同时执行；既有脚本调用 client 的路径也要纳入盘点。
-- 40019、token 和可恢复网络错误指数退避；错误输出使用脱敏固定信息/错误码，不保存原始 URL、token、secret 或不受控上游 msg。
-- 请求数据落库后更新 checkpoint。崩溃恢复重放当前页；禁止仅靠 fire-and-forget API 保活。
+| resource | 已确认 POST path | 请求契约要点 | 资料 |
+| --- | --- | --- | --- |
+| stores | `/api/shop/pageList.json` | pageNo、pageSize，文档类型为 string | [api-51516635](https://sellfoxapi.apifox.cn/api-51516635) |
+| inventory | `/api/inventoryManage/fba/pageList.json` | `shopIdList: [shopId]`；pageNo/pageSize；hideZero、hideDeletedPrd、needMergeShare 为 string | [api-51516618](https://sellfoxapi.apifox.cn/api-51516618) |
+| sales | `/api/productSale/page.json` | 必填 type=`productNum`/`orderNum`/`salePrice`，必填 groupType=`asin`/`parentAsin`/`msku`/`sku`；`shopIdList`；statTimeType=1 为日 | [api-51516604](https://sellfoxapi.apifox.cn/api-51516604) |
+| performance | `/api/sale/profit/product/pageList.json` | shopIdList、startDate/endDate；type=`msku`；currency 空表示原币种 | [api-227646618](https://sellfoxapi.apifox.cn/api-227646618) |
+| listings | `/api/order/api/product/v2/pageList.json` | shopIdList、pageNo/pageSize；marketplaceIdList；onlineStatusList=`active`/`inActive`/`delete` | [api-420168353](https://sellfoxapi.apifox.cn/api-420168353) |
+| hourly | `/api/cpc/hourData/spCampaign.json` | 必填 aggregationType=`campaign`、shopId、date、campaignId；只能查询最近 60 天 | [api-352957023](https://sellfoxapi.apifox.cn/api-352957023) |
+| ads_report（后期） | `/api/cpc/download/createTask.json` → `/api/cpc/download/pageList.json` | 创建用 shopIds、adTypeCode、reportTypeCode、timeUnit、reportStartDate/reportEndDate；进度用 taskIds | [api-52365899](https://sellfoxapi.apifox.cn/api-52365899)、[api-52365898](https://sellfoxapi.apifox.cn/api-52365898) |
 
-## 存储与幂等
+补充确认：
 
-- 店铺继续使用 organizationId + workspaceId + externalId 唯一键。
-- 新快照具备 organizationId/workspaceId/storeId、业务日、稳定 sourceKey、ASIN/MSKU/SKU、syncedAt 与 payload。
-- 库存每次抓取生成独立快照（同一 run 重试复用 capturedAt 幂等），以业务日筛选；销量采用店铺 + 报表日 + 业务键，重复同步更新同一业务日记录。
-- Sellfox 店铺存在任一快照时数据库拒绝删除店铺行，避免外键级联删除历史；当前没有自动过期、清理或删除快照的入口。备份与存储容量仍由数据库运维策略负责。
-- 业务键必须依据接口实际粒度确定，库存还需核对 FNSKU/库存状态等维度，禁止以标题当键或猜测字段把不同记录合并。
-- 数量缺失保留 null，不伪造零；响应结构或店铺归属无法确认时失败并留下 run，不标空数据成功。
-- 列表默认 50 行，服务端过滤分页；列表不默认返回完整 raw payload，详情按需读取。
-- CSV 复用现有导出格式与范围，防电子表格公式注入并限制导出规模；保持组织/workspace 权限。
+1. [Token 文档 doc-1589130](https://sellfoxapi.apifox.cn/doc-1589130) 明确 `expires_in` 单位是**毫秒**，正常 24 小时；0 表示失效。当前 client 乘以 1000 是缺陷，必须修正。
+2. [签名 doc-1749562](https://sellfoxapi.apifox.cn/doc-1749562)：按 access_token/client_id/method/nonce/timestamp/url 排序，以 client_secret 作 HMAC-SHA256；body 不参与签名，method 使用 post。
+3. [限流 doc-4717915](https://sellfoxapi.apifox.cn/doc-4717915)：每接口每秒一次，超限 code=40019。本项目继续采用更保守的全局串行和请求间隔 ≥1200ms。
+4. [公共报错 doc-1759053](https://sellfoxapi.apifox.cn/doc-1759053)：40001 token 失效；40005 IP 白名单；40011 签名；40014 参数/分页上限；40021 无接口权限。公共分页上限为 100；SP 活动特定文档允许 100–1000，首期仍用 100。
+5. [SP 活动 api-367482273](https://sellfoxapi.apifox.cn/api-367482273) 用 nextToken 分页，不应套 pageNo。现有前 5 个活动采样只能称浅同步。
+6. Listing 文档 switchFulfillmentTo 的配送类型说明有重复 FBA 文案，不能据此推断 FBM 枚举；首期不传此筛选。
 
-## 定时策略
+### 2.1 资料缺口与准入
 
-- stores 每 8 小时；inventory 每 3 小时；listings 每日一次。
-- sales/performance 每日 Asia/Shanghai 06:30 拉 T-1；近七日补缺需有明确的完整性判断。
-- hourly 默认关闭，明确标浅同步；ads_report 占位禁用。
-- 默认不自动为所有租户启动外部请求。计划按 workspace 持久化启用，展示下一运行时间、最近运行和失败状态；执行前复核执行人权限。
+上述本地 API 页面只有请求字段和 HTTP 状态列表，没有展开 200 成功响应 schema/样例。路径、请求字段可以定稿，但 rows/totalPage、店铺归属、稳定业务键、库存量字段及销量日列结构仍须补齐证据，不能将当前猜测字段当官方契约。
 
-## 页面/API
+下一步从同一官方项目补充 OpenAPI JSON/YAML 或成功响应 schema；仍缺失时，在明确授权的测试工作区用最小只读请求取得样例，经脱敏后建立 fixture。不得把 token、签名 URL 或原始业务响应打印到聊天和通用日志。
 
-- 顶栏 configured、workspace、店铺多选、立即同步资源菜单、最近运行与各域上次成功时间。
-- 域：overview/stores/inventory/sales/performance/listings/ads/runs。
-- URL 保存域、店铺、日期范围、搜索、站点、页码；切换 workspace 清空旧数据并取消/忽略迟到响应。
-- 沿用现有 overview/performance/export，新增各域列表及导出；POST sync 对长任务返回 202 + runId，通过 runs 轮询。
-- 读沿用 sellfox:view，同步沿用 sellfox:create，不扩宽角色权限。
-- 无凭据提供服务器配置说明链接，无店铺引导同步店铺，无库存引导同步库存。
+每域准入需确认：响应外壳、空列表形状、分页结束条件、shopId 所在层、唯一键、日期/时区、单位及币种、缺省值语义。缺任一关键项时该域标记“响应契约待验证”，同步/计划不可启用；读已有历史数据仍可用。
 
-## 外部接口待核验
+## 3. 代码基线与必须修正的差异
 
-- stores：`/api/shop/pageList.json`；performance：`/api/sale/profit/product/pageList.json`。
-- inventory：核对 `/api/inventoryManage/fba/pageList.json` 的请求筛选、分页、返回字段及粒度。
-- sales：实现使用用户提供的候选 `/api/productSale/page.json`；上线前仍须通过当前赛狐账号对应文档核对精确路径、请求筛选名和逐日字段语义。区间响应若缺逐日日期会停止该店写入并让 run 失败，不把区间结果伪装成单日数据。
-- listings：核对在线产品 V2 的精确路径、分页与稳定身份字段。
-- 尚未核验的接口不得猜测实现并标记可用；必要时以明确未接入状态交付，记录所缺契约。
+已存在：稳定 resource 枚举、inventory/sales/schedule 表与增量 migration、共享 sync service、独立 BullMQ Worker/heartbeat、异步 run、日期/店铺分页浏览与导出、快照外键防级联删除。以上为代码存在性确认，不等同于端到端验收通过。
 
-## 本地实现状态
+| 优先级 | 当前问题 | 处理要求 |
+| --- | --- | --- |
+| P0 | token 有效期毫秒被当秒；重试等待为线性且所有错误重试 | 修正 TTL，刷新去重，明确可重试错误和指数退避 |
+| P0 | inventory 用 shopId，官方参数是 shopIdList | 改成单店数组；响应归属校验，防筛选被忽略后将全账号库存写入单店 |
+| P0 | sales 缺必填 type/groupType，用了 shopId | 固定 MSKU、日统计；销量与销售额独立请求并核对合并身份；逐日处理 |
+| P0 | rowsFrom 的空结果无法区分合法空页/结构变化 | 显式响应 schema：合法空数组成功，未知结构失败；缺业务身份不能静默 skip 并报成功 |
+| P0 | 全局一组凭据可被不同 workspace 调用并拉入全部店铺 | 先建立凭据授权范围到 organization/workspace/shop 的服务端绑定，再允许同步 |
+| P1 | 日期默认值在执行/重试时重新计算；stores 恢复读取 pageNo 而非已存 cursor | 创建 run 时冻结日期、店铺集合、抓取时间和请求版本；统一 checkpoint |
+| P1 | 完成时用旧 summary 覆盖最新进度；各域失败游标行为不一致 | 原子保留进度与结果，持久化每店/日期完成状态与失败原因，重试跳过已完成单元 |
+| P1 | Worker concurrency=1 不保证多副本只有一个任务执行；运行前缺统一身份复核 | Worker 级全局执行锁 + run CAS/租约；复核 active 用户、成员、权限及店铺授权 |
+| P1 | 没有店铺可能显示同步成功；达到页数上限可能被当正常完成 | 明确需先同步店铺；硬上限仍有数据时标不完整失败 |
+| P1 | Listings 只有灰态；统一站点筛选、raw 详情、设置页健康度不完整 | 按第 7 节补齐；已有功能与新域共用分页组件 |
+| P1 | 专项测试仅覆盖 1200ms、资源/日期、分页边界 | 补充真实有意义的服务层/权限/幂等/恢复测试，不能沿用过往过度覆盖声明 |
 
-- 已实现 PostgreSQL 全局 advisory lock + client Promise queue；每次 token/API HTTP 请求完成后至少间隔 1200ms，跨 Worker 进程共享同一数据库锁。
-- 已实现独立 BullMQ 队列、concurrency 1 Worker、heartbeat、持久化 run/checkpoint、指数退避重试、组织/workspace/shop 验证和权限撤销后暂停计划。
-- 已实现 stores、inventory、sales、performance、既有 hourly 浅同步；inventory/sales/performance 按 store/page 保存 checkpoint，重试从最近完成页继续。快照不自动过期，且店铺删除受历史快照外键保护。
-- 已实现 stores/inventory/sales/performance/hourly/runs 的服务端分页、域筛选、CSV 与 `/sellfox` 域导航、日期/店铺/ASIN/MSKU/SKU 搜索、详情摘要和定时开关。
-- Listing 和 ads_report 保持灰态占位；当前广告视图是既有 SP 小时浅同步结果。
-- 本机 `.env` 未修改，未执行数据库迁移，未安装/启动生产 systemd unit，未访问真实赛狐接口。
+## 4. 数据模型与永久保留
 
-## 影响、回滚与验证
+### 4.1 组织、工作区与账号边界
 
-- 影响仅限赛狐 API/UI、增量 Prisma 表、独立队列/Worker 命令与运维说明，不变更 ProductRecord 或 Amazon transport。
-- 1200ms 串行意味着 100 页请求至少约两分钟，实际还包含上游响应和数据库时间。异步排队避免拖慢页面请求；独立 Worker 避免阻塞现有导入队列。
-- 数据库增加快照和索引存储；不默认全历史补拉，不在页面执行同步或重计算。长期保留/清理政策在有真实规模后另定。
-- 回滚先关闭赛狐计划并停止独立 Worker，再回退应用；增量表保留，不执行 down migration，不删除报表记录。
-- 当前新增测试只覆盖请求串行/1200ms 间隔、资源与日期校验及分页边界；同步服务落库幂等、路由权限和页面交互尚无专门自动化覆盖。不访问真实赛狐。
-- 按用户要求优先相关测试 + lint/typecheck，必要时 check:fast；Prisma generate/validate 和 migration 检查。不默认全量 build/E2E，也不迁移生产。
-- 生产安装需审核后安装 `deploy/systemd/amazon-sellfox-sync-worker.service`，并确认 `QUEUE_DRIVER=redis`、Redis、PostgreSQL 及服务端 Sellfox 凭据；再按受控流程审阅并部署迁移。销售候选接口 `/api/productSale/page.json` 的官方路径、字段及口径尚未核验；当前网络无法访问官方文档，必须先用赛狐账号对应文档核实，再进行真实接口验收。全仓 `check:fast` 曾被既存未跟踪 `tmp/create-kayak-sku.ts` 的 `no-explicit-any` 阻断，赛狐定向 lint、类型检查和已有测试通过。
-- 本次未改服务器 `.env`、未部署/启动生产 Worker、未访问真实赛狐。现有工作区包含大量其他模块未提交改动，GitHub 同步须先确认整体范围。
+- `SellfoxStore` 保持 organizationId + workspaceId + externalId 唯一，externalId 即 shopId；workspace header 不能代替访问授权检查。
+- 一组服务端凭据视为一个赛狐连接，可覆盖多个 Amazon 店铺；首期不提供多个赛狐 client_id 的页面配置。多个赛狐开发者账号需后续单独设计 connectionId 和服务端凭据引用。
+- 服务端受控绑定记录该连接可服务的组织/工作区及授权 shopExternalIds。凭据仍只存 env；绑定不含 secret/token。缺绑定或无权店铺失败关闭，不能把服务器全局凭据视为全租户授权。
+- 店铺发现只保留目标工作区授权集合；所有请求、写库、详情与导出都带组织/工作区边界。指定店铺在入队和执行时均复核，空数组为当前工作区全部授权且已同步店铺。
+
+### 4.2 各域记录粒度
+
+| 数据 | 保留与幂等键 | 日期语义 |
+| --- | --- | --- |
+| 店铺 | 现有唯一键，保留最新店铺资料；不自动删除失联店铺 | lastSyncedAt 为连接时间，不表示历史店铺资料 |
+| FBA 库存 | storeId + capturedAt + 已核验 sourceKey；同 run 重试复用 capturedAt | reportDate 为实际采集日，capturedAt 为 UTC 抓取时间 |
+| 销量 | storeId + reportDate + sourceKey；重复同步 upsert | 赛狐日统计日期，数量/销售额独立缺失时为 null |
+| 产品表现 | 现有 storeId + reportDate + sourceKey | 每次请求仅一个报表日；不将区间汇总写成逐日事实 |
+| Listing（新增） | 建议 storeId + capturedAt + sourceKey，新增 SellfoxListingSnapshot | reportDate 为采集日；保留当时状态、MSKU/ASIN 及原始摘要 |
+| 小时 | 现有 storeId + reportDate + hour + adType/entityType/entityId | 日和小时按赛狐报表口径，不擅自转换站点日 |
+
+库存与 Listing 是“采集当时的状态”：10 月 25 日开始同步，不能反推 10 月 24 日的真实库存/Listing。同步入口拒绝给当前状态接口指定过去业务日；浏览器日期筛选只查询已存在的历史。小时接口上游只支持最近 60 天，但已落库小时记录永久保留，可离线浏览更早日期。
+
+库存 sourceKey 需依据官方响应确认是否含 FNSKU、共享仓、库存状态等维度，禁止以非空字段随意拼接、优先拿 id 就假定稳定。数量字段必须明确表示可售/总库存/在途中的哪种；不能把这些字段作为同义别名互相兜底。
+
+所有报表缺值显示“—”，已明确返回的 0 才显示 0。销量和销售额不同时有值时保留部分指标状态。金额保留原币种，跨币种不直接求和；存储精度和现有 Float 兼容，新增金额采用明确的小数策略并覆盖舍入测试。
+
+### 4.3 保留、安全与容量
+
+- 无自动清理或删除入口；现有快照到店铺外键使用 RESTRICT。Listing 新表沿用此保护。
+- 原始 payload 服务端保存，默认列表不返回；响应验证后按店/页事务写入并推进 checkpoint。
+- 捕获过程失败的批次保留但标不完整，默认历史视图只选成功批次；原始记录可从 run 追溯。
+- 同日快照默认看该店最后完整采集批次，可切换抓取时间。不能把一天 8 次库存相加，也不能混合不同批次去找每 SKU 最近值冒充完整库存。
+- 成功空批次也有批次/run 记录，区分“合法零行”与“从未采集”。覆盖率按店铺/域/业务日成功批次计算，不能只看是否曾有一行数据。
+- 以最小增量模型提供 capture/run 关联及完整性标记；写入旧批次幂等，旧数据无法确定批次时标 legacy，不猜测成功状态。
+- 持久保留会持续增长：S 店 × K 行/店 × C 次/日 × 365 是库存年行数。例如 5 店、各 1000 行、每日 8 次约 1460 万行/年，尚未计 payload/索引/Listing；只是容量示例，不是实测。
+- 首期默认库存 3 小时、Listing 每日一次，不自动全历史补拉。用样本测行大小/索引与查询 P95 后再确定磁盘预算；不足时可先降采集频率，历史不自动删除。PostgreSQL 备份及恢复验证是永久保留的运维前提。
+
+## 5. 同步服务与 Worker
+
+### 5.1 任务与执行顺序
+
+手动/定时 → 校验权限及连接范围 → 创建持久化 SellfoxSyncRun → BullMQ 任务 `{ runId }` → 独立 `SellfoxSyncQueue`（concurrency=1）→ 共用 service → 既有 client → 分页事务落库 → runs/overview 查询。
+
+任务冻结：organizationId/workspaceId/resource、shopExternalIds、reportDate 或展开的日期列表、capturedAt、requestVersion。队列单元包含 `{ resource, workspaceId, shopExternalId, pageCursor, reportDate }`，按店/日期/页顺序处理。runId 贯穿快照、批次与日志。
+
+- 缺 Redis 或 Worker 不可用返回明确状态，不退化成浏览器或请求内长任务。
+- Worker 多副本需独立全局执行锁，连接断开立即停止新请求；HTTP advisory lock 继续保护其他 Node 调用路径。
+- 重试同一 run 采用 CAS/租约避免重复执行；手动与定时同一范围存在活动 run 时返回已有 runId，防重复排队。
+- 所有 HTTP（包括 token、重试）统一串行，完成后至少等待 1200ms，再允许下一请求；队列暂停不丢任务。
+
+### 5.2 逐域读取策略
+
+- stores：分页取授权店铺，冻结 run 允许范围；不从缺失响应推断店铺删除。
+- inventory：单店 shopIdList；首期 `hideZero: "false"`、`hideDeletedPrd: "false"`、`needMergeShare: "false"`，保留零值和独立记录，业务含义通过响应核验后验收；不传日期筛选，不合并未知仓维度。
+- sales：单店、单日、groupType=`msku`、statTimeType=1；type=`productNum` 获取数量，type=`salePrice` 获取销售额；按已核验业务身份和日期合并，币种不一致拒绝合并。orderNum 暂不请求、不冒充销量。分页分别记录指标 cursor，一页验证后写入；日期范围展开为逐日单元，最多 90 个自然日，缺一端按单日归一化，拒绝 reportDate 与范围同时传入。
+- performance：保留既有 type=`msku`、shopIdList；逐日拉取与补数，只在完整成功后更新该日覆盖状态。
+- listings：单店 shopIdList，首次全量，无时间过滤；不隐藏 inActive/delete 状态。每日全量快照优先，增量游标留给有性能证据后的阶段；不能把 modifiedTime 当历史状态查询。
+- hourly：每店最多前 5 个 SP 活动作为样本，标清采样数量和覆盖范围；按官方 nextToken 获取活动后再采样，日期不得超过上游 60 天范围；单店失败继续下一店。
+- ads_report：本阶段只显示接口名与灰态，禁止创建真实任务。后期需保存 taskId、异步轮询、超时和 storage fileId；下载 URL 的有效期、域名、大小及响应格式单独验收。
+
+### 5.3 Token、失败与恢复
+
+- `expiresAt = receivedAt + expires_in(ms)`，到期前保守刷新；0/非法 TTL 不缓存，不能缓存成长期有效 token。并发刷新去重，40001 允许一次刷新后重新签名，不无限刷新。
+- 40019、HTTP 429/5xx、网络超时可重试；建议等待 2s/4s/8s 加 jitter，仍经过全局限流。参数、白名单、签名及无权限错误立即失败，避免请求风暴。
+- client 与 job 总重试预算有上限，避免 4×4 无限放大。每店错误写脱敏 code/类型、尝试次数与下一重试时间；不保存 URL/query/token。
+- 单店失败继续后续店；run 只有所有目标单元成功才 done；失败保持现有 failed 状态并在 summary 展示成功/失败店及完整性。连续失败写告警摘要，页面可见。
+- checkpoint 记录稳定 shopExternalId、日期、指标、下一页/nextToken，不仅依赖可变化的店铺下标。页数据与 checkpoint 同事务提交，崩溃重放当前页由稳定唯一键去重。
+- checkpoint/result 合并更新，不以执行前旧 summary 覆盖进度；中途失败保留最新 cursor，重试不重写已成功批次。
+- BullMQ stalled 恢复和数据库恢复分工明确：有效租约仍在的 running 不抢占；租约过期且 Redis 无活动任务的 run 才恢复 queued；多副本恢复要防重。
+
+## 6. 计划与运维
+
+| resource | 默认计划建议 | 默认状态 |
+| --- | --- | --- |
+| stores | 每 8 小时 | 关闭 |
+| inventory | 每 3 小时 | 关闭 |
+| sales/performance | 每日 06:30 Asia/Shanghai 拉 T-1 | 关闭 |
+| listings | 每日一次 | 关闭，响应契约通过后可启用 |
+| hourly/ads_report | 手动浅同步/后期 | 无默认定时 |
+
+复用专用 `npm run worker:sellfox-sync`、`amazon-sellfox-sync-worker` 和 30 秒计划检查；不在页面启动 scheduler。计划启用需 sellfox:create 和有效服务端连接映射，每次执行复核启用人身份/权限；撤销即暂停并写失败 run。
+
+日计划创建任务时冻结 T-1，不在执行/重试时重算。重启跨过 06:30 当日补入一次；不自动追补无限历史。最近 7 日缺口按完整性标记显式补拉；同日重复 tick 及手动竞争只产生一个活动 run。
+
+`/settings` 运维页及 `/sellfox` 展示 worker heartbeat、最近运行/成功、队列等待、下次计划、失败摘要。configured、workerOnline、API 已授权和数据新鲜度是不同状态，不能用 configured 代表“已连通”。
+
+## 7. 页面与 API
+
+组件沿现有 UI 拆分为 connection-bar、domain-tabs、resource-table、sync-runs-panel；统一 loading/error/empty 状态，默认 50 行服务端分页，不加载全表/raw。
+
+- 连接栏：configured、当前工作区、全局店铺多选、资源同步菜单、最近 run。域概览：店铺数、各域完整覆盖率、未采集/失败/过期缺口。
+- 域导航：概览、店铺、库存、销量、产品表现、Listing、广告、同步日志。未接入广告报告给出官方接口名，无模拟数据。
+- 筛选：店铺、from/to、ASIN/MSKU/SKU 搜索、站点；URL 保存筛选/域/页码，可复制，浏览器前进后退与切 workspace 不能出现旧数据。
+- 库存/Listing 可选“当日最后成功批次”及具体抓取时间；日期是业务日，抓取时间使用用户时区显示并注明。
+- 点记录打开摘要抽屉；点击 raw 折叠项才取详情，展示大小限制与截断说明。不能让 payload/summary 中敏感错误内容进入页面。
+- 产品表现保留原指标/导出能力；金额按币种分组。销量 quantity 标题为销量，不能复用库存标题。
+- 缺凭据链接设置/运维说明；已配置无店铺提供同步店铺；有店无库存提供同步库存；尚未获接口权限显示对应域禁用原因。
+- 读 sellfox:view；同步及计划 sellfox:create；导出沿用 sellfox:export，不扩大普通 operations 角色权限。按钮与 API 都检查权限。
+
+| API | 契约 |
+| --- | --- |
+| GET `/api/sellfox/overview` | configured、域计数、按店/日覆盖、latest runs、每域最近成功、worker 状态 |
+| POST `/api/sellfox/sync` | resource、可选 shopExternalIds、reportDate/dateRange；兼容现有 startDate/endDate，归一化后冻结入 run；202 + runId |
+| GET `/api/sellfox/:domain` | stores/inventory/sales/performance/listings/hourly/runs；分页、日期/店铺/站点/搜索；返回完整性信息 |
+| GET `/api/sellfox/:domain/:id` | 新增按需详情；验证 organization/workspace/store 权限，受限 raw |
+| GET `/api/sellfox/:domain/export` | 与列表同口径 CSV；保留现有 performance XLSX，转义 CSV 公式；超限返回明确错误，不静默截断 |
+| GET/POST `/api/sellfox/schedules` | 读/启停当前工作区计划，返回 nextRunAt、lastEnqueuedAt、最近 run 和 disabledReason |
+
+所有 route 声明 Node runtime，组织来自登录会话，workspace 必须验证归属；维持 x-workspace-id 以及既有导出 query scope 兼容。无凭据 503、无权限 403、非法资源/日期 400、未接入 409，并记录已接受同步的 run；未认证/非法请求不伪造已执行记录。
+
+## 8. 按序实施任务与验收
+
+### 阶段 1：契约与客户端收口
+
+- [ ] 修正 TTL 毫秒、退避、重试分类与全局锁断线处理；复用既有 client。
+- [ ] 修正库存 shopIdList、销量必填参数，建立纯请求构造函数及契约测试。
+- [ ] 补足各域成功/空页/异常响应 schema 与脱敏 fixture，建立解析与归属验证；证据不足的域保持禁用。
+- [ ] 完成服务端连接到组织/工作区/店铺的授权映射，覆盖缺映射与越权测试。
+
+完成标准：请求参数与官方文档逐项对应；HMAC/token/40019 无外网测试通过，不能靠猜字段完成响应映射。
+
+### 阶段 2：快照与恢复
+
+- [ ] 审核已存在库存/销量 migration，新增 Listing 和最小批次完整性关联；不修改已部署 migration。
+- [ ] 逐店逐日/逐指标同步销售；库存/Listing 固定 capturedAt，稳定业务键 upsert。
+- [ ] 数据页与 checkpoint 事务提交；修正 stores cursor、失败游标、旧 summary 覆盖、空店铺/分页硬上限问题。
+- [ ] run 原子 claim/租约、多副本串行、失联恢复与已有单元跳过；每店错误脱敏保留。
+
+完成标准：同 run 重放不增重复行，不同库存采集保留历史；跨工作区永不混写，单店失败不影响其他店。
+
+### 阶段 3：计划与浏览器
+
+- [ ] 日计划冻结日期与缺口判断，接入 Listing 每日计划和计划 nextRunAt。
+- [ ] 完成 `/settings` 健康度、资源能力/禁用原因、run 进度与错误呈现。
+- [ ] 完成组件拆分、站点筛选/URL 同步、历史批次选择、raw 详情、各域 CSV；恢复既有表现指标。
+- [ ] 取消/忽略列表、概览、计划与轮询所有迟到响应；切 workspace 后清空记录抽屉，避免旧数据回填。
+
+完成标准：多店多 SKU 按日查阅、筛选和导出一致；采样/未接入明确可见，成功空批次与缺数据可区分。
+
+### 阶段 4：验证与受控启用
+
+- [ ] 无外网单元测试：签名；TTL 毫秒及 0；token 刷新去重；1200ms 全局串行；指数退避/永久错误；官方请求字段、分页边界、日期上下限。
+- [ ] 服务集成测试使用隔离 DB/transport stub：upsert 重放；两次采集；页事务崩溃恢复；失败店后继续；合法空页；未知 schema 拒写；归属不明拒写；日期/指标合并与缺值/币种。
+- [ ] route/Worker 权限测试：403、跨 workspace/shop、缺凭据文案、权限撤销、计划防重、running 恢复及多副本互斥；不访问生产库。
+- [ ] 浏览器烟测：configured 空态→同步店铺 CTA→各域与日期/站点/店铺筛选→分页→详情 raw→CSV→日志轮询→切工作区迟到响应；可用隔离模拟接口，不造已同步生产数据。
+- [ ] 日常相关测试 + check:fast；Prisma 变更补 validate/generate、migration diff/隔离迁移；合码/上线按项目 CI 完整检查。本方案文档本身只做差异与引用核对，不重跑应用测试。
+- [ ] 授权后单店单日只读真实验收，核对赛狐后台同口径数量/金额/库存字段、合法空页与第二页；再扩展多店，重复运行验证幂等。
+
+完成标准：库存/销量/表现/Listing 请求与响应均经核验，完整批次入库并可按日期浏览；定时到点入队且脱离浏览器运行。未达成前不能称“生产同步完成”。
+
+## 9. 性能、部署与回滚
+
+全局串行下 100 次请求至少约两分钟，另加响应与写库时间。销量/销售额独立请求约增加一倍销量域调用，逐日补数按天放大；容量/时长影响应在代码实施前向用户说明，采用单店 T-1 及默认关闭计划作为初期方案，不自动全量补历史。
+
+列表索引覆盖 organization/workspace/store/reportDate；按成功批次查库存，不在前端汇总历史全量。记录首批真实样本的 SQL/API P95、行数与存储大小后再评估优化，不先引入 Redis 报表缓存或新 Read Model。
+
+后续明确部署时：完整盘点工作区→确认全部上线范围→GitHub CI artifact→审阅 migration/deployment plan→按清单更新 web 与赛狐 Worker→读取 RELEASE-RESULT.json→单店验收→显式启用计划。不要在本机或服务器绕过 CI 构建。
+
+按 2026-10-25 仓库规则，新部署目标为 `123.207.47.225`，旧 `159.75.203.221`/aecob.com 独立运行；两边数据库不相同。不得自动迁移旧数据、共享/覆盖凭据或同时启动同连接的采集。跨服务器采集若共用赛狐凭据，数据库锁不能跨数据库限流；正式采集只能指定一个主机，或先设计共享限流与主备所有权。
+
+新表/增量约束由 CI 受控迁移；本次不改服务器 .env。已有错误数据如需修复，先只读盘点并保留溯源，再单独批准，不删原始记录冒充历史正确。
+
+回滚先关闭计划和停止赛狐 Worker，再回退应用；新增表/历史保留，不 down migration、不级联删除、不回滚 ProductRecord。记录 `database: not_rolled_back`。本次只完善方案，不执行上述部署操作。
