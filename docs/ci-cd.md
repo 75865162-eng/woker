@@ -19,7 +19,7 @@ artifact 不包含完整项目工作区、`node_modules/`、`.git/`、`coverage/
 
 生产部署需要配置：
 
-- `PRODUCTION_SERVER_HOST`：生产服务器 IP，例如 `159.75.203.221`
+- `PRODUCTION_SERVER_HOST`：部署服务器 IP，例如 `123.207.47.225`
 - `PRODUCTION_SERVER_USER`：SSH 用户，例如 `ubuntu`
 - `PRODUCTION_SERVER_DIR`：应用目录，例如 `/opt/amazon-ad-bulk-operation`
 - `PRODUCTION_SSH_PRIVATE_KEY`：CI 用 SSH 私钥
@@ -33,4 +33,12 @@ artifact 不包含完整项目工作区、`node_modules/`、`.git/`、`coverage/
 
 `RUN_BOOTSTRAP_SEED` 默认是 `false`，普通部署不会重置管理员密码或重复写 bootstrap audit；只有初始化环境时才临时设为 `true`。
 
-当前 workflow 的生产部署默认不在服务器执行 `npm run build`，也不主动执行 `npm ci`。如果 `package-lock.json` 发生变化，必须显式设置 `INSTALL_DEPS_ON_SERVER=true` 完成一次依赖更新；依赖未变化时服务器只执行 artifact 发布步骤。后续把 worker 预编译成 JS 后，可以进一步收紧服务器侧步骤。
+常规发布默认不在服务器执行 `npm run build`，也不主动执行 `npm ci`。如果 `package-lock.json` 发生变化，必须显式允许服务器依赖安装；依赖未变化时服务器只执行 artifact 发布步骤。后续把 worker 预编译成 JS 后，可以进一步收紧服务器侧步骤。
+
+## Ubuntu 首次安装
+
+新建 Ubuntu 24.04 主机时，先通过 SSH 运行 `sudo bash scripts/bootstrap-server.sh`。脚本安装 Node.js 22、Docker Compose 和 UFW，限制应用端口到 localhost，仅开放 SSH/HTTP/HTTPS；仅在 `.env` 不存在时创建独立数据库密码和 `AUTH_SECRET`。初始管理员密码保存在 `/root/amazon-ad-bulk-credentials.txt`，不得提交到 GitHub。
+
+之后通过 CI 的 `workflow_dispatch` 构建并部署，显式启用 `initial_deployment`、`install_dependencies` 并审核部署计划。首发会在新主机创建全新 PostgreSQL/Redis volumes，应用完整迁移，创建管理员并启动 systemd workers。没有前版 release 时只接受显式首发标记；已有 release 仍必须满足 base commit 校验。
+
+默认 `docker-compose.yml` 只管理 PostgreSQL/Redis。HTTP 入口由 Caddy 容器反代；初装默认访问 `http://123.207.47.225/`。新机使用本地 `uploads/`，不复制旧数据库、上传文件、R2 凭据或 Docker volumes。导入文件因此只保存在新主机，后续切换对象存储时应配置独立的 R2/S3 凭据和迁移流程。

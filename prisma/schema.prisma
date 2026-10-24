@@ -1075,7 +1075,7 @@ model SellfoxHourlyMetric {
   orders         Int          @default(0)
   payload        Json
   syncedAt       DateTime     @default(now())
-  SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([storeId, reportDate, hour, adType, entityType, entityId], map: "SellfoxHourlyMetric_storeId_reportDate_hour_adType_entityType_e")
   @@index([organizationId, workspaceId, reportDate])
@@ -1123,7 +1123,7 @@ model SellfoxProductDailySnapshot {
   syncedAt        DateTime     @default(now())
   createdAt       DateTime     @default(now())
   updatedAt       DateTime
-  SellfoxStore    SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  SellfoxStore    SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([storeId, reportDate, sourceKey])
   @@index([organizationId, workspaceId, asin])
@@ -1147,6 +1147,8 @@ model SellfoxStore {
   updatedAt                   DateTime
   SellfoxHourlyMetric         SellfoxHourlyMetric[]
   SellfoxProductDailySnapshot SellfoxProductDailySnapshot[]
+  SellfoxFbaInventorySnapshot SellfoxFbaInventorySnapshot[]
+  SellfoxSalesDailySnapshot   SellfoxSalesDailySnapshot[]
 
   @@unique([organizationId, workspaceId, externalId])
   @@index([organizationId, workspaceId, updatedAt])
@@ -1167,6 +1169,72 @@ model SellfoxSyncRun {
   @@index([organizationId, workspaceId, startedAt])
 }
 
+model SellfoxFbaInventorySnapshot {
+  id             String       @id
+  organizationId String
+  workspaceId    String       @default("default")
+  storeId        String
+  reportDate     String
+  capturedAt     DateTime
+  sourceKey      String
+  sku            String       @default("")
+  msku           String       @default("")
+  asin           String       @default("")
+  fnsku          String       @default("")
+  quantity       Int?
+  payload        Json
+  syncedAt       DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, capturedAt, sourceKey])
+  @@index([organizationId, workspaceId, reportDate])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, msku])
+}
+
+model SellfoxSalesDailySnapshot {
+  id             String       @id
+  organizationId String
+  workspaceId    String       @default("default")
+  storeId        String
+  reportDate     String
+  sourceKey      String
+  sku            String       @default("")
+  msku           String       @default("")
+  asin           String       @default("")
+  quantity       Int?
+  revenue        Float?
+  currency       String       @default("")
+  payload        Json
+  syncedAt       DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, reportDate, sourceKey])
+  @@index([organizationId, workspaceId, reportDate])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, msku])
+}
+
+model SellfoxSyncSchedule {
+  id             String   @id
+  organizationId String
+  workspaceId    String   @default("default")
+  userId         String
+  resource       String
+  enabled        Boolean  @default(false)
+  intervalMinutes Int
+  lastEnqueuedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, resource])
+  @@index([enabled, lastEnqueuedAt])
+}
+
 model AmazonIntegrationConnection {
   id              String    @id
   organizationId  String
@@ -1182,6 +1250,38 @@ model AmazonIntegrationConnection {
   updatedAt       DateTime  @updatedAt
 
   @@unique([organizationId, workspaceId, provider])
+  @@index([organizationId, workspaceId, updatedAt])
+}
+
+model AmazonIntegrationSecret {
+  id                  String   @id @default(cuid())
+  provider            String   @default("amazon_sp_api") @unique
+  organizationId      String
+  workspaceId         String   @default("default")
+  credentialsCiphertext String  @db.Text
+  awsRegion           String   @default("us-east-1")
+  endpoint            String   @default("https://sellingpartnerapi-na.amazon.com")
+  updatedByUserId     String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId])
+  @@index([organizationId, updatedAt])
+}
+
+model AmazonSellerBinding {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  workspaceId        String   @default("default")
+  sellerAccountId    String
+  marketplaceId      String
+  amazonSellerId     String
+  authorizedResources String[] @default([])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId])
+  @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId])
   @@index([organizationId, workspaceId, updatedAt])
 }
 

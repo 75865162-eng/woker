@@ -33,6 +33,7 @@ export function ListingAiInputPanel({
   setDescriptionPromptOpen,
   onGenerateTitles,
   onGenerateDescriptions,
+  canGenerate,
   onLoadTitleGeneratorHistory,
   onLoadDescriptionGeneratorHistory,
 }: {
@@ -60,6 +61,7 @@ export function ListingAiInputPanel({
   setDescriptionPromptOpen: Dispatch<SetStateAction<boolean>>;
   onGenerateTitles: () => void;
   onGenerateDescriptions: () => void;
+  canGenerate: boolean;
   onLoadTitleGeneratorHistory: (record: TitleGeneratorHistoryRecord) => void;
   onLoadDescriptionGeneratorHistory: (
     record: DescriptionGeneratorHistoryRecord,
@@ -77,6 +79,7 @@ export function ListingAiInputPanel({
         onGeneratorChange={setTitleGenerator}
         onPromptOpenChange={setTitlePromptOpen}
         onGenerate={onGenerateTitles}
+        canGenerate={canGenerate}
         onLoadHistory={onLoadTitleGeneratorHistory}
       />
       <DescriptionGeneratorCard
@@ -90,6 +93,7 @@ export function ListingAiInputPanel({
         onGeneratorChange={setDescriptionGenerator}
         onPromptOpenChange={setDescriptionPromptOpen}
         onGenerate={onGenerateDescriptions}
+        canGenerate={canGenerate}
         onLoadHistory={onLoadDescriptionGeneratorHistory}
       />
     </div>

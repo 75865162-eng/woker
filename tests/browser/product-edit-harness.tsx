@@ -35,7 +35,7 @@ function Harness() {
   }, [opened, shell]);
   return <AppShellUserProvider value={{ organizationId, userId, userName: "测试编辑者", userInitials: "T" }}>
     <button onClick={() => setOpened(true)}>打开编辑器</button>
-    {opened && product ? <ProductEditor product={params.get("mode") === "import" ? null : product} initialDraft={params.get("mode") === "import" ? { ...product, revision: undefined } : undefined} products={[product]} nextSku="SKU-2" creatorName="测试编辑者" creatorUserId={userId} detailReady={!shell || ready} detailError={detailError} onRetryDetail={() => void loadDetail()} opsOptions={["运营甲", "运营乙"]} designerOptions={[]}
+    {opened && product ? <ProductEditor product={params.get("mode") === "import" ? null : product} initialDraft={params.get("mode") === "import" ? { ...product, revision: undefined } : undefined} products={[product]} nextSku="SKU-2" creatorName="测试编辑者" creatorUserId={userId} detailReady={!shell || ready} canEdit detailError={detailError} onRetryDetail={() => void loadDetail()} opsOptions={["运营甲", "运营乙"]} designerOptions={[]}
       onClose={() => setOpened(false)} onSave={async (form) => {
         const response = await fetch("/api/products", { method: "POST", body: JSON.stringify({ product: form }) });
         const data = await response.json() as { product?: Product; error?: string };

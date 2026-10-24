@@ -274,8 +274,8 @@ test("amazon ads adapter plans safely and blocks apply without approval", async 
     approval,
   });
 
-  assert.equal(dryRunApply.status, "SUCCEEDED");
-  assert.equal((((dryRunApply.output as Record<string, unknown>).execution as Record<string, unknown>).status), "DRY_RUN_BLOCKED");
+  assert.equal(dryRunApply.status, "FAILED");
+  assert.equal(dryRunApply.error?.code, "AUDIT_REQUIRED");
 });
 
 test("approved ppc drafts can be queued into the workspace pending draft queue", () => {

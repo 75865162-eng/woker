@@ -37,7 +37,7 @@ function generate(changes: Record<string, string>, invalidBase = false) {
 
 test("documentation does not build, migrate or restart services", () => {
   const plan = generate({ "AGENTS.md": "policy" });
-  for (const key of ["requiresBuild", "requiresDeploy", "requiresMigration", "requiresWorkerRestart", "requiresWebRestart", "requiresCaddyReload"]) assert.equal(plan[key], false, key);
+  for (const key of ["requiresBuild", "requiresDeploy", "requiresMigration", "requiresWorkerRestart", "requiresWebRestart", "requiresSellfoxSyncWorkerRestart", "requiresCaddyReload"]) assert.equal(plan[key], false, key);
 });
 
 test("UI-only release restarts web, not workers or database", () => {
@@ -50,6 +50,7 @@ test("shared libraries conservatively restart both dependent workers", () => {
   const plan = generate({ "src/lib/example.ts": "shared" });
   assert.equal(plan.requiresWorkerRestart, true);
   assert.equal(plan.requiresImageWorkerRestart, true);
+  assert.equal(plan.requiresSellfoxSyncWorkerRestart, true);
   assert.equal(plan.requiresMigration, false);
 });
 
@@ -58,10 +59,14 @@ test("individual worker entry changes do not restart the other worker", () => {
   assert.equal(plan.requiresWorkerRestart, false);
   assert.equal(plan.requiresImageWorkerRestart, true);
   assert.equal(plan.requiresAmazonSyncWorkerRestart, false);
+  assert.equal(plan.requiresSellfoxSyncWorkerRestart, false);
   const amazonPlan = generate({ "scripts/amazon-sync-worker.ts": "worker" });
   assert.equal(amazonPlan.requiresWorkerRestart, false);
   assert.equal(amazonPlan.requiresImageWorkerRestart, false);
   assert.equal(amazonPlan.requiresAmazonSyncWorkerRestart, true);
+  const sellfoxPlan = generate({ "scripts/sellfox-sync-worker.ts": "worker" });
+  assert.equal(sellfoxPlan.requiresSellfoxSyncWorkerRestart, true);
+  assert.equal(sellfoxPlan.requiresAmazonSyncWorkerRestart, false);
 });
 
 test("schema without migration and invalid base fail closed", () => {
@@ -94,4 +99,8 @@ test("Caddy and infra configuration operations require their own changes", () =>
   const infra = generate({ "docker-compose.yml": "services" });
   assert.equal(infra.requiresInfraUpdate, true);
   assert.equal(infra.requiresCaddyReload, false);
+  const bootstrap = generate({ "scripts/bootstrap-server.sh": "setup", "deploy/systemd/amazon-sellfox-sync-worker.service": "service" });
+  assert.equal(bootstrap.requiresManualDeploymentReview, true);
+  assert.equal(bootstrap.requiresRuntimeConfig, true);
+  assert.equal(bootstrap.requiresSellfoxSyncWorkerRestart, true);
 });

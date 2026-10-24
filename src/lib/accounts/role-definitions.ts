@@ -68,7 +68,7 @@ export const roleDefinitions: RoleDefinition[] = [
   {
     id: "finance",
     name: "财务",
-    description: "查看业务数据并导出财务所需资料",
+    description: "查看业务数据并导出财务所需资料；物流页当前进页即开放全部操作，请谨慎分配",
     permissions: {},
     availableByDefault: true,
   },
@@ -82,7 +82,7 @@ export const roleDefinitions: RoleDefinition[] = [
   {
     id: "viewer",
     name: "查看者",
-    description: "只查看工作台、商品、Listing AI 和物流基础数据",
+    description: "只查看 Amazon AI Agent 工作台；不包含商品、Listing AI、物流或 PPC 权限",
     permissions: {},
     availableByDefault: true,
   },
@@ -162,6 +162,7 @@ export function buildRoleDefinitions(permissionActions: PermissionAction[], modu
       case "operations_supervisor":
         return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "imageUpscale", "operations", "tasks"], ["view", "create", "edit", "approve", "export"]) };
       case "operations":
+        // Operations intentionally has no PPC workspace permission by default.
         return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "operations"], ["view", "create", "edit", "export"]) };
       case "operations_assistant":
         return { ...role, permissions: createPermissions(["products", "sellfox", "listingAi", "agents", "operations"], ["view", "create", "edit"]) };
@@ -172,6 +173,7 @@ export function buildRoleDefinitions(permissionActions: PermissionAction[], modu
       case "warehouse":
         return { ...role, permissions: createPermissions(["logistics"], ["view", "create", "edit", "export"]) };
       case "finance":
+        // Logistics currently exposes its full UI after page access; keep the view/export limitation explicit in this role description.
         return { ...role, permissions: createPermissions(["products", "sellfox", "workspace", "agents", "logistics", "history"], ["view", "export"]) };
       case "warehouse_supervisor":
         return { ...role, permissions: createPermissions(["logistics"], ["view", "create", "edit", "approve", "export"]) };

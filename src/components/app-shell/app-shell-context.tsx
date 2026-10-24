@@ -1,12 +1,14 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { RolePermissionMap } from "@/lib/accounts/permissions";
 
 type AppShellUserContextValue = {
   organizationId?: string;
   userId?: string;
   userName?: string;
   userRole?: string;
+  rolePermissions?: RolePermissionMap | null;
   userInitials: string;
 };
 

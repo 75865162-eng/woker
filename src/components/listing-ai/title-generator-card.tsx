@@ -32,6 +32,7 @@ export function TitleGeneratorCard({
   onPromptOpenChange,
   onGenerate,
   onLoadHistory,
+  canGenerate = true,
 }: {
   generator: TitleGeneratorDraft;
   loading: boolean;
@@ -46,6 +47,7 @@ export function TitleGeneratorCard({
   onPromptOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
   onGenerate: () => void;
   onLoadHistory: (record: TitleGeneratorHistoryRecord) => void;
+  canGenerate?: boolean;
 }) {
   const [historySearch, setHistorySearch] = useState("");
   const isOldMode = generator.mode === "old";
@@ -152,7 +154,7 @@ export function TitleGeneratorCard({
               <Settings2 className="h-4 w-4" />
               提示词修改
             </Button>
-            <Button size="sm" disabled={loading} onClick={onGenerate}>
+            <Button size="sm" disabled={!canGenerate || loading} title={!canGenerate ? "没有 Listing AI 生成权限" : undefined} onClick={onGenerate}>
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

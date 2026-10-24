@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
-import { getCurrentUserFromRequest } from "@/lib/auth/session";
-import { roleCanPerformAction } from "@/lib/accounts/permissions";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { type RoleCatalogItem } from "@/lib/accounts/role-catalog";
-import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { getOrganizationRoleCatalogSnapshot, saveOrganizationRoleCatalog } from "@/lib/accounts/role-catalog-server";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
-
-function canManageRoles(role: string) {
-  return role === "owner" || role === "database_admin";
-}
 
 function diffRoles(
   before: Array<{ id: string; name: string; description: string; permissions: unknown; sortOrder: number }>,
@@ -51,11 +45,9 @@ function diffRoles(
 }
 
 export async function GET(request: Request) {
-  const user = await getCurrentUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const permission = await requireApiPermission("accounts", "view", request);
+  if (!permission.ok) return permission.response;
+  const { user } = permission;
 
   const snapshot = await getOrganizationRoleCatalogSnapshot(user.organizationId);
   const response = NextResponse.json(snapshot);
@@ -64,15 +56,11 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const user = await getCurrentUserFromRequest(request);
+  const permission = await requireApiPermission("accounts", "edit", request);
+  if (!permission.ok) return permission.response;
+  const { user } = permission;
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
-  const permissions = await getOrganizationRolePermissions(user.organizationId);
-
-  if (!roleCanPerformAction(user.role, "accounts", "edit", permissions) && !canManageRoles(user.role)) {
+  if (user.role !== "owner" && user.role !== "database_admin") {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 

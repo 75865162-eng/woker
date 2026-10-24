@@ -1,5 +1,5 @@
 import { processImportJob } from "@/lib/jobs/processor";
-import { getAmazonSyncQueue, getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue } from "@/lib/queue/redis-queue";
+import { getAmazonSyncQueue, getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue, getSellfoxSyncQueue } from "@/lib/queue/redis-queue";
 import { processProductOutboxEvent } from "@/lib/products/product-outbox";
 
 export async function enqueueImportJob(jobId: string) {
@@ -82,4 +82,11 @@ export async function enqueueAmazonSyncRun(runId: string) {
       removeOnFail: 200,
     },
   );
+}
+
+export async function enqueueSellfoxSyncRun(runId: string) {
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    throw new Error("赛狐数据同步需要启用 Redis Worker。请配置 QUEUE_DRIVER=redis。");
+  }
+  await getSellfoxSyncQueue().add("process-sellfox-sync-run", { runId }, { jobId: `sellfox-${runId}` });
 }

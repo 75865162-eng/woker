@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AgentApproval,
@@ -68,6 +70,9 @@ function getCurrentApproval(execution?: AgentExecutionDetail | null, fallback?: 
 }
 
 export function SupplierAgentWorkbench() {
+  const shellUser = useAppShellUser();
+  const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
+  const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<SupplierAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -320,11 +325,11 @@ export function SupplierAgentWorkbench() {
               </label>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" onClick={runPlanning} disabled={running || loading}>
+              <Button type="button" variant="secondary" onClick={runPlanning} disabled={!canCreate || running || loading} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 {running ? "运行中..." : "运行供应 Agent"}
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button type="button" onClick={createProject} disabled={projecting || !report}>
+              <Button type="button" onClick={createProject} disabled={!canCreate || projecting || !report} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 {projecting ? "创建中..." : "创建供应项目"}
                 <SquareKanban className="h-4 w-4" />
               </Button>
@@ -349,7 +354,7 @@ export function SupplierAgentWorkbench() {
                   <div className="mt-2 text-xs text-muted">{currentApproval.recommendation.summary}</div>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="button" onClick={() => resolveApproval("APPROVED")} disabled={decisionBusy !== "" || currentApproval.status !== "REQUESTED"}>
+                  <Button type="button" onClick={() => resolveApproval("APPROVED")} disabled={!canApprove || decisionBusy !== "" || currentApproval.status !== "REQUESTED"} title={!canApprove ? "没有 Agent 审批权限" : undefined}>
                     {decisionBusy === "APPROVED" ? "审批中..." : "通过"}
                     <CheckCircle2 className="h-4 w-4" />
                   </Button>

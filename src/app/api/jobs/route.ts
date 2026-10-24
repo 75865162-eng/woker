@@ -26,7 +26,7 @@ function getRuntimePayload(payload: Prisma.JsonValue | null | undefined) {
 
 export async function GET(request: Request) {
   try {
-    const permission = await requireApiPermission("workspace", "view", request);
+    const permission = await requireApiPermission("tasks", "view", request);
 
     if (!permission.ok) {
       return permission.response;

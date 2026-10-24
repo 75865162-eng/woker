@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const permission = await requireApiPermission("workspace", "view", request);
+    const permission = await requireApiPermission("tasks", "view", request);
 
     if (!permission.ok) {
       return permission.response;

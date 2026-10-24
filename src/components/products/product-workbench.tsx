@@ -6,6 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { useSearchParams } from "next/navigation";
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { newProductStatusOptions, productStatusOptions } from "@/data/products";
 import {
   accountsToTeamMembers,
@@ -327,6 +330,10 @@ function writeCachedProductWorkbench(cache: ProductWorkbenchCache) {
 }
 
 export function ProductWorkbench({ initialData }: { initialData?: ProductWorkbenchInitialData }) {
+  const searchParams = useSearchParams();
+  const shellUser = useAppShellUser();
+  const canEditProducts = roleCanPerformAction(shellUser?.userRole, "products", "edit", shellUser?.rolePermissions);
+  const canExportProducts = roleCanPerformAction(shellUser?.userRole, "products", "export", shellUser?.rolePermissions);
   const initialCachedWorkbench = readCachedProductWorkbench();
   const hasServerInitialData = Boolean(
     initialData
@@ -381,7 +388,8 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
   const productsTotalCountRef = useRef(productsTotalCount);
   const listSummaryRef = useRef(listSummary);
   const [teamAccounts, setTeamAccounts] = useState<TeamAccountRecord[]>([]);
-  const shellUser = useAppShellUser();
+  const [deepLinkMessage, setDeepLinkMessage] = useState("");
+  const handledDeepLinkRef = useRef("");
   const currentUserId = shellUser?.userId || "";
   const creatorName = shellUser?.userName?.trim() || "当前创建人";
   const currentUserName = creatorName === "当前创建人" ? "" : creatorName.trim();
@@ -907,6 +915,37 @@ export function ProductWorkbench({ initialData }: { initialData?: ProductWorkben
     await alignProductDetail(workspaceId, normalizedSku);
   }
 
+  useEffect(() => {
+    const sku = searchParams.get("sku")?.trim() ?? "";
+    const workspaceId = searchParams.get("workspaceId")?.trim() ?? "";
+    if (!sku || !workspaceId) return;
+    const requestKey = `${workspaceId}:${sku}`;
+    if (handledDeepLinkRef.current === requestKey) return;
+    const openWhenScopeReady = () => {
+      let selectedWorkspaceId = "default";
+      try {
+        selectedWorkspaceId = (JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}") as { workspaceId?: string }).workspaceId || "default";
+      } catch { /* use default */ }
+      if (selectedWorkspaceId !== workspaceId) return;
+      if (productsLoading) return;
+      handledDeepLinkRef.current = requestKey;
+      setDeepLinkMessage("");
+      void openProduct(sku);
+    };
+    openWhenScopeReady();
+    window.addEventListener(workspaceScopeChangedEventName, openWhenScopeReady);
+    const timeout = window.setTimeout(() => {
+      if (handledDeepLinkRef.current !== requestKey) {
+        handledDeepLinkRef.current = requestKey;
+        setDeepLinkMessage(`无法切换到目标工作区或未找到 SKU「${sku}」，请检查工作区权限。`);
+      }
+    }, 10000);
+    return () => {
+      window.removeEventListener(workspaceScopeChangedEventName, openWhenScopeReady);
+      window.clearTimeout(timeout);
+    };
+  }, [productsLoading, searchParams]);
+
   async function alignProductDetail(workspaceId: string, sku: string) {
     setDetailError("");
     const requestId = ++productDetailRequestSeq.current;
@@ -1183,6 +1222,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
   return (
     <>
       <div className="space-y-5">
+        {deepLinkMessage ? <div role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{deepLinkMessage}</div> : null}
         {productsError ? (
           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{productsError}</div>
         ) : null}
@@ -1274,11 +1314,11 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
                   event.currentTarget.value = "";
                 }}
               />
-              <Button variant="secondary" size="sm" onClick={() => importInputRef.current?.click()}>
+              <Button variant="secondary" size="sm" onClick={() => importInputRef.current?.click()} disabled={!canEditProducts} title={!canEditProducts ? "没有商品编辑权限" : undefined}>
                 <FileUp className="h-4 w-4" />
                 导入数据
               </Button>
-              <Button variant="secondary" size="sm" disabled={exportingProducts} onClick={() => void handleExportProducts()}>
+              <Button variant="secondary" size="sm" disabled={!canExportProducts || exportingProducts} title={!canExportProducts ? "没有商品导出权限" : undefined} onClick={() => void handleExportProducts()}>
                 <FileDown className="h-4 w-4" />
                 {exportingProducts ? "提交中..." : "导出数据"}
               </Button>
@@ -1286,11 +1326,11 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
                 <History className="h-4 w-4" />
                 操作日志
               </Button>
-              <Button size="sm" onClick={openNewProduct}>
+              <Button size="sm" onClick={openNewProduct} disabled={!canEditProducts} title={!canEditProducts ? "没有商品编辑权限" : undefined}>
                 <PackagePlus className="h-4 w-4" />
                 新增商品
               </Button>
-              <Button size="sm" onClick={() => setIsTrialEditorOpen(true)}>
+              <Button size="sm" onClick={() => setIsTrialEditorOpen(true)} disabled={!canEditProducts} title={!canEditProducts ? "没有商品编辑权限" : undefined}>
                 <PackagePlus className="h-4 w-4" />
                 新增试算商品
               </Button>
@@ -1355,6 +1395,7 @@ function handleSaveTrialProduct(draft: TrialProductDraft) {
               creatorName={creatorName}
               creatorUserId={currentUserId}
               detailReady={detailReady}
+              canEdit={canEditProducts}
               detailError={detailError}
               onRetryDetail={() => { if (activeProduct) void alignProductDetail(readCurrentWorkspaceId(), activeProduct.sku); }}
             opsOptions={opsOptions}
@@ -1383,6 +1424,7 @@ export function ProductEditor({
   creatorName,
   creatorUserId,
   detailReady,
+  canEdit,
   detailError = "",
   onRetryDetail,
   opsOptions,
@@ -1397,6 +1439,7 @@ export function ProductEditor({
   creatorName: string;
   creatorUserId: string;
   detailReady: boolean;
+  canEdit: boolean;
   detailError?: string;
   onRetryDetail?: () => void;
   opsOptions: string[];
@@ -2146,7 +2189,7 @@ export function ProductEditor({
               取消
             </Button>
             <Button variant="ghost" size="sm" className={compactToolbarButtonClass} disabled={saving || attachmentsBusy || childEditorOpen} onClick={onClose}>暂时离开（保留草稿）</Button>
-            <Button size="sm" className={compactToolbarButtonClass} onClick={() => void handleSubmit()} disabled={committed || saving || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current) || attachmentsBusy || childEditorOpen}>
+            <Button size="sm" className={compactToolbarButtonClass} onClick={() => void handleSubmit()} disabled={!canEdit || committed || saving || !detailReady || !localDraft.checked || localDraft.candidates.length > 0 || Boolean(conflictDraft.current) || attachmentsBusy || childEditorOpen} title={!canEdit ? "没有商品编辑权限" : undefined}>
               {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "保存中" : attachmentsBusy ? "附件上传中" : "保存"}
             </Button>

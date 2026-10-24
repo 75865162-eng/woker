@@ -306,7 +306,9 @@ export function OperationsHubWorkbench() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {readiness?.connection.runtimeConfiguration.configured && readiness.connection.status !== "CONFIGURED" ? (
+            {!readiness?.connection.runtimeConfiguration.configured ? (
+              <Button size="sm" onClick={() => window.location.assign("/settings?tab=integrations#amazon-sp-api")}><CloudCog className="h-4 w-4" />去配置 Amazon 连接</Button>
+            ) : readiness.connection.status !== "CONFIGURED" ? (
               <Button size="sm" onClick={() => void validateConnection()} disabled={validating}><ShieldCheck className="h-4 w-4" />{validating ? "校验中..." : "验证 Amazon 连接"}</Button>
             ) : null}
             <Button variant="secondary" size="sm" onClick={() => void refreshAll()} disabled={loading || inventoryLoading || metricsLoading}><RefreshCw className="h-4 w-4" />刷新</Button>

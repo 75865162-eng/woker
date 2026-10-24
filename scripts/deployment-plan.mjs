@@ -14,11 +14,12 @@ const prismaMigrationChanged = matches(/^prisma\/migrations\//);
 if (prismaSchemaChanged && !prismaMigrationChanged) throw new Error("Schema change requires a reviewed migration");
 const lockfileChanged = matches(/^package-lock\.json$/);
 const dependenciesChanged = matches(/^package(-lock)?\.json$/);
-const deploymentChanged = matches(/^(\.github\/workflows\/|deploy\/|docker-compose\.yml$|scripts\/(deployment-plan\.mjs|.*release.*\.sh|.*artifact.*\.sh)$)/);
+const deploymentChanged = matches(/^(\.github\/workflows\/|deploy\/|docker-compose\.yml$|scripts\/(deployment-plan\.mjs|.*release.*\.sh|.*artifact.*\.sh|bootstrap-server\.sh)$)/);
 const sharedChanged = matches(/^src\/lib\//);
 const workerChanged = matches(/^(src\/workers\/|scripts\/import-worker\.ts$)/);
 const imageWorkerChanged = matches(/^scripts\/image-upscale-worker\.ts$/);
 const amazonSyncWorkerChanged = matches(/^scripts\/amazon-sync-worker\.ts$/);
+const sellfoxSyncWorkerChanged = matches(/^scripts\/sellfox-sync-worker\.ts$/);
 // Shared library dependency analysis is conservative: both workers consume src/lib.
 const runtimeChanged = !docsOnly;
 const checksum = (ref) => createHash("sha256").update(execFileSync("git", ["show", `${ref}:package-lock.json`])).digest("hex");
@@ -33,6 +34,7 @@ const plan = {
   requiresWorkerRestart: workerChanged || sharedChanged || lockfileChanged || prismaSchemaChanged || prismaMigrationChanged || matches(/^deploy\/systemd\/amazon-worker\.service$/),
   requiresImageWorkerRestart: imageWorkerChanged || sharedChanged || lockfileChanged || prismaSchemaChanged || prismaMigrationChanged || matches(/^deploy\/systemd\/amazon-image-upscale-worker\.service$/),
   requiresAmazonSyncWorkerRestart: amazonSyncWorkerChanged || sharedChanged || lockfileChanged || prismaSchemaChanged || prismaMigrationChanged || matches(/^deploy\/systemd\/amazon-sync-worker\.service$/),
+  requiresSellfoxSyncWorkerRestart: sellfoxSyncWorkerChanged || sharedChanged || lockfileChanged || prismaSchemaChanged || prismaMigrationChanged || matches(/^deploy\/systemd\/amazon-sellfox-sync-worker\.service$/),
   requiresRuntimeConfig: matches(/^deploy\/systemd\//),
   requiresCaddyReload: matches(/^deploy\/caddy\//),
   requiresInfraUpdate: matches(/^docker-compose\.yml$/),

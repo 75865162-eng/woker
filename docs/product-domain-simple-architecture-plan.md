@@ -357,6 +357,8 @@ Summary 投影会继承 `ProductRecord.createdAt`，不会把投影执行时间�
 
 超期规则统一由 workflow 层提供：终态不超期；有 `workflowDueAt` 时按截止时间判断；没有截止时间时按 `ProductRecord.createdAt` 超过 3 天判断。商品行、列表筛选和顶部 summary 使用同一规则。
 
+商品业务流转通知：交办通知包含 `productId`、`sku`、`stage`、`dueAt`、`workspaceId` 和组织范围；工作台深链通过现有 `openProduct` 按 SKU/工作区打开。到期后由现有 amazon-worker 每分钟扫描仍处于运营确认、美工处理中或美工待确认阶段的商品，按商品/阶段/期限/收件人幂等发送一次超期通知；交办已读不抑制超期提醒，阶段或期限推进后不再重复旧提醒。现有 TeamRosterMember 没有独立 userId 字段，当前通过分配成员的 roster ID 对齐组织成员 userId，不能匹配时 worker 写 warning；后续如 roster ID 不等于登录 userId，应增加明确映射字段，不能退回姓名匹配收件人。阶段白名单纳入 `design_review`，与当前 workflow 中它属于设计阶段的责任归属保持一致。SLA 仍为 3 天。
+
 Outbox 处理会同时校验事件中的 organization/workspace 与商品事实记录的作用域；当旧事件处理到更新后的商品时，投影失败状态使用事务实际锁定的当前 revision，而不是事件 payload 中可能过期的 revision。
 
 Product Center 的 listing 投影会先删除同一商品、organization/workspace 下不再对应当前账号、marketplace、SKU 的旧 listing，再写入当前 listing。账号或 marketplace 变更不会在详情中残留旧关系。

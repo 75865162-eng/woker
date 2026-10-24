@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, ShieldAlert, SlidersHorizontal, Target, TriangleAlert } from "lucide-react";
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AgentApproval,
@@ -18,6 +20,9 @@ import type {
   AgentTraceEvent,
 } from "@/lib/agent-platform";
 import type { PpcAnalysisReport, PpcExecutionOutput, PpcExecutionRequest } from "@/lib/agent-platform/ppc";
+import { createBrowserId } from "@/lib/browser/random-id";
+import { AmazonActionAudits, amazonActionHeaders } from "./amazon-action-audits";
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { initializeWorkspaceStorePersistence, useWorkspaceStore } from "@/lib/stores/workspace-store";
 import type { AdjustmentDraft } from "@/lib/types";
 
@@ -100,6 +105,11 @@ function severityTone(severity: string) {
 }
 
 export function PpcAgentWorkbench() {
+  const shellUser = useAppShellUser();
+  const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
+  const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
+  const previewKey = useRef<string>("");
+  const scopeGeneration = useRef(0);
   const [data, setData] = useState<PpcAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -132,25 +142,33 @@ export function PpcAgentWorkbench() {
   } = useWorkspaceStore();
 
   useEffect(() => {
+    const changed = () => { scopeGeneration.current++; previewKey.current = ""; setData(null); setPendingApproval(null); setError(""); setRunning(false); setActionBusy(""); setDecisionBusy(""); setHandoffMessage(""); setRefreshToken((value) => value + 1); };
+    window.addEventListener(workspaceScopeChangedEventName, changed);
+    return () => window.removeEventListener(workspaceScopeChangedEventName, changed);
+  }, []);
+
+  useEffect(() => {
     initializeWorkspaceStorePersistence();
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const generation = scopeGeneration.current;
     setLoading(true);
     setError("");
 
-    fetch("/api/agents/ppc")
+    fetch("/api/agents/ppc", { headers: amazonActionHeaders(), cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as PpcAgentResponse & { error?: string };
+        if (generation !== scopeGeneration.current) return;
         if (!response.ok) throw new Error(payload.error || "加载 PPC Agent 失败。");
         if (!cancelled) setData(payload);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "加载 PPC Agent 失败。");
+        if (!cancelled && generation === scopeGeneration.current) setError(err instanceof Error ? err.message : "加载 PPC Agent 失败。");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && generation === scopeGeneration.current) setLoading(false);
       });
 
     return () => {
@@ -212,6 +230,8 @@ export function PpcAgentWorkbench() {
   }
 
   async function runDiagnosis() {
+    previewKey.current = "";
+    const generation = scopeGeneration.current;
     setRunning(true);
     setError("");
     setHandoffMessage("");
@@ -256,10 +276,11 @@ export function PpcAgentWorkbench() {
       };
       const response = await fetch("/api/agents/ppc/executions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: amazonActionHeaders(true),
         body: JSON.stringify(requestBody),
       });
       const payload = (await response.json()) as PpcExecutionResponse & { error?: string };
+      if (generation !== scopeGeneration.current) return;
       if (!response.ok) throw new Error(payload.error || "运行 PPC Agent 失败。");
 
       const detailedExecution: AgentExecutionDetail = {
@@ -294,14 +315,17 @@ export function PpcAgentWorkbench() {
       );
       await refresh();
     } catch (err) {
+      if (generation !== scopeGeneration.current) return;
       setError(err instanceof Error ? err.message : "运行 PPC Agent 失败。");
     } finally {
-      setRunning(false);
+      if (generation === scopeGeneration.current) setRunning(false);
     }
   }
 
   async function requestActionApproval(actionTarget: "bulk.export.prepare" | "amazon.ads.apply") {
     if (!report) return;
+    const generation = scopeGeneration.current;
+    if (!previewKey.current) previewKey.current = `ppc-preview-${createBrowserId()}`;
 
     setActionBusy(actionTarget);
     setError("");
@@ -310,9 +334,10 @@ export function PpcAgentWorkbench() {
     try {
       const response = await fetch("/api/agents/ppc/actions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: amazonActionHeaders(true),
         body: JSON.stringify({
           actionTarget,
+          idempotencyKey: previewKey.current,
           report,
           adjustmentDrafts,
           marketplace,
@@ -325,6 +350,7 @@ export function PpcAgentWorkbench() {
         }),
       });
       const payload = (await response.json()) as PpcActionResponse & { error?: string };
+      if (generation !== scopeGeneration.current) return;
       if (!response.ok) throw new Error(payload.error || "请求 PPC 审批失败。");
 
       setPendingApproval(payload.approval);
@@ -352,14 +378,16 @@ export function PpcAgentWorkbench() {
       );
       await refresh();
     } catch (err) {
+      if (generation !== scopeGeneration.current) return;
       setError(err instanceof Error ? err.message : "请求 PPC 审批失败。");
     } finally {
-      setActionBusy("");
+      if (generation === scopeGeneration.current) setActionBusy("");
     }
   }
 
   async function resolveApproval(decision: "APPROVED" | "REJECTED") {
     if (!currentApproval) return;
+    const generation = scopeGeneration.current;
 
     setDecisionBusy(decision);
     setError("");
@@ -367,13 +395,14 @@ export function PpcAgentWorkbench() {
     try {
       const response = await fetch(`/api/agents/approvals/${currentApproval.id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: amazonActionHeaders(true),
         body: JSON.stringify({
           decision,
           reason: decision === "APPROVED" ? "PPC recommendation bundle approved." : "PPC recommendation bundle rejected.",
         }),
       });
       const payload = (await response.json()) as { error?: string };
+      if (generation !== scopeGeneration.current) return;
       if (!response.ok) throw new Error(payload.error || "处理审批失败。");
 
       if (decision === "APPROVED" && currentApproval.action.type === "bulk.export.prepare") {
@@ -384,14 +413,16 @@ export function PpcAgentWorkbench() {
       setPendingApproval(null);
       await refresh();
     } catch (err) {
+      if (generation !== scopeGeneration.current) return;
       setError(err instanceof Error ? err.message : "处理审批失败。");
     } finally {
-      setDecisionBusy("");
+      if (generation === scopeGeneration.current) setDecisionBusy("");
     }
   }
 
   return (
     <div className="space-y-4">
+      <AmazonActionAudits refreshToken={refreshToken} onChanged={refresh} />
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -451,7 +482,7 @@ export function PpcAgentWorkbench() {
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" onClick={runDiagnosis} disabled={running || scopedPerformanceRows.length === 0}>
+              <Button type="button" onClick={runDiagnosis} disabled={!canCreate || running || scopedPerformanceRows.length === 0} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 <SparkIcon />
                 {running ? "运行中..." : "运行 PPC Agent"}
               </Button>
@@ -471,7 +502,7 @@ export function PpcAgentWorkbench() {
                 disabled={!report || actionBusy !== ""}
               >
                 <ShieldAlert className="h-4 w-4" />
-                {actionBusy === "amazon.ads.apply" ? "请求中..." : "审批 Amazon API"}
+                {actionBusy === "amazon.ads.apply" ? "请求中..." : "预览 Amazon 出价"}
               </Button>
             </div>
             {parseStatus !== "completed" && (
@@ -510,7 +541,7 @@ export function PpcAgentWorkbench() {
                   </div>
                 ) : null}
                 <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" onClick={() => resolveApproval("APPROVED")} disabled={currentApproval.status !== "REQUESTED" || decisionBusy !== ""}>
+                  <Button type="button" onClick={() => resolveApproval("APPROVED")} disabled={!canApprove || currentApproval.status !== "REQUESTED" || decisionBusy !== ""} title={!canApprove ? "没有 Agent 审批权限" : undefined}>
                     <CheckCircle2 className="h-4 w-4" />
                     {decisionBusy === "APPROVED" ? "审批中..." : "通过"}
                   </Button>

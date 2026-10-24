@@ -13,6 +13,7 @@ SOURCE_COMMIT="${SOURCE_COMMIT:-unknown}"
 EXPECTED_ARTIFACT_SHA256="${EXPECTED_ARTIFACT_SHA256:-}"
 INSTALL_DEPS_ON_SERVER="${INSTALL_DEPS_ON_SERVER:-false}"
 RUN_BOOTSTRAP_SEED="${RUN_BOOTSTRAP_SEED:-false}"
+INITIAL_DEPLOYMENT="${INITIAL_DEPLOYMENT:-false}"
 HEALTH_CHECK_ATTEMPTS="${HEALTH_CHECK_ATTEMPTS:-30}"
 HEALTH_CHECK_INTERVAL_SECONDS="${HEALTH_CHECK_INTERVAL_SECONDS:-2}"
 ARTIFACT_PATH="${1:-}"
@@ -144,7 +145,7 @@ wait_for_health() {
 
 install_runtime_from_release() {
   local runtime_release="$1"
-  if [ "$runtime_config" = "true" ]; then
+  if [ "$runtime_config" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
     install -m 0644 "$runtime_release/deploy/systemd/amazon-web.service" /etc/systemd/system/amazon-web.service
     install -m 0644 "$runtime_release/deploy/systemd/amazon-worker.service" /etc/systemd/system/amazon-worker.service
     install -m 0644 "$runtime_release/deploy/systemd/amazon-image-upscale-worker.service" /etc/systemd/system/amazon-image-upscale-worker.service
@@ -155,13 +156,21 @@ install_runtime_from_release() {
       rm -f /etc/systemd/system/amazon-sync-worker.service
       restart_amazon_sync_worker=false
     fi
+    if [ -f "$runtime_release/deploy/systemd/amazon-sellfox-sync-worker.service" ]; then
+      install -m 0644 "$runtime_release/deploy/systemd/amazon-sellfox-sync-worker.service" /etc/systemd/system/amazon-sellfox-sync-worker.service
+    else
+      systemctl disable --now amazon-sellfox-sync-worker 2>/dev/null || true
+      rm -f /etc/systemd/system/amazon-sellfox-sync-worker.service
+      restart_sellfox_sync_worker=false
+    fi
     systemctl daemon-reload
   fi
   if [ "$restart_web" = "true" ]; then systemctl restart amazon-web; fi
   if [ "$restart_worker" = "true" ]; then systemctl restart amazon-worker; fi
   if [ "$restart_image_worker" = "true" ]; then systemctl restart amazon-image-upscale-worker; fi
   if [ "$restart_amazon_sync_worker" = "true" ]; then systemctl enable --now amazon-sync-worker; fi
-  if [ "$caddy_reload" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
+  if [ "$restart_sellfox_sync_worker" = "true" ]; then systemctl enable --now amazon-sellfox-sync-worker; fi
+  if [ "$caddy_reload" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
 }
 
 rollback_application_release() {
@@ -185,6 +194,17 @@ rollback_application_release() {
   fi
 
   if [ -z "$previous_release_dir" ] || [ ! -d "$previous_release_dir" ]; then
+    if [ "$INITIAL_DEPLOYMENT" = "true" ]; then
+      for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker; do
+        systemctl stop "$service" 2>/dev/null || true
+      done
+      docker rm -f amazon-caddy >/dev/null 2>&1 || true
+      rm -f "$CURRENT_LINK"
+      rollback_status="initial_release_removed"
+      write_release_log failed "$failed_phase: $failure_message; initial application stopped; database not rolled back"
+      write_release_result "$result_path" "failed" "$failed_phase" "$rollback_status" "$rollback_release" "$failure_message" "failed"
+      return 1
+    fi
     rollback_status="unavailable"
     write_release_log failed "$failed_phase: $failure_message; no previous release available; database not rolled back"
     write_release_result "$result_path" "failed" "$failed_phase" "$rollback_status" "$rollback_release" "$failure_message" "failed"
@@ -232,7 +252,7 @@ tar -xzf "$ARTIFACT_PATH" -C "$extract_dir"
 previous_version="$(read_previous_version)"
 app_version_label="$(next_version_label "${previous_version:-}")"
 previous_release_dir="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
-health_url="${HEALTH_URL:-http://127.0.0.1:3000/login}"
+health_url="${HEALTH_URL:-http://127.0.0.1:3000/}"
 
 if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ] || [ ! -f "$extract_dir/RELEASE-METADATA.json" ]; then
   echo "Artifact is not a complete release package." >&2
@@ -246,26 +266,40 @@ if [ "$SOURCE_COMMIT" != "unknown" ] && [ "$metadata_commit" != "$SOURCE_COMMIT"
 fi
 
 # The reviewed CI plan is embedded in the SHA256-verified artifact. Fail closed.
-plan_flags="$(node - "$extract_dir/deployment-plan.json" "$metadata_commit" "$previous_release_dir/RELEASE.json" <<'NODE'
+previous_release_file="${previous_release_dir:+$previous_release_dir/RELEASE.json}"
+if [ -n "$previous_release_dir" ] && [ ! -f "$previous_release_file" ]; then
+  echo "Current release is missing RELEASE.json; refusing to treat it as a first deployment." >&2
+  exit 1
+fi
+if [ -z "$previous_release_dir" ] && { [ -e "$CURRENT_LINK" ] || [ -L "$CURRENT_LINK" ]; }; then
+  echo "Current release link is invalid; refusing initial deployment." >&2
+  exit 1
+fi
+plan_flags="$(node - "$extract_dir/deployment-plan.json" "$metadata_commit" "$previous_release_file" "$INITIAL_DEPLOYMENT" <<'NODE'
 const fs = require('fs');
-const [path, commit, previousPath] = process.argv.slice(2);
+const [path, commit, previousPath, initialDeployment] = process.argv.slice(2);
 const plan = JSON.parse(fs.readFileSync(path, 'utf8'));
 if (plan.headSha !== commit || !plan.requiresDeploy) throw new Error('Invalid deployment plan identity');
-const previous = JSON.parse(fs.readFileSync(previousPath, 'utf8'));
-if (previous.commit !== plan.baseSha) throw new Error('Deployment base differs from running release; regenerate CI plan');
-const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresAmazonSyncWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
+if (previousPath && fs.existsSync(previousPath)) {
+  if (initialDeployment === 'true') throw new Error('INITIAL_DEPLOYMENT cannot be used when a release already exists');
+  const previous = JSON.parse(fs.readFileSync(previousPath, 'utf8'));
+  if (previous.commit !== plan.baseSha) throw new Error('Deployment base differs from running release; regenerate CI plan');
+} else if (initialDeployment !== 'true') {
+  throw new Error('No previous release; explicit INITIAL_DEPLOYMENT=true is required');
+}
+const keys = ['requiresMigration', 'requiresPrismaGenerate', 'requiresWebRestart', 'requiresWorkerRestart', 'requiresImageWorkerRestart', 'requiresAmazonSyncWorkerRestart', 'requiresSellfoxSyncWorkerRestart', 'requiresRuntimeConfig', 'requiresCaddyReload', 'requiresInfraUpdate'];
 for (const key of keys) if (typeof plan[key] !== 'boolean') throw new Error(`Missing plan flag: ${key}`);
 console.log(keys.map(key => String(plan[key])).join(' '));
 NODE
 )"
-read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
+read -r requires_migration requires_generate restart_web restart_worker restart_image_worker restart_amazon_sync_worker restart_sellfox_sync_worker runtime_config caddy_reload infra_update <<< "$plan_flags"
 
 package_lock_checksum="$(sha256sum "$extract_dir/package-lock.json" | awk '{print $1}')"
 cached_package_lock_checksum="$(cat "$APP_DIR/node_modules/.package-lock.sha256" 2>/dev/null || true)"
 
 if [ ! -d "$APP_DIR/node_modules" ] || [ "$package_lock_checksum" != "$cached_package_lock_checksum" ]; then
   plan_install="$(node -e 'const p=require(process.argv[1]); if(typeof p.requiresInstall!=="boolean") process.exit(1); process.stdout.write(String(p.requiresInstall))' "$extract_dir/deployment-plan.json")"
-  if [ "$plan_install" != "true" ]; then
+  if [ "$plan_install" != "true" ] && [ "$INITIAL_DEPLOYMENT" != "true" ]; then
     echo "Dependency mismatch without a lockfile change in deployment plan; stop for review." >&2
     exit 1
   fi
@@ -289,16 +323,16 @@ cp -a "$extract_dir/prisma" "$APP_DIR/prisma"
 cp -a "$extract_dir/scripts" "$APP_DIR/scripts"
 cp -a "$extract_dir/deploy" "$APP_DIR/deploy"
 cp "$extract_dir/docker-compose.yml" "$APP_DIR/docker-compose.yml"
-if [ "$infra_update" = "true" ]; then docker compose up -d postgres redis; fi
+if [ "$infra_update" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then docker compose up -d postgres redis; fi
 
-if [ "$requires_generate" = "true" ]; then npm run db:generate; fi
-if [ "$requires_migration" = "true" ]; then
+if [ "$requires_generate" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then npm run db:generate; fi
+if [ "$requires_migration" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
   migration_status=started
   npm run db:migrate
   migration_status=passed
 fi
 
-if [ "$RUN_BOOTSTRAP_SEED" = "true" ]; then
+if [ "$RUN_BOOTSTRAP_SEED" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
   node --env-file="$APP_DIR/.env" scripts/seed-admin.mjs
 else
   echo "Skipping bootstrap admin seed. Set RUN_BOOTSTRAP_SEED=true to run it."
@@ -338,6 +372,10 @@ ln -sfn "$release_dir" "$CURRENT_LINK"
 release_switched="true"
 install_runtime_from_release "$release_dir"
 
+if [ "$INITIAL_DEPLOYMENT" = "true" ]; then
+  systemctl enable --now amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker
+fi
+
 if ! wait_for_health; then
   trap - ERR
   rollback_application_release "health_check" "HTTP health check failed: $health_url"
@@ -350,6 +388,7 @@ web_status="$(systemctl is-active amazon-web 2>/dev/null || true)"
 worker_status="$(systemctl is-active amazon-worker 2>/dev/null || true)"
 image_worker_status="$(systemctl is-active amazon-image-upscale-worker 2>/dev/null || true)"
 amazon_sync_worker_status="$(systemctl is-active amazon-sync-worker 2>/dev/null || true)"
+sellfox_sync_worker_status="$(systemctl is-active amazon-sellfox-sync-worker 2>/dev/null || true)"
 postgres_container="$(docker compose ps -q postgres)"
 redis_container="$(docker compose ps -q redis)"
 if [ -n "$postgres_container" ]; then
@@ -364,7 +403,7 @@ else
 fi
 disk_available_kb="$(df -Pk / | awk 'NR == 2 {print $4}')"
 runtime_status="passed"
-if [ "$web_status" != "active" ] || [ "$worker_status" != "active" ] || [ "$image_worker_status" != "active" ] || { [ "$restart_amazon_sync_worker" = "true" ] && [ "$amazon_sync_worker_status" != "active" ]; } || [ "$postgres_status" != "running" ] || [ "$redis_status" != "running" ]; then
+if [ "$web_status" != "active" ] || [ "$worker_status" != "active" ] || { [ "$restart_image_worker" = "true" ] && [ "$image_worker_status" != "active" ]; } || { [ "$restart_amazon_sync_worker" = "true" ] && [ "$amazon_sync_worker_status" != "active" ]; } || { [ "$restart_sellfox_sync_worker" = "true" ] && [ "$sellfox_sync_worker_status" != "active" ]; } || [ "$postgres_status" != "running" ] || [ "$redis_status" != "running" ]; then
   runtime_status="failed"
 fi
 if [ "$runtime_status" != "passed" ]; then
@@ -382,7 +421,7 @@ cat > "$result_path" <<JSON
   "healthUrl": "$(json_escape "$health_url")",
   "health": "passed",
   "migration": "$migration_status",
-  "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker, "amazonSyncWorker": $restart_amazon_sync_worker },
+    "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker, "amazonSyncWorker": $restart_amazon_sync_worker, "sellfoxSyncWorker": $restart_sellfox_sync_worker },
   "rollback": {
     "status": "not_needed",
     "database": "not_rolled_back"
@@ -392,6 +431,7 @@ cat > "$result_path" <<JSON
     "amazon-worker": "$(json_escape "$worker_status")",
     "amazon-image-upscale-worker": "$(json_escape "$image_worker_status")",
     "amazon-sync-worker": "$(json_escape "$amazon_sync_worker_status")",
+    "amazon-sellfox-sync-worker": "$(json_escape "$sellfox_sync_worker_status")",
     "postgres": "$(json_escape "$postgres_status")",
     "redis": "$(json_escape "$redis_status")"
   },
@@ -409,7 +449,7 @@ fi
 find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r | awk "NR>${KEEP_RELEASES}" | while read -r old_release; do
   # A worker intentionally not restarted may still be executing an older release.
   in_use=false
-  for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker; do
+  for service in amazon-web amazon-worker amazon-image-upscale-worker amazon-sync-worker amazon-sellfox-sync-worker; do
     runtime_pid="$(systemctl show "$service" --property=MainPID --value)"
     runtime_cwd="$(readlink -f "/proc/${runtime_pid}/cwd" 2>/dev/null || true)"
     case "$runtime_cwd" in "$old_release"|"$old_release"/*) in_use=true ;; esac

@@ -5,6 +5,8 @@ import { ArrowLeft, CheckCircle2, Database, FileText, RefreshCw, ShieldX } from 
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AgentApproval,
@@ -93,6 +95,8 @@ function truncateJson(value: unknown) {
 }
 
 export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
+  const shellUser = useAppShellUser();
+  const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
   const [data, setData] = useState<AgentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -318,7 +322,7 @@ export function AgentDetailWorkbench({ agentId }: { agentId: string }) {
                         className="min-h-20 w-full rounded-md border border-border px-3 py-2 text-xs outline-none focus:border-brand"
                       />
                       <div className="flex gap-2">
-                        <Button type="button" size="sm" onClick={() => resolveApproval(latestApproval, "APPROVED")} disabled={Boolean(approvalBusyId)}>
+                        <Button type="button" size="sm" onClick={() => resolveApproval(latestApproval, "APPROVED")} disabled={!canApprove || Boolean(approvalBusyId)} title={!canApprove ? "没有 Agent 审批权限" : undefined}>
                           <CheckCircle2 className="h-4 w-4" />
                           通过
                         </Button>

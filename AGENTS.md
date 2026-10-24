@@ -2,7 +2,7 @@
 
 这份文件给 Codex、Claude Code 和其他代码 agent 使用。进入本仓库后先读这里，再改代码。
 系统要做“可迁移设计”。
-也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。等要多人使用时，再把存储层从浏览器 IndexedDB 换成后端数据库，而不是把整个系统重写。
+也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。PPC Workspace 的 IndexedDB 用于本地恢复与浏览器缓存，服务端快照、草稿记录等已由数据库承载；Product Center 商品主数据以 PostgreSQL 为事实源。新增多人数据应沿现有服务端存储边界扩展，不把 IndexedDB 描述为未来才迁移的唯一存储层。
 
 ## 最高优先级操作原则：两端对齐、同步闭环、生产级交付
 
@@ -22,7 +22,7 @@
 
 - 先界定最小处理范围：只读取、分析和修改与当前任务直接相关的文件、模块、脚本和文档；不要展开无关重构、全局清理或大范围代码扫描。
 - 先找现有边界：优先复用当前模块、类型、store、repository、route、脚本和 UI 组件的既有模式；只有现有边界不足以完成任务时，才新增抽象。
-- 验证按风险分级：小改动优先运行最贴近改动的检查；涉及共享逻辑、构建链路、数据模型、导入导出、权限、安全、AI 请求或生产部署时，再升级到 `npm run lint`、`npm run build`、页面手动验证或服务器检查。
+- 验证按以下固定级别执行，不默认跑满套：UI 或局部状态改动只运行相关测试（没有对应测试时说明）和 TypeScript；API、筛选、summary 或共享逻辑改动运行 `npm run check:fast`，也可按风险缩小到相关测试与类型检查。构建链、依赖、Prisma、权限改动做针对性专项验证；完整 `npm run check` 与 `git diff --check` 留给准备合码/上线的检查闭环。E2E、手动页面和服务器检查只在改动风险或任务验收明确需要时运行。
 - 避免重复验证：同一类验证不要机械重复；如果已有等价验证结果，要说明依据，把时间留给未覆盖风险。
 - 结尾给出验证路线：最终回复中简要说明本次选择了哪些验证、为什么足够、哪些更高成本验证未运行以及触发条件。
 
@@ -126,8 +126,8 @@ npm run products:scan-statuses
 - `npm run lint` 运行 ESLint flat config。
 - `npm run test` 运行不依赖数据库、外部服务或密钥的核心业务回归测试。
 - `npm run test:e2e` 使用 Playwright 模拟隔离测试账号完成登录、Bulk/Overall 上传、分组、规则运行、保存恢复和导出；必须设置 `E2E_TEST_EMAIL`、`E2E_TEST_PASSWORD`，可用 `E2E_BASE_URL` 指定测试环境。
-- `npm run check:fast` 运行核心测试、lint 和类型检查，适合每次小改动后的快速回归。
-- `npm run check` 依次运行测试、lint 和生产构建，适合作为每次更新后的完整本地健康检查。
+- `npm run check:fast` 运行核心测试、lint 和类型检查；API、筛选、summary 或共享逻辑改动时运行。
+- `npm run check` 依次运行测试、lint 和生产构建；用于准备合码/上线的完整检查，不作为日常小改动默认验证。构建链、依赖、Prisma、权限改动按需执行针对性检查；合码/上线闭环运行完整检查，并配合 `git diff --check`。
 - `npm run products:refresh-derived` 刷新商品列表派生字段、重建商品摘要表并清理过期商品列表缓存；涉及商品状态、负责人、超期逻辑或生产定时维护时使用。
 - `npm run products:repair-projections` 以 `ProductRecord` 为事实源，分批重建 `ProductSummaryRecord` / `ProductTextRecord` 和列表汇总；只在人工维护或投影漂移排查时执行，不在服务启动时运行。
 - `npm run products:scan-statuses` 只读扫描 `ProductRecord.status` 是否属于产品状态枚举；发现非法状态时以退出码 2 结束，不自动修改数据。
@@ -228,19 +228,20 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 
 - 更新服务器前必须先执行完整改动区盘点：用 `git status --short` 确认所有已修改、已删除和未跟踪改动；只要这些改动属于本次要上线的工作范围，就必须全部纳入 GitHub 同步、artifact 打包和服务器发布，不能只发布当前聊天窗口或当前 agent 修改的文件。
 - 如果发现改动区里有不确定是否该上线的内容，先向用户说明文件清单和风险并等待确认；不要静默跳过，也不要用局部打包、局部 rsync 或局部提交制造本地、GitHub、服务器三端不一致。
-- 服务器 IP：`159.75.203.221`。
+- 新部署目标服务器 IP：`123.207.47.225`。
 - SSH 用户：`ubuntu`。
 - 默认服务器目录：`/opt/amazon-ad-bulk-operation`。
-- 正式访问地址：`https://aecob.com`。
+- 新部署访问地址：`http://123.207.47.225`（HTTP 未加密；仅用于用户明确要求的 IP 临时入口）。
+- 旧服务器 `159.75.203.221` 与 `https://aecob.com` 仍在独立运行，保留原有数据库和 R2 数据；新服务器为空库，不自动迁移或同步旧主机数据。不要将两端误认为同一数据集，也不要未经明确要求关闭旧服务器或修改 DNS。
 - 服务器系统：Ubuntu 24.04 LTS x64。
 - 生产架构：PostgreSQL 和 Redis 使用 Docker；Next web 和 worker 使用服务器本机 Node.js + systemd；Caddy 使用 Docker 反代到本机 web。
 - Docker Compose 只管理 infra：`postgres`、`redis`。不要再为普通代码更新执行 `docker compose up -d --build web worker`。
-- systemd 服务：`amazon-web`、`amazon-worker`。
+- systemd 服务：`amazon-web`、`amazon-worker`、`amazon-image-upscale-worker`、`amazon-sync-worker`、`amazon-sellfox-sync-worker`。
 - UFW 必须允许 `22/tcp`、`80/tcp`、`443/tcp`；`3000`、`5432`、`6379` 不开放公网。
 - Caddy 证书和配置使用 Docker volumes `amazon-caddy-data`、`amazon-caddy-config` 持久化；不要无备份删除这些 volumes。
 - 服务器 `.env` 路径：`/opt/amazon-ad-bulk-operation/.env`。这里保存 `AUTH_SECRET`、管理员 bootstrap 配置、R2/S3 配置等敏感运行环境变量。
 - 管理员登录信息保存位置：`/root/amazon-ad-bulk-credentials.txt`。不要把密码写入仓库文档。
-- 生产服务器默认文件存储：Cloudflare R2，`STORAGE_DRIVER=r2`，bucket 为 `amazon-bulk-uploads`。R2/S3 密钥只允许写在服务器 `.env` 或受控密钥管理中，不要提交到仓库或写入文档。
+- 旧服务器文件存储：Cloudflare R2，`STORAGE_DRIVER=r2`，bucket 为 `amazon-bulk-uploads`。新空库服务器首次安装使用独立 local uploads；切换 R2 必须另行配置目标环境密钥和明确对象数据范围。R2/S3 密钥只允许写在服务器 `.env` 或受控密钥管理中，不要提交到仓库或写入文档。
 - 本地开发可继续使用 `STORAGE_DRIVER=local` 和 `uploads/`。更新生产系统时，不要把本地 local uploads 覆盖到服务器，也不要把生产 R2 设置改回 local。
 - 部署同步必须排除大目录和历史产物：`.git`、`node_modules`、`node_modules.*`、`.next`、`.next-*`、`uploads`、`coverage`、`out`、`build`。
 - 项目目录里曾出现过 `node_modules.broken-audit-fix-*`、`.next-build.broken-*`、`.next-build-stale-*` 等历史目录；这些目录绝不能同步到服务器。
@@ -249,6 +250,7 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 - PostgreSQL 和 Redis 只绑定 `127.0.0.1:5432`、`127.0.0.1:6379`，不要暴露公网端口。
 - 生产 `.env` 中 `DATABASE_URL` 应指向 `127.0.0.1:5432`，`REDIS_URL` 应指向 `127.0.0.1:6379`。
 - 本机生产进程必须使用 `npm run build` 后的 standalone 输出，web 启动命令是 `npm run start:standalone`，不要用 `npm run dev` 跑公网。
+- 全新 Ubuntu 24.04 主机先运行 `sudo bash scripts/bootstrap-server.sh`，再通过 workflow_dispatch 显式启用 `initial_deployment=true` 和 `install_dependencies=true`。该脚本生成独立 `.env` 与管理员初始密码文件；首发执行迁移、管理员 seed，并启用 systemd workers。
 - worker 由 systemd 执行 `npm run worker`。服务器发布脚本会用 `node_modules/.package-lock.sha256` 判断依赖是否变化；`package-lock.json` 未变时跳过 `npm ci`。
 - 仓库不保留应用 Dockerfile；生产应用进程只走本机 Node.js + systemd。不要为 web/worker 恢复 Docker build，除非用户明确要求重新容器化。
 - 发布最高原则：根据实际改动按需迁移和重启。禁止每次发布默认迁移数据库、重启全部 worker、重建 Caddy 或更新 infra。
@@ -317,14 +319,18 @@ GitHub CI 负责测试、lint、build、打包和 release-check；本机不重�
 
 ## 验证清单
 
-改代码后按风险选择验证：
+按上方分级规则选择验证，不默认执行完整检查或 E2E：
 
 ```bash
-npm run lint
-npm run build
+# UI / 局部状态：相关测试（无对应测试时说明）+ TypeScript
+# API / 筛选 / summary / 共享逻辑：
+npm run check:fast
+# 准备合码 / 上线：
+npm run check
+git diff --check
 ```
 
-涉及 UI 的改动应启动：
+仅当任务验收明确要求手动页面检查时，才启动：
 
 ```bash
 npm run dev
@@ -370,3 +376,20 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - Amazon 自动同步保持独立快照；`SellerAccount.accountKey` 不是默认 Seller ID。服务端显式配置 `AMAZON_SP_API_SELLER_BINDINGS`，只允许实际授权的 inventory/catalog；缺配置 BLOCKED。
 - Product Center 只附加当前页的只读 Amazon 投影，禁止写入 ProductRecord；补货策略/建议为独立表，不自动生成采购单。
 - 专用 Amazon worker 同时处理每日补货重算。真实销量缺日、缺周期或库存 STALE 时必须 NEEDS_DATA；ERP 历史来源按精确 MSKU，禁止将导入缺省零当真实零。
+
+### 内部 Ops CLI 与 Amazon 出价审计
+
+- `npm run ops:cli -- --help`：仅本机进程读取本地数据库；OPS_CLI_ORGANIZATION_ID / ACTOR_USER_ID / WORKSPACE_IDS 绑定身份与范围，检查 active 成员及模块权限，PG READ ONLY 事务禁止隐式写库。CLI 不直接请求 Amazon、不触发同步、不写 ProductRecord。
+- `ppc suggest` 复用现有分析工具，只输出报告/草稿；PPC 日指标缺可靠 SKU/ASIN 日期映射时保持 null/说明。
+- Amazon 出价动作经 AmazonAgentActionAudit preview → 既有 approvals confirm → audit apply，组织/工作区、30 分钟到期、幂等和批量/出价限制均由服务端检查。
+- AMAZON_ADS_EXECUTION_ENABLED 默认 false；当前 true 仍明确 NOT_IMPLEMENTED、整批零 HTTP，禁止标为 APPLIED。实现真实 transport/profile/实体授权映射并完成受控联调前，不得仅靠开关或删除闸门上线。
+- CLI 命令、配置、API、stub 契约、验证边界和回滚见 `docs/amazon-operations-hub.md`。
+
+### Sellfox 只读同步
+
+- 凭据仅由服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 读取；overview 只返回 configured。所有 Open API 请求必须在 Node Worker 中经 `src/lib/sellfox/client.ts` 发起。
+- 使用专用 `npm run worker:sellfox-sync` 和 `amazon-sellfox-sync-worker.service`；BullMQ concurrency 固定为 1。客户端对 token、重试和资源请求统一串行，间隔不少于 1200ms。
+- 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
+- ProductRecord 保持唯一商品主档事实源。赛狐快照只服务报表、列表和只读分析。
+- 手动与定时任务共用 SellfoxSyncRun 和 sync service；计划需在当前工作区由有 `sellfox:create` 权限的用户显式启用。同步 Worker 与 Redis 不可用时 API 返回服务端错误，不退化为请求内同步。
+- 库存、销量、表现、店铺和运行记录按 organization/workspace 隔离；详细接口契约与验证步骤见 `docs/sellfox-sync-workbench-plan.md`。

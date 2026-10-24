@@ -20,7 +20,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { WeComNotificationSettingsPanel } from "@/components/settings/wecom-notification-settings";
 import {
   aiSettingsStorageKey,
   aiImageSettingsStorageKey,
@@ -740,7 +739,7 @@ export function SettingsWorkbench() {
 
               <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-muted">
-                  {settingsError ? <span className="text-red-600">{settingsError}</span> : savedAt ? <span>已保存：{savedAt}</span> : <span>填写 API Key 后点击保存，Listing AI 会立即使用新配置。</span>}
+                  {settingsError ? <span className="text-red-600">{settingsError}</span> : savedAt ? <span>已保存：{savedAt}</span> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => void resetSettings()}>
@@ -754,11 +753,12 @@ export function SettingsWorkbench() {
                 </div>
               </div>
 
-              <div className="border-t border-border pt-3">
+              <details className="border-t border-border pt-3">
+                <summary className="cursor-pointer text-sm font-semibold text-foreground">生图预设 <span className="ml-2 text-xs font-medium text-muted">{imageReady ? "可调用" : "待完善"}</span></summary>
+                <div className="pt-3">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-bold text-foreground">生图预设</p>
-                    <p className="mt-0.5 text-xs text-muted">它只是已保存配置里的一个预装 API，Image Plan 直接读取这个预设。</p>
                   </div>
                   <Badge tone={imageReady ? "green" : "amber"}>{imageReady ? "可调用" : "待完善"}</Badge>
                 </div>
@@ -855,7 +855,7 @@ export function SettingsWorkbench() {
 
                 <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm text-muted">
-                    {imageSettingsError ? <span className="text-red-600">{imageSettingsError}</span> : imageSavedAt ? <span>已保存：{imageSavedAt}</span> : <span>填写生图 API Key 后点击保存，Image Plan 会使用这个预设。</span>}
+                    {imageSettingsError ? <span className="text-red-600">{imageSettingsError}</span> : imageSavedAt ? <span>已保存：{imageSavedAt}</span> : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => void resetImageSettings()}>
@@ -868,7 +868,8 @@ export function SettingsWorkbench() {
                     </Button>
                   </div>
                 </div>
-              </div>
+                </div>
+              </details>
             </CardContent>
           </Card>
         </section>
@@ -882,7 +883,6 @@ export function SettingsWorkbench() {
                 </div>
                 <div>
                   <CardTitle className="text-sm">外部工具 / MCP 配置</CardTitle>
-                  <p className="mt-0.5 text-xs text-muted">SellerSprite MCP 会被 Market Agent、PPC Agent 和后续 Blue Ocean Radar 共用。</p>
                 </div>
               </div>
               <Badge tone={sellerSpriteReady ? "green" : "gray"}>{sellerSpriteReady ? "可调用" : "待配置"}</Badge>
@@ -909,7 +909,6 @@ export function SettingsWorkbench() {
                       placeholder="https://mcp.sellersprite.com/mcp"
                     />
                   </div>
-                  <p className="mt-1 text-xs text-muted">官方请求域名：https://mcp.sellersprite.com/mcp。直连时也可以用 `?secret-key=`。</p>
                 </Field>
                 <Field label="Marketplace">
                   <input
@@ -921,27 +920,30 @@ export function SettingsWorkbench() {
                 </Field>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_0.7fr_0.8fr]">
-                <Field label="Secret Key">
-                  <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                    <input
-                      className={`${fieldClass} pl-9 pr-11 font-mono`}
-                      type={showSellerSpriteSecret ? "text" : "password"}
-                      value={sellerSpriteSettings.apiKey}
-                      onChange={(event) => updateSellerSprite("apiKey", event.target.value)}
-                      placeholder={sellerSpriteSettings.hasApiKey ? "已保存，留空则保留" : "粘贴 secret-key"}
-                    />
-                    <button
-                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-foreground"
-                      onClick={() => setShowSellerSpriteSecret((current) => !current)}
-                      title={showSellerSpriteSecret ? "隐藏密钥" : "显示密钥"}
-                      type="button"
-                    >
-                      {showSellerSpriteSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </Field>
+              <Field label="Secret Key">
+                <div className="relative">
+                  <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  <input
+                    className={`${fieldClass} pl-9 pr-11 font-mono`}
+                    type={showSellerSpriteSecret ? "text" : "password"}
+                    value={sellerSpriteSettings.apiKey}
+                    onChange={(event) => updateSellerSprite("apiKey", event.target.value)}
+                    placeholder={sellerSpriteSettings.hasApiKey ? "已保存，留空则保留" : "粘贴 secret-key"}
+                  />
+                  <button
+                    className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-foreground"
+                    onClick={() => setShowSellerSpriteSecret((current) => !current)}
+                    title={showSellerSpriteSecret ? "隐藏密钥" : "显示密钥"}
+                    type="button"
+                  >
+                    {showSellerSpriteSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </Field>
+
+              <details>
+                <summary className="cursor-pointer text-sm font-semibold text-foreground">高级参数</summary>
+              <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_0.7fr_0.8fr]">
                 <Field label="超时秒数">
                   <input
                     className={fieldClass}
@@ -962,13 +964,14 @@ export function SettingsWorkbench() {
                   />
                 </Field>
               </div>
+              </details>
 
               {sellerSpriteError ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{sellerSpriteError}</div> : null}
               {sellerSpriteTestMessage ? <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">{sellerSpriteTestMessage}</div> : null}
 
               <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-muted">
-                  {sellerSpriteSavedAt ? <span>已保存：{sellerSpriteSavedAt}</span> : <span>保存后，Agent 会读取这里的连接状态；header 名固定为 secret-key。</span>}
+                  {sellerSpriteSavedAt ? <span>已保存：{sellerSpriteSavedAt}</span> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => void testSellerSpriteSettings()} disabled={testingSellerSprite}>
@@ -994,7 +997,9 @@ export function SettingsWorkbench() {
               </div>
               <Badge tone="gray">{profiles.length} 个</Badge>
             </CardHeader>
-            <CardContent className="space-y-2 p-3">
+            <details>
+            <summary className="cursor-pointer list-none px-3 pb-2 text-xs font-semibold text-muted">{profiles.length} 个配置 · 展开管理</summary>
+            <CardContent className="space-y-2 p-3 pt-0">
               {profiles.length ? (
                 profiles.map((profile) => {
                   const active = profile.id === activeProfileId;
@@ -1023,9 +1028,12 @@ export function SettingsWorkbench() {
                 <p className="text-sm leading-6 text-muted">{settingsLoading ? "正在读取数据库配置..." : "暂无保存配置。点击保存配置后会出现在这里。"}</p>
               )}
             </CardContent>
+            </details>
           </Card>
 
           <Card>
+            <details>
+            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-brand">测试连接</summary>
             <CardHeader className="flex flex-col gap-2 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
@@ -1033,7 +1041,6 @@ export function SettingsWorkbench() {
                 </div>
                 <div>
                   <CardTitle className="text-sm">测试聊天</CardTitle>
-                  <p className="mt-0.5 text-xs text-muted">发送一条短消息，验证 API Key、Base URL、模型和 Responses 协议是否可用。</p>
                 </div>
               </div>
               <Badge tone={testingChat ? "amber" : ready ? "green" : "gray"}>{testingChat ? "测试中" : ready ? "可测试" : "待配置"}</Badge>
@@ -1073,10 +1080,9 @@ export function SettingsWorkbench() {
                 </Button>
               </div>
             </CardContent>
+            </details>
           </Card>
         </section>
-
-        <WeComNotificationSettingsPanel />
 
       </div>
     </>

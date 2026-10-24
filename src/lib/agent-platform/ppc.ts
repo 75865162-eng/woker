@@ -887,6 +887,7 @@ function buildKeywordSignal(sellerSpriteKeywords: JsonValue, performanceRows: Pe
   );
   const secondary = normalizeStringArray(Array.isArray(keywordSeed.secondaryKeywords) ? keywordSeed.secondaryKeywords : []);
   const longTail = normalizeStringArray(Array.isArray(keywordSeed.longTailKeywords) ? keywordSeed.longTailKeywords : []);
+  const hasProvidedKeywords = [keywordSeed.primaryKeywords, keywordSeed.secondaryKeywords, keywordSeed.longTailKeywords].some((value) => Array.isArray(value) && value.length > 0);
   const candidateKeywords = [...primary, ...secondary, ...longTail].filter(Boolean).slice(0, 12);
   const keywordOpportunity = clampScore(
     Math.round(
@@ -900,8 +901,8 @@ function buildKeywordSignal(sellerSpriteKeywords: JsonValue, performanceRows: Pe
     keywordOpportunity,
     candidateKeywords,
     evidence: [{
-      claim: "Keyword opportunity signals inferred from SellerSprite and PPC rows.",
-      dataSource: "SellerSprite + PPC",
+      claim: hasProvidedKeywords ? "Keyword signals inferred from provided keyword context and PPC rows." : "Keyword signals inferred from local PPC rows only.",
+      dataSource: hasProvidedKeywords ? "Provided keyword context + PPC" : "Local PPC",
       toolId: "ppc.keyword.signal",
       metric: "keywordOpportunity",
       value: keywordOpportunity,
@@ -1048,7 +1049,7 @@ function buildOpportunities(
       title: "扩展关键词面",
       type: "structure",
       score: keywordSignal.keywordOpportunity,
-      rationale: "SellerSprite 关键词与 PPC 数据合并后，仍有更宽的 keyword surface 可覆盖。",
+      rationale: "根据本地 PPC 与已提供的关键词上下文评估可扩展的关键词范围；这是规则推断，需人工复核。",
       evidence: [...keywordSignal.evidence],
     });
   }

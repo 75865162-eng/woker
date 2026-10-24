@@ -24,6 +24,7 @@ import {
   setCachedProductListSummary,
 } from "@/lib/products/product-list-cache";
 import { refreshProductListSummaryBundle } from "@/lib/products/product-list-summary";
+import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { enqueueProductOutboxEvent } from "@/lib/queue";
 import { ProductRecordRevisionConflictError } from "@/lib/products/product-record-repository";
@@ -309,6 +310,9 @@ export async function getProductsResponse(
     const url = new URL(request.url);
     const debugTiming = url.searchParams.get("debugTiming") === "true";
     const scope = workspaceScopeFromRequest(request);
+    if (!(await assertWorkspaceAccess(user.organizationId, scope.workspaceId))) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    }
     const source = normalizeProductListSource(url.searchParams.get("source"));
     const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
     const pageSize = clampPageSize(url.searchParams.get("pageSize"));

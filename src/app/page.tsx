@@ -40,15 +40,12 @@ export default async function Home() {
             <p className="mt-2 text-sm text-muted">选择一个模块开始工作，页面会标明当前数据来源和待迁移边界。</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <PrefetchLink href="/workspace">
-              <Button>
-                PPC 优化
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </PrefetchLink>
-            <PrefetchLink href="/listing-ai">
+            {visibleModules.some((module) => module.href === "/workspace") ? <PrefetchLink href="/workspace">
+              <Button>PPC 优化<ArrowRight className="h-4 w-4" /></Button>
+            </PrefetchLink> : null}
+            {visibleModules.some((module) => module.href === "/listing-ai") ? <PrefetchLink href="/listing-ai">
               <Button variant="secondary">Listing AI</Button>
-            </PrefetchLink>
+            </PrefetchLink> : null}
           </div>
         </section>
 

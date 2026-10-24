@@ -145,7 +145,7 @@ export function AppShellClient({
   }, [pathname]);
 
   return (
-    <AppShellUserProvider value={{ organizationId, userId, userInitials, userName, userRole }}>
+    <AppShellUserProvider value={{ organizationId, userId, userInitials, userName, userRole, rolePermissions }}>
       <div className="min-h-screen bg-background">
       {enableShellEnhancements ? <WeComNotificationRunner /> : null}
       <aside className="fixed inset-y-0 left-0 z-20 flex w-[76px] flex-col items-center border-r border-border bg-white">

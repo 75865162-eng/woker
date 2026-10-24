@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { roleCanAccessModule } from "@/lib/accounts/permissions";
+import { getCurrentPopupNotificationId, getProductWorkflowNotificationLink, mergeWorkspaceScope } from "@/lib/notifications/user-notification-helpers";
+import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
 
 type UserNotification = {
   id: string;
@@ -30,10 +34,15 @@ export function UserNotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [popup, setPopup] = useState<UserNotification | null>(null);
+  const [popupIndex, setPopupIndex] = useState(0);
+  const [actionError, setActionError] = useState("");
+  const shellUser = useAppShellUser();
+  const canViewProducts = roleCanAccessModule(shellUser?.userRole, "products", shellUser?.rolePermissions);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const popupPanelRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
   const shownIdsRef = useRef<Set<string>>(new Set());
+  const notificationsRef = useRef(notifications);
 
   const loadNotifications = useCallback(async () => {
     const response = await fetch("/api/notifications/user?limit=50", { cache: "no-store" });
@@ -52,13 +61,19 @@ export function UserNotificationCenter() {
     setNotifications(nextNotifications);
     setUnreadCount(data.unreadCount ?? unread.length);
 
-    const nextPopup = unread.find((item) => item.type === "product_workflow" && !shownIdsRef.current.has(item.id)) ?? unread.find((item) => !shownIdsRef.current.has(item.id));
+    const nextPopup = (canViewProducts ? unread.find((item) => item.type.startsWith("product_workflow")) : undefined)
+      ?? unread.find((item) => !item.type.startsWith("product_workflow") && !shownIdsRef.current.has(item.id));
     if (nextPopup) {
-      shownIdsRef.current.add(nextPopup.id);
-      setPopup(nextPopup);
+      const nextIndex = nextNotifications.filter((item) => !item.readAt && item.type.startsWith("product_workflow")).findIndex((item) => item.id === nextPopup.id);
+      if (!shownIdsRef.current.has(nextPopup.id)) {
+        shownIdsRef.current.add(nextPopup.id);
+        setPopupIndex(Math.max(0, nextIndex));
+        setPopup(nextPopup);
+      }
     }
+    notificationsRef.current = nextNotifications;
     initializedRef.current = true;
-  }, []);
+  }, [canViewProducts]);
 
   useEffect(() => {
     void loadNotifications();
@@ -72,34 +87,61 @@ export function UserNotificationCenter() {
   const markRead = useCallback(async (ids: string[]) => {
     if (!ids.length) return;
 
-    const unreadIds = new Set(notifications.filter((item) => ids.includes(item.id) && !item.readAt).map((item) => item.id));
+    const unreadIds = new Set(notificationsRef.current.filter((item) => ids.includes(item.id) && !item.readAt).map((item) => item.id));
 
-    await fetch("/api/notifications/user", {
+    const response = await fetch("/api/notifications/user", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
-    }).catch(() => undefined);
-    setNotifications((current) => current.map((item) => (ids.includes(item.id) ? { ...item, readAt: new Date().toISOString() } : item)));
+    }).catch(() => null);
+    if (!response?.ok) {
+      setActionError("已读状态保存失败，请重试。");
+      return false;
+    }
+    const readAt = new Date().toISOString();
+    notificationsRef.current = notificationsRef.current.map((item) => (ids.includes(item.id) ? { ...item, readAt } : item));
+    setNotifications(notificationsRef.current);
     setUnreadCount((current) => Math.max(0, current - unreadIds.size));
-  }, [notifications]);
+    setActionError("");
+    return true;
+  }, []);
 
   async function markAllRead() {
-    await fetch("/api/notifications/user", {
+    const response = await fetch("/api/notifications/user", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ all: true }),
-    }).catch(() => undefined);
-    setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+    }).catch(() => null);
+    if (!response?.ok) { setActionError("已读状态保存失败，请重试。"); return; }
+    const readAt = new Date().toISOString();
+    notificationsRef.current = notificationsRef.current.map((item) => ({ ...item, readAt: item.readAt || readAt }));
+    setNotifications(notificationsRef.current);
     setUnreadCount(0);
   }
 
+  const workflowUnread = notifications.filter((item) => !item.readAt && item.type.startsWith("product_workflow"));
+  const popupWorkflow = popup?.type.startsWith("product_workflow") ? workflowUnread : [];
+  const popupItem = popupWorkflow.length ? popupWorkflow[Math.min(popupIndex, popupWorkflow.length - 1)] : popup;
+  const popupMetadata = popupItem?.metadata && typeof popupItem.metadata === "object" ? popupItem.metadata as Record<string, unknown> : {};
+  const popupDueAt = typeof popupMetadata.dueAt === "string" ? popupMetadata.dueAt : "";
+  const overdue = popupItem?.type === "product_workflow_overdue" || (popupDueAt && new Date(popupDueAt).getTime() < Date.now());
+  const popupLink = popupItem ? getProductWorkflowNotificationLink(popupItem) : null;
   const closePopup = useCallback(() => {
-    const currentPopup = popup;
     setPopup(null);
-    if (currentPopup) {
-      void markRead([currentPopup.id]);
-    }
-  }, [markRead, popup]);
+    const currentId = getCurrentPopupNotificationId(popupItem);
+    if (currentId) void markRead([currentId]);
+  }, [markRead, popupItem]);
+  async function openNotificationProduct(item: UserNotification) {
+    const link = getProductWorkflowNotificationLink(item);
+    if (!link || !(await markRead([item.id]))) return;
+    const scope = mergeWorkspaceScope(localStorage.getItem("amazon_bulk_ad_workspace_scope"), link.workspaceId);
+    try {
+      localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify(scope));
+      document.cookie = `amazon_bulk_ad_workspace_scope=${encodeURIComponent(JSON.stringify(scope))}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    } catch { /* Navigation still carries explicit workspace scope. */ }
+    emitWorkspaceScopeChanged({ ...scope, source: "manual" });
+    window.location.assign(link.href);
+  }
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -159,26 +201,30 @@ export function UserNotificationCenter() {
                 <p className="text-sm font-bold text-foreground">通知</p>
                 <p className="text-xs font-medium text-muted">业务流转和处理提醒</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => void markAllRead()} disabled={unreadCount === 0}>
-                <CheckCheck className="h-4 w-4" />
-                全部已读
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => void loadNotifications()}>刷新</Button>
+                <Button variant="ghost" size="sm" onClick={() => void markAllRead()} disabled={unreadCount === 0}>
+                  <CheckCheck className="h-4 w-4" />
+                  全部已读
+                </Button>
+              </div>
             </div>
             <div className="thin-scrollbar flex-1 overflow-y-auto p-2">
               {notifications.map((item) => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
-                  className="block w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-surface-muted"
-                  onClick={() => void markRead([item.id])}
+                  className="rounded-md px-3 py-2 transition-colors hover:bg-surface-muted"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-bold text-foreground">{item.title}</p>
-                    {!item.readAt ? <span className="mt-1 h-2 w-2 flex-none rounded-full bg-brand" /> : null}
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-muted">{item.message}</p>
-                  <p className="mt-1 text-[11px] font-medium text-muted">{formatNotificationTime(item.createdAt)}</p>
-                </button>
+                  <button type="button" className="block w-full text-left" onClick={() => void markRead([item.id])}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-bold text-foreground">{item.title}</p>
+                      {!item.readAt ? <span className="mt-1 h-2 w-2 flex-none rounded-full bg-brand" /> : null}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-muted">{item.message}</p>
+                    <p className="mt-1 text-[11px] font-medium text-muted">{formatNotificationTime(item.createdAt)}</p>
+                  </button>
+                  {item.type.startsWith("product_workflow") ? <Button size="sm" variant="secondary" className="mt-2" disabled={!canViewProducts || !getProductWorkflowNotificationLink(item)} title={!canViewProducts ? "没有商品查看权限" : undefined} onClick={() => void openNotificationProduct(item)}>打开商品</Button> : null}
+                </div>
               ))}
               {!notifications.length ? <div className="px-3 py-8 text-center text-sm font-medium text-muted">暂无通知。</div> : null}
             </div>
@@ -206,17 +252,20 @@ export function UserNotificationCenter() {
             </div>
             <div className="space-y-4 px-5 py-5">
               <div>
-                <p className="text-lg font-bold text-foreground">{popup.title}</p>
-                <p className="mt-2 text-sm font-medium leading-6 text-muted">{popup.message}</p>
+                <p className="text-lg font-bold text-foreground">{popupItem?.title}</p>
+                <p className="mt-2 text-sm font-medium leading-6 text-muted">{popupItem?.message}</p>
               </div>
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-medium text-amber-800">
-                处理期限：{formatNotificationTime(popup.createdAt)}
-              </div>
+              {popupItem?.type.startsWith("product_workflow") ? <div className={cn("rounded-md border px-3 py-3 text-sm font-medium", overdue ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800")}>
+                处理期限：{popupDueAt ? formatNotificationTime(popupDueAt) : "期限未设置"}{overdue ? "（已超时）" : ""}
+              </div> : null}
+              {actionError ? <p role="alert" className="text-sm text-red-700">{actionError} <button className="underline" onClick={() => void markRead([popupItem?.id ?? ""])}>重试</button></p> : null}
               <div className="flex flex-wrap justify-end gap-2">
+                {popupWorkflow.length > 1 ? <Button variant="secondary" onClick={() => setPopupIndex((current) => (current + 1) % popupWorkflow.length)}>下一条（{popupIndex + 1}/{popupWorkflow.length}）</Button> : null}
                 <Button variant="secondary" onClick={closePopup}>
                   <X className="h-4 w-4" />
                   关闭并标记已读
                 </Button>
+                {popupItem?.type.startsWith("product_workflow") && canViewProducts ? <Button onClick={() => void openNotificationProduct(popupItem)} disabled={!popupLink} title={!popupLink ? "通知缺少商品或工作区信息" : undefined}>打开商品</Button> : null}
                 <Button onClick={() => void closePopup()}>
                   <Bell className="h-4 w-4" />
                   知道了

@@ -21,7 +21,11 @@ on:
         type: boolean
         default: false
       install_dependencies:
-        description: Allow server dependency installation if lockfile changed
+        description: Allow npm ci on the server for a lockfile change or first install
+        type: boolean
+        default: false
+      initial_deployment:
+        description: Initialize a clean Ubuntu host with no previous release
         type: boolean
         default: false
 
@@ -141,6 +145,7 @@ jobs:
           SERVER_DIR: ${{ secrets.PRODUCTION_SERVER_DIR }}
           SSH_OPTS: -o StrictHostKeyChecking=yes
           INSTALL_DEPS_ON_SERVER: ${{ inputs.install_dependencies && 'true' || 'false' }}
+          INITIAL_DEPLOYMENT: ${{ inputs.initial_deployment && 'true' || 'false' }}
           RUN_BOOTSTRAP_SEED: "false"
           SOURCE_BRANCH: ${{ github.ref_name }}
           SOURCE_COMMIT: ${{ github.sha }}

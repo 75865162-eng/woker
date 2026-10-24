@@ -110,7 +110,6 @@ export function WorkspaceScopePanel() {
             </div>
             <div>
               <CardTitle className="text-sm">Workspace / 账号 / 站点</CardTitle>
-              <p className="mt-0.5 text-xs font-medium text-muted">定义组织级数据边界，避免不同账号、站点和工作区混用同一份数据；保存前请补齐账号与站点。</p>
             </div>
           </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -183,9 +182,6 @@ export function WorkspaceScopePanel() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs font-medium leading-4 text-muted">
-          每条记录建议保持 workspaceId、accountId、marketplace 的一一对应关系，后续导入、导出和草稿归属都按这个边界执行。
-        </p>
       </CardContent>
     </Card>
   );

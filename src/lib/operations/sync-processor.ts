@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { extractAmazonInventorySnapshots, resolveAmazonMarketplaceId } from "@/lib/amazon/inventory";
 import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
-import { assertAmazonSpApiScopeAllowed, getAmazonSpApiServerConfiguration } from "@/lib/amazon/sp-api-config";
+import { getAmazonSpApiServerConfigurationForScope } from "@/lib/amazon/integration-secrets";
 import { prisma } from "@/lib/db/prisma";
 import { extractMarketplaceParticipations } from "./readiness";
 import { withAmazonSyncLock } from "./sync-lock";
@@ -60,11 +60,10 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
     });
     if (!connection || connection.status !== "CONFIGURED") throw new Error("Amazon 连接未验证或已停用。");
 
-    assertAmazonSpApiScopeAllowed({ organizationId: run.organizationId, workspaceId: run.workspaceId });
     const bindings = await getSellerBindings(run.organizationId, run.workspaceId, run.resource);
     if (!bindings.length) throw new Error("当前工作区没有显式配置 Amazon Seller ID、SellerAccount、站点及该同步域授权；accountKey 不会被当作 Seller ID。");
     const participations = extractMarketplaceParticipations({ payload: connection.marketplaceParticipations });
-    const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration());
+    const client = new AmazonSpApiClient(await getAmazonSpApiServerConfigurationForScope({ organizationId: run.organizationId, workspaceId: run.workspaceId }));
     const capturedAt = new Date();
     const enabledDomains = Array.isArray(connection.enabledDomains)
       ? connection.enabledDomains.filter((domain): domain is string => typeof domain === "string")

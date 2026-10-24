@@ -20,6 +20,8 @@
     "worker": "tsx scripts/import-worker.ts",
     "worker:image-upscale": "tsx scripts/image-upscale-worker.ts",
     "worker:amazon-sync": "tsx scripts/amazon-sync-worker.ts",
+    "worker:sellfox-sync": "tsx scripts/sellfox-sync-worker.ts",
+    "ops:cli": "tsx scripts/ops-cli.ts",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",
     "lint": "eslint",

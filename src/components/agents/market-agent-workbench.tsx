@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, ShieldAlert, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AgentApproval,
@@ -131,6 +133,9 @@ function sellerSpriteStatusTone(status?: string): "green" | "amber" | "red" | "b
 }
 
 export function MarketAgentWorkbench() {
+  const shellUser = useAppShellUser();
+  const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
+  const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<MarketAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -579,11 +584,11 @@ export function MarketAgentWorkbench() {
               </label>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={runResearch} disabled={running || loading} className="min-w-36">
+              <Button type="button" onClick={runResearch} disabled={!canCreate || running || loading} title={!canCreate ? "没有 Agent 创建权限" : undefined} className="min-w-36">
                 {running ? "运行中..." : "运行研究"}
                 <Sparkles className="h-4 w-4" />
               </Button>
-              <Button type="button" variant="secondary" onClick={createProject} disabled={projecting || !selectedOpportunity || !report}>
+              <Button type="button" variant="secondary" onClick={createProject} disabled={!canCreate || projecting || !selectedOpportunity || !report} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 {projecting ? "创建中..." : "创建项目"}
                 <SquareKanban className="h-4 w-4" />
               </Button>
@@ -656,11 +661,11 @@ export function MarketAgentWorkbench() {
                     <div className="mt-2 text-xs text-muted">{currentApproval.recommendation.summary}</div>
                   </div>
                   <div className="flex gap-2">
-                    <Button type="button" onClick={() => resolveApproval("APPROVED")} disabled={decisionBusy !== "" || currentApproval.status !== "REQUESTED"}>
+                    <Button type="button" onClick={() => resolveApproval("APPROVED")} disabled={!canApprove || decisionBusy !== "" || currentApproval.status !== "REQUESTED"} title={!canApprove ? "没有 Agent 审批权限" : undefined}>
                     {decisionBusy === "APPROVED" ? "审批中..." : "通过"}
                       <CheckCircle2 className="h-4 w-4" />
                     </Button>
-                    <Button type="button" variant="danger" onClick={() => resolveApproval("REJECTED")} disabled={decisionBusy !== "" || currentApproval.status !== "REQUESTED"}>
+                    <Button type="button" variant="danger" onClick={() => resolveApproval("REJECTED")} disabled={!canApprove || decisionBusy !== "" || currentApproval.status !== "REQUESTED"} title={!canApprove ? "没有 Agent 审批权限" : undefined}>
                     {decisionBusy === "REJECTED" ? "驳回中..." : "驳回"}
                       <TriangleAlert className="h-4 w-4" />
                     </Button>

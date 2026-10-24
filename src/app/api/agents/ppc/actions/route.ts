@@ -1,12 +1,13 @@
+import { previewAmazonAction } from "@/lib/agent-platform/amazon-action-audit";
+import { AmazonActionError } from "@/lib/agent-platform/amazon-action-policy";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { createApprovalRequest } from "@/lib/agent-platform/approval";
 import { createEvent, createTraceEvent } from "@/lib/agent-platform/trace";
-import { createToolGateway } from "@/lib/agent-platform/tool-gateway";
-import { amazonAdsToolDefinitions, createAmazonAdsApiAdapter } from "@/lib/agent-platform/amazon-ads";
-import { ppcAgentDefinition, ppcAgentId } from "@/lib/agent-platform/ppc";
+import { ppcAgentId } from "@/lib/agent-platform/ppc";
 import type { JsonValue as AgentJsonValue } from "@/lib/agent-platform/types";
 
 export const runtime = "nodejs";
@@ -30,38 +31,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A PPC report is required." }, { status: 400 });
     }
 
+    if (actionTarget === "amazon.ads.apply") {
+      if (!process.env.DATABASE_URL) return NextResponse.json({ code: "AUDIT_DATABASE_REQUIRED", error: "Amazon 预览必须持久化到数据库。" }, { status: 503 });
+      const scope = workspaceScopeFromRequest(request, body);
+      const result = await previewAmazonAction({ organizationId: user.organizationId, workspaceId: scope.workspaceId, actorUserId: user.id }, { report, adjustmentDrafts, idempotencyKey: body.idempotencyKey });
+      return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (actionTarget !== "bulk.export.prepare") return NextResponse.json({ error: "不支持的动作。" }, { status: 400 });
+
     const executionId = `execution-${ppcAgentId}-action-${decisionAt.getTime()}`;
-    const amazonAdsPlanResult = actionTarget === "amazon.ads.apply"
-      ? await createToolGateway({
-          tools: amazonAdsToolDefinitions,
-          adapters: [
-            createAmazonAdsApiAdapter({
-              writeEnabled: process.env.AMAZON_ADS_EXECUTION_ENABLED === "true",
-              clock: () => decisionAt,
-            }),
-          ],
-          clock: () => decisionAt,
-        }).invoke({
-          agent: ppcAgentDefinition,
-          executionId,
-          context: isObject(body.context) ? body.context : {},
-          toolId: "amazon.ads.recommendation.plan",
-          input: {
-            report,
-            adjustmentDrafts,
-          } as AgentJsonValue,
-        })
-      : null;
-    const amazonAdsPlan = isObject(amazonAdsPlanResult?.output) && isObject(amazonAdsPlanResult.output.plan)
-      ? amazonAdsPlanResult.output.plan
-      : null;
+    const amazonAdsPlan = null;
     const approval = createApprovalRequest({
       executionId,
-      riskLevel: actionTarget === "amazon.ads.apply" ? "CRITICAL" : "HIGH",
+      riskLevel: "HIGH",
       recommendation: {
-        summary: actionTarget === "amazon.ads.apply"
-          ? "Approve PPC recommendations before Amazon Ads API execution."
-          : "Approve PPC recommendations before preparing Bulk export.",
+        summary: "Approve PPC recommendations before preparing Bulk export.",
         evidence: report.evidence ?? [],
         risks: [
           "PPC changes affect live ad spend.",
@@ -136,7 +120,6 @@ export async function POST(request: Request) {
         payload: {
           actionTarget,
           draftCount: adjustmentDrafts.length,
-          amazonAdsPlanId: amazonAdsPlan && typeof amazonAdsPlan.planId === "string" ? amazonAdsPlan.planId : undefined,
           reportSummary: typeof report.summary === "string" ? report.summary : undefined,
         } as AgentJsonValue,
         createdAt: decisionAt,
@@ -289,6 +272,7 @@ export async function POST(request: Request) {
       approval,
     });
   } catch (error) {
+    if (error instanceof AmazonActionError) return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to create PPC action approval." },
       { status: 500 },

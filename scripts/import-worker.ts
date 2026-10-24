@@ -3,7 +3,7 @@ import { Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { processImportJob } from "@/lib/jobs/processor";
 import { enqueueProductOutboxEvent } from "@/lib/queue";
-import { enqueuePendingProductOutboxEvents, markExpiredProductAttachmentsOrphaned, processProductOutboxEvent, recoverStaleProductOutboxEvents } from "@/lib/products/product-outbox";
+import { enqueuePendingProductOutboxEvents, markExpiredProductAttachmentsOrphaned, processProductOutboxEvent, recoverStaleProductOutboxEvents, scanOverdueProductWorkflowNotifications } from "@/lib/products/product-outbox";
 import { prisma } from "@/lib/db/prisma";
 import { createRedisConnectionOptions, getImportJobQueue, importJobQueueName, productOutboxQueueName } from "@/lib/queue/redis-queue";
 
@@ -115,6 +115,7 @@ void enqueuePendingOutboxEvents().catch((error) => {
 void markExpiredProductAttachmentsOrphaned().catch((error) => {
   console.error("[worker] product attachment cleanup failed:", error);
 });
+void scanOverdueProductWorkflowNotifications().catch((error) => console.error("[worker] overdue workflow notification scan failed:", error));
 const heartbeatTimer = setInterval(() => {
   void writeHeartbeat().catch((error) => {
     console.error("[worker] heartbeat failed:", error);
@@ -135,6 +136,9 @@ const attachmentCleanupTimer = setInterval(() => {
     console.error("[worker] product attachment cleanup failed:", error);
   });
 }, 5 * 60_000);
+const overdueWorkflowTimer = setInterval(() => {
+  void scanOverdueProductWorkflowNotifications().catch((error) => console.error("[worker] overdue workflow notification scan failed:", error));
+}, 60_000);
 
 worker.on("completed", (job) => {
   console.log(`[worker] completed ${job.data.jobId}`);
@@ -149,6 +153,7 @@ process.on("SIGINT", async () => {
   clearInterval(importJobRecoveryTimer);
   clearInterval(outboxRecoveryTimer);
   clearInterval(attachmentCleanupTimer);
+  clearInterval(overdueWorkflowTimer);
   await writeHeartbeat("stopping").catch(() => undefined);
   await worker.close();
   await productOutboxWorker.close();
@@ -160,6 +165,7 @@ process.on("SIGTERM", async () => {
   clearInterval(importJobRecoveryTimer);
   clearInterval(outboxRecoveryTimer);
   clearInterval(attachmentCleanupTimer);
+  clearInterval(overdueWorkflowTimer);
   await writeHeartbeat("stopping").catch(() => undefined);
   await worker.close();
   await productOutboxWorker.close();

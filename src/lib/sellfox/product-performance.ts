@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sellfoxPost } from "@/lib/sellfox/client";
+import { nextSellfoxPage } from "@/lib/sellfox/sync-contract";
 
 type RecordLike = Record<string, unknown>;
 
@@ -44,16 +45,28 @@ export async function syncSellfoxProductDailySnapshots(input: {
   workspaceId: string;
   reportDate?: string;
   storeExternalId?: string;
+  storeExternalIds?: string[];
+  cursor?: { storeIndex?: number; pageNo?: number };
+  onProgress?: (progress: { storeIndex: number; pageNo: number; synced: number; cursor: { storeIndex: number; pageNo: number }; failedStores?: string[] }) => Promise<void>;
 }) {
   const reportDate = input.reportDate ?? defaultSellfoxReportDate();
+  const storeExternalIds = input.storeExternalIds?.length ? input.storeExternalIds : input.storeExternalId ? [input.storeExternalId] : undefined;
   const stores = await prisma.sellfoxStore.findMany({
-    where: { organizationId: input.organizationId, workspaceId: input.workspaceId, ...(input.storeExternalId ? { externalId: input.storeExternalId } : {}) },
+    where: { organizationId: input.organizationId, workspaceId: input.workspaceId, ...(storeExternalIds ? { externalId: { in: storeExternalIds } } : {}) },
     orderBy: { externalId: "asc" },
   });
   let synced = 0;
+  const failedStores: string[] = [];
+  let firstFailedCursor: { storeIndex: number; pageNo: number } | null = null;
 
-  for (const store of stores) {
-    for (let pageNo = 1; pageNo <= 1_000; pageNo += 1) {
+  const startStoreIndex = Math.max(0, input.cursor?.storeIndex ?? 0);
+  for (let storeIndex = startStoreIndex; storeIndex < stores.length; storeIndex += 1) {
+    const store = stores[storeIndex];
+    const startPageNo = storeIndex === startStoreIndex ? Math.max(1, input.cursor?.pageNo ?? 1) : 1;
+    let currentPageNo = startPageNo;
+    try {
+    for (let pageNo = startPageNo; pageNo <= 10_000; pageNo += 1) {
+      currentPageNo = pageNo;
       const payload = await sellfoxPost<unknown>("/api/sale/profit/product/pageList.json", {
         pageNo,
         pageSize: 100,
@@ -71,7 +84,7 @@ export async function syncSellfoxProductDailySnapshots(input: {
         const sku = text(row, "skuList");
         const asin = text(row, "asinList");
         const title = text(row, "title");
-        const sourceKey = msku || sku || asin || title;
+        const sourceKey = msku || sku || asin;
         if (!sourceKey) continue;
 
         await prisma.sellfoxProductDailySnapshot.upsert({
@@ -123,11 +136,21 @@ export async function syncSellfoxProductDailySnapshots(input: {
         synced += 1;
       }
 
-      if (rows.length < 100 || (pagination.totalPage !== null && pageNo >= pagination.totalPage) || (pagination.totalSize !== null && pageNo * 100 >= pagination.totalSize)) {
-        break;
-      }
+      const nextPage = nextSellfoxPage(rows.length, pageNo, pagination.totalPage ?? (pagination.totalSize === null ? null : Math.ceil(pagination.totalSize / 100)));
+      const cursor = nextPage === null ? { storeIndex: storeIndex + 1, pageNo: 1 } : { storeIndex, pageNo: nextPage };
+      await input.onProgress?.({ storeIndex, pageNo, synced, cursor });
+      if (nextPage === null) break;
+    }
+    } catch {
+      failedStores.push(store.externalId);
+      firstFailedCursor ??= { storeIndex, pageNo: currentPageNo };
     }
   }
 
-  return { reportDate, storeCount: stores.length, synced };
+  if (failedStores.length) {
+    const cursor = firstFailedCursor ?? { storeIndex: startStoreIndex, pageNo: 1 };
+    await input.onProgress?.({ ...cursor, synced, cursor, failedStores });
+    throw new Error(`${failedStores.length} 个店铺产品表现同步失败，已继续处理其他店铺。`);
+  }
+  return { reportDate, storeCount: stores.length, synced, failedStores };
 }

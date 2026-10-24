@@ -1,8 +1,14 @@
 import { createHmac, randomInt } from "node:crypto";
+import { Client } from "pg";
 
 const baseUrl = "https://openapi.sellfox.com";
 const requestTimeoutMs = Math.min(Math.max(Number(process.env.SELLFOX_REQUEST_TIMEOUT_MS) || 30_000, 5_000), 120_000);
 let cachedToken: { value: string; expiresAt: number } | null = null;
+let cachedTokenRequest: Promise<string> | null = null;
+let requestTail: Promise<void> = Promise.resolve();
+let lastRequestStartedAt = 0;
+let lockClient: Client | null = null;
+let lockClientReady: Promise<Client> | null = null;
 
 type SellfoxEnvelope<T> = { code?: number; msg?: string; data?: T };
 
@@ -19,38 +25,58 @@ function credentials() {
 
 async function getAccessToken() {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
-
-  const { clientId, clientSecret } = credentials();
-  const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
-  const { response, payload } = await fetchJsonWithTimeout<{ access_token?: string; expires_in?: number }>(`${baseUrl}/api/oauth/v2/token.json?${params}`, { cache: "no-store" });
-
-  if (!response.ok || payload.code || !payload.data?.access_token) {
-    throw new Error(payload.msg || "赛狐 Token 获取失败。");
+  if (!cachedTokenRequest) {
+    cachedTokenRequest = (async () => {
+      const { clientId, clientSecret } = credentials();
+      const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
+      const { response, payload } = await fetchJsonWithTimeout<{ access_token?: string; expires_in?: number }>(`${baseUrl}/api/oauth/v2/token.json?${params}`, { cache: "no-store" });
+      if (!response.ok || payload.code || !payload.data?.access_token) throw new Error("赛狐 Token 获取失败，请检查服务端凭据和接口状态。");
+      cachedToken = { value: payload.data.access_token, expiresAt: Date.now() + Math.max(((payload.data.expires_in ?? 86_400) * 1_000) - 60_000, 60_000) };
+      return cachedToken.value;
+    })();
   }
-
-  cachedToken = {
-    value: payload.data.access_token,
-    expiresAt: Date.now() + Math.max((payload.data.expires_in ?? 86_400_000) - 60_000, 60_000),
-  };
-  return cachedToken.value;
+  const pending = cachedTokenRequest;
+  try { return await pending; }
+  finally { if (cachedTokenRequest === pending) cachedTokenRequest = null; }
 }
 
 async function fetchJsonWithTimeout<T>(input: string, init: RequestInit) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
-
-  try {
-    const response = await fetch(input, { ...init, signal: controller.signal });
-    const payload = (await response.json()) as SellfoxEnvelope<T>;
-    return { response, payload };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`赛狐接口请求超时（${Math.round(requestTimeoutMs / 1000)} 秒）。`);
+  const request = requestTail.then(async () => {
+    let distributed = false;
+    if (process.env.DATABASE_URL) {
+      lockClientReady ??= (async () => {
+        const client = new Client({ connectionString: process.env.DATABASE_URL });
+        await client.connect();
+        lockClient = client;
+        return client;
+      })();
+      const client = await lockClientReady;
+      await client.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", ["sellfox-open-api-global-rate-limit"]);
+      distributed = true;
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+    } else {
+      const waitMs = Math.max(0, lastRequestStartedAt + 1_200 - Date.now());
+      if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
+    lastRequestStartedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    try {
+      const response = await fetch(input, { ...init, signal: controller.signal });
+      const payload = (await response.json()) as SellfoxEnvelope<T>;
+      return { response, payload };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`赛狐接口请求超时（${Math.round(requestTimeoutMs / 1000)} 秒）。`);
+      }
+      throw new Error("赛狐接口网络请求失败。");
+    } finally {
+      clearTimeout(timeout);
+      if (distributed) await lockClient?.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", ["sellfox-open-api-global-rate-limit"]);
+    }
+  });
+  requestTail = request.then(() => undefined, () => undefined);
+  return request;
 }
 
 export async function sellfoxPost<T>(path: string, body: unknown): Promise<T> {
@@ -86,7 +112,7 @@ export async function sellfoxPost<T>(path: string, body: unknown): Promise<T> {
         continue;
       }
       if (!response.ok || (payload.code && payload.code !== 0)) {
-        throw new Error(payload.msg || `赛狐接口调用失败 (${response.status})。`);
+        throw new Error(`赛狐接口调用失败（HTTP ${response.status}${payload.code ? ` / ${payload.code}` : ""}）。`);
       }
       return payload.data as T;
     } catch (error) {

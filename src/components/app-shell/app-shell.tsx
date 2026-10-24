@@ -49,7 +49,7 @@ export async function AppShell({
   if (currentPath) {
     const accessiblePath = getAccessiblePathOrFallback(currentPath, user?.role, rolePermissions);
     if (accessiblePath !== currentPath) {
-      redirect(accessiblePath);
+      redirect(`/forbidden?from=${encodeURIComponent(currentPath)}`);
     }
   }
 

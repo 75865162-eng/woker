@@ -1,3 +1,6 @@
+import { confirmAmazonAction } from "@/lib/agent-platform/amazon-action-audit";
+import { AmazonActionError } from "@/lib/agent-platform/amazon-action-policy";
+import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -62,6 +65,13 @@ export async function POST(request: Request, context: { params: Promise<{ approv
 
     if (!approval) {
       return NextResponse.json({ error: "Approval request not found." }, { status: 404 });
+    }
+
+    const action = approval.action as unknown as AgentAction;
+    if (action.type === "amazon.ads.apply") {
+      const scope = workspaceScopeFromRequest(request);
+      const result = await confirmAmazonAction({ organizationId: user.organizationId, workspaceId: scope.workspaceId, actorUserId: user.id }, approvalId, decision, reason);
+      return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
     }
 
     if (approval.status !== "REQUESTED") {
@@ -203,6 +213,7 @@ export async function POST(request: Request, context: { params: Promise<{ approv
       },
     });
   } catch (error) {
+    if (error instanceof AmazonActionError) return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to resolve approval." },
       { status: 500 },

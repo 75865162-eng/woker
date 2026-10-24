@@ -12,19 +12,32 @@ export async function GET(request: Request) {
 
     const scope = workspaceScopeFromRequest(request);
     const where = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
-    const [stores, hourlyCount, latestRun, latestHourlyRun, latestPerformanceRun, latestMetric] = await Promise.all([
-      prisma.sellfoxStore.findMany({ where, orderBy: { name: "asc" } }),
+    const [stores, hourlyCount, inventoryCount, salesCount, performanceCount, inventoryCoverage, salesCoverage, latestRun, latestHourlyRun, latestPerformanceRun, latestMetric, latestRuns, latestSuccessRuns, heartbeat] = await Promise.all([
+      prisma.sellfoxStore.findMany({ where, select: { id: true, externalId: true, name: true, marketplace: true, country: true, status: true, lastSyncedAt: true }, orderBy: { name: "asc" } }),
       prisma.sellfoxHourlyMetric.count({ where }),
+      prisma.sellfoxFbaInventorySnapshot.count({ where }),
+      prisma.sellfoxSalesDailySnapshot.count({ where }),
+      prisma.sellfoxProductDailySnapshot.count({ where }),
+      prisma.sellfoxFbaInventorySnapshot.findMany({ where, distinct: ["storeId"], select: { storeId: true } }),
+      prisma.sellfoxSalesDailySnapshot.findMany({ where, distinct: ["storeId"], select: { storeId: true } }),
       prisma.sellfoxSyncRun.findFirst({ where, orderBy: { startedAt: "desc" } }),
       prisma.sellfoxSyncRun.findFirst({ where: { ...where, resource: "hourly", status: "done" }, orderBy: { startedAt: "desc" } }),
       prisma.sellfoxSyncRun.findFirst({ where: { ...where, resource: "performance" }, orderBy: { startedAt: "desc" } }),
       prisma.sellfoxHourlyMetric.findFirst({ where, orderBy: { syncedAt: "desc" } }),
+      prisma.sellfoxSyncRun.findMany({ where, orderBy: { startedAt: "desc" }, take: 20, select: { id: true, resource: true, status: true, summary: true, error: true, startedAt: true, finishedAt: true } }),
+      Promise.all(["stores", "inventory", "sales", "performance", "hourly"].map((resource) => prisma.sellfoxSyncRun.findFirst({ where: { ...where, resource, status: "done" }, orderBy: { startedAt: "desc" }, select: { id: true, resource: true, status: true, summary: true, error: true, startedAt: true, finishedAt: true } }))),
+      prisma.workerHeartbeat.findFirst({ where: { queueName: "sellfox-sync-jobs", status: "online", lastSeenAt: { gte: new Date(Date.now() - 90_000) } }, orderBy: { lastSeenAt: "desc" }, select: { id: true, lastSeenAt: true } }),
     ]);
 
     return NextResponse.json({
       configured: Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET),
       stores,
       hourlyCount,
+      counts: { stores: stores.length, inventory: inventoryCount, sales: salesCount, performance: performanceCount, hourly: hourlyCount },
+      coverage: { inventoryStores: inventoryCoverage.length, inventoryMissingStores: Math.max(0, stores.length - inventoryCoverage.length), salesStores: salesCoverage.length, salesMissingStores: Math.max(0, stores.length - salesCoverage.length) },
+      latestRuns,
+      latestSuccessByResource: Object.fromEntries(latestSuccessRuns.filter((run) => run !== null).map((run) => [run.resource, run])),
+      workerOnline: Boolean(heartbeat),
       latestRun,
       latestPerformanceRun,
       nextHourlyStoreOffset: (() => {

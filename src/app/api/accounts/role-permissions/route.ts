@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { rolePermissionsCookieName } from "@/lib/accounts/permissions";
 import { getOrganizationRolePermissionsSnapshot, saveOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
-import { getCurrentUserFromRequest } from "@/lib/auth/session";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
-
-function canManagePermissions(role: string) {
-  return role === "owner" || role === "database_admin";
-}
 
 function buildPermissionsCookie(permissions: unknown) {
   return `${rolePermissionsCookieName}=${encodeURIComponent(JSON.stringify(permissions))}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
@@ -38,11 +34,9 @@ function diffPermissions(before: Record<string, Record<string, string[]>>, after
 }
 
 export async function GET(request: Request) {
-  const user = await getCurrentUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const permission = await requireApiPermission("accounts", "view", request);
+  if (!permission.ok) return permission.response;
+  const { user } = permission;
 
   const snapshot = await getOrganizationRolePermissionsSnapshot(user.organizationId);
   const response = NextResponse.json(snapshot);
@@ -52,15 +46,9 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const user = await getCurrentUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
-  if (!canManagePermissions(user.role)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
+  const permission = await requireApiPermission("accounts", "edit", request);
+  if (!permission.ok) return permission.response;
+  const { user } = permission;
 
   const body = (await request.json()) as { permissions?: unknown };
   const before = await getOrganizationRolePermissionsSnapshot(user.organizationId);

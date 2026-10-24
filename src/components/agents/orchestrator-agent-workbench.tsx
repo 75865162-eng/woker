@@ -6,6 +6,8 @@ import { ArrowRight, CheckCircle2, Clock3, FileText, GitBranch, Play, RefreshCw,
 import { PrefetchLink } from "@/components/app-shell/prefetch-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AgentApproval,
@@ -78,6 +80,8 @@ function truncateJson(value: unknown) {
 }
 
 export function OrchestratorAgentWorkbench() {
+  const shellUser = useAppShellUser();
+  const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<OrchestratorAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -236,7 +240,7 @@ export function OrchestratorAgentWorkbench() {
               />
               已批准上架
             </label>
-            <Button type="button" className="w-full" onClick={runOrchestration} disabled={running || loading}>
+            <Button type="button" className="w-full" onClick={runOrchestration} disabled={!canCreate || running || loading} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
               {running ? <Clock3 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               {running ? "运行中..." : "运行编排"}
             </Button>

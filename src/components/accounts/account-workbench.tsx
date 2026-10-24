@@ -2,14 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   Archive,
-  Building2,
   Check,
   ChevronLeft,
   ChevronRight,
   Download,
-  Filter,
   Pencil,
   Plus,
   Search,
@@ -295,7 +292,11 @@ export function AccountWorkbench({
     })),
   );
   const [activeRoleId, setActiveRoleId] = useState<RoleId>("operations");
+  const [activeTab, setActiveTab] = useState<"members" | "roles">("members");
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<AccountStatus | "all">("all");
+  const [roleFilter, setRoleFilter] = useState<RoleId | "all">("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
   const [newAccountOpen, setNewAccountOpen] = useState(false);
   const [newRoleOpen, setNewRoleOpen] = useState(false);
   const [roleMembersOpen, setRoleMembersOpen] = useState(false);
@@ -377,9 +378,12 @@ export function AccountWorkbench({
         account.title.toLowerCase().includes(keyword) ||
         account.id.toLowerCase().includes(keyword);
 
-      return keywordMatched;
+      return keywordMatched &&
+        (statusFilter === "all" || account.status === statusFilter) &&
+        (roleFilter === "all" || account.roleId === roleFilter) &&
+        (departmentFilter === "all" || account.department === departmentFilter);
     });
-  }, [query, visibleAccounts]);
+  }, [query, statusFilter, roleFilter, departmentFilter, visibleAccounts]);
 
   const disabledAccounts = visibleAccounts.filter((account) => account.status === "disabled");
   const archivedAccounts = accounts.filter((account) => account.status === "archived");
@@ -393,7 +397,7 @@ export function AccountWorkbench({
 
   useEffect(() => {
     setAccountPage(1);
-  }, [query]);
+  }, [query, statusFilter, roleFilter, departmentFilter]);
 
   useEffect(() => {
     if (accountPage > accountPageCount) {
@@ -689,12 +693,15 @@ export function AccountWorkbench({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="secondary">
-            <Building2 className="h-4 w-4" />
-            组织架构
-          </Button>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="inline-flex w-fit items-center gap-1 border-b border-border" role="tablist" aria-label="账号权限视图">
+          {([ ["members", "成员"], ["roles", "角色与权限"] ] as const).map(([tab, label]) => (
+            <button key={tab} aria-selected={activeTab === tab} className={`border-b-2 px-4 py-2 text-sm font-semibold ${activeTab === tab ? "border-brand text-brand" : "border-transparent text-muted hover:text-foreground"}`} onClick={() => setActiveTab(tab)} role="tab" type="button">
+              {label}
+            </button>
+          ))}
+        </div>
+        {activeTab === "members" ? <div className="flex flex-col gap-2 sm:flex-row">
           <input
             ref={accountImportInputRef}
             accept=".xlsx,.xls,.csv"
@@ -718,7 +725,7 @@ export function AccountWorkbench({
             <UserPlus className="h-4 w-4" />
             新建同事账号
           </Button>
-        </div>
+        </div> : null}
       </div>
       {accountSaveError ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -731,9 +738,10 @@ export function AccountWorkbench({
         </div>
       ) : null}
 
+      {activeTab === "members" ? <>
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <MetricCard title="账号总数" value={visibleAccounts.length} note="当前可见账号" icon={UsersRound} tone="blue" />
-        <MetricCard title="停用账号" value={disabledAccounts.length} note="保留账号但禁止登录" icon={UserCog} tone="gray" />
+        <button className="text-left" onClick={() => { setQuery(""); setStatusFilter("all"); setRoleFilter("all"); setDepartmentFilter("all"); }} type="button"><MetricCard title="账号总数" value={visibleAccounts.length} note="清除筛选并查看全部" icon={UsersRound} tone="blue" /></button>
+        <button className="text-left" onClick={() => { setQuery(""); setRoleFilter("all"); setDepartmentFilter("all"); setStatusFilter(statusFilter === "disabled" ? "all" : "disabled"); }} type="button"><MetricCard title="停用账号" value={disabledAccounts.length} note="点击筛选停用账号" icon={UserCog} tone="gray" /></button>
         <button className="text-left" onClick={() => setArchivedAccountsOpen(true)} type="button">
           <MetricCard title="归档" value={archivedAccounts.length} note="查看已归档员工" icon={Archive} tone="gray" />
         </button>
@@ -756,12 +764,20 @@ export function AccountWorkbench({
                   placeholder="搜索姓名、手机号、部门"
                 />
               </div>
-              <Button variant="secondary">
-                <Filter className="h-4 w-4" />
-                筛选
-              </Button>
             </div>
           </CardHeader>
+          <div className="grid grid-cols-1 gap-2 border-t border-border px-4 py-3 sm:grid-cols-3">
+            <select aria-label="按状态筛选" className={fieldClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AccountStatus | "all")}>
+              <option value="all">全部状态</option><option value="active">正常</option><option value="pending">待激活</option><option value="disabled">已停用</option>
+            </select>
+            <select aria-label="按角色筛选" className={fieldClass} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as RoleId | "all")}>
+              <option value="all">全部角色</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+            </select>
+            <select aria-label="按部门筛选" className={fieldClass} value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
+              <option value="all">全部部门</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}
+            </select>
+            {(statusFilter !== "all" || roleFilter !== "all" || departmentFilter !== "all") ? <Button className="sm:col-span-3 sm:justify-self-end" size="sm" variant="secondary" onClick={() => { setStatusFilter("all"); setRoleFilter("all"); setDepartmentFilter("all"); }}>清除筛选</Button> : null}
+          </div>
           <CardContent className="p-0">
             <div className="overflow-auto">
               <table className="w-full min-w-[860px] border-collapse text-sm">
@@ -771,6 +787,7 @@ export function AccountWorkbench({
                     <th className="px-5 py-3 text-left">手机号</th>
                     <th className="px-5 py-3 text-left">部门 / 岗位</th>
                     <th className="px-5 py-3 text-left">系统角色</th>
+                    <th className="px-5 py-3 text-left">状态</th>
                     <th className="px-5 py-3 text-left">最近活动</th>
                     <th className="px-5 py-3 text-right">操作</th>
                   </tr>
@@ -803,6 +820,7 @@ export function AccountWorkbench({
                           ))}
                         </select>
                       </td>
+                      <td className="px-5 py-4"><Badge tone={account.status === "active" ? "green" : account.status === "disabled" ? "red" : "amber"}>{account.status === "active" ? "正常" : account.status === "disabled" ? "已停用" : account.status === "pending" ? "待激活" : "已归档"}</Badge></td>
                       <td className="px-5 py-4">
                         <p className="font-medium text-foreground">{account.lastLoginIp || "IP 未记录"}</p>
                         <p className="text-xs text-muted">{account.lastLoginAt || account.lastActiveAt || "时间未记录"}</p>
@@ -855,6 +873,8 @@ export function AccountWorkbench({
           </CardContent>
         </Card>
 
+      </section>
+      </> : <>
         <div className="overflow-x-auto">
           <div className="grid min-w-[760px] grid-cols-[minmax(240px,1fr)_minmax(0,2fr)] gap-3">
             <div className="space-y-3">
@@ -887,16 +907,15 @@ export function AccountWorkbench({
                         className="min-w-0 flex-1 text-left"
                         onClick={() => {
                           setActiveRoleId(role.id);
-                          setRoleMembersOpen(true);
                         }}
                         type="button"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-bold text-foreground">{role.name}</p>
-                          <Badge tone={activeRole?.id === role.id ? "green" : "gray"}>{role.memberCount} 人</Badge>
                         </div>
                         <p className="mt-0.5 text-xs leading-4 text-muted">{role.description}</p>
                       </button>
+                      <button className="shrink-0 self-start rounded px-2 py-1 text-xs font-semibold text-brand hover:bg-brand/5" onClick={() => { setActiveRoleId(role.id); setRoleMembersOpen(true); }} type="button" aria-label={`查看${role.memberCount}名${role.name}成员`}>{role.memberCount} 人</button>
                       {roleManageMode ? (
                         <button
                           aria-label={`删除${role.name}`}
@@ -930,8 +949,8 @@ export function AccountWorkbench({
               </Card>
             </div>
 
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2.5">
+            <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
+                <CardHeader className="sticky top-0 z-10 flex flex-row items-center justify-between gap-2 border-b border-border bg-white px-3 py-2.5">
                   <div>
                     <CardTitle className="text-sm">权限管理</CardTitle>
                     <p className="mt-0.5 text-xs text-muted">
@@ -977,8 +996,8 @@ export function AccountWorkbench({
                   ) : null}
                   {activeRole ? (
                     permissionModules.map((module) => (
-                      <div key={module.id} className="grid grid-cols-[86px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
-                        <p className="text-xs font-bold text-foreground">{module.name}</p>
+                      <div key={module.id} className="grid grid-cols-[150px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-border px-2 py-1.5">
+                        <p className="text-xs font-bold text-foreground">{module.name.split(" /")[0]}</p>
                         <div className="grid grid-cols-6 gap-1">
                           <label className="flex items-center justify-center gap-0.5 text-[11px] font-medium text-muted">
                             <input
@@ -1014,9 +1033,9 @@ export function AccountWorkbench({
               </Card>
           </div>
         </div>
-      </section>
-
-      <Card>
+      <details className="rounded-md border border-border bg-white">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">SKU 流转权限说明</summary>
+        <Card className="border-0 shadow-none">
         <CardHeader className="px-4 py-3">
           <CardTitle>SKU 流转权限</CardTitle>
           <p className="mt-1 text-sm text-muted">账号角色会直接决定商品页负责人下拉和 SKU 处理权限。</p>
@@ -1034,33 +1053,9 @@ export function AccountWorkbench({
             </div>
           ))}
         </CardContent>
-      </Card>
-
-      <section className="grid grid-cols-1 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
-            <CardTitle>最近账号动态</CardTitle>
-            <Badge tone="blue">审计预览</Badge>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4">
-            {[
-              "李娜调整了运营角色的导出权限",
-              "张伟重置了陈晨的首次登录密码",
-              "系统停用了赵宁账号并保留审计记录",
-            ].map((item, index) => (
-              <div key={item} className="flex items-center justify-between border-b border-border pb-3 last:border-0 last:pb-0">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-muted text-brand">
-                    <Activity className="h-4 w-4" />
-                  </div>
-                  <p className="text-sm font-medium text-foreground">{item}</p>
-                </div>
-                <span className="text-xs text-muted">{index + 1} 小时前</span>
-              </div>
-            ))}
-          </CardContent>
         </Card>
-      </section>
+      </details>
+      </>}
 
       {newAccountOpen ? <AccountDialog roles={roles} title="新建同事账号" onClose={() => setNewAccountOpen(false)} onSubmit={createAccount} /> : null}
       {newRoleOpen ? <RoleDialog roles={availableRoleTemplates} onClose={() => setNewRoleOpen(false)} onSubmit={addRole} /> : null}

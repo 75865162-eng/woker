@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { Product } from "@/lib/products/types";
 import { invalidateProductListCaches } from "@/lib/products/product-list-cache";
 import { applyProductListSummaryChange } from "@/lib/products/product-list-summary";
-import { createWorkflowNotifications } from "@/lib/products/workflow-notifications";
+import { createWorkflowNotifications, createWorkflowOverdueNotifications } from "@/lib/products/workflow-notifications";
 import {
   lockProductRecordForProjection,
   productRecordPayloadToProduct,
@@ -398,6 +398,7 @@ export async function processProductOutboxEvent(eventId: string) {
           organizationId: auditUser.organizationId,
         },
         product,
+        workspaceId: event.workspaceId,
         previousProduct: normalizeWorkflowStage(payload.previousWorkflowStage ?? "")
           ? { workflowStage: normalizeWorkflowStage(payload.previousWorkflowStage ?? "") }
           : undefined,
@@ -454,6 +455,36 @@ export async function processProductOutboxEvent(eventId: string) {
     });
     throw error;
   }
+}
+
+export async function scanOverdueProductWorkflowNotifications(limit = 100) {
+  const now = new Date();
+  const batchSize = Math.min(Math.max(limit, 1), 500);
+  let offset = 0;
+  let scanned = 0;
+  while (true) {
+    const records = await prisma.productRecord.findMany({
+      where: {
+        workflowDueAt: { lte: now },
+        status: { in: ["ops_review", "design_in_progress", "listing_confirming"] },
+      },
+      select: { id: true, organizationId: true, workspaceId: true, payload: true },
+      orderBy: [{ workflowDueAt: "asc" }, { id: "asc" }],
+      skip: offset,
+      take: batchSize,
+    });
+    for (const record of records) {
+      await createWorkflowOverdueNotifications({
+        organizationId: record.organizationId,
+        workspaceId: record.workspaceId,
+        product: productRecordPayloadToProduct(record.payload),
+      });
+    }
+    scanned += records.length;
+    if (records.length < batchSize) break;
+    offset += records.length;
+  }
+  return scanned;
 }
 
 export async function enqueuePendingProductOutboxEvents(limit = 50) {

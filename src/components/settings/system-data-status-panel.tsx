@@ -25,13 +25,7 @@ async function loadDatabaseMetrics() {
     prisma.weComNotificationSetting.count(),
   ]);
 
-  const incompleteWorkspaceScopes = await prisma.workspaceScope.count({
-    where: {
-      OR: [{ accountId: "" }, { marketplace: "" }],
-    },
-  });
-
-  return { organizations, users, teamMembers, workspaceScopes, incompleteWorkspaceScopes, products, files, jobs, exports, wecomSettings };
+  return { organizations, users, teamMembers, workspaceScopes, products, files, jobs, exports, wecomSettings };
 }
 
 export async function SystemDataStatusPanel() {
@@ -76,12 +70,6 @@ export async function SystemDataStatusPanel() {
       icon: Database,
     },
     {
-      label: "待补齐",
-      value: metrics ? metrics.incompleteWorkspaceScopes.toLocaleString("zh-CN") : "-",
-      detail: "账号 / 站点",
-      icon: AlertTriangle,
-    },
-    {
       label: "商品",
       value: metrics ? metrics.products.toLocaleString("zh-CN") : "-",
       detail: "共享商品资产",
@@ -118,7 +106,6 @@ export async function SystemDataStatusPanel() {
   const queueIsInline = queueDriver === "inline";
   const productionGaps = [
     !hasDatabaseUrl ? "未配置 DATABASE_URL" : "",
-    metrics?.incompleteWorkspaceScopes ? `有 ${metrics.incompleteWorkspaceScopes} 个 workspace 缺少账号或站点` : "",
     storageIsLocal ? "文件仍在本地" : "",
     queueIsInline ? "任务仍为同步执行" : "",
   ].filter(Boolean);
@@ -131,8 +118,7 @@ export async function SystemDataStatusPanel() {
             {healthy ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
           </div>
           <div>
-            <CardTitle className="text-sm">数据库接入状态</CardTitle>
-            <p className="mt-0.5 text-xs font-medium text-muted">用于判断哪些数据已经进入后端共享边界，哪些仍是本地草稿。</p>
+            <CardTitle className="text-sm">系统状态</CardTitle>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -160,7 +146,9 @@ export async function SystemDataStatusPanel() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
+        <details>
+        <summary className="cursor-pointer text-sm font-semibold text-muted">数据计量</summary>
+        <div className="mt-2 grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
           {statusMetrics.map((item) => {
             const Icon = item.icon;
 
@@ -176,30 +164,7 @@ export async function SystemDataStatusPanel() {
             );
           })}
         </div>
-
-        <div className="grid gap-2 text-xs font-medium leading-4 text-muted lg:grid-cols-3">
-          <div className="rounded-md border border-border bg-white p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-bold text-foreground">已接后端边界</p>
-              <Badge tone="green">共享</Badge>
-            </div>
-            <p className="mt-1">账号、组织、团队成员、Workspace、商品、文件对象、处理任务、导出记录都在数据库里，适合多人共用。</p>
-          </div>
-          <div className="rounded-md border border-border bg-white p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-bold text-foreground">仍在本地草稿</p>
-              <Badge tone="amber">待迁移</Badge>
-            </div>
-            <p className="mt-1">PPC 工作区、Listing AI 历史、搜索词合并历史、物流当次处理状态仍依赖浏览器本地存储，属于下一阶段迁移项。</p>
-          </div>
-          <div className="rounded-md border border-border bg-white p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-bold text-foreground">下一步建议</p>
-              <ServerCog className="h-4 w-4 text-brand" />
-            </div>
-            <p className="mt-1">优先把文件资产迁到对象存储，再把 PPC workspace snapshot 和其他协作草稿迁到组织级表结构。</p>
-          </div>
-        </div>
+        </details>
       </CardContent>
     </Card>
   );

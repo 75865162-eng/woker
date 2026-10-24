@@ -101,6 +101,7 @@ export function normalizeAccountRoleId(roleId: string | null | undefined): Accou
 export function toOrganizationRoleId(roleId: string | null | undefined): OrganizationRoleId {
   const normalized = normalizeAccountRoleId(roleId);
 
+  // Roster roles may be customized; membership authorization stores only the Prisma enum.
   return organizationRoleIds.includes(normalized as OrganizationRoleId) ? (normalized as OrganizationRoleId) : "viewer";
 }
 

@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getBootstrapAdminEmail, isBootstrapAdminEmail } from "@/lib/auth/constants";
-import { getCurrentUserFromRequest } from "@/lib/auth/session";
-import { roleCanPerformAction } from "@/lib/accounts/permissions";
-import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
+import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { normalizeAccountRoleId, normalizeTeamAccounts, toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
 import { syncRosterLoginUsers } from "@/lib/accounts/roster-auth-sync";
 import { getTeamRosterSnapshot } from "@/lib/accounts/team-roster-server";
@@ -209,11 +207,9 @@ async function runRosterSaveTransaction<T>(operation: () => Promise<T>) {
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUserFromRequest(request);
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
+    const permission = await requireApiPermission("accounts", "view", request);
+    if (!permission.ok) return permission.response;
+    const { user } = permission;
 
     const snapshot = await getTeamRosterSnapshot(user.organizationId);
 
@@ -229,17 +225,9 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUserFromRequest(request);
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
-
-    const permissions = await getOrganizationRolePermissions(user.organizationId);
-
-    if (!roleCanPerformAction(user.role, "accounts", "edit", permissions)) {
-      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-    }
+    const permission = await requireApiPermission("accounts", "edit", request);
+    if (!permission.ok) return permission.response;
+    const { user } = permission;
 
     const body = (await request.json()) as { accounts?: unknown; members?: unknown };
     const input = body.accounts ?? body.members;

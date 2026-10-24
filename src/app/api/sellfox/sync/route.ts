@@ -1,194 +1,63 @@
-import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
+import { enqueueSellfoxSyncRun } from "@/lib/queue";
 import { prisma } from "@/lib/db/prisma";
-import { sellfoxPost } from "@/lib/sellfox/client";
-import { defaultSellfoxReportDate, syncSellfoxProductDailySnapshots } from "@/lib/sellfox/product-performance";
+import { isSellfoxDate, isSellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
 
-type RecordLike = Record<string, unknown>;
-type SyncResource = "stores" | "hourly" | "performance";
-
-function parseOptionalNumber(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : undefined;
-}
-
-function asRecord(value: unknown): RecordLike | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordLike) : null;
-}
-
-function text(record: RecordLike, ...keys: string[]) {
-  for (const key of keys) {
-    const value = record[key];
-    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
-  }
-  return "";
-}
-
-function number(record: RecordLike, ...keys: string[]) {
-  const value = Number(text(record, ...keys));
-  return Number.isFinite(value) ? value : 0;
-}
-
-function recordsFrom(payload: unknown): RecordLike[] {
-  if (Array.isArray(payload)) return payload.map(asRecord).filter((value): value is RecordLike => Boolean(value));
-  const record = asRecord(payload);
-  if (!record) return [];
-  for (const key of ["records", "list", "rows", "itemList", "data", "result"]) {
-    if (Array.isArray(record[key])) return record[key].map(asRecord).filter((value): value is RecordLike => Boolean(value));
-    const nested = asRecord(record[key]);
-    if (nested) {
-      const rows = recordsFrom(nested);
-      if (rows.length) return rows;
-    }
-  }
-  return [];
-}
-
-async function syncStores(organizationId: string, workspaceId: string) {
-  const payload = await sellfoxPost<unknown>("/api/shop/pageList.json", { pageNo: 1, pageSize: 100 });
-  const rows = recordsFrom(payload);
-  let synced = 0;
-
-  for (const row of rows) {
-    const externalId = text(row, "shopId", "id", "storeId");
-    if (!externalId) continue;
-
-    await prisma.sellfoxStore.upsert({
-      where: { organizationId_workspaceId_externalId: { organizationId, workspaceId, externalId } },
-      create: {
-        id: `sellfox-store-${organizationId}-${workspaceId}-${externalId}`,
-        organizationId,
-        workspaceId,
-        externalId,
-        name: text(row, "shopName", "name", "storeName"),
-        marketplace: text(row, "marketplace", "marketplaceName", "marketplaceId"),
-        country: text(row, "country", "countryName"),
-        status: text(row, "status", "shopStatus"),
-        payload: row as Prisma.InputJsonValue,
-        updatedAt: new Date(),
-      },
-      update: {
-        name: text(row, "shopName", "name", "storeName"),
-        marketplace: text(row, "marketplace", "marketplaceName", "marketplaceId"),
-        country: text(row, "country", "countryName"),
-        status: text(row, "status", "shopStatus"),
-        payload: row as Prisma.InputJsonValue,
-        lastSyncedAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-    synced += 1;
-  }
-
-  return synced;
-}
-
-async function syncHourly(organizationId: string, workspaceId: string, storeOffset: number, storeLimit: number) {
-  const stores = await prisma.sellfoxStore.findMany({
-    where: { organizationId, workspaceId },
-    orderBy: { externalId: "asc" },
-    skip: storeOffset,
-    take: storeLimit,
-  });
-  const reportDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
-  let synced = 0;
-
-  for (const store of stores) {
-    const campaigns = recordsFrom(await sellfoxPost<unknown>("/api/cpc/manageData/spCampaign.json", { shopId: store.externalId, pageSize: 100 }));
-    for (const campaign of campaigns.slice(0, 5)) {
-      const campaignId = text(campaign, "campaignId", "id");
-      if (!campaignId) continue;
-      const metrics = recordsFrom(
-        await sellfoxPost<unknown>("/api/cpc/hourData/spCampaign.json", { aggregationType: "campaign", shopId: store.externalId, date: reportDate, campaignId }),
-      );
-      for (const metric of metrics) {
-        const hour = Math.min(Math.max(Math.floor(number(metric, "hour", "reportHour", "timeHour")), 0), 23);
-        await prisma.sellfoxHourlyMetric.upsert({
-          where: { storeId_reportDate_hour_adType_entityType_entityId: { storeId: store.id, reportDate, hour, adType: "sp", entityType: "campaign", entityId: campaignId } },
-          create: {
-            id: `sellfox-hourly-${store.id}-${reportDate}-${hour}-sp-campaign-${campaignId}`,
-            organizationId,
-            workspaceId,
-            storeId: store.id,
-            reportDate,
-            hour,
-            adType: "sp",
-            entityType: "campaign",
-            entityId: campaignId,
-            entityName: text(campaign, "campaignName", "name"),
-            impressions: Math.floor(number(metric, "impressions")),
-            clicks: Math.floor(number(metric, "clicks")),
-            cost: number(metric, "cost", "costs", "spend"),
-            sales: number(metric, "sales", "salesAmount"),
-            orders: Math.floor(number(metric, "orders", "purchases")),
-            payload: metric as Prisma.InputJsonValue,
-          },
-          update: {
-            impressions: Math.floor(number(metric, "impressions")),
-            clicks: Math.floor(number(metric, "clicks")),
-            cost: number(metric, "cost", "costs", "spend"),
-            sales: number(metric, "sales", "salesAmount"),
-            orders: Math.floor(number(metric, "orders", "purchases")),
-            payload: metric as Prisma.InputJsonValue,
-            syncedAt: new Date(),
-          },
-        });
-        synced += 1;
-      }
-    }
-  }
-
-  return synced;
-}
-
 export async function POST(request: Request) {
   const permission = await requireApiPermission("sellfox", "create", request);
   if (!permission.ok) return permission.response;
-
-  const body = (await request.json().catch(() => ({}))) as { resource?: SyncResource; storeOffset?: unknown; storeLimit?: unknown; storeExternalId?: unknown; reportDate?: unknown };
-  const resource = body.resource;
-  if (!resource || !["stores", "hourly", "performance"].includes(resource)) {
-    return NextResponse.json({ error: "请选择同步资源。" }, { status: 400 });
+  if (!process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET) {
+    return NextResponse.json({ error: "服务端未配置赛狐凭据。请联系管理员检查服务端环境变量。" }, { status: 503 });
+  }
+  if (process.env.QUEUE_DRIVER !== "redis") {
+    return NextResponse.json({ error: "赛狐异步同步 Worker 未启用，请联系管理员。" }, { status: 503 });
   }
 
-  const storeOffset = Math.max(0, parseOptionalNumber(body.storeOffset) || 0);
-  const storeLimit = Math.min(Math.max(parseOptionalNumber(body.storeLimit) || 1, 1), 20);
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  const resource = body?.resource;
+  if (!isSellfoxSyncResource(resource)) {
+    return NextResponse.json({ error: "请选择有效的赛狐同步资源。" }, { status: 400 });
+  }
   const scope = workspaceScopeFromRequest(request);
-  const run = await prisma.sellfoxSyncRun.create({
-    data: {
-      id: `sellfox-sync-${permission.user.organizationId}-${scope.workspaceId}-${resource}-${Date.now()}`,
-      organizationId: permission.user.organizationId,
-      userId: permission.user.id,
-      workspaceId: scope.workspaceId,
-      resource,
-    },
-  });
-
-  try {
-    const performance =
-      resource === "performance"
-        ? await syncSellfoxProductDailySnapshots({
-            organizationId: permission.user.organizationId,
-            workspaceId: scope.workspaceId,
-            storeExternalId: typeof body.storeExternalId === "string" ? body.storeExternalId : undefined,
-            reportDate: typeof body.reportDate === "string" ? body.reportDate : defaultSellfoxReportDate(),
-          })
-        : null;
-    const count =
-      performance?.synced ??
-      (resource === "stores"
-        ? await syncStores(permission.user.organizationId, scope.workspaceId)
-        : await syncHourly(permission.user.organizationId, scope.workspaceId, storeOffset, storeLimit));
-    const summary = resource === "performance" ? { count, reportDate: performance?.reportDate, storeCount: performance?.storeCount } : resource === "hourly" ? { count, storeOffset, storeLimit } : { count };
-    await prisma.sellfoxSyncRun.update({ where: { id: run.id }, data: { status: "done", summary, finishedAt: new Date() } });
-    return NextResponse.json({ runId: run.id, ...summary });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "赛狐同步失败。";
-    await prisma.sellfoxSyncRun.update({ where: { id: run.id }, data: { status: "failed", error: message, finishedAt: new Date() } });
-    return NextResponse.json({ error: message }, { status: 500 });
+  if (body?.shopExternalIds !== undefined && (!Array.isArray(body.shopExternalIds) || body.shopExternalIds.some((value) => typeof value !== "string" || !value.trim()))) {
+    return NextResponse.json({ error: "shopExternalIds 必须是非空店铺 ID 数组。" }, { status: 400 });
   }
+  const shopExternalIds = Array.isArray(body?.shopExternalIds) ? [...new Set(body.shopExternalIds.map((value) => (value as string).trim()))] : undefined;
+  const reportDate = body?.reportDate;
+  const startDate = body?.startDate;
+  const endDate = body?.endDate;
+  if (reportDate !== undefined && !isSellfoxDate(reportDate)) return NextResponse.json({ error: "reportDate 必须使用有效 YYYY-MM-DD 日期。" }, { status: 400 });
+  if ((startDate !== undefined && !isSellfoxDate(startDate)) || (endDate !== undefined && !isSellfoxDate(endDate))) return NextResponse.json({ error: "日期范围必须使用有效 YYYY-MM-DD 日期。" }, { status: 400 });
+  if (startDate && endDate && (Date.parse(`${endDate}T00:00:00Z`) < Date.parse(`${startDate}T00:00:00Z`) || Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`) > 90 * 86_400_000)) {
+    return NextResponse.json({ error: "日期范围最多 90 天，结束日期不得早于开始日期。" }, { status: 400 });
+  }
+  if (shopExternalIds?.length) {
+    const count = await prisma.sellfoxStore.count({ where: { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, externalId: { in: shopExternalIds } } });
+    if (count !== shopExternalIds.length) return NextResponse.json({ error: "所选店铺不属于当前工作区。" }, { status: 403 });
+  }
+
+  if (["listings", "ads_report"].includes(resource)) {
+    const runId = `sellfox-sync-${randomUUID()}`;
+    await prisma.sellfoxSyncRun.create({ data: { id: runId, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, userId: permission.user.id, resource, status: "failed", error: "此数据域尚未接入赛狐 Open API。", summary: { shopExternalIds: shopExternalIds ?? [] }, finishedAt: new Date() } });
+    return NextResponse.json({ error: "此数据域尚未接入赛狐 Open API。", runId }, { status: 409 });
+  }
+
+  const runId = `sellfox-sync-${randomUUID()}`;
+  await prisma.sellfoxSyncRun.create({ data: {
+    id: runId, organizationId: permission.user.organizationId, workspaceId: scope.workspaceId,
+    userId: permission.user.id, resource, status: "queued",
+    summary: { shopExternalIds: shopExternalIds ?? [], ...(reportDate ? { reportDate } : {}), ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) },
+  } });
+  try {
+    await enqueueSellfoxSyncRun(runId);
+  } catch {
+    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "failed", error: "无法将同步任务加入队列，请检查 Redis 与 Worker。", finishedAt: new Date() } });
+    return NextResponse.json({ error: "无法启动赛狐同步队列，请联系管理员。", runId }, { status: 503 });
+  }
+  return NextResponse.json({ runId, status: "queued" }, { status: 202 });
 }

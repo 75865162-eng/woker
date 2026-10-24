@@ -18,7 +18,7 @@ async function recordVersionSafely(input: Parameters<typeof recordDataChangeVers
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const permission = await requireApiPermission("workspace", "edit", request);
+    const permission = await requireApiPermission("tasks", "edit", request);
 
     if (!permission.ok) {
       return permission.response;

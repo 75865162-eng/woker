@@ -88,6 +88,7 @@ export const amazonAdsToolDefinitions: AgentToolDefinition[] = [
 export function createAmazonAdsApiAdapter(input: {
   writeEnabled?: boolean;
   clock?: () => Date;
+  executeApproved?: (input: ToolExecutionInput) => Promise<JsonValue>;
 } = {}): AgentToolAdapter {
   const clock = input.clock ?? (() => new Date());
   const writeEnabled = Boolean(input.writeEnabled);
@@ -115,8 +116,6 @@ export function createAmazonAdsApiAdapter(input: {
       }
 
       if (toolInput.toolId === "amazon.ads.recommendation.apply") {
-        const plan = toRecord(payload.plan) as unknown as AmazonAdsExecutionPlan;
-
         if (!toolInput.approval || toolInput.approval.status !== "APPROVED") {
           throw {
             code: "APPROVAL_REQUIRED",
@@ -125,31 +124,14 @@ export function createAmazonAdsApiAdapter(input: {
           };
         }
 
-        if (!writeEnabled) {
-          return {
-            output: toJsonValue({
-              execution: {
-                status: "DRY_RUN_BLOCKED",
-                message: "Amazon Ads writes are disabled. Plan was recorded but no live ad changes were sent.",
-                plan,
-                generatedAt: clock().toISOString(),
-              },
-            }),
-            latencyMs: Math.max(clock().getTime() - startedAt, 1),
-          };
+        if (!input.executeApproved) {
+          throw { code: "AUDIT_REQUIRED", message: "Amazon Ads apply must use the persisted audit service.", retryable: false };
         }
-
-        return {
-          output: toJsonValue({
-            execution: {
-              status: "READY_FOR_ADAPTER_IMPLEMENTATION",
-              message: "Write execution is enabled, but the real Amazon Ads HTTP client is intentionally not implemented in this phase.",
-              plan,
-              generatedAt: clock().toISOString(),
-            },
-          }),
-          latencyMs: Math.max(clock().getTime() - startedAt, 1),
-        };
+        if (toolInput.approval.executionId !== toolInput.executionId || payload.approvalId !== toolInput.approval.id
+          || !toolInput.approval.expiresAt || !Number.isFinite(Date.parse(toolInput.approval.expiresAt)) || Date.parse(toolInput.approval.expiresAt) <= clock().getTime()) {
+          throw { code: "APPROVAL_INVALID", message: "Approval binding or expiry is invalid.", retryable: false };
+        }
+        return { output: await input.executeApproved(toolInput), latencyMs: Math.max(clock().getTime() - startedAt, 1) };
       }
 
       return {

@@ -23,12 +23,14 @@ Product Center 主列表保留原分页/过滤/缓存路径，在返回当前页
 
 当前仍是一组进程凭证绑定一个组织/工作区和一个真实 Seller ID；不支持把同一 token 用于多个 Seller ID。多 seller 凭证库属于后续工作，不通过 accountKey 猜身份。每个 Seller ID + Marketplace 只能映射一个 SellerAccount。允许同一 seller 的多个站点。
 
-必须在服务端配置（不在浏览器填写）：
+服务端基础配置：
 
 - DATABASE_URL、QUEUE_DRIVER=redis、REDIS_URL。
-- AMAZON_SP_API_LWA_CLIENT_ID / LWA_CLIENT_SECRET / REFRESH_TOKEN / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY（均带 AMAZON_SP_API_ 前缀）。可选 AWS_SESSION_TOKEN、AWS_REGION、ENDPOINT；使用官方对应区域 endpoint。
-- AMAZON_SP_API_ALLOWED_ORGANIZATION_ID、AMAZON_SP_API_ALLOWED_WORKSPACE_ID 精确绑定。
-- `AMAZON_SP_API_SELLER_BINDINGS` JSON 数组。字段：organizationId、workspaceId、sellerAccountId（ERP SellerAccount.id）、marketplaceId（Amazon ID）、amazonSellerId（真实卖家 ID）、authorizedResources（实际已授权的 inventory/catalog 域）。accountKey 不作 Seller ID 使用。
+- `AMAZON_SP_API_ENCRYPTION_KEY`：网页凭证的 AES-256-GCM 主密钥，必须是 32 随机字节的 Base64 编码。生成示例：`openssl rand -base64 32`。主密钥不得提交到仓库；备份到受控密钥管理位置。更换主密钥前必须先完成数据库凭证解密和重加密，否则现存凭证无法读取。
+- LWA/AWS 凭证在系统设置「集成」Tab 输入，按 organizationId + workspaceId 保存为 AES-256-GCM 密文。API、页面和审计记录均不返回密钥。旧 `AMAZON_SP_API_LWA_CLIENT_ID` / `LWA_CLIENT_SECRET` / `REFRESH_TOKEN` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`、可选 `AWS_SESSION_TOKEN`、`AWS_REGION`、`ENDPOINT` 仍支持作为兼容 fallback；fallback 仍需 `AMAZON_SP_API_ALLOWED_ORGANIZATION_ID` 和 `AMAZON_SP_API_ALLOWED_WORKSPACE_ID` 精确绑定。
+- `AMAZON_SP_API_SELLER_BINDINGS` JSON 仅作为数据库没有当前 scope 绑定时的旧配置 fallback。字段：organizationId、workspaceId、sellerAccountId（ERP SellerAccount.id）、marketplaceId（Amazon ID）、amazonSellerId（真实卖家 ID）、authorizedResources（实际已授权的 inventory/catalog 域）。accountKey 不作 Seller ID 使用。
+
+系统设置新增「集成」Tab，可在当前组织/工作区维护 Amazon LWA/AWS 凭证及 active SellerAccount 的 Seller ID、Marketplace、授权同步域。凭证密文存于 `AmazonIntegrationSecret`，店铺映射存于 `AmazonSellerBinding`；两个配置 API 均需要 `settings:edit`，连接验证仍使用 `operations:edit`。更换凭证会清除旧连接验证状态，要求重新验证。店铺绑定优先读数据库；当前 scope 数据库没有绑定时兼容旧 `AMAZON_SP_API_SELLER_BINDINGS` JSON，面板支持导入。审计只记录变化字段名称/绑定行数，不记录凭证值。新增迁移：`20261024000000_add_amazon_seller_bindings`、`20261024010000_add_amazon_integration_secrets`；应用前按受控迁移流程审核。回滚应用时保留密文表和主密钥，不自动删除数据。
 
 配置模板仅用占位符：
 
@@ -81,7 +83,7 @@ worker 对启用策略首次/修改后重算，以后每 24 小时重算。每�
 - GET/PATCH /api/operations/schedules：view/edit；POST sync-runs：create，资源 inventory 或 catalog，幂等键必用。
 - GET/PATCH /api/operations/replenishment：view/edit；策略输入维护在 ERP，Amazon 仍只读；历史报表额外权限见上文。
 
-AmazonAgentActionAudit 仅预留未来 preview-confirm，不提供真实写回入口。P1 利润统一口径、Amazon Ads 接入、P2 通知+对账补偿均未在本轮开放。
+AmazonAgentActionAudit 已接通出价 preview → confirm → apply 审计；本版本 apply 仅 dry_run 或明确失败 NOT_IMPLEMENTED，真实 Amazon Ads 写回尚未开放。利润统一口径、通知和对账补偿仍未开放。
 
 ## 迁移、回滚与验收
 
@@ -103,3 +105,58 @@ AmazonAgentActionAudit 仅预留未来 preview-confirm，不提供真实写回�
 运行 `npm run test:operations:browser`。沿用商品草稿浏览器测试的 esbuild + Playwright 隔离方式，测试数据和模拟 API 仅存在于 tests/browser，不创建应用演示数据、不访问数据库、Amazon 或生产，不需要登录凭证。
 
 覆盖六域概览及 STALE 原因/建议、未同步库存各数量不补 0、刊登缺字段、PPC/订单占位、计划只读/编辑控件、手动同步工作区及幂等键、模拟 403 展示，以及切工作区后库存/指标/状态/手动同步迟到失败不污染新工作区。真实登录、403 服务端权限检查、DB/Redis 多进程锁、Seller ID 和 Amazon 联调仍按上方受控验收执行。
+
+## 内部只读 CLI 与 PPC 审批审计（2026-10-24）
+
+链路：同步仓 → CLI/Agent 读取本地 PostgreSQL → 优化草稿 → 人工确认 → 受控执行检查。这是公司内部 ERP 能力，不对外提供 SaaS。只有既有 inventory/catalog worker 负责官方只读同步；CLI/Agent 不直接请求 Amazon，也不启动同步任务、写 ProductRecord 或执行维护脚本。orders/finance/fulfillment 的执行器仍 BLOCKED。
+
+### CLI 配置与命令
+
+本机/服务器终端运行，无 HTTP listener，无公网 CLI API。使用受控 OS 账号和服务端环境配置授权，不接受命令行传入 Amazon 凭证或任意组织身份。按 Next 规则读取当前目录的 `.env*`；配置内容及数据库错误详情不输出。建议使用仅具 SELECT 权限的独立 PostgreSQL 用户，再由 PostgreSQL `RepeatableRead + READ ONLY` 事务强制禁止数据库写入。
+
+必需：`DATABASE_URL`、`OPS_CLI_ORGANIZATION_ID`、`OPS_CLI_ACTOR_USER_ID`、`OPS_CLI_WORKSPACE_IDS`（逗号分隔）。操作者必须是当前组织 active 用户及有效成员，工作区必须存在且在允许列表中。所有命令检查 operations:view，PPC 命令另检查 workspace:view 和 agents:view；读取既有权限配置但不触发角色初始化/seed。组织身份没有 CLI 覆盖参数。
+
+```bash
+npm run ops:cli -- --help
+npm run ops:cli -- freshness --workspace <workspace>
+npm run ops:cli -- inventory list --workspace <workspace> --sku <sku> --page 1 --json
+npm run ops:cli -- inventory summary --workspace <workspace> --json
+npm run ops:cli -- catalog list --workspace <workspace> --sku <sku> --page 1
+npm run ops:cli -- metrics daily --from 2026-10-01 --to 2026-10-24 --asin <asin> --json
+npm run ops:cli -- sync runs --resource inventory --status SUCCEEDED --page 1 --json
+npm run ops:cli -- ppc report-summary --workspace <workspace> --json
+npm run ops:cli -- ppc suggest --workspace <workspace> --json
+```
+
+Agent/脚本需纯 JSON 时使用 `npm run --silent ops:cli -- ... --json`，或直接 `node_modules/.bin/tsx scripts/ops-cli.ts ... --json`，避免 npm 自身打印 script banner。错误输出 stderr、成功输出 stdout。退出码：0 成功（包括明确缺数据/null）、2 命令/参数错误、3 身份/权限错误、4 数据库/读取/分析错误。列表每页最多 50 行；inventory/catalog 仅读最新完整成功运行，不以历史 SKU 补齐；无成功运行返回 NOT_SYNCED。只读查询不会排队同步。
+
+`metrics daily` 允许最多 90 天，`--asin` 与 `--sku` 二选一；现有 PPC 数据未建立可靠日粒度 SKU/ASIN 映射，所以返回空行、指标 null 及原因，不把导入日期当作报表日期，不用其他报表冒充 PPC。`inventory summary` 没有成功快照时 summary 为 null。
+
+PPC 仅读当前操作者、组织和工作区最新 `WorkspaceDataset`。不读取其他员工导入、不访问浏览器 IndexedDB，也不把多个导入批次重复累计。缺数据返回空草稿；超过 10000 行拒绝全量分析，需先缩小导入数据集。`report-summary` 汇总现有码的 PPC 指标；`suggest` 复用 PPC runtime/analytics，输出兼容 `PpcAnalysisReport` / `adjustmentDrafts` 的 JSON，只输出报告，不持久化或发起审批。库存过期/未同步及广告周期 UNKNOWN 均附 freshnessWarnings；导入时间始终不代表广告报表新鲜度。
+
+### Preview、confirm、apply
+
+前置：现有 AmazonAgentActionAudit 等迁移已经应用，当前组织具有启用的 `ppc` AgentDefinition 及 WorkspaceScope。缺表/缺配置不降级成内存预览，不自动迁移或种子初始化。
+
+- POST `/api/agents/ppc/actions`：agents:create。body 包含 `actionTarget: "amazon.ads.apply"`、report、adjustmentDrafts、必填 idempotencyKey（8–160 位字母/数字/冒号/下划线/连字符）；工作区遵循既有 body/header/query scope。只提取 update_bid，其余建议保留在报告中，不进入执行计划。
+- Preview 在单事务中创建 AgentExecution、AgentTask、AgentApproval 和 AmazonAgentActionAudit(PREVIEW)，记录 old/new、审批 ID、请求摘要、幂等键、30 分钟 expiresAt。oldValues 来自用户提交报告，标明 `submitted_report_unverified`；rowId 不认作 Amazon keywordId/targetId。
+- 同 org/workspace/key 请求重放返回原记录；不同请求内容或操作者使用同一 key 返回 IDEMPOTENCY_CONFLICT。preview 事务锁及现有唯一约束防重复落库，失败整笔回滚。
+- POST `/api/agents/approvals/{approvalId}`：复用 agents:approve。Amazon 审批必须通过 `x-workspace-id` 或 query workspaceId 指定原工作区；数据库检查 organization、workspace、approval/execution/audit 绑定和到期。REQUESTED 条件更新 + 审计事务锁防并发确认，拒绝/过期也记录审计。旧版没有 audit 的 Amazon 审批不能直接执行，需重新 preview。
+- 开关 false 时确认仍为 PREVIEW，confirmedAt、审批人及批准状态记录人工确认；true 时确认为 CONFIRMED。确认只授权，尚未执行，Execution 为 WAITING_TOOL。
+- POST `/api/agents/ppc/audits/{auditId}/apply`：agents:approve，header/query 工作区必须一致，body 只需原 preview 的 idempotencyKey，不接受替换 plan。服务从库中重新检查人工批准、到期及状态，然后调用 `amazon.ads.recommendation.apply` gateway。直接调用 adapter、没有持久化审计服务授权时返回 AUDIT_REQUIRED。
+- false（包括缺省）：只写 `newValues.execution.status=DRY_RUN_BLOCKED`、`externalWriteAttempted=false`，审计保留 PREVIEW。true：完整批次在 HTTP 前失败，记录 FAILED / NOT_IMPLEMENTED，API 返回 501；没有部分写入、没有 APPLIED。两种结果都可重复查询/重放，重复 apply 不再次执行。若开关后来改变，旧 dry_run 的同一 key 仍只重放；需新建 preview 并重新审批。
+- GET `/api/agents/ppc/audits`（最近 20 条）和 GET `/api/agents/ppc/audits/{auditId}`：agents:view，按 org/workspace 过滤，no-store。`/agents/ppc` 展示 PREVIEW/CONFIRMED/FAILED 等记录、old/new、到期、警告及结果，允许人工确认/拒绝和执行检查；支持空、加载、错误状态，切工作区清空旧结果。
+
+硬限制：每批 1–100 条出价更新，目标非空、不重复，old/new bid 必须是有限数且在 [0.02, 100]；超过 50% 变动显式告警。此范围是额外保守闸门，不代表所有站点/币种的官方范围；未有可信 profile/币种及实体映射前不能真实执行。
+
+### Ads stub 与如何打开
+
+`src/lib/amazon/ads-client.ts` 提供 `AmazonAdsBidClient.updateBids`、SP v3 keyword/target PUT 请求构造、完整批量校验、207 逐实体响应解码及安全错误映射。Ads 使用 LWA Bearer + ClientId + Profile Scope，不复用 SP-API SigV4。请求体分别为 keywords / targetingClauses；本轮不提供 add_negative_keyword 写接口。401/403/429/5xx 不回显上游响应体，不自动重试，缺失/重复响应 index 或 entity 不符标记 OUTCOME_UNKNOWN，需要核对后再试。
+
+**本版本不能通过环境变量打开真实写入。** `AMAZON_ADS_EXECUTION_ENABLED=false` 是默认配置；设为 true 只能验证 NOT_IMPLEMENTED 失败闸门。未来开启步骤必须包含：实现并复核真实 transport；服务端组织/工作区到 Ads profile、region、币种、官方 keywordId/targetId 的授权映射；核验实时 old bid；LWA 刷新/超时/敏感信息清理；逐实体结果与不确定响应对账；受控测试账号联调及独立审批，再设置 true。不可把本地 rowId 直接发给 Ads，也不可仅删掉 NOT_IMPLEMENTED 便上线。
+
+### 验证与回滚
+
+本轮不新增 schema/migration，不调整 SyncRun/Schedule/worker，不执行生产维护/迁移/部署。回滚：关闭开关并回退应用代码，保留审批及审计数据；不自动删除记录或数据库 down。旧应用不支持的新审计记录不应由旧入口继续执行。
+
+自动验证：`npm test` 覆盖 CLI 全命令只读 smoke、权限/参数、PPC 建议、审计事务服务及 stub 集成；`npm run test:operations:browser` 包含审计 old/new、确认/dry_run、空/失败及工作区切换，沿用库存/刊登同步页面回归；另跑 lint、typecheck 和生产 build。事务服务测试使用内存 delegate double，浏览器使用隔离模拟接口；它们不替代真实 PostgreSQL advisory lock/唯一约束、多进程并发、受控账号和 Amazon 联调。尚无真实 P95 benchmark，不宣称性能提升。新增分析按需、有 10000 行上限；更大数据集或并发使用前需测内存/延迟。

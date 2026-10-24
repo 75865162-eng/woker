@@ -1,31 +1,30 @@
-import { Suspense } from "react";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { SettingsWorkbench } from "@/components/app-shell/lazy-workbenches";
 import { SystemDataStatusPanel } from "@/components/settings/system-data-status-panel";
 import { WorkerHealthPanel } from "@/components/settings/worker-health-panel";
 import { WorkspaceScopePanel } from "@/components/settings/workspace-scope-panel";
+import { WeComNotificationSettingsPanel } from "@/components/settings/wecom-notification-settings";
+import { AmazonSpApiSettingsPanel } from "@/components/settings/amazon-sp-api-settings-panel";
+import { Suspense } from "react";
 
 export default function SettingsPage() {
   return (
-    <AppShell title="系统设置" subtitle="AI 大模型、系统安全边界与导出映射">
-      <div className="space-y-3">
-        <Suspense fallback={<SystemStatusFallback />}>
-          <SystemDataStatusPanel />
-        </Suspense>
-        <WorkspaceScopePanel />
-        <WorkerHealthPanel />
-        <SettingsWorkbench />
-      </div>
+    <AppShell title="系统设置" subtitle="模型、工作区与通知">
+      <SettingsTabs
+        modelContent={<SettingsWorkbench />}
+        workspaceContent={<WorkspaceScopePanel />}
+        notificationContent={<WeComNotificationSettingsPanel />}
+        integrationsContent={<AmazonSpApiSettingsPanel />}
+        operationsContent={
+          <div className="space-y-3">
+            <Suspense fallback={<div className="h-16 animate-pulse rounded-md border border-border bg-white" />}>
+              <SystemDataStatusPanel />
+            </Suspense>
+            <WorkerHealthPanel />
+          </div>
+        }
+      />
     </AppShell>
-  );
-}
-
-function SystemStatusFallback() {
-  return (
-    <div className="grid grid-cols-[repeat(auto-fit,128px)] justify-start gap-2">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="h-20 animate-pulse rounded-md border border-border bg-white shadow-sm" />
-      ))}
-    </div>
   );
 }

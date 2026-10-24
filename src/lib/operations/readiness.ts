@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import type { CurrentUser } from "@/lib/auth/session";
 import type { WorkspaceScopeInput } from "@/lib/workspace/scope";
 import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
-import { assertAmazonSpApiScopeAllowed, getAmazonSpApiConfigurationStatus, getAmazonSpApiServerConfiguration } from "@/lib/amazon/sp-api-config";
+import { getAmazonSpApiConfigurationStatus } from "@/lib/amazon/sp-api-config";
+import { assertAmazonSpApiScopeCanUse, getAmazonSpApiServerConfigurationForScope, getAmazonSpApiSettings } from "@/lib/amazon/integration-secrets";
 import { enqueueAmazonSyncRun } from "@/lib/queue";
 import { amazonReadDomains, type AmazonMarketplaceParticipation, type AmazonReadDomain, type AmazonSyncResource, type DomainFreshnessSummary, type OperationsConnection, type OperationsInventorySnapshotSummary, type OperationsReadiness, type OperationsSyncRun } from "./types";
 import { getSyncSchedules } from "./schedules";
@@ -23,8 +24,7 @@ function toConnection(row?: {
   statusMessage: string | null;
   lastValidatedAt: Date | null;
   lastSyncAt: Date | null;
-} | null): OperationsConnection {
-  const runtimeConfiguration = getAmazonSpApiConfigurationStatus();
+} | null, runtimeConfiguration = getAmazonSpApiConfigurationStatus()): OperationsConnection {
   const enabledDomains = Array.isArray(row?.enabledDomains) ? row.enabledDomains.filter(isAmazonReadDomain) : [];
   const marketplaceParticipations = parseMarketplaceParticipations(row?.marketplaceParticipations);
   const status = row?.status === "CONFIGURED" || row?.status === "DISABLED" || row?.status === "ERROR"
@@ -100,10 +100,11 @@ export async function getOperationsReadiness(input: {
     scope: input.scope,
     generatedAt: generatedAt.toISOString(),
   };
+  const runtimeConfiguration = await getAmazonSpApiSettings({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId });
 
   if (!process.env.DATABASE_URL) {
     const inventory = emptyInventorySummary();
-    return { ...base, connection: toConnection(), runs: [], inventory, domains: emptyDomainFreshnessSummaries(inventory) };
+    return { ...base, connection: toConnection(null, runtimeConfiguration), runs: [], inventory, domains: emptyDomainFreshnessSummaries(inventory) };
   }
 
   const where = { organizationId: input.organizationId, workspaceId: input.scope.workspaceId };
@@ -135,7 +136,7 @@ export async function getOperationsReadiness(input: {
 
   return {
     ...base,
-    connection: toConnection(connection),
+    connection: toConnection(connection, runtimeConfiguration),
     runs: runs.map(toSyncRun),
     inventory,
     domains,
@@ -326,7 +327,7 @@ export async function requestAmazonSync(input: {
 
   if (connection?.status === "CONFIGURED" && (input.resource === "inventory" || input.resource === "catalog") && process.env.QUEUE_DRIVER === "redis") {
     try {
-      assertAmazonSpApiScopeAllowed({ organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId });
+      await assertAmazonSpApiScopeCanUse({ organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId });
     } catch (error) {
       return await createBlockedRun({
         ...input,
@@ -402,16 +403,15 @@ export async function validateAmazonConnection(input: {
   user: CurrentUser;
   scope: WorkspaceScopeInput;
 }): Promise<{ connection: OperationsConnection; run: OperationsSyncRun }> {
-  const configuration = getAmazonSpApiConfigurationStatus();
-  if (!configuration.configured) {
-    throw new Error(`服务端缺少 SP-API 配置：${configuration.missingEnvironmentVariables.join("、")}`);
-  }
   if (!process.env.DATABASE_URL) {
     throw new Error("数据库未配置，无法记录服务端配置验证结果。");
   }
 
-  assertAmazonSpApiScopeAllowed({ organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId });
-  const serverConfiguration = getAmazonSpApiServerConfiguration();
+  const scopeIdentity = { organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId };
+  const configuration = await getAmazonSpApiSettings(scopeIdentity);
+  if (!configuration.configured) throw new Error(configuration.configurationError || `Amazon SP-API 尚未配置：${configuration.missingEnvironmentVariables.join("、")}`);
+  await assertAmazonSpApiScopeCanUse(scopeIdentity);
+  const serverConfiguration = await getAmazonSpApiServerConfigurationForScope(scopeIdentity);
 
   const now = new Date();
   const connectionId = `amazon-connection-${input.user.organizationId}-${input.scope.workspaceId}-${amazonProvider}`;
@@ -461,7 +461,7 @@ export async function validateAmazonConnection(input: {
         },
       }),
     ]);
-    return { connection: toConnection(connection), run: toSyncRun(run) };
+    return { connection: toConnection(connection, configuration), run: toSyncRun(run) };
   } catch (error) {
     const message = error instanceof AmazonSpApiError ? error.message : "Amazon SP-API 连接校验失败。";
     const [connection, run] = await prisma.$transaction([
@@ -493,7 +493,7 @@ export async function validateAmazonConnection(input: {
         },
       }),
     ]);
-    return { connection: toConnection(connection), run: toSyncRun(run) };
+    return { connection: toConnection(connection, configuration), run: toSyncRun(run) };
   }
 }
 

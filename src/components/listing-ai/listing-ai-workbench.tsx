@@ -22,6 +22,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageUpscaleWorkbench } from "@/components/image-upscale/image-upscale-workbench";
+import { useAppShellUser } from "@/components/app-shell/app-shell-context";
+import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import {
   AlignedPlaceholder,
   AmazonLinkButton,
@@ -392,6 +394,8 @@ async function readListingAiGenerationResponse(
 }
 
 export function ListingAiWorkbench() {
+  const shellUser = useAppShellUser();
+  const canGenerateListing = roleCanPerformAction(shellUser?.userRole, "listingAi", "create", shellUser?.rolePermissions);
   const searchParams = useSearchParams();
   const requestedTab = normalizeTabId(searchParams.get("tab"));
   const [activeTab, setActiveTab] = useState<TabId>(requestedTab ?? "input");
@@ -695,7 +699,7 @@ export function ListingAiWorkbench() {
       field.key,
     ),
   );
-  const canSubmit = !loading;
+  const canSubmit = canGenerateListing && !loading;
   const competitorInfo = useMemo(
     () => buildCompetitorInfo(competitors, ownImages.structureNotes),
     [competitors, ownImages.structureNotes],
@@ -1204,6 +1208,7 @@ export function ListingAiWorkbench() {
             setDescriptionPromptOpen={setDescriptionPromptOpen}
             onGenerateTitles={handleGenerateTitles}
             onGenerateDescriptions={handleGenerateDescriptions}
+            canGenerate={canGenerateListing}
             onLoadTitleGeneratorHistory={loadTitleGeneratorHistory}
             onLoadDescriptionGeneratorHistory={loadDescriptionGeneratorHistory}
           />

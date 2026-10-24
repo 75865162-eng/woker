@@ -32,6 +32,7 @@ export function DescriptionGeneratorCard({
   onPromptOpenChange,
   onGenerate,
   onLoadHistory,
+  canGenerate = true,
 }: {
   generator: DescriptionGeneratorDraft;
   sharedFields: TitleGeneratorField[];
@@ -47,6 +48,7 @@ export function DescriptionGeneratorCard({
   onPromptOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
   onGenerate: () => void;
   onLoadHistory: (record: DescriptionGeneratorHistoryRecord) => void;
+  canGenerate?: boolean;
 }) {
   const [historySearch, setHistorySearch] = useState("");
   const modeText = modeLabelMap[mode];
@@ -87,7 +89,7 @@ export function DescriptionGeneratorCard({
               <Settings2 className="h-4 w-4" />
               提示词修改
             </Button>
-            <Button size="sm" disabled={loading} onClick={onGenerate}>
+            <Button size="sm" disabled={!canGenerate || loading} title={!canGenerate ? "没有 Listing AI 生成权限" : undefined} onClick={onGenerate}>
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
