@@ -4,8 +4,8 @@ import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 export class SellfoxBrowseError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
 }
-export type SellfoxBrowseDomain = "stores" | "inventory" | "sales" | "performance" | "hourly" | "runs";
-export const sellfoxBrowseDomains: SellfoxBrowseDomain[] = ["stores", "inventory", "sales", "performance", "hourly", "runs"];
+export type SellfoxBrowseDomain = "stores" | "inventory" | "sales" | "performance" | "hourly" | "runs" | "listings" | "ads_report";
+export const sellfoxBrowseDomains: SellfoxBrowseDomain[] = ["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report"];
 export const sellfoxExportLimit = 10_000;
 export function sellfoxBrowseQuery(url: URL) {
   const p = url.searchParams;
@@ -24,6 +24,7 @@ export function sellfoxBrowseQuery(url: URL) {
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   return {
     page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate,
+    status: p.get("status")?.trim() || undefined,
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",
     shopExternalIds: [...new Set(p.getAll("shopExternalId").map((value) => value.trim()).filter(Boolean))],
     storeId: p.get("storeId")?.trim() || undefined,

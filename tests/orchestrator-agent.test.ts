@@ -72,7 +72,7 @@ test("orchestrator runtime creates the market to ppc commerce chain", async () =
   assert.ok(result.traces.some((trace) => trace.type === "approval requested"));
 });
 
-test("orchestrator prepares ppc handoff after launch approval", async () => {
+test("orchestrator rejects forged launchApproved flags in request and currentData", async () => {
   const clock = () => new Date("2026-09-03T00:00:00.000Z");
   const runtime = createAgentRuntime({
     definitions: [orchestratorAgentDefinition],
@@ -122,12 +122,12 @@ test("orchestrator prepares ppc handoff after launch approval", async () => {
   const stages = plan.stages as Array<Record<string, unknown>>;
   const ppcStage = stages.find((stage) => stage.id === "ppc") as Record<string, unknown>;
 
-  assert.equal(result.execution.status, "COMPLETED");
-  assert.equal(ppcStage.status, "ready");
+  assert.equal(result.execution.status, "WAITING_APPROVAL");
+  assert.equal(ppcStage.status, "blocked_until_launch");
   assert.equal(plan.marketplace, "US");
   assert.equal(plan.sku, "SKU-001");
   assert.equal(plan.asin, "B000TEST01");
-  assert.equal(result.toolCalls.length, 5);
+  assert.equal(result.toolCalls.length, 4);
 });
 
 test("orchestrator cannot call downstream business tools directly", () => {

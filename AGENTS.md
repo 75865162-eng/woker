@@ -363,6 +363,12 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - `CLAUDE.md` 目前只包含 `@AGENTS.md`，用于让 Claude Code 复用本文件。除非确有需要，不要复制一份独立规则。
 - 新增重要命令、目录、业务约定或外部服务时，同步更新本文件。
 
+## 赛狐 Agent 本地读取
+
+- `docs/sellfox-agent-read.md` 定义库存 current、MSKU 日销、Listing current、利润及广告产品日报窄表/SQL 视图、CSV、字段映射与缺失值口径。Agent/CLI 例行读本地，不调用赛狐 API 或依赖网页登录；ProductRecord 不被赛狐覆盖。
+- 库存/Listing current 只发布完整店铺采集；日销需校验 coverage/complete，缺日不得补零。广告日报缺预算时禁止给暂停/降预算建议；SP已核验，SB/SD仍需同等响应验收。
+- 销量计划可配置 backfillStart，持久化游标默认从上一完整冬季开始；`SELLFOX_BACKFILL_DAYS_PER_RUN` 默认7、上限90。所有计划默认关闭，扩采前评估≥1200ms串行耗时。
+
 ## 经营中台定时同步
 
 - `/operations?tab=sync` 计划按组织/工作区/域隔离，默认关闭，仅 inventory/catalog 执行器已实现；启用仍需明确的服务端授权映射。
@@ -396,3 +402,16 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - Sellfox 计划与手动提交按组织/工作区/资源共用事务防重锁；执行开始重新检查 active 用户和 sellfox:create。`/settings?tab=operations` 赛狐面板显示 Worker 心跳及当前工作区计划，schedules API 返回 lastEnqueuedAt/nextRunAt；时间为 Asia/Shanghai，计划默认关闭，页面不启动 Worker。创建防重不等于多副本执行租约，生产接管验证见 `docs/sellfox-sync-workbench-plan.md` §10。
 - 库存、销量、表现、店铺和运行记录按 organization/workspace 隔离；详细接口契约与验证步骤见 `docs/sellfox-sync-workbench-plan.md`。
 - `npm run test:sellfox:browser`：隔离模拟接口验证多店/日期/站点、URL 导航、导出链接、按需详情、日志轮询与切工作区迟到响应；不访问真实赛狐或生产库。浏览器不持有 token；列表与导出复用 browse-query，导出超过 10,000 条明确拒绝，不能静默截断。
+
+### 本地 Amazon US 选品 CLI
+
+- `npm run selection:run -- --keyword "..." --slug <slug>`：Playwright 只采 Amazon US / 1688，默认只输出 selections 下的本地草稿与 ERP 格式 workbook；用 `npm run test:selection` 跑隔离 fixture 回归。
+- 入口与限速/SQLite/云端补漏/人工供应商兜底说明见 `scripts/selection-pipeline/README.md`。研究图片、草稿、SQLite 配额不提交 GitHub，不接付费选品/代理 SaaS。
+- 仅 `--write` 可创建正式商品；必须显式配置目标数据库、组织、有效 owner/database_admin 操作者，经既有 Product 聚合/审计/Outbox 边界创建。fixture 禁止写库；无凭据不伪造图片 fileId。
+
+### Agent Round C 全链交接
+
+- 交接合同和 Launch/PPC 服务端闸门见 `docs/agent-chain-round-c.md`、`specs/005-agent-chain-handoffs/`；sessionStorage 只作导航交接，带组织/用户/工作区/来源 execution，不是业务事实源。
+- `launchApproved` 请求布尔值不授予权限。Launch 批准引用真实 Approval/原计划，PPC 入站在工具执行前核验；Orchestrator 仍只有编排工具，无 Ads/上架/商品写权限。
+- `market.selection.run` 已注册，但本机 Round B CLI 尚缺受控多租户 runner/job 与机会证据映射；当前返回 NOT_IMPLEMENTED，禁止回落成模拟机会或请求内调用 `--write`。
+- `npx playwright test --config tests/browser/agent-chain.config.ts`：隔离六段 UI/Runtime 交接与 Launch 前后 PPC 门禁，不访问外部服务/生产库，不替代真实选品/上架/广告验收。

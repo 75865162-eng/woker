@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Opportunity v1",
+  "type": "object",
+  "required": [
+    "goal",
+    "marketplace",
+    "_handoff"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "_handoff": {
+            "properties": {
+              "from": {
+                "not": {
+                  "const": "orchestrator"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "marketOpportunity"
+        ],
+        "properties": {
+          "marketOpportunity": {
+            "type": "object",
+            "minProperties": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "marketplace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "marketOpportunity": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "marketReport": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "traceLinks": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": [
+          "stage",
+          "executionId"
+        ],
+        "properties": {
+          "stage": {
+            "enum": [
+              "orchestrator",
+              "market",
+              "product",
+              "supplier",
+              "listing",
+              "launch",
+              "ppc"
+            ]
+          },
+          "executionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "_handoff": {
+      "type": "object",
+      "required": [
+        "version",
+        "kind",
+        "from",
+        "to",
+        "organizationId",
+        "userId",
+        "workspaceId",
+        "sourceExecutionId",
+        "createdAt"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "Opportunity"
+        },
+        "from": {
+          "enum": [
+            "user",
+            "orchestrator",
+            "market",
+            "product",
+            "supplier",
+            "listing",
+            "launch",
+            "ppc"
+          ]
+        },
+        "to": {
+          "enum": [
+            "market",
+            "product",
+            "supplier",
+            "listing",
+            "launch",
+            "ppc"
+          ]
+        },
+        "organizationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceExecutionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

@@ -1111,14 +1111,16 @@ model SellfoxProductDailySnapshot {
   parentAsin      String       @default("")
   title           String       @default("")
   currency        String       @default("")
-  saleQuantity    Int          @default(0)
-  fbaQuantity     Int          @default(0)
-  fbmQuantity     Int          @default(0)
-  saleRevenue     Float        @default(0)
-  grossProfit     Float        @default(0)
-  grossProfitRate Float        @default(0)
-  adCost          Float        @default(0)
-  refundRate      Float        @default(0)
+  orderNum        Int?
+  netRevenue      Float?
+  saleQuantity    Int?
+  fbaQuantity     Int?
+  fbmQuantity     Int?
+  saleRevenue     Float?
+  grossProfit     Float?
+  grossProfitRate Float?
+  adCost          Float?
+  refundRate      Float?
   payload         Json
   syncedAt        DateTime     @default(now())
   createdAt       DateTime     @default(now())
@@ -1149,6 +1151,11 @@ model SellfoxStore {
   SellfoxProductDailySnapshot SellfoxProductDailySnapshot[]
   SellfoxFbaInventorySnapshot SellfoxFbaInventorySnapshot[]
   SellfoxSalesDailySnapshot   SellfoxSalesDailySnapshot[]
+  SellfoxSnapshotHead SellfoxSnapshotHead[]
+  SellfoxListingSnapshot SellfoxListingSnapshot[]
+  SellfoxAdsProductDaily SellfoxAdsProductDaily[]
+  SellfoxReportTask SellfoxReportTask[]
+  SellfoxSalesDayCoverage SellfoxSalesDayCoverage[]
 
   @@unique([organizationId, workspaceId, externalId])
   @@index([organizationId, workspaceId, updatedAt])
@@ -1165,8 +1172,12 @@ model SellfoxSyncRun {
   error          String?
   startedAt      DateTime  @default(now())
   finishedAt     DateTime?
+  executionToken String?
+  leaseExpiresAt DateTime?
+  executionAttempts Int    @default(0)
 
   @@index([organizationId, workspaceId, startedAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model SellfoxFbaInventorySnapshot {
@@ -1182,6 +1193,20 @@ model SellfoxFbaInventorySnapshot {
   asin           String       @default("")
   fnsku          String       @default("")
   quantity       Int?
+  totalInventory Int?
+  inTransit Int?
+  inboundWorking Int?
+  inboundShipped Int?
+  inboundReceiving Int?
+  reservedTransfer Int?
+  reservedProcessing Int?
+  reservedCustomerorders Int?
+  unfulfillable Int?
+  warehouseName String?
+  commodityName String?
+  currency String?
+  avgInventoryCost Float?
+  avgTransportCost Float?
   payload        Json
   syncedAt       DateTime     @default(now())
   createdAt      DateTime     @default(now())
@@ -1189,6 +1214,7 @@ model SellfoxFbaInventorySnapshot {
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([storeId, capturedAt, sourceKey])
+  @@index([storeId, capturedAt, msku], map: "sellfox_inventory_current_lookup")
   @@index([organizationId, workspaceId, reportDate])
   @@index([organizationId, workspaceId, asin])
   @@index([organizationId, workspaceId, msku])
@@ -1214,6 +1240,7 @@ model SellfoxSalesDailySnapshot {
   SellfoxStore   SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@unique([storeId, reportDate, sourceKey])
+  @@index([organizationId, workspaceId, storeId, msku, reportDate], map: "sellfox_sales_agent_lookup")
   @@index([organizationId, workspaceId, reportDate])
   @@index([organizationId, workspaceId, asin])
   @@index([organizationId, workspaceId, msku])
@@ -1227,6 +1254,8 @@ model SellfoxSyncSchedule {
   resource       String
   enabled        Boolean  @default(false)
   intervalMinutes Int
+  backfillStart String?
+  backfillNextDate String?
   lastEnqueuedAt DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1795,4 +1824,99 @@ model AmazonReplenishmentPlan {
   nextCalculationAt  DateTime
 
   @@index([organizationId, workspaceId, generatedAt], map: "AmazonReplenishmentPlan_scope_generated_idx")
+}
+
+// Published only after a complete store capture; empty captures also replace current.
+model SellfoxSnapshotHead {
+  storeId String
+  resource String
+  capturedAt DateTime
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@id([storeId, resource])
+}
+
+model SellfoxListingSnapshot {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  sourceKey String
+  capturedAt DateTime
+  asin String
+  msku String
+  sku String
+  parentAsin String?
+  title String?
+  status String?
+  price Float?
+  currency String?
+  fulfillable Int?
+  sales7 Int?
+  sales14 Int?
+  sales30 Int?
+  revenue7 Float?
+  revenue14 Float?
+  revenue30 Float?
+  adSpend7 Float?
+  adSpend14 Float?
+  adSpend30 Float?
+  sourceUpdatedAt String?
+  payload Json
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([storeId, capturedAt, sourceKey])
+  @@index([organizationId, workspaceId, storeId, msku, capturedAt])
+  @@index([organizationId, workspaceId, asin])
+}
+
+model SellfoxReportTask {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  runId String
+  adType String
+  startDate String
+  endDate String
+  externalTaskId String?
+  status String
+  fileKey String?
+  updatedAt DateTime @updatedAt
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([runId, storeId, adType])
+  @@index([organizationId, workspaceId, status])
+}
+
+model SellfoxAdsProductDaily {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  reportDate String
+  adType String
+  campaignId String
+  adGroupId String
+  productId String
+  asin String?
+  msku String?
+  currency String?
+  impressions Int?
+  clicks Int?
+  cost Float?
+  adOrders Int?
+  adSales Float?
+  payload Json
+  syncedAt DateTime @default(now())
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([storeId, reportDate, adType, campaignId, adGroupId, productId], map: "sellfox_ads_product_daily_identity")
+  @@index([organizationId, workspaceId, storeId, reportDate])
+  @@index([organizationId, workspaceId, asin, reportDate])
+}
+
+model SellfoxSalesDayCoverage {
+  storeId String
+  reportDate String
+  capturedAt DateTime
+  rowWrites Int
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@id([storeId, reportDate])
 }

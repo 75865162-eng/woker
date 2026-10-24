@@ -78,6 +78,7 @@ export interface SupplierExecutionOutput {
 }
 
 export interface SupplierExecutionRequest {
+  chainHandoff?: unknown;
   naturalLanguageGoal?: string;
   marketplace?: string;
   category?: string;

@@ -1,0 +1,26 @@
+# Add category dictionaries using --dictionary <path>. Each review counts once per tag.
+- key: fit
+  name: 贴合度
+  keywords: [does not fit, doesn't fit, poor fit, loose]
+- key: install
+  name: 安装
+  keywords: [install, instructions, difficult to attach]
+- key: leak_water
+  name: 漏水
+  keywords: [leak, water gets in, not waterproof]
+- key: thin_material
+  name: 材质薄
+  keywords: [thin, flimsy]
+- key: accessories
+  name: 配件
+  keywords: [missing parts, missing strap, accessories]
+- key: smell
+  name: 异味
+  keywords: [smell, odor, odour]
+- key: size
+  name: 尺寸
+  keywords: [too small, too big, too large, size]
+- key: durability
+  name: 耐用性
+  keywords: [tore, ripped, broke, broken, fell apart]
+  patterns: ['\btear(?:s|ing)?\b']

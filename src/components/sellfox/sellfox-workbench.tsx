@@ -20,7 +20,7 @@ function readScope() {
   try { return normalizeWorkspaceScope(JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}")); }
   catch { return normalizeWorkspaceScope(); }
 }
-function endpoint(domain: SellfoxView["domain"]) { return `/api/sellfox/${domain === "ads" ? "hourly" : domain}`; }
+function endpoint(domain: SellfoxView["domain"]) { return `/api/sellfox/${domain === "ads" ? "ads_report" : domain}`; }
 
 export function SellfoxWorkbench() {
   const shellUser = useAppShellUser();
@@ -33,6 +33,7 @@ export function SellfoxWorkbench() {
   const [selectedRow, setSelectedRow] = useState<Row | null>(null); const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false); const [scheduleWorking, setScheduleWorking] = useState(false);
   const [syncResource, setSyncResource] = useState("stores"); const [notice, setNotice] = useState(""); const [error, setError] = useState("");
+  const [backfillStart, setBackfillStart] = useState("");
   const [overviewError, setOverviewError] = useState(""); const [refreshVersion, setRefreshVersion] = useState(0);
   const headers = useMemo(() => ({ "x-workspace-id": scope.workspaceId, ...(scope.accountId ? { "x-account-id": scope.accountId } : {}), ...(scope.marketplace ? { "x-marketplace": scope.marketplace } : {}) }), [scope]);
   const withScope = useCallback((params: URLSearchParams) => {
@@ -46,7 +47,7 @@ export function SellfoxWorkbench() {
     setScope(readScope()); setView(readSellfoxView(new URLSearchParams(window.location.search))); setReady(true);
     const pop = () => { setView(readSellfoxView(new URLSearchParams(window.location.search))); setSelectedRow(null); setRows([]); setPagination({ page: 1, pageSize: 50, total: 0 }); setError(""); };
     const changed = () => {
-      scopeEpoch.current += 1; setScope(readScope()); setOverview(null); setSchedules([]); setRows([]); setSelectedRow(null);
+      scopeEpoch.current += 1; setScope(readScope()); setBackfillStart(""); setOverview(null); setSchedules([]); setRows([]); setSelectedRow(null);
       setPagination({ page: 1, pageSize: 50, total: 0 }); setError(""); setOverviewError(""); setNotice(""); setWorking(false); setScheduleWorking(false); setLoading(true);
       const next = { ...readSellfoxView(new URLSearchParams(window.location.search)), shops: [], site: "", page: 1 };
       setView(next);
@@ -95,7 +96,7 @@ export function SellfoxWorkbench() {
     async function load() {
       if (inFlight) return; inFlight = true;
       try {
-        if (view.domain === "overview" || view.domain === "listings") return;
+        if (view.domain === "overview") return;
         const response = await fetch(`${endpoint(view.domain)}?${withScope(sellfoxViewParams(view, true))}`, { headers, cache: "no-store", signal: controller.signal });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || "读取赛狐数据失败。");
         if (!canceled && scopeEpoch.current === epoch) { setRows(data.rows ?? []); setPagination(data.pagination ?? { page: view.page, pageSize: 50, total: 0 }); }
@@ -108,7 +109,7 @@ export function SellfoxWorkbench() {
   }, [ready, view, headers, withScope, refreshVersion]);
 
   const exportHref = useMemo(() => {
-    if (!ready || !["stores", "inventory", "sales", "performance", "ads", "runs"].includes(view.domain)) return "";
+    if (!ready || !["stores", "inventory", "sales", "performance", "ads", "runs", "listings"].includes(view.domain)) return "";
     const params = withScope(sellfoxViewParams(view, true)); params.delete("page"); params.delete("pageSize");
     if (view.domain === "performance") params.set("format", "csv");
     return `${endpoint(view.domain)}/export?${params}`;
@@ -120,7 +121,7 @@ export function SellfoxWorkbench() {
     const disabledReason = sellfoxSyncDisabledReason(resource); if (disabledReason) { setError(disabledReason); return; }
     const epoch = scopeEpoch.current; setWorking(true); setNotice(""); setError("");
     try {
-      const dateInput = ["sales", "performance"].includes(resource) && (view.from || view.to) ? { startDate: view.from || view.to, endDate: view.to || view.from }
+      const dateInput = ["sales", "performance", "ads_report"].includes(resource) && (view.from || view.to) ? { startDate: view.from || view.to, endDate: view.to || view.from }
         : resource === "hourly" ? { reportDate: view.from || view.to || sellfoxDateAt(new Date(), -1) } : {};
       const response = await fetch("/api/sellfox/sync", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ resource, shopExternalIds: view.shops, ...dateInput }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "同步任务创建失败。");
@@ -134,9 +135,9 @@ export function SellfoxWorkbench() {
     if (!canSync || scheduleWorking) return;
     const epoch = scopeEpoch.current; setScheduleWorking(true);
     try {
-      const response = await fetch("/api/sellfox/schedules", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ resource: schedule.resource, enabled: !schedule.enabled }) });
+      const response = await fetch("/api/sellfox/schedules", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ resource: schedule.resource, enabled: !schedule.enabled, ...(schedule.resource === "sales" && !schedule.enabled && backfillStart ? { backfillStart } : {}) }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "定时计划更新失败。");
-      if (scopeEpoch.current === epoch) setRefreshVersion((value) => value + 1);
+      if (scopeEpoch.current === epoch) { setBackfillStart(""); setRefreshVersion((value) => value + 1); }
     } catch (cause) { if (scopeEpoch.current === epoch) setError(cause instanceof Error ? cause.message : "定时计划更新失败。"); }
     finally { if (scopeEpoch.current === epoch) setScheduleWorking(false); }
   }
@@ -158,17 +159,20 @@ export function SellfoxWorkbench() {
         <p className="text-xs text-muted">以下为当前工作区全部历史统计；按店铺与日期浏览请切换数据域。覆盖表示曾有记录，不代表今日完整同步。</p>
         <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{["stores", "inventory", "sales", "performance", "hourly"].map((key) => <div key={key} className="border border-border bg-white px-4 py-3"><p className="text-xs text-muted">{resourceLabels[key]}</p><p className="mt-1 text-xl font-semibold tabular-nums">{overview?.counts[key] ?? "-"}</p></div>)}</section>
         <section className="grid gap-2 sm:grid-cols-2"><div className="border border-border bg-white px-4 py-3 text-sm">库存历史覆盖 {overview?.coverage?.inventoryStores ?? 0}/{overview?.counts.stores ?? 0} 店 · 缺 {overview?.coverage?.inventoryMissingStores ?? 0} 店</div><div className="border border-border bg-white px-4 py-3 text-sm">销量历史覆盖 {overview?.coverage?.salesStores ?? 0}/{overview?.counts.stores ?? 0} 店 · 缺 {overview?.coverage?.salesMissingStores ?? 0} 店</div></section>
-        <section className="border border-border bg-white"><h2 className="border-b border-border px-4 py-3 text-sm font-semibold">定时同步</h2><div className="divide-y divide-border">{schedules.map((schedule) => <label key={schedule.resource} className="flex items-center justify-between gap-3 px-4 py-3 text-sm"><span>{resourceLabels[schedule.resource]}<span className="ml-2 text-xs text-muted">{["sales", "performance"].includes(schedule.resource) ? "每日 06:30（北京时间）" : `每 ${Math.round(schedule.intervalMinutes / 60)} 小时`}{sellfoxSyncDisabledReason(schedule.resource) ? " · 未接入" : ""}{schedule.nextRunAt ? ` · 下次 ${new Date(schedule.nextRunAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}` : ""}</span></span><input aria-label={`${resourceLabels[schedule.resource]}定时同步`} type="checkbox" checked={schedule.enabled} disabled={!canSync || !overview?.configured || scheduleWorking || (!schedule.enabled && Boolean(sellfoxSyncDisabledReason(schedule.resource)))} onChange={() => void toggleSchedule(schedule)} className="h-4 w-4 accent-brand" /></label>)}</div></section>
+        <section className="border border-border bg-white"><h2 className="border-b border-border px-4 py-3 text-sm font-semibold">定时同步</h2><div className="divide-y divide-border">{schedules.map((schedule) => <label key={schedule.resource} className="flex items-center justify-between gap-3 px-4 py-3 text-sm"><span>{resourceLabels[schedule.resource]}<span className="ml-2 text-xs text-muted">{["sales", "performance", "listings", "ads_report"].includes(schedule.resource) ? "每日 06:30（北京时间）" : `每 ${Math.round(schedule.intervalMinutes / 60)} 小时`}{sellfoxSyncDisabledReason(schedule.resource) ? " · 未接入" : ""}{schedule.nextRunAt ? ` · 下次 ${new Date(schedule.nextRunAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}` : ""}</span></span><input aria-label={`${resourceLabels[schedule.resource]}定时同步`} type="checkbox" checked={schedule.enabled} disabled={!canSync || !overview?.configured || scheduleWorking || (!schedule.enabled && Boolean(sellfoxSyncDisabledReason(schedule.resource)))} onChange={() => void toggleSchedule(schedule)} className="h-4 w-4 accent-brand" /></label>)}</div></section>
+        <label className="flex flex-wrap items-center gap-2 border border-border bg-white p-3 text-xs text-muted">销量历史补数起始日<input type="date" aria-label="销量补数起始日" value={backfillStart || schedules.find((item) => item.resource === "sales")?.backfillStart || ""} onChange={(event) => setBackfillStart(event.target.value)} className="h-8 border border-border px-2" /><span>下次启用销量计划时保存；修改起始日将重置补数游标。每天 T-1 + 默认7天历史，失败保留断点。{schedules.find((item) => item.resource === "sales")?.backfillNextDate ? `当前游标：${schedules.find((item) => item.resource === "sales")?.backfillNextDate}` : ""}</span></label>
         <SellfoxRecentRuns runs={latestRuns} onAll={() => navigate({ domain: "runs" })} />
-      </> : view.domain === "listings" ? <section className="border border-border bg-white px-5 py-10"><h2 className="text-sm font-semibold">在线 Listing 尚未接入</h2><p className="mt-2 text-sm text-muted">{sellfoxSyncDisabledReason("listings")}</p><p className="mt-3 break-all text-xs text-muted">官方接口：/api/order/api/product/v2/pageList.json</p></section> : <>
-        {view.domain === "ads" ? <div className="border border-border bg-white p-3 text-xs text-muted"><p>SP 小时活动浅同步样本，每店前 5 个活动，不代表完整广告报告。</p><p className="mt-1">广告下载报告未接入：/api/cpc/download/createTask.json → /api/cpc/download/pageList.json</p></div> : null}
+      </> : <>
+        {view.domain === "ads" ? <div className="border border-border bg-white p-3 text-xs text-muted"><p>广告产品日报：默认 SP，读取本地窄表；SB/SD 可通过同步 API 按需请求，未知报告结构拒绝落库。</p><p className="mt-1">下载任务 → 进度 → XLSX → 本地日表。报告无币种列，币种为空；小时样本保留在 /api/sellfox/hourly 高级调试入口。</p></div> : null}
         <div className="grid gap-2 border border-border bg-white p-3 sm:grid-cols-3">
-          <input type="date" value={view.from} disabled={view.domain === "stores"} onChange={(event) => navigate({ from: event.target.value, allDates: false })} aria-label="开始日期" className="h-9 border border-border px-2 text-sm" />
-          <input type="date" value={view.to} disabled={view.domain === "stores"} onChange={(event) => navigate({ to: event.target.value, allDates: false })} aria-label="结束日期" className="h-9 border border-border px-2 text-sm" />
+          <input type="date" value={view.from} disabled={view.domain === "stores" || view.domain === "listings"} onChange={(event) => navigate({ from: event.target.value, allDates: false })} aria-label="开始日期" className="h-9 border border-border px-2 text-sm" />
+          <input type="date" value={view.to} disabled={view.domain === "stores" || view.domain === "listings"} onChange={(event) => navigate({ to: event.target.value, allDates: false })} aria-label="结束日期" className="h-9 border border-border px-2 text-sm" />
           <input value={view.search} aria-label="搜索记录" onChange={(event) => navigate({ search: event.target.value }, true)} placeholder={view.domain === "runs" ? "资源、状态或运行 ID" : view.domain === "ads" ? "活动名称或 ID" : "搜索 ASIN、MSKU、SKU 或店铺"} className="h-9 border border-border px-3 text-sm" />
-          {view.domain !== "stores" ? <div className="flex flex-wrap items-center gap-2 sm:col-span-3">{[{ label: "今天", offset: 0 }, { label: "昨天", offset: -1 }, { label: "近 7 天", offset: -6 }].map(({ label, offset }) => <button key={label} className="border border-border px-2 py-1 text-xs hover:bg-surface-muted" onClick={() => navigate({ from: sellfoxDateAt(new Date(), offset), to: sellfoxDateAt(new Date(), offset === -6 ? 0 : offset), allDates: false })}>{label}</button>)}<button className="border border-border px-2 py-1 text-xs hover:bg-surface-muted" onClick={() => navigate({ from: "", to: "", allDates: true })}>全部历史</button><span className="text-xs text-muted">{view.domain === "runs" ? "按任务开始日期（北京时间），店铺/站点筛选不适用。" : `业务日（北京时间）：${view.from || view.to ? `${view.from || "不限"} 至 ${view.to || "不限"}` : view.allDates ? "全部历史" : appliedDate}`}</span></div> : null}
+          {view.domain !== "stores" && view.domain !== "listings" ? <div className="flex flex-wrap items-center gap-2 sm:col-span-3">{[{ label: "今天", offset: 0 }, { label: "昨天", offset: -1 }, { label: "近 7 天", offset: -6 }].map(({ label, offset }) => <button key={label} className="border border-border px-2 py-1 text-xs hover:bg-surface-muted" onClick={() => navigate({ from: sellfoxDateAt(new Date(), offset), to: sellfoxDateAt(new Date(), offset === -6 ? 0 : offset), allDates: false })}>{label}</button>)}<button className="border border-border px-2 py-1 text-xs hover:bg-surface-muted" onClick={() => navigate({ from: "", to: "", allDates: true })}>全部历史</button><span className="text-xs text-muted">{view.domain === "runs" ? "按任务开始日期（北京时间），店铺/站点筛选不适用。" : `业务日（北京时间）：${view.from || view.to ? `${view.from || "不限"} 至 ${view.to || "不限"}` : view.allDates ? "全部历史" : appliedDate}`}</span></div> : null}
         </div>
-        <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "按采集时间保留历史；当前视图包含所有匹配的采集记录。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>
+        {canExport && exportHref && view.domain !== "runs" && view.domain !== "stores" ? <a className="text-xs text-brand" href={`${exportHref}&agent=1`}>给 Agent 的导出 CSV（业务窄列）</a> : null}
+        <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "默认读取最近完整快照；选择日期或全部历史可回看历史采集。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>
+        {view.domain === "listings" ? <label className="flex items-center gap-2 text-xs text-muted">最新完整快照 · 状态<select aria-label="Listing 状态" value={view.status ?? ""} onChange={(event) => navigate({ status: event.target.value })} className="h-9 border border-border bg-white px-2"><option value="">全部</option><option value="active">在售</option><option value="inActive">不可售</option><option value="delete">删除</option><option value="incomplete">未完成</option></select></label> : null}
         <SellfoxResourceTable domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} />
       </>}
     </main><aside className="space-y-3"><SellfoxSyncRunsPanel overview={overview} />{selectedRow ? <SellfoxRecordDetail key={`${scope.workspaceId}-${view.domain}-${selectedRow.id}`} row={selectedRow} rawUrl={rawUrl} headers={headers} onClose={() => setSelectedRow(null)} /> : null}</aside></div>

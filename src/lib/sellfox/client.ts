@@ -140,7 +140,7 @@ async function fetchJsonWithTimeout<T>(buildRequest: () => HttpRequest) {
   return request;
 }
 
-export async function sellfoxPost<T>(path: string, body: unknown): Promise<T> {
+export async function sellfoxPost<T>(path: string, body: unknown, options?: { retry?: boolean }): Promise<T> {
   const { clientId, clientSecret } = credentials();
   let refreshedToken = false;
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -162,7 +162,7 @@ export async function sellfoxPost<T>(path: string, body: unknown): Promise<T> {
       if (!response.ok || payload.code) throw responseError(response, payload.code);
       return payload.data as T;
     } catch (error) {
-      if (!(error instanceof SellfoxRequestError) || !error.retryable || attempt === 3) throw error;
+      if (options?.retry === false || !(error instanceof SellfoxRequestError) || !error.retryable || attempt === 3) throw error;
       await new Promise((resolve) => setTimeout(resolve, 2_000 * 2 ** attempt + randomInt(0, 251)));
     }
   }

@@ -130,6 +130,11 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
       await assert.rejects(drive(sellfoxPost("/api/test.json", {})), /非 JSON/);
       assert.equal(calls.length, 2);
     });
+    await t.test("task creation transport is sent once when the result is ambiguous", async () => {
+      reset(); respond = () => new Error("private timeout URL");
+      await assert.rejects(drive(sellfoxPost("/api/cpc/download/createTask.json", {}, { retry: false })));
+      assert.equal(calls.filter((call) => call.url.pathname.includes("createTask")).length, 1);
+    });
   } finally {
     globalThis.fetch = previousFetch;
     t.mock.timers.reset();

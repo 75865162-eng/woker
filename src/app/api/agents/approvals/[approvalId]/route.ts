@@ -1,6 +1,8 @@
 import { confirmAmazonAction } from "@/lib/agent-platform/amazon-action-audit";
 import { AmazonActionError } from "@/lib/agent-platform/amazon-action-policy";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { isObject } from "@/lib/agent-platform/handoff";
+import { resolveLaunchOutput } from "@/lib/agent-platform/launch-gate";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -68,6 +70,24 @@ export async function POST(request: Request, context: { params: Promise<{ approv
     }
 
     const action = approval.action as unknown as AgentAction;
+    const isLaunch = action.type === "orchestrator.launch.approve";
+    if (isLaunch) {
+      const scope = workspaceScopeFromRequest(request);
+      if (approval.execution.workspaceId !== scope.workspaceId || approval.execution.agentDefinitionId !== "orchestrator") {
+        return NextResponse.json({ error: "Launch approval is outside the current workspace." }, { status: 403 });
+      }
+      if (approval.expiresAt && approval.expiresAt <= new Date() && decision === "APPROVED") {
+        return NextResponse.json({ error: "Launch approval has expired." }, { status: 409 });
+      }
+      const output = isObject(approval.execution.output) ? approval.execution.output : {};
+      const plan = isObject(output.plan) ? output.plan : {};
+      const stages = Array.isArray(plan.stages) ? plan.stages : [];
+      const launch = stages.find((stage) => isObject(stage) && stage.id === "launch");
+      const launchPayload = isObject(launch) && isObject(launch.handoffPayload) ? launch.handoffPayload : {};
+      if (decision === "APPROVED" && (!isObject(launchPayload.listingDraft) || !Object.keys(launchPayload.listingDraft).length)) {
+        return NextResponse.json({ error: "Launch 尚未收到刊登草案，请先从 Listing 交接并重新运行编排。" }, { status: 409 });
+      }
+    }
     if (action.type === "amazon.ads.apply") {
       const scope = workspaceScopeFromRequest(request);
       const result = await confirmAmazonAction({ organizationId: user.organizationId, workspaceId: scope.workspaceId, actorUserId: user.id }, approvalId, decision, reason);
@@ -103,8 +123,12 @@ export async function POST(request: Request, context: { params: Promise<{ approv
         ? (approval.execution.output as Record<string, unknown>)
         : {};
 
+    const launchPayload = isObject(action.payload) ? action.payload : {};
+    const resolvedOutput = isLaunch ? resolveLaunchOutput(baseOutput, decision === "APPROVED", {
+      approvalId: approval.id, executionId: approval.executionId, planId: String(launchPayload.planId ?? ""),
+    }) : baseOutput;
     const nextOutput: Prisma.InputJsonValue = {
-      ...baseOutput,
+      ...resolvedOutput,
       approvalDecision: decision,
       approvalReason: reason || undefined,
       action: approval.action,
@@ -149,6 +173,7 @@ export async function POST(request: Request, context: { params: Promise<{ approv
       prisma.agentApproval.update({
         where: {
           id: approval.id,
+          ...(isLaunch ? { status: "REQUESTED" } : {}),
         },
         data: {
           status: resolvedApproval.status,
@@ -213,6 +238,7 @@ export async function POST(request: Request, context: { params: Promise<{ approv
       },
     });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return NextResponse.json({ error: "Approval was already resolved." }, { status: 409 });
     if (error instanceof AmazonActionError) return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to resolve approval." },

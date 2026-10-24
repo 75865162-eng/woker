@@ -1,3 +1,4 @@
+import { runStore } from "./helpers/sellfox-run-store";
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { PrismaClient } from "@prisma/client";
@@ -9,20 +10,17 @@ test("stores resume the failed page and final run summary keeps transactional pr
   const env = { DATABASE_URL: process.env.DATABASE_URL, SELLFOX_CLIENT_ID: process.env.SELLFOX_CLIENT_ID, SELLFOX_CLIENT_SECRET: process.env.SELLFOX_CLIENT_SECRET };
   delete process.env.DATABASE_URL;
   process.env.SELLFOX_CLIENT_ID = "fixture-id"; process.env.SELLFOX_CLIENT_SECRET = "fixture-secret";
-  let run: Record<string, unknown> = { id: "run", organizationId: "org", workspaceId: "workspace", userId: "user", resource: "stores", status: "queued", summary: {}, startedAt: new Date("2026-10-23T16:00:00Z") };
+  let run: Record<string, unknown> = { id: "run", organizationId: "org", workspaceId: "workspace", userId: "user", resource: "stores", executionAttempts: 0, status: "queued", summary: {}, startedAt: new Date("2026-10-23T16:00:00Z") };
   let stores = new Map<string, unknown>(); let failPageTwo = true;
   const pages: number[] = [];
-  function runs(get: () => Record<string, unknown>, put: (value: Record<string, unknown>) => void) {
-    return { findUnique: async () => structuredClone(get()), update: async ({ data }: { data: Record<string, unknown> }) => { put({ ...get(), ...data }); return get(); } };
-  }
   globals.prisma = {
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
-    sellfoxSyncRun: runs(() => run, (value) => { run = value; }),
+    sellfoxSyncRun: runStore(() => run, (value) => { run = value; }),
     $transaction: async (callback: (tx: unknown) => Promise<void>) => {
       let pendingRun = structuredClone(run); const pendingStores = new Map(stores);
       await callback({
-        sellfoxSyncRun: runs(() => pendingRun, (value) => { pendingRun = value; }),
+        sellfoxSyncRun: runStore(() => pendingRun, (value) => { pendingRun = value; }),
         sellfoxStore: { upsert: async ({ create }: { create: { externalId: string; organizationId: string; workspaceId: string } }) => {
           assert.equal(create.organizationId, "org"); assert.equal(create.workspaceId, "workspace");
           pendingStores.set(create.externalId, create);
@@ -60,7 +58,7 @@ test("stores resume the failed page and final run summary keeps transactional pr
 test("legacy performance runs freeze dates from creation and keep completed checkpoints", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }; const previous = globals.prisma;
   let run: Record<string, unknown> = {
-    id: "legacy", organizationId: "org", workspaceId: "workspace", userId: "user", resource: "performance", status: "queued",
+    id: "legacy", organizationId: "org", workspaceId: "workspace", userId: "user", resource: "performance", executionAttempts: 0, status: "queued",
     startedAt: new Date("2026-10-23T16:00:00Z"),
     summary: { shopExternalIds: ["shop-a"], progress: { performance: { "2026-10-23": { stores: { "shop-a": { pageNo: 1, synced: 12, done: true } } } } } },
   };
@@ -68,7 +66,8 @@ test("legacy performance runs freeze dates from creation and keep completed chec
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
     workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
     sellfoxStore: { findMany: async () => [{ id: "store-a", externalId: "shop-a" }] },
-    sellfoxSyncRun: { findUnique: async () => structuredClone(run), update: async ({ data }: { data: Record<string, unknown> }) => { run = { ...run, ...data }; return run; } },
+    sellfoxSyncRun: runStore(() => run, (value) => { run = value; }),
+    $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({ sellfoxSyncRun: runStore(() => run, (value) => { run = value; }) }),
   } as unknown as PrismaClient;
   try {
     await processSellfoxSyncRun("legacy");

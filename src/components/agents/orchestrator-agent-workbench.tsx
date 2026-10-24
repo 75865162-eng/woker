@@ -1,5 +1,10 @@
 "use client";
 
+import { executionMatchesHandoff } from "@/lib/agent-platform/handoff";
+
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChainHandoff, rememberChainExecution } from "./chain-handoff";
+
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowRight, CheckCircle2, Clock3, FileText, GitBranch, Play, RefreshCw, ShieldAlert } from "lucide-react";
@@ -81,6 +86,7 @@ function truncateJson(value: unknown) {
 
 export function OrchestratorAgentWorkbench() {
   const shellUser = useAppShellUser();
+  const chain = useChainHandoff("launch");
   const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<OrchestratorAgentResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,15 +98,21 @@ export function OrchestratorAgentWorkbench() {
   const [category, setCategory] = useState("Home & Kitchen");
   const [sku, setSku] = useState("");
   const [asin, setAsin] = useState("");
-  const [launchApproved, setLaunchApproved] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState(false);
   const [lastRun, setLastRun] = useState<OrchestratorExecutionResponse | null>(null);
+
+  useEffect(() => {
+    const reset = () => { setData(null); setRefreshToken((value) => value + 1); setLastRun(null); };
+    window.addEventListener(workspaceScopeChangedEventName, reset);
+    return () => window.removeEventListener(workspaceScopeChangedEventName, reset);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
 
-    fetch("/api/agents/orchestrator")
+    chainFetch(`/api/agents/orchestrator${window.location.search}`, { headers: chainHeaders(), cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as OrchestratorAgentResponse & { error?: string };
         if (!response.ok) throw new Error(payload.error || "加载 Agent 编排器失败。");
@@ -118,7 +130,7 @@ export function OrchestratorAgentWorkbench() {
     };
   }, [refreshToken]);
 
-  const currentExecution = data?.latestExecution ?? null;
+  const currentExecution = executionMatchesHandoff(data?.latestExecution, chain.payload) ? data?.latestExecution ?? null : null;
   const runOutput = useMemo(
     () => parseOutput(lastRun?.execution.output ?? currentExecution?.output),
     [currentExecution?.output, lastRun?.execution.output],
@@ -128,6 +140,37 @@ export function OrchestratorAgentWorkbench() {
   const approvals = lastRun?.approvals ?? currentExecution?.approvals ?? [];
   const plan = runOutput?.plan ?? null;
   const handoffs = runOutput?.handoffs ?? [];
+
+  useEffect(() => {
+    const inbound = chain.payload;
+    if (!inbound) return;
+    setLastRun(null);
+    if (typeof inbound.goal === "string") setGoal(inbound.goal);
+    if (typeof inbound.marketplace === "string") setMarketplace(inbound.marketplace);
+    if (typeof inbound.category === "string") setCategory(inbound.category);
+    if (typeof inbound.sku === "string") setSku(inbound.sku);
+    if (typeof inbound.asin === "string") setAsin(inbound.asin);
+  }, [chain.payload]);
+
+  async function decideLaunch(approval: AgentApproval, decision: "APPROVED" | "REJECTED") {
+    setDecisionBusy(true); setError("");
+    try {
+      const response = await chainFetch(`/api/agents/approvals/${encodeURIComponent(approval.id)}`, { method: "POST", headers: chainHeaders(true), body: JSON.stringify({ decision, reason: "负责人复核 Launch 库存、合规、定价与预算清单" }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "审批失败。");
+      setLastRun(null);
+      await refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "审批失败。"); }
+    finally { setDecisionBusy(false); }
+  }
+
+  function openHandoff(handoff: OrchestratorHandoff) {
+    if (!plan) return;
+    if (handoff.to === "ppc" && plan.launchGate.status !== "approved") { setError("blocked_until_launch：请先完成 Launch 人工审批。"); return; }
+    try {
+      sendChainHandoff({ previous: chain.payload, from: "orchestrator", to: handoff.to, kind: handoff.kind, payload: { ...handoff.payload, goal: handoff.payload.naturalLanguageGoal ?? plan.goal, marketplace: plan.marketplace, category, sku: plan.sku, asin: plan.asin, status: handoff.to === "ppc" ? "ready" : undefined }, sourceExecutionId: lastRun?.execution.id ?? currentExecution?.id ?? "", sourceWorkspaceId: lastRun?.execution.workspaceId ?? currentExecution?.workspaceId, planId: plan.planId, organizationId: shellUser?.organizationId, userId: shellUser?.userId });
+    } catch (err) { setError(err instanceof Error ? err.message : "交接失败。"); }
+  }
 
   async function refresh() {
     setRefreshToken((current) => current + 1);
@@ -139,12 +182,16 @@ export function OrchestratorAgentWorkbench() {
 
     try {
       const requestBody: OrchestratorExecutionRequest = {
-        naturalLanguageGoal: goal,
+        chainHandoff: chain.payload ?? undefined,
+          naturalLanguageGoal: goal,
         marketplace,
         category,
         sku: sku.trim() || undefined,
         asin: asin.trim() || undefined,
-        launchApproved,
+        marketOpportunity: chain.payload?.marketOpportunity as OrchestratorExecutionRequest["marketOpportunity"],
+        productReport: chain.payload?.productReport as OrchestratorExecutionRequest["productReport"],
+        supplierReport: chain.payload?.supplierReport as OrchestratorExecutionRequest["supplierReport"],
+        listingDraft: chain.payload?.listingDraft as OrchestratorExecutionRequest["listingDraft"],
         context: {
           sku: sku.trim() || undefined,
           asin: asin.trim() || undefined,
@@ -154,19 +201,19 @@ export function OrchestratorAgentWorkbench() {
             category,
             sku: sku.trim() || undefined,
             asin: asin.trim() || undefined,
-            launchApproved,
           },
         },
       };
-      const response = await fetch("/api/agents/orchestrator/executions", {
+      const response = await chainFetch("/api/agents/orchestrator/executions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chainHeaders(true),
         body: JSON.stringify(requestBody),
       });
       const payload = (await response.json()) as OrchestratorExecutionResponse & { error?: string };
 
       if (!response.ok) throw new Error(payload.error || "运行 Agent 编排器失败。");
 
+      rememberChainExecution(payload.execution.id);
       setLastRun(payload);
       await refresh();
     } catch (err) {
@@ -188,6 +235,7 @@ export function OrchestratorAgentWorkbench() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
+            <ChainHandoffNotice payload={chain.payload} error={chain.error} />
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             <label className="block text-xs font-bold text-muted">
               目标
@@ -231,19 +279,19 @@ export function OrchestratorAgentWorkbench() {
                 />
               </label>
             </div>
-            <label className="flex items-center gap-2 rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-foreground">
-              <input
-                type="checkbox"
-                checked={launchApproved}
-                onChange={(event) => setLaunchApproved(event.target.checked)}
-                className="h-4 w-4 accent-brand"
-              />
-              已批准上架
-            </label>
+            <p className="text-xs text-muted">Launch 状态由人工审批记录决定；批准只解锁 PPC 建议，不代表已上架或允许广告花费。</p>
             <Button type="button" className="w-full" onClick={runOrchestration} disabled={!canCreate || running || loading} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
               {running ? <Clock3 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               {running ? "运行中..." : "运行编排"}
             </Button>
+            {approvals.filter((item) => item.action?.type === "orchestrator.launch.approve").map((approval) => <div key={approval.id} className="space-y-2 rounded border border-border p-2 text-sm">
+              <p>Launch：{approval.status}</p>
+              {approval.status === "REQUESTED" && <>
+                <p className="text-xs text-muted">请确认库存、合规、定价、供应方案、刊登稿与 PPC 预算。缺少刊登稿时不可批准。</p>
+                <Button size="sm" disabled={decisionBusy || !roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions)} onClick={() => decideLaunch(approval, "APPROVED")}>确认清单并批准 Launch</Button>
+                <Button size="sm" variant="secondary" disabled={decisionBusy || !roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions)} onClick={() => decideLaunch(approval, "REJECTED")}>拒绝 Launch</Button>
+              </>}
+            </div>)}
           </CardContent>
         </Card>
 
@@ -310,13 +358,20 @@ export function OrchestratorAgentWorkbench() {
             <CardTitle>交接</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {handoffs.length ? handoffs.map((handoff) => <HandoffRow key={`${handoff.from}-${handoff.to}`} handoff={handoff} />) : (
+            {handoffs.length ? handoffs.map((handoff) => <HandoffRow key={`${handoff.from}-${handoff.to}`} handoff={handoff} onOpen={() => openHandoff(handoff)} />) : (
               <div className="rounded-md border border-dashed border-border bg-surface-muted px-3 py-6 text-center text-sm font-semibold text-muted">
                 暂无交接内容。
               </div>
             )}
           </CardContent>
         </Card>
+
+        {runOutput?.executionRefs?.length ? <Card>
+          <CardHeader><CardTitle>链路执行</CardTitle></CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {runOutput.executionRefs.map((ref) => <PrefetchLink key={ref.executionId} href={`/agents/${ref.stage === "launch" ? "orchestrator" : ref.stage}?executionId=${encodeURIComponent(ref.executionId)}`} className="rounded border border-border px-3 py-2 text-sm text-brand">{stageLabels[ref.stage] ?? "编排"} · {ref.executionId}</PrefetchLink>)}
+          </CardContent>
+        </Card> : null}
 
         <div className="grid gap-4 xl:grid-cols-2">
           <Card>
@@ -387,7 +442,7 @@ function StageNode({ stage, last }: { stage: OrchestratorStage; last: boolean })
   );
 }
 
-function HandoffRow({ handoff }: { handoff: OrchestratorHandoff }) {
+function HandoffRow({ handoff, onOpen }: { handoff: OrchestratorHandoff; onOpen: () => void }) {
   return (
     <div className="rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -395,12 +450,10 @@ function HandoffRow({ handoff }: { handoff: OrchestratorHandoff }) {
         <div className="flex items-center gap-2">
         {handoff.requiredApproval ? <Badge tone="amber">审批</Badge> : null}
           {handoff.route ? (
-            <PrefetchLink href={handoff.route}>
-              <Button type="button" size="sm" variant="secondary">
+              <Button type="button" size="sm" variant="secondary" onClick={onOpen}>
                 打开
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </PrefetchLink>
           ) : null}
         </div>
       </div>

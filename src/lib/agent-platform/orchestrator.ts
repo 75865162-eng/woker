@@ -10,6 +10,7 @@ import type {
   ToolExecutionInput,
   ToolExecutionResult,
 } from "./types";
+import { handoffKinds, handoffVersion, readHandoffTrace, type ChainExecutionRef, type HandoffKind } from "./handoff";
 
 export type OrchestratorStageId = "market" | "product" | "supplier" | "listing" | "launch" | "ppc";
 
@@ -34,6 +35,8 @@ export interface OrchestratorStage {
 }
 
 export interface OrchestratorHandoff {
+  contractVersion: 1;
+  kind: HandoffKind;
   from: "user" | OrchestratorStageId;
   to: OrchestratorStageId;
   agentId: string | null;
@@ -59,6 +62,7 @@ export interface OrchestratorPlan {
 }
 
 export interface OrchestratorExecutionOutput {
+  executionRefs?: ChainExecutionRef[];
   plan: OrchestratorPlan;
   handoffs: OrchestratorHandoff[];
   currentStage: OrchestratorStageId;
@@ -75,6 +79,7 @@ export interface OrchestratorExecutionOutput {
 }
 
 export interface OrchestratorExecutionRequest {
+  chainHandoff?: unknown;
   naturalLanguageGoal?: string;
   marketplace?: string;
   category?: string;
@@ -552,6 +557,7 @@ export function createOrchestratorExecutionExecutor(options: {
       launchGateOutput,
     });
     const output: OrchestratorExecutionOutput = {
+      executionRefs: readHandoffTrace(options.request.chainHandoff),
       plan,
       handoffs,
       currentStage,
@@ -696,7 +702,9 @@ function normalizeOrchestratorExecutionInput(request: OrchestratorExecutionReque
     asin: request.asin ?? stringOrUndefined(context.asin) ?? stringOrUndefined(currentData.asin),
     productConstraints: normalizeStringArray(request.productConstraints ?? currentData.productConstraints),
     currentStage: request.currentStage ?? normalizeStageId(currentData.currentStage) ?? "market",
-    launchApproved: request.launchApproved === true || currentData.launchApproved === true,
+    // Request JSON (including currentData) can never authorize Launch.
+    // Persisted approvals update their original execution through the approval API.
+    launchApproved: false,
     stageInputs: {
       marketOpportunity: request.marketOpportunity ?? currentData.marketOpportunity ?? null,
       productReport: request.productReport ?? currentData.productReport ?? null,
@@ -718,7 +726,7 @@ function buildPlan(input: ReturnType<typeof normalizeOrchestratorExecutionInput>
       requiredInputs: ["naturalLanguageGoal", "marketplace", "category", "filters"],
       outputContract: ["ProductOpportunity", "MarketResearchReport", "evidence"],
       nextRoute: "/agents/market",
-      handoffKey: "amazon.agent-platform.product-handoff",
+      handoffKey: "amazon.agent-platform.market-handoff",
       handoffPayload: {
         naturalLanguageGoal: input.goal,
         marketplace: input.marketplace,
@@ -735,7 +743,7 @@ function buildPlan(input: ReturnType<typeof normalizeOrchestratorExecutionInput>
       requiredInputs: ["ProductOpportunity", "MarketResearchReport"],
       outputContract: ["PRD", "CostTarget", "ProductProjectDraft", "evidence"],
       nextRoute: "/agents/product",
-      handoffKey: "amazon.agent-platform.supplier-handoff",
+      handoffKey: "amazon.agent-platform.product-handoff",
       handoffPayload: {
         naturalLanguageGoal: "基于 Market Agent 机会生成 PRD、差异化和成本目标。",
         marketplace: input.marketplace,
@@ -752,7 +760,7 @@ function buildPlan(input: ReturnType<typeof normalizeOrchestratorExecutionInput>
       requiredInputs: ["PRD", "CostTarget", "ProductProjectDraft"],
       outputContract: ["SupplierRecommendation", "RFQDraft", "QuotationAnalysis", "evidence"],
       nextRoute: "/agents/supplier",
-      handoffKey: "amazon.agent-platform.listing-handoff",
+      handoffKey: "amazon.agent-platform.supplier-handoff",
       handoffPayload: {
         naturalLanguageGoal: "基于 Product Agent PRD 做供应商筛选、询价模板、报价比较和推荐。",
         marketplace: input.marketplace,
@@ -768,6 +776,7 @@ function buildPlan(input: ReturnType<typeof normalizeOrchestratorExecutionInput>
       requiredInputs: ["ProductSpecification", "KeywordData", "CompetitorData", "BrandInformation"],
       outputContract: ["KeywordMap", "Title", "Bullets", "Description", "A+Brief", "ListingDraft"],
       nextRoute: "/agents/listing",
+      handoffKey: "amazon.agent-platform.listing-handoff",
       handoffPayload: {
         naturalLanguageGoal: "基于 Product + SellerSprite Keywords + Competitors 生成 Listing Draft。",
         marketplace: input.marketplace,
@@ -778,6 +787,8 @@ function buildPlan(input: ReturnType<typeof normalizeOrchestratorExecutionInput>
     {
       id: "launch",
       name: "Launch Gate",
+      nextRoute: "/agents/orchestrator",
+      handoffKey: "amazon.agent-platform.orchestrator-handoff",
       agentId: null,
       status: input.launchApproved ? "completed" : "waiting_approval",
       objective: "Human approval gate before launch and paid traffic execution.",
@@ -787,6 +798,8 @@ function buildPlan(input: ReturnType<typeof normalizeOrchestratorExecutionInput>
         launchApproved: input.launchApproved,
         requiredChecks: defaultLaunchChecks,
         listingDraft: toJsonValue(input.stageInputs.listingDraft),
+        productReport: toJsonValue(input.stageInputs.productReport),
+        supplierReport: toJsonValue(input.stageInputs.supplierReport),
       },
     },
     {
@@ -798,6 +811,7 @@ function buildPlan(input: ReturnType<typeof normalizeOrchestratorExecutionInput>
       requiredInputs: ["LaunchApproval", "ProductData", "SellerSpriteKeywords", "HistoricalPPC", "AmazonAdsData"],
       outputContract: ["Diagnosis", "BidRecommendation", "NegativeRecommendation", "CampaignRecommendation", "ApprovalRequest"],
       nextRoute: "/agents/ppc",
+      handoffKey: "amazon.agent-platform.ppc-handoff",
       handoffPayload: {
         naturalLanguageGoal: "基于 Launch 后的产品上下文诊断 PPC，并输出审批前建议。",
         marketplace: input.marketplace,
@@ -850,6 +864,8 @@ function handoff(from: "user" | OrchestratorStageId, to: OrchestratorStageId, pl
   return {
     from,
     to,
+    contractVersion: handoffVersion,
+    kind: handoffKinds[to],
     agentId: stage?.agentId ?? null,
     route: stage?.nextRoute,
     payload: (stage?.handoffPayload ?? {}) as JsonObject,

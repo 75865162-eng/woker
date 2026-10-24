@@ -1,3 +1,4 @@
+import { isSellfoxAgentDomain, readSellfoxAgentRows } from "@/lib/sellfox/agent-read";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -6,7 +7,7 @@ import { sellfoxBrowseStoreIds } from "@/lib/sellfox/browse-store-scope";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
 export const runtime = "nodejs";
-const domains = ["stores", "inventory", "sales", "hourly", "runs"] as const;
+const domains = ["stores", "inventory", "sales", "hourly", "runs", "listings", "ads_report"] as const;
 type Domain = (typeof domains)[number];
 export async function GET(request: Request, context: { params: Promise<{ domain: string }> }) {
   const permission = await requireApiPermission("sellfox", "view", request);
@@ -18,6 +19,8 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
     const query = sellfoxBrowseQuery(url); const { page, pageSize } = query;
     const common = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
     const storeIds = domain === "runs" ? undefined : await sellfoxBrowseStoreIds(query, common.organizationId, common.workspaceId);
+    if (isSellfoxAgentDomain(domain) && domain !== "sales" && (domain !== "inventory" || (!query.from && !query.to && !query.allDates))) return NextResponse.json(await readSellfoxAgentRows(domain, query, common));
+
 
     if (domain === "stores") {
       const where = sellfoxStoreWhere(query, common.organizationId, common.workspaceId, storeIds);

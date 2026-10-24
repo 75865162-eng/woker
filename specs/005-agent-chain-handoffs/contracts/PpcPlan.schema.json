@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PpcPlan v1",
+  "type": "object",
+  "required": [
+    "goal",
+    "marketplace",
+    "_handoff"
+  ],
+  "allOf": [
+    {
+      "required": [
+        "status"
+      ],
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ready"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "launchApproval"
+        ],
+        "properties": {
+          "launchApproval": {
+            "type": "object",
+            "required": [
+              "approvalId",
+              "executionId",
+              "planId"
+            ],
+            "properties": {
+              "approvalId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "executionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "planId": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "marketplace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "productContext": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "launchApproval": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked_until_launch"
+      ]
+    },
+    "traceLinks": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": [
+          "stage",
+          "executionId"
+        ],
+        "properties": {
+          "stage": {
+            "enum": [
+              "orchestrator",
+              "market",
+              "product",
+              "supplier",
+              "listing",
+              "launch",
+              "ppc"
+            ]
+          },
+          "executionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "_handoff": {
+      "type": "object",
+      "required": [
+        "version",
+        "kind",
+        "from",
+        "to",
+        "organizationId",
+        "userId",
+        "workspaceId",
+        "sourceExecutionId",
+        "createdAt"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "PpcPlan"
+        },
+        "from": {
+          "enum": [
+            "user",
+            "orchestrator",
+            "market",
+            "product",
+            "supplier",
+            "listing",
+            "launch",
+            "ppc"
+          ]
+        },
+        "to": {
+          "enum": [
+            "market",
+            "product",
+            "supplier",
+            "listing",
+            "launch",
+            "ppc"
+          ]
+        },
+        "organizationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceExecutionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

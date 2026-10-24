@@ -1,5 +1,10 @@
 "use client";
 
+import { executionMatchesHandoff } from "@/lib/agent-platform/handoff";
+
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChainHandoff, rememberChainExecution } from "./chain-handoff";
+
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, ShieldAlert, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +23,6 @@ import type {
   AgentTraceEvent,
 } from "@/lib/agent-platform";
 import type { AgentRuntimeConfigStatus } from "@/lib/agent-platform/runtime-config";
-import { productHandoffStorageKey } from "@/lib/agent-platform/product";
 import type { MarketExecutionOutput, MarketResearchReport, ProductOpportunity } from "@/lib/agent-platform/market";
 
 type MarketAgentResponse = {
@@ -134,6 +138,7 @@ function sellerSpriteStatusTone(status?: string): "green" | "amber" | "red" | "b
 
 export function MarketAgentWorkbench() {
   const shellUser = useAppShellUser();
+  const chain = useChainHandoff("market");
   const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
   const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<MarketAgentResponse | null>(null);
@@ -161,11 +166,25 @@ export function MarketAgentWorkbench() {
   const [pendingApproval, setPendingApproval] = useState<AgentApproval | null>(null);
 
   useEffect(() => {
+    const reset = () => { setData(null); setRefreshToken((value) => value + 1); setPendingApproval(null); };
+    window.addEventListener(workspaceScopeChangedEventName, reset);
+    return () => window.removeEventListener(workspaceScopeChangedEventName, reset);
+  }, []);
+
+  useEffect(() => {
+    const inbound = chain.payload;
+    if (!inbound) return;
+    if (typeof inbound.goal === "string") setGoal(inbound.goal);
+    if (typeof inbound.marketplace === "string") setMarketplace(inbound.marketplace);
+    if (typeof inbound.category === "string") setCategory(inbound.category);
+  }, [chain.payload]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
 
-    fetch("/api/agents/market")
+    chainFetch(`/api/agents/market${window.location.search}`, { headers: chainHeaders(), cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as MarketAgentResponse & { error?: string };
 
@@ -191,7 +210,7 @@ export function MarketAgentWorkbench() {
     };
   }, [refreshToken]);
 
-  const currentExecution = data?.latestExecution ?? null;
+  const currentExecution = executionMatchesHandoff(data?.latestExecution, chain.payload) ? data?.latestExecution ?? null : null;
   const marketExecution = useMemo(() => parseMarketOutput(currentExecution?.output), [currentExecution?.output]);
   const report = marketExecution?.report ?? null;
   const opportunities = useMemo(() => report?.productOpportunities ?? [], [report]);
@@ -210,19 +229,19 @@ export function MarketAgentWorkbench() {
     setRefreshToken((current) => current + 1);
   }
 
-  async function runResearch() {
+  async function runResearch(selectionRun = false) {
     setRunning(true);
     setError("");
     setPendingApproval(null);
     const parsedTargetMargin = targetMargin.trim() ? Number(targetMargin) : undefined;
 
     try {
-      const response = await fetch("/api/agents/market/executions", {
+      const response = await chainFetch("/api/agents/market/executions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: chainHeaders(true),
         body: JSON.stringify({
+          chainHandoff: chain.payload ?? undefined,
+          selectionRun,
           naturalLanguageGoal: goal,
           marketplace,
           category: category || undefined,
@@ -255,6 +274,9 @@ export function MarketAgentWorkbench() {
         throw new Error(payload.error || "运行市场 Agent 失败。");
       }
 
+      if (payload.execution.status === "FAILED") setError("执行失败：请查看轨迹。Round B 采集器尚未接入。");
+
+      rememberChainExecution(payload.execution.id);
       const detailedExecution: AgentExecutionDetail = {
         ...payload.execution,
         approvals: payload.approvals,
@@ -301,11 +323,9 @@ export function MarketAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch("/api/agents/market/projects", {
+      const response = await chainFetch("/api/agents/market/projects", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           opportunity: selectedOpportunity,
           report,
@@ -372,8 +392,9 @@ export function MarketAgentWorkbench() {
       marketReport: report,
     };
 
-    window.sessionStorage.setItem(productHandoffStorageKey, JSON.stringify(payload));
-    window.location.href = "/agents/product";
+    try {
+      sendChainHandoff({ previous: chain.payload, from: "market", to: "product", payload, sourceExecutionId: currentExecution?.id ?? "", sourceWorkspaceId: currentExecution?.workspaceId, organizationId: shellUser?.organizationId, userId: shellUser?.userId, kind: "Opportunity" });
+    } catch (err) { setError(err instanceof Error ? err.message : "交接失败。"); }
   }
 
   async function resolveApproval(decision: "APPROVED" | "REJECTED") {
@@ -383,11 +404,9 @@ export function MarketAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch(`/api/agents/approvals/${currentApproval.id}`, {
+      const response = await chainFetch(`/api/agents/approvals/${currentApproval.id}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           decision,
           reason: decision === "APPROVED" ? "已由市场 Agent 审批通过。" : "已由市场 Agent 审批驳回。",
@@ -521,6 +540,8 @@ export function MarketAgentWorkbench() {
             <p className="text-xs font-medium text-muted">输入自然语言目标和筛选条件，市场 Agent 会给出带证据的产品机会。</p>
           </CardHeader>
           <CardContent className="space-y-3">
+            <ChainHandoffNotice payload={chain.payload} error={chain.error} />
+            <Button type="button" variant="secondary" disabled={!canCreate || running || loading} onClick={() => runResearch(true)}>运行 Round B 选品（尚未接入采集器）</Button>
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             <label className="block space-y-1">
               <span className="text-xs font-semibold text-muted">目标</span>
@@ -584,7 +605,7 @@ export function MarketAgentWorkbench() {
               </label>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={runResearch} disabled={!canCreate || running || loading} title={!canCreate ? "没有 Agent 创建权限" : undefined} className="min-w-36">
+              <Button type="button" onClick={() => runResearch()} disabled={!canCreate || running || loading} title={!canCreate ? "没有 Agent 创建权限" : undefined} className="min-w-36">
                 {running ? "运行中..." : "运行研究"}
                 <Sparkles className="h-4 w-4" />
               </Button>

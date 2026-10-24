@@ -102,6 +102,7 @@ export interface ProductHandoffPayload {
 }
 
 export interface ProductExecutionRequest {
+  chainHandoff?: unknown;
   naturalLanguageGoal?: string;
   marketplace?: string;
   category?: string;

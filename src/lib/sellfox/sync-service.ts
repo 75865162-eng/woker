@@ -1,3 +1,6 @@
+import { syncSellfoxListings, type ListingCheckpoint } from "./listing-sync";
+import { syncSellfoxAdsReports } from "./ads-report-sync";
+import { claimSellfoxRun, fenceSellfoxRun, finishSellfoxRun, SellfoxLeaseLostError, type SellfoxRunLease } from "@/lib/sellfox/run-lease";
 import { canExecuteSellfoxSync } from "@/lib/sellfox/sync-authorization";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -49,9 +52,11 @@ function pageCount(payload: unknown) {
   return null;
 }
 
-type SyncInput = { organizationId: string; workspaceId: string; runId: string; userId: string; resource: SyncResource; shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string };
+type SyncInput = { organizationId: string; workspaceId: string; runId: string; userId: string; resource: SyncResource; shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string; backfillFrom?: string; backfillTo?: string; lease: SellfoxRunLease };
 
-async function saveProgress(input: SyncInput, summary: Record<string, unknown>, db: Pick<Prisma.TransactionClient, "sellfoxSyncRun"> = prisma) {
+async function saveProgress(input: SyncInput, summary: Record<string, unknown>, db?: Pick<Prisma.TransactionClient, "sellfoxSyncRun">) {
+  if (!db) return prisma.$transaction(async (tx) => { await saveProgress(input, summary, tx); });
+  await fenceSellfoxRun(input.lease, db);
   const current = await db.sellfoxSyncRun.findUnique({ where: { id: input.runId }, select: { summary: true } });
   const request = (current?.summary ?? {}) as Record<string, unknown>;
   await db.sellfoxSyncRun.update({ where: { id: input.runId }, data: { summary: { ...request, progress: summary } as Prisma.InputJsonValue } });
@@ -95,11 +100,12 @@ async function syncStores(input: SyncInput) {
 
 async function syncSnapshots(input: SyncInput) {
   if (input.resource !== "inventory" && input.resource !== "sales") throw new SellfoxSyncInputError("快照资源无效。");
-  const dates = input.resource === "inventory" ? [input.reportDate!] : sellfoxReportDates(input.startDate!, input.endDate!);
-  let writes = 0; let storeCount = 0;
+  const dates = input.resource === "inventory" ? [input.reportDate!] : [...new Set([...sellfoxReportDates(input.startDate!, input.endDate!), ...(input.backfillFrom && input.backfillTo ? sellfoxReportDates(input.backfillFrom, input.backfillTo) : [])])];
+  let writes = 0; let storeCount = 0; const failures: boolean[] = [];
   for (const date of dates) {
     const latest = await prisma.sellfoxSyncRun.findUnique({ where: { id: input.runId }, select: { summary: true } });
     const states = asRecord(asRecord(asRecord(latest?.summary)?.progress)?.snapshots) ?? {};
+    try {
     const result = await syncSellfoxSnapshotStores({
       resource: input.resource, organizationId: input.organizationId, workspaceId: input.workspaceId,
       shopExternalIds: input.shopExternalIds!, reportDate: date, capturedAt: input.capturedAt!,
@@ -114,7 +120,12 @@ async function syncSnapshots(input: SyncInput) {
       },
     });
     writes += result.writes; storeCount = Math.max(storeCount, result.storeCount);
+    } catch (error) {
+      if (!(error instanceof SellfoxStoreSyncError)) throw error;
+      failures.push(error.retryable);
+    }
   }
+  if (failures.length) throw new SellfoxStoreSyncError(`${failures.length} 个日期含失败采集单元，其余日期和店铺已继续；补数游标未推进。`, failures.some(Boolean));
   return { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, writes };
 }
 
@@ -128,10 +139,13 @@ async function syncHourly(input: SyncInput) {
       for (const metric of metrics) {
         const rawHour = num(metric, "hour", "reportHour", "timeHour") ?? 0;
         const hour = Math.min(Math.max(Math.floor(rawHour), 0), 23); const now = new Date();
-        await prisma.sellfoxHourlyMetric.upsert({
+        await prisma.$transaction(async (tx) => {
+          await fenceSellfoxRun(input.lease, tx);
+          await tx.sellfoxHourlyMetric.upsert({
           where: { storeId_reportDate_hour_adType_entityType_entityId: { storeId: store.id, reportDate, hour, adType: "sp", entityType: "campaign", entityId: campaignId } },
           create: { id: `sellfox-hourly-${store.id}-${reportDate}-${hour}-sp-campaign-${campaignId}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, hour, adType: "sp", entityType: "campaign", entityId: campaignId, entityName: field(campaign, "campaignName", "name"), impressions: Math.floor(num(metric, "impressions") ?? 0), clicks: Math.floor(num(metric, "clicks") ?? 0), cost: num(metric, "cost", "costs", "spend") ?? 0, sales: num(metric, "sales", "salesAmount") ?? 0, orders: Math.floor(num(metric, "orders", "purchases") ?? 0), payload: metric as Prisma.InputJsonValue },
           update: { impressions: Math.floor(num(metric, "impressions") ?? 0), clicks: Math.floor(num(metric, "clicks") ?? 0), cost: num(metric, "cost", "costs", "spend") ?? 0, sales: num(metric, "sales", "salesAmount") ?? 0, orders: Math.floor(num(metric, "orders", "purchases") ?? 0), payload: metric as Prisma.InputJsonValue, syncedAt: now },
+          });
         }); count += 1;
       }
     }
@@ -140,10 +154,20 @@ async function syncHourly(input: SyncInput) {
 }
 
 export async function processSellfoxSyncRun(runId: string) {
-  const run = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId } });
+  let run = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId } });
   if (!run || run.status === "done") return;
-  await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "running", error: null, finishedAt: null } });
+  const lease = await claimSellfoxRun(runId);
+  if (!lease) return;
+  let renewing = false;
+  const timer = setInterval(() => {
+    if (renewing) return;
+    renewing = true;
+    void fenceSellfoxRun(lease).catch(() => undefined).finally(() => { renewing = false; });
+  }, 30_000);
+  timer.unref();
   try {
+    run = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId } });
+    if (!run) throw new SellfoxLeaseLostError();
     if (!(await canExecuteSellfoxSync(run))) throw new SellfoxSyncInputError("同步已停止：发起用户或工作区已失去有效权限。");
     if (!isSellfoxSyncResource(run.resource)) throw new SellfoxSyncInputError("请选择有效的赛狐同步资源。");
     if (sellfoxSyncDisabledReason(run.resource)) throw new SellfoxSyncUnavailableError(run.resource);
@@ -161,19 +185,22 @@ export async function processSellfoxSyncRun(runId: string) {
       if (requested.length && stores.length !== new Set(requested).size) throw new SellfoxSyncInputError("所选店铺不属于当前工作区。");
       summary = { ...summary, shopExternalIds: stores.map((store) => store.externalId), storesFrozen: true };
     }
-    if ((run.resource === "inventory" || run.resource === "sales") && !summary.capturedAt) {
+    if ((run.resource === "inventory" || run.resource === "sales" || run.resource === "listings") && !summary.capturedAt) {
       const capturedAt = new Date();
       summary = { ...summary, capturedAt: capturedAt.toISOString(), ...(run.resource === "inventory" ? { reportDate: sellfoxDateAt(capturedAt) } : {}) };
     }
     if (run.resource !== "stores" && (!Array.isArray(summary.shopExternalIds) || !summary.shopExternalIds.length || summary.shopExternalIds.some((id) => typeof id !== "string" || !id.trim()))) {
       throw new SellfoxSyncInputError("同步任务缺少有效的已冻结店铺范围。");
     }
-    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { summary: summary as Prisma.InputJsonValue } });
-    const request = summary as { shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string };
+    await prisma.$transaction(async (tx) => {
+      await fenceSellfoxRun(lease, tx);
+      await tx.sellfoxSyncRun.update({ where: { id: runId }, data: { summary: summary as Prisma.InputJsonValue } });
+    });
+    const request = summary as { shopExternalIds?: string[]; reportDate?: string; startDate?: string; endDate?: string; progress?: Record<string, unknown>; capturedAt?: string; adTypes?: string[]; backfillFrom?: string; backfillTo?: string; scheduleId?: string };
     const input: SyncInput = {
-      organizationId: run.organizationId, workspaceId: run.workspaceId, userId: run.userId, runId, resource: run.resource,
+      organizationId: run.organizationId, workspaceId: run.workspaceId, userId: run.userId, runId, resource: run.resource, lease,
       shopExternalIds: request.shopExternalIds, reportDate: request.reportDate, startDate: request.startDate,
-      endDate: request.endDate, progress: request.progress, capturedAt: request.capturedAt,
+      endDate: request.endDate, backfillFrom: request.backfillFrom, backfillTo: request.backfillTo, progress: request.progress, capturedAt: request.capturedAt,
     };
     let result: unknown;
     if (input.resource === "stores") result = { count: await syncStores(input) };
@@ -203,14 +230,24 @@ export async function processSellfoxSyncRun(runId: string) {
       result = { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, synced: count };
     }
     else if (input.resource === "inventory" || input.resource === "sales") result = await syncSnapshots(input);
+    else if (input.resource === "listings") result = await syncSellfoxListings({ ...input, shopExternalIds: input.shopExternalIds!, capturedAt: input.capturedAt!, checkpoint: input.progress?.listings as ListingCheckpoint | undefined, onProgress: async (listings, tx) => saveProgress(input, { listings, count: Object.values(listings).reduce((n, item) => n + item.count, 0) }, tx) });
+    else if (input.resource === "ads_report") result = await syncSellfoxAdsReports({ ...input, startDate: input.startDate!, endDate: input.endDate!, shopExternalIds: input.shopExternalIds!, adTypes: request.adTypes, onProgress: async (progress, tx) => saveProgress(input, progress, tx) });
     else if (input.resource === "hourly") result = await syncHourly(input);
     else throw new SellfoxSyncInputError("此赛狐数据域暂未接入 Open API。");
     // Re-read after page commits; never overwrite current progress with the initial summary.
-    const current = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
-    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "done", summary: { ...asRecord(current?.summary), result } as Prisma.InputJsonValue, finishedAt: new Date() } });
+    await prisma.$transaction(async (tx) => {
+      await fenceSellfoxRun(lease, tx);
+      const current = await tx.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
+      if (input.resource === "sales" && request.scheduleId && request.backfillFrom && request.backfillTo) {
+        const next = new Date(Date.parse(`${request.backfillTo}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+        await tx.sellfoxSyncSchedule.updateMany({ where: { id: request.scheduleId, organizationId: input.organizationId, workspaceId: input.workspaceId, backfillNextDate: request.backfillFrom }, data: { backfillNextDate: next } });
+      }
+      await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result } as Prisma.InputJsonValue }, tx);
+    });
   } catch (error) {
+    if (error instanceof SellfoxLeaseLostError) throw error;
     const message = error instanceof SellfoxSyncUnavailableError || error instanceof SellfoxStoreSyncError ? error.message : sellfoxStoreFailure(error).error;
-    await prisma.sellfoxSyncRun.update({ where: { id: runId }, data: { status: "failed", error: message, finishedAt: new Date() } });
+    await finishSellfoxRun(lease, { status: "failed", error: message });
     throw error;
-  }
+  } finally { clearInterval(timer); }
 }

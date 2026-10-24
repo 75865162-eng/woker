@@ -40,3 +40,8 @@ test("product attachment references include persisted file ids and skip placehol
     ["file-evidence-1", "file-image-1", "file-image-thumb-1"],
   );
 });
+
+test("legacy main image file id remains an ownership binding reference", () => {
+  const product = { imageFileId: "file-main-image-1" } as unknown as Product;
+  assert.deepEqual(collectProductAttachmentReferences(product), [{ fileId: "file-main-image-1", fieldPath: "product.imageFileId" }]);
+});

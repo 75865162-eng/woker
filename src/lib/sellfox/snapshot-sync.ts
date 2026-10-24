@@ -1,3 +1,4 @@
+import { inventoryNarrow } from "./narrow-contracts";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sellfoxPost } from "@/lib/sellfox/client";
@@ -42,7 +43,7 @@ export async function syncSellfoxSnapshotStores(input: {
             for (const row of parsed) {
               const common = { sku: row.sku, msku: row.msku, asin: row.asin, syncedAt: capturedAt, updatedAt: new Date() };
               if ("quantity" in row) {
-                const data = { ...common, fnsku: row.fnsku, quantity: row.quantity, payload: row.payload as Prisma.InputJsonValue };
+                const data = { ...common, fnsku: row.fnsku, quantity: row.quantity, ...inventoryNarrow(row.payload), payload: row.payload as Prisma.InputJsonValue };
                 await tx.sellfoxFbaInventorySnapshot.upsert({ where: { storeId_capturedAt_sourceKey: { storeId: store.id, capturedAt, sourceKey: row.sourceKey } }, create: { id: `sellfox-inventory-${store.id}-${capturedAt.getTime()}-${row.sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, capturedAt, reportDate: input.reportDate, sourceKey: row.sourceKey, ...data }, update: data });
               } else {
                 const where = { storeId_reportDate_sourceKey: { storeId: store.id, reportDate: input.reportDate, sourceKey: row.sourceKey } };
@@ -53,6 +54,9 @@ export async function syncSellfoxSnapshotStores(input: {
                 const data = { ...common, currency: row.currency, ...(!sameBatch ? metric === "productNum" ? { revenue: null } : { quantity: null } : {}), ...(metric === "productNum" ? { quantity: row.value } : { revenue: row.value }), payload: { ...oldPayload, [metric]: row.payload } as Prisma.InputJsonValue };
                 await tx.sellfoxSalesDailySnapshot.upsert({ where, create: { id: `sellfox-sales-${store.id}-${input.reportDate}-${row.sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate: input.reportDate, sourceKey: row.sourceKey, ...data }, update: data });
               }
+            }
+            if (metric === "inventory" && next === null) {
+              await tx.sellfoxSnapshotHead.upsert({ where: { storeId_resource: { storeId: store.id, resource: "inventory" } }, create: { storeId: store.id, resource: "inventory", capturedAt }, update: { capturedAt } });
             }
             await input.onProgress({ checkpoint: nextState, count: count(nextState) }, tx);
           });
@@ -65,6 +69,14 @@ export async function syncSellfoxSnapshotStores(input: {
         checkpoint = { stores: { ...checkpoint.stores, [store.externalId]: { ...checkpoint.stores[store.externalId], [metric]: { pageNo, done: false, writes: checkpoint.stores[store.externalId]?.[metric]?.writes ?? 0, ...failure } } } };
         await input.onProgress({ checkpoint, count: count(checkpoint) });
       }
+    }
+    if (input.resource === "sales" && metrics.every((metric) => checkpoint.stores[store.externalId]?.[metric]?.done)) {
+      await dependencies.db.$transaction(async (tx) => {
+        const capturedAt = new Date(input.capturedAt);
+        const rowWrites = metrics.reduce((n, metric) => n + (checkpoint.stores[store.externalId]?.[metric]?.writes ?? 0), 0);
+        await tx.sellfoxSalesDayCoverage.upsert({ where: { storeId_reportDate: { storeId: store.id, reportDate: input.reportDate } }, create: { storeId: store.id, reportDate: input.reportDate, capturedAt, rowWrites }, update: { capturedAt, rowWrites } });
+        await input.onProgress({ checkpoint, count: count(checkpoint) }, tx);
+      });
     }
   }
   if (failures.length) throw new SellfoxStoreSyncError(`${failures.length} 个店铺/指标快照单元失败，已继续处理其余单元。`, failures.some(Boolean));

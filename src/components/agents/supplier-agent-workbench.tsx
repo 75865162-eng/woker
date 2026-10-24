@@ -1,5 +1,10 @@
 "use client";
 
+import { executionMatchesHandoff } from "@/lib/agent-platform/handoff";
+
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChainHandoff, rememberChainExecution } from "./chain-handoff";
+
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +22,7 @@ import type {
   AgentToolDefinition,
   AgentTraceEvent,
 } from "@/lib/agent-platform";
-import { supplierHandoffStorageKey, type SupplierAnalysisReport, type SupplierExecutionOutput } from "@/lib/agent-platform/supplier";
+import { type SupplierAnalysisReport, type SupplierExecutionOutput } from "@/lib/agent-platform/supplier";
 
 type SupplierAgentResponse = {
   agent: AgentCenterItem;
@@ -71,6 +76,7 @@ function getCurrentApproval(execution?: AgentExecutionDetail | null, fallback?: 
 
 export function SupplierAgentWorkbench() {
   const shellUser = useAppShellUser();
+  const chain = useChainHandoff("supplier");
   const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
   const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<SupplierAgentResponse | null>(null);
@@ -87,26 +93,26 @@ export function SupplierAgentWorkbench() {
   const [pendingApproval, setPendingApproval] = useState<AgentApproval | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = window.sessionStorage.getItem(supplierHandoffStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const reset = () => { setData(null); setRefreshToken((value) => value + 1); setPendingApproval(null); };
+    window.addEventListener(workspaceScopeChangedEventName, reset);
+    return () => window.removeEventListener(workspaceScopeChangedEventName, reset);
+  }, []);
+
+  useEffect(() => {
+    const parsed = chain.payload;
+    if (!parsed) { setSelectedHandoff(null); return; }
       setSelectedHandoff(parsed);
       if (typeof parsed.goal === "string") setGoal(parsed.goal);
       if (typeof parsed.marketplace === "string") setMarketplace(parsed.marketplace);
       if (typeof parsed.category === "string") setCategory(parsed.category);
-      window.sessionStorage.removeItem(supplierHandoffStorageKey);
-    } catch {
-      window.sessionStorage.removeItem(supplierHandoffStorageKey);
-    }
-  }, []);
+  }, [chain.payload]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
 
-    fetch("/api/agents/supplier")
+    chainFetch(`/api/agents/supplier${window.location.search}`, { headers: chainHeaders(), cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as SupplierAgentResponse & { error?: string };
         if (!response.ok) throw new Error(payload.error || "加载供应 Agent 失败。");
@@ -124,7 +130,7 @@ export function SupplierAgentWorkbench() {
     };
   }, [refreshToken]);
 
-  const currentExecution = data?.latestExecution ?? null;
+  const currentExecution = executionMatchesHandoff(data?.latestExecution, chain.payload) ? data?.latestExecution ?? null : null;
   const supplierExecution = useMemo(() => parseSupplierOutput(currentExecution?.output), [currentExecution?.output]);
   const report = supplierExecution?.report ?? null;
   const currentApproval = getCurrentApproval(currentExecution, pendingApproval);
@@ -136,20 +142,29 @@ export function SupplierAgentWorkbench() {
     setRefreshToken((current) => current + 1);
   }
 
+  function handoffToListing() {
+    if (!report) return;
+    try {
+      sendChainHandoff({ previous: chain.payload, from: "supplier", to: "listing", payload: { ...selectedHandoff, goal, marketplace, category, supplierReport: report }, sourceExecutionId: currentExecution?.id ?? "", sourceWorkspaceId: currentExecution?.workspaceId, organizationId: shellUser?.organizationId, userId: shellUser?.userId });
+    } catch (err) { setError(err instanceof Error ? err.message : "交接失败。"); }
+  }
+
   async function runPlanning() {
     setRunning(true);
     setError("");
     setPendingApproval(null);
 
     try {
-      const response = await fetch("/api/agents/supplier/executions", {
+      const response = await chainFetch("/api/agents/supplier/executions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chainHeaders(true),
         body: JSON.stringify({
+          chainHandoff: chain.payload ?? undefined,
           naturalLanguageGoal: goal,
           marketplace,
           category: category || undefined,
           productHandoff: selectedHandoff ?? undefined,
+          productReport: selectedHandoff?.productReport,
           context: {
             currentData: {
               goal,
@@ -163,6 +178,7 @@ export function SupplierAgentWorkbench() {
       const payload = (await response.json()) as SupplierExecutionResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "运行供应 Agent 失败。");
 
+      rememberChainExecution(payload.execution.id);
       const detailedExecution: AgentExecutionDetail = {
         ...payload.execution,
         approvals: payload.approvals,
@@ -208,9 +224,9 @@ export function SupplierAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch("/api/agents/supplier/projects", {
+      const response = await chainFetch("/api/agents/supplier/projects", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           report,
           prd: selectedHandoff && typeof selectedHandoff === "object" && "prd" in selectedHandoff ? selectedHandoff.prd : undefined,
@@ -265,9 +281,9 @@ export function SupplierAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch(`/api/agents/approvals/${currentApproval.id}`, {
+      const response = await chainFetch(`/api/agents/approvals/${currentApproval.id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           decision,
           reason: decision === "APPROVED" ? "已由供应 Agent 审批通过。" : "已由供应 Agent 审批驳回。",
@@ -303,6 +319,7 @@ export function SupplierAgentWorkbench() {
             <p className="text-xs font-medium text-muted">把产品 Agent 的计划转成供应商推荐、报价分析和 RFQ 草稿。</p>
           </CardHeader>
           <CardContent className="space-y-3">
+            <ChainHandoffNotice payload={chain.payload} error={chain.error} />
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {selectedHandoff ? (
               <div className="rounded-md border border-brand/20 bg-brand/5 p-3">
@@ -329,6 +346,7 @@ export function SupplierAgentWorkbench() {
                 {running ? "运行中..." : "运行供应 Agent"}
                 <RefreshCw className="h-4 w-4" />
               </Button>
+              <Button type="button" variant="secondary" onClick={handoffToListing} disabled={!report}>确认供应方案并交接刊登</Button>
               <Button type="button" onClick={createProject} disabled={!canCreate || projecting || !report} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 {projecting ? "创建中..." : "创建供应项目"}
                 <SquareKanban className="h-4 w-4" />

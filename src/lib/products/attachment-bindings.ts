@@ -26,6 +26,15 @@ export function collectProductAttachmentReferences(product: Product): ProductAtt
       });
     }
 
+    // The legacy/main image field is still a file reference and must use the same
+    // organization/workspace ownership checks as nested image assets.
+    if (typeof record.imageFileId === "string" && record.imageFileId.trim()) {
+      references.set(record.imageFileId.trim(), {
+        fileId: record.imageFileId.trim(),
+        fieldPath: `${path}.imageFileId`,
+      });
+    }
+
     if (typeof record.thumbFileId === "string" && record.thumbFileId.trim()) {
       references.set(record.thumbFileId, {
         fileId: record.thumbFileId.trim(),

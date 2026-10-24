@@ -1,3 +1,4 @@
+import { isSellfoxAgentDomain, readSellfoxAgentRows, sellfoxAgentCsv } from "@/lib/sellfox/agent-read";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
 import { assertSellfoxExportComplete, sellfoxBrowseQuery, sellfoxStoreWhere, sellfoxSnapshotWhere, sellfoxHourlyWhere, sellfoxRunWhere, sellfoxExportLimit, SellfoxBrowseError } from "@/lib/sellfox/browse-query";
@@ -19,12 +20,17 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
   const permission = await requireApiPermission("sellfox", "export", request);
   if (!permission.ok) return permission.response;
   const { domain } = await context.params;
-  if (!["stores", "inventory", "sales", "performance", "hourly", "runs"].includes(domain)) return new Response("数据域暂不支持导出。", { status: 404 });
+  if (!["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report"].includes(domain)) return new Response("数据域暂不支持导出。", { status: 404 });
   try {
     const scope = workspaceScopeFromRequest(request); const url = new URL(request.url);
     const common = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
     const query = sellfoxBrowseQuery(url);
     const storeIds = domain === "runs" ? undefined : await sellfoxBrowseStoreIds(query, common.organizationId, common.workspaceId);
+    if (isSellfoxAgentDomain(domain) && (url.searchParams.get("agent") === "1" || domain === "listings" || domain === "ads_report" || (domain === "inventory" && !query.from && !query.to && !query.allDates))) {
+      const { rows } = await readSellfoxAgentRows(domain, query, common, true);
+      return new Response(sellfoxAgentCsv(domain, rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="sellfox-${domain}-agent.csv"`, "Cache-Control": "no-store" } });
+    }
+
     const snapshotWhere = sellfoxSnapshotWhere(query, common.organizationId, common.workspaceId, storeIds);
     let content: string;
     if (domain === "stores") {

@@ -37,7 +37,7 @@ function fixture() {
     $transaction: async (fn: (tx: unknown) => Promise<void>) => {
       const pending = structuredClone(rows); pendingCheckpoint = undefined;
       const table = { upsert: async (args: Args) => { const id = key(args.where); pending.set(id, { ...(pending.get(id) ?? args.create), ...args.update }); }, findUnique: async ({ where }: { where: Record<string, unknown> }) => pending.get(key(where)) ?? null };
-      await fn({ sellfoxFbaInventorySnapshot: table, sellfoxSalesDailySnapshot: table });
+      await fn({ sellfoxFbaInventorySnapshot: table, sellfoxSalesDailySnapshot: table, sellfoxSnapshotHead: { upsert: async () => undefined }, sellfoxSalesDayCoverage: { upsert: async () => undefined } });
       if (failCommit) { failCommit = false; throw new Error("private database error"); }
       rows = pending; if (pendingCheckpoint) checkpoint = pendingCheckpoint;
     },

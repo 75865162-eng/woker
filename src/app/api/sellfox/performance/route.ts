@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       prisma.sellfoxProductDailySnapshot.count({ where }),
       prisma.sellfoxProductDailySnapshot.findMany({
         where,
-        select: { id: true, reportDate: true, sku: true, msku: true, asin: true, title: true, currency: true, saleQuantity: true, fbaQuantity: true, fbmQuantity: true, saleRevenue: true, grossProfit: true, grossProfitRate: true, adCost: true, refundRate: true, syncedAt: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } },
+        select: { id: true, reportDate: true, sku: true, msku: true, asin: true, title: true, currency: true, saleQuantity: true, fbaQuantity: true, fbmQuantity: true, saleRevenue: true, grossProfit: true, grossProfitRate: true, adCost: true, refundRate: true, orderNum: true, netRevenue: true, syncedAt: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } },
         orderBy: [{ saleRevenue: "desc" }, { id: "asc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,

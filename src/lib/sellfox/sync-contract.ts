@@ -2,8 +2,9 @@ export const sellfoxSyncResources = ["stores", "inventory", "sales", "performanc
 export type SellfoxSyncResource = (typeof sellfoxSyncResources)[number];
 
 export function sellfoxSyncDisabledReason(resource: string): string | null {
-  if (resource === "listings") return "此数据域的成功响应契约待验证，暂不能同步。历史数据仍可查询和导出。";
-  if (resource === "ads_report") return "广告下载报告尚未接入。";
+  if (!isSellfoxSyncResource(resource)) return "此赛狐数据域尚未接入。";
+  // V2 page + SP product report verified against real responses on 2026-10-25.
+
   return null;
 }
 
@@ -68,7 +69,7 @@ export function normalizeSellfoxDates(resource: SellfoxSyncResource, input: Reco
     }
     return { reportDate: today };
   }
-  if (resource === "stores" || resource === "ads_report") return {};
+  if (resource === "stores") return {};
   const from = String(startDate ?? endDate ?? reportDate ?? sellfoxDateAt(now, -1));
   const to = String(endDate ?? startDate ?? reportDate ?? from);
   const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;

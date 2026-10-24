@@ -55,6 +55,9 @@ import {
 } from "@/lib/agent-platform/orchestrator";
 import type { AgentRuntimeExecutor, JsonValue as AgentJsonValue } from "@/lib/agent-platform/types";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { handoffProvenance, isObject, parseLaunchApproval, validateHandoff, type ChainStage } from "@/lib/agent-platform/handoff";
+import { verifyLaunchApproval } from "@/lib/agent-platform/launch-gate";
+import { createSelectionAdapter } from "@/lib/agent-platform/selection";
 
 export const runtime = "nodejs";
 
@@ -71,6 +74,38 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const scope = workspaceScopeFromRequest(request, body.context as Record<string, unknown> | null | undefined);
     const hasAgentPersistence = hasAgentPlatformPrismaDelegates();
+    if (body.chainHandoff != null) {
+      try {
+        validateHandoff(body.chainHandoff, (agentId === "orchestrator" ? "launch" : agentId) as ChainStage, {
+          organizationId: user.organizationId, userId: user.id, workspaceId: scope.workspaceId,
+        });
+      } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid handoff." }, { status: 400 });
+      }
+    }
+    if (agentId === "ppc" && (body.chainHandoff != null || body.launchApproval != null || body.launchApproved != null)) {
+      const inbound = isObject(body.chainHandoff) ? body.chainHandoff : {};
+      const reference = parseLaunchApproval(inbound.launchApproval ?? body.launchApproval);
+      const approval = reference && hasAgentPersistence ? await prisma.agentApproval.findFirst({
+        where: { id: reference.approvalId, organizationId: user.organizationId, executionId: reference.executionId },
+        include: { execution: true },
+      }) : null;
+      if (!verifyLaunchApproval(reference, approval, { organizationId: user.organizationId, workspaceId: scope.workspaceId })) {
+        return NextResponse.json({ code: "blocked_until_launch", error: "blocked_until_launch：需要本组织、本工作区对应计划的有效 Launch 审批。" }, { status: 403 });
+      }
+      // Product context comes from the approved plan, never a modified browser payload.
+      const approvedOutput = isObject(approval?.execution.output) ? approval.execution.output : {};
+      const approvedPlan = isObject(approvedOutput.plan) ? approvedOutput.plan : {};
+      body.marketplace = approvedPlan.marketplace;
+      body.sku = approvedPlan.sku;
+      body.asin = approvedPlan.asin;
+      const approvedHandoffs = Array.isArray(approvedOutput.handoffs) ? approvedOutput.handoffs : [];
+      const ppcHandoff = approvedHandoffs.find((item) => isObject(item) && item.to === "ppc");
+      if (!isObject(ppcHandoff) || !isObject(ppcHandoff.payload) || !isObject(ppcHandoff.payload.productContext) || !Object.keys(ppcHandoff.payload.productContext).length) {
+        return NextResponse.json({ code: "blocked_until_launch", error: "批准计划缺少产品/刊登上下文，请重新准备并审批 Launch。" }, { status: 403 });
+      }
+      body.productContext = ppcHandoff.payload.productContext;
+    }
     const agentRecord = hasAgentPersistence
       ? await prisma.agentDefinition.findFirst({
           where: {
@@ -80,10 +115,13 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
         })
       : null;
     const fallbackDefinition = defaultAgentDefinitions.find((definition) => definition.id === agentId) ?? null;
-    const definition = (agentRecord ? toAgentDefinition(agentRecord) : fallbackDefinition) ?? null;
+    let definition = (agentRecord ? toAgentDefinition(agentRecord) : fallbackDefinition) ?? null;
 
     if (!definition) {
       return NextResponse.json({ error: "Agent not found." }, { status: 404 });
+    }
+    if (definition.id === marketAgentId && !definition.tools.includes("market.selection.run")) {
+      definition = { ...definition, tools: [...definition.tools, "market.selection.run"] };
     }
 
     const isMarketAgent = definition.id === marketAgentId;
@@ -126,7 +164,7 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
             ? orchestratorToolDefinitions
           : defaultToolDefinitions,
       adapters: isMarketAgent
-        ? [createSellerSpriteMcpAdapter({ settings: sellerSpriteMcpSettings })]
+        ? [createSellerSpriteMcpAdapter({ settings: sellerSpriteMcpSettings }), createSelectionAdapter()]
         : isListingAgent
           ? [createListingMcpAdapter()]
         : isProductAgent
@@ -285,6 +323,7 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
         message: typeof body.message === "string" ? body.message : "Agent runtime execution",
         requestedToolId,
         requiresApproval,
+        handoff: handoffProvenance(body.chainHandoff) as AgentJsonValue,
       },
       requestedByUserId: user.id,
       workspaceId: scope.workspaceId,

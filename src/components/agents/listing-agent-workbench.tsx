@@ -1,5 +1,10 @@
 "use client";
 
+import { executionMatchesHandoff } from "@/lib/agent-platform/handoff";
+
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChainHandoff, rememberChainExecution } from "./chain-handoff";
+
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +22,7 @@ import type {
   AgentToolDefinition,
   AgentTraceEvent,
 } from "@/lib/agent-platform";
-import { listingHandoffStorageKey, type ListingAnalysisReport, type ListingExecutionOutput, type ListingExecutionRequest } from "@/lib/agent-platform/listing";
+import { type ListingAnalysisReport, type ListingExecutionOutput, type ListingExecutionRequest } from "@/lib/agent-platform/listing";
 import type { ProductDevelopmentReport } from "@/lib/agent-platform/product";
 import type { MarketResearchReport } from "@/lib/agent-platform/market";
 import type { ProductOpportunity } from "@/lib/agent-platform/market";
@@ -86,6 +91,7 @@ function asOpportunity(value: unknown): ProductOpportunity | undefined {
 
 export function ListingAgentWorkbench() {
   const shellUser = useAppShellUser();
+  const chain = useChainHandoff("listing");
   const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
   const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<ListingAgentResponse | null>(null);
@@ -104,26 +110,26 @@ export function ListingAgentWorkbench() {
   const [pendingApproval, setPendingApproval] = useState<AgentApproval | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = window.sessionStorage.getItem(listingHandoffStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const reset = () => { setData(null); setRefreshToken((value) => value + 1); setPendingApproval(null); };
+    window.addEventListener(workspaceScopeChangedEventName, reset);
+    return () => window.removeEventListener(workspaceScopeChangedEventName, reset);
+  }, []);
+
+  useEffect(() => {
+    const parsed = chain.payload;
+    if (!parsed) { setSelectedHandoff(null); return; }
       setSelectedHandoff(parsed);
       if (typeof parsed.goal === "string") setGoal(parsed.goal);
       if (typeof parsed.marketplace === "string") setMarketplace(parsed.marketplace);
       if (typeof parsed.category === "string") setCategory(parsed.category);
-      window.sessionStorage.removeItem(listingHandoffStorageKey);
-    } catch {
-      window.sessionStorage.removeItem(listingHandoffStorageKey);
-    }
-  }, []);
+  }, [chain.payload]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
 
-    fetch("/api/agents/listing")
+    chainFetch(`/api/agents/listing${window.location.search}`, { headers: chainHeaders(), cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as ListingAgentResponse & { error?: string };
         if (!response.ok) throw new Error(payload.error || "加载刊登 Agent 失败。");
@@ -141,7 +147,7 @@ export function ListingAgentWorkbench() {
     };
   }, [refreshToken]);
 
-  const currentExecution = data?.latestExecution ?? null;
+  const currentExecution = executionMatchesHandoff(data?.latestExecution, chain.payload) ? data?.latestExecution ?? null : null;
   const listingExecution = useMemo(() => parseListingOutput(currentExecution?.output), [currentExecution?.output]);
   const report = listingExecution?.report ?? null;
   const currentApproval = getCurrentApproval(currentExecution, pendingApproval);
@@ -184,16 +190,24 @@ export function ListingAgentWorkbench() {
       }));
   }
 
+  function handoffToLaunch() {
+    if (!report) return;
+    try {
+      sendChainHandoff({ previous: chain.payload, from: "listing", to: "launch", payload: { ...selectedHandoff, goal, marketplace, category, listingDraft: report }, sourceExecutionId: currentExecution?.id ?? "", sourceWorkspaceId: currentExecution?.workspaceId, organizationId: shellUser?.organizationId, userId: shellUser?.userId });
+    } catch (err) { setError(err instanceof Error ? err.message : "交接失败。"); }
+  }
+
   async function runPlanning() {
     setRunning(true);
     setError("");
     setPendingApproval(null);
 
     try {
-      const response = await fetch("/api/agents/listing/executions", {
+      const response = await chainFetch("/api/agents/listing/executions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chainHeaders(true),
         body: JSON.stringify({
+          chainHandoff: chain.payload ?? undefined,
           naturalLanguageGoal: goal,
           marketplace,
           category: category || undefined,
@@ -209,6 +223,7 @@ export function ListingAgentWorkbench() {
               category,
               sellerSpriteKeywords: buildKeywordPayload(),
               competitors: buildCompetitorPayload(),
+              supplierReport: selectedHandoff?.supplierReport,
               productReport: selectedHandoff && typeof selectedHandoff === "object" ? selectedHandoff.productReport : undefined,
               marketReport: selectedHandoff && typeof selectedHandoff === "object" ? selectedHandoff.marketReport : undefined,
             },
@@ -218,6 +233,7 @@ export function ListingAgentWorkbench() {
       const payload = (await response.json()) as ListingExecutionResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "运行刊登 Agent 失败。");
 
+      rememberChainExecution(payload.execution.id);
       const detailedExecution: AgentExecutionDetail = {
         ...payload.execution,
         approvals: payload.approvals,
@@ -262,9 +278,9 @@ export function ListingAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch("/api/agents/listing/projects", {
+      const response = await chainFetch("/api/agents/listing/projects", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           report,
           marketplace: report.marketplace,
@@ -317,9 +333,9 @@ export function ListingAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch(`/api/agents/approvals/${currentApproval.id}`, {
+      const response = await chainFetch(`/api/agents/approvals/${currentApproval.id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           decision,
           reason: decision === "APPROVED" ? "已由刊登 Agent 审批通过。" : "已由刊登 Agent 审批驳回。",
@@ -351,6 +367,7 @@ export function ListingAgentWorkbench() {
             <CardTitle>刊登简报</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <ChainHandoffNotice payload={chain.payload} error={chain.error} />
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {selectedHandoff ? (
               <div className="rounded-md border border-brand/20 bg-brand/5 p-3">
@@ -385,6 +402,7 @@ export function ListingAgentWorkbench() {
                 {running ? "运行中..." : "运行刊登 Agent"}
                 <RefreshCw className="h-4 w-4" />
               </Button>
+              <Button type="button" variant="secondary" onClick={handoffToLaunch} disabled={!report}>确认刊登稿并交接 Launch</Button>
               <Button type="button" onClick={createProject} disabled={!canCreate || projecting || !report} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 {projecting ? "创建中..." : "请求人工审批"}
                 <SquareKanban className="h-4 w-4" />

@@ -15,6 +15,7 @@ import type {
   ToolExecutionInput,
   ToolExecutionResult,
 } from "./types";
+import { selectionTool } from "./selection";
 import {
   defaultSellerSpriteMcpSettings,
   toPublicSellerSpriteMcpSettings,
@@ -118,6 +119,8 @@ export interface MarketExecutionOutput {
 }
 
 export interface MarketExecutionRequest {
+  chainHandoff?: unknown;
+  selectionRun?: boolean;
   naturalLanguageGoal?: string;
   marketplace?: string;
   keyword?: string;
@@ -159,6 +162,7 @@ export const marketAgentDefinition: AgentDefinition = {
     "evidence synthesis",
   ],
   tools: [
+    "market.selection.run",
     "sellersprite.market.search",
     "sellersprite.keyword.search",
     "sellersprite.category.analyze",
@@ -216,6 +220,7 @@ export const marketAgentDefinition: AgentDefinition = {
 };
 
 export const marketToolDefinitions: AgentToolDefinition[] = [
+  selectionTool,
   {
     toolId: "sellersprite.market.search",
     name: "SellerSprite Market Search",
@@ -720,6 +725,14 @@ export function createMarketAgentExecutionExecutor(options: {
   const normalizedInput = normalizeMarketExecutionInput(options.request, {});
 
   return async ({ execution, definition, context, callTool, recordTrace, emitEvent }) => {
+    if (options.request.selectionRun) {
+      const result = await callTool("market.selection.run", toJsonValue(normalizedInput));
+      if (result.status !== "SUCCEEDED") throw result.error ?? { code: "NOT_IMPLEMENTED", message: "Round B selection unavailable.", retryable: false };
+      return {
+        output: toJsonValue({ state: result.status, selection: result.output ?? null, error: result.error ?? null }),
+        tokenUsage: 0, costCents: 0,
+      };
+    }
     const toolUsage: Array<{
       toolId: string;
       status: string;

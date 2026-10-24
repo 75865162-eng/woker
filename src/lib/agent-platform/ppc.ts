@@ -97,6 +97,7 @@ export interface PpcExecutionOutput {
 }
 
 export interface PpcExecutionRequest {
+  chainHandoff?: unknown;
   naturalLanguageGoal?: string;
   marketplace?: string;
   campaignGroupId?: string;

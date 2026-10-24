@@ -151,6 +151,7 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
 
       if (agentRecord) {
         agentDefinition = toAgentDefinition(agentRecord);
+        if (agentDefinition.id === "market" && !agentDefinition.tools.includes("market.selection.run")) agentDefinition = { ...agentDefinition, tools: [...agentDefinition.tools, "market.selection.run"] };
       }
 
       if (!agentDefinition) {
@@ -161,6 +162,7 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
         where: {
           organizationId: user.organizationId,
           agentDefinitionId: agentDefinition.id,
+          workspaceId: scope.workspaceId,
         },
         orderBy: {
           createdAt: "desc",
@@ -178,11 +180,15 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
         },
       });
 
-      const latestExecutionSummary = executionRecords[0];
+      const requestedExecutionId = new URL(request.url).searchParams.get("executionId");
+      const latestExecutionSummary = requestedExecutionId ? { id: requestedExecutionId } : executionRecords[0];
       if (latestExecutionSummary) {
-        latestExecution = await prisma.agentExecution.findUnique({
+        latestExecution = await prisma.agentExecution.findFirst({
           where: {
             id: latestExecutionSummary.id,
+            organizationId: user.organizationId,
+            workspaceId: scope.workspaceId,
+            agentDefinitionId: agentDefinition.id,
           },
           include: {
             traces: {
@@ -207,6 +213,7 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
             },
           },
         });
+        if (requestedExecutionId && !latestExecution) return NextResponse.json({ error: "Execution not found in this workspace." }, { status: 404 });
       }
 
       memoryItems = await prisma.agentMemory.findMany({

@@ -1,5 +1,9 @@
 "use client";
 
+import { executionMatchesHandoff } from "@/lib/agent-platform/handoff";
+
+import { ChainHandoffNotice, useChainHandoff, rememberChainExecution } from "./chain-handoff";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, ShieldAlert, SlidersHorizontal, Target, TriangleAlert } from "lucide-react";
@@ -106,6 +110,7 @@ function severityTone(severity: string) {
 
 export function PpcAgentWorkbench() {
   const shellUser = useAppShellUser();
+  const chain = useChainHandoff("ppc");
   const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
   const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const previewKey = useRef<string>("");
@@ -142,6 +147,15 @@ export function PpcAgentWorkbench() {
   } = useWorkspaceStore();
 
   useEffect(() => {
+    const inbound = chain.payload;
+    if (!inbound) return;
+    if (typeof inbound.goal === "string") setGoal(inbound.goal);
+    if (typeof inbound.marketplace === "string") setMarketplace(inbound.marketplace);
+    if (inbound.productContext) setProductContext(JSON.stringify(inbound.productContext, null, 2));
+    setHandoffMessage("已加载 Launch 交接；运行建议时由服务端核验审批，未批准保持 blocked_until_launch。");
+  }, [chain.payload]);
+
+  useEffect(() => {
     const changed = () => { scopeGeneration.current++; previewKey.current = ""; setData(null); setPendingApproval(null); setError(""); setRunning(false); setActionBusy(""); setDecisionBusy(""); setHandoffMessage(""); setRefreshToken((value) => value + 1); };
     window.addEventListener(workspaceScopeChangedEventName, changed);
     return () => window.removeEventListener(workspaceScopeChangedEventName, changed);
@@ -157,7 +171,7 @@ export function PpcAgentWorkbench() {
     setLoading(true);
     setError("");
 
-    fetch("/api/agents/ppc", { headers: amazonActionHeaders(), cache: "no-store" })
+    fetch(`/api/agents/ppc${window.location.search}`, { headers: amazonActionHeaders(), cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as PpcAgentResponse & { error?: string };
         if (generation !== scopeGeneration.current) return;
@@ -176,7 +190,7 @@ export function PpcAgentWorkbench() {
     };
   }, [refreshToken]);
 
-  const currentExecution = data?.latestExecution ?? null;
+  const currentExecution = executionMatchesHandoff(data?.latestExecution, chain.payload) ? data?.latestExecution ?? null : null;
   const ppcExecution = useMemo(() => parsePpcOutput(currentExecution?.output), [currentExecution?.output]);
   const report = ppcExecution?.report ?? null;
   const adjustmentDrafts = ppcExecution?.adjustmentDrafts ?? [];
@@ -239,7 +253,8 @@ export function PpcAgentWorkbench() {
 
     try {
       const requestBody: PpcExecutionRequest = {
-        naturalLanguageGoal: goal,
+        chainHandoff: chain.payload ?? undefined,
+          naturalLanguageGoal: goal,
         marketplace,
         campaignGroupId: activeCampaignGroupId || undefined,
         workspaceUnitId: activeWorkspaceUnitId,
@@ -283,6 +298,7 @@ export function PpcAgentWorkbench() {
       if (generation !== scopeGeneration.current) return;
       if (!response.ok) throw new Error(payload.error || "运行 PPC Agent 失败。");
 
+      rememberChainExecution(payload.execution.id);
       const detailedExecution: AgentExecutionDetail = {
         ...payload.execution,
         approvals: payload.approvals,
@@ -436,6 +452,7 @@ export function PpcAgentWorkbench() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
+            <ChainHandoffNotice payload={chain.payload} error={chain.error} />
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {handoffMessage ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
@@ -482,7 +499,7 @@ export function PpcAgentWorkbench() {
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" onClick={runDiagnosis} disabled={!canCreate || running || scopedPerformanceRows.length === 0} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
+              <Button type="button" onClick={runDiagnosis} disabled={!canCreate || running || Boolean(chain.error) || (scopedPerformanceRows.length === 0 && !chain.payload) || Boolean(chain.payload && chain.payload.status !== "ready")} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 <SparkIcon />
                 {running ? "运行中..." : "运行 PPC Agent"}
               </Button>

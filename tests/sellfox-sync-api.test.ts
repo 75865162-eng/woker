@@ -25,8 +25,9 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
     workspaceScope: { findUnique: async () => ({ id: "workspace" }) },
     sellfoxSyncRun: {
       create: async () => { runWrites += 1; return {}; },
-      findUnique: async () => ({ id: "old-run", resource: "listings", organizationId: "org-a", workspaceId: "default", userId: "actor", status: "queued", summary: {} }),
+      findUnique: async () => ({ id: "old-run", resource: "invalid", organizationId: "org-a", workspaceId: "default", userId: "actor", status: "queued", summary: {} }),
       update: async ({ data }: { data: { status?: string; error?: string } }) => { status = data.status; lastError = data.error; return {}; },
+      updateMany: async ({ data }: { data: { status?: string; error?: string } }) => { status = data.status; lastError = data.error; return { count: 1 }; },
     },
   } as unknown as PrismaClient;
   globalThis.fetch = async () => { networkCalls += 1; throw new Error("No transport allowed in this test"); };
@@ -55,18 +56,11 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
       { resource: "inventory", reportDate: "2000-01-01" },
       { resource: "hourly", reportDate: "2000-01-01" },
     ]) assert.equal((await sync(await request("owner", body))).status, 400);
-    for (const resource of ["listings"]) {
-      const response = await sync(await request("owner", { resource }));
-      assert.equal(response.status, 409);
-      assert.match((await response.json()).error, /成功响应契约待验证/);
-      const planned = await schedule(await request("owner", { resource, enabled: true }));
-      // Listing has no scheduler yet; the existing route rejects it as invalid.
-      assert.equal(planned.status, resource === "listings" ? 400 : 409);
-    }
-    assert.equal(runWrites, 1);
-    await assert.rejects(() => processSellfoxSyncRun("old-run"), /成功响应契约待验证/);
+    for (const adTypes of [[], ["invalid"], "sp"]) assert.equal((await sync(await request("owner", { resource: "ads_report", adTypes }))).status, 400);
+    assert.equal(runWrites, 0);
+    await assert.rejects(() => processSellfoxSyncRun("old-run"), /有效的赛狐同步资源/);
     assert.equal(status, "failed");
-    assert.match(lastError ?? "", /成功响应契约待验证/);
+    assert.ok(lastError);
     assert.equal(networkCalls, 0);
   } finally {
     globals.prisma = previousPrisma;

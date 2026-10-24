@@ -61,3 +61,8 @@ standalone-start.*.log
 
 # temporary local work files
 /tmp/
+
+# local selection research artifacts and request budgets
+/scripts/selection-pipeline/data/
+/selections/*
+!/selections/_example/

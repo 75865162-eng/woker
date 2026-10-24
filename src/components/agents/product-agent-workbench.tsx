@@ -1,5 +1,10 @@
 "use client";
 
+import { executionMatchesHandoff } from "@/lib/agent-platform/handoff";
+
+import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChainHandoff, rememberChainExecution } from "./chain-handoff";
+
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, ShieldAlert, Sparkles, SquareKanban, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -17,9 +22,7 @@ import type {
   AgentToolDefinition,
   AgentTraceEvent,
 } from "@/lib/agent-platform";
-import { productHandoffStorageKey, type ProductDevelopmentReport, type ProductExecutionOutput, type ProductHandoffPayload } from "@/lib/agent-platform/product";
-import { listingHandoffStorageKey } from "@/lib/agent-platform/listing";
-import { supplierHandoffStorageKey } from "@/lib/agent-platform/supplier";
+import { type ProductDevelopmentReport, type ProductExecutionOutput, type ProductHandoffPayload } from "@/lib/agent-platform/product";
 
 type ProductAgentResponse = {
   agent: AgentCenterItem;
@@ -101,6 +104,7 @@ function riskTone(score: number) {
 
 export function ProductAgentWorkbench() {
   const shellUser = useAppShellUser();
+  const chain = useChainHandoff("product");
   const canApprove = roleCanPerformAction(shellUser?.userRole, "agents", "approve", shellUser?.rolePermissions);
   const canCreate = roleCanPerformAction(shellUser?.userRole, "agents", "create", shellUser?.rolePermissions);
   const [data, setData] = useState<ProductAgentResponse | null>(null);
@@ -122,11 +126,14 @@ export function ProductAgentWorkbench() {
   const [pendingApproval, setPendingApproval] = useState<AgentApproval | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = window.sessionStorage.getItem(productHandoffStorageKey);
-      if (!raw) return;
+    const reset = () => { setData(null); setRefreshToken((value) => value + 1); setPendingApproval(null); };
+    window.addEventListener(workspaceScopeChangedEventName, reset);
+    return () => window.removeEventListener(workspaceScopeChangedEventName, reset);
+  }, []);
 
-      const parsed = JSON.parse(raw) as ProductHandoffPayload;
+  useEffect(() => {
+    const parsed = chain.payload as ProductHandoffPayload;
+    if (!parsed) { setSelectedHandoff(null); return; }
       setSelectedHandoff(parsed);
       if (parsed.goal) setGoal(parsed.goal);
       if (parsed.marketplace) setMarketplace(parsed.marketplace);
@@ -134,18 +141,14 @@ export function ProductAgentWorkbench() {
       if (parsed.marketOpportunity?.targetPrice) setTargetPrice(String(parsed.marketOpportunity.targetPrice));
       if (parsed.marketOpportunity?.estimatedMargin) setTargetMargin(String(parsed.marketOpportunity.estimatedMargin));
       if (Array.isArray(parsed.productConstraints)) setConstraints(parsed.productConstraints.join("\n"));
-      window.sessionStorage.removeItem(productHandoffStorageKey);
-    } catch {
-      window.sessionStorage.removeItem(productHandoffStorageKey);
-    }
-  }, []);
+  }, [chain.payload]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
 
-    fetch("/api/agents/product")
+    chainFetch(`/api/agents/product${window.location.search}`, { headers: chainHeaders(), cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as ProductAgentResponse & { error?: string };
 
@@ -171,7 +174,7 @@ export function ProductAgentWorkbench() {
     };
   }, [refreshToken]);
 
-  const currentExecution = data?.latestExecution ?? null;
+  const currentExecution = executionMatchesHandoff(data?.latestExecution, chain.payload) ? data?.latestExecution ?? null : null;
   const productExecution = useMemo(() => parseProductOutput(currentExecution?.output), [currentExecution?.output]);
   const report = productExecution?.report ?? null;
   const currentApproval = getCurrentApproval(currentExecution, pendingApproval);
@@ -197,12 +200,11 @@ export function ProductAgentWorkbench() {
     const parsedTargetMargin = targetMargin.trim() ? Number(targetMargin) : undefined;
 
     try {
-      const response = await fetch("/api/agents/product/executions", {
+      const response = await chainFetch("/api/agents/product/executions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: chainHeaders(true),
         body: JSON.stringify({
+          chainHandoff: chain.payload ?? undefined,
           naturalLanguageGoal: goal,
           marketplace,
           category: category || undefined,
@@ -234,6 +236,7 @@ export function ProductAgentWorkbench() {
         throw new Error(payload.error || "运行产品 Agent 失败。");
       }
 
+      rememberChainExecution(payload.execution.id);
       const detailedExecution: AgentExecutionDetail = {
         ...payload.execution,
         approvals: payload.approvals,
@@ -279,11 +282,9 @@ export function ProductAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch("/api/agents/product/projects", {
+      const response = await chainFetch("/api/agents/product/projects", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           report,
           opportunity: report.sourceOpportunity,
@@ -346,8 +347,9 @@ export function ProductAgentWorkbench() {
       productHandoff: selectedHandoff ?? undefined,
     };
 
-    window.sessionStorage.setItem(supplierHandoffStorageKey, JSON.stringify(payload));
-    window.location.href = "/agents/supplier";
+    try {
+      sendChainHandoff({ previous: chain.payload, from: "product", to: "supplier", payload, sourceExecutionId: currentExecution?.id ?? "", sourceWorkspaceId: currentExecution?.workspaceId, organizationId: shellUser?.organizationId, userId: shellUser?.userId, kind: "PRD" });
+    } catch (err) { setError(err instanceof Error ? err.message : "交接失败。"); }
   }
 
   function handoffToListingAgent() {
@@ -363,8 +365,9 @@ export function ProductAgentWorkbench() {
       productHandoff: selectedHandoff ?? undefined,
     };
 
-    window.sessionStorage.setItem(listingHandoffStorageKey, JSON.stringify(payload));
-    window.location.href = "/agents/listing";
+    try {
+      sendChainHandoff({ previous: chain.payload, from: "product", to: "listing", payload, sourceExecutionId: currentExecution?.id ?? "", sourceWorkspaceId: currentExecution?.workspaceId, organizationId: shellUser?.organizationId, userId: shellUser?.userId, kind: "PRD" });
+    } catch (err) { setError(err instanceof Error ? err.message : "交接失败。"); }
   }
 
   async function resolveApproval(decision: "APPROVED" | "REJECTED") {
@@ -374,11 +377,9 @@ export function ProductAgentWorkbench() {
     setError("");
 
     try {
-      const response = await fetch(`/api/agents/approvals/${currentApproval.id}`, {
+      const response = await chainFetch(`/api/agents/approvals/${currentApproval.id}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: chainHeaders(true),
         body: JSON.stringify({
           decision,
                 reason: decision === "APPROVED" ? "已由产品 Agent 审批通过。" : "已由产品 Agent 审批驳回。",
@@ -484,6 +485,7 @@ export function ProductAgentWorkbench() {
             <p className="text-xs font-medium text-muted">把市场 Agent 的机会转成 PRD、成本目标和产品项目草案。</p>
           </CardHeader>
           <CardContent className="space-y-3">
+            <ChainHandoffNotice payload={chain.payload} error={chain.error} />
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             {selectedHandoff ? (
               <div className="rounded-md border border-brand/20 bg-brand/5 p-3">

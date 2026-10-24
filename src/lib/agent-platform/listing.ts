@@ -100,6 +100,8 @@ export interface ListingExecutionOutput {
 }
 
 export interface ListingExecutionRequest {
+  chainHandoff?: unknown;
+  supplierReport?: JsonValue;
   naturalLanguageGoal?: string;
   marketplace?: string;
   category?: string;
@@ -532,6 +534,7 @@ export function createListingAgentExecutionExecutor(options: {
         marketplace: normalizedInput.marketplace,
         category: normalizedInput.category,
         productReport: normalizedInput.productReport,
+        supplierReport: normalizedInput.supplierReport,
         marketReport: normalizedInput.marketReport,
         productOpportunity: normalizedInput.productOpportunity,
         sellerSpriteKeywords: normalizedInput.sellerSpriteKeywords,
@@ -680,6 +683,7 @@ function normalizeListingExecutionInput(request: ListingExecutionRequest, contex
     marketplace: String(request.marketplace ?? productReport.marketplace ?? marketReport.marketplace ?? productHandoff.marketplace ?? currentData.marketplace ?? context.marketplace ?? "US"),
     category: String(request.category ?? productReport.category ?? marketReport.category ?? productHandoff.category ?? currentData.category ?? "general"),
     productReport,
+    supplierReport: request.supplierReport ?? currentData.supplierReport ?? null,
     marketReport,
     productOpportunity,
     productHandoff: Object.keys(productHandoff).length ? (productHandoff as unknown as ProductHandoffPayload) : null,
@@ -709,6 +713,7 @@ function buildSyntheticListingOutput(input: ToolExecutionInput, clock: () => Dat
         generatedAt: now,
         marketplace: String(snapshot.marketplace ?? context.marketplace ?? "US"),
         category: String(snapshot.category ?? currentData.category ?? "general"),
+        supplierReport: snapshot.supplierReport ?? currentData.supplierReport ?? null,
         summary: summarizeProduct(
           (snapshot.productReport ?? currentData.productReport ?? null) as ProductDevelopmentReport | JsonObject | null,
           (snapshot.marketReport ?? currentData.marketReport ?? null) as MarketResearchReport | JsonObject | null,

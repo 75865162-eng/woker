@@ -5,10 +5,11 @@ import { captions, display, runProgress, type Row, type Pagination } from "./wor
 export function SellfoxResourceTable({ domain, rows, pagination, loading, page, onPage, onSelect }: { domain: SellfoxDomain; rows: Row[]; pagination: Pagination; loading: boolean; page: number; onPage: (page: number) => void; onSelect: (row: Row) => void }) {
   const columns = domain === "runs" ? ["resource", "status", "progress", "startedAt", "finishedAt", "error"]
     : domain === "stores" ? ["name", "externalId", "marketplace", "country", "status", "lastSyncedAt"]
-      : domain === "inventory" ? ["reportDate", "capturedAt", "name", "marketplace", "asin", "msku", "sku", "fnsku", "quantity"]
+      : domain === "inventory" ? ["reportDate", "capturedAt", "name", "marketplace", "asin", "msku", "sku", "fnsku", "quantity", "totalInventory", "inTransit", "inboundWorking", "inboundShipped", "inboundReceiving", "reservedTransfer", "reservedProcessing", "reservedCustomerorders", "unfulfillable", "warehouseName"]
         : domain === "sales" ? ["reportDate", "name", "marketplace", "asin", "msku", "sku", "quantity", "revenue", "currency"]
-          : domain === "ads" ? ["reportDate", "hour", "name", "marketplace", "adType", "entityName", "impressions", "clicks", "cost", "sales", "orders"]
-            : ["reportDate", "name", "marketplace", "asin", "msku", "sku", "title", "saleQuantity", "fbaQuantity", "fbmQuantity", "saleRevenue", "grossProfit", "grossProfitRate", "adCost", "refundRate", "currency"];
+          : domain === "listings" ? ["name", "marketplace", "status", "asin", "msku", "parentAsin", "title", "price", "fulfillable", "sales7", "sales14", "sales30", "adSpend7", "adSpend14", "adSpend30", "capturedAt"]
+          : domain === "ads" ? ["reportDate", "name", "marketplace", "adType", "campaignId", "adGroupId", "productId", "asin", "msku", "impressions", "clicks", "cost", "adSales", "adOrders", "acos", "roas"]
+            : ["reportDate", "name", "marketplace", "asin", "msku", "sku", "title", "saleQuantity", "fbaQuantity", "fbmQuantity", "saleRevenue", "grossProfit", "grossProfitRate", "adCost", "refundRate", "orderNum", "netRevenue", "currency"];
   return <section className="border border-border bg-white" aria-busy={loading}>
     <div className="max-h-[62vh] overflow-auto thin-scrollbar"><table className="w-full min-w-[760px] text-left text-xs"><thead className="sticky top-0 bg-surface-muted text-muted"><tr>{columns.map((key) => <th key={key} className="whitespace-nowrap px-3 py-2.5 font-semibold">{domain === "sales" && key === "quantity" ? "销量" : captions[key] ?? key}</th>)}<th className="px-3 py-2.5">详情</th></tr></thead>
       <tbody>{rows.map((row, index) => {

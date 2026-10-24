@@ -1,27 +1,29 @@
+import { recoverExpiredSellfoxRuns, SellfoxLeaseLostError, sellfoxMaxRunAttempts } from "@/lib/sellfox/run-lease";
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { UnrecoverableError, Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { canExecuteSellfoxSync } from "@/lib/sellfox/sync-authorization";
-import { isSellfoxScheduleDue as due, sellfoxSyncScopeLock } from "@/lib/sellfox/schedule-time";
-import { enqueueSellfoxSyncRun } from "@/lib/queue";
+import { isSellfoxScheduleDue as due, sellfoxSyncScopeLock, sellfoxBackfillWindow } from "@/lib/sellfox/schedule-time";
+import { recoverSellfoxQueueRun } from "@/lib/sellfox/queue-recovery";
 import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/redis-queue";
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { SellfoxRequestError } from "@/lib/sellfox/client";
-import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
+import { normalizeSellfoxDates, sellfoxDateAt, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
 const worker = new Worker<{ runId: string }>(sellfoxSyncQueueName, async (job) => {
   try { await processSellfoxSyncRun(job.data.runId); }
   catch (error) {
+    if (error instanceof SellfoxLeaseLostError) return; // A newer owner (or recovery) controls the persisted run.
     if (error instanceof SellfoxSyncUnavailableError || error instanceof SellfoxSyncInputError || (error instanceof SellfoxStoreSyncError && !error.retryable) || (error instanceof SellfoxRequestError && !error.retryable)) {
       throw new UnrecoverableError(error.message);
     }
     if (job.attemptsMade >= (job.opts.attempts ?? 4) - 1) throw new Error(sellfoxStoreFailure(error).error);
-    await prisma.sellfoxSyncRun.updateMany({ where: { id: job.data.runId, status: "failed" }, data: { status: "queued", error: "同步暂时失败，系统将按退避策略重试。", finishedAt: null } });
+    await prisma.sellfoxSyncRun.updateMany({ where: { id: job.data.runId, status: "failed", executionToken: null, executionAttempts: { lt: sellfoxMaxRunAttempts } }, data: { status: "queued", error: "同步暂时失败，系统将按退避策略重试。", finishedAt: null } });
     throw new Error(sellfoxStoreFailure(error).error);
   }
 }, { connection: createRedisConnectionOptions(), concurrency: 1 });
@@ -31,8 +33,9 @@ async function recoverAndSchedule() {
   if (recovering) return;
   recovering = true;
   try {
+    await recoverExpiredSellfoxRuns();
     const pending = await prisma.sellfoxSyncRun.findMany({ where: { status: "queued" }, orderBy: { startedAt: "asc" }, take: 50 });
-    for (const run of pending) await enqueueSellfoxSyncRun(run.id);
+    for (const run of pending) await recoverSellfoxQueueRun(run.id);
     if (process.env.QUEUE_DRIVER !== "redis" || !process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET) return;
     const schedules = await prisma.sellfoxSyncSchedule.findMany({ where: { enabled: true }, orderBy: { lastEnqueuedAt: "asc" }, take: 100 });
     for (const candidate of schedules) {
@@ -57,12 +60,12 @@ async function recoverAndSchedule() {
         const active = await tx.sellfoxSyncRun.findFirst({ where: { organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, resource: schedule.resource, status: { in: ["queued", "running"] } } });
         if (active) return;
         const runId = `sellfox-sync-${randomUUID()}`;
-        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", ...normalizeSellfoxDates(schedule.resource as "stores" | "inventory" | "sales" | "performance", {}, now), datesFrozen: true, requestVersion: 2 } } });
+        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", scheduleId: schedule.id, ...(schedule.resource === "sales" && schedule.backfillNextDate ? sellfoxBackfillWindow(schedule.backfillNextDate, sellfoxDateAt(now, -1), Math.min(90, Math.max(1, Math.floor(Number(process.env.SELLFOX_BACKFILL_DAYS_PER_RUN) || 7)))) : {}), ...normalizeSellfoxDates(schedule.resource as "stores" | "inventory" | "sales" | "performance" | "listings" | "ads_report", {}, now), datesFrozen: true, requestVersion: 2 } } });
         await tx.sellfoxSyncSchedule.update({ where: { id: schedule.id }, data: { lastEnqueuedAt: now } });
       });
     }
     const scheduledPending = await prisma.sellfoxSyncRun.findMany({ where: { status: "queued", summary: { path: ["trigger"], equals: "schedule" } }, orderBy: { startedAt: "asc" }, take: 50 });
-    for (const run of scheduledPending) await enqueueSellfoxSyncRun(run.id);
+    for (const run of scheduledPending) await recoverSellfoxQueueRun(run.id);
   } finally { recovering = false; }
 }
 

@@ -1,0 +1,15 @@
+marketplace: US
+keywords: [kayak cockpit cover]
+negatives: [inflatable]
+priceMin: 10
+priceMax: 150
+minReviews: 0
+bsrMax: 1000000
+bannedTerms: []
+maxCompetitors: 10
+maxReviewsPerAsin: 20
+dailyRequestBudget: 100
+requestIntervalMs: 3000
+concurrency: 1
+maxSuppliers: 5
+# bestsellersUrl: https://www.amazon.com/Best-Sellers-Sports-Outdoors/zgbs/sporting-goods

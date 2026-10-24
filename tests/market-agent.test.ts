@@ -6,7 +6,7 @@ import { createAgentRuntime } from "@/lib/agent-platform/runtime";
 import { createMarketAgentExecutionExecutor, createSellerSpriteMcpAdapter, marketAgentDefinition, marketEvaluationCases, marketToolDefinitions } from "@/lib/agent-platform/market";
 
 test("market agent has a full tool surface and 20 evaluation cases", () => {
-  assert.equal(marketToolDefinitions.length, 9);
+  assert.equal(marketToolDefinitions.length, 10);
   assert.equal(marketAgentDefinition.tools.length, marketToolDefinitions.length);
   assert.equal(marketEvaluationCases.length, 20);
   assert.ok(canAgentUseTool(marketAgentDefinition, marketToolDefinitions[0]));

@@ -1,0 +1,82 @@
+2026-10-25 交付时共享工作区只读盘点（推送前须重新运行 git status --short）
+以下包含其他并行任务，未由 Round C 审核或授权统一提交。
+
+ M .gitignore
+ M AGENTS.md
+ M docs/sellfox-sync-workbench-plan.md
+ M package-lock.json
+ M package.json
+ M prisma/schema.prisma
+ M scripts/sellfox-sync-worker.ts
+ M src/app/api/agents/[agentId]/executions/route.ts
+ M src/app/api/agents/[agentId]/route.ts
+ M src/app/api/agents/approvals/[approvalId]/route.ts
+ M src/app/api/sellfox/[domain]/[id]/route.ts
+ M src/app/api/sellfox/[domain]/export/route.ts
+ M src/app/api/sellfox/[domain]/route.ts
+ M src/app/api/sellfox/performance/export/route.ts
+ M src/app/api/sellfox/performance/route.ts
+ M src/app/api/sellfox/schedules/route.ts
+ M src/app/api/sellfox/sync/route.ts
+ M src/components/agents/listing-agent-workbench.tsx
+ M src/components/agents/market-agent-workbench.tsx
+ M src/components/agents/orchestrator-agent-workbench.tsx
+ M src/components/agents/ppc-agent-workbench.tsx
+ M src/components/agents/product-agent-workbench.tsx
+ M src/components/agents/supplier-agent-workbench.tsx
+ M src/components/sellfox/resource-table.tsx
+ M src/components/sellfox/sellfox-workbench.tsx
+ M src/components/sellfox/workbench-types.ts
+ M src/lib/agent-platform/listing.ts
+ M src/lib/agent-platform/market.ts
+ M src/lib/agent-platform/orchestrator.ts
+ M src/lib/agent-platform/ppc.ts
+ M src/lib/agent-platform/product.ts
+ M src/lib/agent-platform/supplier.ts
+ M src/lib/products/attachment-bindings.ts
+ M src/lib/sellfox/browse-query.ts
+ M src/lib/sellfox/client.ts
+ M src/lib/sellfox/product-performance.ts
+ M src/lib/sellfox/schedule-time.ts
+ M src/lib/sellfox/snapshot-sync.ts
+ M src/lib/sellfox/sync-contract.ts
+ M src/lib/sellfox/sync-service.ts
+ M src/lib/sellfox/workbench-view.ts
+ M tests/browser/sellfox.spec.ts
+ M tests/market-agent.test.ts
+ M tests/orchestrator-agent.test.ts
+ M tests/sellfox-browse-api.test.ts
+ M tests/sellfox-client.test.ts
+ M tests/sellfox-snapshot-sync.test.ts
+ M tests/sellfox-sync-api.test.ts
+ M tests/sellfox-sync-contract.test.ts
+ M tests/sellfox-sync-run.test.ts
+?? docs/agent-chain-round-c.md
+?? docs/sellfox-agent-read.md
+?? docs/sellfox-four-domain-expansion.md
+?? prisma/migrations/20261025010000_add_sellfox_run_lease/
+?? prisma/migrations/20261025020000_sellfox_agent_read_models/
+?? scripts/selection-pipeline/
+?? selections/
+?? specs/005-agent-chain-handoffs/
+?? src/components/agents/chain-handoff.tsx
+?? src/lib/agent-platform/handoff.ts
+?? src/lib/agent-platform/launch-gate.ts
+?? src/lib/agent-platform/selection.ts
+?? src/lib/sellfox/ads-report-contract.ts
+?? src/lib/sellfox/ads-report-sync.ts
+?? src/lib/sellfox/agent-read.ts
+?? src/lib/sellfox/listing-sync.ts
+?? src/lib/sellfox/narrow-contracts.ts
+?? src/lib/sellfox/queue-recovery.ts
+?? src/lib/sellfox/run-lease.ts
+?? tests/agent-chain-handoff.test.ts
+?? tests/agent-launch-api.test.ts
+?? tests/browser/agent-chain-harness.tsx
+?? tests/browser/agent-chain.config.ts
+?? tests/browser/agent-chain.spec.ts
+?? tests/fixtures/sellfox/listing-page.json
+?? tests/helpers/
+?? tests/sellfox-agent-read.test.ts
+?? tests/sellfox-report-lifecycle.test.ts
+?? tests/sellfox-run-lease.test.ts

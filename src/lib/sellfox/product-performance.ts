@@ -1,3 +1,4 @@
+import { sellfoxNumber } from "./narrow-contracts";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sellfoxPost } from "@/lib/sellfox/client";
@@ -12,12 +13,11 @@ type Dependencies = { db: Pick<PrismaClient, "sellfoxStore" | "$transaction">; p
 
 function text(row: RecordLike, key: string) {
   const value = row[key];
-  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(",");
+  if (Array.isArray(value)) return value.map((item) => typeof item === "string" ? item : item && typeof item === "object" ? String(item[key === "asinList" ? "asin" : "sku"] ?? "") : "").filter(Boolean).join(",");
   return value === undefined || value === null ? "" : String(value).trim();
 }
 function number(row: RecordLike, key: string) {
-  const value = Number(text(row, key));
-  return Number.isFinite(value) ? value : 0;
+  return sellfoxNumber(row, key, ["saleNum", "saleNumFba", "saleNumFbm"].includes(key));
 }
 function pageFrom(payload: unknown) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new SellfoxSyncInputError("产品表现响应结构无法识别。");
@@ -89,8 +89,8 @@ export async function syncSellfoxProductDailySnapshots(input: {
             const row = rows[index]; const sourceKey = identities[index]; const now = new Date();
             const data = {
               sku: text(row, "skuList"), msku: text(row, "mskuList"), asin: text(row, "asinList"), parentAsin: text(row, "parentAsinList"),
-              title: text(row, "title"), currency: text(row, "currency"), saleQuantity: Math.round(number(row, "saleNum")),
-              fbaQuantity: Math.round(number(row, "saleNumFba")), fbmQuantity: Math.round(number(row, "saleNumFbm")),
+              orderNum: sellfoxNumber(row, "orderNum", true), netRevenue: sellfoxNumber(row, "salesPriceNet"), title: text(row, "title"), currency: text(row, "currency"), saleQuantity: number(row, "saleNum"),
+              fbaQuantity: number(row, "saleNumFba"), fbmQuantity: number(row, "saleNumFbm"),
               saleRevenue: number(row, "salePrice"), grossProfit: number(row, "profit"), grossProfitRate: number(row, "profitRate"),
               adCost: number(row, "adTotalCost"), refundRate: number(row, "refundPercent"), payload: row as Prisma.InputJsonValue, syncedAt: now, updatedAt: now,
             };

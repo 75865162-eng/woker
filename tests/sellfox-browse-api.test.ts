@@ -22,6 +22,7 @@ test("list/export filters agree, cross-workspace stores fail and exports never s
     },
   };
   globals.prisma = {
+    $queryRaw: async () => overflow ? Array.from({ length: 10001 }, () => snapshot) : [snapshot],
     workspaceScope: { findUnique: async () => ({ id: "workspace-a" }) },
     sellfoxStore: { findMany: async () => foreign ? [] : [{ id: "store-a" }] },
     sellfoxFbaInventorySnapshot: snapshotTable, sellfoxProductDailySnapshot: snapshotTable,
@@ -45,7 +46,7 @@ test("list/export filters agree, cross-workspace stores fail and exports never s
     assert.equal((await csv(await request("inventory/export?shopExternalId=other"), context("inventory"))).status, 403);
     foreign = false; overflow = true;
     const tooMany = await csv(await request("inventory/export"), context("inventory"));
-    assert.equal(tooMany.status, 413); assert.match(await tooMany.text(), /缩小日期或店铺范围/);
+    assert.equal(tooMany.status, 413); assert.match(await tooMany.text(), /缩小.*范围/);
     assert.equal((await performanceCsv(await request("performance/export?allDates=1&format=csv"))).status, 413);
     assert.equal((await csv(await request("inventory/export", "designer"), context("inventory"))).status, 403);
     const detailResponse = await detail(await request("inventory/row"), { params: Promise.resolve({ domain: "inventory", id: "row" }) });
