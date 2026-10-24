@@ -44,7 +44,9 @@ test("legacy JSON validates each organization and workspace credential scope ind
 
 test("operations editors cannot read or write settings-only Amazon bindings", async () => {
   const previousDriver = process.env.AUTH_DRIVER;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
   process.env.AUTH_DRIVER = "local";
+  delete process.env.DATABASE_URL;
   try {
     const session = await createLocalSession({ id: "ops-user", organizationId: "org-1", organizationName: "ERP", role: "operations", email: "ops@example.test", name: "Ops" });
     const response = await PUT(new Request("http://localhost/api/integrations/amazon/sp-api/bindings", {
@@ -57,6 +59,8 @@ test("operations editors cannot read or write settings-only Amazon bindings", as
   } finally {
     if (previousDriver === undefined) delete process.env.AUTH_DRIVER;
     else process.env.AUTH_DRIVER = previousDriver;
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabaseUrl;
   }
 });
 
@@ -112,7 +116,9 @@ test("binding API persists and returns scoped rows without exposing process secr
   const previousBindings = process.env.AMAZON_SP_API_SELLER_BINDINGS;
   const globalObject = globalThis as typeof globalThis & { prisma?: unknown };
   const previousPrisma = globalObject.prisma;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
   process.env.AUTH_DRIVER = "local";
+  delete process.env.DATABASE_URL;
   process.env.AMAZON_SP_API_SELLER_BINDINGS = "must-not-be-used";
   const saved: AmazonSellerBinding[] = [];
   const auditRows: unknown[] = [];
@@ -150,6 +156,7 @@ test("binding API persists and returns scoped rows without exposing process secr
     assert.match(get.headers.get("cache-control") ?? "", /no-store/);
   } finally {
     if (previousDriver === undefined) delete process.env.AUTH_DRIVER; else process.env.AUTH_DRIVER = previousDriver;
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = previousDatabaseUrl;
     if (previousBindings === undefined) delete process.env.AMAZON_SP_API_SELLER_BINDINGS; else process.env.AMAZON_SP_API_SELLER_BINDINGS = previousBindings;
     if (previousPrisma === undefined) delete globalObject.prisma; else globalObject.prisma = previousPrisma;
   }
@@ -171,7 +178,9 @@ test("credential API stores ciphertext and returns no submitted secret values", 
   const previousKey = process.env.AMAZON_SP_API_ENCRYPTION_KEY;
   const globalObject = globalThis as typeof globalThis & { prisma?: unknown };
   const previousPrisma = globalObject.prisma;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
   process.env.AUTH_DRIVER = "local";
+  delete process.env.DATABASE_URL;
   process.env.AMAZON_SP_API_ENCRYPTION_KEY = Buffer.alloc(32, 8).toString("base64");
   let stored: Record<string, unknown> | null = null;
   const audits: Array<{ metadata?: unknown }> = [];
@@ -201,6 +210,7 @@ test("credential API stores ciphertext and returns no submitted secret values", 
     assert.equal(secretValues.some((value) => JSON.stringify(audits).includes(value)), false);
   } finally {
     if (previousDriver === undefined) delete process.env.AUTH_DRIVER; else process.env.AUTH_DRIVER = previousDriver;
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = previousDatabaseUrl;
     if (previousKey === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = previousKey;
     if (previousPrisma === undefined) delete globalObject.prisma; else globalObject.prisma = previousPrisma;
   }
