@@ -38,6 +38,14 @@ test("download URLs cannot redirect into credentials, local addresses or an unve
   assert.equal(sellfoxReportDownloadUrl("https://s1.sellfox.com/file.xlsx").hostname, "s1.sellfox.com");
   for (const url of ["http://s1.sellfox.com/a", "https://127.0.0.1/a", "https://s1.sellfox.com.evil.test/a", "https://user:secret@s1.sellfox.com/a", "https://s1.sellfox.com:444/a"]) assert.throws(() => sellfoxReportDownloadUrl(url));
 });
+test("SB/SD uppercase identity columns preserve raw headers, accept empty exports, reject ambiguous aliases", async () => {
+  const uppercase = headers.map((key) => key === "asin" || key === "sku" ? key.toUpperCase() : key);
+  const [row] = await parseSellfoxAdProductReport(await report([values], uppercase), scope);
+  assert.equal(row.asin, "asin"); assert.equal(row.msku, "msku");
+  assert.equal(row.payload.ASIN, "asin"); assert.equal(row.payload.asin, undefined);
+  assert.deepEqual(await parseSellfoxAdProductReport(await report([], uppercase), scope), []);
+  await assert.rejects(async () => parseSellfoxAdProductReport(await report([values], [...uppercase, "asin"]), scope), /重复列/);
+});
 test("agent CSV has stable narrow headers, escapes formulas, and never emits payload", () => {
   const csv = sellfoxAgentCsv("sales", [{ msku: "=formula", payload: { token: "secret" }, quantity: 0, complete: false }]);
   assert.match(csv, /'=formula/); assert.doesNotMatch(csv, /payload|secret/);

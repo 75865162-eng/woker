@@ -58,7 +58,7 @@ CSV：`GET /api/sellfox/{inventory|sales|listings|performance|ads_report}/export
 
 销量计划首次启用时，默认补数起点为上一完整冬季的11月1日（2026-10-25 对应2025-11-01），可通过 UI 或 POST schedules 的 backfillStart 修改。持久化 backfillNextDate，每日优先 T-1，再处理默认7天历史；只有整个 run 成功才推进游标。失败重试复用已完成的店/日/指标断点。`SELLFOX_BACKFILL_DAYS_PER_RUN` 可配置1–90，单任务历史段不超过90日；不会自动删除历史。调大批次显著增加队列耗时，39店×7天×2指标至少546次请求（不含分页），仅限流间隔已约11分钟。补数与定时开关按工作区隔离。
 
-广告默认 SP adProductReport；POST sync 可用 `adTypes:["sp","sb","sd"]` 按需选择。SP 真报告已验证，SB/SD 在报告返回时须通过同样的完整表头、店铺、日期、身份校验，否则拒绝落库，不能宣称已验收。结构页不是本期主路径。任务创建前持久化创建意图；创建超时不自动重发。结果不明需管理员只读核对上游后，把确切 taskId 关联至原 SellfoxReportTask 再重试同一个 run；不得靠创建新 run 规避未知任务。已取得 taskId 的重试只查进度，下载文件由 storage adapter 管理。无下载URL、分片/域名/格式变化保持失败；不保存带签名的下载URL到日志。报告存储和快照不设自动清理。
+广告默认 SP adProductReport；POST sync 可用 `adTypes:["sp","sb","sd"]` 按需选择。SP/SB 真数据报告已验证；SD 已验证真实空报告表头，尚未验收非空数据。SP 的 asin/sku 与 SB/SD 的 ASIN/SKU 映射到同一窄列，payload 保留原始表头；同一报告出现大小写两套身份列时拒绝。所有报告仍须通过完整表头、店铺、日期、身份校验，否则拒绝落库。结构页不是本期主路径。任务创建前持久化创建意图；创建超时不自动重发。结果不明需管理员只读核对上游后，把确切 taskId 关联至原 SellfoxReportTask 再重试同一个 run；不得靠创建新 run 规避未知任务。已取得 taskId 的重试只查进度，下载文件由 storage adapter 管理。无下载URL、分片/域名/格式变化保持失败；不保存带签名的下载URL到日志。报告存储和快照不设自动清理。
 
 ## 字段映射（真实响应2026-10-25核验）
 
@@ -74,6 +74,7 @@ CSV：`GET /api/sellfox/{inventory|sales|listings|performance|ads_report}/export
 | 利润/毛利率/订单/净销售额 | profit / profitRate / orderNum / salesPriceNet | grossProfit / grossProfitRate / orderNum / netRevenue |
 | 利润销量、销售额、广告费、退款率 | saleNum / salePrice / adTotalCost / refundPercent | saleQuantity / saleRevenue / adCost / refundRate |
 | 广告日期及实体ID | 日期、广告活动ID、广告组ID、广告产品ID | reportDate、campaignId、adGroupId、productId |
+| 广告ASIN/MSKU | SP: asin/sku；SB/SD: ASIN/SKU | asin/msku；空值保留NULL |
 | 曝光/点击/花费/转化 | 广告曝光量、广告点击量、广告花费、广告订单量、广告销售额 | impressions、clicks、cost、adOrders、adSales |
 
 ## 迁移与回滚
@@ -94,3 +95,11 @@ CSV：`GET /api/sellfox/{inventory|sales|listings|performance|ads_report}/export
 ### 全改动区后续复核
 
 本轮 Agent Round C 收尾已重新完成 `npm run check`（232项核心测试、ESLint、生产构建）、TypeScript、6项赛狐浏览器、3项Agent浏览器及Round B 9项fixture/7项临时库创建集成测试。新增附件测试另行2/2通过。`tmp/`已按Git忽略边界排除ESLint；目前仅保留商品工作台既有hook dependency warning。两条新增迁移在独立临时库执行成功，schema漂移与原基线相同；未修复历史漂移或操作生产。此记录更新上面的暂态全局检查阻碍；详细证据见 `specs/005-agent-chain-handoffs/validation.md`。
+
+### SB/SD 追加验收（2026-10-25）
+
+- 同一已验收店铺、2026-10-24 日报：SB 21行；SD 仅表头、0行。真实表头使用大写 ASIN/SKU，新增精确映射并拒绝大小写重复列；不放宽其他校验。SB 核心窄列与原始 payload 对账差异0，MSKU 缺失仍为NULL。
+- 首次严格解析拒绝后，复用同一 run 的持久化原文件重试成功，没有重复创建任务。禁用 fetch 后，本地广告视图/CSV读取成功，共SP418行、SB21行；SD空报告完成记录保存在任务表，不伪造日报行。SD非空数据仍待验收。
+- 窄列映射变更通过 `check:fast`（234项核心测试、lint、TypeScript）；本次无Prisma变更，不重复迁移/生产构建。
+- 39店从2025-11-01至2026-10-24共有13,961个店/日缺完整覆盖，至少27,922次指标请求，按1200ms间隔至少9.3小时，另有响应、分页及重试时间。未启动全店补数，计划尚未配置，未发布服务器。
+- 随后完成单店2025-11-01～11-07七天历史试采：14个指标请求、888次指标写入合并为444条店/MSKU/日记录，七日完整覆盖均已发布。证明上一冬季数据可读取，不代表已补齐全店长窗；试采后缺口为13,954个店/日。

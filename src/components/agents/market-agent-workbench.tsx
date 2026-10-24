@@ -111,14 +111,16 @@ function getCurrentApproval(execution?: AgentExecutionDetail | null, fallback?: 
   return requested ?? execution?.approvals?.[0] ?? fallback ?? null;
 }
 
-function badgeTone(score: number) {
+function badgeTone(score: number | null) {
+  if (score === null) return "gray";
   if (score >= 75) return "green";
   if (score >= 55) return "blue";
   if (score >= 40) return "amber";
   return "red";
 }
 
-function riskTone(score: number) {
+function riskTone(score: number | null) {
+  if (score === null) return "gray";
   if (score >= 70) return "red";
   if (score >= 50) return "amber";
   return "green";
@@ -146,6 +148,8 @@ export function MarketAgentWorkbench() {
   const [error, setError] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
   const [running, setRunning] = useState(false);
+  const [selectionFileId, setSelectionFileId] = useState("");
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [projecting, setProjecting] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState<"APPROVED" | "REJECTED" | "">("");
   const [goal, setGoal] = useState("寻找美国站售价20-50美元、竞争中等以下、Review 低于 500、利润率 25% 以上的产品");
@@ -166,7 +170,7 @@ export function MarketAgentWorkbench() {
   const [pendingApproval, setPendingApproval] = useState<AgentApproval | null>(null);
 
   useEffect(() => {
-    const reset = () => { setData(null); setRefreshToken((value) => value + 1); setPendingApproval(null); };
+    const reset = () => { setSelectionFileId(""); setData(null); setRefreshToken((value) => value + 1); setPendingApproval(null); };
     window.addEventListener(workspaceScopeChangedEventName, reset);
     return () => window.removeEventListener(workspaceScopeChangedEventName, reset);
   }, []);
@@ -229,6 +233,25 @@ export function MarketAgentWorkbench() {
     setRefreshToken((current) => current + 1);
   }
 
+  async function uploadSelectionEvidence(file: File) {
+    setUploadingEvidence(true);
+    setSelectionFileId("");
+    setError("");
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error("选品草稿不能超过 2 MB。");
+      const response = await chainFetch("/api/agents/market/selection-evidence", {
+        method: "POST", headers: { ...chainHeaders(), "Content-Type": "application/octet-stream" }, body: file,
+      });
+      const payload = await response.json() as { fileId?: string; keyword?: string; error?: string };
+      if (!response.ok || !payload.fileId) throw new Error(payload.error || "上传选品证据失败。");
+      setSelectionFileId(payload.fileId);
+      setKeyword(payload.keyword ?? "");
+      setMarketplace("US");
+      setData((current) => current ? { ...current, latestExecution: null } : current);
+    } catch (err) { setError(err instanceof Error ? err.message : "上传选品证据失败。"); }
+    finally { setUploadingEvidence(false); }
+  }
+
   async function runResearch(selectionRun = false) {
     setRunning(true);
     setError("");
@@ -242,6 +265,7 @@ export function MarketAgentWorkbench() {
         body: JSON.stringify({
           chainHandoff: chain.payload ?? undefined,
           selectionRun,
+          selectionFileId: selectionRun ? selectionFileId : undefined,
           naturalLanguageGoal: goal,
           marketplace,
           category: category || undefined,
@@ -274,7 +298,7 @@ export function MarketAgentWorkbench() {
         throw new Error(payload.error || "运行市场 Agent 失败。");
       }
 
-      if (payload.execution.status === "FAILED") setError("执行失败：请查看轨迹。Round B 采集器尚未接入。");
+      if (payload.execution.status === "FAILED") setError("执行失败：请查看工具轨迹中的证据校验结果。");
 
       rememberChainExecution(payload.execution.id);
       const detailedExecution: AgentExecutionDetail = {
@@ -431,10 +455,10 @@ export function MarketAgentWorkbench() {
   const traces = currentExecution?.traces ?? [];
   const memoryItems = data?.memoryItems ?? [];
   const metrics = useMemo(() => {
-    const blueOceanIndex = report?.blueOceanRadar.blueOceanIndex ?? 0;
-    const demand = report?.blueOceanRadar.demandStrength ?? 0;
-    const competitionScore = report?.blueOceanRadar.competitionStrength ?? 0;
-    const margin = selectedOpportunity?.estimatedMargin ?? 0;
+    const blueOceanIndex = report?.blueOceanRadar.blueOceanIndex ?? null;
+    const demand = report?.blueOceanRadar.demandStrength ?? null;
+    const competitionScore = report?.blueOceanRadar.competitionStrength ?? null;
+    const margin = selectedOpportunity?.estimatedMargin ?? null;
     return {
       blueOceanIndex,
       demand,
@@ -481,7 +505,7 @@ export function MarketAgentWorkbench() {
           <CardContent className="flex items-center gap-3 p-4">
             <Sparkles className="h-5 w-5 text-brand" />
             <div>
-              <div className="text-lg font-black text-foreground">{metrics.blueOceanIndex}</div>
+              <div className="text-lg font-black text-foreground">{metrics.blueOceanIndex ?? "未知"}</div>
               <div className="text-xs font-medium text-muted">蓝海指数</div>
             </div>
           </CardContent>
@@ -490,7 +514,7 @@ export function MarketAgentWorkbench() {
           <CardContent className="flex items-center gap-3 p-4">
             <CheckCircle2 className="h-5 w-5 text-brand" />
             <div>
-              <div className="text-lg font-black text-foreground">{metrics.demand}</div>
+              <div className="text-lg font-black text-foreground">{metrics.demand ?? "未知"}</div>
               <div className="text-xs font-medium text-muted">需求强度</div>
             </div>
           </CardContent>
@@ -499,7 +523,7 @@ export function MarketAgentWorkbench() {
           <CardContent className="flex items-center gap-3 p-4">
             <ShieldAlert className="h-5 w-5 text-brand" />
             <div>
-              <div className="text-lg font-black text-foreground">{metrics.competitionScore}</div>
+              <div className="text-lg font-black text-foreground">{metrics.competitionScore ?? "未知"}</div>
               <div className="text-xs font-medium text-muted">竞争强度</div>
             </div>
           </CardContent>
@@ -508,7 +532,7 @@ export function MarketAgentWorkbench() {
           <CardContent className="flex items-center gap-3 p-4">
             <SquareKanban className="h-5 w-5 text-brand" />
             <div>
-              <div className="text-lg font-black text-foreground">{metrics.margin}%</div>
+              <div className="text-lg font-black text-foreground">{metrics.margin === null ? "未知" : `${metrics.margin}%`}</div>
               <div className="text-xs font-medium text-muted">预计利润率</div>
             </div>
           </CardContent>
@@ -541,7 +565,18 @@ export function MarketAgentWorkbench() {
           </CardHeader>
           <CardContent className="space-y-3">
             <ChainHandoffNotice payload={chain.payload} error={chain.error} />
-            <Button type="button" variant="secondary" disabled={!canCreate || running || loading} onClick={() => runResearch(true)}>运行 Round B 选品（尚未接入采集器）</Button>
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <label className="block space-y-1 text-sm">
+                <span className="font-semibold">Round B 采集草稿</span>
+                <input type="file" accept=".json,application/json" aria-label="Round B 采集草稿" disabled={!canCreate || running || uploadingEvidence} onChange={(event) => {
+                  const file = event.target.files?.[0]; event.target.value = "";
+                  if (file) void uploadSelectionEvidence(file);
+                }} className="block w-full text-xs" />
+              </label>
+              <p className="text-xs text-muted">上传实际采集的 derived/draft.json（最多 2 MB）。生成证据机会供人工审阅；未采集的指标保持未知。</p>
+              <Button type="button" variant="secondary" disabled={!canCreate || running || loading || uploadingEvidence || !selectionFileId} onClick={() => runResearch(true)}>{uploadingEvidence ? "上传中…" : running ? "运行中…" : "从 Round B 证据生成机会"}</Button>
+              {selectionFileId ? <p role="status" className="text-xs text-muted">草稿已上传，可以生成机会。</p> : null}
+            </div>
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             <label className="block space-y-1">
               <span className="text-xs font-semibold text-muted">目标</span>
@@ -605,7 +640,7 @@ export function MarketAgentWorkbench() {
               </label>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={() => runResearch()} disabled={!canCreate || running || loading} title={!canCreate ? "没有 Agent 创建权限" : undefined} className="min-w-36">
+              <Button type="button" onClick={() => runResearch()} disabled={!canCreate || running || loading || uploadingEvidence} title={!canCreate ? "没有 Agent 创建权限" : undefined} className="min-w-36">
                 {running ? "运行中..." : "运行研究"}
                 <Sparkles className="h-4 w-4" />
               </Button>
@@ -632,7 +667,7 @@ export function MarketAgentWorkbench() {
                 <CardTitle>研究报告</CardTitle>
                 <p className="mt-1 text-xs font-medium text-muted">蓝海雷达、信号摘要和推荐下一步操作。</p>
               </div>
-              <Badge tone={badgeTone(metrics.blueOceanIndex)}>{metrics.blueOceanIndex}/100</Badge>
+              <Badge tone={badgeTone(metrics.blueOceanIndex)}>{metrics.blueOceanIndex === null ? "未知" : `${metrics.blueOceanIndex}/100`}</Badge>
             </CardHeader>
             <CardContent className="space-y-3">
               {report ? (
@@ -726,12 +761,12 @@ export function MarketAgentWorkbench() {
                         <div className="text-sm font-semibold text-foreground">{opportunity.productIdea}</div>
                         <div className="mt-1 text-xs text-muted">{opportunity.recommendation}</div>
                       </div>
-                      <Badge tone={badgeTone(opportunity.opportunityScore)}>{opportunity.opportunityScore}/100</Badge>
+                      <Badge tone={badgeTone(opportunity.opportunityScore)}>{opportunity.scoreBasis === "evidence_completeness" ? `证据完整度 ${opportunity.evidenceCompleteness}/100` : opportunity.opportunityScore === null ? "待评分" : `${opportunity.opportunityScore}/100`}</Badge>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge tone="gray">需求 {opportunity.estimatedDemand}</Badge>
-                      <Badge tone={riskTone(opportunity.riskScore)}>风险 {opportunity.riskScore}</Badge>
-                      <Badge tone="gray">置信度 {Math.round(opportunity.confidence * 100)}%</Badge>
+                      <Badge tone="gray">需求 {opportunity.estimatedDemand ?? "未知"}</Badge>
+                      <Badge tone={riskTone(opportunity.riskScore)}>风险 {opportunity.riskScore ?? "未知"}</Badge>
+                      <Badge tone="gray">置信度 {opportunity.scoreBasis === "evidence_completeness" ? "待评估" : `${Math.round(opportunity.confidence * 100)}%`}</Badge>
                     </div>
                   </button>
                 ))}
@@ -908,11 +943,11 @@ export function MarketAgentWorkbench() {
   );
 }
 
-function MetricBox({ label, value, tone }: { label: string; value: number; tone: "blue" | "amber" | "red" }) {
+function MetricBox({ label, value, tone }: { label: string; value: number | null; tone: "blue" | "amber" | "red" }) {
   return (
     <div className="rounded-md border border-border bg-surface-muted px-3 py-2">
       <div className="text-[11px] font-bold uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-1 text-sm font-semibold ${tone === "blue" ? "text-brand" : tone === "amber" ? "text-amber-700" : "text-danger"}`}>{value}</div>
+      <div className={`mt-1 text-sm font-semibold ${tone === "blue" ? "text-brand" : tone === "amber" ? "text-amber-700" : "text-danger"}`}>{value ?? "未知"}</div>
     </div>
   );
 }

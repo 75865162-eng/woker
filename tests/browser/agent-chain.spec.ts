@@ -12,6 +12,9 @@ import { createPpcAgentExecutionExecutor, createPpcAnalyticsAdapter, ppcAgentDef
 import { createSelectionAdapter } from "@/lib/agent-platform/selection";
 import type { AgentExecutionDetail } from "@/lib/agent-platform/types";
 
+import selectionSample from "../fixtures/selection/evidence.json";
+import { parseSelectionEvidence } from "@/lib/agent-platform/selection-evidence";
+
 let bundle: string;
 const surfaces = {
   orchestrator: { definition: orchestratorAgentDefinition, tools: orchestratorToolDefinitions, adapters: [createOrchestratorInternalAdapter()], executor: createOrchestratorExecutionExecutor },
@@ -36,8 +39,9 @@ test.beforeAll(async () => {
 
 async function setup(page: Page) {
   const latest = new Map<string, AgentExecutionDetail>();
+  const selectionFiles = new Map<string, unknown>();
   const calls: { stage: string; body: Record<string, unknown> }[] = [];
-  const delay = { market: false, release: () => {} };
+  const delay = { market: false, release: () => {}, upload: false, releaseUpload: () => {} };
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/*", async (route) => {
@@ -49,6 +53,15 @@ async function setup(page: Page) {
     if (url.pathname === "/api/workspace/draft-runs") return route.fulfill({ json: { draftRuns: [] } });
     if (url.pathname === "/api/workspace/snapshot") return route.fulfill({ json: { snapshot: null } });
     expect(["workspace-a", "workspace-b"]).toContain(request.headers()["x-workspace-id"]);
+    if (url.pathname === "/api/agents/market/selection-evidence") {
+      const data = JSON.parse(request.postData()!);
+      try { parseSelectionEvidence(data); }
+      catch { return route.fulfill({ status: 400, json: { error: "选品证据无效。" } }); }
+      const fileId = `selection-${request.headers()["x-workspace-id"]}`;
+      selectionFiles.set(fileId, data);
+      if (delay.upload) await new Promise<void>((resolve) => { delay.releaseUpload = resolve; });
+      return route.fulfill({ status: 201, json: { fileId, keyword: data.brief.keyword } });
+    }
     if (url.pathname.startsWith("/api/agents/approvals/")) {
       const current = latest.get("orchestrator")!;
       const approved = request.postDataJSON().decision === "APPROVED";
@@ -62,7 +75,10 @@ async function setup(page: Page) {
     expect(surface).toBeTruthy();
     if (request.method() === "POST") {
       const body = request.postDataJSON(); calls.push({ stage, body });
-      const runtime = createAgentRuntime({ definitions: [surface.definition], tools: surface.tools, adapters: surface.adapters });
+      const runtime = createAgentRuntime({ definitions: [surface.definition], tools: surface.tools, adapters: stage === "market" ? [createSellerSpriteMcpAdapter(), createSelectionAdapter({ loadEvidence: async (fileId) => {
+        expect(fileId).toBe(`selection-${request.headers()["x-workspace-id"]}`);
+        return { value: selectionFiles.get(fileId), source: { fileId, sha256: "browser-evidence-hash" } };
+      } })] : surface.adapters });
       const result = await runtime.run({ agentId: stage, context: { currentData: body.context?.currentData ?? {}, marketplace: "US" }, input: { handoff: handoffProvenance(body.chainHandoff) as never }, workspaceId: "workspace-a", executor: surface.executor({ request: body, requestedByUserId: "actor" }) });
       const detail: AgentExecutionDetail = { ...result.execution, approvals: result.approvals, traces: result.traces, toolCalls: result.toolCalls, events: result.events };
       latest.set(stage, detail);
@@ -154,4 +170,43 @@ test("future-version and foreign-workspace handoffs show errors; unapproved PPC 
   await page.evaluate(({ key, value }) => sessionStorage.setItem(key, JSON.stringify(value)), { key: handoffStorageKeys.ppc, value: { ...payload, _handoff: { ...payload._handoff, workspaceId: "other" } } });
   await page.reload();
   await expect(page.getByRole("alert")).toContainText("工作区");
+});
+
+
+test("Round B artifact upload produces a Market report with unknown metrics and passes evidence to Product", async ({ page }) => {
+  const state = await setup(page);
+  await page.goto("http://127.0.0.1:43221/agents/market");
+  const button = page.getByRole("button", { name: "从 Round B 证据生成机会", exact: true });
+  await expect(button).toBeDisabled();
+  await page.getByLabel("Round B 采集草稿", { exact: true }).setInputFiles({ name: "draft.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(selectionSample)) });
+  await expect(page.getByText("草稿已上传，可以生成机会。", { exact: true })).toBeVisible();
+  await button.click();
+  await expect(page.getByText("证据完整度 75/100", { exact: true })).toBeVisible();
+  await expect(page.getByText("需求 未知", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "发送到产品 Agent", exact: true }).click();
+  await expect(page).toHaveURL(/\/agents\/product$/);
+  await page.getByRole("button", { name: "运行产品 Agent", exact: true }).click();
+  await expect.poll(() => state.calls.some((call) => call.stage === "product")).toBe(true);
+  const handoff = state.calls.find((call) => call.stage === "product")!.body as { marketReport: { selectionSource: { fileId: string } }; marketOpportunity: { estimatedMargin: unknown } };
+  expect(handoff.marketReport.selectionSource.fileId).toBe("selection-workspace-a");
+  expect(handoff.marketOpportunity.estimatedMargin).toBe(null);
+  expect(state.errors).toEqual([]);
+});
+
+
+test("workspace switch cannot revive a late Round B upload", async ({ page }) => {
+  const state = await setup(page);
+  state.delay.upload = true;
+  await page.goto("http://127.0.0.1:43221/agents/market");
+  const started = page.waitForRequest("**/api/agents/market/selection-evidence");
+  await page.getByLabel("Round B 采集草稿", { exact: true }).setInputFiles({ name: "draft.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(selectionSample)) });
+  await started;
+  await page.evaluate(() => {
+    localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "workspace-b", marketplace: "US" }));
+    window.dispatchEvent(new Event("amazon-workspace-scope-changed"));
+  });
+  state.delay.releaseUpload();
+  await expect(page.getByText("工作区已变化，已丢弃上一工作区的响应。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "从 Round B 证据生成机会", exact: true })).toBeDisabled();
+  await expect(page.getByText("草稿已上传，可以生成机会。", { exact: true })).toHaveCount(0);
 });

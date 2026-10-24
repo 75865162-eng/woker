@@ -17,7 +17,7 @@ npm run selection:run -- --keyword "kayak cockpit cover" --slug kayak-cockpit-co
 npm run selection:tag -- --slug kayak-cockpit-cover --cloud-patch
 ```
 
-安装 pnpm 的环境也可 `pnpm selection:run -- --keyword ... --slug ...`；以 npm lockfile 为依赖事实源，不生成另一份锁文件。命令中的第二个 `--` 会被 CLI 正确处理。
+本仓库以 npm/package-lock.json 为依赖事实源，推荐使用上述 npm 命令。CLI 兼容 `pnpm selection:run -- --keyword ... --slug ...` 的双 `--` 参数；但部分 pnpm 版本会自动安装依赖并移动 npm 的 node_modules，尚未验收包管理器混用，请勿因此生成另一份锁文件。
 
 `--write` 需要下方明确的数据库和操作者配置。**不要在未审查草稿时运行写库命令。** 模块不自动读取 `.env`；需要时沿用仓库风格：
 
@@ -128,6 +128,10 @@ npm run selection:run -- --keyword "kayak cockpit cover" --slug selection-offlin
 ```
 
 数据库集成命令只创建随机命名、临时、loopback 映射且 tmpfs 存储的 PostgreSQL 测试容器，不读取调用环境原有 DATABASE_URL；测试结束自动删除容器。需要本机 Docker 和 postgres:16-alpine 镜像。
+
+图片上传契约另通过本机临时 HTTP 服务验证：实际 multipart 文件字节、workspaceId/US、会话 Cookie、返回 asset，以及拒绝远程明文 HTTP；草稿测试验证图片 fileId 传入竞品附件字段。这些隔离测试不代表已通过真实 ERP 会话上传。
+
+本机已通过 11 项隔离测试；包括上传 403/缺失 asset 拒绝、无凭据降级，以及补漏子进程的 50 条分批、默认关闭、失败退出与虚构 quote 拒绝。离线完整命令另以 `selection-offline-acceptance` 为 slug，结合 `--fixtures --cloud-patch --suppliers-file scripts/selection-pipeline/fixtures/suppliers.json` 验证了图片、标签计数、3 条人工文件候选及可读取的 workbook/draft；该目录全部为测试数据，禁止用于采购或正式写库。
 
 fixture 模式无外网请求、禁止 --write/--upload-images，使用独立 sqlite。假 ASIN、灰色示意图、虚构供应商均只用于解析/链路回归；raw/collection-info 和 draft.fixture 持续标记来源，不能绕过标记写库。解析测试使用真实 Chromium DOM；至少包含 search / PDP / reviews，还覆盖 1688 解析、词典、补漏输出校验、SQLite 配额、站点熔断、workbook 表头和未授权创建拒绝。临时 PostgreSQL 集成测试另覆盖聚合 create/replay、并发 SKU、角色拒绝、附件组织隔离回滚、审计/Outbox/summary projection。
 

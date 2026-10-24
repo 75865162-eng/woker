@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "fixture": false,
+  "slug": "isolated-evidence-contract",
+  "brief": { "keyword": "kayak cover", "priceMin": 20, "priceMax": 50 },
+  "competitors": [{ "asin": "B012345678", "title": "Test-only cover", "url": "https://www.amazon.com/dp/B012345678", "price": 0, "rating": 4, "reviewsCount": 10, "bsr": null, "capturedAt": "2026-10-24T00:00:00.000Z" }],
+  "tags": { "matches": [{ "asin": "B012345678", "tag": "fit", "quote": "poor fit", "source": "dictionary" }] },
+  "suppliers": []
+}

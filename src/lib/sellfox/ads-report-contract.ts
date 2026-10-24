@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { isSellfoxDate, SellfoxSyncInputError } from "./sync-contract";
 import { sellfoxNumber, type SellfoxRow } from "./narrow-contracts";
 const required = ["店铺", "日期", "asin", "sku", "广告活动ID", "广告组ID", "广告产品ID", "广告曝光量", "广告点击量", "广告花费", "广告订单量", "广告销售额"];
-/** Verified SP adProductReport XLSX 2026-10-25. No currency column: keep currency null. */
+/** Verified SP/SB and empty SD adProductReport XLSX 2026-10-25. No currency column: keep currency null. */
 export async function parseSellfoxAdProductReport(buffer: Buffer, input: { storeName: string; startDate: string; endDate: string }) {
   if (buffer.length > 25 * 1024 * 1024) throw new SellfoxSyncInputError("广告报告超过 25MB，请缩小日期范围。");
   // Inspect ZIP central-directory declared uncompressed sizes before ExcelJS inflates entries.
@@ -25,7 +25,11 @@ export async function parseSellfoxAdProductReport(buffer: Buffer, input: { store
     if (key in columns) throw new SellfoxSyncInputError("广告报告存在重复列。");
     columns[key] = index;
   });
-  if (required.some((key) => !columns[key])) throw new SellfoxSyncInputError("广告产品报告缺少已验证列。");
+  // Real SB/SD exports use uppercase ASIN/SKU; keep original names in the audit payload.
+  for (const key of ["asin", "sku"]) {
+    if (columns[key] && columns[key.toUpperCase()]) throw new SellfoxSyncInputError("广告报告存在重复列。");
+  }
+  if (required.some((key) => !columns[key] && !(["asin", "sku"].includes(key) && columns[key.toUpperCase()]))) throw new SellfoxSyncInputError("广告产品报告缺少已验证列。");
   const rows = [];
   const identities = new Set<string>();
   for (let index = 2; index <= sheet.rowCount; index++) {
@@ -43,7 +47,7 @@ export async function parseSellfoxAdProductReport(buffer: Buffer, input: { store
     const identity = JSON.stringify([reportDate, campaignId, adGroupId, productId]);
     if (identities.has(identity)) throw new SellfoxSyncInputError("广告报告重复实体日期。");
     identities.add(identity);
-    rows.push({ reportDate, campaignId, adGroupId, productId, asin: String(raw.asin ?? "") || null, msku: String(raw.sku ?? "") || null, currency: null,
+    rows.push({ reportDate, campaignId, adGroupId, productId, asin: String(raw.asin ?? raw.ASIN ?? "") || null, msku: String(raw.sku ?? raw.SKU ?? "") || null, currency: null,
       impressions: sellfoxNumber(raw, "广告曝光量", true), clicks: sellfoxNumber(raw, "广告点击量", true), cost: sellfoxNumber(raw, "广告花费"), adOrders: sellfoxNumber(raw, "广告订单量", true), adSales: sellfoxNumber(raw, "广告销售额"), payload: raw });
   }
   return rows;

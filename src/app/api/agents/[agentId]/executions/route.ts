@@ -58,6 +58,7 @@ import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { handoffProvenance, isObject, parseLaunchApproval, validateHandoff, type ChainStage } from "@/lib/agent-platform/handoff";
 import { verifyLaunchApproval } from "@/lib/agent-platform/launch-gate";
 import { createSelectionAdapter } from "@/lib/agent-platform/selection";
+import { selectionEvidenceLoader } from "@/lib/agent-platform/selection-evidence-server";
 
 export const runtime = "nodejs";
 
@@ -164,7 +165,7 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
             ? orchestratorToolDefinitions
           : defaultToolDefinitions,
       adapters: isMarketAgent
-        ? [createSellerSpriteMcpAdapter({ settings: sellerSpriteMcpSettings }), createSelectionAdapter()]
+        ? [createSellerSpriteMcpAdapter({ settings: sellerSpriteMcpSettings }), createSelectionAdapter({ loadEvidence: selectionEvidenceLoader({ organizationId: user.organizationId, workspaceId: scope.workspaceId }) })]
         : isListingAgent
           ? [createListingMcpAdapter()]
         : isProductAgent

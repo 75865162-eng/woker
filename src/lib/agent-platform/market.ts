@@ -54,10 +54,10 @@ export interface MarketEvidenceItem {
 }
 
 export interface BlueOceanRadar {
-  blueOceanIndex: number;
-  demandStrength: number;
-  competitionStrength: number;
-  entryBarrier: number;
+  blueOceanIndex: number | null;
+  demandStrength: number | null;
+  competitionStrength: number | null;
+  entryBarrier: number | null;
   explanation: string;
 }
 
@@ -67,15 +67,17 @@ export interface ProductOpportunity {
   marketplace: string;
   category: string;
   targetPrice: string;
-  estimatedDemand: number;
-  competitionScore: number;
-  reviewBarrier: number;
-  keywordOpportunity: number;
-  trendScore: number;
-  differentiationOpportunity: number;
-  estimatedMargin: number;
-  riskScore: number;
-  opportunityScore: number;
+  estimatedDemand: number | null;
+  competitionScore: number | null;
+  reviewBarrier: number | null;
+  keywordOpportunity: number | null;
+  trendScore: number | null;
+  differentiationOpportunity: number | null;
+  estimatedMargin: number | null;
+  riskScore: number | null;
+  opportunityScore: number | null;
+  evidenceCompleteness?: number;
+  scoreBasis?: "evidence_completeness";
   confidence: number;
   evidence: MarketEvidenceItem[];
   recommendation: string;
@@ -94,20 +96,21 @@ export interface MarketResearchReport {
   }>;
   blueOceanRadar: BlueOceanRadar;
   signals: {
-    demandStrength: number;
-    competitionStrength: number;
-    entryBarrier: number;
-    keywordOpportunity: number;
-    trendScore: number;
-    reviewBarrier: number;
-    differentiationOpportunity: number;
-    estimatedMargin: number;
+    demandStrength: number | null;
+    competitionStrength: number | null;
+    entryBarrier: number | null;
+    keywordOpportunity: number | null;
+    trendScore: number | null;
+    reviewBarrier: number | null;
+    differentiationOpportunity: number | null;
+    estimatedMargin: number | null;
   };
   productOpportunities: ProductOpportunity[];
   evidence: MarketEvidenceItem[];
   summary: string;
   recommendation: string;
   generatedAt: string;
+  selectionSource?: { fileId: string; sha256: string; schemaVersion: number; slug: string; importedAt: string; stale: boolean; suppliers: Array<{ title: string; url: string; shopName: string; price: string; moq: string }> };
 }
 
 export interface MarketExecutionOutput {
@@ -121,6 +124,7 @@ export interface MarketExecutionOutput {
 export interface MarketExecutionRequest {
   chainHandoff?: unknown;
   selectionRun?: boolean;
+  selectionFileId?: string;
   naturalLanguageGoal?: string;
   marketplace?: string;
   keyword?: string;
@@ -726,10 +730,10 @@ export function createMarketAgentExecutionExecutor(options: {
 
   return async ({ execution, definition, context, callTool, recordTrace, emitEvent }) => {
     if (options.request.selectionRun) {
-      const result = await callTool("market.selection.run", toJsonValue(normalizedInput));
+      const result = await callTool("market.selection.run", toJsonValue({ ...normalizedInput, fileId: options.request.selectionFileId ?? null }));
       if (result.status !== "SUCCEEDED") throw result.error ?? { code: "NOT_IMPLEMENTED", message: "Round B selection unavailable.", retryable: false };
       return {
-        output: toJsonValue({ state: result.status, selection: result.output ?? null, error: result.error ?? null }),
+        output: result.output ?? null,
         tokenUsage: 0, costCents: 0,
       };
     }
@@ -1196,7 +1200,7 @@ function buildOpportunities(input: {
     recommendation: "Use the price band to protect margin, then verify supplier quotes before any sourcing move.",
   });
 
-  return opportunities.sort((left, right) => right.opportunityScore - left.opportunityScore);
+  return opportunities.sort((left, right) => (right.opportunityScore ?? 0) - (left.opportunityScore ?? 0));
 }
 
 function buildEvidenceBundle(input: {
@@ -1310,7 +1314,7 @@ function deriveMarketRisks(input: MarketResearchInput, signals: ReturnType<typeo
     risks.add("High review barrier may slow initial traction.");
   }
 
-  if (!opportunities.length || opportunities[0].opportunityScore < 55) {
+  if (!opportunities.length || (opportunities[0].opportunityScore ?? 0) < 55) {
     risks.add("Opportunity score is below the preferred launch threshold.");
   }
 

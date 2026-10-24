@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { createServer, type Server } from "node:http";
+import { uploadImage } from "./src/images/upload";
 import { chromium, type Browser } from "@playwright/test";
 import ExcelJS from "exceljs";
 import { parseSearch } from "./src/amazon/search";
 import { parsePdp } from "./src/amazon/pdp";
 import { parseReviews } from "./src/amazon/reviews";
 import { applyDict, loadDictionary, aggregateTags } from "./src/tags/applyDict";
-import { validatePatch } from "./src/tags/cloudPatch";
+import { cloudPatch, validatePatch } from "./src/tags/cloudPatch";
 import { parse1688, validateSuppliers } from "./src/alibaba/search1688";
 import { SnapshotStore } from "./src/snapshot/store";
 import { RateLimit } from "./src/amazon/rateLimit";
@@ -66,8 +68,11 @@ test("configuration and manual suppliers reject unsupported scope and unsafe URL
   assert.throws(() => validateSuppliers([{ title: "bad",url: "https://evil.test/offer/1.html" }],5));
   const suppliers = validateSuppliers(JSON.parse(await readFile(path.join(base,"fixtures/suppliers.json"),"utf8")),5); assert.equal(suppliers.length,3);
 });
-test("workbook uses ERP sections and records image provenance and tag counts",async () => {
-  const draft = buildDraft("test",{ keyword: "kayak cover" },[{ asin: "B012345678",title: "Cover",url: "https://www.amazon.com/dp/B012345678",price: 29,rating: 4,reviewsCount: 10,imagePath: "raw/images/B012345678.jpg" }],[],aggregateTags([{ asin: "B012345678",tag: "fit",quote: "poor fit",source: "dictionary" }]));
+test("workbook uses ERP sections, records image provenance, file IDs and tag counts",async () => {
+  const imageAsset = { id: "file-main",name: "cover.jpg",mimeType: "image/jpeg",size: 5,storageType: "local" as const,uploadedAt: new Date().toISOString(),thumbUrl: "/thumb",originalUrl: "/original" };
+  const draft = buildDraft("test",{ keyword: "kayak cover" },[{ asin: "B012345678",title: "Cover",url: "https://www.amazon.com/dp/B012345678",price: 29,rating: 4,reviewsCount: 10,imagePath: "raw/images/B012345678.jpg",imageFileId: imageAsset.id,imageAsset }],[],aggregateTags([{ asin: "B012345678",tag: "fit",quote: "poor fit",source: "dictionary" }]));
+  const competitors = draft.product.workbookDetail.competitors as { hotVariantImageAsset?: { id: string } }[];
+  assert.equal(competitors[0].hotVariantImageAsset?.id,imageAsset.id);
   const file = path.join(temporary,"workbook.xlsx"); await buildXlsx(draft,file);
   const workbook = new ExcelJS.Workbook(); await workbook.xlsx.readFile(file);
   const sheet = workbook.worksheets[0];
@@ -102,4 +107,69 @@ test("rate limit circuit breaker stops retrying after a site block",async () => 
     await assert.rejects(rate.navigate(page,"https://www.amazon.com/dp/B012345678"),/SITE_CIRCUIT_OPEN/);
     assert.equal(JSON.parse(await store.sql("SELECT used FROM request_budget"))[0].used,1);
   } finally { rate.close(); await page.close(); }
+});
+
+test("image upload uses the scoped multipart contract and rejects insecure remote origins",async () => {
+  const imagePath = path.join(temporary,"upload.jpg");
+  const imageBytes = Buffer.from([0xff,0xd8,0xff,0xd9]);
+  await writeFile(imagePath,imageBytes);
+  let received: { path?: string; cookie?: string; body?: Buffer } = {};
+  let responseMode: "success" | "forbidden" | "missing-asset" = "success";
+  const server: Server = createServer((request,response) => {
+    const chunks: Buffer[] = [];
+    request.on("data",chunk => chunks.push(Buffer.from(chunk)));
+    request.on("end",() => {
+      received = { path: request.url, cookie: request.headers.cookie, body: Buffer.concat(chunks) };
+      if (responseMode === "forbidden") { response.writeHead(403); response.end("private response must not enter errors"); return; }
+      if (responseMode === "missing-asset") { response.writeHead(200,{ "content-type": "application/json" }); response.end("{}"); return; }
+      response.writeHead(200,{ "content-type": "application/json" });
+      response.end(JSON.stringify({ asset: { id: "file-uploaded",name: "B012345678.jpg",mimeType: "image/jpeg",size: 4,storageType: "local",uploadedAt: "2026-10-25T00:00:00.000Z",thumbUrl: "/thumb",originalUrl: "/original",thumbFileId: "file-thumb" } }));
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0,"127.0.0.1",resolve));
+  const address = server.address(); assert.ok(address && typeof address === "object");
+  const oldUrl = process.env.SELECTION_ERP_URL; const oldCookie = process.env.SELECTION_ERP_COOKIE;
+  process.env.SELECTION_ERP_URL = `http://127.0.0.1:${address.port}`; process.env.SELECTION_ERP_COOKIE = "session=unit-test-only";
+  try {
+    const asset = await uploadImage(imagePath,"selection-test");
+    assert.equal(asset?.id,"file-uploaded"); assert.equal(received.path,"/api/products/file-assets/upload");
+    assert.equal(received.cookie,"session=unit-test-only");
+    const body = received.body?.toString() ?? "";
+    assert.match(body,/name="workspaceId"[\s\S]*selection-test/); assert.match(body,/name="marketplace"[\s\S]*US/);
+    assert.ok(received.body?.includes(imageBytes));
+    responseMode = "forbidden";
+    await assert.rejects(uploadImage(imagePath,"selection-test"),{ message: "ERP_IMAGE_UPLOAD_FAILED" });
+    responseMode = "missing-asset";
+    await assert.rejects(uploadImage(imagePath,"selection-test"),{ message: "INVALID_UPLOAD_RESPONSE" });
+    delete process.env.SELECTION_ERP_COOKIE;
+    assert.equal(await uploadImage(imagePath,"selection-test"),undefined);
+    process.env.SELECTION_ERP_COOKIE = "session=unit-test-only";
+    process.env.SELECTION_ERP_URL = "http://example.invalid";
+    await assert.rejects(uploadImage(imagePath,"selection-test"),/INSECURE_ERP_ORIGIN/);
+  } finally {
+    if (oldUrl === undefined) delete process.env.SELECTION_ERP_URL; else process.env.SELECTION_ERP_URL = oldUrl;
+    if (oldCookie === undefined) delete process.env.SELECTION_ERP_COOKIE; else process.env.SELECTION_ERP_COOKIE = oldCookie;
+    await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
+
+test("cloud patch command batches original quotes, defaults off and rejects failed or invented results",async () => {
+  const saved = process.env.SELECTION_CLOUD_PATCH_CMD;
+  const rows = Array.from({ length: 51 },(_,index) => ({ asin: "B012345678",star: 2,date: "",text: `Unmatched quote ${index}` }));
+  try {
+    delete process.env.SELECTION_CLOUD_PATCH_CMD;
+    assert.deepEqual(await cloudPatch(rows),[]);
+    const transform = 'let input="";process.stdin.on("data",chunk=>input+=chunk);process.stdin.on("end",()=>{const rows=JSON.parse(input);if(rows.length>50)process.exit(3);process.stdout.write(JSON.stringify(rows.map(row=>({...row,tag:"buckle"}))));});';
+    process.env.SELECTION_CLOUD_PATCH_CMD = JSON.stringify([process.execPath,"-e",transform]);
+    const result = await cloudPatch(rows);
+    assert.equal(result.length,51);
+    assert.deepEqual(result.map(row => row.quote),rows.map(row => row.text));
+    assert.ok(result.every(row => row.source === "cloud" && row.tag === "buckle"));
+    process.env.SELECTION_CLOUD_PATCH_CMD = JSON.stringify([process.execPath,"-e","process.exit(2)"]);
+    await assert.rejects(cloudPatch(rows),{ message: "CLOUD_COMMAND_FAILED" });
+    process.env.SELECTION_CLOUD_PATCH_CMD = JSON.stringify([process.execPath,"-e",'process.stdout.write(JSON.stringify([{asin:"B012345678",tag:"buckle",quote:"invented"}]))']);
+    await assert.rejects(cloudPatch(rows),{ message: "UNSUPPORTED_CLOUD_QUOTE" });
+  } finally {
+    if (saved === undefined) delete process.env.SELECTION_CLOUD_PATCH_CMD; else process.env.SELECTION_CLOUD_PATCH_CMD = saved;
+  }
 });
