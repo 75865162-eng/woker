@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { text, syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
+import { extractPerformanceFields, text, syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
 import { SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { sellfoxPost } from "@/lib/sellfox/client";
 
@@ -23,6 +23,15 @@ test("performance text extracts scalar identities without stringifying objects",
     const actual = text({ [key]: value }, key);
     assert.equal(actual, expected); assert.doesNotMatch(actual, /\[object Object\]/);
   }
+});
+
+test("performance extraction maps confirmed fee and image payload keys to narrow fields", () => {
+  assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: "4.25", giftWrapAmount: 1.5, imageUrl: " https://example.test/item.jpg " }), {
+    promotionDiscount: 4.25, giftWrapFee: 1.5, imageUrl: "https://example.test/item.jpg",
+  });
+  assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: null, giftWrapAmount: "", imageUrl: "" }), {
+    promotionDiscount: null, giftWrapFee: null, imageUrl: null,
+  });
 });
 
 function fixture(storeIds = ["a", "b"]) {
@@ -75,10 +84,11 @@ const page = (prefix: string, size: number, totalPage: number) => ({ rows: Array
 
 test("single-object performance identities reach upsert as extracted values", async () => {
   const f = fixture(["a"]);
-  f.setResponse(() => ({ rows: [{ mskuList: { msku: "M1" }, skuList: { sku: "S1" }, asinList: { asin: "B0X" }, parentAsinList: { parentAsin: "P1" } }], totalPage: 1 }));
+  f.setResponse(() => ({ rows: [{ mskuList: { msku: "M1" }, skuList: { sku: "S1" }, asinList: { asin: "B0X" }, parentAsinList: { parentAsin: "P1" }, promotionDiscountAmount: 4.25, giftWrapAmount: 1.5, imageUrl: "https://example.test/item.jpg" }], totalPage: 1 }));
   await syncSellfoxProductDailySnapshots(input, f.dependencies);
   const row = [...f.rows.values()][0] as Record<string, unknown>;
   assert.deepEqual([row.sourceKey, row.msku, row.sku, row.asin, row.parentAsin], ["M1", "M1", "S1", "B0X", "P1"]);
+  assert.deepEqual([row.promotionDiscount, row.giftWrapFee, row.imageUrl], [4.25, 1.5, "https://example.test/item.jpg"]);
 });
 
 test("page transaction rollback retains the failed page; retry replays it and skips completed stores", async () => {

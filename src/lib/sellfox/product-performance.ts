@@ -35,6 +35,13 @@ export function text(row: RecordLike, key: string) {
 function number(row: RecordLike, key: string) {
   return sellfoxNumber(row, key, ["saleNum", "saleNumFba", "saleNumFbm"].includes(key));
 }
+export function extractPerformanceFields(row: RecordLike) {
+  return {
+    promotionDiscount: sellfoxNumber(row, "promotionDiscountAmount"),
+    giftWrapFee: sellfoxNumber(row, "giftWrapAmount"),
+    imageUrl: text(row, "imageUrl") || null,
+  };
+}
 function pageFrom(payload: unknown) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new SellfoxSyncInputError("产品表现响应结构无法识别。");
   const record = payload as RecordLike;
@@ -113,7 +120,7 @@ export async function syncSellfoxProductDailySnapshots(input: {
               orderNum: sellfoxNumber(row, "orderNum", true), netRevenue: sellfoxNumber(row, "salesPriceNet"), title: text(row, "title"), currency: text(row, "currency"), saleQuantity: number(row, "saleNum"),
               fbaQuantity: number(row, "saleNumFba"), fbmQuantity: number(row, "saleNumFbm"),
               saleRevenue: number(row, "salePrice"), grossProfit: number(row, "profit"), grossProfitRate: number(row, "profitRate"),
-              adCost: number(row, "adTotalCost"), refundRate: number(row, "refundPercent"), payload: row as Prisma.InputJsonValue, syncedAt: capturedAt, updatedAt: now,
+              adCost: number(row, "adTotalCost"), refundRate: number(row, "refundPercent"), ...extractPerformanceFields(row), payload: row as Prisma.InputJsonValue, syncedAt: capturedAt, updatedAt: now,
             };
             await tx.sellfoxProductDailySnapshot.upsert({
               where: { storeId_reportDate_sourceKey_onlySettle: { storeId: store.id, reportDate, sourceKey, onlySettle } },

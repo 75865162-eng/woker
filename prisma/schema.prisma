@@ -1121,6 +1121,9 @@ model SellfoxProductDailySnapshot {
   grossProfit     Float?
   grossProfitRate Float?
   adCost          Float?
+  promotionDiscount Float?
+  giftWrapFee     Float?
+  imageUrl        String?
   refundRate      Float?
   payload         Json
   syncedAt        DateTime     @default(now())

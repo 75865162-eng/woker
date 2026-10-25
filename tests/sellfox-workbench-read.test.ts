@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 import { workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
 import { defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
-import { visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
+import { browseEmptyMessage, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
 
 test("workbench matrix URL round trips independent dimensions, metric, zero filter and ad filters", () => {
   const input = { ...defaultSellfoxView, domain: "sales" as const, dimension: "parentAsin", metric: "revenue", hideZero: true, shops: ["s1"], from: "2026-10-01", to: "2026-10-07" };
@@ -118,4 +118,23 @@ test("order totals preserve null and image columns use current scoped Listing me
     assert.equal(sellfoxColumnValue(image, {mainImage: "https://example.test/product.jpg"}), "https://example.test/product.jpg");
     assert.equal(sellfoxColumnValue(image, {}), "");
   }
+});
+
+test("performance browse selects and sums elevated fee fields and prefers listing image over payload fallback", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-01&to=2026-10-02"));
+  const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" });
+  assert.match(sql.text, /s\."promotionDiscount",s\."giftWrapFee",s\."imageUrl"/);
+  assert.match(sql.text, /sum\("promotionDiscount"\)::float/);
+  assert.match(sql.text, /sum\("giftWrapFee"\)::float/);
+  assert.match(sql.text, /COALESCE\(NULLIF\(l\."mainImage",''\),NULLIF\(s\."imageUrl",''\)\)/);
+  assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\."imageUrl"/);
+});
+
+test("performance fee columns are numeric and available; empty browse guidance follows worker and sync status", () => {
+  const fees = visibleColumns("performance").filter(column => ["promotionDiscount", "giftWrapFee"].includes(column.key));
+  assert.deepEqual(fees.map(({ key, unavailable, numeric }) => [key, unavailable, numeric]), [["promotionDiscount", undefined, true], ["giftWrapFee", undefined, true]]);
+  assert.equal(sellfoxColumnValue(fees[0], { promotionDiscount: 12.5 }), 12.5);
+  assert.match(browseEmptyMessage("sales", { workerOnline: false } as never) ?? "", /Worker.*离线.*立即同步/);
+  assert.match(browseEmptyMessage("performance", { workerOnline: true, latestSuccessByResource: {} } as never) ?? "", /尚无产品表现同步成功记录/);
+  assert.match(browseEmptyMessage("sales", { workerOnline: true, latestSuccessByResource: { sales: { id: "r", resource: "sales", status: "done", startedAt: "2026-10-26" } } } as never) ?? "", /调整日期范围.*补数/);
 });
