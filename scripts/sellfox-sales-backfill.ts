@@ -8,6 +8,7 @@ import { planSellfoxSalesBackfill } from "@/lib/sellfox/backfill-plan";
 import { recoverSellfoxQueueRun } from "@/lib/sellfox/queue-recovery";
 import { getSellfoxSyncQueue } from "@/lib/queue/redis-queue";
 
+let backfillQueue: ReturnType<typeof getSellfoxSyncQueue> | undefined;
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help")) {
@@ -39,7 +40,7 @@ async function main() {
   console.log(JSON.stringify({ mode: args.includes("--apply") ? "apply" : "dry-run", batchKey, startDate, endDate, stores: stores.length, missingStoreDays: missingDays, plannedRuns: units.length, minimumRequests: missingDays * 2, minimumHours: Number((missingDays * 2 * 1.2 / 3600).toFixed(2)) }));
   if (!args.includes("--apply")) return;
   if (process.env.QUEUE_DRIVER !== "redis" || !process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET) throw new Error("需要现有Redis队列与服务端赛狐凭据。");
-  const queue = getSellfoxSyncQueue();
+  const queue = backfillQueue = getSellfoxSyncQueue();
   // Fail before creating durable runs if Redis is unavailable.
   await Promise.race([queue.waitUntilReady(), new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("Redis连接超时，未创建补数任务。")), 5000); timer.unref(); })]);
   const runs = await prisma.$transaction(async (tx) => {
@@ -61,11 +62,11 @@ async function main() {
   console.log(JSON.stringify({ batchKey, totalRuns: runs.length, recoveredOrEnqueued: enqueued, failedRuns: runs.filter((run) => run.status === "failed").length, note: "由专用Worker执行；使用相同参数可恢复queued入队。失败任务保留断点，不自动重建或重置重试次数。计划未更改。" }));
 }
 
-main().catch((error: unknown) => {
+main().catch(() => {
   // Never surface database/Redis URLs or external response bodies.
-  console.error(error instanceof Error && !/prisma|redis|connect|ECONN|Invalid/i.test(error.message) ? error.message : "补数未完成，请检查队列、权限和持久化任务状态。不要重复创建任务。");
+  console.error("补数未完成，请检查参数、队列、权限和持久化任务状态。不要重复创建任务。");
   process.exitCode = 1;
 }).finally(async () => {
-  if (process.env.QUEUE_DRIVER === "redis") await getSellfoxSyncQueue().close().catch(() => undefined);
+  await backfillQueue?.close().catch(() => undefined);
   await prisma.$disconnect();
 });
