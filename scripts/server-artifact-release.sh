@@ -257,7 +257,8 @@ if [ -e "$CURRENT_LINK" ] || [ -L "$CURRENT_LINK" ]; then
 else
   previous_release_dir=""
 fi
-health_url="${HEALTH_URL:-http://127.0.0.1:3000/}"
+# Render a public page: the root auth redirect can succeed while login SSR fails.
+health_url="${HEALTH_URL:-http://127.0.0.1:3000/login}"
 
 if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ] || [ ! -f "$extract_dir/RELEASE-METADATA.json" ]; then
   echo "Artifact is not a complete release package." >&2
