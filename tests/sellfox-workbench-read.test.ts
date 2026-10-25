@@ -235,8 +235,8 @@ test("rollup defaults omit duplicate names and product clutter while preserving 
   }
 });
 
-test("product dimensions and other domains retain their existing column defaults", () => {
-  const sales = ["image", "identity", "name", "analysis", "operations", "salesInsight", "parentAsin", "msku", "sku", "title", "fulfillable", "subtotal"];
+test("sales product defaults omit unavailable operations columns while other defaults stay unchanged", () => {
+  const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "fulfillable", "subtotal"];
   const performance = ["image", "identity", "name", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
   for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
     assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
@@ -251,6 +251,27 @@ test("product dimensions and other domains retain their existing column defaults
       assert.deepEqual(defaultVisibleColumnKeys(domain, dimension), columns[domain].filter(c => c.defaultVisible).map(c => c.key));
     }
   }
+});
+
+test("sales unavailable operations columns remain selectable and explicitly exportable in every dimension", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  const keys = ["operations", "salesInsight"];
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ operations: "unsupported", salesInsight: "unsupported" }], total: 1, totals: [] }] } as unknown as PrismaClient;
+  try {
+    for (const dimension of ["asin", "msku", "sku", "parentAsin", "store", "developer", "spu"]) {
+      const config = visibleColumns("sales", keys, [], dimension);
+      assert.deepEqual(config.map(c => c.key), keys);
+      assert.ok(config.every(c => c.unavailable && !c.defaultVisible));
+      const url = new URL(`http://localhost/?dimension=${dimension}&from=2026-10-25&to=2026-10-25`);
+      const query = sellfoxBrowseQuery(url);
+      const defaults = await (await sellfoxWorkbenchExport("sales", query, scope, url)).text();
+      assert.ok(!defaults.includes('"运营"') && !defaults.includes('"销量洞察"'));
+      for (const key of keys) url.searchParams.append("column", key);
+      const custom = await (await sellfoxWorkbenchExport("sales", query, scope, url)).text();
+      assert.equal(custom.trim(), '"运营","销量洞察"\r\n"",""');
+    }
+  } finally { globals.prisma = previous; }
 });
 
 test("workbench CSV export resolves rollup defaults without column params and honors explicit columns", async () => {
@@ -291,7 +312,7 @@ test("typed exact search binds literal input, rejects absent fields and keeps qu
 test("reference columns combine only visible identity fields and export identical cell values", () => {
   assert.equal(readSellfoxView(new URLSearchParams("domain=sales")).dimension, "asin");
   const sales = visibleColumns("sales",undefined,["2026-10-24"],"asin");
-  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","operations","salesInsight","parentAsin","msku","sku","title","fulfillable","subtotal"]);
+  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","parentAsin","msku","sku","title","fulfillable","subtotal"]);
   const store = sales.find(c=>c.key === "name")!;
   assert.equal(sellfoxColumnValue(store,{name:"店铺",marketplace:"US"}),"店铺\nUS");
   const profit = visibleColumns("performance",undefined,[],"msku").find(c=>c.key === "identity")!;

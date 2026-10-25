@@ -255,7 +255,7 @@ test("reference layout keeps compact filter bands and domain-specific identity c
   await page.setViewportSize({width:1440,height:960});
   const {calls} = await setup(page, "domain=sales&from=2026-10-18&to=2026-10-24",20);
   const expected: Record<string,string[]> = {
-    sales:["图片","ASIN","店铺/站点","分析","运营未接","销量洞察未接","父ASIN","MSKU","品名/SKU","标题","FBA可售","小计"],
+    sales:["图片","ASIN","店铺/站点","分析","父ASIN","MSKU","品名/SKU","标题","FBA可售","小计"],
     performance:["图片","标题/ASIN","店铺/站点","分析","毛利润"],
     listings:["","状态","图片","ASIN/MSKU","标题"],
     ads:["","产品信息","有效未接","服务状态未接","FBA可售","价格","广告活动","广告组"],
