@@ -293,3 +293,46 @@ test("reference layout keeps compact filter bands and domain-specific identity c
   }
   expect(calls.filter(c=>c.body !== null)).toEqual([]);
 });
+
+
+test("AWD hover details stay unknown and column settings fit the narrow viewport", async ({ page }) => {
+  await page.setViewportSize({width:1440,height:900});
+  const {calls} = await setup(page, "domain=sales&from=2026-10-18&to=2026-10-24",20);
+  const trigger=page.getByRole("button",{name:"查看AWD库存明细",exact:true}).first();
+  await trigger.hover();
+  const hint=page.getByRole("tooltip",{name:"AWD库存明细",exact:true});
+  await expect(hint).toBeVisible();
+  for (const label of ["AWD可售","AWD预留","小计"]) await expect(hint.getByText(label,{exact:true})).toBeVisible();
+  await expect(hint.locator("dd")).toHaveText(["—","—","—"]);
+  await expect(hint).toContainText("赛狐有、API/本地无");
+  await hint.getByText("AWD预留",{exact:true}).click();
+  await expect(page.getByRole("region",{name:"记录摘要",exact:true})).toHaveCount(0);
+  await expect(hint).toBeVisible();
+  await page.screenshot({path:"/tmp/sellfox-awd-hover.png",fullPage:false});
+  await page.keyboard.press("Escape");
+  await expect(hint).toHaveCount(0);
+  await trigger.focus();
+  await expect(hint).toBeVisible();
+  await page.getByTestId("sellfox-table-scroll").evaluate(el=>{el.scrollTop=120});
+  await expect(hint).toHaveCount(0);
+  const last=page.getByRole("button",{name:"查看AWD库存明细",exact:true}).last();
+  await last.hover();
+  await expect(hint).toBeVisible();
+  const hintBox=await hint.boundingBox();
+  expect(hintBox!.y).toBeGreaterThanOrEqual(0);expect(hintBox!.y+hintBox!.height).toBeLessThanOrEqual(900);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("columnheader",{name:"10-18",exact:true})).toHaveAttribute("title","业务日 2026-10-18");
+  await page.setViewportSize({width:360,height:640});
+  const summary=page.getByText("自定义列",{exact:true});
+  await summary.click();
+  const menu=page.getByLabel("自定义列面板",{exact:true});
+  await expect(menu).toBeVisible();
+  const box=await menu.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(360);
+  expect(box!.y).toBeGreaterThanOrEqual(0);expect(box!.y+box!.height).toBeLessThanOrEqual(640);
+  await page.screenshot({path:"/tmp/sellfox-columns-mobile.png",fullPage:true});
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
+  await expect(summary).toBeFocused();
+  expect(calls.filter(c=>c.body !== null)).toEqual([]);
+});
