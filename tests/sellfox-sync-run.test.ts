@@ -57,6 +57,8 @@ test("stores resume the failed page and final run summary keeps transactional pr
 
 test("legacy performance runs freeze dates from creation and keep completed checkpoints", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }; const previous = globals.prisma;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
   let run: Record<string, unknown> = {
     id: "legacy", organizationId: "org", workspaceId: "workspace", userId: "user", resource: "performance", executionAttempts: 0, status: "queued",
     startedAt: new Date("2026-10-23T16:00:00Z"),
@@ -76,5 +78,9 @@ test("legacy performance runs freeze dates from creation and keep completed chec
     assert.equal(summary.startDate, "2026-10-23"); assert.equal(summary.datesFrozen, true);
     assert.deepEqual(summary.result, { startDate: "2026-10-23", endDate: "2026-10-23", storeCount: 1, synced: 12 });
     assert.ok(summary.progress);
-  } finally { globals.prisma = previous; }
+  } finally {
+    globals.prisma = previous;
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabaseUrl;
+  }
 });
