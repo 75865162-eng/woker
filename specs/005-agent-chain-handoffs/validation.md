@@ -54,3 +54,13 @@ git diff --check
 命令补充：`npx tsx --test tests/selection-evidence-api.test.ts tests/selection-evidence.test.ts`；浏览器继续使用原 agent-chain 配置。后续发布与真实接口验收需独立执行，本轮未部署。
 
 收尾共享工作区新增赛狐补数脚本/计划函数/测试，随整区提交 `95f6c23` 纳入；补充3/3计划测试、相关ESLint与全库TypeScript均通过。脚本后续仅调整错误脱敏与延迟创建队列的清理逻辑；未运行补数脚本、未创建任务或触发采集。上述238项全量测试结果不包含这3项后加入的测试，单独报告，避免混用统计。
+
+
+## Supplier 证据接线补充验收（2026-10-25）
+
+- `npm run check:fast` 通过：当时 249 项核心测试、全库 ESLint（仅既有 Product hook warning）、TypeScript。随后新增“不同来源工具输出禁止回退”用例，与供应证据其余用例单独复核，6/6 通过。
+- `npm run build` 通过生产构建。最后补充 SHA256 格式校验、证据 toolCallId 和空短名单 handler 防护后，另做定向测试、类型与 lint 复核。
+- Agent 浏览器：原 5 项通过；第 6 项空短名单用例初次因摘要出现两处而发生 locator 严格匹配失败，改为精确摘要匹配后通过。覆盖 Round B→Market→Product→Supplier→Listing 的实际工作台、原六段/审批链与空短名单禁用交接。
+- 证据路径保留原始页面价/MOQ、不猜联系人/交期/成本/评分；来源/URL 无效、工具失败、返回来源不匹配均停止；空短名单为 NEEDS_DATA。报告证据携带原文件标识/hash/导入时间与工具调用标识。
+- 仍为人工提供、未经独立核实的供应线索；无实时采集、正式询价或采购动作。Product 与 Listing 原模拟适配器未在本轮替换，页面回归不代表真实 PRD 成本或刊登文案质量验收。未修改数据库结构、生产或服务器。
+- 并行赛狐改动独立保留，GitHub 同步范围等待用户明确选择；不把并行工作冒充本轮已完成功能。

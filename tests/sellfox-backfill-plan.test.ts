@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planSellfoxSalesBackfill } from "@/lib/sellfox/backfill-plan";
+import { isSellfoxManualBackfill, planSellfoxSalesBackfill } from "@/lib/sellfox/backfill-plan";
+
+test("only explicit persisted manual backfills receive background priority", () => {
+  assert.equal(isSellfoxManualBackfill({ trigger: "manual_backfill" }), true);
+  for (const summary of [null, [], {}, { trigger: "schedule" }, { trigger: "manual" }]) assert.equal(isSellfoxManualBackfill(summary), false);
+});
 
 test("backfill skips covered dates per store and splits gaps into bounded contiguous runs", () => {
   const units = planSellfoxSalesBackfill({ startDate: "2025-11-01", endDate: "2025-11-07", chunkDays: 3, shopExternalIds: ["b", "a"], coverage: [{ shopExternalId: "a", reportDate: "2025-11-02" }, { shopExternalId: "a", reportDate: "2025-11-03" }] });

@@ -4,14 +4,15 @@ import { randomUUID } from "node:crypto";
 import { UnrecoverableError, Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { sellfoxScheduledBackfill } from "@/lib/sellfox/schedule-backfill";
 import { canExecuteSellfoxSync } from "@/lib/sellfox/sync-authorization";
-import { isSellfoxScheduleDue as due, sellfoxSyncScopeLock, sellfoxBackfillWindow } from "@/lib/sellfox/schedule-time";
+import { isSellfoxScheduleDue as due, sellfoxSyncScopeLock } from "@/lib/sellfox/schedule-time";
 import { recoverSellfoxQueueRun } from "@/lib/sellfox/queue-recovery";
 import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/redis-queue";
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { SellfoxRequestError } from "@/lib/sellfox/client";
-import { normalizeSellfoxDates, sellfoxDateAt, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
+import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -57,10 +58,15 @@ async function recoverAndSchedule() {
           await tx.sellfoxSyncRun.create({ data: { id: `sellfox-sync-${randomUUID()}`, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "failed", error: "定时同步已暂停：启用计划的用户或工作区已失去有效权限。", summary: { trigger: "schedule", scheduleId: schedule.id }, finishedAt: now } });
           return;
         }
-        const active = await tx.sellfoxSyncRun.findFirst({ where: { organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, resource: schedule.resource, status: { in: ["queued", "running"] } } });
-        if (active) return;
+        // Historical backlog must not block the daily slot. The same serial worker executes both.
+        const active = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "SellfoxSyncRun"
+          WHERE "organizationId"=${schedule.organizationId} AND "workspaceId"=${schedule.workspaceId}
+            AND resource=${schedule.resource} AND status IN ('queued','running')
+            AND COALESCE(summary->>'trigger','') <> 'manual_backfill' LIMIT 1`;
+        if (active.length) return;
+        const history = await sellfoxScheduledBackfill(tx, schedule, now, Math.min(90, Math.max(1, Math.floor(Number(process.env.SELLFOX_BACKFILL_DAYS_PER_RUN) || 7))));
         const runId = `sellfox-sync-${randomUUID()}`;
-        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", scheduleId: schedule.id, ...(schedule.resource === "sales" && schedule.backfillNextDate ? sellfoxBackfillWindow(schedule.backfillNextDate, sellfoxDateAt(now, -1), Math.min(90, Math.max(1, Math.floor(Number(process.env.SELLFOX_BACKFILL_DAYS_PER_RUN) || 7)))) : {}), ...normalizeSellfoxDates(schedule.resource as "stores" | "inventory" | "sales" | "performance" | "listings" | "ads_report", {}, now), datesFrozen: true, requestVersion: 2 } } });
+        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", scheduleId: schedule.id, ...history, ...normalizeSellfoxDates(schedule.resource as "stores" | "inventory" | "sales" | "performance" | "listings" | "ads_report", {}, now), datesFrozen: true, requestVersion: 2 } } });
         await tx.sellfoxSyncSchedule.update({ where: { id: schedule.id }, data: { lastEnqueuedAt: now } });
       });
     }

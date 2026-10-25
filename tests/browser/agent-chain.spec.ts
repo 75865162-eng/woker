@@ -77,7 +77,7 @@ async function setup(page: Page) {
       const body = request.postDataJSON(); calls.push({ stage, body });
       const runtime = createAgentRuntime({ definitions: [surface.definition], tools: surface.tools, adapters: stage === "market" ? [createSellerSpriteMcpAdapter(), createSelectionAdapter({ loadEvidence: async (fileId) => {
         expect(fileId).toBe(`selection-${request.headers()["x-workspace-id"]}`);
-        return { value: selectionFiles.get(fileId), source: { fileId, sha256: "browser-evidence-hash" } };
+        return { value: selectionFiles.get(fileId), source: { fileId, sha256: "a".repeat(64) } };
       } })] : surface.adapters });
       const result = await runtime.run({ agentId: stage, context: { currentData: body.context?.currentData ?? {}, marketplace: "US" }, input: { handoff: handoffProvenance(body.chainHandoff) as never }, workspaceId: "workspace-a", executor: surface.executor({ request: body, requestedByUserId: "actor" }) });
       const detail: AgentExecutionDetail = { ...result.execution, approvals: result.approvals, traces: result.traces, toolCalls: result.toolCalls, events: result.events };
@@ -173,12 +173,12 @@ test("future-version and foreign-workspace handoffs show errors; unapproved PPC 
 });
 
 
-test("Round B artifact upload produces a Market report with unknown metrics and passes evidence to Product", async ({ page }) => {
+test("Round B evidence passes Market, Product, Supplier and Listing without invented quotations", async ({ page }) => {
   const state = await setup(page);
   await page.goto("http://127.0.0.1:43221/agents/market");
   const button = page.getByRole("button", { name: "从 Round B 证据生成机会", exact: true });
   await expect(button).toBeDisabled();
-  await page.getByLabel("Round B 采集草稿", { exact: true }).setInputFiles({ name: "draft.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(selectionSample)) });
+  await page.getByLabel("Round B 采集草稿", { exact: true }).setInputFiles({ name: "draft.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ ...selectionSample, suppliers: [{ title: "Browser cover lead", shopName: "", url: "https://detail.1688.com/offer/123456.html", price: "", moq: "" }] })) });
   await expect(page.getByText("草稿已上传，可以生成机会。", { exact: true })).toBeVisible();
   await button.click();
   await expect(page.getByText("证据完整度 75/100", { exact: true })).toBeVisible();
@@ -190,6 +190,17 @@ test("Round B artifact upload produces a Market report with unknown metrics and 
   const handoff = state.calls.find((call) => call.stage === "product")!.body as { marketReport: { selectionSource: { fileId: string } }; marketOpportunity: { estimatedMargin: unknown } };
   expect(handoff.marketReport.selectionSource.fileId).toBe("selection-workspace-a");
   expect(handoff.marketOpportunity.estimatedMargin).toBe(null);
+  await page.getByRole("button", { name: "发送到供应 Agent", exact: true }).click();
+  await page.getByRole("button", { name: "运行供应 Agent", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "供应商线索（待核实）", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "查看 1688 原始线索", exact: true })).toHaveAttribute("href", "https://detail.1688.com/offer/123456.html");
+  await expect(page.getByText("待核实 / 未报价 / 待核实", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "确认供应方案并交接刊登", exact: true }).click();
+  await page.getByRole("button", { name: "运行刊登 Agent", exact: true }).click();
+  await expect.poll(() => state.calls.some((call) => call.stage === "listing")).toBe(true);
+  const listing = state.calls.find((call) => call.stage === "listing")!.body as { context: { currentData: { supplierReport: { selectionSource: { fileId: string }; quotationAnalysis: { unitPrice: string; score: number | null }[] } } } };
+  expect(listing.context.currentData.supplierReport.selectionSource.fileId).toBe("selection-workspace-a");
+  expect(listing.context.currentData.supplierReport.quotationAnalysis[0]).toMatchObject({ unitPrice: "未报价", score: null });
   expect(state.errors).toEqual([]);
 });
 
@@ -209,4 +220,19 @@ test("workspace switch cannot revive a late Round B upload", async ({ page }) =>
   // The new workspace reload may clear the transient error; it must never restore old evidence.
   await expect(page.getByRole("button", { name: "从 Round B 证据生成机会", exact: true })).toBeDisabled();
   await expect(page.getByText("草稿已上传，可以生成机会。", { exact: true })).toHaveCount(0);
+});
+
+
+test("empty Round B shortlist blocks Supplier UI handoff to Listing", async ({ page }) => {
+  const state = await setup(page);
+  await page.goto("http://127.0.0.1:43221/agents/market");
+  await page.getByLabel("Round B 采集草稿", { exact: true }).setInputFiles({ name: "draft.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(selectionSample)) });
+  await page.getByRole("button", { name: "从 Round B 证据生成机会", exact: true }).click();
+  await page.getByRole("button", { name: "发送到产品 Agent", exact: true }).click();
+  await page.getByRole("button", { name: "运行产品 Agent", exact: true }).click();
+  await page.getByRole("button", { name: "发送到供应 Agent", exact: true }).click();
+  await page.getByRole("button", { name: "运行供应 Agent", exact: true }).click();
+  await expect(page.getByText("已整理 0 条 Round B 供应线索；未完成供应商核验或正式核价。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "确认供应方案并交接刊登", exact: true })).toBeDisabled();
+  expect(state.errors).toEqual([]);
 });

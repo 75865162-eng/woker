@@ -1,6 +1,8 @@
 import { processImportJob } from "@/lib/jobs/processor";
 import { getAmazonSyncQueue, getImageUpscaleJobQueue, getImportJobQueue, getProductOutboxQueue, getSellfoxSyncQueue } from "@/lib/queue/redis-queue";
 import { processProductOutboxEvent } from "@/lib/products/product-outbox";
+import { prisma } from "@/lib/db/prisma";
+import { isSellfoxManualBackfill } from "@/lib/sellfox/backfill-plan";
 
 export async function enqueueImportJob(jobId: string) {
   const driver = process.env.QUEUE_DRIVER ?? "inline";
@@ -88,5 +90,8 @@ export async function enqueueSellfoxSyncRun(runId: string) {
   if (process.env.QUEUE_DRIVER !== "redis") {
     throw new Error("赛狐数据同步需要启用 Redis Worker。请配置 QUEUE_DRIVER=redis。");
   }
-  await getSellfoxSyncQueue().add("process-sellfox-sync-run", { runId }, { jobId: `sellfox-${runId}` });
+  const run = await prisma.sellfoxSyncRun.findUniqueOrThrow({ where: { id: runId }, select: { summary: true } });
+  // BullMQ unprioritized jobs (manual/daily) run before historical jobs with positive priority.
+  // Reading persisted intent also preserves priority when recovery rebuilds a lost Redis job.
+  await getSellfoxSyncQueue().add("process-sellfox-sync-run", { runId }, { jobId: `sellfox-${runId}`, ...(isSellfoxManualBackfill(run.summary) ? { priority: 10 } : {}) });
 }

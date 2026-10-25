@@ -60,6 +60,31 @@ CSV：`GET /api/sellfox/{inventory|sales|listings|performance|ads_report}/export
 
 广告默认 SP adProductReport；POST sync 可用 `adTypes:["sp","sb","sd"]` 按需选择。SP/SB 真数据报告已验证；SD 已验证真实空报告表头，尚未验收非空数据。SP 的 asin/sku 与 SB/SD 的 ASIN/SKU 映射到同一窄列，payload 保留原始表头；同一报告出现大小写两套身份列时拒绝。所有报告仍须通过完整表头、店铺、日期、身份校验，否则拒绝落库。结构页不是本期主路径。任务创建前持久化创建意图；创建超时不自动重发。结果不明需管理员只读核对上游后，把确切 taskId 关联至原 SellfoxReportTask 再重试同一个 run；不得靠创建新 run 规避未知任务。已取得 taskId 的重试只查进度，下载文件由 storage adapter 管理。无下载URL、分片/域名/格式变化保持失败；不保存带签名的下载URL到日志。报告存储和快照不设自动清理。
 
+## 一次性历史回填
+
+维护命令默认只盘点本地覆盖，不请求赛狐或修改计划。必须显式绑定组织、工作区和仍有 sellfox:create 权限的操作者：
+
+```bash
+npm run sellfox:backfill-sales -- --organization-id=ORG --workspace-id=WORKSPACE --actor-user-id=USER --start-date=2025-11-01 --end-date=2026-10-24 --chunk-days=30
+# 核对缺口和耗时后，追加 --apply 入队；不要省略日期后用跨天变化的默认值恢复批次。
+```
+
+默认分段7天，可指定1–90天；按单店连续缺日拆分，完整覆盖日不重复采集。同组织/工作区/起止日复用原批次，即使改了分段大小也不会另建任务。每段是现有SellfoxSyncRun，沿用分页检查点、执行租约、权限复核、失败按店/日继续和最多4次执行限制；重复同参数 `--apply` 只恢复queued任务入队，失败或已达上限的任务不自动重建。Redis不可用时入队可能部分完成，但DB任务保留，恢复命令及Worker检查可继续。
+
+历史队列任务priority=10，普通手动/定时任务无priority（BullMQ优先处理），concurrency仍为1；正在执行的一段不被抢占。回填期间日销计划仍拉T-1，暂停额外计划历史段；批次结束后，计划从coverage查首个缺日，只越过已验证完整的日期，避免再次拉取整段冬季。
+
+本机启动：`node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-sync-worker.ts`。本轮后台进程PID记录在被Git忽略的 `tmp/sellfox-backfill-worker.pid`，日志在 `tmp/sellfox-backfill-worker.log`；只对该记录中的进程发送SIGTERM可暂停采集，数据库/Redis任务保留，重新启动同一Worker恢复。不要清空队列、删除SyncRun、重置重试次数或重复建批次。当前本机后台进程不是开机自启服务，关机/休眠/进程退出会暂停计划；恢复电脑后须重启Worker。启用本地计划不会更新生产systemd或服务器。
+
+进度从数据库读取，无需调用Open API：
+
+```sql
+SELECT status, count(*) FROM "SellfoxSyncRun"
+WHERE "organizationId" = $1 AND "workspaceId" = $2
+  AND summary->>'backfillBatchKey' = $3
+GROUP BY status;
+-- 必须另查sales_day_coverage确认目标店/日完整；任务入队/运行中不等于回填完成。
+```
+
 ## 字段映射（真实响应2026-10-25核验）
 
 | 赛狐列 | API key/报告表头 | 窄字段 |
@@ -103,3 +128,11 @@ CSV：`GET /api/sellfox/{inventory|sales|listings|performance|ads_report}/export
 - 窄列映射变更通过 `check:fast`（234项核心测试、lint、TypeScript）；本次无Prisma变更，不重复迁移/生产构建。
 - 39店从2025-11-01至2026-10-24共有13,961个店/日缺完整覆盖，至少27,922次指标请求，按1200ms间隔至少9.3小时，另有响应、分页及重试时间。未启动全店补数，计划尚未配置，未发布服务器。
 - 随后完成单店2025-11-01～11-07七天历史试采：14个指标请求、888次指标写入合并为444条店/MSKU/日记录，七日完整覆盖均已发布。证明上一冬季数据可读取，不代表已补齐全店长窗；试采后缺口为13,954个店/日。
+
+### 全店回填与计划启动（2026-10-25，仍在执行）
+
+用户随后明确授权“完成本地验收、冬季回填，并开启定时计划”。本地39店2025-11-01～2026-10-24缺口按30天分成468个持久化任务，批次key为 `5f39aa239993b36b531b41299987b5a4a775be1f79540d57013f0e450d8922b9`，已全部入队；重复同参运行未增加批次任务数。至少27,908次指标请求、9.3小时限流时间，实际还需响应/分页、定时采集和重试时间。尚不能标记全店回填完成。
+
+已开启当前本地工作区inventory（180分钟）、sales/performance/listings/ads_report（每日06:30 Asia/Shanghai）5项计划；过点首次启动已生成各域补跑任务。广告计划默认SP，未擅自扩为所有广告类型。本机专用Worker在线，实测仅1任务active，日常任务在waiting，历史任务在prioritized；销售定时任务不带重复历史窗口。未启动stores/hourly计划，未修改生产服务器。
+
+启动后首个单店2025-11-01～11-30分段已完成（1,682次指标写入），缺口从13,954降至13,924个店/日；随后执行库存定时任务，验证日常任务优先接续。该时点批次1段done、467段queued，属于进行中结果。回填规划、优先级识别、计划不重复补数及已覆盖游标测试通过；`check:fast`共250项测试、lint、TypeScript通过，仅保留原有商品工作台hook warning。无Prisma变更，未重复迁移或生产构建。

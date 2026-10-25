@@ -143,7 +143,7 @@ export function SupplierAgentWorkbench() {
   }
 
   function handoffToListing() {
-    if (!report) return;
+    if (!report || report.sourcingStatus === "NEEDS_DATA") return;
     try {
       sendChainHandoff({ previous: chain.payload, from: "supplier", to: "listing", payload: { ...selectedHandoff, goal, marketplace, category, supplierReport: report }, sourceExecutionId: currentExecution?.id ?? "", sourceWorkspaceId: currentExecution?.workspaceId, organizationId: shellUser?.organizationId, userId: shellUser?.userId });
     } catch (err) { setError(err instanceof Error ? err.message : "交接失败。"); }
@@ -346,7 +346,7 @@ export function SupplierAgentWorkbench() {
                 {running ? "运行中..." : "运行供应 Agent"}
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button type="button" variant="secondary" onClick={handoffToListing} disabled={!report}>确认供应方案并交接刊登</Button>
+              <Button type="button" variant="secondary" onClick={handoffToListing} disabled={!report || report.sourcingStatus === "NEEDS_DATA"}>确认供应方案并交接刊登</Button>
               <Button type="button" onClick={createProject} disabled={!canCreate || projecting || !report} title={!canCreate ? "没有 Agent 创建权限" : undefined}>
                 {projecting ? "创建中..." : "创建供应项目"}
                 <SquareKanban className="h-4 w-4" />
@@ -392,16 +392,18 @@ export function SupplierAgentWorkbench() {
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>供应商推荐</CardTitle>
+            <CardTitle>{report?.selectionSource ? "供应商线索（待核实）" : "供应商推荐"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {report?.selectionSource && <div className="text-xs text-muted">{report.summary} {report.sourcingStatus === "NEEDS_DATA" ? "请补充供应线索后重新运行。" : report.selectionSource.stale ? "证据已过期，请重新核实。" : "请人工核实后交接。"} 来源：{report.selectionSource.slug}</div>}
             {report?.supplierRecommendations.length ? report.supplierRecommendations.map((supplier) => (
               <div key={supplier.supplierId} className="rounded-md border border-border p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">{supplier.supplierName}</div>
-                  <Badge tone="blue">{Math.round(supplier.confidence * 100)}%</Badge>
+                  <Badge tone="blue">{report?.selectionSource ? "待评估" : `${Math.round(supplier.confidence * 100)}%`}</Badge>
                 </div>
                 <div className="mt-1 text-xs text-muted">{supplier.summary}</div>
+                {supplier.sourceUrl && <a href={supplier.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand">查看 1688 原始线索</a>}
               </div>
             )) : <EmptyState text="暂无供应商推荐。" />}
           </CardContent>
@@ -433,14 +435,14 @@ export function SupplierAgentWorkbench() {
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>报价分析</CardTitle>
+            <CardTitle>{report?.selectionSource ? "页面价格线索（非正式报价）" : "报价分析"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {report?.quotationAnalysis.length ? report.quotationAnalysis.map((item) => (
               <div key={item.supplierId} className="rounded-md border border-border p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">{item.supplierName}</div>
-                  <Badge tone="gray">{item.score}</Badge>
+                  <Badge tone="gray">{item.score === null ? "待评估" : item.score}</Badge>
                 </div>
                 <div className="mt-1 text-xs text-muted">{item.moq} / {item.unitPrice} / {item.leadTime}</div>
               </div>

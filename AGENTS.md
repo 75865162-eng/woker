@@ -366,8 +366,9 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 ## 赛狐 Agent 本地读取
 
 - `docs/sellfox-agent-read.md` 定义库存 current、MSKU 日销、Listing current、利润及广告产品日报窄表/SQL 视图、CSV、字段映射与缺失值口径。Agent/CLI 例行读本地，不调用赛狐 API 或依赖网页登录；ProductRecord 不被赛狐覆盖。
-- 库存/Listing current 只发布完整店铺采集；日销需校验 coverage/complete，缺日不得补零。广告日报缺预算时禁止给暂停/降预算建议；SP已核验，SB/SD仍需同等响应验收。
+- 库存/Listing current 只发布完整店铺采集；日销需校验 coverage/complete，缺日不得补零。广告日报缺预算时禁止给暂停/降预算建议；SP/SB真数据已核验，SD仅验证真实空报告，非空数据仍待验收。
 - 销量计划可配置 backfillStart，持久化游标默认从上一完整冬季开始；`SELLFOX_BACKFILL_DAYS_PER_RUN` 默认7、上限90。所有计划默认关闭，扩采前评估≥1200ms串行耗时。
+- `npm run sellfox:backfill-sales -- --help`：按显式组织/工作区/操作者盘点完整覆盖缺口，默认dry-run；`--apply`按店拆分最多90天加入现有队列，相同日期范围复用原批次。历史任务低于手动/定时任务优先级；开启计划需另行授权，历史回填期间日销计划仍拉T-1，不重复启动历史补数。执行与恢复见 `docs/sellfox-agent-read.md`。
 
 ## 经营中台定时同步
 
@@ -395,7 +396,7 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 - 凭据仅由服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 读取；overview 只返回 configured。所有 Open API 请求必须在 Node Worker 中经 `src/lib/sellfox/client.ts` 发起。
 - 使用专用 `npm run worker:sellfox-sync` 和 `amazon-sellfox-sync-worker.service`；BullMQ concurrency 固定为 1。客户端对 token、重试和资源请求统一串行，间隔不少于 1200ms。
-- 官方 token `expires_in` 单位为毫秒。库存/销量已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。Listing 响应仍待核验，由 `sellfoxSyncDisabledReason` 禁止手动/定时/已入队任务同步；不得删除检查恢复猜字段落库。
+- 官方 token `expires_in` 单位为毫秒。库存/销量/Listing已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts`、`narrow-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。后续未验证资源仍由 `sellfoxSyncDisabledReason` 禁止同步，不得恢复猜字段落库。
 - 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
 - ProductRecord 保持唯一商品主档事实源。赛狐快照只服务报表、列表和只读分析。
 - 手动与定时任务共用 SellfoxSyncRun 和 sync service；计划需在当前工作区由有 `sellfox:create` 权限的用户显式启用。同步 Worker 与 Redis 不可用时 API 返回服务端错误，不退化为请求内同步。

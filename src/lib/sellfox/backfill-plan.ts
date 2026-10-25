@@ -1,6 +1,9 @@
 import { isSellfoxDate } from "./sync-contract";
 
 const DAY = 86_400_000;
+export function isSellfoxManualBackfill(summary: unknown) {
+  return Boolean(summary && typeof summary === "object" && !Array.isArray(summary) && "trigger" in summary && summary.trigger === "manual_backfill");
+}
 export type SalesBackfillUnit = { shopExternalId: string; startDate: string; endDate: string; days: number };
 /** Only contiguous uncovered days enter a run. Never republish coverage for skipped captures. */
 export function planSellfoxSalesBackfill(input: {

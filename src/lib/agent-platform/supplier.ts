@@ -1,3 +1,4 @@
+import { buildSupplierEvidenceReport, supplierSelectionSource } from "./supplier-evidence";
 import type {
   AgentDefinition,
   AgentEventName,
@@ -24,10 +25,12 @@ export interface SupplierQuotation {
   leadTime: string;
   sampleCost: string;
   notes: string;
-  score: number;
+  score: number | null;
+  sourceUrl?: string;
 }
 
 export interface SupplierRecommendation {
+  sourceUrl?: string;
   supplierId: string;
   supplierName: string;
   summary: string;
@@ -47,6 +50,8 @@ export interface SupplierRfQSection {
 }
 
 export interface SupplierAnalysisReport {
+  selectionSource?: NonNullable<import("./market").MarketResearchReport["selectionSource"]>;
+  sourcingStatus?: "NEEDS_DATA" | "NEEDS_VERIFICATION";
   goal: string;
   marketplace: string;
   category?: string;
@@ -425,7 +430,18 @@ export function createSupplierMcpAdapter(clock: () => Date = () => new Date()): 
     adapterId: supplierToolAdapterId,
     async execute(input: ToolExecutionInput): Promise<ToolExecutionResult> {
       const startedAt = clock().getTime();
-      const output = toJsonValue(buildSyntheticSupplierOutput(input, clock));
+      const snapshot = extractJsonObject(input.input);
+      const source = supplierSelectionSource(snapshot.productReport);
+      const evidenceReport = source ? buildSupplierEvidenceReport(source, String(snapshot.goal ?? "供应线索核实"), String(snapshot.marketplace ?? "US"), String(snapshot.productSummary ?? "待核实产品方案"), clock().toISOString()) : undefined;
+      const evidenceOutputs: Record<string, unknown> = evidenceReport ? {
+        "supplier.product.load": { prd: snapshot.prd, productReport: snapshot.productReport },
+        "supplier.database.search": { suppliers: evidenceReport.supplierRecommendations },
+        "supplier.quotation.analyze": { quotations: evidenceReport.quotationAnalysis },
+        "supplier.recommendation.compose": { suppliers: evidenceReport.supplierRecommendations },
+        "supplier.rfq.draft": evidenceReport.rfqDraft,
+        "supplier.project.draft": evidenceReport.supplierProjectDraft,
+      } : {};
+      const output = toJsonValue(source ? { ...extractJsonObject(toJsonValue(evidenceOutputs[input.toolId])), selectionFileId: source.fileId, selectionSha256: source.sha256 } : buildSyntheticSupplierOutput(input, clock));
 
       return {
         output,
@@ -443,7 +459,26 @@ export function createSupplierAgentExecutionExecutor(options: {
   const clock = options.clock ?? (() => new Date());
   const normalizedInput = normalizeSupplierExecutionInput(options.request, {});
 
-  return async ({ execution, definition, callTool, recordTrace, emitEvent }) => {
+  return async ({ execution, definition, callTool: gatewayCallTool, recordTrace, emitEvent }) => {
+    const selectionSource = supplierSelectionSource(normalizedInput.productReport);
+    const callTool: typeof gatewayCallTool = async (toolId, input) => {
+      const result = await gatewayCallTool(toolId, selectionSource ? toJsonValue({ ...extractJsonObject(input),
+        productReport: normalizedInput.productReport, goal: normalizedInput.naturalLanguageGoal,
+        marketplace: normalizedInput.marketplace, productSummary: summarizeProduct(normalizedInput.prd, normalizedInput.productReport),
+      }) : input);
+      if (selectionSource && (result.status !== "SUCCEEDED" || !result.output || typeof result.output !== "object" || Array.isArray(result.output))) {
+        throw new Error(`Round B 供应工具 ${toolId} 未成功，已停止交接报告生成。`);
+      }
+      if (selectionSource) {
+        const output = extractJsonObject(result.output);
+        const requiredArray: Record<string, string> = { "supplier.database.search": "suppliers", "supplier.quotation.analyze": "quotations", "supplier.recommendation.compose": "suppliers", "supplier.rfq.draft": "questions", "supplier.project.draft": "stages" };
+        const field = requiredArray[toolId];
+        if (output.selectionFileId !== selectionSource.fileId || output.selectionSha256 !== selectionSource.sha256 || (field && !Array.isArray(output[field]))) {
+          throw new Error(`Round B 供应工具 ${toolId} 返回的证据不匹配，已停止报告生成。`);
+        }
+      }
+      return result;
+    };
     const generatedAt = clock().toISOString();
 
     recordTrace(
@@ -532,7 +567,7 @@ export function createSupplierAgentExecutionExecutor(options: {
       projectResult,
       generatedAt,
     });
-    const report: SupplierAnalysisReport = {
+    let report: SupplierAnalysisReport = {
       goal: normalizedInput.naturalLanguageGoal,
       marketplace: normalizedInput.marketplace,
       category: normalizedInput.category,
@@ -546,6 +581,11 @@ export function createSupplierAgentExecutionExecutor(options: {
       recommendation,
       generatedAt,
     };
+
+    if (selectionSource) {
+      const evidenceReport = buildSupplierEvidenceReport(selectionSource, normalizedInput.naturalLanguageGoal, normalizedInput.marketplace, report.productSummary, generatedAt);
+      report = { ...evidenceReport, category: normalizedInput.category, supplierRecommendations: recommendations, quotationAnalysis: quotations, rfqDraft, supplierProjectDraft: projectDraft, evidence: evidenceReport.evidence.map((item) => ({ ...item, toolCallId: supplierSearchResult.toolCall?.id })) };
+    }
 
     const memoryItems = buildMemoryItems({
       execution,
@@ -562,19 +602,19 @@ export function createSupplierAgentExecutionExecutor(options: {
       recommendation: {
         summary: report.recommendation,
         evidence: report.evidence,
-        risks: projectDraft.risks,
-        confidence: clampScore(recommendations[0]?.confidence ?? 0.7) / 100,
+        risks: report.supplierProjectDraft.risks,
+        confidence: selectionSource ? 0 : clampScore(recommendations[0]?.confidence ?? 0.7) / 100,
         nextAction: "Review supplier shortlist and RFQ draft before sourcing approval.",
       },
       decision: {
         summary: report.summary,
-        rationale: "Supplier planning is complete and ready for human review.",
-        confidence: clampScore(recommendations[0]?.confidence ?? 0.7) / 100,
+        rationale: selectionSource ? "仅整理用户提供的供应线索，供应商与报价尚未核实。" : "Supplier planning is complete and ready for human review.",
+        confidence: selectionSource ? 0 : clampScore(recommendations[0]?.confidence ?? 0.7) / 100,
         nextStep: "Review sourcing project draft and RFQ",
       },
       output: toJsonValue({
         report,
-        evidence,
+        evidence: report.evidence,
       }),
       tokenUsage: 150,
       costCents: 0,
@@ -917,6 +957,7 @@ function extractSupplierRecommendations(value: JsonValue | undefined): SupplierR
         strengths: normalizeStringArray(item.strengths),
         risks: normalizeStringArray(item.risks),
         confidence: typeof item.confidence === "number" ? item.confidence : 0.7,
+        sourceUrl: typeof item.sourceUrl === "string" ? item.sourceUrl : undefined,
       };
     })
     .filter((item): item is SupplierRecommendation => Boolean(item));
@@ -942,7 +983,8 @@ function extractSupplierQuotations(value: JsonValue | undefined): SupplierQuotat
         leadTime: String(item.leadTime ?? "-"),
         sampleCost: String(item.sampleCost ?? "-"),
         notes: String(item.notes ?? ""),
-        score: typeof item.score === "number" ? clampScore(item.score) : 70,
+        score: item.score === null ? null : typeof item.score === "number" ? clampScore(item.score) : 70,
+        sourceUrl: typeof item.sourceUrl === "string" ? item.sourceUrl : undefined,
       };
     })
     .filter((item): item is SupplierQuotation => Boolean(item));
@@ -961,7 +1003,7 @@ function extractSupplierRecommendationItems(
     summary: quotation.notes,
     strengths: ["Quotation available"],
     risks: ["Synthetic quotation requires validation"],
-    confidence: quotation.score / 100,
+    confidence: quotation.score === null ? 0 : quotation.score / 100,
   }));
 }
 
@@ -1042,7 +1084,7 @@ function buildMemoryItems(input: {
         requestedByUserId: input.requestedByUserId ?? null,
       }),
       sourceExecutionId: input.execution.id,
-      confidence: Math.max(0.55, input.report.supplierRecommendations[0]?.confidence ?? 0.7),
+      confidence: input.report.selectionSource ? 0 : Math.max(0.55, input.report.supplierRecommendations[0]?.confidence ?? 0.7),
       createdAt: input.generatedAt,
       updatedAt: input.generatedAt,
     },

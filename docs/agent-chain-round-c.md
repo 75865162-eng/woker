@@ -44,7 +44,7 @@ Orchestrator 可先准备缺少报告的 brief；业务 Agent 的出站必须携
 - 仅保留 brief/竞品观测/评论引用/供应商线索；丢弃正式 product payload、fileId、本地路径及任意附加字段。通过 storage adapter + 既有 FileObject 保存规范化研究 JSON，数据库失败清理新对象。
 - 工具只接受 fileId，加载时精确过滤 organization/workspace、done/JSON 及专用存储前缀；身份由鉴权 route 闭包传入，不能从客户端 context 覆盖。Trace/report 保存 fileId、规范化证据 SHA256、原采集时间；超过 7 天提示重新核实。刷新可读取原执行报告，工作区切换丢弃迟到上传/执行。
 - 不把 BSR 转成真实销量，也不由小样本推断市场需求、趋势、利润或风险；缺失信号及商业机会分为 null。保留真实零值。`evidenceCompleteness` 单独表示竞品 price/rating/reviewsCount/bsr 字段覆盖率，不作为 `opportunityScore` 传给下一段；置信度保守为 0，UI 标待评估。旧数字型报告继续兼容。
-- 机会与报告通过原 Opportunity v1 handoff 传给 Product，供应商线索保留在 `report.selectionSource.suppliers`。Supplier 当前业务适配器的真实消费仍待后续接线，不能声称供应询价已自动完成。
+- 机会与报告通过原 Opportunity v1 handoff 传给 Product，供应商线索保留在 `report.selectionSource.suppliers`。Supplier 已消费这些线索并保留原链接、fileId/hash；仅整理线索和未发送询价草稿，不表示正式询价或供应商核验完成。
 
 **操作**：本机 Round B 生成实际草稿 → 在 `/agents/market` 选择 `selections/<slug>/derived/draft.json` → 生成机会 → 人工核对证据 → 发送到 Product。研究原始文件仍不提交 GitHub；上传只保存规范化证据。
 
@@ -69,3 +69,14 @@ npm run check:fast
 本次 Agent 改动无 schema/migration/worker/部署配置变更；交接是浏览器导航缓存，商品/审批事实源仍在现有数据库。回滚代码时保留历史 Approval/Trace；旧代码存在客户端 Launch 标记信任缺陷，回滚期间应关闭全链 Launch/PPC 交接入口，不能把恢复该绕过当作替代方案。
 
 GitHub 同步必须盘点并确认整个工作区改动；工作区含并行赛狐、Round B、依赖和 Prisma 改动，不能只推送当前聊天文件或假设它们已验收。服务器发布未获授权，未执行。合码前先修复工作区全量检查阻碍，再按 AGENTS.md 执行完整 check；发布走明确授权的 CI artifact 链。
+
+## Round B 供应线索接线
+
+Product 原报告中的 `sourceMarketReport.selectionSource` 通过既有 Product→Supplier handoff 传入。Supplier 复用六个 Tool Gateway 工具；来源存在时禁止模拟工厂回退，包括空短名单和工具失败。无 Round B 来源的旧独立流程维持兼容。
+
+- 保留 1688 原始商品链接、页面价格和 MOQ 原文，不转换币种、不补造联系人、交期、样品费或正式报价；评分 null、置信度 0，询价草稿尚未发送。
+- `sourcingStatus=NEEDS_VERIFICATION` 表示线索待核实；空短名单为 `NEEDS_DATA`，UI 禁止交接 Listing。非法来源/非 1688 商品 URL/工具失败或来源不匹配直接停止，不产出模拟成功报告。
+- 页面显示来源、待核实提示和过期状态；采购人工复核后通过既有 Supplier→Listing 按钮传递完整 supplierReport，包括 selectionSource 和未知字段。这是草稿交接，不代表已采购、已核价或已签约。
+- 未新增表、worker、依赖或业务写权限；无外部询价/采购请求。回滚本次 Supplier 代码可撤销接线，原始 Market 文件与历史执行保留；回滚期间不要将旧模拟供应报告作为真实证据。
+
+相关验证：`npx tsx --test tests/supplier-evidence.test.ts tests/supplier-agent.test.ts`；浏览器六段回归新增 Round B Market→Product→Supplier→Listing 实际页面路径。

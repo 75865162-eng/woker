@@ -34,3 +34,6 @@ Opportunity / PRD / SupplierShortlist / ListingDraft / LaunchTicket / PpcPlan；
 
 ## Assumptions
 P0+ 自动顺序 execution、Round B 真采集、SP-API 上架与真实 Ads transport 不在本期。每次业务交接点击代表人工复核草稿；高风险写入仍需持久化审批。
+
+### Round B 供应线索增量
+Supplier 消费 Product 保留的 selectionSource，展示未经核验的 1688 线索，未知价格/联系人/交期不得模拟；空短名单阻止 UI 交接，异常停止生成；人工审阅后原报告传到 Listing。不得发送询价、采购或改正式商品。
