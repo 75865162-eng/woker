@@ -159,7 +159,7 @@ test("sales matrix filters debounce, serialize dimensions and preserve visible e
   await expect.poll(() => calls.filter(c => c.path.endsWith("/sales")).at(-1)?.query.get("hideZero")).toBe("1");
   const last = calls.filter(c => c.path.endsWith("/sales")).at(-1)!;
   expect(last.query.get("dimension")).toBe("parentAsin"); expect(last.query.get("metric")).toBe("revenue");
-  await expect(page.getByRole("button", { name: "SPU", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "SPU", exact: true })).toBeEnabled();
   await expect(page.getByRole("checkbox", { name: "实时统计", exact: true })).toBeDisabled();
   await expect(page.getByRole("checkbox", { name: "实时统计", exact: true })).not.toBeChecked();
   await page.getByText("自定义列", { exact: true }).click();
@@ -424,10 +424,20 @@ for (const domain of ["sales", "performance"] as const) {
     await expect(page.getByRole("columnheader", { name: domain === "sales" ? "店铺" : "标题/店铺", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /dimension=store/);
     if (domain === "performance") await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveAttribute("href", /dimension=store/);
-    for (const name of ["开发员", "业务员", ...(domain === "sales" ? ["SPU"] : [])]) {
+    for (const name of ["业务员"]) {
       const tab = tabs.getByRole("button", { name, exact: true });
       await expect(tab).toBeDisabled();
-      await expect(tab.locator("..")).toHaveAttribute("title", "本地未同步该维度");
+    }
+    const developer = tabs.getByRole("button", { name: "开发员", exact: true });
+    await expect(developer).toBeEnabled();
+    await developer.click();
+    await expect.poll(latestDimension).toBe("developer");
+    if (domain === "sales") {
+      const spu = tabs.getByRole("button", { name: "SPU", exact: true });
+      await expect(spu).toBeEnabled();
+      await spu.click();
+      await expect.poll(latestDimension).toBe("spu");
+      await expect(page).toHaveURL(/dimension=spu/);
     }
     if (domain === "performance") await expect(tabs.getByRole("button", { name: "SPU", exact: true })).toHaveCount(0);
     await page.reload();

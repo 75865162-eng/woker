@@ -5,6 +5,7 @@ export class SellfoxBrowseError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
 }
 export type SellfoxBrowseDomain = "stores" | "inventory" | "sales" | "performance" | "hourly" | "runs" | "listings" | "ads_report";
+export type SellfoxBrowseDimension = "asin" | "parentAsin" | "msku" | "sku" | "store" | "developer" | "spu";
 export const sellfoxBrowseDomains: SellfoxBrowseDomain[] = ["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report"];
 export const sellfoxExportLimit = 10_000;
 export function sellfoxBrowseQuery(url: URL) {
@@ -24,7 +25,7 @@ export function sellfoxBrowseQuery(url: URL) {
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   return {
     layout: p.get("layout") === "workbench",
-    dimension: (["asin", "parentAsin", "msku", "sku", "store"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as "asin" | "parentAsin" | "msku" | "sku" | "store",
+    dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as SellfoxBrowseDimension,
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",

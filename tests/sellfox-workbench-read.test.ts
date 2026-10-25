@@ -7,7 +7,7 @@ import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxV
 import { browseEmptyMessage, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
 
 test("workbench matrix URL round trips independent dimensions, metric, zero filter and ad filters", () => {
-  const input = { ...defaultSellfoxView, domain: "sales" as const, dimension: "parentAsin", metric: "revenue", hideZero: true, shops: ["s1"], from: "2026-10-01", to: "2026-10-07" };
+  const input = { ...defaultSellfoxView, domain: "sales" as const, dimension: "parentAsin" as const, metric: "revenue", hideZero: true, shops: ["s1"], from: "2026-10-01", to: "2026-10-07" };
   const params = sellfoxViewParams(input, true), query = sellfoxBrowseQuery(new URL(`http://localhost/?${params}`));
   assert.equal(query.dimension, "parentAsin"); assert.equal(query.metric, "revenue"); assert.equal(query.hideZero, true); assert.equal(query.layout, true);
   const view = readSellfoxView(sellfoxViewParams(input)); assert.equal(view.dimension, input.dimension); assert.equal(view.hideZero, true);
@@ -69,15 +69,34 @@ test("date backfill never invents dates, changes explicit/open-ended ranges or r
     { ...implicit, allDates: true }, { ...implicit, domain: "listings" as const },
   ]) assert.equal(backfillSellfoxViewDates(view, ["2026-10-16"]), view);
 });
-test("UI browse SQL binds scope and search text, filters after entity aggregation, and never reads raw payload", () => {
+test("UI browse SQL binds scope and search text, filters after entity aggregation, and scopes listing payload reads", () => {
   const query = sellfoxBrowseQuery(new URL('http://localhost/?from=2026-10-01&to=2026-10-07&search=%27%3BDROP%20TABLE&hideZero=1&dimension=asin'));
   const sql = workbenchReadSql("sales", query, { organizationId: "org-unique", workspaceId: "workspace-unique" });
   assert.ok(sql.values.includes("org-unique")); assert.ok(sql.values.includes("workspace-unique")); assert.ok(sql.values.includes("%';DROP TABLE%"));
-  assert.ok(!sql.text.includes("DROP TABLE")); assert.ok(!sql.text.includes("payload"));
+  assert.ok(!sql.text.includes("DROP TABLE")); assert.match(sql.text, /p\.payload->'devList'/); assert.match(sql.text, /p\.payload->>'commodityName'/);
+  assert.ok(sql.values.includes("org-unique"));
   assert.match(sql.text, /bool_and\(complete AND quantity IS NOT NULL\)/);
   assert.match(sql.text, /filtered AS \(SELECT \* FROM grouped WHERE true AND quantity IS DISTINCT FROM 0\)/);
   const ads = workbenchReadSql("ads_report", { ...query, quickFilter: "clicksNoOrders" }, { organizationId: "org", workspaceId: "ws" });
   assert.match(ads.text, /clicks>0 AND "adOrders"=0/);
+});
+test("developer and SPU use one primary-resolved Listing row per fact without array fan-out", () => {
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  for (const [domain, dimension, label] of [["sales", "developer", "开发员"], ["sales", "spu", "SPU"], ["performance", "developer", "开发员"]] as const) {
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&search=${encodeURIComponent(label)}`));
+    const sql = workbenchReadSql(domain, query, scope);
+    assert.match(sql.text, /LEFT JOIN LATERAL \(SELECT candidate\.\*/);
+    assert.match(sql.text, /s\.msku IS NOT NULL AND candidate\.msku=s\.msku/);
+    assert.match(sql.text, /s\.asin IS NOT NULL AND candidate\.asin=s\.asin/);
+    assert.match(sql.text, /item\.value->>'devId'=p\.payload->>'devId'/);
+    assert.match(sql.text, /ORDER BY item\.ordinality LIMIT 1/);
+    assert.match(sql.text, /COALESCE\(NULLIF\(p\.payload->>'commodityName',''\),NULLIF\(p\.payload->>'commoditySku',''\),'未分配SPU'\)/);
+    assert.match(sql.text, /FROM base GROUP BY "storeId",(?:identity,currency|currency,identity)/);
+    assert.match(sql.text, /COALESCE\(l\.developer,'未分配开发员'\) ILIKE|COALESCE\(l\.spu,'未分配SPU'\) ILIKE/);
+    assert.doesNotMatch(sql.text, /CROSS JOIN LATERAL jsonb_array_elements/);
+    assert.ok(sql.values.includes(`%${label}%`));
+  }
+  assert.match(workbenchReadSql("performance", sellfoxBrowseQuery(new URL("http://localhost/?dimension=spu")), scope).text, /COALESCE\(NULLIF\(s\."asin",''\), NULLIF\(s\.msku,''\), s\.id\) AS identity/);
 });
 test("store dimension groups by storeId and currency with joined name/site and bound store-name search", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/?dimension=store&from=2026-10-24&to=2026-10-24&search=TK%E5%BA%97"));
@@ -149,6 +168,9 @@ test("reference columns combine only visible identity fields and export identica
   const profit = visibleColumns("performance",undefined,[],"msku").find(c=>c.key === "identity")!;
   assert.equal(profit.labelZh,"标题/MSKU");
   assert.equal(sellfoxColumnValue(profit,{title:"商品",identity:"MSKU-1",payload:{title:"错误来源"}}),"商品\nMSKU-1");
+  const developer = visibleColumns("performance",undefined,[],"developer").find(c=>c.key === "identity")!;
+  assert.equal(developer.labelZh,"开发员");
+  assert.equal(sellfoxColumnValue(developer,{title:"商品",identity:"开发员甲"}),"开发员甲");
   const csv = visibleColumnCsv([profit],[{title:"商品",identity:"MSKU-1"}]);
   assert.match(csv,/"商品\nMSKU-1"/);
   assert.equal(sellfoxColumnValue(profit,{identity:"MSKU-1"}),"MSKU-1");
@@ -204,9 +226,9 @@ test("performance browse selects and sums elevated fee fields and prefers listin
   assert.doesNotMatch(sql.text, /count\((?:DISTINCT )?"mainImageCandidate"\)/);
   for (const domain of ["sales", "performance"] as const) {
     const text = workbenchReadSql(domain, query, { organizationId: "org", workspaceId: "ws" }).text;
-    assert.match(text, /min\(NULLIF\("mainImage",''\)\) AS "mainImage"/);
+    assert.match(text, domain === "sales" ? /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/ : /min\(NULLIF\("mainImageCandidate",''\)\) AS "mainImage"/);
     assert.doesNotMatch(text, /count\((?:DISTINCT )?"(?:listingMainImage|mainImage)"\)/);
-    if (domain === "sales") assert.match(text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
+    if (domain === "sales") assert.match(text, /listingMainImage/);
   }
   assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\."imageUrl"/);
 });

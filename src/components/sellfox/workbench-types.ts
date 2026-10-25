@@ -53,7 +53,7 @@ export const columns: Record<string, SellfoxColumn[]> = {
 export const unavailableReason = "赛狐有、API/本地无";
 export function visibleColumns(domain: string, selected?: string[], dates: string[] = [], dimension = "msku", matrix = false) {
   const configured = columns[domain] ?? [];
-  return [...configured.map(c => c.key === "identity" ? { ...c, labelZh: `${domain === "performance" ? "标题/" : ""}${({ asin: "ASIN", parentAsin: "父ASIN", msku: "MSKU", sku: "SKU", store: "店铺" } as Record<string, string>)[dimension] ?? c.labelZh}` } : c), ...(domain === "sales" ? dates.filter(date => matrix || selected?.includes(`day:${date}`)).map(date => column(`day:${date}`, date.slice(5), { numeric: true })) : [])].filter(c => selected ? selected.includes(c.key) || (matrix && c.key.startsWith("day:")) : c.defaultVisible);
+  return [...configured.map(c => c.key === "identity" ? { ...c, labelZh: `${domain === "performance" && dimension !== "developer" ? "标题/" : ""}${({ asin: "ASIN", parentAsin: "父ASIN", msku: "MSKU", sku: "SKU", store: "店铺", developer: "开发员", spu: "SPU" } as Record<string, string>)[dimension] ?? c.labelZh}`, ...(domain === "performance" && dimension === "developer" ? { parts: ["identity"] } : {}) } : c), ...(domain === "sales" ? dates.filter(date => matrix || selected?.includes(`day:${date}`)).map(date => column(`day:${date}`, date.slice(5), { numeric: true })) : [])].filter(c => selected ? selected.includes(c.key) || (matrix && c.key.startsWith("day:")) : c.defaultVisible);
 }
 // Composite cells share their value with CSV/XLSX; no field is guessed from payload.
 export function sellfoxColumnValue(column: SellfoxColumn, row: Row): unknown {

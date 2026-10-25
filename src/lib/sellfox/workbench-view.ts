@@ -1,4 +1,5 @@
 import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
+import type { SellfoxBrowseDimension } from "./browse-query";
 
 export const sellfoxDomains = [
   { id: "overview", label: "概览" }, { id: "stores", label: "店铺" }, { id: "inventory", label: "库存" },
@@ -6,7 +7,7 @@ export const sellfoxDomains = [
   { id: "ads", label: "广告" }, { id: "runs", label: "同步日志" },
 ] as const;
 export type SellfoxDomain = (typeof sellfoxDomains)[number]["id"];
-export type SellfoxView = { domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; dimension?: string; metric?: string; hideZero?: boolean; onlySettle?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
+export type SellfoxView = { domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; dimension?: SellfoxBrowseDimension; metric?: string; hideZero?: boolean; onlySettle?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
 export const defaultSellfoxView: SellfoxView = { domain: "overview", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "asin", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "", pageSize: 20, salesView: "wide" };
 export function readSellfoxView(params: URLSearchParams): SellfoxView {
   const domain = params.get("domain"); const page = Number(params.get("page"));
@@ -14,7 +15,7 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     domain: sellfoxDomains.some((item) => item.id === domain) ? domain as SellfoxDomain : "overview",
     from: isSellfoxDate(params.get("from")) ? params.get("from")! : "", to: isSellfoxDate(params.get("to")) ? params.get("to")! : "",
     status: ["active", "inActive", "delete", "incomplete"].includes(params.get("status") ?? "") ? params.get("status")! : "",
-    dimension: ["asin", "parentAsin", "msku", "sku", "store"].includes(params.get("dimension") ?? "") ? params.get("dimension")! : "asin",
+    dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(params.get("dimension") ?? "") ? params.get("dimension") : "asin") as SellfoxBrowseDimension,
     metric: ["quantity", "orders", "revenue"].includes(params.get("metric") ?? "") ? params.get("metric")! : "quantity",
     onlySettle: params.get("onlySettle") === "1", hideZero: params.get("hideZero") === "1", currency: params.get("currency") ?? (domain === "performance" ? "USD" : ""), adType: ["sp", "sb", "sd"].includes(params.get("adType") ?? "") ? params.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(params.get("quickFilter") ?? "") ? params.get("quickFilter")! : "",

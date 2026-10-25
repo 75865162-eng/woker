@@ -32,14 +32,16 @@ test("shareable view parameters round-trip shops, site, history and pagination",
   const runs = sellfoxViewParams({ ...view, domain: "runs" }, true);
   assert.equal(runs.has("shopExternalId"), false); assert.equal(runs.has("site"), false);
 });
-test("store dimension round trips sales and performance while unknown dimensions retain safe defaults", () => {
+test("store, developer and sales-only SPU dimensions round trip while unknown values retain safe defaults", () => {
   for (const domain of ["sales", "performance"]) {
-    const view = readSellfoxView(new URLSearchParams(`domain=${domain}&dimension=store`));
-    assert.equal(view.dimension, "store");
-    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
-    assert.equal(query(sellfoxViewParams(view, true).toString()).dimension, "store");
+    for (const dimension of ["store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
+      const view = readSellfoxView(new URLSearchParams(`domain=${domain}&dimension=${dimension}`));
+      assert.equal(view.dimension, dimension);
+      assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+      assert.equal(query(sellfoxViewParams(view, true).toString()).dimension, dimension);
+    }
   }
-  for (const dimension of ["", "payload", "storeId", 'store";DROP TABLE', "spu", "salesperson"]) {
+  for (const dimension of ["", "payload", "storeId", 'store";DROP TABLE', "salesperson"]) {
     const params = new URLSearchParams({ dimension });
     assert.equal(readSellfoxView(params).dimension, "asin");
     assert.equal(query(params.toString()).dimension, "msku");
