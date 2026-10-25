@@ -218,3 +218,11 @@ GROUP BY status;
 旧主机升级 Compose 前检查 POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD 是否存在；缺失时只能从当前运行的 PostgreSQL 容器配置补入相同值，验证与 DATABASE_URL 一致，不重置密码、不输出值。Caddy 保留 aecob.com 和两个 IP 入口，不修改 DNS。生产 Worker 使用发布内的 systemd 单元与服务器 .env：systemctl enable --now amazon-sellfox-sync-worker。
 
 验收 schedules API 的 configured、queueEnabled、worker.online，以及 inventory/sales/performance/listings/ads_report 的 enabled/nextRunAt；stores/hourly 不启用，广告保留 SP。等原有30秒调度 tick，记录 trigger=schedule 的成功 run。销量默认从上一完整冬季11月1日起每天补7天，串行限流可能持续十几分钟以上。回滚先关闭五项计划，必要时停专用 Worker；应用失败沿 release 回滚，不 down migration、不清快照。
+
+### aecob.com 生产启用验收 · 2026-10-25
+
+- 目标为旧主机 `159.75.203.221`，组织 `cmu16envk0000h8va9y84ukev` / 工作区 `default`；不涉及新主机数据库。CI run `40163449096` 成功，应用 commit `11f4f4dd4a89565b7fac03e221ad60f27a8ae723`，artifact SHA256 `7275a8bbeba92961b530d08e9209edf64d6e670417196a628eb6129e8a6767c8`。RELEASE-RESULT 显示 health/migration passed，服务 active，数据库未回滚。
+- 专用 Worker enabled/active，NRestarts=0；GET schedules 的 configured/queueEnabled/worker.online 均 true，设置→运维页面确认在线。五项计划通过正式 API 开启；stores/hourly 未启用，广告维持默认 SP，销量 backfillStart=2025-11-01。
+- 初始工作区无店铺，先通过正式 sync API 手动只读采集39店，run `sellfox-sync-99bcbb44-c553-4277-a722-ef8e42402168` done。五项 schedule 于北京时间13:04:51 自动入队。
+- 库存 run `sellfox-sync-4537345d-812d-4cd7-909e-807070be5473`，summary.trigger=schedule，status=done，error=null，完成时间北京时间13:08:20；39店、8621条快照。验收时销量running，performance/listings/ads_report queued，尚不代表其已完成。库存下次为当日16:04:51，其余次日06:30。
+- 本地 check:fast 260项测试、lint和类型检查通过（既有商品Hook警告保留）；最新布局的13项浏览器测试见前述记录。CI 完成测试/lint/build/产物验证与受控迁移，不在本机或服务器构建。全流程未输出.env值、未对赛狐商品/广告写回；日志无持续报错。
