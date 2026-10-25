@@ -15,7 +15,7 @@ async function switchWorkspace(page: Page) {
     window.dispatchEvent(new CustomEvent("amazon-bulk-ad:workspace-scope-changed"));
   });
 }
-async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-10-24", rowCount = 1, tkStore = false) {
+async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-10-24", rowCount = 1, tkStore = false, multiStore = false) {
   const calls: Array<{ path: string; query: URLSearchParams; workspace: string; body: unknown }> = [];
   const state = { configured: true, delayPath: "", pending: false, release: () => {} };
   await page.route("**/*", async (route) => {
@@ -32,7 +32,7 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
       // Even if the transport completes after abort, old scope must never render.
     }
     const store = { id: `store-${workspace}`, externalId: tkStore ? "124687" : `shop-${workspace}`, name: `店铺-${workspace}`, marketplace: "US", country: "US", status: "active", lastSyncedAt: "2026-10-24T00:00:00Z" };
-    if (url.pathname.endsWith("/overview")) return route.fulfill({ json: { configured: state.configured, stores: [store], counts: { stores: 1, inventory: 1, sales: 1, performance: 1, hourly: 0 }, latestRuns: [], latestSuccessByResource: {}, workerOnline: true } });
+    if (url.pathname.endsWith("/overview")) return route.fulfill({ json: { configured: state.configured, stores: multiStore ? [store, { ...store, id: `${store.id}-other`, externalId: "other-shop", name: "另一店铺" }] : [store], counts: { stores: multiStore ? 2 : 1, inventory: 1, sales: 1, performance: 1, hourly: 0 }, latestRuns: [], latestSuccessByResource: {}, workerOnline: true } });
     if (url.pathname.endsWith("/schedules")) return route.fulfill({ json: { schedules: [{ resource: "performance", enabled: false, intervalMinutes: 1440 }] } });
     if (url.pathname.endsWith("/sync")) return route.fulfill({ status: 202, json: { runId: "test-run", status: "queued" } });
     if (/\/(sales|performance|runs)\/row$/.test(url.pathname)) return route.fulfill({ json: { payload: { msku: "test-msku", token: "[已隐藏]" }, truncated: true } });
@@ -68,6 +68,37 @@ test("daily multi-store browsing, shared filters, pagination and browser navigat
   await expect(page.getByText("workspace-a-entity-page1", { exact: true })).toBeVisible();
   await page.getByLabel("日期快捷").selectOption("-29");
   await expect.poll(() => calls.filter(call => call.path.endsWith("/sales")).at(-1)?.query.get("layout")).toBe("workbench");
+});
+
+test("shop name clicks survive unfocused label activation and repeated multi-store changes", async ({ page }) => {
+  const { calls } = await setup(page, "domain=stores", 1, false, true);
+  const trigger = page.getByLabel("展开店铺筛选");
+  const panel = page.getByLabel("店铺筛选", { exact: true });
+  await trigger.click();
+  // macOS can move focus to the document before activating a non-focusable label.
+  await trigger.evaluate(element => (element as HTMLElement).blur());
+  await expect(panel).toBeVisible();
+  const first = panel.locator("label").filter({ hasText: "店铺-workspace-a" });
+  const other = panel.locator("label").filter({ hasText: "另一店铺" });
+  for (let iteration = 0; iteration < 3; iteration++) {
+    await first.getByText("店铺-workspace-a · US", { exact: true }).click();
+    await expect(first.getByRole("checkbox")).toBeChecked();
+    await other.getByText("另一店铺 · US", { exact: true }).click();
+    await expect(other.getByRole("checkbox")).toBeChecked();
+    await expect(trigger).toContainText("已选 2 家店铺");
+    await expect.poll(() => calls.filter(call => call.path === "/api/sellfox/stores").at(-1)?.query.getAll("shopExternalId")).toEqual(["shop-workspace-a", "other-shop"]);
+    await page.getByRole("button", { name: "清空店铺选择", exact: true }).click();
+    await expect(first.getByRole("checkbox")).not.toBeChecked();
+    await expect(other.getByRole("checkbox")).not.toBeChecked();
+    await expect.poll(() => calls.filter(call => call.path === "/api/sellfox/stores").at(-1)?.query.getAll("shopExternalId")).toEqual([]);
+  }
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await page.getByLabel("搜索记录").click();
+  await expect(panel).toBeHidden();
+  expect(calls.some(call => call.body !== null)).toBe(false);
 });
 
 test("performance retains metrics and Excel; raw details load only on explicit expansion", async ({ page }) => {
