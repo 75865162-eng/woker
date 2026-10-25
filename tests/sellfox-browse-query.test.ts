@@ -32,6 +32,19 @@ test("shareable view parameters round-trip shops, site, history and pagination",
   const runs = sellfoxViewParams({ ...view, domain: "runs" }, true);
   assert.equal(runs.has("shopExternalId"), false); assert.equal(runs.has("site"), false);
 });
+test("store dimension round trips sales and performance while unknown dimensions retain safe defaults", () => {
+  for (const domain of ["sales", "performance"]) {
+    const view = readSellfoxView(new URLSearchParams(`domain=${domain}&dimension=store`));
+    assert.equal(view.dimension, "store");
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    assert.equal(query(sellfoxViewParams(view, true).toString()).dimension, "store");
+  }
+  for (const dimension of ["", "payload", "storeId", 'store";DROP TABLE', "spu", "salesperson"]) {
+    const params = new URLSearchParams({ dimension });
+    assert.equal(readSellfoxView(params).dimension, "asin");
+    assert.equal(query(params.toString()).dimension, "msku");
+  }
+});
 test("raw details redact nested credentials and bound large or deep payloads", () => {
   const preview = sellfoxPayloadPreview({ token: "private", rows: [{ client_secret: "hidden", link: "https://example.test/?access_token=private&sign=private", msku: "sku-a" }], large: "x".repeat(3000) });
   const output = JSON.stringify(preview.payload);

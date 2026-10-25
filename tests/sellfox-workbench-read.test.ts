@@ -79,6 +79,46 @@ test("UI browse SQL binds scope and search text, filters after entity aggregatio
   const ads = workbenchReadSql("ads_report", { ...query, quickFilter: "clicksNoOrders" }, { organizationId: "org", workspaceId: "ws" });
   assert.match(ads.text, /clicks>0 AND "adOrders"=0/);
 });
+test("store dimension groups by storeId and currency with joined name/site and bound store-name search", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?dimension=store&from=2026-10-24&to=2026-10-24&search=TK%E5%BA%97"));
+  for (const domain of ["sales", "performance"] as const) {
+    const sql = workbenchReadSql(domain, query, { organizationId: "org", workspaceId: "ws" });
+    assert.match(sql.text, /COALESCE\(NULLIF\(s\."storeId",''\), NULLIF\(s\.msku,''\), s\.id\) AS identity/);
+    assert.doesNotMatch(sql.text, /s\."store"/);
+    assert.match(sql.text, /st\.name AS "storeName",st\.marketplace AS "storeSite"/);
+    assert.match(sql.text, /min\("storeName"\) AS name,min\("storeSite"\) AS marketplace/);
+    assert.match(sql.text, /FROM base GROUP BY "storeId",(?:identity,currency|currency,identity)/);
+    assert.match(sql.text, /FROM filtered GROUP BY currency/);
+    assert.match(sql.text, /st\.name ILIKE \$/);
+    assert.ok(sql.values.includes("%TK店%"));
+    const exact = workbenchReadSql(domain, { ...query, exactMatch: true }, { organizationId: "org", workspaceId: "ws" });
+    assert.match(exact.text, /lower\(st\.name\)=lower\(/);
+    assert.ok(exact.values.includes("TK店"));
+    assert.doesNotMatch(workbenchReadSql(domain, { ...query, searchType: "asin" }, { organizationId: "org", workspaceId: "ws" }).text, /st\.name ILIKE/);
+  }
+});
+
+test("store rows display joined names and clear ambiguous product fields without mixing currency totals", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  try {
+    for (const domain of ["sales", "performance"] as const) {
+      const rows = ["USD", "CAD"].map(currency => ({ storeId: "s1", identity: "s1", name: "TK店", marketplace: "US", currency, members: ["m1", "m2"], asin: "asin1", msku: "m1", sku: "sku1", parentAsin: "parent1", title: "商品1" }));
+      rows.push({ ...rows[0], storeId: "s2", identity: "s2", name: "单品店", members: ["m1"] });
+      const totals = [{ currency: "USD", subtotal: 3 }, { currency: "CAD", subtotal: 5 }];
+      globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => sql.text.startsWith("WITH") ? [{ rows, total: rows.length, totals }] : [] } as unknown as PrismaClient;
+      const result = await readSellfoxWorkbench(domain, sellfoxBrowseQuery(new URL("http://localhost/?dimension=store&from=2026-10-24&to=2026-10-24")), { organizationId: "org", workspaceId: "ws" });
+      assert.deepEqual(result.totals, totals);
+      for (const row of result.rows.slice(0, 2)) {
+        assert.equal(row.identity, "TK店"); assert.equal(row.marketplace, "US");
+        for (const key of ["asin", "msku", "sku", "parentAsin", "title"]) assert.equal(row[key], null);
+      }
+      assert.equal(result.rows[2].identity, "单品店"); assert.equal(result.rows[2].asin, "asin1"); assert.equal(result.rows[2].msku, "m1");
+      const identity = visibleColumns(domain, undefined, [], "store").find(c => c.key === "identity")!;
+      assert.equal(identity.labelZh, domain === "sales" ? "店铺" : "标题/店铺");
+      assert.equal(sellfoxColumnValue(identity, result.rows[0]), "TK店");
+    }
+  } finally { globals.prisma = previous; }
+});
 test("visible-column export matches ordered matrix headers, leaves unsupported values blank and escapes formulas", () => {
   const config = visibleColumns("sales", ["identity", "awdAvailable", "subtotal", "day:2026-10-01"], ["2026-10-01"], "asin");
   assert.deepEqual(config.map(c=>c.labelZh), ["ASIN", "小计", "AWD库存", "10-01"]);

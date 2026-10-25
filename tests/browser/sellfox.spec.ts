@@ -410,6 +410,39 @@ test("sales currency is enabled, follows browse and export requests, and resets 
   await expect(page.getByRole("link", { name: "CSV", exact: true })).not.toHaveAttribute("href", /currency=/);
 });
 
+for (const domain of ["sales", "performance"] as const) {
+  test(`${domain} store dimension follows URL and exports with unsupported dimensions still disabled`, async ({ page }) => {
+    const { calls } = await setup(page, `domain=${domain}&dimension=store&from=2026-10-24&to=2026-10-24`);
+    const tabs = page.getByRole("navigation", { name: "统计维度", exact: true });
+    const store = tabs.getByRole("button", { name: "店铺", exact: true });
+    const asin = page.getByRole("checkbox", { name: "按 ASIN 汇总", exact: true });
+    await expect(store).toBeEnabled();
+    await expect(store).toHaveAttribute("aria-pressed", "true");
+    await expect(asin).not.toBeChecked();
+    const latestDimension = () => calls.filter(call => call.path.endsWith(`/${domain}`)).at(-1)?.query.get("dimension");
+    await expect.poll(latestDimension).toBe("store");
+    await expect(page.getByRole("columnheader", { name: domain === "sales" ? "店铺" : "标题/店铺", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /dimension=store/);
+    if (domain === "performance") await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveAttribute("href", /dimension=store/);
+    for (const name of ["开发员", "业务员", ...(domain === "sales" ? ["SPU"] : [])]) {
+      const tab = tabs.getByRole("button", { name, exact: true });
+      await expect(tab).toBeDisabled();
+      await expect(tab.locator("..")).toHaveAttribute("title", "本地未同步该维度");
+    }
+    if (domain === "performance") await expect(tabs.getByRole("button", { name: "SPU", exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(store).toHaveAttribute("aria-pressed", "true");
+    await asin.check();
+    await expect.poll(latestDimension).toBe("asin");
+    await asin.uncheck();
+    await expect.poll(latestDimension).toBe("msku");
+    await store.click();
+    await expect.poll(latestDimension).toBe("store");
+    await expect(page).toHaveURL(/dimension=store/);
+    expect(calls.filter(call => call.body !== null)).toEqual([]);
+  });
+}
+
 test("P0 orders, settlement scope, current image and KPI follow browse and export filters", async ({ page }) => {
   const { calls } = await setup(page);
   await page.getByRole("button", {name:"订单量",exact:true}).click();

@@ -24,7 +24,7 @@ export function sellfoxBrowseQuery(url: URL) {
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   return {
     layout: p.get("layout") === "workbench",
-    dimension: (["asin", "parentAsin", "msku", "sku"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as "asin" | "parentAsin" | "msku" | "sku",
+    dimension: (["asin", "parentAsin", "msku", "sku", "store"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as "asin" | "parentAsin" | "msku" | "sku" | "store",
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",

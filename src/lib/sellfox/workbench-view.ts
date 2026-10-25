@@ -14,7 +14,7 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     domain: sellfoxDomains.some((item) => item.id === domain) ? domain as SellfoxDomain : "overview",
     from: isSellfoxDate(params.get("from")) ? params.get("from")! : "", to: isSellfoxDate(params.get("to")) ? params.get("to")! : "",
     status: ["active", "inActive", "delete", "incomplete"].includes(params.get("status") ?? "") ? params.get("status")! : "",
-    dimension: ["asin", "parentAsin", "msku", "sku"].includes(params.get("dimension") ?? "") ? params.get("dimension")! : "asin",
+    dimension: ["asin", "parentAsin", "msku", "sku", "store"].includes(params.get("dimension") ?? "") ? params.get("dimension")! : "asin",
     metric: ["quantity", "orders", "revenue"].includes(params.get("metric") ?? "") ? params.get("metric")! : "quantity",
     onlySettle: params.get("onlySettle") === "1", hideZero: params.get("hideZero") === "1", currency: params.get("currency") ?? (domain === "performance" ? "USD" : ""), adType: ["sp", "sb", "sd"].includes(params.get("adType") ?? "") ? params.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(params.get("quickFilter") ?? "") ? params.get("quickFilter")! : "",

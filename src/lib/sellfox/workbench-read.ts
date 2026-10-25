@@ -48,12 +48,13 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (domain === "performance") filters.push(Prisma.sql`s."onlySettle"=${query.onlySettle}`);
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
-  const dim = Prisma.raw(`s."${query.dimension}"`); // query parser closed enum
+  const dim = query.dimension === "store" ? Prisma.sql`s."storeId"` : Prisma.raw(`s."${query.dimension}"`); // query parser closed enum
   const identity = domain === "sales" && query.dimension === "parentAsin" ? Prisma.sql`l."parentAsin"` : dim;
   const baseIdentity = Prisma.sql`COALESCE(NULLIF(${identity},''), NULLIF(s.msku,''), s.id)`;
   const searchFields = [Prisma.sql`s.asin`, Prisma.sql`s.msku`, Prisma.sql`s.sku`, Prisma.sql`l.title`];
   if (domain === "ads_report") { searchFields.splice(2, 1); searchFields.push(Prisma.sql`s."campaignId"`, Prisma.sql`s."adGroupId"`); }
   if (domain === "sales" || domain === "performance") searchFields.push(identity);
+  if ((domain === "sales" || domain === "performance") && query.dimension === "store") searchFields.push(Prisma.sql`st.name`);
   if (domain === "performance" || domain === "listings") searchFields.push(Prisma.sql`s.title`);
   const typedSearch: Record<string, Prisma.Sql> = { asin: Prisma.sql`s.asin`, msku: Prisma.sql`s.msku`, title: domain === "performance" || domain === "listings" ? Prisma.sql`s.title` : Prisma.sql`l.title` };
   if (domain !== "ads_report") typedSearch.sku = Prisma.sql`s.sku`;
@@ -139,6 +140,11 @@ export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: Sellf
     const members = Array.isArray(row.members) ? row.members : [row.msku];
     const stocks = members.flatMap(msku => { const stock = stocksByKey.get(JSON.stringify([row.storeId, msku])); return stock ? [stock] : []; });
     if (["sales", "performance"].includes(domain) && members.length > 1) row.msku = null;
+    if (["sales", "performance"].includes(domain) && query.dimension === "store") {
+      // Group by stable storeId in SQL; show the joined store name to users/exports.
+      row.identity = row.name;
+      if (members.length > 1) for (const key of ["asin", "sku", "parentAsin", "title"]) row[key] = null;
+    }
     for (const key of (domain === "listings" ? ["totalInventory"] : ["fulfillable", "totalInventory"])) row[key] = stocks.length === members.length && stocks.length > 0 && stocks.every(s => s[key] != null) ? stocks.reduce((sum, s) => sum + Number(s[key]), 0) : null;
     row.inventoryCapturedAt = stocks[0]?.inventoryCapturedAt ?? null;
     if (domain === "sales") { for (const date of dates) row[`day:${date}`] = (row.daily as Row)?.[date] ?? null;
