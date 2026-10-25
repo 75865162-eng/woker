@@ -52,6 +52,10 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
+  const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(dimension);
+  const storeColumn = crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min("storeId") END AS "storeId"` : Prisma.sql`"storeId"`;
+  const storeGrain = crossStore ? Prisma.empty : Prisma.sql`"storeId",`;
+  const marketplace = crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min("storeSite") END` : Prisma.sql`min("storeSite")`;
   const dim = dimension === "store" ? Prisma.sql`s."storeId"` : dimension === "developer" ? Prisma.sql`COALESCE(l.developer,'未分配开发员')` : dimension === "spu" ? Prisma.sql`COALESCE(l.spu,'未分配SPU')` : Prisma.raw(`s."${dimension}"`); // query parser closed enum
   const identity = domain === "sales" && dimension === "parentAsin" ? Prisma.sql`l."parentAsin"` : dim;
   const baseIdentity = Prisma.sql`COALESCE(NULLIF(${identity},''), NULLIF(s.msku,''), s.id)`;
@@ -93,28 +97,28 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   };
   const aggregateColumns = domain === "performance" ? ["saleQuantity", "saleRevenue", "grossProfit", "adCost", "promotionDiscount", "giftWrapFee", "orderNum", "netRevenue", "fbaQuantity", "fbmQuantity"] : ["impressions", "clicks", "cost", "adOrders", "adSales"];
   const groups = domain === "sales" ? Prisma.sql`days AS (
-    SELECT "storeId",identity,currency,"reportDate",min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,
-      ${["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},min("storeSite") AS marketplace,CASE WHEN count("listingTitle")=count(*) AND count(DISTINCT "listingTitle")=1 THEN min("listingTitle") END AS title,CASE WHEN count("listingPrice")=count(*) AND count(DISTINCT "listingPrice")=1 THEN min("listingPrice") END AS price,CASE WHEN count("listingParentAsin")=count(*) AND count(DISTINCT "listingParentAsin")=1 THEN min("listingParentAsin") END AS "parentAsin",
+    SELECT ${storeColumn},identity,currency,"reportDate",min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,
+      ${["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},${marketplace} AS marketplace,CASE WHEN count("listingTitle")=count(*) AND count(DISTINCT "listingTitle")=1 THEN min("listingTitle") END AS title,CASE WHEN count("listingPrice")=count(*) AND count(DISTINCT "listingPrice")=1 THEN min("listingPrice") END AS price,CASE WHEN count("listingParentAsin")=count(*) AND count(DISTINCT "listingParentAsin")=1 THEN min("listingParentAsin") END AS "parentAsin",
       min(NULLIF("listingMainImage",'')) AS "mainImage",
       CASE WHEN bool_and(complete AND orders IS NOT NULL) THEN sum(orders)::float END AS orders,
       CASE WHEN bool_and(complete AND quantity IS NOT NULL) THEN sum(quantity)::float END AS quantity,
       CASE WHEN bool_and(complete AND revenue IS NOT NULL) THEN sum(revenue)::float END AS revenue,
       array_agg(DISTINCT msku) AS members
-    FROM base GROUP BY "storeId",identity,currency,"reportDate"
+    FROM base GROUP BY ${storeGrain}identity,currency,"reportDate"
   ), grouped AS (
-    SELECT "storeId",identity,currency,min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,min(name) AS name,min(marketplace) AS marketplace,CASE WHEN count(title)=count(*) AND count(DISTINCT title)=1 THEN min(title) END AS title,
+    SELECT ${storeColumn},identity,currency,min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,min(name) AS name,${crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min(marketplace) END` : Prisma.sql`min(marketplace)`} AS marketplace,CASE WHEN count(title)=count(*) AND count(DISTINCT title)=1 THEN min(title) END AS title,
       CASE WHEN count(price)=count(*) AND count(DISTINCT price)=1 THEN min(price) END AS price,CASE WHEN count("parentAsin")=count(*) AND count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",
       min(NULLIF("mainImage",'')) AS "mainImage",
       jsonb_object_agg("reportDate",quantity) AS "dailyQuantity",jsonb_object_agg("reportDate",${Prisma.raw(salesMetric)}) AS daily,
       ${query.metric === "orders" ? Prisma.sql`CASE WHEN count(*)=${workbenchDateRange(query).length} THEN ${safeSum(salesMetric)} END` : safeSum(salesMetric)} AS subtotal,${safeSum("quantity")} AS quantity,
-      count(*)::int AS "observedDays",(SELECT array_agg(DISTINCT b.msku) FROM base b WHERE b."storeId"=days."storeId" AND b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS members
-    FROM days GROUP BY "storeId",identity,currency
+      count(*)::int AS "observedDays",(SELECT array_agg(DISTINCT b.msku) FROM base b WHERE ${crossStore ? Prisma.empty : Prisma.sql`b."storeId"=days."storeId" AND `}b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS members${crossStore ? Prisma.sql`,(SELECT jsonb_agg(DISTINCT jsonb_build_array(b."storeId",b.msku)) FROM base b WHERE b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS "stockMembers"` : Prisma.empty}
+    FROM days GROUP BY ${storeGrain}identity,currency
   )` : domain === "listings" ? Prisma.sql`grouped AS (SELECT base.* FROM base)` : Prisma.sql`grouped AS (
-    SELECT "storeId",currency,${domain === "performance" ? Prisma.sql`identity` : Prisma.sql`"adType","campaignId","adGroupId","productId"`},
+    SELECT ${storeColumn},currency,${domain === "performance" ? Prisma.sql`identity` : Prisma.sql`"adType","campaignId","adGroupId","productId"`},
       min(id) AS id,min(asin) AS asin,min(msku) AS msku,${domain === "performance" ? Prisma.sql`min(NULLIF("mainImageCandidate",'')) AS "mainImage",CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,CASE WHEN count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",CASE WHEN count(*)=1 THEN min("refundRate") END AS "refundRate",` : Prisma.sql`min("listingTitle") AS title,min("listingPrice") AS price,`}
-      ${domain === "performance" && ["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},min("storeSite") AS marketplace,array_agg(DISTINCT msku) AS members,
+      ${domain === "performance" && ["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},${marketplace} AS marketplace,array_agg(DISTINCT msku) AS members,${crossStore ? Prisma.sql`jsonb_agg(DISTINCT jsonb_build_array("storeId",msku)) AS "stockMembers",` : Prisma.empty}
       ${Prisma.join(aggregateColumns.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`))}
-    FROM base GROUP BY "storeId",currency,${domain === "performance" ? Prisma.sql`identity` : Prisma.sql`"adType","campaignId","adGroupId","productId"`}
+    FROM base GROUP BY ${crossStore ? Prisma.sql`identity,currency` : Prisma.sql`"storeId",currency,${domain === "performance" ? Prisma.sql`identity` : Prisma.sql`"adType","campaignId","adGroupId","productId"`}`}
   )`;
   const finalFilters = [Prisma.sql`true`];
   if (domain === "sales" && query.hideZero) finalFilters.push(Prisma.sql`quantity IS DISTINCT FROM 0`);
@@ -135,7 +139,13 @@ export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: Sellf
   const { rows, total, totals } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);
   // Page-bounded supplemental lookup, never one network call per entity or full payload reads.
-  const stores = [...new Set(rows.map(row => String(row.storeId)))];
+  // Exact source pairs avoid attributing an MSKU to unrelated stores on the page.
+  // DISTINCT in SQL also prevents counting the same stock once per report day.
+  const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(query.dimension);
+  const memberPairs = (row: Row): unknown[][] => crossStore && Array.isArray(row.stockMembers)
+    ? row.stockMembers
+    : (Array.isArray(row.members) ? row.members : [row.msku]).map(msku => [row.storeId, msku]);
+  const stores = [...new Set(rows.flatMap(row => memberPairs(row).flatMap(([storeId]) => storeId == null ? [] : [String(storeId)])))];
   const mskus = [...new Set(rows.flatMap(row => Array.isArray(row.members) ? row.members.map(String) : row.msku ? [String(row.msku)] : []))];
   const inventory = stores.length ? await prisma.$queryRaw<Row[]>(Prisma.sql`SELECT "storeId",msku,CASE WHEN count(quantity)=count(*) THEN sum(quantity)::float END AS fulfillable,CASE WHEN count("totalInventory")=count(*) THEN sum("totalInventory")::float END AS "totalInventory",max("capturedAt") AS "inventoryCapturedAt" FROM sellfox_inventory_current i WHERE ${scoped("i", scope)} AND "storeId" IN (${Prisma.join(stores)}) AND msku IN (${Prisma.join(mskus.length ? mskus : ["\u0001"])}) GROUP BY "storeId",msku`) : [];
   const stocksByKey = new Map(inventory.map(stock => [JSON.stringify([stock.storeId, stock.msku]), stock]));
@@ -145,15 +155,16 @@ export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: Sellf
     ? query.from || query.to ? dateSpan(query.from || query.to!, query.to || query.from!) : query.reportDate ? [query.reportDate] : []
     : [];
   for (const row of rows) {
-    const members = Array.isArray(row.members) ? row.members : [row.msku];
-    const stocks = members.flatMap(msku => { const stock = stocksByKey.get(JSON.stringify([row.storeId, msku])); return stock ? [stock] : []; });
-    if (["sales", "performance"].includes(domain) && members.length > 1) row.msku = null;
+    const pairs = memberPairs(row);
+    const stocks = pairs.flatMap(pair => { const stock = stocksByKey.get(JSON.stringify(pair)); return stock ? [stock] : []; });
+    delete row.stockMembers;
+    if (["sales", "performance"].includes(domain) && pairs.length > 1) row.msku = null;
     if (["sales", "performance"].includes(domain) && ["store", "developer", "spu"].includes(query.dimension)) {
       // Group by stable store or Listing identity in SQL; show its display label.
       row.identity = row.name;
-      if (members.length > 1) for (const key of ["asin", "sku", "parentAsin", "title"]) row[key] = null;
+      if (pairs.length > 1) for (const key of ["asin", "sku", "parentAsin", "title"]) row[key] = null;
     }
-    for (const key of (domain === "listings" ? ["totalInventory"] : ["fulfillable", "totalInventory"])) row[key] = stocks.length === members.length && stocks.length > 0 && stocks.every(s => s[key] != null) ? stocks.reduce((sum, s) => sum + Number(s[key]), 0) : null;
+    for (const key of (domain === "listings" ? ["totalInventory"] : ["fulfillable", "totalInventory"])) row[key] = stocks.length === pairs.length && stocks.length > 0 && stocks.every(s => s[key] != null) ? stocks.reduce((sum, s) => sum + Number(s[key]), 0) : null;
     row.inventoryCapturedAt = stocks[0]?.inventoryCapturedAt ?? null;
     if (domain === "sales") { for (const date of dates) row[`day:${date}`] = (row.daily as Row)?.[date] ?? null;
       const values = dates.slice(-7).map(date => (row.dailyQuantity as Row)?.[date]);

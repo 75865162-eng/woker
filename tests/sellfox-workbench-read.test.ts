@@ -133,7 +133,17 @@ test("developer and SPU use one primary-resolved Listing row per fact without ar
     assert.match(sql.text, /item\.value->>'devId'=p\.payload->>'devId'/);
     assert.match(sql.text, /ORDER BY item\.ordinality LIMIT 1/);
     assert.match(sql.text, /COALESCE\(NULLIF\(p\.payload->>'commodityName',''\),NULLIF\(p\.payload->>'commoditySku',''\),'未分配SPU'\)/);
-    assert.match(sql.text, /FROM base GROUP BY "storeId",(?:identity,currency|currency,identity)/);
+    assert.match(sql.text, /FROM base GROUP BY identity,currency/);
+    assert.doesNotMatch(sql.text, /GROUP BY "storeId",(?:identity|currency,identity)/);
+    assert.match(sql.text, /CASE WHEN count\("storeId"\)=count\(\*\) AND count\(DISTINCT "storeId"\)=1 THEN min\("storeId"\) END AS "storeId"/);
+    assert.match(sql.text, /count\(DISTINCT "storeId"\)=1 THEN min\("storeSite"\) END AS marketplace/);
+    assert.match(sql.text, /min\(identity\) AS name/);
+    assert.match(sql.text, /jsonb_agg\(DISTINCT jsonb_build_array\((?:b\.)?"storeId",(?:b\.)?msku\)\)/);
+    if (domain === "sales") {
+      assert.match(sql.text, /FROM base GROUP BY identity,currency,"reportDate"/);
+      assert.match(sql.text, /FROM days GROUP BY identity,currency/);
+      assert.doesNotMatch(sql.text, /b\."storeId"=days\."storeId"/);
+    }
     assert.match(sql.text, /COALESCE\(l\.developer,'未分配开发员'\) ILIKE|COALESCE\(l\.spu,'未分配SPU'\) ILIKE/);
     assert.doesNotMatch(sql.text, /CROSS JOIN LATERAL jsonb_array_elements/);
     assert.ok(sql.values.includes(`%${label}%`));
@@ -156,6 +166,21 @@ test("store dimension groups by storeId and currency with joined name/site and b
     assert.match(exact.text, /lower\(st\.name\)=lower\(/);
     assert.ok(exact.values.includes("TK店"));
     assert.doesNotMatch(workbenchReadSql(domain, { ...query, searchType: "asin" }, { organizationId: "org", workspaceId: "ws" }).text, /st\.name ILIKE/);
+  }
+});
+
+test("product dimensions retain store-scoped identity and sales members", () => {
+  for (const domain of ["sales", "performance"] as const) {
+    for (const dimension of ["asin", "parentAsin", "msku", "sku"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}`));
+      const sql = workbenchReadSql(domain, query, { organizationId: "org", workspaceId: "ws" }).text;
+      assert.match(sql, /FROM base GROUP BY "storeId",(?:identity,currency|currency,identity)/);
+      assert.doesNotMatch(sql, /AS "stockMembers"/);
+      if (domain === "sales") {
+        assert.match(sql, /FROM days GROUP BY "storeId",identity,currency/);
+        assert.match(sql, /b\."storeId"=days\."storeId"/);
+      }
+    }
   }
 });
 
