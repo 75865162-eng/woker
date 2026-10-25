@@ -422,3 +422,38 @@ test("performance fee columns are numeric and available; empty browse guidance f
   assert.match(browseEmptyMessage("performance", { workerOnline: true, latestSuccessByResource: {} } as never) ?? "", /尚无销售利润同步成功记录/);
   assert.match(browseEmptyMessage("sales", { workerOnline: true, latestSuccessByResource: { sales: { id: "r", resource: "sales", status: "done", startedAt: "2026-10-26" } } } as never) ?? "", /调整日期范围.*补数/);
 });
+
+test("fulfillment uses scoped current Listing and filters members before sales/profit rollups and totals", () => {
+  const scope = { organizationId: "org-fulfillment", workspaceId: "ws-fulfillment" };
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
+      for (const fulfillment of ["AFN", "MFN"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&fulfillment=${fulfillment}&from=2026-10-25&to=2026-10-25&onlySettle=1`));
+        for (const exporting of [false, true]) {
+          const sql = workbenchReadSql(domain, query, scope, exporting);
+          assert.ok(sql.values.includes(fulfillment));
+          assert.match(sql.text, /CASE WHEN p.payload->>'switchFulfillmentTo' IN \('AFN','MFN'\) THEN p.payload->>'switchFulfillmentTo' END AS fulfillment/);
+          const base = sql.text.slice(sql.text.indexOf("base AS"), sql.text.indexOf(domain === "sales" ? "days AS" : "grouped AS"));
+          assert.match(base, /WHERE [\s\S]* AND l.fulfillment=\$\d+\)/);
+          assert.match(sql.text, /p.id=l.id AND p\."organizationId"=[\s\S]*p\."workspaceId"=/);
+          assert.ok(sql.values.includes(scope.organizationId) && sql.values.includes(scope.workspaceId));
+          if (domain === "listings") {
+            assert.match(base, /l.fulfillment,/);
+            assert.match(base, /LEFT JOIN listing l ON l.id=s.id AND l\."storeId"=s\."storeId"/);
+          } else {
+            assert.match(base, /candidate\."storeId"=s\."storeId"/);
+            assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1/);
+            assert.doesNotMatch(base, /s\.payload/);
+          }
+        }
+      }
+    }
+    const all = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope);
+    assert.doesNotMatch(all.text, /AND l.fulfillment=/);
+  }
+  const config = visibleColumns("listings", ["fulfillment"]);
+  assert.equal(config[0].labelZh, "发货方式");
+  assert.equal(config[0].unavailable, undefined);
+  assert.equal(defaultVisibleColumnKeys("listings").includes("fulfillment"), false);
+  assert.equal(visibleColumnCsv(config, [{ fulfillment: "AFN" }, { fulfillment: "MFN" }, { fulfillment: null }]).trim(), '"发货方式"\r\n"AFN"\r\n"MFN"\r\n""');
+});

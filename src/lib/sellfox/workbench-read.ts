@@ -49,6 +49,9 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   } else if (query.status) filters.push(Prisma.sql`s.status ILIKE ${query.status}`);
   if (domain === "ads_report" && query.adType) filters.push(Prisma.sql`s."adType"=${query.adType}`);
   if (domain === "performance") filters.push(Prisma.sql`s."onlySettle"=${query.onlySettle}`);
+  // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
+  // Blank/unknown values remain in all, never in the AFN/MFN subsets.
+  if (query.fulfillment && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
@@ -75,7 +78,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     : domain === "performance" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.title,s."parentAsin",s."saleQuantity",s."saleRevenue",s."grossProfit",s."adCost",s."promotionDiscount",s."giftWrapFee",s."imageUrl",s."orderNum",s."netRevenue",s."refundRate",s."fbaQuantity",s."fbmQuantity",${baseIdentity} AS identity`
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));
   const listing = Prisma.sql`listing AS (
-    SELECT l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
+    SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
+      CASE WHEN p.payload->>'switchFulfillmentTo' IN ('AFN','MFN') THEN p.payload->>'switchFulfillmentTo' END AS fulfillment,
       COALESCE(
         (SELECT NULLIF(item.value->>'devName','') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'devList')='array' THEN p.payload->'devList' ELSE '[]'::jsonb END) WITH ORDINALITY item(value,ordinality) WHERE NULLIF(p.payload->>'devId','') IS NOT NULL AND item.value->>'devId'=p.payload->>'devId' ORDER BY item.ordinality LIMIT 1),
         (SELECT NULLIF(item.value->>'devName','') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'devList')='array' THEN p.payload->'devList' ELSE '[]'::jsonb END) WITH ORDINALITY item(value,ordinality) WHERE NULLIF(item.value->>'devName','') IS NOT NULL ORDER BY item.ordinality LIMIT 1),
@@ -86,9 +90,9 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
+    ${domain === "listings" ? Prisma.sql`l.fulfillment,` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
-    LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin LIMIT 1) l ON TRUE WHERE ${Prisma.join(filters, " AND ")})`;
+    ${domain === "listings" ? Prisma.sql`LEFT JOIN listing l ON l.id=s.id AND l."storeId"=s."storeId"` : Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {
     const col = Prisma.raw(`"${key}"`);
     // These optional fees use null=0 at both entity and filtered-total levels.

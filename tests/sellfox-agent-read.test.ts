@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import { inventoryNarrow, listingNarrow } from "@/lib/sellfox/narrow-contracts";
 import { parseSellfoxAdProductReport, sellfoxReportDownloadUrl } from "@/lib/sellfox/ads-report-contract";
-import { sellfoxAgentCsv, sellfoxAgentColumns } from "@/lib/sellfox/agent-read";
+import type { Prisma, PrismaClient } from "@prisma/client";
+import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
+import { readSellfoxAgentRows, sellfoxAgentCsv, sellfoxAgentColumns } from "@/lib/sellfox/agent-read";
 import { defaultSellfoxBackfillStart, sellfoxBackfillWindow, nextSellfoxScheduleAt } from "@/lib/sellfox/schedule-time";
 import { syncSellfoxListings, type ListingCheckpoint } from "@/lib/sellfox/listing-sync";
 import listing from "./fixtures/sellfox/listing-page.json";
@@ -82,4 +84,33 @@ test("listing transaction failure cannot publish current; retry reuses capture a
   await syncSellfoxListings({ ...input, checkpoint }, { db, post }); assert.equal(head, new Date(input.capturedAt).toISOString()); assert.equal(count, 1);
   empty = true;
   await syncSellfoxListings({ ...input, capturedAt: "2026-10-25T03:00:00Z" }, { db, post }); assert.equal(head, "2026-10-25T03:00:00.000Z"); assert.equal(count, 1);
+});
+
+test("agent rows, pagination counts and long-table export honor current Listing fulfillment", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["sales", "performance", "listings"] as const) {
+      for (const fulfillment of ["AFN", "MFN"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?fulfillment=${fulfillment}&onlySettle=1`));
+        calls.length = 0;
+        const result = await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        assert.equal(result.pagination.total, 0);
+        assert.equal(calls.length, 2);
+        const where = calls[0].text.split(" WHERE ")[1].split(" ORDER BY ")[0];
+        assert.ok(calls[1].text.includes(where));
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        for (const sql of calls) {
+          assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
+          assert.match(sql.text, /p\."organizationId"=[\s\S]*p\."workspaceId"=/);
+          assert.match(sql.text, /candidate\."organizationId"=[\s\S]*candidate\."workspaceId"=/);
+          assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
+          assert.match(sql.text, /LIMIT 1\)=\$\d+/);
+          assert.ok(sql.values.includes(fulfillment));
+          assert.match(sql.text, domain === "listings" ? /candidate.id=s.id/ : /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
 });

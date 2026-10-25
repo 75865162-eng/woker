@@ -60,3 +60,22 @@ test("legacy profit queries explicitly isolate all-orders and settled partitions
   assert.equal(sellfoxSnapshotWhere(query("onlySettle=1"), "org", "ws", undefined, true).onlySettle, true);
   assert.equal(sellfoxSnapshotWhere(query("onlySettle=1"), "org", "ws").onlySettle, undefined);
 });
+
+test("fulfillment accepts only AFN/MFN and round trips UI, API and export parameters", () => {
+  for (const fulfillment of ["AFN", "MFN"] as const) {
+    assert.equal(query(`fulfillment=${fulfillment}`).fulfillment, fulfillment);
+    for (const domain of ["sales", "performance", "listings"]) {
+      const view = readSellfoxView(new URLSearchParams({ domain, fulfillment }));
+      assert.equal(readSellfoxView(sellfoxViewParams(view)).fulfillment, fulfillment);
+      assert.equal(query(sellfoxViewParams(view, true).toString()).fulfillment, fulfillment);
+    }
+  }
+  for (const value of ["", "afn", "FBA", "UNKNOWN", "AFN' OR TRUE--"]) {
+    assert.equal(query(`fulfillment=${encodeURIComponent(value)}`).fulfillment, "");
+    const view = readSellfoxView(new URLSearchParams({ domain: "sales", fulfillment: value }));
+    assert.equal(view.fulfillment, "");
+    assert.equal(sellfoxViewParams(view, true).has("fulfillment"), false);
+  }
+  const view = readSellfoxView(new URLSearchParams("domain=ads&fulfillment=AFN"));
+  assert.equal(sellfoxViewParams(view, true).has("fulfillment"), false);
+});

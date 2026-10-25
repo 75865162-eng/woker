@@ -241,7 +241,7 @@ COMMIT;
 | 利润：退款率 / 父ASIN | refundRate / parentAsin | 单条已同步记录保留退款率；跨日/多条聚合无可靠分母时留空。只统计已结算、自定义费用/加权灰显 |
 | Listing：状态 / ASIN / MSKU / 父ASIN / 品名SKU / 价格 | status / asin / msku / parentAsin / sku / price | 只读最新完整current；Active/Inactive/delete/incomplete忽略大小写。父体资源未验证而灰显 |
 | Listing：7/14/30销量 / 销售额 / 广告花费 | sales7/14/30、revenue7/14/30、adSpend7/14/30 | API滚动快照原值，缺失不填零，不跨日相加 |
-| Listing：可售 / 更新时间 | fulfillable / sourceUpdatedAt，另列capturedAt | 可售保留Listing自身已验证inventoryManage.available，不被补充库存覆盖。发货方式、调价、打印、标签、配对均灰显 |
+| Listing：可售 / 更新时间 | fulfillable / sourceUpdatedAt，另列capturedAt | 可售保留Listing自身已验证inventoryManage.available，不被补充库存覆盖。发货方式见下方 AFN/MFN 口径；调价、打印、标签、配对仍灰显 |
 | 广告产品：曝光 / 点击 / 花费 / 订单 / 销售额 | impressions / clicks / cost / adOrders / adSales | 按店铺+币种+SP/SB/SD+campaign/adGroup/product聚合日期窗；活动/组只有ID，不伪造名称 |
 | 广告：ACoS / ROAS | sum(cost)÷sum(adSales) / sum(adSales)÷sum(cost) | 行及底栏均重算；无有效分母留空。报告没有币种时仍标未知，禁止推断USD |
 | 广告：有效 / 服务状态 / 投放中 / 已暂停 | 无广告结构状态 | 未知灰态，不能把未知当关闭；仅广告产品Tab有数据，其他Tab标待接；有花费/有点击无订单按本地汇总筛选 |
@@ -300,3 +300,14 @@ COMMIT;
 已确认并本地应用增量迁移 `20261025040000_sellfox_listing_identity_image`：Listing V2 `fnsku`、`parentSku`、`mainImage` 提升至同名可空窄列及 `sellfox_listing_current`，沿用原worker分页/完整current发布契约。只取消Listing对应灰列；主图仅提供已验证HTTPS域名的按需链接，不预加载图片；其余域图片及未接字段仍为「赛狐有、API/本地无」。空值为NULL，不推导身份或补0。
 
 TK-US单次run `sellfox-sync-round-g-listing-tk-us-20261025` 已done；UTC捕获 `2026-10-25T15:38:57.848Z`，523行，FNSKU/父SKU/有效主图非空518/399/503。原468条销量回填run的ID集合未变，其他店current未变，计划未开启/修改。Listing是current字段覆盖，不能代替日销complete或自然日覆盖。完整域×字段×接口状态矩阵、只读SQL、验证限制和回滚说明见 [Round G记录](sellfox-round-g.md)。本轮仅本地修改，无提交/推送/服务器发布；生产需先迁移再加载新worker代码，旧常驻worker不会自动获得新字段映射。
+
+
+### 发货方式筛选（2026-10-26，本地待部署）
+
+销量、销售利润及在线商品支持 `fulfillment=AFN|MFN`，省略表示全部；UI 选项为「全部 / AFN / MFN」，重置会清空。来源仅为最新完整 `sellfox_listing_current` 所指向的 `SellfoxListingSnapshot.payload.switchFulfillmentTo`，不读取或推测日销 payload 的发货字段。空值、未知值和未匹配 Listing 的事实行仅留在全部，不计入 AFN/MFN 子集；在线商品可选「发货方式」列默认隐藏，未知显示空值。
+
+Listing 按同组织/工作区/店铺的快照 ID 精确关联。销量/利润沿用主图的同组织/工作区/店铺 Listing 匹配：优先精确 MSKU，再回退 ASIN；按 MSKU、ASIN、快照 ID 稳定选一条，再判断发货方式，禁止先筛候选造成兄弟 Listing 替代。筛选在成员行进入日/实体/店铺/开发员/SPU 汇总前应用，分页总数、KPI 和导出使用相同子集；销售利润未新增 SPU。此属性是当前状态，不代表历史销售日的配送方式。
+
+普通 CSV/XLSX 使用 workbench 导出路径；显式传 fulfillment 而未传 layout 的请求也使用此路径。`agent=1` 保留原英文窄列长表与 10,000 行上限，按相同 Listing 匹配筛选，分页 count 与读取复用谓词；不新增 fulfillment 窄表字段或修改 SQL view。未选筛选时不新增 Agent 关联；workbench 复用已有 Listing 关联。真实库 P95 尚未测量，部署后需在 123 验证筛选/汇总/空结果/导出一致性及查询耗时。本地验证为查询参数、SQL 结构和模拟 API 回归，不替代真实数据库执行或 UI 验收。
+
+本次不修改 schema、migration、sync 或 worker；回滚撤销本次应用代码即可，无数据回滚。产品标签（已观测 labels 数组为空）、业务员及其他未验证能力继续灰显。

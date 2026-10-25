@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { GET as browse } from "@/app/api/sellfox/[domain]/route";
+import { GET as performanceBrowse } from "@/app/api/sellfox/performance/route";
 import { GET as salesBrowse } from "@/app/api/sellfox/sales/route";
 import { GET as csv } from "@/app/api/sellfox/[domain]/export/route";
 import { GET as performanceCsv } from "@/app/api/sellfox/performance/export/route";
@@ -142,6 +143,49 @@ test("list/export filters agree, cross-workspace stores fail and exports never s
     await browse(await request("runs?from=2026-10-24&to=2026-10-24&search=failed"), context("runs"));
     await csv(await request("runs/export?from=2026-10-24&to=2026-10-24&search=failed"), context("runs"));
     assert.deepEqual(queries[0].where, queries[1].where);
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+test("fulfillment reaches browse and CSV/XLSX/Agent export SQL, including without layout", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [] }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    for (const domain of ["sales", "performance", "listings"]) {
+      for (const fulfillment of ["AFN", "MFN"]) {
+        const context = { params: Promise.resolve({ domain }) };
+        const request = (extra = "") => new Request(`http://localhost/api/sellfox/${domain}?from=2026-10-25&to=2026-10-25&fulfillment=${fulfillment}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+        const browseHandler = domain === "sales" ? salesBrowse : domain === "performance" ? performanceBrowse : (r: Request) => browse(r, context);
+        const handlers = [
+          () => browseHandler(request()),
+          () => browseHandler(request("&layout=workbench")),
+          ...["&format=csv", "&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1"].map(extra => () => csv(request(extra), context)),
+          ...(domain === "performance" ? ["&format=csv", "&format=xlsx", "&agent=1"].map(extra => () => performanceCsv(request(extra))) : []),
+        ];
+        for (const handler of handlers) {
+          calls.length = 0;
+          const response = await handler();
+          assert.equal(response.status, 200);
+          assert.ok(calls.length > 0);
+          for (const sql of calls) {
+            assert.ok(sql.values.includes(fulfillment));
+            assert.match(sql.text, /switchFulfillmentTo/);
+          }
+        }
+      }
+    }
   } finally {
     globals.prisma = previous;
     for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
