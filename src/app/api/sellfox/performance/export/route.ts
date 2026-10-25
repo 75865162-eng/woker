@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     }
 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("赛狐产品表现");
+    const sheet = workbook.addWorksheet("赛狐销售利润");
     sheet.columns = [
       { header: "Shop ID", key: "shopExternalId", width: 22 },
       { header: "币种", key: "currency", width: 12 },
@@ -87,6 +87,6 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof SellfoxBrowseError ? error.message : "导出赛狐产品表现失败，请稍后重试。" }, { status: error instanceof SellfoxBrowseError ? error.status : 500 });
+    return Response.json({ error: error instanceof SellfoxBrowseError ? error.message : "导出赛狐销售利润失败，请稍后重试。" }, { status: error instanceof SellfoxBrowseError ? error.status : 500 });
   }
 }

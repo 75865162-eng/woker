@@ -82,11 +82,12 @@ test("workbench SQL, matrix metadata and exports use the effective date for both
   } finally { globals.prisma = previous; }
 });
 
-test("Prisma sales/profit browse and export share fallback filters and expose the effective date", async () => {
+test("sales browse/export and both performance browse layouts share scoped effective dates", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const filters: unknown[] = [];
+  const sqlCalls: Prisma.Sql[] = [];
   const table = {
     findFirst: async () => ({ reportDate: "2026-10-16" }),
     count: async ({ where }: { where: unknown }) => { filters.push(where); return 0; },
@@ -95,20 +96,35 @@ test("Prisma sales/profit browse and export share fallback filters and expose th
   };
   globals.prisma = {
     workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
+    sellfoxStore: { findMany: async () => [], findFirst: async () => null },
     sellfoxSalesDailySnapshot: table, sellfoxProductDailySnapshot: table,
+    $queryRaw: async (sql: Prisma.Sql) => { sqlCalls.push(sql); return [{ rows: [], total: 0, totals: [{ currency: "USD", promotionDiscount: 0, giftWrapFee: 0 }] }]; },
   } as unknown as PrismaClient;
   try {
     const session = await createLocalSession({ id: "actor", ...scope, organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
     const request = (path: string) => new Request(`http://localhost/api/sellfox/${path}`, { headers: { "x-workspace-id": scope.workspaceId, cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
     const context = { params: Promise.resolve({ domain: "sales" }) };
-    for (const response of [await browse(request("sales"), context), await performanceBrowse(request("performance"))]) {
+    assert.equal((await performanceBrowse(new Request("http://localhost/api/sellfox/performance"))).status, 401);
+    assert.equal((await performanceBrowse(request("performance?shopExternalId=foreign"))).status, 403);
+    assert.equal((await performanceBrowse(request("performance?storeId=foreign"))).status, 403);
+    for (const response of [await browse(request("sales"), context), await performanceBrowse(request("performance")), await performanceBrowse(request("performance?layout=workbench")), await performanceBrowse(request("performance?onlySettle=1"))]) {
       assert.equal(response.status, 200);
-      assert.deepEqual((await response.json()).dates, ["2026-10-16"]);
+      const data = await response.json();
+      assert.deepEqual(data.dates, ["2026-10-16"]);
+      if (data.totals) assert.deepEqual(data.totals, [{ currency: "USD", promotionDiscount: 0, giftWrapFee: 0 }]);
     }
+    assert.equal(sqlCalls.length, 3);
+    assert.equal(sqlCalls[0].text, sqlCalls[1].text);
+    assert.deepEqual(sqlCalls[0].values, sqlCalls[1].values);
+    for (const sql of sqlCalls) {
+      for (const value of [scope.organizationId, scope.workspaceId, "2026-10-16"]) assert.ok(sql.values.includes(value));
+      assert.match(sql.text, /"promotionDiscount"/); assert.match(sql.text, /"giftWrapFee"/); assert.match(sql.text, /"mainImageCandidate"/);
+    }
+    assert.ok(sqlCalls[0].values.includes(false)); assert.ok(sqlCalls[2].values.includes(true));
     assert.equal((await salesExport(request("sales/export"), context)).status, 200);
     const exported = await performanceExport(request("performance/export?format=csv"));
     assert.equal(exported.status, 200); assert.match(exported.headers.get("Content-Disposition")!, /2026-10-16/);
-    assert.ok(filters.length >= 7);
+    assert.equal(filters.length, 4);
     for (const where of filters) {
       assert.equal((where as Record<string, unknown>).reportDate, "2026-10-16");
       assert.equal((where as Record<string, unknown>).organizationId, scope.organizationId);

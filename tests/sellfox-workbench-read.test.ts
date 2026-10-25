@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
-import { workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
+import { readSellfoxWorkbench, workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
 import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
 import { browseEmptyMessage, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
 
@@ -159,7 +160,42 @@ test("performance browse selects and sums elevated fee fields and prefers listin
   // Other unknown metrics still preserve missing-data semantics.
   assert.match(sql.text, /CASE WHEN count\("grossProfit"\)=count\(\*\) THEN sum\("grossProfit"\)::float END/);
   assert.match(sql.text, /COALESCE\(NULLIF\(l\."mainImage",''\),NULLIF\(s\."imageUrl",''\)\)/);
+  assert.match(sql.text, /min\(NULLIF\("mainImageCandidate",''\)\) AS "mainImage"/);
+  assert.doesNotMatch(sql.text, /count\((?:DISTINCT )?"mainImageCandidate"\)/);
+  for (const domain of ["sales", "performance"] as const) {
+    const text = workbenchReadSql(domain, query, { organizationId: "org", workspaceId: "ws" }).text;
+    assert.match(text, /min\(NULLIF\("mainImage",''\)\) AS "mainImage"/);
+    assert.doesNotMatch(text, /count\((?:DISTINCT )?"(?:listingMainImage|mainImage)"\)/);
+    if (domain === "sales") assert.match(text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
+  }
   assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\."imageUrl"/);
+});
+
+test("performance dates survive effective-date resolution, client backfill and explicit ranges", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  let lookups = 0;
+  const sqlCalls: Prisma.Sql[] = [];
+  globals.prisma = {
+    sellfoxProductDailySnapshot: { findFirst: async () => { lookups++; return { reportDate: "2026-10-25" }; } },
+    $queryRaw: async (sql: Prisma.Sql) => { sqlCalls.push(sql); return [{ rows: [], total: 0, totals: [] }]; },
+  } as unknown as PrismaClient;
+  const read = (params = "") => readSellfoxWorkbench("performance", sellfoxBrowseQuery(new URL(`http://localhost/?${params}`)), { organizationId: "org", workspaceId: "ws" });
+  try {
+    const implicit = await read();
+    assert.deepEqual(implicit.dates, ["2026-10-25"]);
+    const view = backfillSellfoxViewDates({ ...defaultSellfoxView, domain: "performance" }, implicit.dates);
+    assert.equal(view.from, "2026-10-25"); assert.equal(view.to, "2026-10-25");
+    assert.deepEqual((await read(sellfoxViewParams(view, true).toString())).dates, implicit.dates);
+    assert.deepEqual((await read("reportDate=2026-10-24")).dates, ["2026-10-24"]);
+    assert.deepEqual((await read("from=2026-10-23&to=2026-10-25")).dates, ["2026-10-23", "2026-10-24", "2026-10-25"]);
+    assert.deepEqual((await read("from=2026-10-23")).dates, ["2026-10-23"]);
+    assert.deepEqual((await read("to=2026-10-25")).dates, ["2026-10-25"]);
+    assert.equal((await read("from=2026-01-01&to=2026-10-25")).dates.length, 298);
+    assert.deepEqual((await read("allDates=1")).dates, []);
+    assert.equal(lookups, 1);
+    assert.ok(sqlCalls[0].values.includes("2026-10-25"));
+    assert.ok(sqlCalls[1].values.includes("2026-10-25"));
+  } finally { globals.prisma = previous; }
 });
 
 test("performance fee columns are numeric and available; empty browse guidance follows worker and sync status", () => {
@@ -167,7 +203,9 @@ test("performance fee columns are numeric and available; empty browse guidance f
   assert.deepEqual(fees.map(({ key, unavailable, numeric }) => [key, unavailable, numeric]), [["promotionDiscount", undefined, true], ["giftWrapFee", undefined, true]]);
   assert.equal(sellfoxColumnValue(fees[0], { promotionDiscount: 12.5 }), 12.5);
   assert.equal(sellfoxColumnValue(fees[0], { promotionDiscount: 0 }), 0);
+  assert.equal(sellfoxColumnValue(fees[0], { promotionDiscount: "0" }), "0");
   assert.equal(sellfoxColumnValue(fees[1], { giftWrapFee: 0 }), 0);
+  assert.equal(sellfoxColumnValue(fees[1], { giftWrapFee: "0" }), "0");
   assert.match(browseEmptyMessage("sales", { workerOnline: false } as never) ?? "", /Worker.*离线.*立即同步/);
   assert.match(browseEmptyMessage("performance", { workerOnline: true, latestSuccessByResource: {} } as never) ?? "", /尚无销售利润同步成功记录/);
   assert.match(browseEmptyMessage("sales", { workerOnline: true, latestSuccessByResource: { sales: { id: "r", resource: "sales", status: "done", startedAt: "2026-10-26" } } } as never) ?? "", /调整日期范围.*补数/);
