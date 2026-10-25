@@ -185,7 +185,7 @@ export async function processSellfoxSyncRun(runId: string) {
       if (requested.length && stores.length !== new Set(requested).size) throw new SellfoxSyncInputError("所选店铺不属于当前工作区。");
       summary = { ...summary, shopExternalIds: stores.map((store) => store.externalId), storesFrozen: true };
     }
-    if ((run.resource === "inventory" || run.resource === "sales" || run.resource === "listings") && !summary.capturedAt) {
+    if ((run.resource === "inventory" || run.resource === "sales" || run.resource === "listings" || run.resource === "performance") && !summary.capturedAt) {
       const capturedAt = new Date();
       summary = { ...summary, capturedAt: capturedAt.toISOString(), ...(run.resource === "inventory" ? { reportDate: sellfoxDateAt(capturedAt) } : {}) };
     }
@@ -209,25 +209,29 @@ export async function processSellfoxSyncRun(runId: string) {
       let count = 0; let storeCount = 0;
       for (let dateIndex = 0; dateIndex < dates.length; dateIndex += 1) {
         const date = dates[dateIndex];
-        const latest = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
-        const progress = asRecord(asRecord(latest?.summary)?.progress);
-        const states = asRecord(progress?.performance) ?? {};
-        const resultForDate = await syncSellfoxProductDailySnapshots({
-          organizationId: run.organizationId, workspaceId: run.workspaceId, storeExternalIds: request.shopExternalIds, reportDate: date,
-          checkpoint: states[date] as PerformanceCheckpoint | undefined,
-          cursor: !states[date] && dateIndex === Number(request.progress?.dateIndex ?? 0) ? asRecord(request.progress?.cursor) as { storeIndex?: number; pageNo?: number } | null ?? undefined : undefined,
-          onProgress: async (update, tx) => {
-            const db = tx ?? prisma;
-            const current = await db.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
-            const currentProgress = asRecord(asRecord(current?.summary)?.progress) ?? {};
-            const checkpoints = { ...asRecord(currentProgress.performance), [date]: update.checkpoint };
-            const total = Object.values(checkpoints).reduce<number>((sum, state) => sum + Object.values((state as PerformanceCheckpoint).stores).reduce((value, store) => value + store.synced, 0), 0);
-            await saveProgress(input, { ...currentProgress, dateIndex, reportDate: date, performance: checkpoints, count: total }, db);
-          },
-        });
-        count += resultForDate.synced; storeCount = Math.max(storeCount, resultForDate.storeCount);
+        for (const onlySettle of [false, true]) {
+          const progressKey = onlySettle ? "performanceSettled" : "performance";
+          const latest = await prisma.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
+          const progress = asRecord(asRecord(latest?.summary)?.progress);
+          const states = asRecord(progress?.[progressKey]) ?? {};
+          const resultForDate = await syncSellfoxProductDailySnapshots({
+            organizationId: run.organizationId, workspaceId: run.workspaceId, storeExternalIds: request.shopExternalIds, reportDate: date, onlySettle, capturedAt: request.capturedAt,
+            checkpoint: states[date] as PerformanceCheckpoint | undefined,
+            cursor: !onlySettle && !states[date] && dateIndex === Number(request.progress?.dateIndex ?? 0) ? asRecord(request.progress?.cursor) as { storeIndex?: number; pageNo?: number } | null ?? undefined : undefined,
+            onProgress: async (update, tx) => {
+              const db = tx ?? prisma;
+              const current = await db.sellfoxSyncRun.findUnique({ where: { id: runId }, select: { summary: true } });
+              const currentProgress = asRecord(asRecord(current?.summary)?.progress) ?? {};
+              const checkpoints = { ...asRecord(currentProgress[progressKey]), [date]: update.checkpoint };
+              const partitions = { ...currentProgress, [progressKey]: checkpoints };
+              const total = ["performance", "performanceSettled"].reduce((sum, key) => sum + Object.values(asRecord(partitions[key]) ?? {}).reduce<number>((n, state) => n + Object.values((state as PerformanceCheckpoint).stores).reduce((value, store) => value + store.synced, 0), 0), 0);
+              await saveProgress(input, { ...currentProgress, dateIndex, reportDate: date, [progressKey]: checkpoints, count: total }, db);
+            },
+          });
+          count += resultForDate.synced; storeCount = Math.max(storeCount, resultForDate.storeCount);
+        }
       }
-      result = { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, synced: count };
+      result = { startDate: dates[0], endDate: dates[dates.length - 1], storeCount, synced: count, onlySettleModes: [false, true] };
     }
     else if (input.resource === "inventory" || input.resource === "sales") result = await syncSnapshots(input);
     else if (input.resource === "listings") result = await syncSellfoxListings({ ...input, shopExternalIds: input.shopExternalIds!, capturedAt: input.capturedAt!, checkpoint: input.progress?.listings as ListingCheckpoint | undefined, onProgress: async (listings, tx) => saveProgress(input, { listings, count: Object.values(listings).reduce((n, item) => n + item.count, 0) }, tx) });

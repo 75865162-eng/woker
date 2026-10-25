@@ -40,12 +40,17 @@ export async function syncSellfoxProductDailySnapshots(input: {
   organizationId: string;
   workspaceId: string;
   reportDate?: string;
+  onlySettle?: boolean;
+  capturedAt?: string;
   storeExternalId?: string;
   storeExternalIds?: string[];
   cursor?: { storeIndex?: number; pageNo?: number };
   checkpoint?: PerformanceCheckpoint;
   onProgress?: (progress: PerformanceProgress, tx?: Prisma.TransactionClient) => Promise<void>;
 }, dependencies: Dependencies = { db: prisma, post: sellfoxPost }) {
+  const onlySettle = input.onlySettle ?? false;
+  const capturedAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
+  if (!Number.isFinite(capturedAt.getTime())) throw new SellfoxSyncInputError("利润采集时间无效。");
   const reportDate = input.reportDate ?? defaultSellfoxReportDate();
   const storeExternalIds = input.storeExternalIds?.length ? input.storeExternalIds : input.storeExternalId ? [input.storeExternalId] : undefined;
   const stores = await dependencies.db.sellfoxStore.findMany({
@@ -74,7 +79,7 @@ export async function syncSellfoxProductDailySnapshots(input: {
       if (previous?.done) continue;
       while (pageNo <= 10_000) {
         const payload = await dependencies.post<unknown>("/api/sale/profit/product/pageList.json", {
-          pageNo, pageSize: 100, shopIdList: [store.externalId], startDate: reportDate, endDate: reportDate, type: "msku", currency: "",
+          pageNo, pageSize: 100, shopIdList: [store.externalId], startDate: reportDate, endDate: reportDate, type: "msku", currency: "", onlySettle,
         });
         const { rows, totalPages } = pageFrom(payload);
         // Validate pagination and identities before committing any part of this page.
@@ -88,18 +93,24 @@ export async function syncSellfoxProductDailySnapshots(input: {
           for (let index = 0; index < rows.length; index += 1) {
             const row = rows[index]; const sourceKey = identities[index]; const now = new Date();
             const data = {
-              sku: text(row, "skuList"), msku: text(row, "mskuList"), asin: text(row, "asinList"), parentAsin: text(row, "parentAsinList"),
+              onlySettle, sku: text(row, "skuList"), msku: text(row, "mskuList"), asin: text(row, "asinList"), parentAsin: text(row, "parentAsinList"),
               orderNum: sellfoxNumber(row, "orderNum", true), netRevenue: sellfoxNumber(row, "salesPriceNet"), title: text(row, "title"), currency: text(row, "currency"), saleQuantity: number(row, "saleNum"),
               fbaQuantity: number(row, "saleNumFba"), fbmQuantity: number(row, "saleNumFbm"),
               saleRevenue: number(row, "salePrice"), grossProfit: number(row, "profit"), grossProfitRate: number(row, "profitRate"),
-              adCost: number(row, "adTotalCost"), refundRate: number(row, "refundPercent"), payload: row as Prisma.InputJsonValue, syncedAt: now, updatedAt: now,
+              adCost: number(row, "adTotalCost"), refundRate: number(row, "refundPercent"), payload: row as Prisma.InputJsonValue, syncedAt: capturedAt, updatedAt: now,
             };
             await tx.sellfoxProductDailySnapshot.upsert({
-              where: { storeId_reportDate_sourceKey: { storeId: store.id, reportDate, sourceKey } },
-              create: { id: `sellfox-product-daily-${store.id}-${reportDate}-${sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, sourceKey, ...data },
+              where: { storeId_reportDate_sourceKey_onlySettle: { storeId: store.id, reportDate, sourceKey, onlySettle } },
+              create: { id: onlySettle ? `sellfox-product-settled-${JSON.stringify([store.id, reportDate, sourceKey])}` : `sellfox-product-daily-${store.id}-${reportDate}-${sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, sourceKey, ...data },
               update: data,
             });
           }
+          // Only a fully collected settled partition may remove stale settled rows.
+          // A valid empty response clears that scope; failure never clears it.
+          if (onlySettle && nextPage === null) await tx.sellfoxProductDailySnapshot.deleteMany({ where: {
+            organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, onlySettle,
+            syncedAt: { not: capturedAt },
+          } });
           await input.onProgress?.({ reportDate, synced: syncedCount(nextCheckpoint), checkpoint: nextCheckpoint }, tx);
         });
         checkpoint = nextCheckpoint;
@@ -117,5 +128,5 @@ export async function syncSellfoxProductDailySnapshots(input: {
   if (failedStores.length) {
     throw new SellfoxStoreSyncError(`${failedStores.length} 个店铺产品表现同步失败，已继续处理其他店铺。`, failedStores.some((id) => checkpoint.stores[id].retryable));
   }
-  return { reportDate, storeCount: stores.length, synced: syncedCount(checkpoint), failedStores };
+  return { reportDate, onlySettle, storeCount: stores.length, synced: syncedCount(checkpoint), failedStores };
 }

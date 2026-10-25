@@ -84,7 +84,8 @@ export const sellfoxAgentColumns = {
     "syncedAt",
     "shopExternalId",
     "name",
-    "marketplace"
+    "marketplace",
+    "orders"
   ],
   "performance": [
     "id",
@@ -109,7 +110,8 @@ export const sellfoxAgentColumns = {
     "syncedAt",
     "shopExternalId",
     "name",
-    "marketplace"
+    "marketplace",
+    "onlySettle"
   ],
   "ads_report": [
     "id",
@@ -144,6 +146,7 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
   const clauses = [Prisma.sql`"organizationId"=${scope.organizationId}`, Prisma.sql`"workspaceId"=${scope.workspaceId}`];
   if (query.shopExternalIds.length) clauses.push(Prisma.sql`"shopExternalId" IN (${Prisma.join(query.shopExternalIds)})`);
   if (domain === "listings" && query.status) clauses.push(Prisma.sql`status ILIKE ${query.status}`);
+  if (domain === "performance") clauses.push(Prisma.sql`"onlySettle"=${query.onlySettle}`);
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);
   if (query.site) clauses.push(Prisma.sql`marketplace=${query.site}`);
   if (query.search) {

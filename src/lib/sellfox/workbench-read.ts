@@ -40,6 +40,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     }
   } else if (query.status) filters.push(Prisma.sql`s.status ILIKE ${query.status}`);
   if (domain === "ads_report" && query.adType) filters.push(Prisma.sql`s."adType"=${query.adType}`);
+  if (domain === "performance") filters.push(Prisma.sql`s."onlySettle"=${query.onlySettle}`);
+  const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const dim = Prisma.raw(`s."${query.dimension}"`); // query parser closed enum
   const identity = domain === "sales" && query.dimension === "parentAsin" ? Prisma.sql`l."parentAsin"` : dim;
@@ -55,17 +57,18 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const selectedSearch = query.searchType ? typedSearch[query.searchType] : undefined;
   if (query.searchType && !selectedSearch) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) filters.push(Prisma.sql`(${Prisma.join((selectedSearch ? [selectedSearch] : searchFields).map(field => query.exactMatch ? Prisma.sql`lower(${field})=lower(${query.search})` : Prisma.sql`${field} ILIKE ${`%${query.search}%`}`), " OR ")})`);
-  const fields = domain === "sales" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.quantity,s.revenue,s.complete,${baseIdentity} AS identity`
+  const fields = domain === "sales" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.quantity,s.revenue,s.orders,s.complete,${baseIdentity} AS identity`
     : domain === "performance" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.title,s."parentAsin",s."saleQuantity",s."saleRevenue",s."grossProfit",s."adCost",s."orderNum",s."netRevenue",s."refundRate",s."fbaQuantity",s."fbmQuantity",${baseIdentity} AS identity`
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));
   const listing = Prisma.sql`listing AS (
     SELECT "storeId", msku, CASE WHEN count("parentAsin")=count(*) AND count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",
       CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,
+      CASE WHEN count("mainImage")=count(*) AND count(DISTINCT "mainImage")=1 THEN min("mainImage") END AS "mainImage",
       CASE WHEN count(price)=count(*) AND count(DISTINCT price)=1 THEN min(price) END AS price
     FROM sellfox_listing_current l WHERE ${scoped("l", scope)} AND msku IS NOT NULL GROUP BY "storeId",msku
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin"
+    l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
     LEFT JOIN listing l ON l."storeId"=s."storeId" AND l.msku=s.msku WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => { const col = Prisma.raw(`"${key}"`); return Prisma.sql`CASE WHEN count(${col})=count(*) THEN sum(${col})::float END`; };
@@ -73,6 +76,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const groups = domain === "sales" ? Prisma.sql`days AS (
     SELECT "storeId",identity,currency,"reportDate",min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,
       min("storeName") AS name,min("storeSite") AS marketplace,CASE WHEN count("listingTitle")=count(*) AND count(DISTINCT "listingTitle")=1 THEN min("listingTitle") END AS title,CASE WHEN count("listingPrice")=count(*) AND count(DISTINCT "listingPrice")=1 THEN min("listingPrice") END AS price,CASE WHEN count("listingParentAsin")=count(*) AND count(DISTINCT "listingParentAsin")=1 THEN min("listingParentAsin") END AS "parentAsin",
+      CASE WHEN count("listingMainImage")=count(*) AND count(DISTINCT "listingMainImage")=1 THEN min("listingMainImage") END AS "mainImage",
+      CASE WHEN bool_and(complete AND orders IS NOT NULL) THEN sum(orders)::float END AS orders,
       CASE WHEN bool_and(complete AND quantity IS NOT NULL) THEN sum(quantity)::float END AS quantity,
       CASE WHEN bool_and(complete AND revenue IS NOT NULL) THEN sum(revenue)::float END AS revenue,
       array_agg(DISTINCT msku) AS members
@@ -80,13 +85,14 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   ), grouped AS (
     SELECT "storeId",identity,currency,min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,min(name) AS name,min(marketplace) AS marketplace,CASE WHEN count(title)=count(*) AND count(DISTINCT title)=1 THEN min(title) END AS title,
       CASE WHEN count(price)=count(*) AND count(DISTINCT price)=1 THEN min(price) END AS price,CASE WHEN count("parentAsin")=count(*) AND count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",
-      jsonb_object_agg("reportDate",quantity) AS "dailyQuantity",jsonb_object_agg("reportDate",${Prisma.raw(query.metric === "revenue" ? "revenue" : "quantity")}) AS daily,
-      ${safeSum(query.metric === "revenue" ? "revenue" : "quantity")} AS subtotal,${safeSum("quantity")} AS quantity,
+      CASE WHEN count("mainImage")=count(*) AND count(DISTINCT "mainImage")=1 THEN min("mainImage") END AS "mainImage",
+      jsonb_object_agg("reportDate",quantity) AS "dailyQuantity",jsonb_object_agg("reportDate",${Prisma.raw(salesMetric)}) AS daily,
+      ${query.metric === "orders" ? Prisma.sql`CASE WHEN count(*)=${workbenchDateRange(query).length} THEN ${safeSum(salesMetric)} END` : safeSum(salesMetric)} AS subtotal,${safeSum("quantity")} AS quantity,
       count(*)::int AS "observedDays",(SELECT array_agg(DISTINCT b.msku) FROM base b WHERE b."storeId"=days."storeId" AND b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS members
     FROM days GROUP BY "storeId",identity,currency
   )` : domain === "listings" ? Prisma.sql`grouped AS (SELECT base.* FROM base)` : Prisma.sql`grouped AS (
     SELECT "storeId",currency,${domain === "performance" ? Prisma.sql`identity` : Prisma.sql`"adType","campaignId","adGroupId","productId"`},
-      min(id) AS id,min(asin) AS asin,min(msku) AS msku,${domain === "performance" ? Prisma.sql`CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,CASE WHEN count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",CASE WHEN count(*)=1 THEN min("refundRate") END AS "refundRate",` : Prisma.sql`min("listingTitle") AS title,min("listingPrice") AS price,`}
+      min(id) AS id,min(asin) AS asin,min(msku) AS msku,${domain === "performance" ? Prisma.sql`CASE WHEN count("listingMainImage")=count(*) AND count(DISTINCT "listingMainImage")=1 THEN min("listingMainImage") END AS "mainImage",CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,CASE WHEN count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",CASE WHEN count(*)=1 THEN min("refundRate") END AS "refundRate",` : Prisma.sql`min("listingTitle") AS title,min("listingPrice") AS price,`}
       min("storeName") AS name,min("storeSite") AS marketplace,array_agg(DISTINCT msku) AS members,
       ${Prisma.join(aggregateColumns.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`))}
     FROM base GROUP BY "storeId",currency,${domain === "performance" ? Prisma.sql`identity` : Prisma.sql`"adType","campaignId","adGroupId","productId"`}

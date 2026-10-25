@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       prisma.sellfoxHourlyMetric.count({ where }),
       prisma.sellfoxFbaInventorySnapshot.count({ where }),
       prisma.sellfoxSalesDailySnapshot.count({ where }),
-      prisma.sellfoxProductDailySnapshot.count({ where }),
+      prisma.sellfoxProductDailySnapshot.count({ where: { ...where, onlySettle: false } }),
       prisma.sellfoxFbaInventorySnapshot.findMany({ where, distinct: ["storeId"], select: { storeId: true } }),
       prisma.sellfoxSalesDailySnapshot.findMany({ where, distinct: ["storeId"], select: { storeId: true } }),
       prisma.sellfoxSyncRun.findFirst({ where, orderBy: { startedAt: "desc" } }),

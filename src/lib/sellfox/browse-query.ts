@@ -25,7 +25,7 @@ export function sellfoxBrowseQuery(url: URL) {
   return {
     layout: p.get("layout") === "workbench",
     dimension: (["asin", "parentAsin", "msku", "sku"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as "asin" | "parentAsin" | "msku" | "sku",
-    metric: p.get("metric") === "revenue" ? "revenue" : "quantity", hideZero: p.get("hideZero") === "1",
+    metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
     page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate,
@@ -50,7 +50,7 @@ export function sellfoxStoreWhere(query: SellfoxBrowseQuery, organizationId: str
 }
 export function sellfoxSnapshotWhere(query: SellfoxBrowseQuery, organizationId: string, workspaceId: string, storeIds?: string[], performance = false) {
   return {
-    organizationId, workspaceId, ...(storeIds ? { storeId: { in: storeIds } } : {}), ...sellfoxDateFilter(query, performance),
+    organizationId, workspaceId, ...(storeIds ? { storeId: { in: storeIds } } : {}), ...sellfoxDateFilter(query, performance), ...(performance ? { onlySettle: query.onlySettle } : {}),
     ...(query.site ? { SellfoxStore: { marketplace: query.site } } : {}),
     ...(query.search ? { OR: (performance ? ["sku", "msku", "asin", "title"] : ["sku", "msku", "asin"]).map((field) => ({ [field]: { contains: query.search, mode: "insensitive" as const } })) } : {}),
   };

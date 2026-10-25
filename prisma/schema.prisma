@@ -1105,6 +1105,7 @@ model SellfoxProductDailySnapshot {
   storeId         String
   reportDate      String
   sourceKey       String
+  onlySettle      Boolean      @default(false)
   sku             String       @default("")
   msku            String       @default("")
   asin            String       @default("")
@@ -1127,7 +1128,7 @@ model SellfoxProductDailySnapshot {
   updatedAt       DateTime
   SellfoxStore    SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  @@unique([storeId, reportDate, sourceKey])
+  @@unique([storeId, reportDate, sourceKey, onlySettle], map: "sellfox_profit_scope_key")
   @@index([organizationId, workspaceId, asin])
   @@index([organizationId, workspaceId, msku])
   @@index([organizationId, workspaceId, reportDate], map: "SellfoxProductDailySnapshot_organizationId_workspaceId_reportDa")
@@ -1230,6 +1231,7 @@ model SellfoxSalesDailySnapshot {
   sku            String       @default("")
   msku           String       @default("")
   asin           String       @default("")
+  orders         Int?
   quantity       Int?
   revenue        Float?
   currency       String       @default("")

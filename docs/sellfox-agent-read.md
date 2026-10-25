@@ -2,20 +2,22 @@
 
 Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出」CSV，不调用 `openapi.sellfox.com`，也不依赖赛狐网页登录。ProductRecord 仍是商品主档，以下均为可重建的只读报表层，禁止反写主档或广告。
 
+当前 P0 增量与本地验证见 [销量/利润 P0](sellfox-sales-profit-p0.md)。历史验收记录中的“两指标”描述保留当时口径；旧 coverage 不代表订单量已采集，orders 仍为 NULL。直接查询利润 SQL 视图时必须显式过滤 `"onlySettle"=false`（全部）或 `true`（已结算），API 默认 false。
+
 ## 读取入口
 
 | PostgreSQL 视图 | 底层窄表 | 业务用途 |
 | --- | --- | --- |
 | `sellfox_inventory_current` | SellfoxFbaInventorySnapshot + SellfoxSnapshotHead | 每店最新完整库存采集；保留旧历史 |
-| `sellfox_sales_daily` | SellfoxSalesDailySnapshot + 日覆盖标记 | MSKU 主维度，ASIN/SKU 冗余；quantity、revenue、currency、complete |
-| `sellfox_sales_day_coverage` | SellfoxSalesDayCoverage | 每店每自然日两指标已完整采集，包括合法空结果；rowWrites 是两指标写入次数，不是独立 SKU 数 |
+| `sellfox_sales_daily` | SellfoxSalesDailySnapshot + 日覆盖标记 | MSKU 主维度，ASIN/SKU 冗余；quantity、revenue、currency、complete、orders（缺失NULL） |
+| `sellfox_sales_day_coverage` | SellfoxSalesDayCoverage | 每店每自然日三指标已完整采集，包括合法空结果；rowWrites 是三指标写入次数，不是独立 SKU 数 |
 | `sellfox_listing_current` | SellfoxListingSnapshot + SellfoxSnapshotHead | 每店最新完整 Listing，lower(status)=active 为在售（真实返回 Active/Inactive/Incomplete/delete，保留原值，筛选忽略大小写） |
-| `sellfox_profit_daily` | SellfoxProductDailySnapshot | 单日 MSKU 利润、广告花费、退款率、订单和净销售额 |
+| `sellfox_profit_daily` | SellfoxProductDailySnapshot | 单日 MSKU 利润、广告花费、退款率、订单和净销售额；必须筛选 onlySettle=false/true，禁止跨口径相加 |
 | `sellfox_ads_product_daily` | SellfoxAdsProductDaily | 单店/日/广告类型/活动/组/产品的花费及转化；派生 acos、roas |
 
 视图采用窄列投影；底层业务列、店铺和日期索引负责查询，不在常规查询时解码 payload。current 只在单店全部页提交后切换，合法空快照也切换；失败采集不会发布半批 current。快照 Head 的 storeId 关联店铺的 organization/workspace，跨工作区不得关联。
 
-库存 sourceKey 使用响应 `id`，保留 ASIN/MSKU/FNSKU；不能只按 ASIN 去重后丢弃不同 MSKU/库位。Listing 使用响应 `id`，保留 MSKU/ASIN。日销使用店铺+MSKU+reportDate；同一任务两指标只在身份、币种与采集批次一致时合并。
+库存 sourceKey 使用响应 `id`，保留 ASIN/MSKU/FNSKU；不能只按 ASIN 去重后丢弃不同 MSKU/库位。Listing 使用响应 `id`，保留 MSKU/ASIN。日销使用店铺+MSKU+reportDate；同一任务三指标只在身份、币种与采集批次一致时合并。
 
 历史MSKU日销真实响应允许 `skus:null`（未配对内部SKU），此时窄列sku保留空串、payload保留null，不从MSKU/ASIN推导SKU；shopIds、mskus仍必须是有效唯一身份，其他非法SKU数组仍拒绝。补货按精确MSKU关联，不按内部SKU缺失丢弃真实销量。
 
@@ -161,7 +163,7 @@ COMMIT;
 | FBA可售/总库存/在途 | available / totalInventory / inTransit | quantity / totalInventory / inTransit |
 | 入仓/预留/不可售 | inboundWorking/Shipped/Receiving、reservedTransfer/Processing/Customerorders、unfulfillable | 同名；Customerorders 的实际 key 为 reservedCustomerorders |
 | 仓库/品名/成本 | warehouseName / commodityName / avgInventoryCost / avgTransportCost | 同名，缺失NULL |
-| 销量/销售额 | productSaleDayOpenVo[].day + productNum/salePrice | reportDate + quantity/revenue |
+| 销量/销售额/订单量 | productSaleDayOpenVo[].day + productNum/salePrice/orderNum | reportDate + quantity/revenue/orders |
 | Listing MSKU/内部SKU/状态 | sku / commoditySku / onlineStatus | msku / sku / status |
 | Listing售价/可售 | standardPrice / inventoryManage.available | price / fulfillable（不使用quantity冒充FBA库存） |
 | 7/14/30天销量、销额、广告费 | day7/14/30SaleNum、day7/14/30SalePrice、day7/14/30AdTotalCost | sales7/14/30、revenue7/14/30、adSpend7/14/30 |

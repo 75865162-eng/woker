@@ -67,3 +67,33 @@ test("reference columns combine only visible identity fields and export identica
   assert.equal(sellfoxColumnValue(listing,{asin:"ASIN-1",msku:"MSKU-1"}),"ASIN-1\nMSKU-1");
   assert.ok(!visibleColumns("ads").some(c=>["image","msku","title"].includes(c.key)));
 });
+
+
+test("orders and onlySettle round trip through URL, browse and export parameters", () => {
+  const sales = readSellfoxView(new URLSearchParams("domain=sales&metric=orders"));
+  assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${sellfoxViewParams(sales,true)}`)).metric, "orders");
+  const view = readSellfoxView(new URLSearchParams("domain=performance&onlySettle=1&currency="));
+  assert.equal(view.onlySettle, true);
+  const query = sellfoxBrowseQuery(new URL(`http://localhost/?${sellfoxViewParams(view,true)}`));
+  assert.equal(query.onlySettle, true); assert.equal(query.currency, "");
+  const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" });
+  assert.match(sql.text, /s\."onlySettle"=/); assert.ok(sql.values.includes(true));
+  const all = workbenchReadSql("performance", {...query,onlySettle:false}, { organizationId: "org", workspaceId: "ws" });
+  assert.ok(all.values.includes(false));
+});
+
+test("order totals preserve null and image columns use current scoped Listing metadata", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?metric=orders"));
+  const sql = workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" });
+  assert.match(sql.text, /bool_and\(complete AND orders IS NOT NULL\)/);
+  assert.match(sql.text, /jsonb_object_agg\("reportDate",orders\)/);
+  assert.match(sql.text, /count\("orders"\)=count\(\*\)/);
+  assert.match(sql.text, /FROM sellfox_listing_current/);
+  assert.match(sql.text, /l\."mainImage" AS "listingMainImage"/);
+  for (const domain of ["sales", "performance"]) {
+    const image = visibleColumns(domain).find(c => c.key === "image")!;
+    assert.equal(image.unavailable, undefined);
+    assert.equal(sellfoxColumnValue(image, {mainImage: "https://example.test/product.jpg"}), "https://example.test/product.jpg");
+    assert.equal(sellfoxColumnValue(image, {}), "");
+  }
+});

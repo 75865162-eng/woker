@@ -7,7 +7,7 @@ import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-e
 import { sellfoxInventoryRequest, sellfoxSalesRequest } from "@/lib/sellfox/sync-requests";
 import { sellfoxInventoryRow, sellfoxSalesRow, sellfoxSnapshotPage } from "@/lib/sellfox/snapshot-contracts";
 
-type Metric = "inventory" | "productNum" | "salePrice";
+type Metric = "inventory" | "productNum" | "salePrice" | "orderNum";
 type PageState = { pageNo: number; done: boolean; writes: number; error?: string; retryable?: boolean };
 export type SnapshotCheckpoint = { stores: Record<string, Partial<Record<Metric, PageState>>> };
 type Dependencies = { db: Pick<PrismaClient, "sellfoxStore" | "$transaction">; post: typeof sellfoxPost };
@@ -20,7 +20,7 @@ export async function syncSellfoxSnapshotStores(input: {
   const stores = await dependencies.db.sellfoxStore.findMany({ where: { organizationId: input.organizationId, workspaceId: input.workspaceId, externalId: { in: input.shopExternalIds } }, orderBy: { externalId: "asc" } });
   if (stores.length !== new Set(input.shopExternalIds).size) throw new SellfoxSyncInputError("快照任务店铺已不属于当前工作区。");
   let checkpoint: SnapshotCheckpoint = { stores: { ...input.checkpoint?.stores } };
-  const metrics: Metric[] = input.resource === "inventory" ? ["inventory"] : ["productNum", "salePrice"];
+  const metrics: Metric[] = input.resource === "inventory" ? ["inventory"] : ["productNum", "salePrice", "orderNum"];
   const count = (state: SnapshotCheckpoint) => Object.values(state.stores).reduce((sum, store) => sum + Object.values(store).reduce((total, metric) => total + (metric?.writes ?? 0), 0), 0);
   const failures: boolean[] = [];
   for (const store of stores) {
@@ -50,8 +50,8 @@ export async function syncSellfoxSnapshotStores(input: {
                 const existing = await tx.sellfoxSalesDailySnapshot.findUnique({ where, select: { payload: true, currency: true, asin: true, syncedAt: true } });
                 const sameBatch = existing?.syncedAt?.getTime() === capturedAt.getTime();
                 const oldPayload = sameBatch && existing?.payload && typeof existing.payload === "object" && !Array.isArray(existing.payload) ? existing.payload : {};
-                if (sameBatch && existing && (existing.currency !== row.currency || (existing.asin && row.asin && existing.asin !== row.asin))) throw new SellfoxSyncInputError("销量与销售额的币种或 ASIN 不一致，已停止合并。");
-                const data = { ...common, currency: row.currency, ...(!sameBatch ? metric === "productNum" ? { revenue: null } : { quantity: null } : {}), ...(metric === "productNum" ? { quantity: row.value } : { revenue: row.value }), payload: { ...oldPayload, [metric]: row.payload } as Prisma.InputJsonValue };
+                if (sameBatch && existing && (existing.currency !== row.currency || (existing.asin && row.asin && existing.asin !== row.asin))) throw new SellfoxSyncInputError("销量指标的币种或 ASIN 不一致，已停止合并。");
+                const data = { ...common, currency: row.currency, ...(!sameBatch ? { quantity: null, revenue: null, orders: null } : {}), ...{ [metric === "productNum" ? "quantity" : metric === "salePrice" ? "revenue" : "orders"]: row.value }, payload: { ...oldPayload, [metric]: row.payload } as Prisma.InputJsonValue };
                 await tx.sellfoxSalesDailySnapshot.upsert({ where, create: { id: `sellfox-sales-${store.id}-${input.reportDate}-${row.sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate: input.reportDate, sourceKey: row.sourceKey, ...data }, update: data });
               }
             }

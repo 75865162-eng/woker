@@ -40,7 +40,7 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
     const from = url.searchParams.get("from") || "2026-10-24", to = url.searchParams.get("to") || from;
     const dates = Array.from({length: Math.min(90,Math.max(1,(Date.parse(to)-Date.parse(from))/86400000+1))}, (_,i)=>new Date(Date.parse(from)+i*86400000).toISOString().slice(0,10));
     const daily = Object.fromEntries(dates.map(d=>[d,2]));
-    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2}] : domain === "ads_report" ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : domain === "sales" ? [{ currency:"USD", subtotal:2, daily }] : [], dates: domain === "sales" ? dates : [], rows: Array.from({length: rowCount}, (_, index) => ({ id: index ? `row-${index}` : "row", identity: `${workspace}-entity-page${url.searchParams.get("page") || 1}${index ? `-${index}` : ""}`, asin: `B0SAMPLE${String(index).padStart(3,"0")}`, daily, dailyQuantity: daily, ...Object.fromEntries(dates.map(d=>[`day:${d}`,2])), average7:2, title: `布局样本商品标题 ${index+1}`, grossProfit: -10, saleRevenue:200, netRevenue:180, orderNum:4, adCost:2, subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, acos:0.125, roas:8, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store })), pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: Number(url.searchParams.get("pageSize") || 50), total: 51 } } });
+    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2}] : domain === "ads_report" ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : domain === "sales" ? [{ currency:"USD", subtotal:2, daily }] : [], dates: domain === "sales" ? dates : [], rows: Array.from({length: rowCount}, (_, index) => ({ id: index ? `row-${index}` : "row", identity: `${workspace}-entity-page${url.searchParams.get("page") || 1}${index ? `-${index}` : ""}`, asin: `B0SAMPLE${String(index).padStart(3,"0")}`, daily, dailyQuantity: daily, ...Object.fromEntries(dates.map(d=>[`day:${d}`,2])), mainImage: index === 0 ? "https://m.media-amazon.com/images/I/fixture.jpg" : null, average7:2, title: `布局样本商品标题 ${index+1}`, grossProfit: -10, saleRevenue:200, netRevenue:180, orderNum:4, adCost:2, subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, acos:0.125, roas:8, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store })), pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: Number(url.searchParams.get("pageSize") || 50), total: 51 } } });
     throw new Error(`Unexpected test request: ${url.pathname}`);
   });
   await page.goto(`http://127.0.0.1:43221/?${params}`);
@@ -74,7 +74,7 @@ test("performance retains metrics and Excel; raw details load only on explicit e
   const { calls } = await setup(page, "domain=performance");
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("button", { name: "完整", exact: true }).click();
-  await expect(page.getByRole("checkbox", {name:"只统计已结算",exact:true})).toBeDisabled();
+  await expect(page.getByRole("checkbox", {name:"只统计已结算",exact:true})).toBeEnabled();
   await expect(page.getByRole("columnheader", { name: "FBA 销量", exact: true })).toBeVisible();
   for (const name of ["FBM 销量", "毛利率", "退款率", "币种"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveAttribute("href", /format=xlsx/);
@@ -351,7 +351,7 @@ test("TK shortcuts preserve scoped deep-link filters and unavailable chips stay 
   await expect(page.getByRole("button", { name: "TK店-CA", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "TK店-US", exact: true }).click();
   await expect.poll(() => calls.filter(call => call.path === "/api/sellfox/sales").at(-1)?.query.get("shopExternalId")).toBe("124687");
-  await expect(page.getByRole("button", { name: "订单量", exact: true })).toHaveAttribute("title", "赛狐有、API/本地无");
+  await expect(page.getByRole("button", { name: "订单量", exact: true })).toBeEnabled();
   expect(calls.filter(call => call.path === "/api/sellfox/sales").at(-1)?.workspace).toBe("workspace-a");
   expect(calls.some(call => call.path === "/api/sellfox/sync")).toBe(false);
 });
@@ -387,4 +387,27 @@ test("Round H2 wide default, checkbox shops, visible summary and local matrix to
   await page.getByRole("button",{name:"在线商品",exact:true}).click();
   await expect(page.getByRole("button",{name:"查看记录 row",exact:true})).toHaveText("详情");
   expect(calls.filter(call=>call.body !== null)).toEqual([]);
+});
+
+
+test("P0 orders, settlement scope, current image and KPI follow browse and export filters", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.getByRole("button", {name:"订单量",exact:true}).click();
+  await expect.poll(() => calls.filter(c=>c.path.endsWith("/sales")).at(-1)?.query.get("metric")).toBe("orders");
+  await expect(page.getByRole("link", {name:"CSV",exact:true})).toHaveAttribute("href", /metric=orders/);
+  const kpi = page.getByLabel("关键指标汇总");
+  await expect(kpi).toContainText("订单量"); await expect(kpi).toContainText("USD"); await expect(kpi).toContainText("2");
+  await expect(page.getByRole("link", {name:"图",exact:true})).toHaveAttribute("href", "https://m.media-amazon.com/images/I/fixture.jpg");
+  await page.getByRole("button", {name:"下一页"}).click();
+  await expect(page.getByText("workspace-a-entity-page2",{exact:true})).toBeVisible();
+  await expect(kpi).toContainText("订单量2");
+  await page.getByRole("button", {name:"销售利润",exact:true}).click();
+  await page.getByRole("checkbox", {name:"只统计已结算",exact:true}).check();
+  await expect.poll(() => calls.filter(c=>c.path.endsWith("/performance")).at(-1)?.query.get("onlySettle")).toBe("1");
+  await expect(page.getByRole("link",{name:"Excel",exact:true})).toHaveAttribute("href", /onlySettle=1/);
+  await expect(kpi).toContainText("毛利润10"); // filtered totals, row grossProfit is -10
+  await page.reload();
+  await expect(page.getByRole("checkbox", {name:"只统计已结算",exact:true})).toBeChecked();
+  await page.getByRole("button",{name:"重置",exact:true}).click();
+  await expect(page.getByRole("checkbox", {name:"只统计已结算",exact:true})).not.toBeChecked();
 });

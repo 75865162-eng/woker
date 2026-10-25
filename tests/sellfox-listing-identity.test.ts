@@ -66,5 +66,5 @@ test("narrow SQL and both CSV paths expose only promoted columns; remaining unsu
   const sql = workbenchReadSql("listings", sellfoxBrowseQuery(new URL("http://local/?shopExternalId=124687")), { organizationId: "org", workspaceId: "ws" });
   assert.match(sql.text, /s\."mainImage"/); assert.doesNotMatch(sql.text, /payload/);
   assert.ok(sql.values.includes("124687")); assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
-  assert.ok(visibleColumns("sales").find(c => c.key === "image")?.unavailable);
+  assert.equal(visibleColumns("sales").find(c => c.key === "image")?.unavailable, undefined);
 });

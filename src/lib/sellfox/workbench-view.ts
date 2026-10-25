@@ -6,7 +6,7 @@ export const sellfoxDomains = [
   { id: "ads", label: "广告" }, { id: "runs", label: "同步日志" },
 ] as const;
 export type SellfoxDomain = (typeof sellfoxDomains)[number]["id"];
-export type SellfoxView = { domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; dimension?: string; metric?: string; hideZero?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
+export type SellfoxView = { domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; dimension?: string; metric?: string; hideZero?: boolean; onlySettle?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
 export const defaultSellfoxView: SellfoxView = { domain: "overview", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "asin", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "", pageSize: 20, salesView: "wide" };
 export function readSellfoxView(params: URLSearchParams): SellfoxView {
   const domain = params.get("domain"); const page = Number(params.get("page"));
@@ -15,8 +15,8 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     from: isSellfoxDate(params.get("from")) ? params.get("from")! : "", to: isSellfoxDate(params.get("to")) ? params.get("to")! : "",
     status: ["active", "inActive", "delete", "incomplete"].includes(params.get("status") ?? "") ? params.get("status")! : "",
     dimension: ["asin", "parentAsin", "msku", "sku"].includes(params.get("dimension") ?? "") ? params.get("dimension")! : "asin",
-    metric: ["quantity", "revenue"].includes(params.get("metric") ?? "") ? params.get("metric")! : "quantity",
-    hideZero: params.get("hideZero") === "1", currency: params.get("currency") ?? (domain === "performance" ? "USD" : ""), adType: ["sp", "sb", "sd"].includes(params.get("adType") ?? "") ? params.get("adType")! : "",
+    metric: ["quantity", "orders", "revenue"].includes(params.get("metric") ?? "") ? params.get("metric")! : "quantity",
+    onlySettle: params.get("onlySettle") === "1", hideZero: params.get("hideZero") === "1", currency: params.get("currency") ?? (domain === "performance" ? "USD" : ""), adType: ["sp", "sb", "sd"].includes(params.get("adType") ?? "") ? params.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(params.get("quickFilter") ?? "") ? params.get("quickFilter")! : "",
     salesView: params.get("salesView") === "matrix" ? "matrix" : "wide",
     pageSize: [20, 50, 100, 200].includes(Number(params.get("pageSize"))) ? Number(params.get("pageSize")) : 20,
@@ -38,6 +38,7 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
     if (view[key]) params.set(key, view[key]!);
   }
   if (view.domain === "performance" && !view.currency) params.set("currency", "");
+  if (view.domain === "performance" && view.onlySettle) params.set("onlySettle", "1");
   if (view.hideZero) params.set("hideZero", "1");
   if (view.search) params.set("search", view.search);
   if (view.searchType) params.set("searchType", view.searchType);
