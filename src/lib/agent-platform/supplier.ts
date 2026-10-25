@@ -584,7 +584,8 @@ export function createSupplierAgentExecutionExecutor(options: {
 
     if (selectionSource) {
       const evidenceReport = buildSupplierEvidenceReport(selectionSource, normalizedInput.naturalLanguageGoal, normalizedInput.marketplace, report.productSummary, generatedAt);
-      report = { ...evidenceReport, category: normalizedInput.category, supplierRecommendations: recommendations, quotationAnalysis: quotations, rfqDraft, supplierProjectDraft: projectDraft, evidence: evidenceReport.evidence.map((item) => ({ ...item, toolCallId: supplierSearchResult.toolCall?.id })) };
+      const searchCall = "toolCall" in supplierSearchResult && isRecord(supplierSearchResult.toolCall) ? supplierSearchResult.toolCall : {};
+      report = { ...evidenceReport, category: normalizedInput.category, supplierRecommendations: recommendations, quotationAnalysis: quotations, rfqDraft, supplierProjectDraft: projectDraft, evidence: evidenceReport.evidence.map((item) => ({ ...item, toolCallId: typeof searchCall.id === "string" ? searchCall.id : undefined })) };
     }
 
     const memoryItems = buildMemoryItems({
