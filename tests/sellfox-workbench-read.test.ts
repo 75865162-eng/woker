@@ -359,6 +359,24 @@ test("order totals preserve null and image columns use current scoped Listing me
   }
 });
 
+test("listings expose brand and rating from the scoped current Listing snapshot", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?status=active"));
+  const sql = workbenchReadSql("listings", query, { organizationId: "org", workspaceId: "ws" });
+  assert.match(sql.text, /NULLIF\(p\.payload->>'brand',''\) AS brand/);
+  assert.match(sql.text, /NULLIF\(p\.payload->>'rating',''\) AS rating/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,/);
+  assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
+  const brand = visibleColumns("listings", ["brand"]).find(c => c.key === "brand")!;
+  const rating = visibleColumns("listings", ["rating"]).find(c => c.key === "rating")!;
+  assert.equal(brand.unavailable, undefined);
+  assert.equal(rating.unavailable, undefined);
+  assert.equal(brand.defaultVisible, false);
+  assert.equal(rating.defaultVisible, false);
+  assert.equal(sellfoxColumnValue(brand, { brand: "Acme" }), "Acme");
+  assert.equal(sellfoxColumnValue(rating, { rating: "4.4" }), "4.4");
+  assert.equal(visibleColumnCsv([brand, rating], [{ brand: "Acme", rating: "4.4" }]).trim(), '"品牌","星级"\r\n"Acme","4.4"');
+});
+
 test("performance browse selects and sums elevated fee fields and prefers listing image over payload fallback", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-01&to=2026-10-02"));
   const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" });
