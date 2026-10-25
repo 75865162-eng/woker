@@ -185,3 +185,11 @@ GROUP BY status;
 验证：4项新增无数据库回归覆盖查询参数白名单、日期窗、绑定参数/租户边界和可见列CSV安全；浏览器覆盖维度/指标/隐藏零、状态与广告快筛、列设置、未知字段和灰态操作、汇总比率、工作区迟到响应及窄屏固定列。另在本机独立事务临时表内验证多MSKU透视、null与真实0、跨币种和跨workspace，ROLLBACK清理；禁用fetch后四域真实本地读取成功，不以模拟浏览器替代真实API字段校验。此UI变更无迁移、无生产发布，不默认运行全套构建/E2E。
 
 本轮结果（2026-10-25）：`check:fast` 258项核心测试、lint、TypeScript通过（保留已有商品编辑器hook warning）；10项Sellfox浏览器通过，另对最终四域1440px截图与760px横向滚动做定向复验。真实单店离线查询验证销量/利润各4维度；当前可见列CSV导出59实体成功，跨workspace为0行。未执行新的生产构建、全仓E2E、迁移或服务器发布。
+
+## 生产启用检查（独立主机与数据库）
+
+生产计划必须在目标主机自己的组织/工作区启用。本地计划、其他服务器的 Worker 与数据库不作为生产验收。发布前核对当前 RELEASE.json commit；通过 CI/CD 的 target_host 显式选择旧主机 159.75.203.221 或新主机 123.207.47.225，base_sha 必须属于该主机。已有发布不使用 initial_deployment，不运行管理员 seed。涉及迁移/部署须审核并设置 deployment_reviewed；锁文件变更才授权 install_dependencies。
+
+旧主机升级 Compose 前检查 POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD 是否存在；缺失时只能从当前运行的 PostgreSQL 容器配置补入相同值，验证与 DATABASE_URL 一致，不重置密码、不输出值。Caddy 保留 aecob.com 和两个 IP 入口，不修改 DNS。生产 Worker 使用发布内的 systemd 单元与服务器 .env：systemctl enable --now amazon-sellfox-sync-worker。
+
+验收 schedules API 的 configured、queueEnabled、worker.online，以及 inventory/sales/performance/listings/ads_report 的 enabled/nextRunAt；stores/hourly 不启用，广告保留 SP。等原有30秒调度 tick，记录 trigger=schedule 的成功 run。销量默认从上一完整冬季11月1日起每天补7天，串行限流可能持续十几分钟以上。回滚先关闭五项计划，必要时停专用 Worker；应用失败沿 release 回滚，不 down migration、不清快照。

@@ -50,6 +50,7 @@ restart_web=false
 restart_worker=false
 restart_image_worker=false
 restart_amazon_sync_worker=false
+restart_sellfox_sync_worker=false
 runtime_config=false
 caddy_reload=false
 infra_update=false

@@ -1,3 +1,30 @@
+aecob.com, www.aecob.com {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+	}
+}
+
+http://159.75.203.221, http://159-75-203-221.sslip.io {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+		header_down Location ^http://localhost:3000(.*)$ http://{host}$1
+	}
+}
+
+https://159.75.203.221, https://159-75-203-221.sslip.io {
+	tls internal
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+		header_down Location ^http://localhost:3000(.*)$ https://{host}$1
+	}
+}
+
 http://123.207.47.225 {
 	encode zstd gzip
 

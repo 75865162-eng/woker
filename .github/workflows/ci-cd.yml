@@ -16,6 +16,14 @@ on:
         description: Exact commit currently running on production
         type: string
         required: true
+      target_host:
+        description: Explicit production target (empty uses configured production host)
+        type: choice
+        options:
+          - ""
+          - "159.75.203.221"
+          - "123.207.47.225"
+        default: ""
       deployment_reviewed:
         description: Deployment infrastructure and database migrations have been manually reviewed
         type: boolean
@@ -131,7 +139,7 @@ jobs:
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          SERVER_HOST: ${{ secrets.PRODUCTION_SERVER_HOST }}
+          SERVER_HOST: ${{ inputs.target_host || secrets.PRODUCTION_SERVER_HOST }}
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
@@ -140,7 +148,7 @@ jobs:
 
       - name: Deploy artifact
         env:
-          SERVER_HOST: ${{ secrets.PRODUCTION_SERVER_HOST }}
+          SERVER_HOST: ${{ inputs.target_host || secrets.PRODUCTION_SERVER_HOST }}
           SERVER_USER: ${{ secrets.PRODUCTION_SERVER_USER }}
           SERVER_DIR: ${{ secrets.PRODUCTION_SERVER_DIR }}
           SSH_OPTS: -o StrictHostKeyChecking=yes
