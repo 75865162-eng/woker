@@ -73,6 +73,7 @@ test("performance retains metrics and Excel; raw details load only on explicit e
   const { calls } = await setup(page, "domain=performance");
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("button", { name: "完整", exact: true }).click();
+  await expect(page.getByRole("checkbox", {name:"只统计已结算",exact:true})).toBeDisabled();
   await expect(page.getByRole("columnheader", { name: "FBA 销量", exact: true })).toBeVisible();
   for (const name of ["FBM 销量", "毛利率", "退款率", "币种"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveAttribute("href", /format=xlsx/);
@@ -154,7 +155,8 @@ test("sales matrix filters debounce, serialize dimensions and preserve visible e
   const last = calls.filter(c => c.path.endsWith("/sales")).at(-1)!;
   expect(last.query.get("dimension")).toBe("parentAsin"); expect(last.query.get("metric")).toBe("revenue");
   await expect(page.getByRole("button", { name: "SPU", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "实时统计", exact: true })).toBeDisabled();
+  await expect(page.getByRole("checkbox", { name: "实时统计", exact: true })).toBeDisabled();
+  await expect(page.getByRole("checkbox", { name: "实时统计", exact: true })).not.toBeChecked();
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByLabel("显示标题列", { exact: true }).check();
   await expect(page.getByRole("columnheader", { name:"标题",exact:true })).toBeVisible();
@@ -169,6 +171,7 @@ test("sales matrix filters debounce, serialize dimensions and preserve visible e
 
 test("listing and ads expose only verified read filters and disabled web operations", async ({ page }) => {
   const { calls } = await setup(page, "domain=listings");
+  expect((await page.getByLabel("只读工具条",{exact:true}).getByRole("button").allTextContents()).slice(0,4)).toEqual(["配对","自动配对","同步","调价"]);
   for (const name of ["父体", "调价", "打印", "配对"]) await expect(page.getByRole("button", { name, exact: true })).toBeDisabled();
   for (const name of ["7天销量", "14天销售额", "30天广告花费", "可售"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
   await page.getByLabel("Listing 状态").selectOption("delete");
@@ -269,12 +272,22 @@ test("reference layout keeps compact filter bands and domain-specific identity c
     await page.setViewportSize({width:720,height:900});
     const scroller = page.getByTestId("sellfox-table-scroll");
     const identity = page.locator("thead th.sticky").last();
+    const action = page.getByRole("columnheader", {name:"操作",exact:true});
+    const actionBefore = await action.boundingBox();
+    expect(actionBefore!.x + actionBefore!.width).toBeLessThanOrEqual(721);
     const before = await identity.boundingBox();
     await scroller.evaluate(el=>{el.scrollLeft=500});
     const after = await identity.boundingBox();
     expect(Math.abs(before!.x-after!.x)).toBeLessThan(2);
+    const actionAfter = await action.boundingBox();
+    expect(Math.abs(actionBefore!.x-actionAfter!.x)).toBeLessThan(2);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({path:`/tmp/sellfox-layout-${domain}-mobile.png`,fullPage:true});
+    await page.getByRole("button",{name:"查看记录 row",exact:true}).click();
+    await expect(page.getByRole("region",{name:"记录摘要",exact:true})).toBeVisible();
+    await page.getByRole("button",{name:"关闭详情",exact:true}).click();
+    await page.setViewportSize({width:360,height:800});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.setViewportSize({width:1440,height:960});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
