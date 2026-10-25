@@ -37,7 +37,7 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
     if (url.pathname.endsWith("/sync")) return route.fulfill({ status: 202, json: { runId: "test-run", status: "queued" } });
     if (/\/(sales|performance|runs)\/row$/.test(url.pathname)) return route.fulfill({ json: { payload: { msku: "test-msku", token: "[已隐藏]" }, truncated: true } });
     const domain = url.pathname.split("/").pop();
-    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2}] : domain === "ads_report" ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : [], dates: domain === "sales" ? [url.searchParams.get("from") || "2026-10-24"] : [], rows: [{ id: "row", identity: "test-msku", daily: { [url.searchParams.get("from") || "2026-10-24"]: 2 }, ["day:" + (url.searchParams.get("from") || "2026-10-24")]: 2, subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store }], pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: 50, total: 51 } } });
+    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2}] : domain === "ads_report" ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : domain === "sales" ? [{ currency:"USD", subtotal:2, daily:{[url.searchParams.get("from") || "2026-10-24"]:2} }] : [], dates: domain === "sales" ? [url.searchParams.get("from") || "2026-10-24"] : [], rows: [{ id: "row", identity: "test-msku", daily: { [url.searchParams.get("from") || "2026-10-24"]: 2 }, ["day:" + (url.searchParams.get("from") || "2026-10-24")]: 2, subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store }], pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: Number(url.searchParams.get("pageSize") || 50), total: 51 } } });
     throw new Error(`Unexpected test request: ${url.pathname}`);
   });
   await page.goto(`http://127.0.0.1:43221/?${params}`);
@@ -209,4 +209,29 @@ test("narrow viewport scrolls metrics while keeping the identity header fixed", 
     await scroll.evaluate(el => { el.scrollLeft = 0; });
     await page.screenshot({ path: `/tmp/sellfox-ui-${file}-desktop.png`, fullPage: true });
   }
+});
+
+
+test("typed exact search, reset and pagination remain local readonly requests", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.getByLabel("搜索类型", { exact:true }).selectOption("asin");
+  await page.getByLabel("搜索记录").fill("B0EXAMPLE");
+  await page.getByLabel("精确匹配", { exact:true }).check();
+  await expect.poll(() => calls.filter(c=>c.path.endsWith("/sales")).at(-1)?.query.get("exactMatch")).toBe("1");
+  expect(calls.filter(c=>c.path.endsWith("/sales")).at(-1)?.query.get("searchType")).toBe("asin");
+  await expect(page.getByLabel("表内汇总")).toContainText("2");
+  await page.getByLabel("每页条数").selectOption("20");
+  await expect.poll(() => calls.filter(c=>c.path.endsWith("/sales")).at(-1)?.query.get("pageSize")).toBe("20");
+  await expect(page.getByRole("button", {name:"下一页",exact:true})).toBeEnabled();
+  await page.getByLabel("跳转页码").fill("3");
+  await page.getByRole("button", {name:"确定",exact:true}).click();
+  await expect.poll(() => calls.filter(c=>c.path.endsWith("/sales")).at(-1)?.query.get("page")).toBe("3");
+  await page.getByRole("button", {name:"重置",exact:true}).click();
+  await expect.poll(() => calls.filter(c=>c.path.endsWith("/sales")).at(-1)?.query.get("search")).toBeNull();
+  expect(calls.filter(c=>c.path.endsWith("/sales")).at(-1)?.query.get("exactMatch")).toBeNull();
+  await page.getByRole("button", {name:"广告",exact:true}).click();
+  await expect(page.getByRole("button", {name:"添加广告产品",exact:true})).toBeDisabled();
+  await page.getByRole("button", {name:"有花费无点击",exact:true}).click();
+  await expect.poll(() => calls.filter(c=>c.path.endsWith("/ads_report")).at(-1)?.query.get("quickFilter")).toBe("spendNoClicks");
+  expect(calls.filter(c=>c.body !== null)).toEqual([]);
 });

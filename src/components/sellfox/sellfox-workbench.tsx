@@ -64,7 +64,7 @@ export function SellfoxWorkbench() {
   }, []);
 
   function navigate(patch: Partial<SellfoxView>, replace = false) {
-    const next = { ...view, page: 1, ...patch, ...(patch.domain === "performance" && !view.currency ? { currency: "USD" } : {}) }; setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setPagination({ page: next.page, pageSize: 50, total: 0 }); setLoading(true); setError("");
+    const next = { ...view, page: 1, ...(patch.domain && patch.domain !== view.domain ? { searchType: "" } : {}), ...patch, ...(patch.domain === "performance" && !view.currency ? { currency: "USD" } : {}) }; setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setPagination({ page: next.page, pageSize: next.pageSize ?? 50, total: 0 }); setLoading(true); setError("");
     const url = `${window.location.pathname}?${withScope(sellfoxViewParams(next))}`;
     if (replace) window.history.replaceState(null, "", url); else window.history.pushState(null, "", url);
   }
@@ -166,12 +166,12 @@ export function SellfoxWorkbench() {
         <label className="flex flex-wrap items-center gap-2 border border-border bg-white p-3 text-xs text-muted">销量历史补数起始日<input type="date" aria-label="销量补数起始日" value={backfillStart || schedules.find((item) => item.resource === "sales")?.backfillStart || ""} onChange={(event) => setBackfillStart(event.target.value)} className="h-8 border border-border px-2" /><span>下次启用销量计划时保存；修改起始日将重置补数游标。每天 T-1 + 默认7天历史，失败保留断点。{schedules.find((item) => item.resource === "sales")?.backfillNextDate ? `当前游标：${schedules.find((item) => item.resource === "sales")?.backfillNextDate}` : ""}</span></label>
         <SellfoxRecentRuns runs={latestRuns} onAll={() => navigate({ domain: "runs" })} />
       </> : <>
-        <SellfoxBrowseFilters view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[view.domain]} onColumns={keys => setColumnSelection(current => ({ ...current, [view.domain]: keys }))} />
+        <SellfoxBrowseFilters onSync={() => void sync("listings")} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason("listings"))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[view.domain]} onColumns={keys => setColumnSelection(current => ({ ...current, [view.domain]: keys }))} />
         {canExport && exportHref && view.domain !== "runs" && view.domain !== "stores" ? <a className="text-xs text-brand" href={`${exportHref}&agent=1`}>给 Agent 的导出 CSV（业务窄列）</a> : null}
         <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "默认读取最近完整快照；选择日期或全部历史可回看历史采集。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>
         {view.domain === "sales" ? <p className="text-xs text-muted">MSKU 日表按当前维度汇总；父ASIN/标题/价格来自最新 Listing，库存来自最新完整库存快照。未匹配父体时保留 MSKU。— 表示缺失，日矩阵最多90天；小计仅统计已知日，缺日不补零。趋势为窗口末7日，完整才算均值。</p> : null}
         {view.domain === "performance" ? <p className="text-xs text-muted">区间按店铺、维度、币种汇总；毛利率按汇总金额重算，退款率跨多条记录时留空。本地未提升的费用列不从 payload 猜取。</p> : null}
-        <SellfoxResourceTable dates={dates} totals={totals} selectedColumns={columnSelection[view.domain]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} />
+        <SellfoxResourceTable dates={dates} totals={totals} selectedColumns={columnSelection[view.domain]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} />
       </>}
     </main><aside className="space-y-3">{selectedRow || view.domain === "runs" ? <SellfoxSyncRunsPanel overview={overview} /> : null}{selectedRow ? <SellfoxRecordDetail key={`${scope.workspaceId}-${view.domain}-${selectedRow.id}`} row={selectedRow} rawUrl={rawUrl} headers={headers} onClose={() => setSelectedRow(null)} /> : null}</aside></div>
   </div>;

@@ -6,7 +6,7 @@ export const sellfoxDomains = [
   { id: "ads", label: "广告" }, { id: "runs", label: "同步日志" },
 ] as const;
 export type SellfoxDomain = (typeof sellfoxDomains)[number]["id"];
-export type SellfoxView = { domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; dimension?: string; metric?: string; hideZero?: boolean; currency?: string; adType?: string; quickFilter?: string };
+export type SellfoxView = { domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; dimension?: string; metric?: string; hideZero?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean };
 export const defaultSellfoxView: SellfoxView = { domain: "overview", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "msku", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "" };
 export function readSellfoxView(params: URLSearchParams): SellfoxView {
   const domain = params.get("domain"); const page = Number(params.get("page"));
@@ -17,7 +17,9 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     dimension: ["asin", "parentAsin", "msku", "sku"].includes(params.get("dimension") ?? "") ? params.get("dimension")! : "msku",
     metric: ["quantity", "revenue"].includes(params.get("metric") ?? "") ? params.get("metric")! : "quantity",
     hideZero: params.get("hideZero") === "1", currency: params.get("currency") ?? (domain === "performance" ? "USD" : ""), adType: ["sp", "sb", "sd"].includes(params.get("adType") ?? "") ? params.get("adType")! : "",
-    quickFilter: ["spend", "clicksNoOrders"].includes(params.get("quickFilter") ?? "") ? params.get("quickFilter")! : "",
+    quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(params.get("quickFilter") ?? "") ? params.get("quickFilter")! : "",
+    pageSize: [20, 50, 100, 200].includes(Number(params.get("pageSize"))) ? Number(params.get("pageSize")) : 50,
+    searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId"].includes(params.get("searchType") ?? "") ? params.get("searchType")! : "", exactMatch: params.get("exactMatch") === "1",
     search: params.get("search") ?? "", site: params.get("site") ?? "", shops: [...new Set(params.getAll("shopExternalId").filter(Boolean))],
     page: Number.isSafeInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1, allDates: params.get("allDates") === "1",
   };
@@ -36,6 +38,8 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
   if (view.domain === "performance" && !view.currency) params.set("currency", "");
   if (view.hideZero) params.set("hideZero", "1");
   if (view.search) params.set("search", view.search);
+  if (view.searchType) params.set("searchType", view.searchType);
+  if (view.exactMatch) params.set("exactMatch", "1");
   // Run dates refer to start time, not snapshot business date; shop/site do not apply.
   if (!forRequest || view.domain !== "runs") {
     if (view.site) params.set("site", view.site);
@@ -44,6 +48,6 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
   if (view.allDates) params.set("allDates", "1");
   if (forRequest && !view.allDates && !view.from && !view.to && !["overview", "stores", "runs", "listings"].includes(view.domain)) params.set("reportDate", sellfoxDateAt(new Date(), view.domain === "inventory" ? 0 : -1));
   if (forRequest || view.page > 1) params.set("page", String(view.page));
-  if (forRequest) params.set("pageSize", "50");
+  if (forRequest || view.pageSize) params.set("pageSize", String(view.pageSize ?? 50));
   return params;
 }
