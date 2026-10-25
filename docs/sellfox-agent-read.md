@@ -17,6 +17,8 @@ Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出�
 
 库存 sourceKey 使用响应 `id`，保留 ASIN/MSKU/FNSKU；不能只按 ASIN 去重后丢弃不同 MSKU/库位。Listing 使用响应 `id`，保留 MSKU/ASIN。日销使用店铺+MSKU+reportDate；同一任务两指标只在身份、币种与采集批次一致时合并。
 
+历史MSKU日销真实响应允许 `skus:null`（未配对内部SKU），此时窄列sku保留空串、payload保留null，不从MSKU/ASIN推导SKU；shopIds、mskus仍必须是有效唯一身份，其他非法SKU数组仍拒绝。补货按精确MSKU关联，不按内部SKU缺失丢弃真实销量。
+
 多店真实V2响应另验证：`delete`状态可有稳定id/ASIN而sku为空，Listing窄表msku允许NULL，payload保留原空值；这类记录不能参与在售MSKU补货JOIN。仅此已验证例外允许缺MSKU，在售/其他状态缺MSKU、任意记录缺id/ASIN或店铺不匹配仍拒绝整店发布。迁移 `20261025030000_allow_deleted_sellfox_listing_without_msku` 只DROP该快照列的NOT NULL，不改主档、不填造MSKU。回退应用前须处理旧版本对NULL的兼容，保留列与原数据，不自动恢复NOT NULL。
 
 `NULL` 是未知，不是零。缺日不是零销量；日销只有 `complete=true` 且必要数值非空才可消费。覆盖表用于识别合法空日，但不能据空店铺日推断某个 SKU 当时在售或销量为零；补货长窗缺日/缺周期必须 NEEDS_DATA。历史旧行在重新完整采集前可能 complete=false。不要填零凑满冬季历史。
@@ -145,3 +147,10 @@ GROUP BY status;
 - Listing初次两店失败：一家上游业务码500，受控重读恢复；一家delete记录缺MSKU。只放宽已验证删除记录并将msku存NULL，增量迁移在临时表回滚验证后仅本地应用/登记，无生产操作。正常结束当前广告任务后重启单一Worker，原Listing run保留capture及已完成37店检查点，第二次执行成功，不另建全量任务。
 - 库存可售/总库存、利润核心字段、Listing MSKU/售价/可售、广告花费/订单/销售额与各自payload SQL对账差异0；禁用网络后五域窄列/CSV单店读取成功，跨workspace查询0行。实际全店Listing超过10,000行时返回413，无截断CSV；请按店分段导出。日销保留一条旧批次complete=false记录，未伪造为完整。
 - `check:fast` 251项测试、lint和TypeScript通过；Prisma validate/generate、隔离迁移与真实续跑成功。未运行新的全套构建/E2E。全店冬季回填仍在原468段批次继续，不能把首轮定时采集完成等同于长窗历史已补齐。
+
+### 历史日销缺内部SKU与休眠恢复（2026-10-25）
+
+- 真实历史单日日销两指标均返回一条有效MSKU/ASIN、`skus:null`记录；原严格数组校验拒绝整页。仅接受已验证null缺失，主键、日期、币种、数值检查不放宽；新增回归验证null主键、非法数组和跨店仍拒绝。
+- 复用原失败run、capture和29个已完成日期；保留executionAttempts上限，从失败日期重试后第二次执行成功。SQL确认该行quantity=1、revenue=11.99 USD、sku空串、payload.skus为null、complete=true。没有另建批次或重置次数。
+- macOS电源日志显示11:16～11:27反复数分钟休眠，与BullMQ续锁失败相符。两个受影响run在原断点第二次完成；一个Redis job仍显示stalled失败但对应数据库run已done，这是队列历史状态，不能据此重建已完成业务任务。当前单Worker继续串行回填，五项计划保持开启。
+- 此次采样历史批次5段done、462段queued、1段running、0段failed；完整覆盖205个店/日（含先前试采及T-1），长窗仍未补齐。`check:fast` 252项测试、lint、TypeScript通过；无schema变更，不重复迁移、构建或E2E。后台进程未设置防休眠或开机自启，持续回填需电脑保持唤醒；定时计划仅在Worker运行时执行。

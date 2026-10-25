@@ -26,6 +26,21 @@ test("daily metric contracts reject foreign shops, combined MSKUs, wrong dates a
   assert.throws(() => sellfoxSalesRow({ ...volume.rows[0], mskus: ["a", "b"] }, "shop-fixture", "2026-10-24", "productNum"), /唯一/);
 });
 
+test("historical MSKU sales preserve an unpaired internal SKU without weakening identity validation", () => {
+  for (const [fixture, metric] of [[volume, "productNum"], [revenue, "salePrice"]] as const) {
+    const raw = { ...fixture.rows[0], skus: null };
+    const parsed = sellfoxSalesRow(raw, "shop-fixture", "2026-10-24", metric);
+    assert.equal(parsed.sku, "");
+    assert.equal(parsed.msku, fixture.rows[0].mskus[0]);
+    assert.equal(parsed.payload.skus, null);
+    assert.throws(() => sellfoxSalesRow({ ...raw, mskus: null }, "shop-fixture", "2026-10-24", metric), /身份/);
+    assert.throws(() => sellfoxSalesRow({ ...raw, shopIds: null }, "shop-fixture", "2026-10-24", metric), /身份/);
+    assert.throws(() => sellfoxSalesRow({ ...raw, skus: [null] }, "shop-fixture", "2026-10-24", metric), /身份/);
+    assert.throws(() => sellfoxSalesRow({ ...raw, skus: undefined }, "shop-fixture", "2026-10-24", metric), /身份/);
+    assert.throws(() => sellfoxSalesRow(raw, "foreign", "2026-10-24", metric), /归属/);
+  }
+});
+
 function fixture() {
   let rows = new Map<string, Record<string, unknown>>(); let checkpoint: SnapshotCheckpoint | undefined; let failCommit = false;
   const calls: string[] = []; let failureMetric = ""; let revenueCurrency = "USD";

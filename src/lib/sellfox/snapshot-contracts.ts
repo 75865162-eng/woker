@@ -31,7 +31,9 @@ function strings(value: unknown) {
   return value.map((item) => (item as string).trim());
 }
 export function sellfoxSalesRow(value: unknown, shopExternalId: string, reportDate: string, metric: "productNum" | "salePrice") {
-  const row = record(value); const shops = strings(row.shopIds); const mskus = strings(row.mskus); const asins = strings(row.asins); const skus = strings(row.skus);
+  // Real historical MSKU reports can have skus:null (no internal SKU pairing).
+  // shopIds/mskus remain required; do not manufacture an internal SKU from MSKU.
+  const row = record(value); const shops = strings(row.shopIds); const mskus = strings(row.mskus); const asins = strings(row.asins); const skus = row.skus === null ? [] : strings(row.skus);
   if (shops.length !== 1 || shops[0] !== shopExternalId) throw new SellfoxSyncInputError("销量响应店铺归属不匹配，已拒绝写入。");
   if (mskus.length !== 1 || asins.length > 1 || skus.length > 1) throw new SellfoxSyncInputError("销量响应不是唯一 MSKU 维度。");
   if (!Array.isArray(row.productSaleDayOpenVo) || row.productSaleDayOpenVo.length !== 1) throw new SellfoxSyncInputError("销量单日报表缺少唯一业务日。");
