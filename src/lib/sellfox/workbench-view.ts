@@ -49,7 +49,7 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
     for (const shop of view.shops) params.append("shopExternalId", shop);
   }
   if (view.allDates) params.set("allDates", "1");
-  if (forRequest && !view.allDates && !view.from && !view.to && !["overview", "stores", "runs", "listings"].includes(view.domain)) params.set("reportDate", sellfoxDateAt(new Date(), view.domain === "inventory" ? 0 : -1));
+  if (forRequest && !view.allDates && !view.from && !view.to && !["overview", "stores", "runs", "listings", "sales", "performance"].includes(view.domain)) params.set("reportDate", sellfoxDateAt(new Date(), view.domain === "inventory" ? 0 : -1));
   if (forRequest || view.page > 1) params.set("page", String(view.page));
   if (forRequest || view.pageSize) params.set("pageSize", String(view.pageSize ?? 20));
   return params;

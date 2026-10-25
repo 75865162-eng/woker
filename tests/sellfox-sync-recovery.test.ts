@@ -1,11 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
+import { text, syncSellfoxProductDailySnapshots, type PerformanceCheckpoint } from "@/lib/sellfox/product-performance";
 import { SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { sellfoxPost } from "@/lib/sellfox/client";
 
 type Dependencies = NonNullable<Parameters<typeof syncSellfoxProductDailySnapshots>[1]>;
 const input = { organizationId: "org-a", workspaceId: "workspace-a", reportDate: "2026-10-24" };
+
+test("performance text extracts scalar identities without stringifying objects", () => {
+  const cases: [string, unknown, string][] = [
+    ["asinList", " B0X ", "B0X"], ["asinList", [" B0X ", "", " ", "B0Y"], "B0X,B0Y"],
+    ["asinList", { asin: "B0X" }, "B0X"], ["asinList", [{ asin: " B0X " }, { asin: "B0Y" }], "B0X,B0Y"],
+    ["skuList", { sku: "S1", asin: "B0X" }, "S1"], ["asinList", { sku: "S1", asin: "B0X" }, "B0X"],
+    ["mskuList", { sku: "S1", msku: "M1" }, "S1"], ["mskuList", { msku: "M1" }, "M1"],
+    ["parentAsinList", { parentAsin: "P1", asin: "B0X" }, "P1"], ["parentAsinList", { asin: "B0X" }, "B0X"],
+    ["asinList", { value: " B0X " }, "B0X"], ["asinList", { id: 123 }, "123"], ["asinList", { name: "B0X" }, "B0X"],
+    ["asinList", { asin: { asin: "B0X" } }, ""], ["asinList", [{ asin: {} }, {}, ["B0X"]], ""],
+    ["asinList", { unexpected: "B0X" }, ""], ["asinList", "[object Object]", ""],
+    ["asinList", 0, "0"], ["asinList", false, "false"], ["asinList", null, ""], ["asinList", undefined, ""],
+  ];
+  for (const [key, value, expected] of cases) {
+    const actual = text({ [key]: value }, key);
+    assert.equal(actual, expected); assert.doesNotMatch(actual, /\[object Object\]/);
+  }
+});
 
 function fixture(storeIds = ["a", "b"]) {
   let rows = new Map<string, unknown>();
@@ -54,6 +72,14 @@ function fixture(storeIds = ["a", "b"]) {
 }
 
 const page = (prefix: string, size: number, totalPage: number) => ({ rows: Array.from({ length: size }, (_, index) => ({ mskuList: [`${prefix}-${index}`], saleNum: 1 })), totalPage });
+
+test("single-object performance identities reach upsert as extracted values", async () => {
+  const f = fixture(["a"]);
+  f.setResponse(() => ({ rows: [{ mskuList: { msku: "M1" }, skuList: { sku: "S1" }, asinList: { asin: "B0X" }, parentAsinList: { parentAsin: "P1" } }], totalPage: 1 }));
+  await syncSellfoxProductDailySnapshots(input, f.dependencies);
+  const row = [...f.rows.values()][0] as Record<string, unknown>;
+  assert.deepEqual([row.sourceKey, row.msku, row.sku, row.asin, row.parentAsin], ["M1", "M1", "S1", "B0X", "P1"]);
+});
 
 test("page transaction rollback retains the failed page; retry replays it and skips completed stores", async () => {
   const f = fixture();

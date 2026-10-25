@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { SellfoxBrowseError, sellfoxExportLimit, type SellfoxBrowseQuery } from "./browse-query";
 import { sellfoxDateAt } from "./sync-contract";
+import { resolveEffectiveReportDate } from "./browse-report-date";
 
 type Scope = { organizationId: string; workspaceId: string };
 type Row = Record<string, unknown>;
@@ -111,6 +112,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY id LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows`;
 }
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
+  if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
   const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[] }[]>(workbenchReadSql(domain, query, scope, exporting));
   const { rows, total, totals } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);
@@ -119,7 +121,7 @@ export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: Sellf
   const mskus = [...new Set(rows.flatMap(row => Array.isArray(row.members) ? row.members.map(String) : row.msku ? [String(row.msku)] : []))];
   const inventory = stores.length ? await prisma.$queryRaw<Row[]>(Prisma.sql`SELECT "storeId",msku,CASE WHEN count(quantity)=count(*) THEN sum(quantity)::float END AS fulfillable,CASE WHEN count("totalInventory")=count(*) THEN sum("totalInventory")::float END AS "totalInventory",max("capturedAt") AS "inventoryCapturedAt" FROM sellfox_inventory_current i WHERE ${scoped("i", scope)} AND "storeId" IN (${Prisma.join(stores)}) AND msku IN (${Prisma.join(mskus.length ? mskus : ["\u0001"])}) GROUP BY "storeId",msku`) : [];
   const stocksByKey = new Map(inventory.map(stock => [JSON.stringify([stock.storeId, stock.msku]), stock]));
-  const dates = domain === "sales" ? workbenchDateRange(query) : [];
+  const dates = domain === "sales" ? workbenchDateRange(query) : domain === "performance" && query.reportDate && !query.from && !query.to ? [query.reportDate] : [];
   for (const row of rows) {
     const members = Array.isArray(row.members) ? row.members : [row.msku];
     const stocks = members.flatMap(msku => { const stock = stocksByKey.get(JSON.stringify([row.storeId, msku])); return stock ? [stock] : []; });

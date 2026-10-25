@@ -3,7 +3,7 @@ import { SellfoxWorkbench } from "@/components/sellfox/sellfox-workbench";
 
 export default function SellfoxPage() {
   return (
-    <AppShell title="Sellfox 报表同步" subtitle="Sellfox 店铺、小时指标与产品表现快照">
+    <AppShell title="销量统计 / 销售利润" subtitle="按店铺、商品和业务日期查看销量、利润与广告表现">
       <SellfoxWorkbench />
     </AppShell>
   );

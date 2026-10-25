@@ -11,10 +11,26 @@ export type PerformanceCheckpoint = { stores: Record<string, PerformanceStorePro
 type PerformanceProgress = { reportDate: string; synced: number; checkpoint: PerformanceCheckpoint };
 type Dependencies = { db: Pick<PrismaClient, "sellfoxStore" | "$transaction">; post: typeof sellfoxPost };
 
-function text(row: RecordLike, key: string) {
+export function text(row: RecordLike, key: string) {
+  const preferred: Record<string, string[]> = { asinList: ["asin"], skuList: ["sku"], mskuList: ["sku", "msku"], parentAsinList: ["parentAsin", "asin"] };
+  const fields = [...(preferred[key] ?? []), "asin", "sku", "msku", "parentAsin", "value", "id", "name"];
+  const scalar = (value: unknown) => {
+    if (!["string", "number", "boolean"].includes(typeof value)) return "";
+    const result = String(value).trim();
+    return result === "[object Object]" ? "" : result;
+  };
+  const extract = (value: unknown) => {
+    if (!value || typeof value !== "object") return scalar(value);
+    if (Array.isArray(value)) return "";
+    const record = value as RecordLike;
+    for (const field of fields) {
+      const identity = scalar(record[field]);
+      if (identity) return identity;
+    }
+    return "";
+  };
   const value = row[key];
-  if (Array.isArray(value)) return value.map((item) => typeof item === "string" ? item : item && typeof item === "object" ? String(item[key === "asinList" ? "asin" : "sku"] ?? "") : "").filter(Boolean).join(",");
-  return value === undefined || value === null ? "" : String(value).trim();
+  return (Array.isArray(value) ? value : [value]).map(extract).filter(Boolean).join(",");
 }
 function number(row: RecordLike, key: string) {
   return sellfoxNumber(row, key, ["saleNum", "saleNumFba", "saleNumFbm"].includes(key));

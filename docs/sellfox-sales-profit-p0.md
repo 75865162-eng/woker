@@ -11,6 +11,16 @@
 - 主图来自同组织/工作区/店铺/MSKU 的 `sellfox_listing_current.mainImage`，不读 ProductRecord、不冒充历史图片。聚合有多个不同主图或缺图时不猜测，显示 —。复用现有图片列的安全 HTTPS CDN URL 链接，点击「图」打开；不预载原图。CSV/Excel 同列导出主图 URL。
 - 表上方「关键指标汇总」只展示本次服务端筛选 totals，按币种分行；销量显示所选指标，利润显示毛利润、销售额、净销售额、订单量、销量和广告费。不使用本页行数重算，不跨币种换算；NULL 显示 —，真实0显示0。加载期间不展示上次 totals。
 
+## 本地修补：身份解析与默认业务日
+
+产品表现同步的 `text()` 按字段优先提取单对象或数组里的 ASIN/SKU/MSKU/父ASIN，空值及无法识别的嵌套对象返回空串，不再将对象写成 `[object Object]`。本次只修复后续同步；未添加或执行历史坏数据 SQL 修复脚本，已有坏行需另行审查 payload、sourceKey 和唯一键后维护。
+
+销量/利润 UI 请求不再发送隐式 `reportDate=昨天`。浏览及对应导出由服务端在同组织/工作区、所选店铺/站点/币种（利润另按 onlySettle 分区）查找不晚于昨天的最近有数据的一天，使用一次仅选择日期的索引查询；昨天有数据时仍选昨天，整个范围无数据时保留昨天的空结果。搜索/隐藏零值不影响选日。显式 `from`、`to`、`reportDate` 和 `allDates=1` 均不回退，响应 `dates` 返回有效单日；库存默认今天及 Agent 长表读取口径保持原状。销量工作台的全部历史仍需显式选择最多90天的矩阵窗口。
+
+本修补不改 schema、不运行迁移，不访问持久数据库。验证入口是 `tests/sellfox-report-date.test.ts`、`tests/sellfox-sync-recovery.test.ts` 及原有 browse/workbench/snapshot 单测，并执行类型检查和改动文件 ESLint。未实测真实 PostgreSQL 的查询 P95；后续发布前用实际数据确认日期索引查询耗时。回退可撤销本次代码提交，无数据库回滚步骤；已有坏数据不会被本次代码自动恢复。
+
+本次修补验证：6 个相关测试文件共 36 个用例通过，TypeScript、改动文件 ESLint 和 `git diff --check` 通过。沙箱禁止 `tsx` CLI 的 IPC socket，改用逐文件 `node --import tsx tests/<文件>.test.ts` 执行；未运行生产构建、浏览器/全站 E2E 或真实数据库性能验收，准备合码/发布或做真实数据验收时再执行。
+
 ## 增量 migration 与后续发布注意
 
 `prisma/migrations/20261026010000_sellfox_sales_profit_p0/migration.sql`：
