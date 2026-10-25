@@ -6,7 +6,7 @@ import { resolveEffectiveReportDate } from "@/lib/sellfox/browse-report-date";
 import { readSellfoxWorkbench } from "@/lib/sellfox/workbench-read";
 import { defaultSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
 import { sellfoxDateAt } from "@/lib/sellfox/sync-contract";
-import { GET as browse } from "@/app/api/sellfox/[domain]/route";
+import { GET as salesBrowse } from "@/app/api/sellfox/sales/route";
 import { GET as performanceBrowse } from "@/app/api/sellfox/performance/route";
 import { GET as salesExport } from "@/app/api/sellfox/[domain]/export/route";
 import { GET as performanceExport } from "@/app/api/sellfox/performance/export/route";
@@ -107,24 +107,28 @@ test("sales browse/export and both performance browse layouts share scoped effec
     assert.equal((await performanceBrowse(new Request("http://localhost/api/sellfox/performance"))).status, 401);
     assert.equal((await performanceBrowse(request("performance?shopExternalId=foreign"))).status, 403);
     assert.equal((await performanceBrowse(request("performance?storeId=foreign"))).status, 403);
-    for (const response of [await browse(request("sales"), context), await performanceBrowse(request("performance")), await performanceBrowse(request("performance?layout=workbench")), await performanceBrowse(request("performance?onlySettle=1"))]) {
+    for (const response of [await salesBrowse(request("sales")), await performanceBrowse(request("performance")), await performanceBrowse(request("performance?layout=workbench")), await performanceBrowse(request("performance?onlySettle=1"))]) {
       assert.equal(response.status, 200);
       const data = await response.json();
       assert.deepEqual(data.dates, ["2026-10-16"]);
-      if (data.totals) assert.deepEqual(data.totals, [{ currency: "USD", promotionDiscount: 0, giftWrapFee: 0 }]);
+      assert.deepEqual(data.totals, [{ currency: "USD", promotionDiscount: 0, giftWrapFee: 0 }]);
     }
-    assert.equal(sqlCalls.length, 3);
-    assert.equal(sqlCalls[0].text, sqlCalls[1].text);
-    assert.deepEqual(sqlCalls[0].values, sqlCalls[1].values);
+    assert.equal(filters.length, 0);
+    assert.equal(sqlCalls.length, 4);
+    assert.equal(sqlCalls[1].text, sqlCalls[2].text);
+    assert.deepEqual(sqlCalls[1].values, sqlCalls[2].values);
     for (const sql of sqlCalls) {
       for (const value of [scope.organizationId, scope.workspaceId, "2026-10-16"]) assert.ok(sql.values.includes(value));
+    }
+    assert.match(sqlCalls[0].text, /FROM sellfox_sales_daily/);
+    for (const sql of sqlCalls.slice(1)) {
       assert.match(sql.text, /"promotionDiscount"/); assert.match(sql.text, /"giftWrapFee"/); assert.match(sql.text, /"mainImageCandidate"/);
     }
-    assert.ok(sqlCalls[0].values.includes(false)); assert.ok(sqlCalls[2].values.includes(true));
+    assert.ok(sqlCalls[1].values.includes(false)); assert.ok(sqlCalls[3].values.includes(true));
     assert.equal((await salesExport(request("sales/export"), context)).status, 200);
     const exported = await performanceExport(request("performance/export?format=csv"));
     assert.equal(exported.status, 200); assert.match(exported.headers.get("Content-Disposition")!, /2026-10-16/);
-    assert.equal(filters.length, 4);
+    assert.equal(filters.length, 2);
     for (const where of filters) {
       assert.equal((where as Record<string, unknown>).reportDate, "2026-10-16");
       assert.equal((where as Record<string, unknown>).organizationId, scope.organizationId);

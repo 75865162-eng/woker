@@ -1,4 +1,3 @@
-import { resolveEffectiveReportDate } from "@/lib/sellfox/browse-report-date";
 import { readSellfoxWorkbench, type WorkbenchDomain } from "@/lib/sellfox/workbench-read";
 import { isSellfoxAgentDomain, readSellfoxAgentRows } from "@/lib/sellfox/agent-read";
 import { NextResponse } from "next/server";
@@ -18,12 +17,12 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
   if (!domains.includes(domain as Domain)) return NextResponse.json({ error: "数据域不存在。" }, { status: 404 });
   try {
     const scope = workspaceScopeFromRequest(request); const url = new URL(request.url);
-    let query = sellfoxBrowseQuery(url); const { page, pageSize } = query;
+    const query = sellfoxBrowseQuery(url); const { page, pageSize } = query;
     const common = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
     const storeIds = domain === "runs" ? undefined : await sellfoxBrowseStoreIds(query, common.organizationId, common.workspaceId);
-    if (query.layout && ["sales", "listings", "ads_report"].includes(domain)) return NextResponse.json(await readSellfoxWorkbench(domain as WorkbenchDomain, query, common));
-    if (isSellfoxAgentDomain(domain) && domain !== "sales" && (domain !== "inventory" || (!query.from && !query.to && !query.allDates))) return NextResponse.json(await readSellfoxAgentRows(domain, query, common));
-
+    if (domain === "sales") return NextResponse.json(await readSellfoxWorkbench("sales", query, common));
+    if (query.layout && ["listings", "ads_report"].includes(domain)) return NextResponse.json(await readSellfoxWorkbench(domain as WorkbenchDomain, query, common));
+    if (isSellfoxAgentDomain(domain) && (domain !== "inventory" || (!query.from && !query.to && !query.allDates))) return NextResponse.json(await readSellfoxAgentRows(domain, query, common));
 
     if (domain === "stores") {
       const where = sellfoxStoreWhere(query, common.organizationId, common.workspaceId, storeIds);
@@ -41,15 +40,12 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
       return NextResponse.json({ rows, pagination: { page, pageSize, total } });
     }
 
-    if (domain === "sales") query = await resolveEffectiveReportDate("sales", query, common);
     const snapshotWhere = sellfoxSnapshotWhere(query, common.organizationId, common.workspaceId, storeIds);
-
     if (domain === "inventory") {
       const [total, rows] = await Promise.all([prisma.sellfoxFbaInventorySnapshot.count({ where: snapshotWhere }), prisma.sellfoxFbaInventorySnapshot.findMany({ where: snapshotWhere, select: { id: true, reportDate: true, capturedAt: true, sku: true, msku: true, asin: true, fnsku: true, quantity: true, syncedAt: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: [{ capturedAt: "desc" }, { asin: "asc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize })]);
       return NextResponse.json({ rows, pagination: { page, pageSize, total } });
     }
-    const [total, rows] = await Promise.all([prisma.sellfoxSalesDailySnapshot.count({ where: snapshotWhere }), prisma.sellfoxSalesDailySnapshot.findMany({ where: snapshotWhere, select: { id: true, reportDate: true, sku: true, msku: true, asin: true, quantity: true, revenue: true, currency: true, syncedAt: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: [{ reportDate: "desc" }, { revenue: "desc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize })]);
-    return NextResponse.json({ rows, dates: query.reportDate && !query.from && !query.to ? [query.reportDate] : [], pagination: { page, pageSize, total } });
+    return NextResponse.json({ error: "数据域不存在。" }, { status: 404 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof SellfoxBrowseError ? error.message : "读取赛狐数据失败，请稍后重试。" }, { status: error instanceof SellfoxBrowseError ? error.status : 500 });
   }

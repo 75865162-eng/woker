@@ -1,11 +1,97 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { GET as browse } from "@/app/api/sellfox/[domain]/route";
+import { GET as salesBrowse } from "@/app/api/sellfox/sales/route";
 import { GET as csv } from "@/app/api/sellfox/[domain]/export/route";
 import { GET as performanceCsv } from "@/app/api/sellfox/performance/export/route";
 import { GET as detail } from "@/app/api/sellfox/[domain]/[id]/route";
 import { createLocalSession } from "@/lib/auth/session";
+
+test("sales always browses workbench aggregates, preserving scope, permissions and CSV export", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }; const previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const scope = { organizationId: "org-a", workspaceId: "workspace-a" };
+  const sqlCalls: Prisma.Sql[] = [];
+  let overflow = false; let failRead = false; let legacyReads = 0;
+  const date = "2026-10-25";
+  const totals = [{ currency: "USD", subtotal: 109, daily: { [date]: 109 } }];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: scope.workspaceId }) },
+    sellfoxStore: {
+      findMany: async ({ where }: { where: Record<string, unknown> }) => {
+        assert.equal(where.organizationId, scope.organizationId); assert.equal(where.workspaceId, scope.workspaceId);
+        return [];
+      },
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        assert.equal(where.organizationId, scope.organizationId); assert.equal(where.workspaceId, scope.workspaceId);
+        return null;
+      },
+    },
+    sellfoxSalesDailySnapshot: {
+      findFirst: async () => ({ reportDate: date }),
+      count: async () => { legacyReads++; return 281; },
+      findMany: async () => { legacyReads++; return []; },
+    },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      sqlCalls.push(sql);
+      if (failRead) throw new Error("private database failure");
+      if (!sql.text.includes("FROM sellfox_sales_daily")) return [];
+      return [{ total: overflow ? 10001 : 1, totals, rows: [{ id: "aggregate", storeId: "store-a", name: "GG", identity: "store-a", currency: "USD", members: ["sku-a", "sku-b"], subtotal: 109, daily: { [date]: 109 }, dailyQuantity: { [date]: 109 } }] }];
+    },
+  } as unknown as PrismaClient;
+  const context = () => ({ params: Promise.resolve({ domain: "sales" }) });
+  const handlers = [salesBrowse, (request: Request) => browse(request, context())];
+  async function request(params = "", role = "owner") {
+    const session = await createLocalSession({ id: "actor", ...scope, organizationName: "Fixture", role, email: "actor@example.test", name: "Actor" });
+    return new Request(`http://localhost/api/sellfox/sales?${params}`, { headers: { "x-workspace-id": scope.workspaceId, cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+  }
+  try {
+    for (const handler of handlers) {
+      assert.equal((await handler(new Request("http://localhost/api/sellfox/sales"))).status, 401);
+      assert.equal((await handler(await request("", "warehouse"))).status, 403);
+      assert.equal((await handler(await request("shopExternalId=foreign"))).status, 403);
+      assert.equal((await handler(await request("storeId=foreign"))).status, 403);
+      assert.equal((await handler(await request("page=1.5"))).status, 400);
+      for (const params of ["", "dimension=store", "dimension=store&layout=workbench"]) {
+        const response = await handler(await request(params));
+        assert.equal(response.status, 200);
+        const data = await response.json();
+        assert.deepEqual(data.pagination, { page: 1, pageSize: 50, total: 1 });
+        assert.deepEqual(data.dates, [date]); assert.deepEqual(data.totals, totals);
+        assert.equal(data.rows.length, 1); assert.equal(data.rows[0].subtotal, 109);
+        assert.equal(data.rows[0][`day:${date}`], 109); assert.equal(data.rows[0].msku, null);
+        if (params.includes("dimension=store")) {
+          assert.equal(data.rows[0].identity, "GG");
+          assert.match(sqlCalls.at(-2)!.text, /COALESCE\(NULLIF\(s\."storeId",''\)/);
+        }
+      }
+    }
+    assert.equal(legacyReads, 0);
+    assert.equal(sqlCalls.length, 12);
+    for (const sql of sqlCalls) {
+      assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
+    }
+    const exportParams = "layout=workbench&dimension=store&format=csv";
+    const exported = await csv(await request(exportParams), context());
+    assert.equal(exported.status, 200); assert.match(exported.headers.get("Content-Type")!, /text\/csv/);
+    assert.match(await exported.text(), /GG/);
+    assert.equal((await csv(await request(exportParams, "designer"), context())).status, 403);
+    assert.equal((await csv(await request(`${exportParams}&storeId=foreign`), context())).status, 403);
+    assert.equal((await csv(await request(`${exportParams}&shopExternalId=foreign`), context())).status, 403);
+    overflow = true;
+    assert.equal((await csv(await request(exportParams), context())).status, 413);
+    assert.equal(legacyReads, 0);
+    failRead = true;
+    const failed = await salesBrowse(await request());
+    assert.equal(failed.status, 500);
+    assert.deepEqual(await failed.json(), { error: "读取赛狐销量统计失败，请稍后重试。" });
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
 
 test("list/export filters agree, cross-workspace stores fail and exports never silently truncate", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }; const previous = globals.prisma;
