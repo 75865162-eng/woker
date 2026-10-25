@@ -2,9 +2,12 @@ import { build } from "esbuild";
 import { expect, test, type Page } from "@playwright/test";
 
 let bundle: string;
+let styles: string;
 test.beforeAll(async () => {
   const result = await build({ entryPoints: ["tests/browser/sellfox-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' } });
   bundle = result.outputFiles[0].text;
+  const [{ readFile }, { default: postcss }, { default: tailwind }] = await Promise.all([import("node:fs/promises"), import("postcss"), import("@tailwindcss/postcss")]);
+  styles = (await postcss([tailwind()]).process(await readFile("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css;
 });
 async function switchWorkspace(page: Page) {
   await page.evaluate(() => {
@@ -18,8 +21,9 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
   await page.route("**/*", async (route) => {
     const request = route.request(); const url = new URL(request.url());
     expect(url.origin).toBe("http://127.0.0.1:43221");
+    if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
-    if (!url.pathname.startsWith("/api/")) return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
+    if (!url.pathname.startsWith("/api/")) return route.fulfill({ contentType: "text/html", body: '<html><head><link rel="stylesheet" href="/styles.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
     const workspace = request.headers()["x-workspace-id"] ?? "";
     const call = { path: url.pathname, query: url.searchParams, workspace, body: request.method() === "POST" ? request.postDataJSON() : null }; calls.push(call);
     expect(request.headers()["authorization"]).toBeUndefined();
@@ -33,7 +37,7 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
     if (url.pathname.endsWith("/sync")) return route.fulfill({ status: 202, json: { runId: "test-run", status: "queued" } });
     if (/\/(sales|performance|runs)\/row$/.test(url.pathname)) return route.fulfill({ json: { payload: { msku: "test-msku", token: "[已隐藏]" }, truncated: true } });
     const domain = url.pathname.split("/").pop();
-    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { rows: [{ id: "row", reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store }], pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: 50, total: 51 } } });
+    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2}] : domain === "ads_report" ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : [], dates: domain === "sales" ? [url.searchParams.get("from") || "2026-10-24"] : [], rows: [{ id: "row", identity: "test-msku", daily: { [url.searchParams.get("from") || "2026-10-24"]: 2 }, ["day:" + (url.searchParams.get("from") || "2026-10-24")]: 2, subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store }], pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: 50, total: 51 } } });
     throw new Error(`Unexpected test request: ${url.pathname}`);
   });
   await page.goto(`http://127.0.0.1:43221/?${params}`);
@@ -43,7 +47,8 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
 test("daily multi-store browsing, shared filters, pagination and browser navigation", async ({ page }) => {
   const { calls } = await setup(page);
   await expect(page.getByRole("cell", { name: "workspace-a-SKU-page1", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "销量", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "小计", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "库存", exact: true })).toHaveCount(0);
   await page.getByLabel("店铺筛选").selectOption(["shop-workspace-a"]);
   await page.getByLabel("站点筛选").selectOption("US");
@@ -56,13 +61,14 @@ test("daily multi-store browsing, shared filters, pagination and browser navigat
   await expect(page.getByRole("cell", { name: "workspace-a-SKU-page2", exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("cell", { name: "workspace-a-SKU-page1", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "全部历史", exact: true }).click();
-  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /allDates=1/);
-  const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href"); expect(href).not.toContain("reportDate");
+  await page.getByRole("button", { name: "近 30 天", exact: true }).click();
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/sales")).at(-1)?.query.get("layout")).toBe("workbench");
 });
 
 test("performance retains metrics and Excel; raw details load only on explicit expansion", async ({ page }) => {
   const { calls } = await setup(page, "domain=performance");
+  await page.getByText("列设置", { exact: true }).click();
+  await page.getByRole("button", { name: "完整", exact: true }).click();
   await expect(page.getByRole("columnheader", { name: "FBA 销量", exact: true })).toBeVisible();
   for (const name of ["FBM 销量", "毛利率", "退款率", "币种"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveAttribute("href", /format=xlsx/);
@@ -132,4 +138,75 @@ test("listing current and advertising product daily browse locally and expose na
   await expect.poll(() => calls.some((call) => call.path.endsWith("/ads_report"))).toBe(true);
   expect(calls.some((call) => call.path.endsWith("/hourly"))).toBe(false);
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /ads_report\/export.*agent=1/);
+});
+
+test("sales matrix filters debounce, serialize dimensions and preserve visible export columns", async ({ page }) => {
+  const { calls } = await setup(page);
+  await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "父ASIN", exact: true }).click();
+  await page.getByLabel("销量指标").selectOption("revenue");
+  await page.getByLabel("隐藏销量为 0").check();
+  await expect.poll(() => calls.filter(c => c.path.endsWith("/sales")).at(-1)?.query.get("hideZero")).toBe("1");
+  const last = calls.filter(c => c.path.endsWith("/sales")).at(-1)!;
+  expect(last.query.get("dimension")).toBe("parentAsin"); expect(last.query.get("metric")).toBe("revenue");
+  await expect(page.getByRole("button", { name: "SPU", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "实时统计", exact: true })).toBeDisabled();
+  await page.getByText("列设置", { exact: true }).click();
+  await page.getByLabel("显示标题列", { exact: true }).uncheck();
+  const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
+  const params = new URL(href!, "http://localhost").searchParams;
+  expect(params.getAll("column")).not.toContain("title"); expect(params.getAll("column")).toContain("subtotal");
+  await page.setViewportSize({ width: 720, height: 800 });
+  await expect(page.getByRole("columnheader", { name: "父ASIN", exact: true }).first()).toHaveClass(/sticky left-0/);
+  const writes = calls.filter(c => c.body !== null); expect(writes).toEqual([]);
+});
+
+test("listing and ads expose only verified read filters and disabled web operations", async ({ page }) => {
+  const { calls } = await setup(page, "domain=listings");
+  for (const name of ["父体", "调价", "打印", "配对"]) await expect(page.getByRole("button", { name, exact: true })).toBeDisabled();
+  for (const name of ["7天销量", "14天销售额", "30天广告花费", "可售"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
+  await page.getByLabel("Listing 状态").selectOption("delete");
+  await expect.poll(() => calls.filter(c => c.path.endsWith("/listings")).at(-1)?.query.get("status")).toBe("delete");
+  await page.getByRole("button", { name: "广告", exact: true }).click();
+  await expect(page.getByRole("button", { name: "广告产品", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: "搜索词 · 待接", exact: true })).toBeDisabled();
+  await page.getByLabel("广告类型", { exact: true }).selectOption("sb");
+  await page.getByRole("button", { name: "有点击无订单", exact: true }).click();
+  await expect.poll(() => calls.filter(c => c.path.endsWith("/ads_report")).at(-1)?.query.get("quickFilter")).toBe("clicksNoOrders");
+  expect(calls.filter(c => c.path.endsWith("/ads_report")).at(-1)?.query.get("adType")).toBe("sb");
+  await expect(page.getByRole("button", { name: "归档", exact: true })).toBeDisabled();
+  expect(calls.filter(c => c.body !== null)).toEqual([]);
+});
+
+
+test("profit and advertising footers use filter totals and recompute ratios rather than averaging row rates", async ({ page }) => {
+  await setup(page, "domain=performance");
+  await expect(page.getByLabel("筛选合计")).toContainText("毛利率 5.00%");
+  await expect(page.getByLabel("筛选合计")).toContainText("销售额 200");
+  await page.getByRole("button", { name: "广告", exact: true }).click();
+  await expect(page.getByLabel("筛选合计")).toContainText("ACoS 5.00%");
+  await expect(page.getByLabel("筛选合计")).toContainText("未知币种");
+});
+
+
+test("narrow viewport scrolls metrics while keeping the identity header fixed", async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 900 });
+  await setup(page);
+  const scroll = page.getByTestId("sellfox-table-scroll");
+  await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeAttached();
+  const identity = page.getByRole("columnheader", { name: "MSKU", exact: true }).first();
+  const before = await identity.boundingBox();
+  await scroll.evaluate(el => { el.scrollLeft = 600; });
+  const after = await identity.boundingBox();
+  expect(Math.abs(after!.x - before!.x)).toBeLessThan(2);
+  expect(await scroll.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+  await page.screenshot({ path: "/tmp/sellfox-ui-sales.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const [tab, file, header] of [["销量", "sales", "小计"], ["销售利润", "performance", "毛利润"], ["在线 Listing", "listings", "7天销量"], ["广告", "ads", "广告订单"]]) {
+    await page.getByRole("button", { name: tab, exact: true }).click();
+    await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "查看记录 row", exact: true })).toBeVisible();
+    await scroll.evaluate(el => { el.scrollLeft = 0; });
+    await page.screenshot({ path: `/tmp/sellfox-ui-${file}-desktop.png`, fullPage: true });
+  }
 });

@@ -1,3 +1,4 @@
+import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
 import { readSellfoxAgentRows, sellfoxAgentCsv } from "@/lib/sellfox/agent-read";
 import ExcelJS from "exceljs";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
       return new Response(sellfoxAgentCsv("performance", rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="sellfox-profit-agent.csv"', "Cache-Control": "no-store" } });
     }
     const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
+    if (query.layout) return await sellfoxWorkbenchExport("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, url);
     const where = sellfoxSnapshotWhere(query, permission.user.organizationId, scope.workspaceId, storeIds, true);
     const dateLabel = url.searchParams.get("from") || url.searchParams.get("to") || (typeof where.reportDate === "string" ? where.reportDate : "history");
     const rows = await prisma.sellfoxProductDailySnapshot.findMany({

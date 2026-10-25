@@ -1,3 +1,4 @@
+import { readSellfoxWorkbench, type WorkbenchDomain } from "@/lib/sellfox/workbench-read";
 import { isSellfoxAgentDomain, readSellfoxAgentRows } from "@/lib/sellfox/agent-read";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -19,6 +20,7 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
     const query = sellfoxBrowseQuery(url); const { page, pageSize } = query;
     const common = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
     const storeIds = domain === "runs" ? undefined : await sellfoxBrowseStoreIds(query, common.organizationId, common.workspaceId);
+    if (query.layout && ["sales", "listings", "ads_report"].includes(domain)) return NextResponse.json(await readSellfoxWorkbench(domain as WorkbenchDomain, query, common));
     if (isSellfoxAgentDomain(domain) && domain !== "sales" && (domain !== "inventory" || (!query.from && !query.to && !query.allDates))) return NextResponse.json(await readSellfoxAgentRows(domain, query, common));
 
 

@@ -154,3 +154,34 @@ GROUP BY status;
 - 复用原失败run、capture和29个已完成日期；保留executionAttempts上限，从失败日期重试后第二次执行成功。SQL确认该行quantity=1、revenue=11.99 USD、sku空串、payload.skus为null、complete=true。没有另建批次或重置次数。
 - macOS电源日志显示11:16～11:27反复数分钟休眠，与BullMQ续锁失败相符。两个受影响run在原断点第二次完成；一个Redis job仍显示stalled失败但对应数据库run已done，这是队列历史状态，不能据此重建已完成业务任务。当前单Worker继续串行回填，五项计划保持开启。
 - 此次采样历史批次5段done、462段queued、1段running、0段failed；完整覆盖205个店/日（含先前试采及T-1），长窗仍未补齐。`check:fast` 252项测试、lint、TypeScript通过；无schema变更，不重复迁移、构建或E2E。后台进程未设置防休眠或开机自启，持续回填需电脑保持唤醒；定时计划仅在Worker运行时执行。
+
+## /sellfox 只读排版与列映射（截图对齐）
+
+四域复用连接顶栏 → 域Tab → 筛选区 → 结果表。维度/指标/日期/店铺/站点/搜索进入URL，列表请求300ms debounce；默认每页50实体。表头与左侧图片/身份列固定，指标和日列横向滚动。`workbench-types.ts` 的 `columns` 定义中文表头、赛狐列名、默认显隐与字段依赖；列设置按域保存在当前页面会话，CSV和销售利润Excel复用当前可见列及相同筛选，不受当前页限制，超过10,000实体明确拒绝。
+
+浏览通过现有路由的 `layout=workbench` 只读分支；旧接口和 Agent窄表导出不变。`workbench-read.ts` 在本地PostgreSQL先按实体聚合再分页/透视，不读全量payload、不发Open API、不修改schema/同步Worker/ProductRecord。库存补充按当前页成员MSKU批量查询，不引入浏览器请求瀑布。普通CSV列名中文化；Agent CSV仍保持稳定英文窄字段及原始长表语义，不继承矩阵列/维度/快筛，不作为当前可见列导出的替代。
+
+| 域 / 赛狐UI列 | 本地窄字段 / 计算 | 来源及限制 |
+| --- | --- | --- |
+| 销量：ASIN / 父ASIN / MSKU / SKU | identity；日表asin/msku/sku，父ASIN按store+MSKU关联Listing current | 以MSKU日表本地汇总；父体为当前Listing关系，不是历史父体报表；缺映射保留原MSKU，不造父ASIN。SPU/店铺/人员维度未同步而灰显 |
+| 销量：日列 / 小计 | quantity或revenue → day:YYYY-MM-DD / subtotal | 日期升序，最多90天；complete=false或指标缺失的日单元格留空；缺日不补0。小计是存在记录的已知日合计，存在无效记录时整体未知，不能作完整长窗。全部历史仍用Agent长表导出 |
+| 销量：订单量 / 实时统计 | 无 | 订单指标灰显；实时只在赛狐网页 |
+| 销量：店铺站点 / MSKU售价 / 品名SKU / 标题 | name/marketplace、msku、Listing.price、sku、Listing.title | 多MSKU实体不展示任意成员MSKU；价格/父体/标题有歧义时留空，不取最便宜商品冒充整组 |
+| 销量：FBA可售 / 总库存 / 快照时间 | inventory_current.quantity / totalInventory / capturedAt | 按成员MSKU汇总最新完整快照，不代表销售日库存；成员缺库存时未知。底栏库存/7日均明确为本页，销量/金额为筛选合计 |
+| 销量：近7天趋势 / 均值 | 窗口末7个业务日quantity / sum÷7 | 必须7日均有有效日销量才显示；不将缺日补零 |
+| 利润：毛利润 / 毛利率 / 净销售额毛利率 | grossProfit / sum(grossProfit)÷sum(saleRevenue) / sum(grossProfit)÷sum(netRevenue) | 按店铺+维度+币种汇总；分母≤0或金额缺失留空，日利率不平均 |
+| 利润：销售额 / 净销售额 / 订单量 / 销量 / 广告花费 | saleRevenue / netRevenue / orderNum / saleQuantity / adCost | 保留API原金额正负号；默认USD，可选全部并分别合计；完整档另有fbaQuantity/fbmQuantity |
+| 利润：退款率 / 父ASIN | refundRate / parentAsin | 单条已同步记录保留退款率；跨日/多条聚合无可靠分母时留空。只统计已结算、自定义费用/加权灰显 |
+| Listing：状态 / ASIN / MSKU / 父ASIN / 品名SKU / 价格 | status / asin / msku / parentAsin / sku / price | 只读最新完整current；Active/Inactive/delete/incomplete忽略大小写。父体资源未验证而灰显 |
+| Listing：7/14/30销量 / 销售额 / 广告花费 | sales7/14/30、revenue7/14/30、adSpend7/14/30 | API滚动快照原值，缺失不填零，不跨日相加 |
+| Listing：可售 / 更新时间 | fulfillable / sourceUpdatedAt，另列capturedAt | 可售保留Listing自身已验证inventoryManage.available，不被补充库存覆盖。发货方式、调价、打印、标签、配对均灰显 |
+| 广告产品：曝光 / 点击 / 花费 / 订单 / 销售额 | impressions / clicks / cost / adOrders / adSales | 按店铺+币种+SP/SB/SD+campaign/adGroup/product聚合日期窗；活动/组只有ID，不伪造名称 |
+| 广告：ACoS / ROAS | sum(cost)÷sum(adSales) / sum(adSales)÷sum(cost) | 行及底栏均重算；无有效分母留空。报告没有币种时仍标未知，禁止推断USD |
+| 广告：有效 / 服务状态 / 投放中 / 已暂停 | 无广告结构状态 | 未知灰态，不能把未知当关闭；仅广告产品Tab有数据，其他Tab标待接；有花费/有点击无订单按本地汇总筛选 |
+| 图片 / AWD库存与在途 / 业务员 / 标签 / FNSKU / 星级评论 / 促销与礼品等费用 | 当前浏览窄字段无相应映射 | 图片占位；其他默认隐藏或灰列，tooltip「赛狐有、API/本地无」，不猜payload字段或抓网页补值 |
+
+汇总详情抽屉保留既有按需展开原始摘要入口，原始摘要取代表行的原快照，并不是区间聚合payload。库存与元信息来自current，不能解释为历史快照；表底金额/广告指标为整个筛选结果，分币种。缺失任一成员指标时不以其余成员拼造完整合计。只读UI没有新增广告/商品写接口。
+
+验证：4项新增无数据库回归覆盖查询参数白名单、日期窗、绑定参数/租户边界和可见列CSV安全；浏览器覆盖维度/指标/隐藏零、状态与广告快筛、列设置、未知字段和灰态操作、汇总比率、工作区迟到响应及窄屏固定列。另在本机独立事务临时表内验证多MSKU透视、null与真实0、跨币种和跨workspace，ROLLBACK清理；禁用fetch后四域真实本地读取成功，不以模拟浏览器替代真实API字段校验。此UI变更无迁移、无生产发布，不默认运行全套构建/E2E。
+
+本轮结果（2026-10-25）：`check:fast` 258项核心测试、lint、TypeScript通过（保留已有商品编辑器hook warning）；10项Sellfox浏览器通过，另对最终四域1440px截图与760px横向滚动做定向复验。真实单店离线查询验证销量/利润各4维度；当前可见列CSV导出59实体成功，跨workspace为0行。未执行新的生产构建、全仓E2E、迁移或服务器发布。

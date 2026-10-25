@@ -1,3 +1,4 @@
+import { readSellfoxWorkbench } from "@/lib/sellfox/workbench-read";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const query = sellfoxBrowseQuery(url); const { page, pageSize } = query;
     const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
+    if (query.layout) return NextResponse.json(await readSellfoxWorkbench("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }));
     const where = sellfoxSnapshotWhere(query, permission.user.organizationId, scope.workspaceId, storeIds, true);
     const [total, rows, summary] = await Promise.all([
       prisma.sellfoxProductDailySnapshot.count({ where }),

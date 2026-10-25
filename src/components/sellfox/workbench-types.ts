@@ -29,3 +29,28 @@ export function runProgress(row: Row) {
   const count = progress?.count ?? (summary?.result as Row | undefined)?.synced ?? (summary?.result as Row | undefined)?.count ?? (summary?.result as Row | undefined)?.writes;
   return typeof count === "number" ? count : null;
 }
+
+export type SellfoxColumn = { key: string; labelZh: string; sellfoxLabel: string; defaultVisible: boolean; requiresField: string; unavailable?: boolean; numeric?: boolean };
+const column = (key: string, label: string, options: Partial<SellfoxColumn> = {}): SellfoxColumn => ({ key, labelZh: label, sellfoxLabel: label, defaultVisible: true, requiresField: key, ...options });
+const missing = (key: string, label: string, visible = false) => column(key, label, { unavailable: true, defaultVisible: visible });
+const numbers = (items: [string, string][]) => items.map(([key, label]) => column(key, label, { numeric: true }));
+export const columns: Record<string, SellfoxColumn[]> = {
+  sales: [missing("image", "图片", true), column("identity", "MSKU"), column("name", "店铺"), column("marketplace", "站点"), column("parentAsin", "父ASIN"), column("msku", "MSKU"), column("price", "售价"), column("sku", "品名SKU"), column("title", "标题"), missing("salesperson", "业务员"), ...numbers([["fulfillable", "FBA可售"], ["totalInventory", "总库存"]]), column("inventoryCapturedAt", "库存快照时间"), missing("awdAvailable", "AWD库存"), missing("awdInbound", "AWD在途"), column("trend", "近7天销量趋势"), column("average7", "近7天日均", { numeric: true }), column("subtotal", "小计", { numeric: true }), column("currency", "币种")],
+  performance: [missing("image", "图片", true), column("asin", "ASIN"), column("identity", "ASIN/MSKU"), column("title", "标题"), column("parentAsin", "父ASIN"), column("sku", "品名SKU"), ...numbers([["grossProfit", "毛利润"], ["grossProfitRate", "毛利率"], ["netProfitRate", "净销售额毛利率"], ["saleRevenue", "销售额"], ["netRevenue", "净销售额"], ["orderNum", "订单量"], ["saleQuantity", "销量"], ["fulfillable", "FBA可售"], ["adCost", "广告花费"], ["refundRate", "退款率"]]), column("currency", "币种"), column("name", "店铺"), column("marketplace", "站点"), ...numbers([["fbaQuantity", "FBA 销量"], ["fbmQuantity", "FBM 销量"]]).map(c => ({ ...c, defaultVisible: false })), missing("promotionDiscount", "促销折扣"), missing("giftWrapFee", "礼品包装费")],
+  listings: [column("status", "状态"), missing("image", "图片", true), column("asin", "ASIN"), column("msku", "MSKU"), column("title", "标题"), missing("productTags", "产品标签"), column("parentAsin", "父ASIN"), missing("fnsku", "FNSKU"), column("sku", "品名SKU"), column("name", "店铺"), column("marketplace", "站点"), ...numbers([["price", "价格"], ["sales7", "7天销量"], ["sales14", "14天销量"], ["sales30", "30天销量"], ["revenue7", "7天销售额"], ["revenue14", "14天销售额"], ["revenue30", "30天销售额"], ["adSpend7", "7天广告花费"], ["adSpend14", "14天广告花费"], ["adSpend30", "30天广告花费"], ["fulfillable", "可售"]]), missing("salesperson", "业务员"), column("sourceUpdatedAt", "更新时间"), column("capturedAt", "快照时间"), column("currency", "币种")],
+  ads: [missing("image", "图片", true), column("asin", "产品信息 / ASIN"), column("msku", "MSKU"), column("title", "标题"), missing("enabled", "有效", true), missing("serviceStatus", "服务状态", true), ...numbers([["fulfillable", "FBA可售"], ["price", "价格"]]), missing("rating", "星级/评论"), column("campaignId", "活动"), column("adGroupId", "组"), missing("salesperson", "业务员"), ...numbers([["impressions", "曝光"], ["clicks", "点击"], ["cost", "花费"], ["adOrders", "广告订单"], ["adSales", "广告销售额"], ["acos", "ACoS"], ["roas", "ROAS"]]), column("adType", "广告类型"), column("name", "店铺"), column("marketplace", "站点"), column("currency", "币种")],
+};
+export const unavailableReason = "赛狐有、API/本地无";
+export function visibleColumns(domain: string, selected?: string[], dates: string[] = [], dimension = "msku") {
+  const configured = columns[domain] ?? [];
+  return [...configured.map(c => c.key === "identity" ? { ...c, labelZh: ({ asin: "ASIN", parentAsin: "父ASIN", msku: "MSKU", sku: "SKU" } as Record<string, string>)[dimension] ?? c.labelZh } : c), ...(domain === "sales" ? dates.map(date => column(`day:${date}`, date.slice(5), { numeric: true })) : [])].filter(c => selected ? selected.includes(c.key) || c.key.startsWith("day:") : c.defaultVisible);
+}
+export function visibleColumnCsv(config: SellfoxColumn[], rows: Row[]) {
+  const cell = (value: unknown) => {
+    if (typeof value === "number") return String(value);
+    let text = value instanceof Date ? value.toISOString() : value == null ? "" : String(value);
+    if (/^\s*[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replaceAll('"', '""')}"`;
+  };
+  return "\uFEFF" + [config.map(c => c.labelZh), ...rows.map(row => config.map(c => c.unavailable ? null : row[c.key]))].map(line => line.map(cell).join(",")).join("\r\n");
+}

@@ -365,6 +365,7 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 ## 赛狐 Agent 本地读取
 
+- `/sellfox` 四域UI列由 `workbench-types.ts` 的columns配置；`layout=workbench` 只读浏览分支按本地实体聚合/分页、销量最多90天日矩阵。CSV/利润Excel跟随可见列，Agent导出保留原英文长表。父ASIN/价格/库存补充来自current，不冒充历史；金额按币种分开，缺失不补0，无结构状态的广告控件灰显。浏览器验收使用真实Tailwind样式，运行 `npm run test:sellfox:browser`。
 - `docs/sellfox-agent-read.md` 定义库存 current、MSKU 日销、Listing current、利润及广告产品日报窄表/SQL 视图、CSV、字段映射与缺失值口径。Agent/CLI 例行读本地，不调用赛狐 API 或依赖网页登录；ProductRecord 不被赛狐覆盖。
 - 库存/Listing current 只发布完整店铺采集；日销需校验 coverage/complete，缺日不得补零。广告日报缺预算时禁止给暂停/降预算建议；SP/SB真数据已核验，SD仅验证真实空报告，非空数据仍待验收。
 - Listing V2 已验证 delete 状态可有稳定id+ASIN但缺MSKU，快照msku存NULL；在售/其他未验证状态仍不得放宽身份检查。对应增量迁移为 `20261025030000_allow_deleted_sellfox_listing_without_msku`，不修改ProductRecord。

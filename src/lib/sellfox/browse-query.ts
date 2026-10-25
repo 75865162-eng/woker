@@ -23,6 +23,11 @@ export function sellfoxBrowseQuery(url: URL) {
   const from = date("from"), to = date("to"), reportDate = date("reportDate");
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   return {
+    layout: p.get("layout") === "workbench",
+    dimension: (["asin", "parentAsin", "msku", "sku"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as "asin" | "parentAsin" | "msku" | "sku",
+    metric: p.get("metric") === "revenue" ? "revenue" : "quantity", hideZero: p.get("hideZero") === "1",
+    currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
+    quickFilter: ["spend", "clicksNoOrders"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
     page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate,
     status: p.get("status")?.trim() || undefined,
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",

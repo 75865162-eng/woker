@@ -1,3 +1,5 @@
+import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
+import type { WorkbenchDomain } from "@/lib/sellfox/workbench-read";
 import { isSellfoxAgentDomain, readSellfoxAgentRows, sellfoxAgentCsv } from "@/lib/sellfox/agent-read";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -26,6 +28,7 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
     const common = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
     const query = sellfoxBrowseQuery(url);
     const storeIds = domain === "runs" ? undefined : await sellfoxBrowseStoreIds(query, common.organizationId, common.workspaceId);
+    if (query.layout && url.searchParams.get("agent") !== "1" && ["sales", "performance", "listings", "ads_report"].includes(domain)) return await sellfoxWorkbenchExport(domain as WorkbenchDomain, query, common, url);
     if (isSellfoxAgentDomain(domain) && (url.searchParams.get("agent") === "1" || domain === "listings" || domain === "ads_report" || (domain === "inventory" && !query.from && !query.to && !query.allDates))) {
       const { rows } = await readSellfoxAgentRows(domain, query, common, true);
       return new Response(sellfoxAgentCsv(domain, rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="sellfox-${domain}-agent.csv"`, "Cache-Control": "no-store" } });
