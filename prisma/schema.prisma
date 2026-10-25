@@ -1843,7 +1843,7 @@ model SellfoxListingSnapshot {
   sourceKey String
   capturedAt DateTime
   asin String
-  msku String
+  msku String?
   sku String
   parentAsin String?
   title String?

@@ -34,6 +34,13 @@ test("verified product report columns retain null conversions, reject scope drif
   await assert.rejects(async () => parseSellfoxAdProductReport(await report([values], headers.slice(1)), scope), /缺少/);
   await assert.rejects(async () => parseSellfoxAdProductReport(await report([values]), { ...scope, endDate: "2026-10-23" }), /日期/);
 });
+test("verified deleted Listing keeps missing MSKU null while active rows and foreign identities still fail closed", () => {
+  const row = { ...listing.rows[0], sku: "", onlineStatus: "delete" };
+  const deleted = listingNarrow(row, "shop-fixture");
+  assert.equal(deleted.msku, null); assert.equal(deleted.asin, "ASIN-FIXTURE");
+  assert.equal(deleted.sourceKey, "listing-fixture");
+  for (const patch of [{ onlineStatus: "Active" }, { onlineStatus: "Incomplete" }, { asin: "" }, { id: "" }, { shopId: "foreign" }]) assert.throws(() => listingNarrow({ ...row, ...patch }, "shop-fixture"));
+});
 test("download URLs cannot redirect into credentials, local addresses or an unverified host", () => {
   assert.equal(sellfoxReportDownloadUrl("https://s1.sellfox.com/file.xlsx").hostname, "s1.sellfox.com");
   for (const url of ["http://s1.sellfox.com/a", "https://127.0.0.1/a", "https://s1.sellfox.com.evil.test/a", "https://user:secret@s1.sellfox.com/a", "https://s1.sellfox.com:444/a"]) assert.throws(() => sellfoxReportDownloadUrl(url));

@@ -367,6 +367,7 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 - `docs/sellfox-agent-read.md` 定义库存 current、MSKU 日销、Listing current、利润及广告产品日报窄表/SQL 视图、CSV、字段映射与缺失值口径。Agent/CLI 例行读本地，不调用赛狐 API 或依赖网页登录；ProductRecord 不被赛狐覆盖。
 - 库存/Listing current 只发布完整店铺采集；日销需校验 coverage/complete，缺日不得补零。广告日报缺预算时禁止给暂停/降预算建议；SP/SB真数据已核验，SD仅验证真实空报告，非空数据仍待验收。
+- Listing V2 已验证 delete 状态可有稳定id+ASIN但缺MSKU，快照msku存NULL；在售/其他未验证状态仍不得放宽身份检查。对应增量迁移为 `20261025030000_allow_deleted_sellfox_listing_without_msku`，不修改ProductRecord。
 - 销量计划可配置 backfillStart，持久化游标默认从上一完整冬季开始；`SELLFOX_BACKFILL_DAYS_PER_RUN` 默认7、上限90。所有计划默认关闭，扩采前评估≥1200ms串行耗时。
 - `npm run sellfox:backfill-sales -- --help`：按显式组织/工作区/操作者盘点完整覆盖缺口，默认dry-run；`--apply`按店拆分最多90天加入现有队列，相同日期范围复用原批次。历史任务低于手动/定时任务优先级；开启计划需另行授权，历史回填期间日销计划仍拉T-1，不重复启动历史补数。执行与恢复见 `docs/sellfox-agent-read.md`。
 

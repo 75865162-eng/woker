@@ -17,6 +17,8 @@ Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出�
 
 库存 sourceKey 使用响应 `id`，保留 ASIN/MSKU/FNSKU；不能只按 ASIN 去重后丢弃不同 MSKU/库位。Listing 使用响应 `id`，保留 MSKU/ASIN。日销使用店铺+MSKU+reportDate；同一任务两指标只在身份、币种与采集批次一致时合并。
 
+多店真实V2响应另验证：`delete`状态可有稳定id/ASIN而sku为空，Listing窄表msku允许NULL，payload保留原空值；这类记录不能参与在售MSKU补货JOIN。仅此已验证例外允许缺MSKU，在售/其他状态缺MSKU、任意记录缺id/ASIN或店铺不匹配仍拒绝整店发布。迁移 `20261025030000_allow_deleted_sellfox_listing_without_msku` 只DROP该快照列的NOT NULL，不改主档、不填造MSKU。回退应用前须处理旧版本对NULL的兼容，保留列与原数据，不自动恢复NOT NULL。
+
 `NULL` 是未知，不是零。缺日不是零销量；日销只有 `complete=true` 且必要数值非空才可消费。覆盖表用于识别合法空日，但不能据空店铺日推断某个 SKU 当时在售或销量为零；补货长窗缺日/缺周期必须 NEEDS_DATA。历史旧行在重新完整采集前可能 complete=false。不要填零凑满冬季历史。
 
 库存总库存/可售/预留/在途互有业务关系，不相加冒充总库存。币种不同不直接混算。Listing 的近7/14/30天字段是 API 的滚动窗口快照，不能再跨天求和。profitRate/refundRate 不得按日相加或简单平均。广告报告没有币种列，currency 保留 NULL，不能从店铺站点猜币种。
@@ -136,3 +138,10 @@ GROUP BY status;
 已开启当前本地工作区inventory（180分钟）、sales/performance/listings/ads_report（每日06:30 Asia/Shanghai）5项计划；过点首次启动已生成各域补跑任务。广告计划默认SP，未擅自扩为所有广告类型。本机专用Worker在线，实测仅1任务active，日常任务在waiting，历史任务在prioritized；销售定时任务不带重复历史窗口。未启动stores/hourly计划，未修改生产服务器。
 
 启动后首个单店2025-11-01～11-30分段已完成（1,682次指标写入），缺口从13,954降至13,924个店/日；随后执行库存定时任务，验证日常任务优先接续。该时点批次1段done、467段queued，属于进行中结果。回填规划、优先级识别、计划不重复补数及已覆盖游标测试通过；`check:fast`共250项测试、lint、TypeScript通过，仅保留原有商品工作台hook warning。无Prisma变更，未重复迁移或生产构建。
+
+### 全店首轮定时采集闭环与契约修正（2026-10-25）
+
+- 库存、日销、利润、Listing、SP广告日报5个定时run均完成39店。库存current共8,618行、39个完整Head（含一家合法空结果）；日销T-1覆盖39店、两指标共834次写入；利润T-1共2,045行；Listing完整采集12,094行；SP广告日报2,835行，另保留已验证的SB21行。
+- Listing初次两店失败：一家上游业务码500，受控重读恢复；一家delete记录缺MSKU。只放宽已验证删除记录并将msku存NULL，增量迁移在临时表回滚验证后仅本地应用/登记，无生产操作。正常结束当前广告任务后重启单一Worker，原Listing run保留capture及已完成37店检查点，第二次执行成功，不另建全量任务。
+- 库存可售/总库存、利润核心字段、Listing MSKU/售价/可售、广告花费/订单/销售额与各自payload SQL对账差异0；禁用网络后五域窄列/CSV单店读取成功，跨workspace查询0行。实际全店Listing超过10,000行时返回413，无截断CSV；请按店分段导出。日销保留一条旧批次complete=false记录，未伪造为完整。
+- `check:fast` 251项测试、lint和TypeScript通过；Prisma validate/generate、隔离迁移与真实续跑成功。未运行新的全套构建/E2E。全店冬季回填仍在原468段批次继续，不能把首轮定时采集完成等同于长窗历史已补齐。
