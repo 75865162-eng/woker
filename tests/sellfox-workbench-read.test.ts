@@ -80,6 +80,45 @@ test("UI browse SQL binds scope and search text, filters after entity aggregatio
   const ads = workbenchReadSql("ads_report", { ...query, quickFilter: "clicksNoOrders" }, { organizationId: "org", workspaceId: "ws" });
   assert.match(ads.text, /clicks>0 AND "adOrders"=0/);
 });
+test("sales excludes only incomplete all-null shells before day, entity and KPI aggregation", () => {
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  const shellFilter = "NOT (NOT s.complete AND s.quantity IS NULL AND s.orders IS NULL AND s.revenue IS NULL)";
+  for (const metric of ["quantity", "orders", "revenue"]) {
+    for (const dimension of ["asin", "store", "developer", "spu"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?metric=${metric}&dimension=${dimension}&from=2026-10-25&to=2026-10-25`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql("sales", query, scope, exporting).text;
+        const base = sql.slice(sql.indexOf("base AS ("), sql.indexOf("days AS ("));
+        // Removing shells here protects both shared-identity days and standalone
+        // orphan identities from nulling subtotal and daily currency KPIs.
+        assert.ok(base.includes(shellFilter));
+        assert.match(sql, /FROM base GROUP BY/);
+        assert.match(sql, /FROM days GROUP BY/);
+        assert.match(sql, /FROM filtered GROUP BY currency/);
+        assert.ok(sql.includes(`jsonb_object_agg("reportDate",${metric}) AS daily`));
+      }
+    }
+  }
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  for (const domain of ["performance", "ads_report", "listings"] as const) {
+    assert.ok(!workbenchReadSql(domain, query, scope).text.includes(shellFilter));
+  }
+});
+
+test("sales complete sums stay exact and partially known or complete-null rows still propagate unknowns", () => {
+  for (const metric of ["quantity", "orders", "revenue"]) {
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?metric=${metric}&from=2026-10-25&to=2026-10-25`));
+    const sql = workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text;
+    for (const key of ["quantity", "orders", "revenue"]) {
+      assert.ok(sql.includes(`CASE WHEN bool_and(complete AND ${key} IS NOT NULL) THEN sum(${key})::float END AS ${key}`));
+    }
+    assert.ok(sql.includes(`CASE WHEN count("${metric}")=count(*) THEN sum("${metric}")::float END`));
+    assert.match(sql, /CASE WHEN count\("subtotal"\)=count\(\*\) THEN sum\("subtotal"\)::float END/);
+    assert.match(sql, /CASE WHEN count\(day.value\)=count\(\*\) AND count\(\*\)=/);
+    assert.doesNotMatch(sql, /COALESCE\((?:sum\()?"?(?:quantity|orders|revenue|subtotal)\b/);
+  }
+});
+
 test("developer and SPU use one primary-resolved Listing row per fact without array fan-out", () => {
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const [domain, dimension, label] of [["sales", "developer", "开发员"], ["sales", "spu", "SPU"], ["performance", "developer", "开发员"]] as const) {

@@ -74,6 +74,7 @@ export async function syncSellfoxSnapshotStores(input: {
       await dependencies.db.$transaction(async (tx) => {
         const capturedAt = new Date(input.capturedAt);
         const rowWrites = metrics.reduce((n, metric) => n + (checkpoint.stores[store.externalId]?.[metric]?.writes ?? 0), 0);
+        await tx.sellfoxSalesDailySnapshot.deleteMany({ where: { storeId: store.id, reportDate: input.reportDate, syncedAt: { not: capturedAt } } });
         await tx.sellfoxSalesDayCoverage.upsert({ where: { storeId_reportDate: { storeId: store.id, reportDate: input.reportDate } }, create: { storeId: store.id, reportDate: input.reportDate, capturedAt, rowWrites }, update: { capturedAt, rowWrites } });
         await input.onProgress({ checkpoint, count: count(checkpoint) }, tx);
       });

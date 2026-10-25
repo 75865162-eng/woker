@@ -38,6 +38,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     if (domain === "sales") {
       const dates = workbenchDateRange(query);
       filters.push(Prisma.sql`s."reportDate">=${dates[0]} AND s."reportDate"<=${dates.at(-1)}`);
+      // Ignore incomplete empty shells; partially known metrics still propagate unknowns.
+      filters.push(Prisma.sql`NOT (NOT s.complete AND s.quantity IS NULL AND s.orders IS NULL AND s.revenue IS NULL)`);
     } else {
       if (query.from) filters.push(Prisma.sql`s."reportDate">=${query.from}`);
       if (query.to) filters.push(Prisma.sql`s."reportDate"<=${query.to}`);
