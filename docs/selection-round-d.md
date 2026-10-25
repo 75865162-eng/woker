@@ -98,3 +98,13 @@ npm run check:fast
 - 共享工作区后来持续出现并行 Sellfox UI 改动，单独构建在 resource-table.tsx:29 的 title 类型处失败；按 allowlist 未修改该文件。更早一次构建与临时库测试同时运行，虽退出 0 但出现临时目录清理后的 tracing ENOENT 告警，不能作为无告警构建证据。
 - 最终基于已提交 `2c90f5f` 加本轮 allowlist 文件建立临时隔离校验目录，不读取 .env、不包含并行未提交 Sellfox/Prisma 改动。该快照 254 项核心测试与完整 Next 生产构建均通过；只保留既有 Product hook dependency warning，无 tracing 文件复制告警。未改构建配置或依赖版本。等价采用已完成测试 + 单独构建，未机械重跑 npm run check 的同一测试集。
 - 以上只证明本轮 allowlist 快照；不宣称仍在修改中的整个共享工作区已完成生产验收。没有服务器、真实站点采集或现有数据库写入。
+
+## 网页表单兜底
+
+登录后打开 `/agents/market/selection`（Market 三步说明中的“去网页补评论/供应商”）。选择已有 slug，粘贴 1–3 星真实评论（日期可空、原文 ≤240 字），点击“保存评论并打标签”；再填至少 3 条不同的真实 `https://detail.1688.com/offer/<数字>.html` 链接和标题，点击“保存供应商并重建工作簿”。两次保存均调用现有 pipeline 校验、词典、draft/workbook 和 quality 函数，不启动 CLI、Playwright、采集或云标签。评论表单为当前竞品的完整快照，删除行随保存生效；CLI `--reviews-file` 仍仅替换涉及的 ASIN。空标签保持 NEEDS_DATA，需核对原文或补充现有词典。
+
+目录位于**运行 Next 服务的主机**，网页不能直接读取另一台电脑的 `selections/`。本地目录按 `SELECTION_ORGANIZATION_ID` 与可选 `SELECTION_WORKSPACE_ID`（默认 `default`）绑定；组织未配置时只允许数据库中唯一组织访问，多个组织时拒绝访问，需管理员明确绑定。接口同时验证 agents 权限及登录组织的工作区访问权。仅返回环境就绪布尔状态，组织/Actor 可使用上述绑定与当前登录用户自动补全；不让用户输入数据库密码。目录禁止符号链接和路径穿越，读写使用同一个 `.pipeline.lock`，保存失败保留输入供重试。
+
+高级区默认收起。上传、建 SKU 都重新检查当前文件门禁、fixture、商品权限与有效 owner/database_admin 身份；显式配置的 Actor 必须是当前登录用户，禁止借环境管理员身份。ERP URL 未配置时禁用上传；Cookie 仅在门禁通过后显示为一次性隐藏输入，也可使用已有服务端配置，上传前验证 ERP 会话属于同用户/组织。Cookie 不持久化、不回显；只上传已有图片。显式确认创建后复用 `productsCreate`（事务、revision、审计、Outbox、幂等），成功按收据 SKU 到同组织/工作区 `/dashboard` 核对。上传部分失败会保留已成功附件并重建要求上传的门禁，未过门禁的网页按钮继续禁用；需要管理员按上文 CLI 授权步骤续传，不能编辑 quality 绕过。
+
+本页只补本地证据；完成后仍走 Market 上传 `derived/draft.json` → 只读生成机会。不会自动上传、创建 SKU、迁移数据库或发布服务器。网页真实登录和真实证据验收需操作者执行；自动测试只使用隔离测试目录，执行后删除，不修改 kayak 研究数据。

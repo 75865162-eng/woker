@@ -56,7 +56,15 @@ AmazonCatalogSnapshot 存字段来源 JSON、sourceRunId、capturedAt；库存�
 
 ## 补货建议
 
-策略按组织/工作区/店铺/Marketplace/SKU 唯一，operations:edit 人员维护。可以手动粘贴每日销量（日期,件数），或显式绑定当前工作区已有 SellfoxProductDailySnapshot 的报表店铺。读取内部历史不发起第三方同步；报表来源额外需要 sellfox:view，并在建议页面/API 权限不足时隐藏相关策略。只接收精确单 MSKU，原始 payload.saleNum 必须存在且为非负整数；同日期多条、多 MSKU 汇总、缺失字段不累加、不补零。当前利润/ACOS 由人工维护参考值，不自动把报表 grossProfit 当净利润。
+策略按组织/工作区/店铺/Marketplace/SKU 唯一，operations:edit 人员维护。可以手动粘贴每日销量（日期,件数），或显式绑定当前工作区 Sellfox 报表店铺（historicalSource.storeId 是本地 SellfoxStore.id，不是外部 shopId）。读取内部历史不发起第三方同步；报表来源额外需要 sellfox:view，并在建议页面/API 权限不足时隐藏相关策略。当前利润/ACOS 由人工维护参考值，不自动把报表 grossProfit 当净利润。
+
+### Round E：Sellfox 补货读路径
+
+绑定 Sellfox 店铺的策略从 `sellfox_sales_daily` 读取昨日结束的最近 28 天，只接收 `complete=true`、quantity 非空非负整数、精确 MSKU；内部 sku 为空不影响匹配。重复日期不累加，不使用利润表 payload.saleNum，不按 ASIN、内部 SKU 或前缀匹配，不从完整空店铺日推导单 MSKU 零销量。成熟品缺任一天即 NEEDS_DATA；完整 28 天且正日需求、库存新鲜、周期齐全时才可 READY。新品仍使用明确的人工试销需求。
+
+同一策略库存只读该绑定店铺的 `sellfox_inventory_current`，按精确 MSKU 独立汇总，quantity 为可售、inTransit 为在途；任一库位数值未知时对应汇总保持 NULL。没有 current、缺可售或快照过期均 NEEDS_DATA，不回退或混加 Amazon 快照。未绑定 Sellfox 的策略保留人工历史 + Amazon 库存路径。结果与 inputSnapshot 均记录 inventorySource（sellfox_inventory_current / AmazonInventorySnapshot）；Sellfox 输入还记录本地店铺、外部 shopId、MSKU、capturedAt，inventoryRunId 为 NULL，避免冒充 Amazon run。计算失败时库存与来源引用清空，不沿用旧结果。
+
+该修改不写商品主档、不改同步/数据库契约；回滚可撤回应用代码，保留原批次及快照，回滚后旧 saleNum 计算结果不应视为已验证数据。覆盖查询与原批次 Worker 续跑见 [赛狐本地读取约定](sellfox-agent-read.md#round-e-tk-覆盖监控与补货验收)。
 
 worker 对启用策略首次/修改后重算，以后每 24 小时重算。每轮最多 50 条；页面 GET 只读计划表。修改参数并保存可触发按需重算，正常 worker 下一轮约 30 秒内开始。失败记录 lastError、空建议并 30 分钟后再算；不覆盖新版本策略的结果。停用保留旧计划但标注停用。保留本次输入快照、策略版本时间、库存运行 ID、生成时间与下次计算时间，方便追踪。库存运行 ID 直接取自本次实际读取的快照；同策略版本较早发起的并发计算不能覆盖较新结果，失败时清空本次库存运行引用。
 
@@ -67,10 +75,22 @@ worker 对启用策略首次/修改后重算，以后每 24 小时重算。每�
 - 可售天数：当前可售 / 预测日需求（不将预留、不可售计入）。
 - 目标量：日需求 ×（总周期 + 安全天数 + 复核天数）－当前可售－窗口内已知 ETA 在途，向上取整且不小于零。默认安全 14 天、复核 30 天，可维护。
 - 库存模拟按日加入明确 ETA 到货，首次不能满足一天需求即预计缺货日；建议下单日倒推周期及安全天数，可能已过期，必须保留以提示紧急。
-- Amazon 总在途仅作风险提示；没有 ETA 不扣减，逾期未确认到货也不当作可售。
+- 库存来源的总在途仅作风险提示；没有 ETA 不扣减，逾期未确认到货也不当作可售。
 - 单位利润/币种、ACOS/归因窗口是参考与风险说明，不重复计广告销量，不认定净利润，不自动抑制或执行采购。
 
 当前是可解释的基础计划，不包含仓库/PO 系统自动 ETA、自动同比、统一利润核算或预测模型。数据缺失统一 NEEDS_DATA；READY 仅表示基础计算输入齐，不是采购批准。
+
+## UI Round F
+
+`/operations` 保留经营中台/补货策略，`/sellfox` 保留只读镜像。概览及补货页的「打开赛狐销量/库存」携带同工作区、TK外部店铺ID；补货选中MSKU时附精确搜索。浏览链接、店铺chip和选择MSKU均不触发同步。
+
+补货操作顺序：选择当前工作区赛狐店铺（TK-US/CA/MX/BR独立选项，未同步者禁用）→明确选择策略归属active店铺→确认站点→选择精确MSKU（Listing current，每页50条，可搜索翻页）→维护周期/来源并保存。赛狐店铺与SellerAccount不按名称猜映射。补货GET已最小扩展：沿用operations:view，只返回同组织/工作区active店铺的id、显示名/账户名和站点，并提供既有sellfox:view权限状态，不读取settings专属凭据/绑定接口。无active店铺、无报表权限或读取失败均明确提示，不伪造UUID或空成功。
+
+表单使用已有销量workbench窄API预览上海T-28～T-1的精确MSKU dailyQuantity；缺失、NULL、无效或身份/币种不唯一均显示NEEDS_DATA及缺失日期，不补0。完整28日仅说明销量齐全，READY仍由原worker检查库存与周期后生成。手工销量折叠到高级兜底，绑定赛狐时禁用；空件数阻止保存。在途/利润/广告/季节性原有维护入口保留。
+
+结果表显示inventorySource（sellfox_inventory_current / AmazonInventorySnapshot），旧结果无来源显示「未知（待重新计算）」；状态同时保留NEEDS_DATA/missingInputs、紧急度文字与色点、可展开的一行理由。订单/未接广告指标统一「赛狐有、API/本地无」tooltip，不填造订单或广告数据。只读用户仍可查看来源与风险；修改权限、服务端计算及保存契约不变。
+
+验证：真实Tailwind样式的operations浏览器回归覆盖点选保存（非UUID输入）、缺日、完整日但不提前宣称READY、两类来源、理由展开、空值拒绝、403与工作区隔离；sellfox回归保留列契约、紧凑高度和移动端无横向溢出。本轮operations浏览器17项、sellfox浏览器14项通过；check:fast 265项测试、lint与TypeScript通过（仅原有商品组件hook警告）。回滚撤回本轮组件及GET附加字段即可，无迁移、无同步/批次变更。P1仅增加TK快捷chip，未新增总销量看板或缺少证据的指标。
 
 ## API
 

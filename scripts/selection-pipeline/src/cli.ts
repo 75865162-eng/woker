@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile, copyFile, open } from "node:fs/promises";
 import { chromium, type Page } from "@playwright/test";
 import { loadConfig, pipelineRoot, selectionDir, type Config } from "./config";
 import { log, PipelineError, readJson, recordError, writeJson } from "./io";
-import type { Brief, Competitor, Draft, Review, Supplier, TagsResult } from "./types";
+import type { Brief, Competitor, Draft, Review, Supplier } from "./types";
 import { SnapshotStore } from "./snapshot/store";
 import { RateLimit } from "./amazon/rateLimit";
 import { search, parseSearch } from "./amazon/search";
@@ -17,7 +17,7 @@ import { loadDictionary, applyDict, aggregateTags } from "./tags/applyDict";
 import { cloudPatch } from "./tags/cloudPatch";
 import { search1688, validateSuppliers } from "./alibaba/search1688";
 import { buildDraft } from "./workbook/buildDraft";
-import { buildXlsx } from "./workbook/buildXlsx";
+import { rebuildWorkbook } from "./local-workbook";
 import { assertWriteQuality, inspectQuality, loadReviews, validateReviews } from "./quality";
 
 const parsed = parseArgs({ args: process.argv.slice(2).filter(v => v !== "--"), allowPositionals: true, options: {
@@ -182,27 +182,17 @@ async function uploadExistingImages(dir: string, rows: Competitor[], checkpoint?
   }
 }
 async function workbook(dir: string, slug: string, brief: Brief) {
-  const [competitors,tags,supplierRows] = await Promise.all([
-    readJson<Competitor[]>(path.join(dir,"raw/competitors.json")),readJson<TagsResult>(path.join(dir,"derived/tags.json")),readJson<Supplier[]>(path.join(dir,"derived/suppliers.json")),
-  ]);
-  let uploadFailure: unknown;
+  let failure: unknown;
   if (opts["upload-images"]) {
-    try { await uploadExistingImages(dir, competitors); }
-    catch (error) { uploadFailure = error; await recordError(dir, "image_upload", error); }
+    try {
+      const rows = await readJson<Competitor[]>(path.join(dir, "raw/competitors.json"));
+      await uploadExistingImages(dir, rows);
+    } catch (error) { failure = error; await recordError(dir, "image_upload", error); }
   }
-  // Preserve the draft identity across rebuilds for database idempotency.
-  const draft = buildDraft(slug,brief,competitors,supplierRows,tags);
-  draft.fixture = (await readJson<{ fixture: boolean }>(path.join(dir,"raw/collection-info.json"))).fixture;
-  try { const prior = await readJson<Draft>(path.join(dir,"derived/draft.json")); draft.product.id = prior.product.id; draft.quality = prior.quality; }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-  draft.quality = await inspectQuality(dir, draft, opts["upload-images"], opts["workspace-id"]);
-  await writeJson(path.join(dir,"derived/draft.json"),draft);
-  await buildXlsx(draft,path.join(dir,"derived/workbook.xlsx"));
-  await writeJson(path.join(dir,"derived/quality.json"), draft.quality);
-  log("quality_evaluated", { status: draft.quality.status, blockWrite: draft.quality.blockWrite, reasons: draft.quality.reasons });
-  log("workbook_complete",{ path: path.join(dir,"derived/workbook.xlsx"), competitors: competitors.length });
-  if (uploadFailure) throw uploadFailure;
+  await rebuildWorkbook(dir, slug, brief, opts["workspace-id"], Boolean(opts["upload-images"]));
+  if (failure) throw failure;
 }
+
 async function create(dir: string) {
   if (!opts.write) { log("create_skipped",{ reason: "PASS_WRITE_TO_PERSIST" }); return; }
   if (opts.fixtures) throw new PipelineError("FIXTURE_WRITE_FORBIDDEN");

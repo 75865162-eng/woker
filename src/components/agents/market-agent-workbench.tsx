@@ -5,6 +5,7 @@ import { executionMatchesHandoff } from "@/lib/agent-platform/handoff";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { ChainHandoffNotice, chainFetch, chainHeaders, sendChainHandoff, useChainHandoff, rememberChainExecution } from "./chain-handoff";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, FileText, RefreshCw, Sparkles, SquareKanban, ShieldAlert, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -471,6 +472,17 @@ export function MarketAgentWorkbench() {
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <div className="text-sm font-semibold text-foreground">选品证据补全</div>
+            <p className="mt-1 text-xs text-muted">用网页表单补低星评论与 1688 供应商，重建工作簿并查看质量门禁。</p>
+          </div>
+          <Link href="/agents/market/selection" className="inline-flex h-10 items-center justify-center rounded-md bg-brand px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            进入选品证据补全
+          </Link>
+        </CardContent>
+      </Card>
       <section className="grid gap-3 md:grid-cols-2">
         <Card>
           <CardContent className="flex items-center justify-between gap-3 p-4">
@@ -574,8 +586,8 @@ export function MarketAgentWorkbench() {
                 }} className="block w-full text-xs" />
               </label>
               <ol className="list-inside list-decimal space-y-1 text-xs text-muted">
-                <li>在本机完成 slug 的 collect → tag → suppliers → workbook，核对 quality.json；缺评论或供应商时先用人工文件补齐。</li>
-                <li>上传 selections/&lt;slug&gt;/derived/draft.json（最多 2 MB），取得当前工作区的证据 fileId。</li>
+                <li>在本机完成 slug 采集；可先在选品证据页用表单补齐评论/供应商，重建工作簿并核对 quality。</li>
+                <li><Link href="/agents/market/selection" className="text-brand underline">去网页补评论/供应商</Link>，再上传 selections/&lt;slug&gt;/derived/draft.json（最多 2 MB），取得当前工作区的证据 fileId。</li>
                 <li>点击“从 Round B 证据生成机会”，人工核对来源后交接 Product；此工具只读上传产物，不会爬取 Amazon 或启动 CLI。</li>
               </ol>
               <p className="text-xs text-muted">BSR 销量估算为未校准启发式，不代表真实销量或市场需求；空标签表示待补数据，不表示无差评。</p>

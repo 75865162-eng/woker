@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "sku": "DEMO-001",
+  "title": "测试商品",
+  "marketplace": "US",
+  "workspace": "default",
+  "englishName": "Demo Product",
+  "note": "Agent 提供的商品草稿",
+  "meta": { "source": "agent" },
+  "imagePaths": ["/tmp/demo.jpg"]
+}

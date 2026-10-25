@@ -62,7 +62,10 @@ export const sellfoxAgentColumns = {
     "sourceUpdatedAt",
     "shopExternalId",
     "name",
-    "marketplace"
+    "marketplace",
+    "fnsku",
+    "parentSku",
+    "mainImage"
   ],
   "sales": [
     "complete",

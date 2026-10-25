@@ -4,10 +4,10 @@ import type { Draft } from "../types";
 import { inspectQuality, assertWriteQuality } from "../quality";
 import { selectionDir } from "../config";
 // No database imports are loaded by the dry-run path.
-export async function productsCreate(draft: Draft, workspaceId: string) {
+export async function productsCreate(draft: Draft, workspaceId: string, context?: { organizationId: string; actorUserId: string }) {
   if (draft.fixture) throw new PipelineError("FIXTURE_WRITE_FORBIDDEN");
-  const organizationId = process.env.SELECTION_ORGANIZATION_ID;
-  const actorUserId = process.env.SELECTION_ACTOR_USER_ID;
+  const organizationId = context?.organizationId ?? process.env.SELECTION_ORGANIZATION_ID;
+  const actorUserId = context?.actorUserId ?? process.env.SELECTION_ACTOR_USER_ID;
   if (!process.env.DATABASE_URL || !organizationId || !actorUserId) throw new PipelineError("WRITE_REQUIRES_DATABASE_AND_EXPLICIT_ACTOR");
   if (!/^[a-f0-9-]{36}$/i.test(draft.product.id)) throw new PipelineError("INVALID_DRAFT_ID");
   if (draft.schemaVersion !== 1 || draft.product.status !== "pending" || !draft.brief.keyword || draft.product.sku !== "DRAFT") throw new PipelineError("INVALID_OR_ALREADY_CREATED_DRAFT");
@@ -44,5 +44,5 @@ export async function productsCreate(draft: Draft, workspaceId: string) {
     const queued = await Promise.allSettled(events.map(event => processProductOutboxEvent(event.id)));
     const pending = await prisma.productOutboxEvent.count({ where: { organizationId, workspaceId, entityType: "product", OR: [{ entityId: result.product.id }, { entityId: result.product.sku }], status: { not: "done" } } });
     return { sku: result.product.sku, productId: result.product.id, revision: result.product.revision, outboxEventId: result.outboxEventId, projectionEventId: result.projectionEventId, queuePending: pending > 0 || queued.some(r => r.status === "rejected") };
-  } finally { await prisma.$disconnect(); }
+  } finally { if (!context) await prisma.$disconnect(); }
 }

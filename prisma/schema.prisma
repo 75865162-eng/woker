@@ -1845,6 +1845,9 @@ model SellfoxListingSnapshot {
   asin String
   msku String?
   sku String
+  fnsku String?
+  parentSku String?
+  mainImage String?
   parentAsin String?
   title String?
   status String?

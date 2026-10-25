@@ -13,10 +13,15 @@ export async function GET(request: Request) {
   const where = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
   try {
     const policies = process.env.DATABASE_URL ? await prisma.amazonReplenishmentPolicy.findMany({ where, orderBy: { updatedAt: "desc" }, take: 200 }) : [];
+    const sellerAccounts = process.env.DATABASE_URL ? await prisma.sellerAccount.findMany({
+      where: { ...where, status: "active" },
+      select: { id: true, displayName: true, accountKey: true, marketplaceCode: true, marketplaceId: true },
+      orderBy: [{ displayName: "asc" }, { id: "asc" }],
+    }) : [];
     const plans = policies.length ? await prisma.amazonReplenishmentPlan.findMany({ where: { ...where, policyId: { in: policies.map((row) => row.id) } } }) : [];
     const edit = await requireApiPermission("operations", "edit", request);
     const reports = await requireApiPermission("sellfox", "view", request);
-    return NextResponse.json({ rows: policies.filter((policy) => reports.ok || !parseReplenishmentInputs(policy.inputs).historicalSource).map((policy) => ({ ...policy, plan: plans.find((row) => row.policyId === policy.id) ?? null })), canEdit: edit.ok }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ rows: policies.filter((policy) => reports.ok || !parseReplenishmentInputs(policy.inputs).historicalSource).map((policy) => ({ ...policy, plan: plans.find((row) => row.policyId === policy.id) ?? null })), canEdit: edit.ok, canReadSellfox: reports.ok, sellerAccounts }, { headers: { "Cache-Control": "no-store" } });
   } catch { return NextResponse.json({ error: "补货计划读取失败。" }, { status: 500 }); }
 }
 

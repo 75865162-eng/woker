@@ -89,6 +89,71 @@ GROUP BY status;
 -- 必须另查sales_day_coverage确认目标店/日完整；任务入队/运行中不等于回填完成。
 ```
 
+## Round E：TK 覆盖监控与补货验收
+
+TK 是店铺名，不是土耳其站；外部 shopId：US `124687`（ATVPDKIKX0DER）、CA `124688`（A2EUQ1WTGCTBG2）、MX `426997`（A1AM78C64UM0Y8）、BR `245097`（A2Q3Y263D00KWC）。策略绑定使用当前组织/工作区的本地 SellfoxStore.id，不能把 shopId 或 ProductRecord SKU 猜成绑定。ProductRecord 数量、空 Amazon*Snapshot 或任务 done 不证明单 MSKU 销量完整。
+
+2026-10-25 本机抽样窗口 2025-11-01～2026-10-24：US/CA/BR 约完整61天、缺297天，MX约缺327天，原回填批次约61 done / 406 queued（动态采样，不是完成承诺）。继续使用上文原 batch key，不重建/reset 批次。只读查看批次状态和以下覆盖缺口；保存每次采样时间及 missing_days，随原队列完成应下降。失败段须核对原 run/断点，不靠新批次掩盖。
+
+以下在已授权的本地 PostgreSQL **只读** psql 会话执行，替换 org/ws。改 shops 的 VALUES 可同时查看四店；目标 MSKU 完整性另查 daily，店铺 coverage 完整不能替代它。
+
+```sql
+\set org 'YOUR_ORGANIZATION_ID'
+\set ws 'YOUR_WORKSPACE_ID'
+BEGIN READ ONLY;
+WITH shops(shop) AS (VALUES ('124687'), ('124688'), ('426997'), ('245097')),
+expected AS (
+  SELECT shop, to_char(d, 'YYYY-MM-DD') AS day
+  FROM shops CROSS JOIN generate_series(DATE '2025-11-01', DATE '2026-10-24', INTERVAL '1 day') d
+), missing AS (
+  SELECT e.* FROM expected e
+  WHERE NOT EXISTS (
+    SELECT 1 FROM sellfox_sales_day_coverage c
+    WHERE c."organizationId" = :'org' AND c."workspaceId" = :'ws'
+      AND c."shopExternalId" = e.shop AND c."reportDate" = e.day
+  )
+)
+SELECT shop, count(*) AS missing_days, min(day) AS first_missing,
+       array_agg(day ORDER BY day) AS missing_dates
+FROM missing GROUP BY shop ORDER BY shop;
+-- 无行表示四店此窗口均覆盖；合法空店铺日也有 coverage，但不能推导 SKU 的零销量。
+COMMIT;
+```
+
+补货真正使用的窗口是上海日期的 T-28～T-1，以下查询 TK-US 指定 MSKU 的缺日（内部 sku 空不应过滤）：
+
+```sql
+\set msku 'EXACT_MSKU'
+BEGIN READ ONLY;
+WITH expected AS (
+  SELECT to_char(d, 'YYYY-MM-DD') AS day
+  FROM generate_series((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date - 28,
+                       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date - 1, INTERVAL '1 day') d
+)
+SELECT e.day AS missing_or_invalid_day FROM expected e
+WHERE (SELECT count(*) FROM sellfox_sales_daily s
+       WHERE s."organizationId" = :'org' AND s."workspaceId" = :'ws'
+         AND s."shopExternalId" = '124687' AND s.msku = :'msku'
+         AND s."reportDate" = e.day AND s.complete = true
+         AND s.quantity IS NOT NULL AND s.quantity >= 0) <> 1
+ORDER BY e.day;
+COMMIT;
+```
+
+有缺日则成熟品必须 NEEDS_DATA，不补0、不用利润 saleNum；无缺日且正日需求、周期完整、current 库存新鲜才可 READY。补货已绑定 Sellfox 的策略只读同店 `sellfox_inventory_current`，独立汇总精确 MSKU，避免与销量 JOIN 扇出；未知数值保持 NULL，空库存不回退 Amazon。结果及输入快照有 inventorySource，输入另有 storeId/shopExternalId/MSKU/capturedAt；无绑定的策略保留显式 Amazon 来源，详见经营中台补货短节。
+
+本轮验证：上述两段 SQL 已在本地 `BEGIN READ ONLY` 事务执行并回滚；四店长窗缺日分别 US/CA/BR=297、MX=327，抽取的一个 TK-US 精确 MSKU 最近28日仍全部缺失，不能 READY。单测覆盖完整28日 READY、缺日/未完成日 NEEDS_DATA、空内部SKU、空MSKU与精确匹配、空current不回退Amazon；`check:fast` 261项测试及TypeScript通过，lint无错误（2条非本轮文件警告）。未修改批次、队列、计划或生产服务。
+
+保持原 Worker 醒着：先用 `cat tmp/sellfox-backfill-worker.pid`、`ps -p <PID> -o pid,etime,command` 核对是本工作区的 sellfox-sync-worker，再用 `tail -n 50 tmp/sellfox-backfill-worker.log` 检查进展。已运行时不要再启第二个 Worker；macOS 可前台执行 `caffeinate -i -p <已核对的PID>` 防空闲休眠直至该进程退出（需接电，合盖/关机仍可能暂停）。仅确认原进程退出后，按上文相同 .env/Redis 启动同一 Worker 并记录新 PID，原数据库/Redis任务继续；恢复后先查原批次和 coverage，不重复 --apply、不清队列、不 reset。此轮只提供操作说明，不自动启用计划或改生产服务；406 段不要求本轮跑完。
+
+## UI Round F
+
+`/sellfox` 继续为只读镜像，不与经营中台合页；补货策略入口仍在 `/operations?tab=replenishment`。概览和补货深链使用 `workspaceId`、`domain=sales|inventory`、`shopExternalId`，选中MSKU时附 `dimension=msku&searchType=msku&exactMatch=1&search=...`。本工作区TK四店chip只更改筛选，未同步店铺禁用，不改列映射、计划或上游数据。
+
+经营中台通过既有店铺/Listing current窄API选择本地SellfoxStore及MSKU；内部sku空不影响选择，空MSKU不提供为候选。下拉分页搜索，每页50条，不预载全量商品/payload；工作区或店铺切换会清除旧MSKU和覆盖预览，旧请求取消。销量预览只使用sales workbench的完整日dailyQuantity，缺日/NULL显示NEEDS_DATA和缺失日期；不引用利润saleNum，不以Listing滚动销量代替逐日完整性。完整日也不在前端宣布补货READY。最终建议展示worker记录的库存来源与missingInputs。
+
+订单/未接广告仍禁用，tooltip统一「赛狐有、API/本地无」。经营中台策略归属店铺必须显式选真实active SellerAccount，不能用SellfoxStore.id代替；本轮只对补货GET增加已授权的窄店铺选项，保存及同步契约不变。浏览器回归使用真实Tailwind样式，核对TK筛选/深链、禁用tooltip及现有列/导出/紧凑布局；无服务器操作、无批次重建。
+
 ## 字段映射（真实响应2026-10-25核验）
 
 | 赛狐列 | API key/报告表头 | 窄字段 |
@@ -178,7 +243,7 @@ GROUP BY status;
 | 广告产品：曝光 / 点击 / 花费 / 订单 / 销售额 | impressions / clicks / cost / adOrders / adSales | 按店铺+币种+SP/SB/SD+campaign/adGroup/product聚合日期窗；活动/组只有ID，不伪造名称 |
 | 广告：ACoS / ROAS | sum(cost)÷sum(adSales) / sum(adSales)÷sum(cost) | 行及底栏均重算；无有效分母留空。报告没有币种时仍标未知，禁止推断USD |
 | 广告：有效 / 服务状态 / 投放中 / 已暂停 | 无广告结构状态 | 未知灰态，不能把未知当关闭；仅广告产品Tab有数据，其他Tab标待接；有花费/有点击无订单按本地汇总筛选 |
-| 图片 / AWD库存与在途 / 业务员 / 标签 / FNSKU / 星级评论 / 促销与礼品等费用 | 当前浏览窄字段无相应映射 | 图片占位；其他默认隐藏或灰列，tooltip「赛狐有、API/本地无」，不猜payload字段或抓网页补值 |
+| 非Listing图片 / AWD库存与在途 / 业务员 / 标签 / 星级评论 / 促销与礼品等费用 | 当前浏览窄字段无相应映射 | 图片占位；其他默认隐藏或灰列，tooltip「赛狐有、API/本地无」，不猜payload字段或抓网页补值；Listing图片/FNSKU/父SKU见Round G |
 
 汇总详情抽屉保留既有按需展开原始摘要入口，原始摘要取代表行的原快照，并不是区间聚合payload。库存与元信息来自current，不能解释为历史快照；表底金额/广告指标为整个筛选结果，分币种。缺失任一成员指标时不以其余成员拼造完整合计。只读UI没有新增广告/商品写接口。
 
@@ -226,3 +291,10 @@ GROUP BY status;
 - 初始工作区无店铺，先通过正式 sync API 手动只读采集39店，run `sellfox-sync-99bcbb44-c553-4277-a722-ef8e42402168` done。五项 schedule 于北京时间13:04:51 自动入队。
 - 库存 run `sellfox-sync-4537345d-812d-4cd7-909e-807070be5473`，summary.trigger=schedule，status=done，error=null，完成时间北京时间13:08:20；39店、8621条快照。验收时销量running，performance/listings/ads_report queued，尚不代表其已完成。库存下次为当日16:04:51，其余次日06:30。
 - 本地 check:fast 260项测试、lint和类型检查通过（既有商品Hook警告保留）；最新布局的13项浏览器测试见前述记录。CI 完成测试/lint/build/产物验证与受控迁移，不在本机或服务器构建。全流程未输出.env值、未对赛狐商品/广告写回；日志无持续报错。
+
+
+### 同步 Round G：TK-US Listing 三字段
+
+已确认并本地应用增量迁移 `20261025040000_sellfox_listing_identity_image`：Listing V2 `fnsku`、`parentSku`、`mainImage` 提升至同名可空窄列及 `sellfox_listing_current`，沿用原worker分页/完整current发布契约。只取消Listing对应灰列；主图仅提供已验证HTTPS域名的按需链接，不预加载图片；其余域图片及未接字段仍为「赛狐有、API/本地无」。空值为NULL，不推导身份或补0。
+
+TK-US单次run `sellfox-sync-round-g-listing-tk-us-20261025` 已done；UTC捕获 `2026-10-25T15:38:57.848Z`，523行，FNSKU/父SKU/有效主图非空518/399/503。原468条销量回填run的ID集合未变，其他店current未变，计划未开启/修改。Listing是current字段覆盖，不能代替日销complete或自然日覆盖。完整域×字段×接口状态矩阵、只读SQL、验证限制和回滚说明见 [Round G记录](sellfox-round-g.md)。本轮仅本地修改，无提交/推送/服务器发布；生产需先迁移再加载新worker代码，旧常驻worker不会自动获得新字段映射。

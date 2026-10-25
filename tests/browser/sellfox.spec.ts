@@ -15,7 +15,7 @@ async function switchWorkspace(page: Page) {
     window.dispatchEvent(new CustomEvent("amazon-bulk-ad:workspace-scope-changed"));
   });
 }
-async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-10-24", rowCount = 1) {
+async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-10-24", rowCount = 1, tkStore = false) {
   const calls: Array<{ path: string; query: URLSearchParams; workspace: string; body: unknown }> = [];
   const state = { configured: true, delayPath: "", pending: false, release: () => {} };
   await page.route("**/*", async (route) => {
@@ -31,7 +31,7 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
       state.pending = true; await new Promise<void>((resolve) => { state.release = resolve; });
       // Even if the transport completes after abort, old scope must never render.
     }
-    const store = { id: `store-${workspace}`, externalId: `shop-${workspace}`, name: `店铺-${workspace}`, marketplace: "US", country: "US", status: "active", lastSyncedAt: "2026-10-24T00:00:00Z" };
+    const store = { id: `store-${workspace}`, externalId: tkStore ? "124687" : `shop-${workspace}`, name: `店铺-${workspace}`, marketplace: "US", country: "US", status: "active", lastSyncedAt: "2026-10-24T00:00:00Z" };
     if (url.pathname.endsWith("/overview")) return route.fulfill({ json: { configured: state.configured, stores: [store], counts: { stores: 1, inventory: 1, sales: 1, performance: 1, hourly: 0 }, latestRuns: [], latestSuccessByResource: {}, workerOnline: true } });
     if (url.pathname.endsWith("/schedules")) return route.fulfill({ json: { schedules: [{ resource: "performance", enabled: false, intervalMinutes: 1440 }] } });
     if (url.pathname.endsWith("/sync")) return route.fulfill({ status: 202, json: { runId: "test-run", status: "queued" } });
@@ -51,10 +51,11 @@ test("daily multi-store browsing, shared filters, pagination and browser navigat
   const { calls } = await setup(page);
   await expect(page.getByText("workspace-a-entity-page1", { exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "小计", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: "库存", exact: true })).toHaveCount(0);
   await page.getByLabel("展开店铺筛选").click();
-  await page.getByLabel("店铺筛选", {exact:true}).selectOption(["shop-workspace-a"]);
+  await page.getByLabel("搜索店铺").fill("workspace-a");
+  await page.getByRole("checkbox", { name: "店铺-workspace-a · US", exact: true }).check();
   await page.getByLabel("站点筛选").selectOption("US");
   await page.getByLabel("搜索记录").fill("SKU");
   await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /site=US.*shopExternalId=shop-workspace-a/);
@@ -94,9 +95,9 @@ test("late old-workspace overview and table responses cannot restore previous st
   await page.getByRole("button", { name: "刷新", exact: true }).click();
   await expect.poll(() => state.pending).toBe(true);
   await switchWorkspace(page);
-  await expect(page.getByLabel("店铺筛选", {exact:true}).locator("option")).toHaveText(["店铺-workspace-b · US"]);
+  await expect(page.getByLabel("店铺筛选", {exact:true}).locator("label")).toHaveText(["店铺-workspace-b · US"]);
   state.release();
-  await expect(page.getByLabel("店铺筛选", {exact:true}).locator("option")).toHaveText(["店铺-workspace-b · US"]);
+  await expect(page.getByLabel("店铺筛选", {exact:true}).locator("label")).toHaveText(["店铺-workspace-b · US"]);
   state.pending = false; state.delayPath = "/api/sellfox/sales";
   await page.evaluate(() => { localStorage.setItem("amazon_bulk_ad_workspace_scope", JSON.stringify({ workspaceId: "workspace-a" })); window.dispatchEvent(new CustomEvent("amazon-bulk-ad:workspace-scope-changed")); });
   await expect.poll(() => state.pending).toBe(true);
@@ -123,7 +124,7 @@ test("run polling preserves filters when switching to verified listing and adver
   await expect(page.getByRole("cell", { name: "42", exact: true })).toBeVisible();
   await expect.poll(() => calls.filter((call) => call.path.endsWith("/runs")).length, { timeout: 8000 }).toBeGreaterThan(1);
   for (const call of calls.filter((call) => call.path.endsWith("/runs"))) { expect(call.query.get("from")).toBe("2026-10-24"); expect(call.query.get("search")).toBe("running"); }
-  await page.getByRole("button", { name: "在线 Listing", exact: true }).click();
+  await page.getByRole("button", { name: "在线商品", exact: true }).click();
   await expect(page.getByLabel("Listing 状态")).toBeVisible();
   await page.getByRole("button", { name: "广告", exact: true }).click();
   await expect(page.getByLabel("广告类型",{exact:true})).toBeVisible();
@@ -147,6 +148,7 @@ test("listing current and advertising product daily browse locally and expose na
 
 test("sales matrix filters debounce, serialize dimensions and preserve visible export columns", async ({ page }) => {
   const { calls } = await setup(page);
+  await page.getByRole("button", {name:"日矩阵（高级）", exact:true}).click();
   await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "父ASIN", exact: true }).click();
   await page.getByRole("button", {name:"销售额",exact:true}).click();
@@ -202,7 +204,7 @@ test("narrow viewport scrolls metrics while keeping the identity header fixed", 
   await page.setViewportSize({ width: 760, height: 900 });
   await setup(page);
   const scroll = page.getByTestId("sellfox-table-scroll");
-  await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeAttached();
+  await expect(page.getByRole("columnheader", { name: "FBA可售", exact: true })).toBeAttached();
   const identity = page.getByRole("columnheader", { name: "ASIN", exact: true }).first();
   const before = await identity.boundingBox();
   await scroll.evaluate(el => { el.scrollLeft = 600; });
@@ -211,7 +213,7 @@ test("narrow viewport scrolls metrics while keeping the identity header fixed", 
   expect(await scroll.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
   await page.screenshot({ path: "/tmp/sellfox-ui-sales.png", fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  for (const [tab, file, header] of [["销量", "sales", "小计"], ["销售利润", "performance", "毛利润"], ["在线 Listing", "listings", "7天销量"], ["广告", "ads", "广告订单"]]) {
+  for (const [tab, file, header] of [["销量", "sales", "小计"], ["销售利润", "performance", "毛利润"], ["在线商品", "listings", "7天销量"], ["广告", "ads", "广告订单"]]) {
     await page.getByRole("navigation", {name:"赛狐数据域"}).getByRole("button", { name: tab, exact: true }).click();
     await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "查看记录 row", exact: true })).toBeVisible();
@@ -250,18 +252,18 @@ test("reference layout keeps compact filter bands and domain-specific identity c
   await page.setViewportSize({width:1440,height:960});
   const {calls} = await setup(page, "domain=sales&from=2026-10-18&to=2026-10-24",20);
   const expected: Record<string,string[]> = {
-    sales:["图片","ASIN","店铺/站点","总库存","AWD库存未接","AWD在途未接","近7天销量趋势","均值","小计",...Array.from({length:7},(_,i)=>`10-${18+i}`),"操作"],
-    performance:["图片","标题/ASIN","父ASIN","品名/SKU","毛利润"],
+    sales:["图片","ASIN","店铺/站点","分析","运营未接","销量洞察未接","父ASIN","MSKU","品名/SKU","标题","FBA可售","小计"],
+    performance:["图片","标题/ASIN","店铺/站点","分析","毛利润"],
     listings:["","状态","图片","ASIN/MSKU","标题"],
     ads:["","产品信息","有效未接","服务状态未接","FBA可售","价格","广告活动","广告组"],
   };
-  for (const [domain,tab] of [["sales","销量"],["performance","销售利润"],["listings","在线 Listing"],["ads","广告"]]) {
+  for (const [domain,tab] of [["sales","销量"],["performance","销售利润"],["listings","在线商品"],["ads","广告"]]) {
     await page.getByRole("navigation", {name:"赛狐数据域"}).getByRole("button",{name:tab,exact:true}).click();
     await expect(page.getByRole("button",{name:"查看记录 row",exact:true})).toBeVisible();
     const headers=await page.locator("thead th").allTextContents();
     expect(headers.map(h=>h.replace(/星期./g,"").trim()).slice(0,expected[domain].length)).toEqual(expected[domain]);
     const filter=await page.getByLabel("筛选区",{exact:true}).boundingBox();
-    expect(filter!.height).toBeLessThan(domain === "ads" ? 255 : 215);
+    expect(filter!.height).toBeLessThan(domain === "sales" ? 265 : domain === "ads" ? 255 : 215);
     await expect(page.locator("tbody tr")).toHaveCount(20);
     if (domain === "listings" || domain === "ads") {
       await page.getByLabel("选择本页记录",{exact:true}).check();
@@ -273,14 +275,14 @@ test("reference layout keeps compact filter bands and domain-specific identity c
     const scroller = page.getByTestId("sellfox-table-scroll");
     const identity = page.locator("thead th.sticky").last();
     const action = page.getByRole("columnheader", {name:"操作",exact:true});
-    const actionBefore = await action.boundingBox();
-    expect(actionBefore!.x + actionBefore!.width).toBeLessThanOrEqual(721);
+    const actionBefore = ["sales", "performance"].includes(domain) ? null : await action.boundingBox();
+    if (domain === "listings" || domain === "ads") expect(actionBefore!.x + actionBefore!.width).toBeLessThanOrEqual(721);
     const before = await identity.boundingBox();
     await scroller.evaluate(el=>{el.scrollLeft=500});
     const after = await identity.boundingBox();
     expect(Math.abs(before!.x-after!.x)).toBeLessThan(2);
-    const actionAfter = await action.boundingBox();
-    expect(Math.abs(actionBefore!.x-actionAfter!.x)).toBeLessThan(2);
+    const actionAfter = ["sales", "performance"].includes(domain) ? null : await action.boundingBox();
+    if (actionBefore && actionAfter) expect(Math.abs(actionBefore.x-actionAfter.x)).toBeLessThan(2);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({path:`/tmp/sellfox-layout-${domain}-mobile.png`,fullPage:true});
     await page.getByRole("button",{name:"查看记录 row",exact:true}).click();
@@ -298,6 +300,10 @@ test("reference layout keeps compact filter bands and domain-specific identity c
 test("AWD hover details stay unknown and column settings fit the narrow viewport", async ({ page }) => {
   await page.setViewportSize({width:1440,height:900});
   const {calls} = await setup(page, "domain=sales&from=2026-10-18&to=2026-10-24",20);
+  await page.getByRole("button",{name:"日矩阵（高级）",exact:true}).click();
+  await page.getByText("自定义列",{exact:true}).click();
+  await page.getByLabel("显示AWD库存列",{exact:true}).check();
+  await page.keyboard.press("Escape");
   const trigger=page.getByRole("button",{name:"查看AWD库存明细",exact:true}).first();
   await trigger.hover();
   const hint=page.getByRole("tooltip",{name:"AWD库存明细",exact:true});
@@ -335,4 +341,50 @@ test("AWD hover details stay unknown and column settings fit the narrow viewport
   await expect(menu).not.toBeVisible();
   await expect(summary).toBeFocused();
   expect(calls.filter(c=>c.body !== null)).toEqual([]);
+});
+
+
+test("TK shortcuts preserve scoped deep-link filters and unavailable chips stay disabled", async ({ page }) => {
+  const { calls } = await setup(page, "domain=sales&shopExternalId=124687&workspaceId=workspace-a&dimension=msku", 1, true);
+  // Use the labelled container because these chips do not introduce another navigation region.
+  await expect(page.locator('[aria-label="TK 四店快捷"]').getByRole("button", { name: "TK店-US", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "TK店-CA", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "TK店-US", exact: true }).click();
+  await expect.poll(() => calls.filter(call => call.path === "/api/sellfox/sales").at(-1)?.query.get("shopExternalId")).toBe("124687");
+  await expect(page.getByRole("button", { name: "订单量", exact: true })).toHaveAttribute("title", "赛狐有、API/本地无");
+  expect(calls.filter(call => call.path === "/api/sellfox/sales").at(-1)?.workspace).toBe("workspace-a");
+  expect(calls.some(call => call.path === "/api/sellfox/sync")).toBe(false);
+});
+
+
+test("Round H2 wide default, checkbox shops, visible summary and local matrix toggle", async ({page}) => {
+  const {calls} = await setup(page);
+  await expect(page.getByRole("button", {name:"宽表（赛狐默认）",exact:true})).toHaveAttribute("aria-pressed","true");
+  await expect(page.getByLabel("每页条数")).toHaveValue("20");
+  await expect(page.getByRole("columnheader",{name:"10-24",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("columnheader",{name:"操作",exact:true})).toHaveCount(0);
+  await expect(page.getByLabel("筛选合计",{exact:true})).toBeVisible();
+  await expect(page.getByLabel("表内汇总")).toContainText("本页 0");
+  await page.getByLabel("展开店铺筛选").click();
+  await expect(page.locator("select[multiple]")).toHaveCount(0);
+  await page.getByLabel("搜索店铺").fill("no-match");
+  await expect(page.getByText("无匹配店铺",{exact:true})).toBeVisible();
+  await page.getByLabel("搜索店铺").fill("workspace-a");
+  await page.getByRole("button",{name:"全选搜索结果",exact:true}).click();
+  await expect(page.getByRole("checkbox",{name:"店铺-workspace-a · US",exact:true})).toBeChecked();
+  await page.getByRole("button",{name:"清空店铺选择",exact:true}).click();
+  await expect(page.getByRole("checkbox",{name:"店铺-workspace-a · US",exact:true})).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button",{name:"日矩阵（高级）",exact:true}).click();
+  await expect(page.getByRole("columnheader",{name:"10-24",exact:true})).toBeVisible();
+  await expect(page).toHaveURL(/salesView=matrix/);
+  const matrixExport = await page.getByRole("link",{name:"CSV",exact:true}).getAttribute("href");
+  expect(new URL(matrixExport!,"http://localhost").searchParams.getAll("column")).toContain("day:2026-10-24");
+  await page.getByRole("button",{name:"宽表（赛狐默认）",exact:true}).click();
+  await expect(page.getByRole("columnheader",{name:"10-24",exact:true})).toHaveCount(0);
+  const wideExport = await page.getByRole("link",{name:"CSV",exact:true}).getAttribute("href");
+  expect(new URL(wideExport!,"http://localhost").searchParams.getAll("column")).not.toContain("day:2026-10-24");
+  await page.getByRole("button",{name:"在线商品",exact:true}).click();
+  await expect(page.getByRole("button",{name:"查看记录 row",exact:true})).toHaveText("详情");
+  expect(calls.filter(call=>call.body !== null)).toEqual([]);
 });

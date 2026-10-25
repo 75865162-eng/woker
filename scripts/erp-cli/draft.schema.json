@@ -1,0 +1,1146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ERP Product Upsert v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "sku": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "品名": {
+      "type": "string"
+    },
+    "chineseName": {
+      "type": "string"
+    },
+    "englishName": {
+      "type": "string"
+    },
+    "marketplace": {
+      "type": "string"
+    },
+    "workspace": {
+      "type": "string"
+    },
+    "workspaceId": {
+      "type": "string"
+    },
+    "accountId": {
+      "type": "string"
+    },
+    "image": {
+      "type": "string"
+    },
+    "imageFileId": {
+      "type": "string"
+    },
+    "asin": {
+      "type": "string"
+    },
+    "developer": {
+      "type": "string"
+    },
+    "supplierName": {
+      "type": "string"
+    },
+    "supplierUrl": {
+      "type": "string"
+    },
+    "specs": {
+      "type": "string"
+    },
+    "purchaseLeadTime": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "keywords": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "cancelReason": {
+      "type": "string"
+    },
+    "hsCode": {
+      "type": "string"
+    },
+    "selectionOwner": {
+      "type": "string"
+    },
+    "opsAssignee": {
+      "type": "string"
+    },
+    "designerAssignee": {
+      "type": "string"
+    },
+    "workflowStartedAt": {
+      "type": "string"
+    },
+    "workflowDueAt": {
+      "type": "string"
+    },
+    "workflowUpdatedAt": {
+      "type": "string"
+    },
+    "workflowReminderAt": {
+      "type": "string"
+    },
+    "currentOwner": {
+      "type": "string"
+    },
+    "purchasePrice": {
+      "type": "number",
+      "minimum": 0
+    },
+    "productWeightG": {
+      "type": "number",
+      "minimum": 0
+    },
+    "packageWeightG": {
+      "type": "number",
+      "minimum": 0
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "isOverdue": {
+      "type": "boolean"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "dashboard"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "developing",
+        "ops_review",
+        "design_in_progress",
+        "listing_confirming",
+        "listed",
+        "canceled",
+        "delisted",
+        "patent_risk"
+      ]
+    },
+    "workflowStage": {
+      "type": "string",
+      "enum": [
+        "selection_pending",
+        "ops_confirming",
+        "design_in_progress",
+        "design_review",
+        "done",
+        "blocked"
+      ]
+    },
+    "workflowHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stageLabel": {
+            "type": "string"
+          },
+          "actorUserId": {
+            "type": "string"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "assigneeName": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "selection_pending",
+              "ops_confirming",
+              "design_in_progress",
+              "design_review",
+              "done",
+              "blocked"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "stageLabel",
+          "createdAt",
+          "stage"
+        ]
+      }
+    },
+    "productSizeCm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "length": {
+          "type": "number",
+          "minimum": 0
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0
+        },
+        "height": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": []
+    },
+    "packageSizeCm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "length": {
+          "type": "number",
+          "minimum": 0
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0
+        },
+        "height": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": []
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "competitorAsins": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "opsAssignees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "designerAssignees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "editableBy": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "viewableBy": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "imagePaths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "imageAssets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "uploadedAt": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 0
+          },
+          "storageType": {
+            "type": "string",
+            "enum": [
+              "local",
+              "s3",
+              "r2"
+            ]
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "previewUrl": {
+            "type": "string"
+          },
+          "previewFileId": {
+            "type": "string"
+          },
+          "originalUrl": {
+            "type": "string"
+          },
+          "thumbFileId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mimeType",
+          "uploadedAt",
+          "size",
+          "storageType",
+          "originalUrl"
+        ]
+      }
+    },
+    "conclusionExcelFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "uploadedAt": {
+          "type": "string"
+        },
+        "downloadUrl": {
+          "type": "string"
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0
+        },
+        "storageType": {
+          "type": "string",
+          "enum": [
+            "local",
+            "s3",
+            "r2"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "mimeType",
+        "uploadedAt",
+        "size",
+        "storageType"
+      ]
+    },
+    "patentInformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "searchChannels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "keywords": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "imageAssets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "uploadedAt": {
+                      "type": "string"
+                    },
+                    "downloadUrl": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "storageType": {
+                      "type": "string",
+                      "enum": [
+                        "local",
+                        "s3",
+                        "r2"
+                      ]
+                    },
+                    "thumbUrl": {
+                      "type": "string"
+                    },
+                    "originalUrl": {
+                      "type": "string"
+                    },
+                    "thumbFileId": {
+                      "type": "string"
+                    },
+                    "previewUrl": {
+                      "type": "string"
+                    },
+                    "previewFileId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "mimeType",
+                    "uploadedAt",
+                    "size",
+                    "storageType"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "keywords",
+              "imageAssets"
+            ]
+          }
+        },
+        "patents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "patentNumber": {
+                "type": "string"
+              },
+              "patentType": {
+                "type": "string"
+              },
+              "relatedUrl": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "uploadedAt": {
+                      "type": "string"
+                    },
+                    "downloadUrl": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "storageType": {
+                      "type": "string",
+                      "enum": [
+                        "local",
+                        "s3",
+                        "r2"
+                      ]
+                    },
+                    "thumbUrl": {
+                      "type": "string"
+                    },
+                    "originalUrl": {
+                      "type": "string"
+                    },
+                    "thumbFileId": {
+                      "type": "string"
+                    },
+                    "previewUrl": {
+                      "type": "string"
+                    },
+                    "previewFileId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "mimeType",
+                    "uploadedAt",
+                    "size",
+                    "storageType"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "patentNumber",
+              "patentType",
+              "relatedUrl",
+              "attachments"
+            ]
+          }
+        }
+      },
+      "required": [
+        "searchChannels",
+        "patents"
+      ]
+    },
+    "operationsProgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "orderQuantity": {
+          "type": "number",
+          "minimum": 0
+        },
+        "forecastMonthlySales": {
+          "type": "number",
+          "minimum": 0
+        },
+        "forecastPrice": {
+          "type": "number",
+          "minimum": 0
+        },
+        "shipDate": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "updatedByUserId": {
+          "type": "string"
+        },
+        "updatedBy": {
+          "type": "string"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "changedAt": {
+                "type": "string"
+              },
+              "changedByUserId": {
+                "type": "string"
+              },
+              "changedBy": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "changedAt",
+              "changedBy",
+              "summary"
+            ]
+          }
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "owner": {
+                "type": "string"
+              },
+              "plannedAt": {
+                "type": "string"
+              },
+              "completedAt": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "enum": [
+                  "selection_data",
+                  "backend_upload",
+                  "order",
+                  "image_request",
+                  "copywriting",
+                  "design",
+                  "final_sample_confirmation",
+                  "shipping",
+                  "keyword_research",
+                  "listing"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "not_started",
+                  "in_progress",
+                  "completed",
+                  "blocked"
+                ]
+              },
+              "evidenceFile": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "fileId": {
+                    "type": "string"
+                  },
+                  "fileName": {
+                    "type": "string"
+                  },
+                  "fileType": {
+                    "type": "string"
+                  },
+                  "downloadUrl": {
+                    "type": "string"
+                  },
+                  "thumbUrl": {
+                    "type": "string"
+                  },
+                  "fileDataUrl": {
+                    "type": "string"
+                  },
+                  "uploadedAt": {
+                    "type": "string"
+                  },
+                  "fileSize": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "fileName",
+                  "fileType",
+                  "uploadedAt"
+                ]
+              }
+            },
+            "required": [
+              "owner",
+              "plannedAt",
+              "completedAt",
+              "updatedAt",
+              "id",
+              "status"
+            ]
+          }
+        }
+      },
+      "required": [
+        "orderQuantity",
+        "forecastMonthlySales",
+        "forecastPrice",
+        "shipDate",
+        "updatedAt",
+        "updatedBy",
+        "history",
+        "stages"
+      ]
+    },
+    "videoPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "propsSceneRequirements": {
+          "type": "string"
+        },
+        "videoType": {
+          "type": "string"
+        },
+        "styleConfirmation": {
+          "type": "string"
+        },
+        "backgroundMusic": {
+          "type": "string"
+        },
+        "productionNotes": {
+          "type": "string"
+        },
+        "propsSceneRequirementImages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "uploadedAt": {
+                "type": "string"
+              },
+              "size": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mimeType",
+              "url",
+              "uploadedAt",
+              "size"
+            ]
+          }
+        },
+        "videoTypeImages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "uploadedAt": {
+                "type": "string"
+              },
+              "size": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mimeType",
+              "url",
+              "uploadedAt",
+              "size"
+            ]
+          }
+        },
+        "styleConfirmationImages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "uploadedAt": {
+                "type": "string"
+              },
+              "size": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mimeType",
+              "url",
+              "uploadedAt",
+              "size"
+            ]
+          }
+        },
+        "backgroundMusicFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "uploadedAt": {
+                "type": "string"
+              },
+              "size": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mimeType",
+              "url",
+              "uploadedAt",
+              "size"
+            ]
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "url"
+            ]
+          }
+        },
+        "shots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "sellingPoint": {
+                "type": "string"
+              },
+              "sceneContent": {
+                "type": "string"
+              },
+              "shotType": {
+                "type": "string"
+              },
+              "cameraMove": {
+                "type": "string"
+              },
+              "duration": {
+                "type": "string"
+              },
+              "angle": {
+                "type": "string"
+              },
+              "effectReference": {
+                "type": "string"
+              },
+              "copyEnglish": {
+                "type": "string"
+              },
+              "shotNo": {
+                "type": "number",
+                "minimum": 0
+              },
+              "images": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "uploadedAt": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "mimeType",
+                    "url",
+                    "uploadedAt",
+                    "size"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "sellingPoint",
+              "sceneContent",
+              "shotType",
+              "cameraMove",
+              "duration",
+              "angle",
+              "effectReference",
+              "copyEnglish",
+              "shotNo",
+              "images"
+            ]
+          }
+        },
+        "props": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "imageUrl": {
+                "type": "string"
+              },
+              "spec": {
+                "type": "string"
+              },
+              "purchasePlatform": {
+                "type": "string"
+              },
+              "purchaseLink": {
+                "type": "string"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "unitPrice": {
+                "type": "number",
+                "minimum": 0
+              },
+              "totalPrice": {
+                "type": "number",
+                "minimum": 0
+              },
+              "images": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "uploadedAt": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "mimeType",
+                    "url",
+                    "uploadedAt",
+                    "size"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "imageUrl",
+              "spec",
+              "purchasePlatform",
+              "purchaseLink",
+              "quantity",
+              "unitPrice",
+              "totalPrice",
+              "images"
+            ]
+          }
+        }
+      },
+      "required": [
+        "propsSceneRequirements",
+        "videoType",
+        "styleConfirmation",
+        "backgroundMusic",
+        "productionNotes",
+        "propsSceneRequirementImages",
+        "videoTypeImages",
+        "styleConfirmationImages",
+        "backgroundMusicFiles",
+        "references",
+        "shots",
+        "props"
+      ]
+    },
+    "version": {
+      "const": 1
+    },
+    "meta": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "sku",
+    "marketplace"
+  ],
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "required": [
+            "title"
+          ]
+        },
+        {
+          "required": [
+            "品名"
+          ]
+        },
+        {
+          "required": [
+            "chineseName"
+          ]
+        }
+      ]
+    },
+    {
+      "anyOf": [
+        {
+          "required": [
+            "workspace"
+          ]
+        },
+        {
+          "required": [
+            "workspaceId"
+          ]
+        }
+      ]
+    }
+  ]
+}

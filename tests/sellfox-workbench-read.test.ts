@@ -31,8 +31,8 @@ test("UI browse SQL binds scope and search text, filters after entity aggregatio
   assert.match(ads.text, /clicks>0 AND "adOrders"=0/);
 });
 test("visible-column export matches ordered matrix headers, leaves unsupported values blank and escapes formulas", () => {
-  const config = visibleColumns("sales", ["identity", "awdAvailable", "subtotal"], ["2026-10-01"], "asin");
-  assert.deepEqual(config.map(c=>c.labelZh), ["ASIN", "AWD库存", "小计", "10-01"]);
+  const config = visibleColumns("sales", ["identity", "awdAvailable", "subtotal", "day:2026-10-01"], ["2026-10-01"], "asin");
+  assert.deepEqual(config.map(c=>c.labelZh), ["ASIN", "小计", "AWD库存", "10-01"]);
   const csv = visibleColumnCsv(config, [{ identity: "=UNTRUSTED()", awdAvailable: 999, subtotal: null, "day:2026-10-01": 0 }]);
   assert.match(csv, /'=UNTRUSTED/); assert.ok(!csv.includes("999")); assert.match(csv, /"","",0$/);
   assert.deepEqual(visibleColumns("performance", []).map(c=>c.key), []);
@@ -54,7 +54,7 @@ test("typed exact search binds literal input, rejects absent fields and keeps qu
 test("reference columns combine only visible identity fields and export identical cell values", () => {
   assert.equal(readSellfoxView(new URLSearchParams("domain=sales")).dimension, "asin");
   const sales = visibleColumns("sales",undefined,["2026-10-24"],"asin");
-  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","totalInventory","awdAvailable","awdInbound","trend","average7","subtotal","day:2026-10-24"]);
+  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","operations","salesInsight","parentAsin","msku","sku","title","fulfillable","subtotal"]);
   const store = sales.find(c=>c.key === "name")!;
   assert.equal(sellfoxColumnValue(store,{name:"店铺",marketplace:"US"}),"店铺\nUS");
   const profit = visibleColumns("performance",undefined,[],"msku").find(c=>c.key === "identity")!;

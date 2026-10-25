@@ -50,16 +50,17 @@ test("seller binding never assumes accountKey is seller ID and requires explicit
   assert.throws(() => parseSellerBindings(JSON.stringify([binding, binding])));
 });
 
-test("ERP history rejects missing source values, duplicate dates and multi-MSKU aggregates", async () => {
+test("daily sales rejects incomplete, missing, duplicate and non-exact MSKU observations", async () => {
   const { extractHistoricalSales } = await import("@/lib/operations/historical-sales");
   const rows = extractHistoricalSales([
-    { reportDate: "2026-10-01", msku: "SKU", payload: { saleNum: 0 } },
-    { reportDate: "2026-10-02", msku: "SKU", payload: {} },
-    { reportDate: "2026-10-03", msku: "SKU", payload: { saleNum: "" } },
-    { reportDate: "2026-10-04", msku: "SKU", payload: { saleNum: 5 } },
-    { reportDate: "2026-10-04", msku: "SKU", payload: { saleNum: 2 } },
-    { reportDate: "2026-10-05", msku: "SKU,SKU-2", payload: { saleNum: 6 } },
-    { reportDate: "2026-10-06", msku: "SKU", payload: { saleNum: true } },
+    { reportDate: "2026-10-01", msku: "SKU", quantity: 0, complete: true },
+    { reportDate: "2026-10-02", msku: "SKU", quantity: null, complete: true },
+    { reportDate: "2026-10-03", msku: "SKU", quantity: 5, complete: false },
+    { reportDate: "2026-10-04", msku: "SKU", quantity: 5, complete: true },
+    { reportDate: "2026-10-04", msku: "SKU", quantity: 2, complete: true },
+    { reportDate: "2026-10-05", msku: "SKU,SKU-2", quantity: 6, complete: true },
+    { reportDate: "2026-10-06", msku: "SKU-2", quantity: 100, complete: true },
   ], "SKU");
   assert.deepEqual(rows, [{ date: "2026-10-01", units: 0 }]);
+  assert.deepEqual(extractHistoricalSales([{ reportDate: "2026-10-01", msku: "", quantity: 9, complete: true }], ""), []);
 });

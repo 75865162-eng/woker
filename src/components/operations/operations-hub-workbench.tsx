@@ -8,6 +8,7 @@ import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-
 import { amazonReadDomains, type AmazonReadDomain, type AmazonSyncResource, type DomainFreshnessSummary, type OperationsDailyMetric, type OperationsReadiness, type OperationsSyncRun } from "@/lib/operations/types";
 
 import { SyncSchedulesPanel } from "./sync-schedules-panel";
+import { SellfoxLinks } from "./sellfox-links";
 import { ReplenishmentPanel } from "./replenishment-panel";
 import { AmazonProductsPanel } from "./amazon-products-panel";
 
@@ -286,7 +287,7 @@ export function OperationsHubWorkbench() {
       {tab === "sync" && <SyncSchedulesPanel key={scopeRevision} headers={workspaceHeaders} onSync={(resource) => void requestSync(resource ?? "inventory")} onChanged={() => void refreshAll()} />}
       {tab === "replenishment" && <ReplenishmentPanel key={scopeRevision} headers={workspaceHeaders} />}
       {tab === "catalog" && <AmazonProductsPanel key={scopeRevision} headers={workspaceHeaders} />}
-      {tab === "orders" && <section className="border border-border p-5"><h3 className="text-sm font-bold">{tab === "orders" ? "订单 · NOT_SYNCED" : "在线产品 · NOT_SYNCED"}</h3><p className="mt-2 text-sm text-muted">{tab === "orders" ? "订单 worker 尚未接入。计划频率 15–30 分钟；接入后提供近 7/30 天订单量、件数、销售额，Pending 订单口径另行标注。" : "Amazon Listing 快照，非公司主数据，不写入产品中心。计划日更，worker 未就绪前保持关闭。"}</p></section>}
+      {tab === "orders" && <section className="border border-border p-5"><h3 className="text-sm font-bold">订单 · NOT_SYNCED</h3><p title="赛狐有、API/本地无" className="mt-2 text-sm text-muted">赛狐有、API/本地无 · 订单明细尚未接入，不以销量件数冒充订单量。</p></section>}
 
       {notice ? (
         <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
@@ -322,7 +323,8 @@ export function OperationsHubWorkbench() {
           </div>
         ) : null}
 
-        <p className="mt-3 text-sm">最新可售库存：{readiness?.inventory.status && readiness.inventory.status !== "NOT_SYNCED" ? readiness.inventory.fulfillableQuantity.toLocaleString("zh-CN") : "未同步"} · 今日广告花费：未接通日投影 · 今日订单/销量：未同步</p>
+        <div className="mt-3"><SellfoxLinks workspaceId={readiness?.scope.workspaceId ?? workspaceHeaders().get("x-workspace-id") ?? "default"} /></div>
+        <p title="赛狐有、API/本地无" className="mt-3 text-sm">最新可售库存：{readiness?.inventory.status && readiness.inventory.status !== "NOT_SYNCED" ? readiness.inventory.fulfillableQuantity.toLocaleString("zh-CN") : "未同步"} · 今日广告花费：未接通日投影 · 今日订单/销量：未同步 · 赛狐有、API/本地无</p>
         <div className="mt-4 grid gap-px border border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
           {amazonReadDomains.map((domain) => {
             const summary = readiness?.domains?.[domain];
@@ -350,9 +352,9 @@ export function OperationsHubWorkbench() {
 
       <section hidden={tab !== "inventory"} className="border-b border-border pb-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><div className="flex items-center gap-2"><PackageSearch className="h-4 w-4 text-brand" /><h3 className="text-sm font-bold text-foreground">库存</h3><Badge tone={freshnessBadge(readiness?.inventory.status === "FRESH" ? "FRESH" : readiness?.inventory.status === "STALE" ? "STALE" : "NOT_SYNCED").tone}>{readiness?.inventory.status === "FRESH" ? "新鲜" : readiness?.inventory.status === "STALE" ? "已过期" : "未同步"}</Badge></div>
+          <div><div className="flex items-center gap-2"><PackageSearch className="h-4 w-4 text-brand" /><h3 className="text-sm font-bold text-foreground">Amazon 库存快照</h3><Badge tone={freshnessBadge(readiness?.inventory.status === "FRESH" ? "FRESH" : readiness?.inventory.status === "STALE" ? "STALE" : "NOT_SYNCED").tone}>{readiness?.inventory.status === "FRESH" ? "新鲜" : readiness?.inventory.status === "STALE" ? "已过期" : "未同步"}</Badge></div>
             <p className="mt-1 text-xs text-muted">可售 {inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 在途 {inventoryQuantity(readiness?.inventory.inboundQuantity)} · 预留 {inventoryQuantity(readiness?.inventory.reservedQuantity)} · 不可售 {inventoryQuantity(readiness?.inventory.unfulfillableQuantity)}</p>
-            <p className="mt-1 text-xs text-muted">快照时间：{formatDateTime(readiness?.inventory.capturedAt ?? null)} · 新鲜度沿用服务端阈值 · {readiness?.inventory.snapshotCount.toLocaleString("zh-CN") ?? 0} 个 SKU</p>
+            <p className="mt-1 text-xs text-muted">Amazon 快照时间：{formatDateTime(readiness?.inventory.capturedAt ?? null)} · 新鲜度沿用服务端阈值 · {readiness?.inventory.snapshotCount.toLocaleString("zh-CN") ?? 0} 个 SKU</p>
             {readiness?.domains.inventory.reason ? <p className="mt-1 text-xs text-amber-800">{readiness.domains.inventory.reason} {readiness.domains.inventory.recommendedAction}</p> : null}
             {readiness?.domains.inventory.lastAttemptError ? <p className="mt-1 text-xs text-red-700">最近同步失败：{readiness.domains.inventory.lastAttemptError}</p> : null}
           </div>
@@ -373,7 +375,7 @@ export function OperationsHubWorkbench() {
 
       <section hidden={tab !== "ads"} className="border-b border-border pb-5">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold text-foreground">经营指标 · 广告 × 销量</h3><a href="/workspace" className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline">广告优化工作台<ArrowUpRight className="h-3.5 w-3.5" /></a></div><p className="mt-1 max-w-3xl text-xs text-muted">{metrics?.sourceNote ?? "现有 PPC 日粒度投影尚未接通；不另建广告同步。"} TACOS = 广告花费 ÷ 销售额。</p></div>
+          <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold text-foreground">经营指标 · 广告 × 销量</h3><a href="/workspace" className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline">广告优化工作台<ArrowUpRight className="h-3.5 w-3.5" /></a></div><p title="赛狐有、API/本地无" className="mt-1 max-w-3xl text-xs text-muted">{metrics?.sourceNote ?? "赛狐有、API/本地无 · 本页广告日投影未接通；不另建广告同步。"} TACOS = 广告花费 ÷ 销售额。</p></div>
           <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); setMetricPage(1); setMetricSku(metricSkuInput.trim()); setMetricAsin(metricAsinInput.trim()); }}>
             <label className="grid gap-1 text-xs font-semibold text-muted">开始日期<input type="date" value={metricFrom} onChange={(event) => setMetricFrom(event.target.value)} className="h-9 border border-border px-2 text-sm text-foreground" /></label>
             <label className="grid gap-1 text-xs font-semibold text-muted">结束日期<input type="date" value={metricTo} onChange={(event) => setMetricTo(event.target.value)} className="h-9 border border-border px-2 text-sm text-foreground" /></label>

@@ -40,8 +40,10 @@
     "selection:suppliers": "tsx scripts/selection-pipeline/src/cli.ts suppliers",
     "selection:workbook": "tsx scripts/selection-pipeline/src/cli.ts workbook",
     "selection:create": "tsx scripts/selection-pipeline/src/cli.ts create",
+    "erp": "tsx scripts/erp-cli/src/cli.ts",
     "test:selection": "tsx --test scripts/selection-pipeline/selection.test.ts",
-    "test:selection:create": "node scripts/selection-pipeline/run-create-integration.mjs"
+    "test:selection:create": "node scripts/selection-pipeline/run-create-integration.mjs",
+    "test:erp": "node scripts/erp-cli/run-integration.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1129.0",

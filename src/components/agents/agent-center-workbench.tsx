@@ -159,6 +159,14 @@ export function AgentCenterWorkbench() {
             <p className="mt-1 text-xs font-medium text-muted">市场 → 产品 → 供应 → 刊登 → Launch → PPC</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <PrefetchLink
+              href="/agents/platform-runtime-core"
+              className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted"
+              title="查看运行时定义、执行历史、轨迹和审批"
+            >
+              <Bot className="h-4 w-4" />
+              Runtime Core · 运行时验证
+            </PrefetchLink>
             {orchestrator ? (
               <PrefetchLink href="/agents/orchestrator">
                 <Button type="button" size="sm" variant="secondary">

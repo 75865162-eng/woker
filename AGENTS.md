@@ -170,6 +170,7 @@ npm run products:scan-statuses
 - 规则引擎应生成草稿，由用户选择后再导出；不要让规则自动直接覆盖原始数据。
 - `workspace-store.ts` 当前承担较多状态和数据转换职责。新增复杂逻辑时优先放到 `src/lib/*` 的纯函数模块，再由 store 调用。
 - IndexedDB snapshot 是本地恢复机制。改 state shape 时要考虑旧 snapshot 的兼容性或降级处理。
+- 选品本地证据表单为 `/agents/market/selection`，复用 selection pipeline 校验与 `.pipeline.lock`；本机目录按 `SELECTION_ORGANIZATION_ID` / `SELECTION_WORKSPACE_ID`（默认 `default`）限制组织/工作区，缺显式组织绑定时仅限数据库唯一组织。Market 上传 draft 仍为只读机会输入；详细边界见 `docs/selection-round-d.md`“网页表单兜底”。
 - Listing AI 的输出结构由 `src/lib/listing-ai/types.ts` 定义，改 prompt 或 client 时要保持 UI 消费字段稳定。
 - Logistics 模块依赖实际 Excel/PDF 模板和中文字段名，改解析逻辑前先看 `src/lib/logistics/types.ts`、`excel.ts`、`pdf.ts` 以及 `public/logistics-templates/`。
 

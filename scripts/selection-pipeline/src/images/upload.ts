@@ -4,9 +4,9 @@ import type { ProductImageAsset } from "@/lib/products/types";
 import { PipelineError } from "../io";
 // Same endpoint/contract as uploadProductImageAsset in src/lib/products/image-assets.ts.
 // Node has no browser session: explicit ERP origin + session cookie are required.
-export async function uploadImage(file: string, workspaceId: string): Promise<ProductImageAsset | undefined> {
-  const origin = process.env.SELECTION_ERP_URL;
-  const cookie = process.env.SELECTION_ERP_COOKIE;
+export async function uploadImage(file: string, workspaceId: string, credentials?: { origin: string; cookie: string }): Promise<ProductImageAsset | undefined> {
+  const origin = credentials?.origin ?? process.env.SELECTION_ERP_URL;
+  const cookie = credentials?.cookie ?? process.env.SELECTION_ERP_COOKIE;
   if (!origin || !cookie) return undefined;
   const url = new URL(origin);
   if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) throw new PipelineError("INSECURE_ERP_ORIGIN");

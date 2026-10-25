@@ -108,7 +108,7 @@ export function calculateReplenishment(input: ReplenishmentInputs, inventory: { 
   else reasons.push(`参考 ACOS ${input.acos}%（${input.advertisingWindow}）；不把广告归因销量重复计入总销量。`);
   const receipts = input.receipts.filter((row) => row.eta >= today);
   if (input.receipts.some((row) => row.eta < today)) reasons.push("存在逾期在途：未当作已到货库存，请核实。");
-  if ((inventory.inbound ?? 0) > receipts.reduce((sum, row) => sum + row.quantity, 0)) reasons.push("Amazon 总在途量超过已维护 ETA 的数量；未定到货日在途不抵扣补货需求。");
+  if ((inventory.inbound ?? 0) > receipts.reduce((sum, row) => sum + row.quantity, 0)) reasons.push("库存来源总在途量超过已维护 ETA 的数量；未定到货日在途不抵扣补货需求。");
   if (dailyDemand === 0) missingInputs.push("正日需求：零销量不能推断未来需求");
   const result: ReplenishmentResult = { version: "1", status: missingInputs.length ? "NEEDS_DATA" : "READY", lifecycle: input.lifecycle,
     dailyDemand, daysOfCover: dailyDemand && inventory.available !== null ? inventory.available / dailyDemand : null,
