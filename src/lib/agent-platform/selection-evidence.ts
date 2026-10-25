@@ -47,7 +47,8 @@ export function parseSelectionEvidence(value: unknown, now = new Date()) {
     if (!Number.isFinite(timestamp) || timestamp > now.getTime() + 300_000) return fail("采集时间无效或晚于当前时间。");
     return { asin, title: text(item.title, "竞品标题", 1000), url: url.toString(), capturedAt: new Date(timestamp).toISOString(),
       price: metric(item.price, "价格"), rating: metric(item.rating, "评分", 5),
-      reviewsCount: metric(item.reviewsCount, "评论数", Number.MAX_SAFE_INTEGER, true), bsr: metric(item.bsr, "BSR", Number.MAX_SAFE_INTEGER, true) };
+      reviewsCount: metric(item.reviewsCount, "评论数", Number.MAX_SAFE_INTEGER, true), bsr: metric(item.bsr, "BSR", Number.MAX_SAFE_INTEGER, true),
+      sales30Days: { value: metric(isObject(item.sales30Days) ? item.sales30Days.value : item.sales30Days, "销量估算"), heuristic: true as const, method: "uncalibrated_bsr_power_law" } };
   });
   if (!isObject(value.tags) || !Array.isArray(value.tags.matches) || value.tags.matches.length > 1000) return fail("差评标签结构无效或超过上限。");
   const quoteKeys = new Set<string>();
@@ -63,6 +64,7 @@ export function parseSelectionEvidence(value: unknown, now = new Date()) {
   const suppliers = value.suppliers.map((item) => {
     if (!isObject(item)) return fail("供应商格式无效。");
     const url = sourceUrl(item.url, "1688.com");
+    if (/^\/offer\/10000000000[123]\.html$/.test(url.pathname) || item.shopName === "fixture-only") return fail("离线虚构供应商不可用于真实选品交接，请补充人工核验的供应文件。");
     if (url.hostname !== "detail.1688.com" || !/^\/offer\/\d+\.html$/.test(url.pathname)) return fail("供应商链接不是已支持的 1688 商品页。");
     return { title: text(item.title, "供应商标题", 1000), url: url.origin + url.pathname,
       shopName: typeof item.shopName === "string" && item.shopName.length <= 300 ? item.shopName : fail("供应商店铺无效。"), price: typeof item.price === "string" && item.price.length <= 200 ? item.price : fail("供应商报价无效。"),
@@ -87,13 +89,14 @@ export function buildSelectionMarketOutput(value: unknown, source: { fileId: str
   const completeness = Math.round(observed / (data.competitors.length * 4) * 100);
   const stale = data.competitors.some((c) => now.getTime() - Date.parse(c.capturedAt) > 7 * 86400_000);
   const missing = ["市场需求", "竞争强度", "趋势", "关键词流量", "利润率", "合规风险"];
+  const researchGap = !data.tags.length || data.suppliers.length < 3 ? "NEEDS_DATA：低星标签或至少 3 条供应线索不足，不可标为直播选品验收通过。" : "研究门槛仍需在本机 quality.json 与原始评论/图片中核对；导入不等于验收通过。";
   const opportunity: ProductOpportunity = {
     opportunityId: `selection-${source.sha256}`, productIdea: data.keyword, marketplace: "US", category: "待核实",
     targetPrice: data.priceMin !== null || data.priceMax !== null ? `$${data.priceMin ?? "?"}–$${data.priceMax ?? "?"}（目标）` : "待核实",
     estimatedDemand: null, competitionScore: null, reviewBarrier: null, keywordOpportunity: null, trendScore: null,
     differentiationOpportunity: null, estimatedMargin: null, riskScore: null, opportunityScore: null, evidenceCompleteness: completeness,
     scoreBasis: "evidence_completeness", confidence: 0, evidence,
-    recommendation: `证据完整度 ${completeness}/100；不代表商业机会评分。${missing.join("、")}未知。${stale ? "存在超过 7 天的快照，请重新核实。" : ""}请人工审阅后再交接产品。`,
+    recommendation: `${researchGap} 证据完整度 ${completeness}/100；不代表商业机会评分。${missing.join("、")}未知。${stale ? "存在超过 7 天的快照，请重新核实。" : ""}请人工审阅后再交接产品。`,
   };
   const blueOceanRadar = { blueOceanIndex: null, demandStrength: null, competitionStrength: null, entryBarrier: null, explanation: "竞品样本不足以推断整体市场；保留未知。" };
   const report = {

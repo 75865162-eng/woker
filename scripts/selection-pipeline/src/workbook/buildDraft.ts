@@ -16,11 +16,11 @@ export function buildDraft(slug: string, brief: Brief, competitors: Competitor[]
       competitors: competitors.map(c => {
         const points = Object.entries(tags.countByAsin[c.asin] ?? {}).sort((a,b) => b[1]-a[1]).map(([tag,count]) => `${tag}: ${count}`);
         const sales = estimateSales(c.bsr);
-        return { type: "参考竞品", asin: c.asin, sales30Days: sales === null ? "未知" : `估算 ${sales}（未校准）`, variantCount: String(c.variations?.length ?? ""), variantType: c.variations?.join("; ") ?? "", hotVariantImage: c.imageAsset?.thumbUrl ?? "", hotVariantImageAsset: c.imageAsset, hotVariantSpec: c.title, hotVariantPrice: String(c.price ?? ""), reviewCount: String(c.reviewsCount ?? ""), rating: String(c.rating ?? ""), negativePoint1: points[0] ?? "", negativePoint2: points[1] ?? "", negativePoint3: points[2] ?? "", note: points.join("; ") };
+        return { type: "参考竞品", asin: c.asin, heuristic: true, sales30Days: sales === null ? "未知" : `估算 ${sales}（未校准）`, variantCount: String(c.variations?.length ?? ""), variantType: c.variations?.join("; ") ?? "", hotVariantImage: c.imageAsset?.thumbUrl ?? "", hotVariantImageAsset: c.imageAsset, hotVariantSpec: c.title, hotVariantPrice: String(c.price ?? ""), reviewCount: String(c.reviewsCount ?? ""), rating: String(c.rating ?? ""), negativePoint1: points[0] ?? "", negativePoint2: points[1] ?? "", negativePoint3: points[2] ?? "", note: points.join("; ") };
       }),
       suppliers: suppliers.map(s => ({ productUrl: s.url, factoryName: s.shopName, configuration: `${s.title}；页面报价 ${s.price}（币种/阶梯待核实）`, moq: s.moq })),
       keywords: [{ keyword: brief.keyword }], remark: "价格/销量/供应商为采集线索，不代表已验证数据。",
     },
   };
-  return { schemaVersion: 1, slug, brief, competitors, suppliers, tags, product };
+  return { schemaVersion: 1, slug, brief, competitors: competitors.map(c => ({ ...c, sales30Days: { value: estimateSales(c.bsr), heuristic: true, method: "uncalibrated_bsr_power_law" } })), suppliers, tags, product };
 }

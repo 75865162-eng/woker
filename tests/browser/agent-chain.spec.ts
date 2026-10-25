@@ -105,6 +105,7 @@ test("actual six workbenches pass versioned payloads and approval unlocks PPC wi
   await expect(page).toHaveURL(/\/agents\/market$/);
   await expect(page.getByText("已加载交接，运行前请复核。", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "运行研究", exact: true }).click();
+  await expect(page.getByRole("note").filter({ hasText: "模拟数据不可作为全链路验收" })).toBeVisible();
   await page.getByRole("button", { name: "发送到产品 Agent", exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/product$/);
   await page.getByRole("button", { name: "运行产品 Agent", exact: true }).click();

@@ -417,3 +417,8 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - `launchApproved` 请求布尔值不授予权限。Launch 批准引用真实 Approval/原计划，PPC 入站在工具执行前核验；Orchestrator 仍只有编排工具，无 Ads/上架/商品写权限。
 - `market.selection.run` 可读取当前组织/工作区上传的 Round B draft 证据（Market 页，agents:create，2 MB）；通过既有 FileObject/storage 保存规范化研究切片，商业评分与未观测指标保留 null，证据完整度单列，不创建商品。后台实时采集 runner/job 仍未接入，缺 fileId 时 NOT_IMPLEMENTED；禁止回落模拟机会、请求内启动采集或调用 `--write`。
 - `npx playwright test --config tests/browser/agent-chain.config.ts`：隔离六段 UI/Runtime 交接与 Launch 前后 PPC 门禁，不访问外部服务/生产库，不替代真实选品/上架/广告验收。
+
+### Selection Round D 质量门禁
+
+- `scripts/selection-pipeline/README.md` 和 `docs/selection-round-d.md` 定义人工 `tag --reviews-file`、`suppliers --suppliers-file`、`workbook --upload-images` 续作。create/run --write 前重算原始低星评论、标签引用、≥3 条去重供应线索与实际图片；fixture/缺证据/上传未齐时硬失败，不信任旧 quality.json。
+- draft/Market 的 sales30Days 必须标 heuristic=true；空标签为 NEEDS_DATA，不是无差评。真人上传/建 SKU/页面验收与 fixture、临时库、浏览器 harness 验证分别记录，不能代签；market.selection.run 继续只读上传 fileId，不启动 CLI。

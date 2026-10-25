@@ -49,3 +49,29 @@ test("Market Runtime consumes uploaded evidence exclusively, creates handoff out
   assert.equal(rejected.execution.output, undefined);
   assert.equal(reads, 2);
 });
+
+
+test("Round D imported sales estimates are always heuristic and incomplete research cannot be called accepted", () => {
+  const value = { ...sample, tags: { matches: [] }, competitors: [{ ...sample.competitors[0], sales30Days: { value: 123, heuristic: false } }] };
+  const output = buildSelectionMarketOutput(value, { fileId: "file", sha256: "hash" }, now);
+  assert.deepEqual((output.evidence[0].value as { sales30Days: unknown }).sales30Days, { value: 123, heuristic: true, method: "uncalibrated_bsr_power_law" });
+  assert.equal(output.productOpportunities[0].estimatedDemand, null);
+  assert.match(output.report.recommendation, /NEEDS_DATA/);
+  assert.match(output.report.recommendation, /不可标为直播选品验收通过/);
+  assert.throws(() => parseSelectionEvidence({ ...sample, suppliers: [{ title: "Copied fixture", shopName: "fixture-only", price: "", moq: "", url: "https://detail.1688.com/offer/100000000001.html" }] }, now), /虚构供应商/);
+});
+
+test("Round D evidence with an empty shortlist stays empty in Supplier and failed source cannot use simulated factories", async () => {
+  const { createSupplierMcpAdapter, createSupplierAgentExecutionExecutor, supplierAgentDefinition, supplierToolDefinitions } = await import("@/lib/agent-platform/supplier");
+  const market = buildSelectionMarketOutput(sample, { fileId: "file", sha256: "a".repeat(64) }, now);
+  const productReport = { summary: "Draft from evidence; not a validated PRD", sourceMarketReport: market.report } as unknown as import("@/lib/agent-platform/product").ProductDevelopmentReport;
+  const runtime = createAgentRuntime({ definitions: [supplierAgentDefinition], tools: supplierToolDefinitions, adapters: [createSupplierMcpAdapter(() => now)] });
+  const run = (report: typeof productReport) => runtime.run({ agentId: "supplier", context: {}, input: {}, executor: createSupplierAgentExecutionExecutor({ request: { productReport: report }, clock: () => now }) });
+  const result = await run(productReport);
+  assert.equal(result.execution.status, "COMPLETED");
+  const output = result.execution.output as unknown as { report: { sourcingStatus: string; supplierRecommendations: unknown[]; selectionSource: { fileId: string } } };
+  assert.equal(output.report.sourcingStatus, "NEEDS_DATA"); assert.deepEqual(output.report.supplierRecommendations, []);
+  assert.equal(output.report.selectionSource.fileId, "file");
+  const bad = await run({ ...productReport, sourceMarketReport: { ...market.report, selectionSource: null } } as unknown as typeof productReport);
+  assert.equal(bad.execution.status, "FAILED"); assert.equal(bad.toolCalls.length, 0);
+});

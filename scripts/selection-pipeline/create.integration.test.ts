@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -35,8 +35,13 @@ after(async () => { await db.$disconnect(); for (const dir of paths) await rm(di
 async function prepare() {
   const slug = `selection-db-test-${randomUUID()}`;
   const dir = path.resolve("selections",slug); paths.push(dir);
-  const draft = buildDraft(slug,{ keyword: "isolated integration test", chineseName: "隔离测试商品" },[{ asin: "B012345678",title: "Synthetic integration record",url: "https://www.amazon.com/dp/B012345678",price: 20,rating: 4,reviewsCount: 100 }],[],aggregateTags([]));
+  const draft = buildDraft(slug,{ keyword: "isolated integration test", chineseName: "隔离测试商品" },[{ asin: "B012345678",title: "Synthetic integration record",url: "https://www.amazon.com/dp/B012345678",price: 20,rating: 4,reviewsCount: 100, imagePath: "raw/images/B012345678.jpg" }],Array.from({ length: 3 }, (_, i) => ({ title: "Isolated database test only", shopName: "", price: "", moq: "", url: `https://detail.1688.com/offer/23456789000${i}.html` })),aggregateTags([{ asin: "B012345678", tag: "size", quote: "poor fit", source: "dictionary" }]));
   await mkdir(path.join(dir,"derived"),{ recursive: true });
+  await mkdir(path.join(dir,"raw/images"),{ recursive: true });
+  await mkdir(path.join(dir,"raw/reviews"),{ recursive: true });
+  await copyFile(path.resolve("scripts/selection-pipeline/fixtures/product.jpg"),path.join(dir,"raw/images/B012345678.jpg"));
+  await writeFile(path.join(dir,"raw/reviews/B012345678.jsonl"),JSON.stringify({ asin: "B012345678", star: 2, date: "", text: "poor fit" }) + "\n");
+  await writeJson(path.join(dir,"raw/collection-info.json"),{ fixture: false });
   await writeJson(path.join(dir,"brief.json"),draft.brief);
   await writeJson(path.join(dir,"derived/draft.json"),draft);
   return { slug,dir,draft };
@@ -62,7 +67,10 @@ test("real aggregate create: audit, revision, outbox, list projections and works
   assert.equal(await db.productTextRecord.count({ where: { productRecordId: receipt.productId } }),1);
   const workspace = await db.workspaceScope.findUniqueOrThrow({ where: { organizationId_id: { organizationId: org,id: workspaceId } } });
   assert.equal(workspace.accountId,"preserve-account"); assert.equal(workspace.marketplace,"US");
-  assert.equal((await readJson<Receipt>(path.join(item.dir,"derived/created.json"))).productId,receipt.productId);
+  const created = await readJson<Receipt & { slug: string; workspaceId: string; createdAt: string; uploadedImageFileIds: string[] }>(path.join(item.dir,"derived/created.json"));
+  assert.equal(created.productId,receipt.productId);
+  assert.equal(created.slug,item.slug); assert.equal(created.workspaceId,workspaceId);
+  assert.ok(Number.isFinite(Date.parse(created.createdAt))); assert.deepEqual(created.uploadedImageFileIds,[]);
 });
 test("same draft replay returns one immutable product and does not duplicate audit",async () => {
   const item = await prepare(); const first = await create(item); const second = await create(item);

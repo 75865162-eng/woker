@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { Review } from "../types";
+import { PipelineError } from "../io";
 import { selectors } from "./selectors";
 import type { RateLimit } from "./rateLimit";
 export async function parseReviews(page: Page, asin: string): Promise<Review[]> {
@@ -21,5 +22,6 @@ export async function reviews(page: Page, asin: string, max: number, limit: Rate
     }
     if (result.length >= max || !batch.length || !await page.locator(selectors.nextReviews).count()) break;
   }
+  if (!result.length) throw new PipelineError("REVIEWS_NEEDS_DATA");
   return result.slice(0, max);
 }

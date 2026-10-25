@@ -18,11 +18,12 @@ import { cloudPatch } from "./tags/cloudPatch";
 import { search1688, validateSuppliers } from "./alibaba/search1688";
 import { buildDraft } from "./workbook/buildDraft";
 import { buildXlsx } from "./workbook/buildXlsx";
+import { assertWriteQuality, inspectQuality, loadReviews, validateReviews } from "./quality";
 
 const parsed = parseArgs({ args: process.argv.slice(2).filter(v => v !== "--"), allowPositionals: true, options: {
   keyword: { type: "string" }, slug: { type: "string" }, config: { type: "string" },
   write: { type: "boolean", default: false }, "cloud-patch": { type: "boolean", default: false },
-  "suppliers-file": { type: "string" }, "workspace-id": { type: "string", default: "default" },
+  "reviews-file": { type: "string" }, "suppliers-file": { type: "string" }, "workspace-id": { type: "string", default: "default" },
   fixtures: { type: "boolean", default: false }, "upload-images": { type: "boolean", default: false },
   dictionary: { type: "string" }, help: { type: "boolean", default: false },
 } });
@@ -40,7 +41,7 @@ async function setFixture(page: Page, name: string) { await page.setContent(awai
 async function collect(dir: string, brief: Brief, config: Config) {
   const store = new SnapshotStore(path.join(pipelineRoot, opts.fixtures ? "data/fixture.sqlite" : "data/selection.sqlite"));
   await store.init();
-  await writeJson(path.join(dir,"raw/collection-info.json"), { fixture: opts.fixtures });
+  await writeJson(path.join(dir,"raw/collection-info.json"), { fixture: opts.fixtures, uploadImages: Boolean(opts["upload-images"]) });
   const limit = new RateLimit(store,config.requestIntervalMs,config.dailyRequestBudget);
   const competitors: Competitor[] = [];
   const browser = await chromium.launch({ headless: true });
@@ -92,9 +93,9 @@ async function collect(dir: string, brief: Brief, config: Config) {
           await copyFile(fixture("product.jpg"),path.join(dir,`raw/images/${c.asin}.jpg`));
           c.imagePath = `raw/images/${c.asin}.jpg`;
         } else if (c.mainImageUrl) c.imagePath = await downloadImage(c.mainImageUrl,c.asin,dir,limit);
-        if (c.imagePath && (opts["upload-images"] || opts.write) && !opts.fixtures) {
+        if (c.imagePath && opts["upload-images"] && command === "collect" && !opts.fixtures) {
           const asset = await uploadImage(path.join(dir,c.imagePath),opts["workspace-id"]!);
-          if (asset) { c.imageAsset = asset; c.imageFileId = asset.id; }
+          if (asset) { c.imageAsset = asset; c.imageFileId = asset.id; c.imageUploadWorkspaceId = opts["workspace-id"]!; }
           else log("image_upload_skipped",{ reason: "ERP_URL_OR_COOKIE_NOT_CONFIGURED", asin: c.asin });
         }
       } catch (error) { await recordError(dir,"image",error,c.asin); }
@@ -108,13 +109,20 @@ async function collect(dir: string, brief: Brief, config: Config) {
 }
 async function tag(dir: string) {
   const competitors = await readJson<Competitor[]>(path.join(dir,"raw/competitors.json"));
-  const rows: Review[] = [];
-  for (const c of competitors) {
-    try {
-      const text = await readFile(path.join(dir,`raw/reviews/${c.asin}.jsonl`),"utf8");
-      rows.push(...text.split("\n").filter(Boolean).map(line => JSON.parse(line) as Review));
-    } catch (error) { await recordError(dir,"read_reviews",error,c.asin); }
+  const asins = new Set(competitors.map(c => c.asin));
+  if (opts["reviews-file"]) {
+    const input = await readFile(opts["reviews-file"], "utf8");
+    if (Buffer.byteLength(input) > 2 * 1024 * 1024) throw new PipelineError("REVIEWS_FILE_TOO_LARGE_MAX_2MB");
+    const imported = validateReviews(input.split("\n").filter(line => line.trim()).map(line => JSON.parse(line)), asins);
+    if (!imported.length) throw new PipelineError("REVIEWS_NEEDS_DATA");
+    for (const asin of new Set(imported.map(row => row.asin))) {
+      const file = path.join(dir, `raw/reviews/${asin}.jsonl`);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, imported.filter(row => row.asin === asin).map(row => JSON.stringify(row)).join("\n") + "\n");
+    }
   }
+  const rows = await loadReviews(dir, [...asins]);
+  if (!rows.length) await recordError(dir, "reviews", new PipelineError("REVIEWS_NEEDS_DATA"));
   const dictionary = await loadDictionary(opts.dictionary ?? path.join(pipelineRoot,"src/tags/dictionary.yaml"));
   const result = applyDict(rows,dictionary);
   if (opts["cloud-patch"]) {
@@ -122,6 +130,7 @@ async function tag(dir: string) {
     catch (error) { await recordError(dir,"cloud_patch",error); }
   }
   await writeJson(path.join(dir,"derived/tags.json"),aggregateTags(result.matches));
+  if (!result.matches.length) await recordError(dir, "tags", new PipelineError("TAGS_NEEDS_DATA"));
   log("tag_complete",{ reviews: rows.length, unmatched: result.unmatched.length, cloudEnabled: opts["cloud-patch"] });
 }
 async function suppliers(dir: string, brief: Brief, config: Config) {
@@ -155,38 +164,76 @@ async function suppliers(dir: string, brief: Brief, config: Config) {
   await writeJson(path.join(dir,"derived/suppliers.json"),rows);
   log("suppliers_complete",{ count: rows.length, needsManualFallback: rows.length < 3 });
 }
+async function uploadExistingImages(dir: string, rows: Competitor[], checkpoint?: () => Promise<void>) {
+  const provenance = await readJson<{ fixture: boolean }>(path.join(dir, "raw/collection-info.json"));
+  if (opts.fixtures || provenance.fixture !== false) throw new PipelineError("FIXTURE_WRITE_FORBIDDEN");
+  const { realpath } = await import("node:fs/promises");
+  const root = await realpath(dir);
+  for (const c of rows) {
+    if (!c.imagePath || c.imageFileId && c.imageAsset?.id === c.imageFileId && c.imageAsset.originalUrl && c.imageUploadWorkspaceId === opts["workspace-id"]) continue;
+    if (!/^raw\/images\/[A-Za-z0-9._-]+\.(?:jpg|jpeg|png|webp)$/.test(c.imagePath)) throw new PipelineError("INVALID_LOCAL_IMAGE_PATH");
+    const file = await realpath(path.join(root, c.imagePath));
+    if (!file.startsWith(root + path.sep)) throw new PipelineError("INVALID_LOCAL_IMAGE_PATH");
+    const asset = await uploadImage(file, opts["workspace-id"]!);
+    if (!asset) throw new PipelineError("ERP_UPLOAD_REQUIRES_URL_COOKIE_AND_PRODUCTS_EDIT");
+    c.imageAsset = asset; c.imageFileId = asset.id; c.imageUploadWorkspaceId = opts["workspace-id"]!;
+    await writeJson(path.join(dir, "raw/competitors.json"), rows);
+    await checkpoint?.();
+  }
+}
 async function workbook(dir: string, slug: string, brief: Brief) {
   const [competitors,tags,supplierRows] = await Promise.all([
     readJson<Competitor[]>(path.join(dir,"raw/competitors.json")),readJson<TagsResult>(path.join(dir,"derived/tags.json")),readJson<Supplier[]>(path.join(dir,"derived/suppliers.json")),
   ]);
+  let uploadFailure: unknown;
+  if (opts["upload-images"]) {
+    try { await uploadExistingImages(dir, competitors); }
+    catch (error) { uploadFailure = error; await recordError(dir, "image_upload", error); }
+  }
   // Preserve the draft identity across rebuilds for database idempotency.
   const draft = buildDraft(slug,brief,competitors,supplierRows,tags);
   draft.fixture = (await readJson<{ fixture: boolean }>(path.join(dir,"raw/collection-info.json"))).fixture;
-  try { draft.product.id = (await readJson<Draft>(path.join(dir,"derived/draft.json"))).product.id; }
+  try { const prior = await readJson<Draft>(path.join(dir,"derived/draft.json")); draft.product.id = prior.product.id; draft.quality = prior.quality; }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  draft.quality = await inspectQuality(dir, draft, opts["upload-images"], opts["workspace-id"]);
   await writeJson(path.join(dir,"derived/draft.json"),draft);
   await buildXlsx(draft,path.join(dir,"derived/workbook.xlsx"));
-  await writeJson(path.join(dir,"derived/quality.json"), {
-    fixture: draft.fixture, competitors: competitors.length, images: competitors.filter(c => c.imagePath).length,
-    uploadedImages: competitors.filter(c => c.imageFileId).length, taggedQuotes: tags.matches.length,
-    suppliers: supplierRows.length, needsReview: !competitors.length || !tags.matches.length || supplierRows.length < 3,
-    missingMetrics: competitors.filter(c => typeof c.price !== "number" || c.bsr == null || typeof c.rating !== "number" || typeof c.reviewsCount !== "number").map(c => c.asin),
-  });
+  await writeJson(path.join(dir,"derived/quality.json"), draft.quality);
+  log("quality_evaluated", { status: draft.quality.status, blockWrite: draft.quality.blockWrite, reasons: draft.quality.reasons });
   log("workbook_complete",{ path: path.join(dir,"derived/workbook.xlsx"), competitors: competitors.length });
+  if (uploadFailure) throw uploadFailure;
 }
 async function create(dir: string) {
   if (!opts.write) { log("create_skipped",{ reason: "PASS_WRITE_TO_PERSIST" }); return; }
   if (opts.fixtures) throw new PipelineError("FIXTURE_WRITE_FORBIDDEN");
   const draft = await readJson<Draft>(path.join(dir,"derived/draft.json"));
-  if (!draft.competitors.length) throw new PipelineError("NO_COMPETITORS_REVIEW_DRAFT_BEFORE_WRITE");
+  let quality = await inspectQuality(dir, draft, opts["upload-images"], opts["workspace-id"]);
+  draft.quality = quality;
+  await writeJson(path.join(dir, "derived/draft.json"), draft);
+  await writeJson(path.join(dir, "derived/quality.json"), quality);
+  if (opts["upload-images"]) {
+    // Reject missing research before uploading; an upload cannot fix reviews or suppliers.
+    const reasons = quality.reasons.filter(reason => reason.code !== "UPLOADED_IMAGES_NEEDS_DATA");
+    assertWriteQuality({ ...quality, reasons, blockWrite: reasons.length > 0 });
+    await uploadExistingImages(dir, draft.competitors, () => writeJson(path.join(dir, "derived/draft.json"), draft));
+    const rebuilt = buildDraft(draft.slug, draft.brief, draft.competitors, draft.suppliers, draft.tags);
+    draft.product.workbookDetail = rebuilt.product.workbookDetail;
+    quality = await inspectQuality(dir, draft, true, opts["workspace-id"]);
+  }
+  draft.quality = quality;
+  await writeJson(path.join(dir, "derived/draft.json"), draft);
+  await writeJson(path.join(dir, "derived/quality.json"), quality);
+  assertWriteQuality(quality);
   const { productsCreate } = await import("./create/productsCreate");
   const result = await productsCreate(draft,opts["workspace-id"]!);
-  await writeJson(path.join(dir,"derived/created.json"),result);
-  log("product_created",result);
+  const receipt = { ...result, slug: draft.slug, workspaceId: opts["workspace-id"], createdAt: new Date().toISOString(), uploadedImageFileIds: draft.competitors.flatMap(c => c.imageFileId ? [c.imageFileId] : []) };
+  await writeJson(path.join(dir,"derived/created.json"),receipt);
+  log("product_created",receipt);
 }
 async function main() {
-  if (opts.help) { console.log("selection run|collect|tag|suppliers|workbook|create --slug <slug> [--keyword <US keyword>] [--config file] [--write] [--workspace-id default] [--cloud-patch] [--suppliers-file file] [--fixtures] [--upload-images]"); return; }
+  if (opts.help) { console.log("selection run|collect|tag|suppliers|workbook|create --slug <slug> [--keyword <US keyword>] [--config file] [--write] [--workspace-id default] [--cloud-patch] [--reviews-file /absolute/reviews.jsonl] [--suppliers-file /absolute/suppliers.json (>=3 unique real 1688 offers)] [--fixtures] [--upload-images]\nManual fallback: tag --reviews-file imports {asin,star:1..3,date,text<=240} JSONL into raw/reviews/<ASIN>.jsonl. Run workbook after tag/suppliers. workbook --upload-images uploads existing local files without collecting again. --write only supports run/create and hard-fails if quality.blockWrite=true."); return; }
   if (!["run","collect","tag","suppliers","workbook","create"].includes(command)) throw new PipelineError("UNKNOWN_COMMAND");
+  if (opts.write && !["run", "create"].includes(command)) throw new PipelineError("WRITE_ONLY_VALID_FOR_RUN_OR_CREATE");
   if (!opts.slug) throw new PipelineError("SLUG_REQUIRED");
   if (opts.fixtures && (opts.write || opts["upload-images"])) throw new PipelineError("FIXTURE_WRITE_FORBIDDEN");
   const dir = selectionDir(opts.slug);

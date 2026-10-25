@@ -1,6 +1,8 @@
 import { nextSku } from "@/components/products/product-workbench-utils";
 import { PipelineError } from "../io";
 import type { Draft } from "../types";
+import { inspectQuality, assertWriteQuality } from "../quality";
+import { selectionDir } from "../config";
 // No database imports are loaded by the dry-run path.
 export async function productsCreate(draft: Draft, workspaceId: string) {
   if (draft.fixture) throw new PipelineError("FIXTURE_WRITE_FORBIDDEN");
@@ -9,6 +11,7 @@ export async function productsCreate(draft: Draft, workspaceId: string) {
   if (!process.env.DATABASE_URL || !organizationId || !actorUserId) throw new PipelineError("WRITE_REQUIRES_DATABASE_AND_EXPLICIT_ACTOR");
   if (!/^[a-f0-9-]{36}$/i.test(draft.product.id)) throw new PipelineError("INVALID_DRAFT_ID");
   if (draft.schemaVersion !== 1 || draft.product.status !== "pending" || !draft.brief.keyword || draft.product.sku !== "DRAFT") throw new PipelineError("INVALID_OR_ALREADY_CREATED_DRAFT");
+  assertWriteQuality(await inspectQuality(selectionDir(draft.slug), draft, false, workspaceId));
   const { prisma } = await import("@/lib/db/prisma");
   const { saveProductAggregate } = await import("@/lib/products/product-aggregate-service");
   try {

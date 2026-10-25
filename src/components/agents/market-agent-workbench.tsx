@@ -573,10 +573,16 @@ export function MarketAgentWorkbench() {
                   if (file) void uploadSelectionEvidence(file);
                 }} className="block w-full text-xs" />
               </label>
-              <p className="text-xs text-muted">上传实际采集的 derived/draft.json（最多 2 MB）。生成证据机会供人工审阅；未采集的指标保持未知。</p>
+              <ol className="list-inside list-decimal space-y-1 text-xs text-muted">
+                <li>在本机完成 slug 的 collect → tag → suppliers → workbook，核对 quality.json；缺评论或供应商时先用人工文件补齐。</li>
+                <li>上传 selections/&lt;slug&gt;/derived/draft.json（最多 2 MB），取得当前工作区的证据 fileId。</li>
+                <li>点击“从 Round B 证据生成机会”，人工核对来源后交接 Product；此工具只读上传产物，不会爬取 Amazon 或启动 CLI。</li>
+              </ol>
+              <p className="text-xs text-muted">BSR 销量估算为未校准启发式，不代表真实销量或市场需求；空标签表示待补数据，不表示无差评。</p>
               <Button type="button" variant="secondary" disabled={!canCreate || running || loading || uploadingEvidence || !selectionFileId} onClick={() => runResearch(true)}>{uploadingEvidence ? "上传中…" : running ? "运行中…" : "从 Round B 证据生成机会"}</Button>
-              {selectionFileId ? <p role="status" className="text-xs text-muted">草稿已上传，可以生成机会。</p> : null}
+              {selectionFileId ? <><p role="status" className="text-xs text-muted">草稿已上传，可以生成机会。</p><p className="break-all text-xs text-muted">selectionFileId：{selectionFileId}</p></> : null}
             </div>
+            {report && !report.selectionSource && <p role="note" className="rounded-md border border-border p-2 text-xs font-semibold text-muted">当前报告没有 Round B selection 证据；模拟数据不可作为全链路验收。请先上传实际 draft 再生成证据机会。</p>}
             {error ? <div className="rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{error}</div> : null}
             <label className="block space-y-1">
               <span className="text-xs font-semibold text-muted">目标</span>

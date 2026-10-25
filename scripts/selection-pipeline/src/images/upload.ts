@@ -16,6 +16,6 @@ export async function uploadImage(file: string, workspaceId: string): Promise<Pr
   const response = await fetch(new URL("/api/products/file-assets/upload", url), { method: "POST", headers: { Cookie: cookie }, body: form, redirect: "error", signal: AbortSignal.timeout(30000) });
   if (!response.ok) throw new PipelineError("ERP_IMAGE_UPLOAD_FAILED");
   const body = await response.json() as { asset?: ProductImageAsset };
-  if (!body.asset?.id) throw new PipelineError("INVALID_UPLOAD_RESPONSE");
+  if (typeof body.asset?.id !== "string" || !body.asset.id || typeof body.asset.originalUrl !== "string" || !body.asset.originalUrl || !body.asset.mimeType?.startsWith("image/") || !Number.isFinite(body.asset.size) || body.asset.size <= 0) throw new PipelineError("INVALID_UPLOAD_RESPONSE");
   return body.asset;
 }

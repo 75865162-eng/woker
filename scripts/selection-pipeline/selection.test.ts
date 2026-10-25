@@ -114,7 +114,7 @@ test("image upload uses the scoped multipart contract and rejects insecure remot
   const imageBytes = Buffer.from([0xff,0xd8,0xff,0xd9]);
   await writeFile(imagePath,imageBytes);
   let received: { path?: string; cookie?: string; body?: Buffer } = {};
-  let responseMode: "success" | "forbidden" | "missing-asset" = "success";
+  let responseMode: "success" | "forbidden" | "missing-asset" | "invalid-asset" = "success";
   const server: Server = createServer((request,response) => {
     const chunks: Buffer[] = [];
     request.on("data",chunk => chunks.push(Buffer.from(chunk)));
@@ -122,6 +122,7 @@ test("image upload uses the scoped multipart contract and rejects insecure remot
       received = { path: request.url, cookie: request.headers.cookie, body: Buffer.concat(chunks) };
       if (responseMode === "forbidden") { response.writeHead(403); response.end("private response must not enter errors"); return; }
       if (responseMode === "missing-asset") { response.writeHead(200,{ "content-type": "application/json" }); response.end("{}"); return; }
+      if (responseMode === "invalid-asset") { response.writeHead(200,{ "content-type": "application/json" }); response.end(JSON.stringify({ asset: { id: "unusable" } })); return; }
       response.writeHead(200,{ "content-type": "application/json" });
       response.end(JSON.stringify({ asset: { id: "file-uploaded",name: "B012345678.jpg",mimeType: "image/jpeg",size: 4,storageType: "local",uploadedAt: "2026-10-25T00:00:00.000Z",thumbUrl: "/thumb",originalUrl: "/original",thumbFileId: "file-thumb" } }));
     });
@@ -140,6 +141,8 @@ test("image upload uses the scoped multipart contract and rejects insecure remot
     responseMode = "forbidden";
     await assert.rejects(uploadImage(imagePath,"selection-test"),{ message: "ERP_IMAGE_UPLOAD_FAILED" });
     responseMode = "missing-asset";
+    await assert.rejects(uploadImage(imagePath,"selection-test"),{ message: "INVALID_UPLOAD_RESPONSE" });
+    responseMode = "invalid-asset";
     await assert.rejects(uploadImage(imagePath,"selection-test"),{ message: "INVALID_UPLOAD_RESPONSE" });
     delete process.env.SELECTION_ERP_COOKIE;
     assert.equal(await uploadImage(imagePath,"selection-test"),undefined);
@@ -172,4 +175,95 @@ test("cloud patch command batches original quotes, defaults off and rejects fail
   } finally {
     if (saved === undefined) delete process.env.SELECTION_CLOUD_PATCH_CMD; else process.env.SELECTION_CLOUD_PATCH_CMD = saved;
   }
+});
+
+test("Round D quality requires real review-backed tags, 3 unique suppliers, local images and requested uploads", async () => {
+  const { assessQuality, assertWriteQuality, validateReviews } = await import("./src/quality");
+  const asin = "B012345678";
+  const suppliers = Array.from({ length: 3 }, (_, index) => ({ title: "Isolated test lead", shopName: "", price: "", moq: "", url: `https://detail.1688.com/offer/23456789000${index}.html` }));
+  const review = { asin, star: 2, date: "2026-10-25", text: "poor fit" };
+  const draft = buildDraft("quality-unit", { keyword: "test" }, [{ asin, title: "Test", url: `https://www.amazon.com/dp/${asin}`, price: 1, rating: 4, reviewsCount: 1, bsr: 100 }], suppliers, aggregateTags([{ asin, tag: "size", quote: review.text, source: "dictionary" }]));
+  const input = { reviews: [review], localImageAsins: [asin], uploadedImageAsins: [], requireUploadedImages: false, sourceFixture: false };
+  const good = assessQuality(draft, input);
+  assert.equal(good.blockWrite, false); assert.equal(good.needsReview, false);
+  assert.doesNotThrow(() => assertWriteQuality(good));
+  const invalidCases: Array<[typeof draft, string]> = [
+    [{ ...draft, tags: aggregateTags([]) }, "TAGS_NEEDS_DATA"],
+    [{ ...draft, suppliers: suppliers.slice(0, 2) }, "SUPPLIERS_NEEDS_DATA"],
+    [{ ...draft, suppliers: [suppliers[0], suppliers[0], suppliers[1]] }, "SUPPLIERS_NEEDS_DATA"],
+    [{ ...draft, tags: aggregateTags([{ asin, tag: "size", quote: "invented", source: "dictionary" }]) }, "TAGS_NEEDS_DATA"],
+  ];
+  for (const [changed, expected] of invalidCases) {
+    const quality = assessQuality(changed, input);
+    assert.equal(quality.blockWrite, true);
+    assert.throws(() => assertWriteQuality(quality), new RegExp(expected));
+  }
+  const noReviews = assessQuality(draft, { ...input, reviews: [], errorCodes: ["SITE_BLOCKED_OR_LOGIN_REQUIRED"] });
+  assert.equal(noReviews.status, "NEEDS_DATA"); assert.equal(noReviews.validReviews, 0);
+  assert.deepEqual(noReviews.collectionReasonCodes, ["SITE_BLOCKED_OR_LOGIN_REQUIRED"]);
+  assert.throws(() => assertWriteQuality(noReviews), /raw\/reviews/);
+  assert.equal(assessQuality(draft, { ...input, localImageAsins: [] }).blockWrite, true);
+  assert.equal(assessQuality(draft, { ...input, requireUploadedImages: true }).blockWrite, true);
+  assert.equal(assessQuality(draft, { ...input, requireUploadedImages: true, uploadedImageAsins: [asin] }).blockWrite, false);
+  assert.equal(assessQuality({ ...draft, fixture: true }, input).blockWrite, true);
+  assert.equal(assessQuality(draft, { ...input, sourceFixture: undefined }).blockWrite, true);
+  assert.equal(assessQuality({ ...draft, suppliers: JSON.parse(await readFile(path.join(base, "fixtures/suppliers.json"), "utf8")) }, input).blockWrite, true);
+  assert.throws(() => validateReviews([{ ...review, star: 5 }], new Set([asin])), /INVALID_REVIEW/);
+  assert.throws(() => validateReviews([{ ...review, asin: "B099999999" }], new Set([asin])), /INVALID_REVIEW/);
+  assert.equal(validateReviews([review, review], new Set([asin])).length, 1);
+  assert.equal(draft.competitors[0].sales30Days?.heuristic, true);
+});
+
+test("Round D CLI refuses empty live --write, accepts manual review/supplier fallback and persists failed upload gate", async () => {
+  const { execFile } = await import("node:child_process"); const { promisify } = await import("node:util");
+  const { mkdir, copyFile, unlink, symlink } = await import("node:fs/promises"); const { randomUUID } = await import("node:crypto");
+  const { writeJson, readJson } = await import("./src/io");
+  const slug = `round-d-isolated-${randomUUID()}`; const dir = selectionDir(slug);
+  const asin = "B012345678";
+  const competitors = [{ asin, title: "Synthetic CLI test only", url: `https://www.amazon.com/dp/${asin}`, capturedAt: new Date().toISOString(), price: 1, rating: 4, reviewsCount: 1, bsr: 100, imagePath: `raw/images/${asin}.jpg` }];
+  const cli = (args: string[]) => promisify(execFile)(process.execPath, ["node_modules/tsx/dist/cli.mjs", "scripts/selection-pipeline/src/cli.ts", ...args, "--slug", slug], { timeout: 15000, env: { ...process.env, DATABASE_URL: "", SELECTION_ORGANIZATION_ID: "", SELECTION_ACTOR_USER_ID: "", SELECTION_ERP_URL: "", SELECTION_ERP_COOKIE: "" } });
+  try {
+    await mkdir(path.join(dir, "raw/images"), { recursive: true });
+    await copyFile(path.join(base, "fixtures/product.jpg"), path.join(dir, `raw/images/${asin}.jpg`));
+    await writeJson(path.join(dir, "brief.json"), { keyword: "isolated CLI test" });
+    await writeJson(path.join(dir, "raw/collection-info.json"), { fixture: false });
+    await writeJson(path.join(dir, "raw/competitors.json"), competitors);
+    await writeJson(path.join(dir, "derived/tags.json"), aggregateTags([]));
+    await writeJson(path.join(dir, "derived/suppliers.json"), []);
+    await cli(["workbook"]);
+    // Never attempts a successful --write with synthetic test evidence against an existing DB.
+    await assert.rejects(cli(["create", "--write"]), error => {
+      const output = String((error as { stdout?: string }).stdout);
+      return /QUALITY_BLOCK_WRITE/.test(output) && /REVIEWS_NEEDS_DATA/.test(output) && /SUPPLIERS_NEEDS_DATA/.test(output) && /reviews-file/.test(output) && /suppliers-file/.test(output);
+    });
+    assert.equal((await readJson<{ blockWrite: boolean }>(path.join(dir, "derived/quality.json"))).blockWrite, true);
+    const manualReviews = path.join(dir, "manual-reviews.jsonl");
+    await writeFile(manualReviews, JSON.stringify({ asin, star: 2, date: "2026-10-25", text: "too small and thin material" }) + "\n");
+    const manualSuppliers = path.join(dir, "manual-suppliers.json");
+    await writeJson(manualSuppliers, Array.from({ length: 3 }, (_, i) => ({ title: "Isolated test only", price: "", moq: "", shopName: "", url: `https://detail.1688.com/offer/23456789000${i}.html` })));
+    await cli(["tag", "--reviews-file", manualReviews]);
+    await cli(["suppliers", "--suppliers-file", manualSuppliers]);
+    await cli(["workbook"]);
+    const ready = await readJson<{ blockWrite: boolean; validReviews: number; suppliers: number }>(path.join(dir, "derived/quality.json"));
+    assert.equal(ready.blockWrite, false); assert.equal(ready.validReviews, 1); assert.equal(ready.suppliers, 3);
+    const localImage = path.join(dir, `raw/images/${asin}.jpg`);
+    await writeFile(localImage, "not an image");
+    await cli(["workbook"]);
+    assert.equal((await readJson<{ images: number }>(path.join(dir, "derived/quality.json"))).images, 0);
+    await unlink(localImage);
+    await symlink(path.join(base, "fixtures/product.jpg"), localImage);
+    await cli(["workbook"]);
+    assert.equal((await readJson<{ images: number }>(path.join(dir, "derived/quality.json"))).images, 0);
+    await unlink(localImage);
+    await copyFile(path.join(base, "fixtures/product.jpg"), localImage);
+    await writeJson(path.join(dir, "raw/collection-info.json"), { fixture: false, uploadImages: true });
+    await cli(["workbook"]);
+    const requested = await readJson<{ requireUploadedImages: boolean; blockWrite: boolean }>(path.join(dir, "derived/quality.json"));
+    assert.equal(requested.requireUploadedImages, true); assert.equal(requested.blockWrite, true);
+    await assert.rejects(cli(["workbook", "--upload-images"]), error => /ERP_UPLOAD_REQUIRES/.test(String((error as { stdout?: string }).stdout)));
+    await cli(["workbook"]);
+    const blocked = await readJson<{ blockWrite: boolean; requireUploadedImages: boolean }>(path.join(dir, "derived/quality.json"));
+    assert.equal(blocked.requireUploadedImages, true); assert.equal(blocked.blockWrite, true);
+    await assert.rejects(readFile(path.join(dir, "derived/created.json")), { code: "ENOENT" });
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

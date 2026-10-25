@@ -13,7 +13,7 @@ npx playwright install chromium
 # 缺少 sqlite3 时：macOS brew install sqlite；Ubuntu sudo apt-get install sqlite3
 
 npm run selection:run -- --keyword "kayak cockpit cover" --slug kayak-cockpit-cover
-npm run selection:run -- --keyword "kayak cockpit cover" --slug kayak-cockpit-cover --write
+# 先补全评论、供应商并审查 quality，写库步骤见下文；不直接把“跑过”当验收通过。
 npm run selection:tag -- --slug kayak-cockpit-cover --cloud-patch
 ```
 
@@ -35,7 +35,7 @@ Amazon 只读取服务端 HTML，屏蔽子资源；1688 允许必要的脚本/XH
 
 ```bash
 npm run selection:collect -- --slug kayak-cockpit-cover --keyword "kayak cockpit cover"
-npm run selection:tag -- --slug kayak-cockpit-cover
+npm run selection:tag -- --slug kayak-cockpit-cover --reviews-file /absolute/path/reviews.jsonl
 npm run selection:suppliers -- --slug kayak-cockpit-cover --suppliers-file /absolute/path/suppliers.json
 npm run selection:workbook -- --slug kayak-cockpit-cover
 npm run selection:create -- --slug kayak-cockpit-cover --write --workspace-id default
@@ -80,10 +80,10 @@ SQLite 表 `asin_snapshots(asin,capturedAt,price,bsr,reviewsCount,rating)` 仅�
 
 - `SELECTION_ERP_URL`：ERP 的 HTTPS origin（本机 localhost/127.0.0.1 允许 HTTP）。
 - `SELECTION_ERP_COOKIE`：已登录用户的完整 Cookie header；API 仍检查 `products:edit`，只有 `products:create` 的会话不能上传。
-- `--upload-images`：collect/run 时显式上传；`--write` 也会尝试上传。
+- `--upload-images`：collect/run/workbook 时显式上传，或 create --write 时先核对研究证据再上传；仅 --write 不隐式发起上传。
 - `--workspace-id`：缺省 default；上传的作用域必须与创建一致。
 
-图片先下载并转成实际 JPEG（最多 10MB 输入/2500 万像素），成功上传才写 `competitors[].imageFileId` 和完整 `imageAsset`，再映射 hotVariantImageAsset。商品聚合保存现在会对旧主图字段 `imageFileId` 与嵌套 `imageAssets` 一并做 organization/workspace 归属校验。没有配置凭据/上传失败就保留本地文件，绝不伪造 fileId。默认不上传，避免文件模式产生服务端写入。仅 workbook 重建不会重新上传；如需补传请带 `--upload-images` 重新 collect。上传后暂未创建商品的临时附件由既有 ERP 生命周期管理，不在 CLI 自动删除。
+图片先下载并转成实际 JPEG（最多 10MB 输入/2500 万像素），成功上传才写 `competitors[].imageFileId` 和完整 `imageAsset`，再映射 hotVariantImageAsset。商品聚合保存现在会对旧主图字段 `imageFileId` 与嵌套 `imageAssets` 一并做 organization/workspace 归属校验。没有配置凭据/上传失败就保留本地文件，绝不伪造 fileId。默认不上传，避免文件模式产生服务端写入。`workbook --upload-images` 可补传当前本地图片并重建 draft，无需重新采集；`create --write --upload-images` 先检查研究门禁再补传并写库。缺会话、上传失败或只完成部分上传会保留 requireUploadedImages=true 并阻断写库；需要在原工作区补传成功后重建。上传后暂未创建商品的临时附件由既有 ERP 生命周期管理，不在 CLI 自动删除。
 
 ## 可选云端补漏
 
@@ -113,7 +113,7 @@ stdin 为最多 50 条词典未命中短句：`[{"asin":"B012345678","quote":"or
 
 保留目标工作区既有账户/站点设置，新默认工作区使用仓库默认空账户/站点。事务中分配 SKU（复用 nextSku），使用 PostgreSQL advisory lock 序列化本 CLI，且 existingRecord=null 强制创建；并发其他入口仍由唯一键阻止覆盖。`saveProductAggregate` 负责 revision、审计、DataChangeVersion、附件绑定、Outbox。事务后用现有 processProductOutboxEvent 处理投影/通知，不要求新增 Redis 服务；失败会保留 durable Outbox，created.json 标 `queuePending`，由既有 worker/受控重试修复。检查可见性时要确认投影成功与目标组织/工作区。
 
-草稿 UUID 在 workbook 重建时保留；聚合会生成正式商品 ID，草稿 UUID 另存于 `payload.selectionPipeline.draftId`，数据库按此来源标记在事务锁内查重，同一草稿重跑 `--write` 不创建第二个 SKU，也不更新原商品；新选品请使用新 slug。创建收据写 created.json；不把产品改回 DRAFT。原始 draft 保留用于追溯。空竞品和 fixture 草稿拒绝创建。
+草稿 UUID 在 workbook 重建时保留；聚合会生成正式商品 ID，草稿 UUID 另存于 `payload.selectionPipeline.draftId`，数据库按此来源标记在事务锁内查重，同一草稿重跑 `--write` 不创建第二个 SKU，也不更新原商品；新选品请使用新 slug。创建收据写 created.json；不把产品改回 DRAFT。原始 draft 保留用于追溯。空竞品和 fixture 草稿拒绝创建；Round D 还强制重算原始评论/标签引用、至少 3 条不同商品链接、本地实际图片以及启用上传时的成功附件数，不能编辑 quality.json 绕过门禁。
 
 回滚：本次不修改主 schema、现有 API 或 UI，移除脚本及 package scripts 即可停用。正式商品误创建后使用 ERP 已有审核/取消流程处理，禁止本脚本自动删事实记录、审计或附件。图片上传是独立动作；数据库创建失败不会自动删除已上传资产。
 
@@ -140,3 +140,62 @@ fixture 模式无外网请求、禁止 --write/--upload-images，使用独立 sq
 未提供目标数据库的组织/操作者身份和 ERP session，**未执行真实上传/写库，也没有声称创建了可见 SKU/fileId**。下一步由具备权限的操作者审查 draft，提供同作用域的上传会话和上述数据库环境变量，运行 create --write 并检查 created.json/ERP 列表。已在一次性 PostgreSQL 容器中通过 7 项集成验收：聚合创建及列表投影、重复草稿幂等、并发 SKU、角色/停用身份拒绝、旧主图跨组织附件拒绝及事务回滚、并发同草稿去重、Outbox 恢复。仍未对现有开发/生产数据实际执行写入；真实上传会话与用户页面验收仍需授权身份。
 
 Amazon/1688 页面结构、地区、登录及风控会变化；HTML fixtures 不是活网站点稳定性的保证。只采集自己有权访问的数据，遵守目标站点 ToS、robots 与访问限制，不绕过登录/验证码，不提高并发碰撞站点。竞品图片仅用于内部研究；对外使用需另行确认版权。本功能不部署服务器、不迁移数据库、不安排后台定时采集。
+
+
+## Round D 质量门禁与人工评论
+
+`derived/quality.json` 现在包含 `validReviews`、`taggedQuotes`（与原始低星评论逐字匹配、按 ASIN/标签/引用去重）、`suppliers`（URL 去重）、`images`（实际可读图片，不只数 imagePath）、`uploadedImages`、`requireUploadedImages`、`needsReview`、`blockWrite`、`reasons` 和采集历史 `collectionReasonCodes`。默认至少 1 条有效低星评论及标签、3 条真实候选商品链接、1 张当前竞品的实际本地图片；启用上传时须补齐本地图片对应的同工作区附件。门槛通过仅为 READY_FOR_REVIEW，不是采购/商业机会认证；缺指标仍需复核。fixture 永远 blockWrite。
+
+写库前重新读取原始评论与图片验证，不信任旧 quality.json。blockWrite 时 `run --write` / `create --write` 非 0 退出，错误直接指出 REVIEWS_NEEDS_DATA、TAGS_NEEDS_DATA、SUPPLIERS_NEEDS_DATA 等原因和兜底路径。空标签是 NEEDS_DATA，不是“没有差评”；登录/风控历史仍见 raw/errors.log 的 SITE_BLOCKED_OR_LOGIN_REQUIRED 等原码。人工补齐后历史错误不删除，也不会单独导致当前完整证据永久阻断。
+
+按有权查看的评论手工整理 JSONL，每行一个对象；只允许当前 raw/competitors.json 中的 ASIN、整数 1–3 星、日期字符串和最多 240 字符原文。人工导入验证全部行后替换输入涉及的 ASIN 文件，其余 ASIN 保留；重复 ASIN+原文去重，不自动生成评论。
+
+```jsonl
+{"asin":"B0GH7CKL75","star":2,"date":"原页面日期","text":"粘贴你实际看到的低星原文，不要使用本示意文本"}
+```
+
+```bash
+npm run selection:tag -- --slug kayak-cockpit-cover --reviews-file /absolute/path/reviews.jsonl
+npm run selection:suppliers -- --slug kayak-cockpit-cover --suppliers-file /absolute/path/suppliers.json
+npm run selection:workbook -- --slug kayak-cockpit-cover
+```
+
+至少 3 条供应商记录按前文结构提供不同的真实 1688 商品链接；价格/MOQ 缺失仍留空，不能编造以通过门禁。已知 fixtures 的虚构 URL/店名即使被复制到 live 文件也禁止写库。门禁不能独立证明其他人工内容的真实性，仍需操作者核原文、链接和采购资质。`draft.competitors[].sales30Days` 现在为 `{value, heuristic:true, method:"uncalibrated_bsr_power_law"}`；工作簿仍显示“估算（未校准）”，不作为真实需求信号。
+
+## 授权上传与建 SKU 最短步骤
+
+1. 在目标 ERP 正常登录并选定与 CLI 相同的组织/工作区。浏览器开发者工具 → Network → 找一次成功的同站 API 请求 → Request Headers → 复制完整 Cookie 值。仅将它粘入本机终端的隐藏输入，不复制请求里的 Authorization 或把 Cookie 发到聊天、文档、截图、仓库；不要用 fixture 会话。会话到期需正常重登录；403 表示检查 products:edit 权限及作用域，不绕权。
+2. 使用操作者明确选择的 DATABASE_URL、组织 ID、用户 ID；三个变量缺一不可。操作者必须是该组织 active owner/database_admin，上传会话需同组织/工作区且有 products:edit。不自动推断管理员或复用生产凭据。
+3. 审查 quality 与 draft。下面示例为本机 zsh，保密输入避免 shell 历史留下 Cookie；DATABASE_URL 可来自你已受控配置的环境文件，不展示密码。
+
+```zsh
+# 在仓库根目录；如用现有 .env，则用文末 node --env-file 方式让子进程显式加载。
+export DATABASE_URL  # 已由你选择并配置的目标数据库
+export SELECTION_ORGANIZATION_ID='<目标组织ID>'
+export SELECTION_ACTOR_USER_ID='<该组织有效owner/database_admin用户ID>'
+export SELECTION_ERP_URL='https://<你已登录的ERP域名>'
+read -rs 'SELECTION_ERP_COOKIE?粘贴当前会话Cookie（隐藏输入）: '
+export SELECTION_ERP_COOKIE
+
+# 不重爬站点，只补传当前 raw/images；检查 uploadedImages 与 blockWrite。
+npm run selection:workbook -- --slug kayak-cockpit-cover --upload-images --workspace-id default
+# 确认完整证据、上传结果与作用域后，显式写库。
+npm run selection:create -- --slug kayak-cockpit-cover --write --workspace-id default
+# DATABASE_URL 只在 .env 时改用：
+# node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/selection-pipeline/src/cli.ts create --slug kayak-cockpit-cover --write --workspace-id default
+unset SELECTION_ERP_COOKIE
+```
+
+CLI 写库直连 Prisma → saveProductAggregate，**不是 POST /api/products**；上传才是 POST /api/products/file-assets/upload。不要运行 fixture --write；也不要删除 fixture 标记以绕过门禁。
+
+成功后 `derived/created.json` 应有真实 `sku`、`productId`、`revision`、`outboxEventId`、`projectionEventId`、`queuePending`，以及 `slug`、`workspaceId`、`createdAt`、`uploadedImageFileIds`。同草稿幂等重跑时 event ID 可为空；queuePending=true 需排查/恢复现有 Outbox，不能当“列表已可见”。进入同组织/工作区的 `/dashboard`，按收据 SKU 打开详情并核对名称、竞品图附件、工作簿、供应线索。无需把收据复制到仓库；未成功不生成新的 created.json，历史收据不能当作本次成功证明。
+
+### Round D 当前真实验收缺口（2026-10-25）
+
+本机 `kayak-cockpit-cover` 重建质量报告：1 个竞品、1 张实际本地图片；有效低星评论=0、标签=0、suppliers=0、uploadedImages=0。create --write 已在质量门禁处失败，指出评论和供应商兜底文件；未进入写库。保留原 SITE_BLOCKED_OR_LOGIN_REQUIRED / SITE_CIRCUIT_OPEN 历史日志，不把它们解释为“无差评/无供应商”。
+
+只检查环境变量是否配置（不显示值）：本机 .env 有 DATABASE_URL，缺 SELECTION_ORGANIZATION_ID / SELECTION_ACTOR_USER_ID / SELECTION_ERP_URL / SELECTION_ERP_COOKIE。未补造身份、借用别的任务会话或自动挑管理员。因此本轮无法真实上传与建 SKU，未创建或伪造 created.json/fileId；也未完成已登录真人 UI 的 `/dashboard` 可见性验收。需要操作者补真实评论/供应商并按上面授权步骤执行。独立临时库的 7 项聚合创建回归不是这项真人验收替代品。
+
+Market 入口仍为“本机 slug 产物 → 上传 derived/draft.json → 按 fileId 只读生成机会”；不在 Next 请求内启动 CLI。即使证据不完整，也可人工查看真实缺口；它不会因此成为验收通过报告，Supplier 空短名单应保持 NEEDS_DATA 并禁用交接。详见 [Round D 验收与边界](../../docs/selection-round-d.md)。
+
+Round D 最终验证：选品测试 13/13、证据/API 6/6、临时库创建 7/7、Agent 浏览器 6/6；已提交基线 + allowlist 隔离快照的 254 项核心测试和生产构建通过。共享工作区后续 Sellfox 在途构建错误保持不碰；详见 Round D 文档的最终校验范围。

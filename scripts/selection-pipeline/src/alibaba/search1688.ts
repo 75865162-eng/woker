@@ -4,12 +4,12 @@ import type { RateLimit } from "../amazon/rateLimit";
 import { selectors } from "../amazon/selectors";
 import { PipelineError } from "../io";
 export function validateSuppliers(value: unknown, max: number): Supplier[] {
-  if (!Array.isArray(value)) throw new PipelineError("INVALID_SUPPLIERS_FILE");
+  if (!Array.isArray(value) || value.length > 1000) throw new PipelineError("INVALID_SUPPLIERS_FILE");
   const rows = value.map(row => {
     if (!row || typeof row.title !== "string" || !row.title.trim() || typeof row.url !== "string") throw new PipelineError("INVALID_SUPPLIER");
     const url = new URL(row.url);
-    if (url.protocol !== "https:" || url.hostname !== "detail.1688.com" || !/^\/offer\/\d+\.html$/.test(url.pathname)) throw new PipelineError("INVALID_SUPPLIER_URL");
-    for (const field of ["price","moq","shopName"] as const) if (row[field] != null && typeof row[field] !== "string") throw new PipelineError("INVALID_SUPPLIER_FIELD");
+    if (url.username || url.password || url.port || url.protocol !== "https:" || url.hostname !== "detail.1688.com" || !/^\/offer\/\d+\.html$/.test(url.pathname)) throw new PipelineError("INVALID_SUPPLIER_URL");
+    for (const field of ["price","moq","shopName"] as const) if (row[field] != null && (typeof row[field] !== "string" || row[field].length > 300)) throw new PipelineError("INVALID_SUPPLIER_FIELD");
     return { title: row.title.slice(0,500), url: url.origin + url.pathname, price: row.price ?? "", moq: row.moq ?? "", shopName: row.shopName ?? "" };
   });
   return [...new Map(rows.map(r => [r.url,r])).values()].slice(0,max);
