@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 import { workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
 import { defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
-import { visibleColumns, visibleColumnCsv } from "@/components/sellfox/workbench-types";
+import { visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
 
 test("workbench matrix URL round trips independent dimensions, metric, zero filter and ad filters", () => {
   const input = { ...defaultSellfoxView, domain: "sales" as const, dimension: "parentAsin", metric: "revenue", hideZero: true, shops: ["s1"], from: "2026-10-01", to: "2026-10-07" };
@@ -48,4 +48,22 @@ test("typed exact search binds literal input, rejects absent fields and keeps qu
   for (const [quickFilter, pattern] of [["spendNoClicks", /cost>0 AND clicks=0/], ["noClicks", /clicks=0/]] as const) assert.match(workbenchReadSql("ads_report", {...query,quickFilter}, {organizationId:"o",workspaceId:"w"}).text, pattern);
   const view = readSellfoxView(new URLSearchParams("domain=sales&searchType=asin&exactMatch=1&pageSize=20"));
   assert.equal(sellfoxViewParams(view,true).get("pageSize"),"20"); assert.equal(sellfoxViewParams(view,true).get("exactMatch"),"1");
+});
+
+
+test("reference columns combine only visible identity fields and export identical cell values", () => {
+  assert.equal(readSellfoxView(new URLSearchParams("domain=sales")).dimension, "asin");
+  const sales = visibleColumns("sales",undefined,["2026-10-24"],"asin");
+  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","totalInventory","awdAvailable","awdInbound","trend","average7","subtotal","day:2026-10-24"]);
+  const store = sales.find(c=>c.key === "name")!;
+  assert.equal(sellfoxColumnValue(store,{name:"店铺",marketplace:"US"}),"店铺\nUS");
+  const profit = visibleColumns("performance",undefined,[],"msku").find(c=>c.key === "identity")!;
+  assert.equal(profit.labelZh,"标题/MSKU");
+  assert.equal(sellfoxColumnValue(profit,{title:"商品",identity:"MSKU-1",payload:{title:"错误来源"}}),"商品\nMSKU-1");
+  const csv = visibleColumnCsv([profit],[{title:"商品",identity:"MSKU-1"}]);
+  assert.match(csv,/"商品\nMSKU-1"/);
+  assert.equal(sellfoxColumnValue(profit,{identity:"MSKU-1"}),"MSKU-1");
+  const listing = visibleColumns("listings").find(c=>c.key === "asin")!;
+  assert.equal(sellfoxColumnValue(listing,{asin:"ASIN-1",msku:"MSKU-1"}),"ASIN-1\nMSKU-1");
+  assert.ok(!visibleColumns("ads").some(c=>["image","msku","title"].includes(c.key)));
 });

@@ -149,7 +149,7 @@ export function SellfoxWorkbench() {
   }
   const latestRuns = overview?.latestRuns ?? []; const domainLabel = sellfoxDomains.find((item) => item.id === view.domain)?.label;
   const rawUrl = selectedRow ? `${endpoint(view.domain)}/${encodeURIComponent(String(selectedRow.id))}?${withScope(new URLSearchParams())}` : "";
-  return <div className="space-y-4">
+  return <div className="space-y-2">
     <SellfoxConnectionBar overview={overview} workspaceId={scope.workspaceId} syncResource={syncResource} setSyncResource={setSyncResource} canSync={canSync} canExport={canExport} working={working} onSync={() => void sync()} onRefresh={() => setRefreshVersion((value) => value + 1)} exportHref={exportHref} xlsxHref={xlsxHref} />
     {overview && !overview.configured ? <div className="flex items-center gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><AlertCircle className="h-4 w-4 shrink-0" /><span>请管理员在服务端配置赛狐凭据。此页面不会收集或显示密钥。</span><a className="font-semibold underline" href="/settings">设置与运维</a></div> : null}
     {overview?.configured && overview.stores.length === 0 ? <div className="flex flex-wrap items-center justify-between gap-3 border border-border bg-white px-4 py-3"><p className="text-sm">当前工作区尚无赛狐店铺，请先同步店铺。</p><Button size="sm" disabled={!canSync || working} onClick={() => void sync("stores")}><Store className="h-4 w-4" />同步店铺</Button></div> : null}
@@ -157,7 +157,7 @@ export function SellfoxWorkbench() {
     {notice ? <div role="status" className="border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{notice}</div> : null}
     {error || overviewError ? <div role="alert" className="border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error || overviewError}</div> : null}
     <SellfoxDomainTabs domain={view.domain} active={latestRuns.some((run) => ["running", "queued"].includes(run.status))} onChange={(domain) => { navigate({ domain }); setSyncResource(resourceForDomain(domain)); }} />
-    <div className={`grid gap-3 ${selectedRow || view.domain === "runs" ? "lg:grid-cols-[minmax(0,1fr)_260px]" : ""}`}><main className="min-w-0 space-y-3">
+    <div className={`grid gap-3 ${selectedRow || view.domain === "runs" ? "lg:grid-cols-[minmax(0,1fr)_260px]" : ""}`}><main className="min-w-0 space-y-2">
       {view.domain === "overview" ? <>
         <p className="text-xs text-muted">以下为当前工作区全部历史统计；按店铺与日期浏览请切换数据域。覆盖表示曾有记录，不代表今日完整同步。</p>
         <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{["stores", "inventory", "sales", "performance", "hourly"].map((key) => <div key={key} className="border border-border bg-white px-4 py-3"><p className="text-xs text-muted">{resourceLabels[key]}</p><p className="mt-1 text-xl font-semibold tabular-nums">{overview?.counts[key] ?? "-"}</p></div>)}</section>
@@ -166,12 +166,14 @@ export function SellfoxWorkbench() {
         <label className="flex flex-wrap items-center gap-2 border border-border bg-white p-3 text-xs text-muted">销量历史补数起始日<input type="date" aria-label="销量补数起始日" value={backfillStart || schedules.find((item) => item.resource === "sales")?.backfillStart || ""} onChange={(event) => setBackfillStart(event.target.value)} className="h-8 border border-border px-2" /><span>下次启用销量计划时保存；修改起始日将重置补数游标。每天 T-1 + 默认7天历史，失败保留断点。{schedules.find((item) => item.resource === "sales")?.backfillNextDate ? `当前游标：${schedules.find((item) => item.resource === "sales")?.backfillNextDate}` : ""}</span></label>
         <SellfoxRecentRuns runs={latestRuns} onAll={() => navigate({ domain: "runs" })} />
       </> : <>
-        <SellfoxBrowseFilters onSync={() => void sync("listings")} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason("listings"))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[view.domain]} onColumns={keys => setColumnSelection(current => ({ ...current, [view.domain]: keys }))} />
-        {canExport && exportHref && view.domain !== "runs" && view.domain !== "stores" ? <a className="text-xs text-brand" href={`${exportHref}&agent=1`}>给 Agent 的导出 CSV（业务窄列）</a> : null}
+        <SellfoxBrowseFilters onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync("listings")} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason("listings"))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[view.domain]} onColumns={keys => setColumnSelection(current => ({ ...current, [view.domain]: keys }))} />
+        <SellfoxResourceTable dates={dates} totals={totals} selectedColumns={columnSelection[view.domain]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} />
+        <details className="border border-border bg-white px-3 py-2 text-[11px] text-muted"><summary className="cursor-pointer">读取口径与数据来源 · 本地快照只读</summary><div className="mt-2 space-y-2">
         <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "默认读取最近完整快照；选择日期或全部历史可回看历史采集。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>
         {view.domain === "sales" ? <p className="text-xs text-muted">MSKU 日表按当前维度汇总；父ASIN/标题/价格来自最新 Listing，库存来自最新完整库存快照。未匹配父体时保留 MSKU。— 表示缺失，日矩阵最多90天；小计仅统计已知日，缺日不补零。趋势为窗口末7日，完整才算均值。</p> : null}
         {view.domain === "performance" ? <p className="text-xs text-muted">区间按店铺、维度、币种汇总；毛利率按汇总金额重算，退款率跨多条记录时留空。本地未提升的费用列不从 payload 猜取。</p> : null}
-        <SellfoxResourceTable dates={dates} totals={totals} selectedColumns={columnSelection[view.domain]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} />
+</div></details>
+        {canExport && exportHref && view.domain !== "runs" && view.domain !== "stores" ? <a className="text-xs text-brand" href={`${exportHref}&agent=1`}>给 Agent 的导出 CSV（业务窄列）</a> : null}
       </>}
     </main><aside className="space-y-3">{selectedRow || view.domain === "runs" ? <SellfoxSyncRunsPanel overview={overview} /> : null}{selectedRow ? <SellfoxRecordDetail key={`${scope.workspaceId}-${view.domain}-${selectedRow.id}`} row={selectedRow} rawUrl={rawUrl} headers={headers} onClose={() => setSelectedRow(null)} /> : null}</aside></div>
   </div>;

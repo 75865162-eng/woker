@@ -7,14 +7,14 @@ export const sellfoxDomains = [
 ] as const;
 export type SellfoxDomain = (typeof sellfoxDomains)[number]["id"];
 export type SellfoxView = { domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; dimension?: string; metric?: string; hideZero?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean };
-export const defaultSellfoxView: SellfoxView = { domain: "overview", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "msku", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "" };
+export const defaultSellfoxView: SellfoxView = { domain: "overview", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "asin", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "" };
 export function readSellfoxView(params: URLSearchParams): SellfoxView {
   const domain = params.get("domain"); const page = Number(params.get("page"));
   return {
     domain: sellfoxDomains.some((item) => item.id === domain) ? domain as SellfoxDomain : "overview",
     from: isSellfoxDate(params.get("from")) ? params.get("from")! : "", to: isSellfoxDate(params.get("to")) ? params.get("to")! : "",
     status: ["active", "inActive", "delete", "incomplete"].includes(params.get("status") ?? "") ? params.get("status")! : "",
-    dimension: ["asin", "parentAsin", "msku", "sku"].includes(params.get("dimension") ?? "") ? params.get("dimension")! : "msku",
+    dimension: ["asin", "parentAsin", "msku", "sku"].includes(params.get("dimension") ?? "") ? params.get("dimension")! : "asin",
     metric: ["quantity", "revenue"].includes(params.get("metric") ?? "") ? params.get("metric")! : "quantity",
     hideZero: params.get("hideZero") === "1", currency: params.get("currency") ?? (domain === "performance" ? "USD" : ""), adType: ["sp", "sb", "sd"].includes(params.get("adType") ?? "") ? params.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(params.get("quickFilter") ?? "") ? params.get("quickFilter")! : "",
