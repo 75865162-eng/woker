@@ -80,18 +80,21 @@ test("UI browse SQL binds scope and search text, filters after entity aggregatio
   const ads = workbenchReadSql("ads_report", { ...query, quickFilter: "clicksNoOrders" }, { organizationId: "org", workspaceId: "ws" });
   assert.match(ads.text, /clicks>0 AND "adOrders"=0/);
 });
-test("sales excludes only incomplete all-null shells before day, entity and KPI aggregation", () => {
+test("sales excludes incomplete null-quantity/null-revenue shells even with orders before day, entity and KPI aggregation", () => {
   const scope = { organizationId: "org", workspaceId: "ws" };
-  const shellFilter = "NOT (NOT s.complete AND s.quantity IS NULL AND s.orders IS NULL AND s.revenue IS NULL)";
+  const shellFilter = "NOT (NOT s.complete AND s.quantity IS NULL AND s.revenue IS NULL)";
   for (const metric of ["quantity", "orders", "revenue"]) {
-    for (const dimension of ["asin", "store", "developer", "spu"]) {
+    for (const dimension of ["msku", "asin", "parentAsin", "store", "developer", "spu"]) {
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?metric=${metric}&dimension=${dimension}&from=2026-10-25&to=2026-10-25`));
       for (const exporting of [false, true]) {
         const sql = workbenchReadSql("sales", query, scope, exporting).text;
         const base = sql.slice(sql.indexOf("base AS ("), sql.indexOf("days AS ("));
         // Removing shells here protects both shared-identity days and standalone
-        // orphan identities from nulling subtotal and daily currency KPIs.
+        // orphan identities from nulling subtotal and daily currency KPIs, even
+        // when stale coverage-skew orders are non-null. Complete rows and partial
+        // incomplete rows with quantity/revenue (including zero) remain in base.
         assert.ok(base.includes(shellFilter));
+        assert.doesNotMatch(base, /s\.orders IS NULL/);
         assert.match(sql, /FROM base GROUP BY/);
         assert.match(sql, /FROM days GROUP BY/);
         assert.match(sql, /FROM filtered GROUP BY currency/);
