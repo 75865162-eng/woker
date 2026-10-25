@@ -390,6 +390,23 @@ test("Round H2 wide default, checkbox shops, visible summary and local matrix to
 });
 
 
+test("sales currency is enabled, follows browse and export requests, and resets to all", async ({ page }) => {
+  const { calls } = await setup(page);
+  const currency = page.getByLabel("币种筛选");
+  await expect(currency).toBeEnabled();
+  await expect(currency).toHaveValue("");
+  await expect.poll(() => calls.filter(c => c.path.endsWith("/sales")).at(-1)?.query.has("currency")).toBe(false);
+  await currency.selectOption("CAD");
+  await expect.poll(() => calls.filter(c => c.path.endsWith("/sales")).at(-1)?.query.get("currency")).toBe("CAD");
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /currency=CAD/);
+  await page.reload();
+  await expect(currency).toHaveValue("CAD");
+  await page.getByRole("button", { name: "重置", exact: true }).click();
+  await expect(currency).toHaveValue("");
+  await expect.poll(() => calls.filter(c => c.path.endsWith("/sales")).at(-1)?.query.has("currency")).toBe(false);
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).not.toHaveAttribute("href", /currency=/);
+});
+
 test("P0 orders, settlement scope, current image and KPI follow browse and export filters", async ({ page }) => {
   const { calls } = await setup(page);
   await page.getByRole("button", {name:"订单量",exact:true}).click();

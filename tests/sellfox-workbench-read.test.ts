@@ -15,6 +15,28 @@ test("workbench matrix URL round trips independent dimensions, metric, zero filt
   const unsafe = sellfoxBrowseQuery(new URL('http://localhost/?dimension=payload&metric=orderNum&adType=unknown&quickFilter=paused'));
   assert.equal(unsafe.dimension, "msku"); assert.equal(unsafe.metric, "quantity"); assert.equal(unsafe.adType, ""); assert.equal(unsafe.quickFilter, "");
 });
+test("sales and performance currency round trip through view and browse requests", () => {
+  for (const domain of ["sales", "performance"] as const) {
+    const view = readSellfoxView(new URLSearchParams(`domain=${domain}&currency=CAD`));
+    assert.equal(readSellfoxView(sellfoxViewParams(view)).currency, "CAD");
+    const params = sellfoxViewParams(view, true);
+    assert.equal(params.get("currency"), "CAD");
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?${params}`));
+    assert.equal(query.currency, "CAD");
+    const sql = workbenchReadSql(domain, query, { organizationId: "org", workspaceId: "ws" });
+    assert.match(sql.text, /s\.currency=/);
+    assert.ok(sql.values.includes("CAD"));
+  }
+  for (const suffix of ["", "&currency="]) {
+    const sales = readSellfoxView(new URLSearchParams(`domain=sales${suffix}`));
+    assert.equal(sales.currency, "");
+    const params = sellfoxViewParams(sales, true);
+    assert.equal(params.has("currency"), false);
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?${params}`));
+    assert.equal(query.currency, "");
+    assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\.currency=/);
+  }
+});
 test("matrix enumerates business days including leap day and rejects unbounded/overwide windows", () => {
   assert.deepEqual(workbenchDateRange(sellfoxBrowseQuery(new URL('http://localhost/?from=2024-02-28&to=2024-03-01'))), ["2024-02-28", "2024-02-29", "2024-03-01"]);
   assert.throws(() => workbenchDateRange(sellfoxBrowseQuery(new URL('http://localhost/?from=2026-01-01&to=2026-10-01'))), /90/);

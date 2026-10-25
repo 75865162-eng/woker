@@ -33,7 +33,7 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
   if (view.status && (!forRequest || view.domain === "listings")) params.set("status", view.status);
   if (forRequest && ["sales", "performance", "listings", "ads"].includes(view.domain)) params.set("layout", "workbench");
   for (const key of ["dimension", "metric", "currency", "adType", "quickFilter"] as const) {
-    if (forRequest && key === "currency" && view.domain !== "performance") continue;
+    if (forRequest && key === "currency" && !["sales", "performance"].includes(view.domain)) continue;
     if (forRequest && ["adType", "quickFilter"].includes(key) && view.domain !== "ads") continue;
     if (view[key]) params.set(key, view[key]!);
   }
