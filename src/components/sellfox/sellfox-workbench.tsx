@@ -15,7 +15,7 @@ import { SellfoxDomainTabs } from "./domain-tabs";
 import { SellfoxResourceTable } from "./resource-table";
 import { SellfoxRecentRuns, SellfoxSyncRunsPanel } from "./sync-runs-panel";
 import { SellfoxRecordDetail } from "./record-detail";
-import { browseEmptyMessage, columns, resourceLabels, type Overview, type Pagination, type Row, type Schedule } from "./workbench-types";
+import { browseEmptyMessage, defaultVisibleColumnKeys, resourceLabels, type Overview, type Pagination, type Row, type Schedule } from "./workbench-types";
 
 function readScope() {
   try { return normalizeWorkspaceScope(JSON.parse(localStorage.getItem("amazon_bulk_ad_workspace_scope") ?? "{}")); }
@@ -37,6 +37,8 @@ export function SellfoxWorkbench() {
   const [syncResource, setSyncResource] = useState("stores"); const [notice, setNotice] = useState(""); const [error, setError] = useState("");
   const [dates, setDates] = useState<string[]>([]); const [totals, setTotals] = useState<Row[]>([]);
   const [columnSelection, setColumnSelection] = useState<Record<string, string[]>>({});
+  // Explicit choices belong to this dimension, including back/forward navigation.
+  const columnSelectionKey = ["sales", "performance"].includes(view.domain) ? `${view.domain}:${view.dimension}` : view.domain;
   const [backfillStart, setBackfillStart] = useState("");
   const [overviewError, setOverviewError] = useState(""); const [refreshVersion, setRefreshVersion] = useState(0);
   const headers = useMemo(() => ({ "x-workspace-id": scope.workspaceId, ...(scope.accountId ? { "x-account-id": scope.accountId } : {}), ...(scope.marketplace ? { "x-marketplace": scope.marketplace } : {}) }), [scope]);
@@ -124,13 +126,13 @@ export function SellfoxWorkbench() {
     if (!ready || !["stores", "inventory", "sales", "performance", "ads", "runs", "listings"].includes(view.domain)) return "";
     const params = withScope(sellfoxViewParams(view, true)); params.delete("page"); params.delete("pageSize");
     if (view.domain === "performance") params.set("format", "csv");
-    if (view.domain === "sales" || columnSelection[view.domain]) {
+    if (view.domain === "sales" || columnSelection[columnSelectionKey]) {
       params.set("columns", "custom");
-      const keys = columnSelection[view.domain] ?? columns[view.domain]?.filter(c => c.defaultVisible).map(c => c.key) ?? [];
+      const keys = columnSelection[columnSelectionKey] ?? defaultVisibleColumnKeys(view.domain, view.dimension);
       for (const key of [...keys, ...(view.domain === "sales" && view.salesView === "matrix" ? dates.map(date => `day:${date}`) : [])]) params.append("column", key);
     }
     return `${endpoint(view.domain)}/export?${params}`;
-  }, [ready, view, withScope, columnSelection, dates]);
+  }, [ready, view, withScope, columnSelection, columnSelectionKey, dates]);
   const xlsxHref = view.domain === "performance" ? exportHref.replace("format=csv", "format=xlsx") : "";
 
   async function sync(resource = syncResource) {
@@ -177,8 +179,8 @@ export function SellfoxWorkbench() {
         <label className="flex flex-wrap items-center gap-2 border border-border bg-white p-3 text-xs text-muted">销量历史补数起始日<input type="date" aria-label="销量补数起始日" value={backfillStart || schedules.find((item) => item.resource === "sales")?.backfillStart || ""} onChange={(event) => setBackfillStart(event.target.value)} className="h-8 border border-border px-2" /><span>下次启用销量计划时保存；修改起始日将重置补数游标。每天 T-1 + 默认7天历史，失败保留断点。{schedules.find((item) => item.resource === "sales")?.backfillNextDate ? `当前游标：${schedules.find((item) => item.resource === "sales")?.backfillNextDate}` : ""}</span></label>
         <SellfoxRecentRuns runs={latestRuns} onAll={() => navigate({ domain: "runs" })} />
       </> : <>
-        <SellfoxBrowseFilters onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync("listings")} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason("listings"))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[view.domain]} onColumns={keys => setColumnSelection(current => ({ ...current, [view.domain]: keys }))} />
-        <div className={view.domain === "ads" ? "grid min-w-0 gap-2 sm:grid-cols-[140px_minmax(0,1fr)]" : "min-w-0"}>{view.domain === "ads" ? <aside aria-label="广告组合列表" className="border border-border bg-white p-3 text-xs"><h3 className="font-semibold">广告组合</h3><p className="mt-3 text-muted">暂无本地数据 · 待接</p><p className="mt-2 text-muted">赛狐有、API/本地无</p></aside> : null}<SellfoxResourceTable metric={view.metric} matrix={view.salesView === "matrix"} dates={dates} totals={totals} selectedColumns={columnSelection[view.domain]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} emptyMessage={browseEmptyMessage(view.domain, overview)} onEmptySync={() => void sync(view.domain)} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(view.domain))} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} /></div>
+        <SellfoxBrowseFilters onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync("listings")} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason("listings"))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[columnSelectionKey]} onColumns={keys => setColumnSelection(current => ({ ...current, [columnSelectionKey]: keys }))} />
+        <div className={view.domain === "ads" ? "grid min-w-0 gap-2 sm:grid-cols-[140px_minmax(0,1fr)]" : "min-w-0"}>{view.domain === "ads" ? <aside aria-label="广告组合列表" className="border border-border bg-white p-3 text-xs"><h3 className="font-semibold">广告组合</h3><p className="mt-3 text-muted">暂无本地数据 · 待接</p><p className="mt-2 text-muted">赛狐有、API/本地无</p></aside> : null}<SellfoxResourceTable metric={view.metric} matrix={view.salesView === "matrix"} dates={dates} totals={totals} selectedColumns={columnSelection[columnSelectionKey]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} emptyMessage={browseEmptyMessage(view.domain, overview)} onEmptySync={() => void sync(view.domain)} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(view.domain))} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} /></div>
         <details className="border border-border bg-white px-3 py-2 text-[11px] text-muted"><summary className="cursor-pointer">读取口径与数据来源 · 本地快照只读</summary><div className="mt-2 space-y-2">
         <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "默认读取最近完整快照；选择日期或全部历史可回看历史采集。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>
         {view.domain === "sales" ? <p className="text-xs text-muted">MSKU 日表按当前维度汇总；父ASIN/标题/价格来自最新 Listing，库存来自最新完整库存快照。未匹配父体时保留 MSKU。— 表示缺失，日矩阵最多90天；小计仅统计已知日，缺日不补零。趋势为窗口末7日，完整才算均值。</p> : null}

@@ -51,9 +51,19 @@ export const columns: Record<string, SellfoxColumn[]> = {
   ads: [column("asin", "产品信息", { parts: ["title", "asin"], requiresField: "title,asin" }), missing("enabled", "有效", true), missing("serviceStatus", "服务状态", true), missing("adStrategy", "广告策略"), ...numbers([["fulfillable", "FBA可售"], ["price", "价格"]]), missing("rating", "星级/评论"), column("campaignId", "广告活动"), column("adGroupId", "广告组"), missing("productTags", "标签"), missing("salesperson", "业务员"), ...numbers([["impressions", "曝光"], ["clicks", "点击"], ["cost", "花费"], ["adOrders", "广告订单"], ["adSales", "广告销售额"], ["acos", "ACoS"], ["roas", "ROAS"]]), column("adType", "广告类型"), column("currency", "币种"), ...[missing("image", "图片"), column("msku", "MSKU"), column("title", "标题"), column("name", "店铺"), column("marketplace", "站点")].map(c => ({ ...c, defaultVisible: false }))],
 };
 export const unavailableReason = "赛狐有、API/本地无";
+const rollupDimensions = new Set(["store", "developer", "spu"]);
+export function defaultVisibleColumnKeys(domain: string, dimension = "msku") {
+  // Rollup name already supplies identity; product fields are empty or ambiguous.
+  const hidden = !rollupDimensions.has(dimension) ? [] : domain === "sales"
+    ? ["name", "operations", "salesInsight", "parentAsin", "msku", "sku", "title"]
+    : domain === "performance" ? ["name"] : [];
+  return (columns[domain] ?? []).filter(c => c.defaultVisible && !hidden.includes(c.key)).map(c => c.key);
+}
 export function visibleColumns(domain: string, selected?: string[], dates: string[] = [], dimension = "msku", matrix = false) {
   const configured = columns[domain] ?? [];
-  return [...configured.map(c => c.key === "identity" ? { ...c, labelZh: `${domain === "performance" && dimension !== "developer" ? "标题/" : ""}${({ asin: "ASIN", parentAsin: "父ASIN", msku: "MSKU", sku: "SKU", store: "店铺", developer: "开发员", spu: "SPU" } as Record<string, string>)[dimension] ?? c.labelZh}`, ...(domain === "performance" && dimension === "developer" ? { parts: ["identity"] } : {}) } : c), ...(domain === "sales" ? dates.filter(date => matrix || selected?.includes(`day:${date}`)).map(date => column(`day:${date}`, date.slice(5), { numeric: true })) : [])].filter(c => selected ? selected.includes(c.key) || (matrix && c.key.startsWith("day:")) : c.defaultVisible);
+  const selectedKeys = selected ?? defaultVisibleColumnKeys(domain, dimension);
+  const rollup = rollupDimensions.has(dimension);
+  return [...configured.map(c => c.key === "identity" ? { ...c, labelZh: `${domain === "performance" && !rollup ? "标题/" : ""}${({ asin: "ASIN", parentAsin: "父ASIN", msku: "MSKU", sku: "SKU", store: "店铺", developer: "开发员", spu: "SPU" } as Record<string, string>)[dimension] ?? c.labelZh}`, ...(domain === "performance" && rollup ? { parts: ["identity"] } : {}) } : c), ...(domain === "sales" ? dates.filter(date => matrix || selected?.includes(`day:${date}`)).map(date => column(`day:${date}`, date.slice(5), { numeric: true })) : [])].filter(c => selectedKeys.includes(c.key) || (matrix && c.key.startsWith("day:")));
 }
 // Composite cells share their value with CSV/XLSX; no field is guessed from payload.
 export function sellfoxColumnValue(column: SellfoxColumn, row: Row): unknown {

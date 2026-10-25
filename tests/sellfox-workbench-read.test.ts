@@ -4,7 +4,8 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 import { readSellfoxWorkbench, workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
 import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
-import { browseEmptyMessage, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
+import { browseEmptyMessage, columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
+import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
 
 test("workbench matrix URL round trips independent dimensions, metric, zero filter and ad filters", () => {
   const input = { ...defaultSellfoxView, domain: "sales" as const, dimension: "parentAsin" as const, metric: "revenue", hideZero: true, shops: ["s1"], from: "2026-10-01", to: "2026-10-07" };
@@ -200,7 +201,7 @@ test("store rows display joined names and clear ambiguous product fields without
       }
       assert.equal(result.rows[2].identity, "单品店"); assert.equal(result.rows[2].asin, "asin1"); assert.equal(result.rows[2].msku, "m1");
       const identity = visibleColumns(domain, undefined, [], "store").find(c => c.key === "identity")!;
-      assert.equal(identity.labelZh, domain === "sales" ? "店铺" : "标题/店铺");
+      assert.equal(identity.labelZh, "店铺");
       assert.equal(sellfoxColumnValue(identity, result.rows[0]), "TK店");
     }
   } finally { globals.prisma = previous; }
@@ -211,6 +212,67 @@ test("visible-column export matches ordered matrix headers, leaves unsupported v
   const csv = visibleColumnCsv(config, [{ identity: "=UNTRUSTED()", awdAvailable: 999, subtotal: null, "day:2026-10-01": 0 }]);
   assert.match(csv, /'=UNTRUSTED/); assert.ok(!csv.includes("999")); assert.match(csv, /"","",0$/);
   assert.deepEqual(visibleColumns("performance", []).map(c=>c.key), []);
+});
+
+test("rollup defaults omit duplicate names and product clutter while preserving core metrics and picker overrides", () => {
+  const sales = ["image", "identity", "analysis", "fulfillable", "subtotal"];
+  const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
+  for (const dimension of ["store", "developer", "spu"]) {
+    for (const [domain, expected] of [["sales", sales], ["performance", performance]] as const) {
+      assert.deepEqual(defaultVisibleColumnKeys(domain, dimension), expected);
+      const config = visibleColumns(domain, undefined, [], dimension);
+      assert.deepEqual(config.map(c => c.key), expected);
+      const identity = config.find(c => c.key === "identity")!;
+      assert.equal(identity.labelZh, ({ store: "店铺", developer: "开发员", spu: "SPU" })[dimension]);
+      assert.equal(sellfoxColumnValue(identity, { identity: "汇总", title: "商品标题" }), "汇总");
+      const hidden = columns[domain].filter(c => !expected.includes(c.key)).map(c => c.key);
+      assert.deepEqual(visibleColumns(domain, hidden, [], dimension).map(c => c.key), hidden);
+      assert.deepEqual(visibleColumns(domain, [], [], dimension), []);
+    }
+    const dates = ["2026-10-24", "2026-10-25"];
+    assert.deepEqual(visibleColumns("sales", undefined, dates, dimension, true).map(c => c.key), [...sales, ...dates.map(date => `day:${date}`)]);
+    assert.deepEqual(visibleColumns("sales", ["subtotal"], dates, dimension, true).map(c => c.key), ["subtotal", ...dates.map(date => `day:${date}`)]);
+  }
+});
+
+test("product dimensions and other domains retain their existing column defaults", () => {
+  const sales = ["image", "identity", "name", "analysis", "operations", "salesInsight", "parentAsin", "msku", "sku", "title", "fulfillable", "subtotal"];
+  const performance = ["image", "identity", "name", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
+  for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
+    assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
+    assert.deepEqual(visibleColumns("sales", undefined, [], dimension).map(c => c.key), sales);
+    assert.deepEqual(defaultVisibleColumnKeys("performance", dimension), performance);
+    const config = visibleColumns("performance", undefined, [], dimension);
+    assert.deepEqual(config.map(c => c.key), performance);
+    assert.deepEqual(config.find(c => c.key === "identity")?.parts, ["title", "identity"]);
+  }
+  for (const domain of ["listings", "ads"]) {
+    for (const dimension of ["msku", "store", "developer", "spu"]) {
+      assert.deepEqual(defaultVisibleColumnKeys(domain, dimension), columns[domain].filter(c => c.defaultVisible).map(c => c.key));
+    }
+  }
+});
+
+test("workbench CSV export resolves rollup defaults without column params and honors explicit columns", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ identity: "汇总", name: "汇总", title: "商品标题", subtotal: 3, saleQuantity: 3 }], total: 1, totals: [] }] } as unknown as PrismaClient;
+  try {
+    for (const domain of ["sales", "performance"] as const) {
+      for (const dimension of ["store", "developer", "spu"]) {
+        const url = new URL(`http://localhost/?dimension=${dimension}&from=2026-10-25&to=2026-10-25`);
+        const query = sellfoxBrowseQuery(url);
+        const csv = await (await sellfoxWorkbenchExport(domain, query, scope, url)).text();
+        const expected = visibleColumnCsv(visibleColumns(domain, undefined, [], dimension), []).trim();
+        assert.equal(csv.trim().split("\r\n")[0], expected);
+        assert.ok(!csv.includes("商品标题"));
+        url.searchParams.append("column", "name"); url.searchParams.append("column", "title");
+        const custom = await (await sellfoxWorkbenchExport(domain, query, scope, url)).text();
+        assert.equal(custom.trim().split("\r\n")[0], '"店铺/站点","标题"');
+        assert.ok(custom.includes("商品标题"));
+      }
+    }
+  } finally { globals.prisma = previous; }
 });
 
 
