@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 import { workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
-import { defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
+import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
 import { browseEmptyMessage, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
 
 test("workbench matrix URL round trips independent dimensions, metric, zero filter and ad filters", () => {
@@ -41,6 +41,32 @@ test("matrix enumerates business days including leap day and rejects unbounded/o
   assert.deepEqual(workbenchDateRange(sellfoxBrowseQuery(new URL('http://localhost/?from=2024-02-28&to=2024-03-01'))), ["2024-02-28", "2024-02-29", "2024-03-01"]);
   assert.throws(() => workbenchDateRange(sellfoxBrowseQuery(new URL('http://localhost/?from=2026-01-01&to=2026-10-01'))), /90/);
   assert.throws(() => workbenchDateRange(sellfoxBrowseQuery(new URL('http://localhost/?allDates=1'))), /日期范围/);
+});
+test("fallback dates freeze once and round trip with the same currency, scope filters and page", () => {
+  for (const domain of ["sales", "performance"] as const) {
+    for (const currency of [undefined, "", "CAD"]) {
+      const params = new URLSearchParams({ domain, onlySettle: domain === "performance" ? "1" : "0", page: "2", shopExternalId: "s1" });
+      if (currency !== undefined) params.set("currency", currency);
+      const view = readSellfoxView(params);
+      const resolved = backfillSellfoxViewDates(view, ["2026-10-16", "2026-10-14", "2026-10-15"]);
+      assert.deepEqual(resolved, { ...view, from: "2026-10-14", to: "2026-10-16" });
+      assert.equal(view.from, "");
+      assert.equal(backfillSellfoxViewDates(resolved, ["2026-10-25"]), resolved);
+      const reloaded = readSellfoxView(sellfoxViewParams(resolved));
+      assert.deepEqual(reloaded, resolved);
+      assert.equal(sellfoxViewParams(reloaded, true).toString(), sellfoxViewParams(resolved, true).toString());
+    }
+  }
+});
+test("date backfill never invents dates, changes explicit/open-ended ranges or restricts all history", () => {
+  const implicit = { ...defaultSellfoxView, domain: "performance" as const };
+  for (const invalid of [undefined, null, [], "2026-10-16", [null], ["2026-02-30"], ["2026-10-16", "invalid"]]) {
+    assert.equal(backfillSellfoxViewDates(implicit, invalid), implicit);
+  }
+  for (const view of [
+    { ...implicit, from: "2026-10-01" }, { ...implicit, to: "2026-10-20" },
+    { ...implicit, allDates: true }, { ...implicit, domain: "listings" as const },
+  ]) assert.equal(backfillSellfoxViewDates(view, ["2026-10-16"]), view);
 });
 test("UI browse SQL binds scope and search text, filters after entity aggregation, and never reads raw payload", () => {
   const query = sellfoxBrowseQuery(new URL('http://localhost/?from=2026-10-01&to=2026-10-07&search=%27%3BDROP%20TABLE&hideZero=1&dimension=asin'));
@@ -124,8 +150,14 @@ test("performance browse selects and sums elevated fee fields and prefers listin
   const query = sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-01&to=2026-10-02"));
   const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" });
   assert.match(sql.text, /s\."promotionDiscount",s\."giftWrapFee",s\."imageUrl"/);
-  assert.match(sql.text, /sum\("promotionDiscount"\)::float/);
-  assert.match(sql.text, /sum\("giftWrapFee"\)::float/);
+  // Both entity aggregation and currency KPI totals must include non-null fees
+  // even beside null rows, and yield 0 when every fee in the group is null.
+  for (const key of ["promotionDiscount", "giftWrapFee"]) {
+    assert.equal(sql.text.split(`COALESCE(sum("${key}"),0)::float AS "${key}"`).length - 1, 2);
+    assert.ok(!sql.text.includes(`count("${key}")`));
+  }
+  // Other unknown metrics still preserve missing-data semantics.
+  assert.match(sql.text, /CASE WHEN count\("grossProfit"\)=count\(\*\) THEN sum\("grossProfit"\)::float END/);
   assert.match(sql.text, /COALESCE\(NULLIF\(l\."mainImage",''\),NULLIF\(s\."imageUrl",''\)\)/);
   assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\."imageUrl"/);
 });
@@ -134,7 +166,9 @@ test("performance fee columns are numeric and available; empty browse guidance f
   const fees = visibleColumns("performance").filter(column => ["promotionDiscount", "giftWrapFee"].includes(column.key));
   assert.deepEqual(fees.map(({ key, unavailable, numeric }) => [key, unavailable, numeric]), [["promotionDiscount", undefined, true], ["giftWrapFee", undefined, true]]);
   assert.equal(sellfoxColumnValue(fees[0], { promotionDiscount: 12.5 }), 12.5);
+  assert.equal(sellfoxColumnValue(fees[0], { promotionDiscount: 0 }), 0);
+  assert.equal(sellfoxColumnValue(fees[1], { giftWrapFee: 0 }), 0);
   assert.match(browseEmptyMessage("sales", { workerOnline: false } as never) ?? "", /Worker.*离线.*立即同步/);
-  assert.match(browseEmptyMessage("performance", { workerOnline: true, latestSuccessByResource: {} } as never) ?? "", /尚无产品表现同步成功记录/);
+  assert.match(browseEmptyMessage("performance", { workerOnline: true, latestSuccessByResource: {} } as never) ?? "", /尚无销售利润同步成功记录/);
   assert.match(browseEmptyMessage("sales", { workerOnline: true, latestSuccessByResource: { sales: { id: "r", resource: "sales", status: "done", startedAt: "2026-10-26" } } } as never) ?? "", /调整日期范围.*补数/);
 });

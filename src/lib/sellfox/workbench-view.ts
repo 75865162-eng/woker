@@ -25,6 +25,13 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     page: Number.isSafeInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1, allDates: params.get("allDates") === "1",
   };
 }
+/** Freeze only implicit sales/profit dates; explicit and all-history views stay intact. */
+export function backfillSellfoxViewDates(view: SellfoxView, dates: unknown): SellfoxView {
+  if (!["sales", "performance"].includes(view.domain) || view.allDates || view.from || view.to) return view;
+  if (!Array.isArray(dates) || !dates.length || !dates.every(isSellfoxDate)) return view;
+  const sorted = [...dates].sort();
+  return { ...view, from: sorted[0], to: sorted[sorted.length - 1] };
+}
 export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
   const params = new URLSearchParams();
   if (!forRequest && view.salesView === "matrix") params.set("salesView", "matrix");

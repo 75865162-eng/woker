@@ -29,6 +29,7 @@ export async function verifySellfoxP0Sql(query: Query) {
       VALUES ('all','org','ws','s','2026-10-24','m1','m1','A','USD','{}',now(),100,20,5);`);
     // Execute the actual incremental migration against populated prior views/indexes.
     await query(await readFile("prisma/migrations/20261026010000_sellfox_sales_profit_p0/migration.sql", "utf8"));
+    await query(await readFile("prisma/migrations/20261026020000_sellfox_profit_fees_image_fallback/migration.sql", "utf8"));
     assert.equal((await query('SELECT orders FROM sellfox_sales_daily')).rows[0].orders, null);
     assert.equal((await query('SELECT "onlySettle" FROM sellfox_profit_daily')).rows[0].onlySettle, false);
     await query(`UPDATE "SellfoxSalesDailySnapshot" SET orders=0;
@@ -46,6 +47,7 @@ export async function verifySellfoxP0Sql(query: Query) {
     assert.equal(orders.rows[0].mainImage, 'https://m.media-amazon.com/images/I/fixture.jpg');
     const all = await read("performance", ""), settled = await read("performance", "onlySettle=1");
     assert.equal(all.total, 1); assert.equal(all.totals[0].saleRevenue, 100);
+    assert.equal(all.rows[0].promotionDiscount, 0); assert.equal(all.totals[0].giftWrapFee, 0);
     assert.equal(settled.total, 1); assert.equal(settled.totals[0].saleRevenue, 40);
     assert.equal(settled.rows[0].mainImage, orders.rows[0].mainImage);
     await query(`INSERT INTO "SellfoxSalesDailySnapshot" (id,"organizationId","workspaceId","storeId","reportDate","sourceKey",msku,asin,quantity,revenue,currency,payload,"updatedAt","syncedAt",orders)
@@ -59,6 +61,26 @@ export async function verifySellfoxP0Sql(query: Query) {
     const incomplete = workbenchReadSql("sales", sellfoxBrowseQuery(new URL('http://localhost/?from=2026-10-23&to=2026-10-24&metric=orders')), {organizationId:'org',workspaceId:'ws'});
     const incompleteRows = (await query(incomplete.text, incomplete.values)).rows[0].rows as Record<string, unknown>[];
     assert.equal(incompleteRows[0].subtotal, null);
+    // Optional fees coalesce at entity and totals levels; unknown core metrics
+    // remain null. Different currencies and settlement partitions never mix.
+    await query(`INSERT INTO "SellfoxProductDailySnapshot" (id,"organizationId","workspaceId","storeId","reportDate","sourceKey",msku,asin,currency,payload,"updatedAt","promotionDiscount","giftWrapFee")
+      VALUES ('fee','org','ws','s','2026-10-24','m2','m2','A','USD','{}',now(),12.5,1.25),
+        ('fee-null','org','ws','s','2026-10-24','m3','m3','B','USD','{}',now(),NULL,NULL),
+        ('fee-cad','org','ws','s','2026-10-24','mc','mc','C','CAD','{}',now(),9,2);`);
+    const fees = await read("performance", "dimension=asin");
+    const combined = fees.rows.find(row => row.identity === "A")!;
+    assert.equal(combined.promotionDiscount, 12.5); assert.equal(combined.giftWrapFee, 1.25);
+    assert.equal(combined.saleRevenue, null);
+    const nullFees = fees.rows.find(row => row.identity === "B")!;
+    assert.equal(nullFees.promotionDiscount, 0); assert.equal(nullFees.giftWrapFee, 0);
+    assert.equal(fees.totals.find(row => row.currency === "USD")?.promotionDiscount, 12.5);
+    assert.equal(fees.totals.find(row => row.currency === "USD")?.giftWrapFee, 1.25);
+    assert.equal(fees.totals.find(row => row.currency === "CAD")?.promotionDiscount, 9);
+    const paged = await read("performance", "dimension=asin&pageSize=1");
+    assert.equal(paged.rows.length, 1); assert.deepEqual(paged.totals, fees.totals);
+    const settledFees = await read("performance", "dimension=asin&onlySettle=1");
+    assert.equal(settledFees.totals[0].promotionDiscount, 0);
+    assert.equal(settledFees.totals[0].giftWrapFee, 0);
   } finally { await query("ROLLBACK"); }
 }
 

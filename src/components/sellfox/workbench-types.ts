@@ -4,10 +4,10 @@ export type StoreRow = { id: string; externalId: string; name: string; marketpla
 export type Run = { id: string; resource: string; status: string; summary?: Row | null; error?: string | null; startedAt: string; finishedAt?: string | null };
 export type Overview = { configured: boolean; stores: StoreRow[]; counts: Record<string, number>; coverage?: { inventoryStores: number; inventoryMissingStores: number; salesStores: number; salesMissingStores: number }; latestRuns: Run[]; latestSuccessByResource?: Record<string, Run>; workerOnline?: boolean };
 export type Schedule = { backfillStart?: string | null; backfillNextDate?: string | null; resource: string; enabled: boolean; intervalMinutes: number; lastEnqueuedAt?: string | null; nextRunAt?: string | null };
-export const resourceLabels: Record<string, string> = { stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "产品表现", hourly: "SP 小时样本", listings: "在线商品", ads_report: "广告下载报告" };
+export const resourceLabels: Record<string, string> = { stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "销售利润", hourly: "SP 小时样本", listings: "在线商品", ads_report: "广告下载报告" };
 export function browseEmptyMessage(domain: string, overview: Overview | null) {
   if (domain !== "sales" && domain !== "performance") return null;
-  const label = domain === "sales" ? "销量" : "产品表现";
+  const label = domain === "sales" ? "销量" : "销售利润";
   if (overview?.workerOnline === false) return `Worker 当前离线，无法自动同步${label}数据。可点“立即同步”排队，或检查 Worker 状态。`;
   if (!overview?.latestSuccessByResource?.[domain]) return `尚无${label}同步成功记录，请点“立即同步”获取数据。`;
   return `当前筛选日期暂无${label}数据，可调整日期范围，或点“立即同步”补数。`;

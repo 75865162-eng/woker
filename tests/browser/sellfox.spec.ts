@@ -18,8 +18,11 @@ async function switchWorkspace(page: Page) {
 async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-10-24", rowCount = 1, tkStore = false) {
   const calls: Array<{ path: string; query: URLSearchParams; workspace: string; body: unknown }> = [];
   const state = { configured: true, delayPath: "", pending: false, release: () => {} };
+  // Context routing also intercepts the original image opened in a new tab.
+  await page.context().route("https://m.media-amazon.com/**", route => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6XcAAAAASUVORK5CYII=", "base64") }));
   await page.route("**/*", async (route) => {
     const request = route.request(); const url = new URL(request.url());
+    if (url.origin === "https://m.media-amazon.com") return route.fallback();
     expect(url.origin).toBe("http://127.0.0.1:43221");
     if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
@@ -37,10 +40,10 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
     if (url.pathname.endsWith("/sync")) return route.fulfill({ status: 202, json: { runId: "test-run", status: "queued" } });
     if (/\/(sales|performance|runs)\/row$/.test(url.pathname)) return route.fulfill({ json: { payload: { msku: "test-msku", token: "[已隐藏]" }, truncated: true } });
     const domain = url.pathname.split("/").pop();
-    const from = url.searchParams.get("from") || "2026-10-24", to = url.searchParams.get("to") || from;
+    const from = url.searchParams.get("from") || (domain === "performance" ? "2026-10-16" : "2026-10-24"), to = url.searchParams.get("to") || from;
     const dates = Array.from({length: Math.min(90,Math.max(1,(Date.parse(to)-Date.parse(from))/86400000+1))}, (_,i)=>new Date(Date.parse(from)+i*86400000).toISOString().slice(0,10));
     const daily = Object.fromEntries(dates.map(d=>[d,2]));
-    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2}] : domain === "ads_report" ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : domain === "sales" ? [{ currency:"USD", subtotal:2, daily }] : [], dates: domain === "sales" ? dates : [], rows: Array.from({length: rowCount}, (_, index) => ({ id: index ? `row-${index}` : "row", identity: `${workspace}-entity-page${url.searchParams.get("page") || 1}${index ? `-${index}` : ""}`, asin: `B0SAMPLE${String(index).padStart(3,"0")}`, daily, dailyQuantity: daily, ...Object.fromEntries(dates.map(d=>[`day:${d}`,2])), mainImage: index === 0 ? "https://m.media-amazon.com/images/I/fixture.jpg" : null, average7:2, title: `布局样本商品标题 ${index+1}`, grossProfit: -10, saleRevenue:200, netRevenue:180, orderNum:4, adCost:2, subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, acos:0.125, roas:8, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store })), pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: Number(url.searchParams.get("pageSize") || 50), total: 51 } } });
+    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2, promotionDiscount:12.5, giftWrapFee:0}] : domain === "ads_report" ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : domain === "sales" ? [{ currency:"USD", subtotal:2, daily }] : [], dates: domain === "sales" || (domain === "performance" && !url.searchParams.has("from") && !url.searchParams.has("to")) ? dates : [], rows: Array.from({length: rowCount}, (_, index) => ({ id: index ? `row-${index}` : "row", identity: `${workspace}-entity-page${url.searchParams.get("page") || 1}${index ? `-${index}` : ""}`, asin: `B0SAMPLE${String(index).padStart(3,"0")}`, daily, dailyQuantity: daily, ...Object.fromEntries(dates.map(d=>[`day:${d}`,2])), mainImage: index === 0 ? "https://m.media-amazon.com/images/I/fixture.jpg?width=80&format=jpg" : null, average7:2, title: `布局样本商品标题 ${index+1}`, grossProfit: -10, saleRevenue:200, netRevenue:180, orderNum:4, adCost:2, promotionDiscount:0, giftWrapFee:1.25, subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, acos:0.125, roas:8, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store })), pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: Number(url.searchParams.get("pageSize") || 50), total: 51 } } });
     throw new Error(`Unexpected test request: ${url.pathname}`);
   });
   await page.goto(`http://127.0.0.1:43221/?${params}`);
@@ -414,7 +417,7 @@ test("P0 orders, settlement scope, current image and KPI follow browse and expor
   await expect(page.getByRole("link", {name:"CSV",exact:true})).toHaveAttribute("href", /metric=orders/);
   const kpi = page.getByLabel("关键指标汇总");
   await expect(kpi).toContainText("订单量"); await expect(kpi).toContainText("USD"); await expect(kpi).toContainText("2");
-  await expect(page.getByRole("link", {name:"图",exact:true})).toHaveAttribute("href", "https://m.media-amazon.com/images/I/fixture.jpg");
+  await expect(page.getByRole("link", {name:"商品主图",exact:true})).toHaveAttribute("href", "https://m.media-amazon.com/images/I/fixture.jpg?width=80&format=jpg");
   await page.getByRole("button", {name:"下一页"}).click();
   await expect(page.getByText("workspace-a-entity-page2",{exact:true})).toBeVisible();
   await expect(kpi).toContainText("订单量2");
@@ -427,4 +430,57 @@ test("P0 orders, settlement scope, current image and KPI follow browse and expor
   await expect(page.getByRole("checkbox", {name:"只统计已结算",exact:true})).toBeChecked();
   await page.getByRole("button",{name:"重置",exact:true}).click();
   await expect(page.getByRole("checkbox", {name:"只统计已结算",exact:true})).not.toBeChecked();
+});
+
+for (const domain of ["sales", "performance"] as const) {
+  test(`${domain} fallback dates populate inputs and URL once, with stable refresh and currency`, async ({ page }) => {
+    const { calls } = await setup(page, `domain=${domain}&currency=&onlySettle=1`);
+    const date = domain === "sales" ? "2026-10-24" : "2026-10-16";
+    const browseCalls = () => calls.filter(call => call.path.endsWith(`/${domain}`));
+    await expect(page.getByLabel("开始日期")).toHaveValue(date);
+    await expect(page.getByLabel("结束日期")).toHaveValue(date);
+    await expect.poll(() => browseCalls().length).toBe(2);
+    expect(browseCalls()[0].query.has("from")).toBe(false);
+    expect(new URL(page.url()).searchParams.get("from")).toBe(date);
+    expect(new URL(page.url()).searchParams.get("to")).toBe(date);
+    await expect(page.getByLabel("币种筛选")).toHaveValue("");
+    const expected = browseCalls()[1].query.toString();
+    await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", new RegExp(`from=${date}&to=${date}`));
+    await page.waitForTimeout(750); // More than two request debounce windows: no backfill loop.
+    expect(browseCalls()).toHaveLength(2);
+    await page.getByRole("button", { name: "刷新本地列表", exact: true }).click();
+    await expect.poll(() => browseCalls().length).toBe(3);
+    expect(browseCalls()[2].query.toString()).toBe(expected);
+    await page.reload();
+    await expect.poll(() => browseCalls().length).toBe(4);
+    expect(browseCalls()[3].query.toString()).toBe(expected);
+    await expect(page.getByLabel("开始日期")).toHaveValue(date);
+    await expect(page.getByLabel("币种筛选")).toHaveValue("");
+  });
+}
+
+test("profit thumbnails load safely, missing images stay blank and fee zeros/numbers reach rows and KPI", async ({ page }) => {
+  const { calls } = await setup(page, "domain=performance", 2);
+  const image = page.getByRole("img", { name: "商品主图", exact: true });
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await expect(image).toHaveAttribute("loading", "lazy");
+  await expect(image.locator("..")).toHaveAttribute("href", "https://m.media-amazon.com/images/I/fixture.jpg?width=80&format=jpg");
+  await expect(image.locator("..")).toHaveAttribute("target", "_blank");
+  const popupPromise = page.waitForEvent("popup");
+  await image.click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL("https://m.media-amazon.com/images/I/fixture.jpg?width=80&format=jpg");
+  await popup.close();
+  await expect(page.getByRole("region", { name: "记录摘要" })).toHaveCount(0);
+  const rows = page.locator("tbody tr");
+  const headers = await page.getByRole("columnheader").allTextContents();
+  const promotion = headers.indexOf("促销折扣"), gift = headers.indexOf("礼品包装费");
+  await expect(rows.nth(0).locator("td").nth(promotion)).toHaveText("0");
+  await expect(rows.nth(0).locator("td").nth(gift)).toHaveText("1.25");
+  await expect(rows.nth(1).locator("td").first()).toHaveText("—");
+  await expect(page.getByLabel("关键指标汇总")).toContainText("促销折扣12.5");
+  await expect(page.getByLabel("关键指标汇总")).toContainText("礼品包装费0");
+  await expect(page.getByLabel("立即同步资源")).toContainText("销售利润");
+  expect(calls.filter(call => call.body !== null)).toEqual([]);
 });

@@ -72,7 +72,12 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
     LEFT JOIN listing l ON l."storeId"=s."storeId" AND l.msku=s.msku WHERE ${Prisma.join(filters, " AND ")})`;
-  const safeSum = (key: string) => { const col = Prisma.raw(`"${key}"`); return Prisma.sql`CASE WHEN count(${col})=count(*) THEN sum(${col})::float END`; };
+  const safeSum = (key: string) => {
+    const col = Prisma.raw(`"${key}"`);
+    // These optional fees use null=0 at both entity and filtered-total levels.
+    if (domain === "performance" && ["promotionDiscount", "giftWrapFee"].includes(key)) return Prisma.sql`COALESCE(sum(${col}),0)::float`;
+    return Prisma.sql`CASE WHEN count(${col})=count(*) THEN sum(${col})::float END`;
+  };
   const aggregateColumns = domain === "performance" ? ["saleQuantity", "saleRevenue", "grossProfit", "adCost", "promotionDiscount", "giftWrapFee", "orderNum", "netRevenue", "fbaQuantity", "fbmQuantity"] : ["impressions", "clicks", "cost", "adOrders", "adSales"];
   const groups = domain === "sales" ? Prisma.sql`days AS (
     SELECT "storeId",identity,currency,"reportDate",min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,

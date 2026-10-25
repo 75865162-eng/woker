@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { sellfoxDateAt, sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
-import { defaultSellfoxView, readSellfoxView, sellfoxDomains, sellfoxViewParams, type SellfoxView } from "@/lib/sellfox/workbench-view";
+import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxDomains, sellfoxViewParams, type SellfoxView } from "@/lib/sellfox/workbench-view";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { SellfoxConnectionBar } from "./connection-bar";
@@ -64,7 +64,7 @@ export function SellfoxWorkbench() {
   }, []);
 
   function navigate(patch: Partial<SellfoxView>, replace = false) {
-    const next = { ...view, page: 1, ...(patch.domain && patch.domain !== view.domain ? { searchType: "" } : {}), ...patch, ...(patch.domain === "performance" && !view.currency ? { currency: "USD" } : {}) }; setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setPagination({ page: next.page, pageSize: next.pageSize ?? 20, total: 0 }); setLoading(true); setError("");
+    const next = { ...view, page: 1, ...(patch.domain && patch.domain !== view.domain ? { searchType: "" } : {}), ...patch }; setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setPagination({ page: next.page, pageSize: next.pageSize ?? 20, total: 0 }); setLoading(true); setError("");
     const url = `${window.location.pathname}?${withScope(sellfoxViewParams(next))}`;
     if (replace) window.history.replaceState(null, "", url); else window.history.pushState(null, "", url);
   }
@@ -104,7 +104,14 @@ export function SellfoxWorkbench() {
         if (view.domain === "overview") return;
         const response = await fetch(`${endpoint(view.domain)}?${withScope(sellfoxViewParams(view, true))}`, { headers, cache: "no-store", signal: controller.signal });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || "读取赛狐数据失败。");
-        if (!canceled && scopeEpoch.current === epoch) { setRows(data.rows ?? []); setDates(data.dates ?? []); setTotals(data.totals ?? []); setPagination(data.pagination ?? { page: view.page, pageSize: 20, total: 0 }); }
+        if (!canceled && scopeEpoch.current === epoch) {
+          setRows(data.rows ?? []); setDates(data.dates ?? []); setTotals(data.totals ?? []); setPagination(data.pagination ?? { page: view.page, pageSize: 20, total: 0 });
+          const resolved = backfillSellfoxViewDates(view, data.dates);
+          if (resolved !== view) {
+            setView(resolved);
+            window.history.replaceState(null, "", `${window.location.pathname}?${withScope(sellfoxViewParams(resolved))}`);
+          }
+        }
       } catch (cause) { if (!canceled && scopeEpoch.current === epoch) setError(cause instanceof Error ? cause.message : "读取赛狐数据失败。"); }
       finally { inFlight = false; if (!canceled && scopeEpoch.current === epoch) setLoading(false); }
     }
