@@ -359,6 +359,15 @@ Summary 投影会继承 `ProductRecord.createdAt`，不会把投影执行时间�
 
 商品业务流转通知：交办通知包含 `productId`、`sku`、`stage`、`dueAt`、`workspaceId` 和组织范围；工作台深链通过现有 `openProduct` 按 SKU/工作区打开。到期后由现有 amazon-worker 每分钟扫描仍处于运营确认、美工处理中或美工待确认阶段的商品，按商品/阶段/期限/收件人幂等发送一次超期通知；交办已读不抑制超期提醒，阶段或期限推进后不再重复旧提醒。现有 TeamRosterMember 没有独立 userId 字段，当前通过分配成员的 roster ID 对齐组织成员 userId，不能匹配时 worker 写 warning；后续如 roster ID 不等于登录 userId，应增加明确映射字段，不能退回姓名匹配收件人。阶段白名单纳入 `design_review`，与当前 workflow 中它属于设计阶段的责任归属保持一致。SLA 仍为 3 天。
 
+登录弹窗与通知已读状态分离：`/api/notifications/user` 额外返回 `pendingWorkflowNotifications` 和不可用于认证的 `notificationSessionKey`。待办从当前账号收到的交办/超期通知关联组织、工作区内的权威 `ProductRecord`，核对当前阶段和当前 roster 负责人；排除完成、终止、转交和删除商品，同商品当前阶段合并重复通知，不受历史通知分页或 readAt 限制。续期任务继续提醒，期限和 SKU 使用当前商品值。关闭、知道了、Escape、遮罩只收起业务提醒；通知列表和打开商品仍可记录已读，已读不代表业务完成。
+
+浏览器只在 localStorage 保存组织/用户对应的本次登录显示标记（session 的单向摘要，无认证能力），刷新、路由切换和同浏览器其他标签页不再次自动弹出；新登录生成新标记，仍有待办才弹。存储不可用时降级为组件生命周期内去重。既有 15 秒轮询更新已打开的待办，不增加定时器；每次读取增加按收件人索引关联当前商品的窄查询，不读取完整商品 payload、不新增表或后台任务。回滚上述 API、组件和辅助模块即可恢复原交互，无数据迁移。
+
+隔离验收：`npx tsx --test tests/pending-workflow-notifications.test.ts tests/user-notification-helpers.test.ts`；`npx playwright test --config tests/browser/notifications.config.ts` 使用模拟接口与真实 Tailwind 样式，验证关闭不写已读、刷新/轮询去重、重新登录再提醒、完成后不提醒和请求失败重试，不访问生产库。
+
+2026-10-26 本地验证：核心 294 项通过，最终相关 9 项与浏览器 2 项通过，`git diff --check` 通过。`check:fast` 在 lint 阶段被本地 eslint-config-next / @rushstack/eslint-patch 加载错误阻断；单独 typecheck 只报告既有 operations.spec.ts、sellfox-listing-identity.spec.ts、sellfox.spec.ts 的两套 PostCSS 类型冲突。未修依赖、未运行生产构建或真实数据库集成/性能压测、未部署；合码/发布前须在依赖一致的环境补齐 lint、类型和完整 check。
+
+
 Outbox 处理会同时校验事件中的 organization/workspace 与商品事实记录的作用域；当旧事件处理到更新后的商品时，投影失败状态使用事务实际锁定的当前 revision，而不是事件 payload 中可能过期的 revision。
 
 Product Center 的 listing 投影会先删除同一商品、organization/workspace 下不再对应当前账号、marketplace、SKU 的旧 listing，再写入当前 listing。账号或 marketplace 变更不会在详情中残留旧关系。

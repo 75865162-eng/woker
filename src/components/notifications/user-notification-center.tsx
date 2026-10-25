@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanAccessModule } from "@/lib/accounts/permissions";
-import { getCurrentPopupNotificationId, getProductWorkflowNotificationLink, mergeWorkspaceScope } from "@/lib/notifications/user-notification-helpers";
+import { getProductWorkflowNotificationLink, mergeWorkspaceScope } from "@/lib/notifications/user-notification-helpers";
 import { emitWorkspaceScopeChanged } from "@/lib/workspace/workspace-scope-events";
 
 type UserNotification = {
@@ -31,6 +31,7 @@ function formatNotificationTime(value: string) {
 
 export function UserNotificationCenter() {
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [pendingWorkflow, setPendingWorkflow] = useState<UserNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [popup, setPopup] = useState<UserNotification | null>(null);
@@ -40,18 +41,24 @@ export function UserNotificationCenter() {
   const canViewProducts = roleCanAccessModule(shellUser?.userRole, "products", shellUser?.rolePermissions);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const popupPanelRef = useRef<HTMLDivElement | null>(null);
-  const initializedRef = useRef(false);
+  const workflowSessionRef = useRef<string | null>(null);
+  const workflowDismissedRef = useRef(false);
+  const loadSequenceRef = useRef(0);
   const shownIdsRef = useRef<Set<string>>(new Set());
   const notificationsRef = useRef(notifications);
 
   const loadNotifications = useCallback(async () => {
-    const response = await fetch("/api/notifications/user?limit=50", { cache: "no-store" });
+    const sequence = ++loadSequenceRef.current;
+    const response = await fetch("/api/notifications/user?limit=50", { cache: "no-store" }).catch(() => null);
+    if (!response) return;
     const data = (await response.json().catch(() => ({}))) as {
       notifications?: UserNotification[];
       unreadCount?: number;
+      pendingWorkflowNotifications?: UserNotification[];
+      notificationSessionKey?: string;
     };
 
-    if (!response.ok) {
+    if (!response.ok || sequence !== loadSequenceRef.current) {
       return;
     }
 
@@ -61,19 +68,40 @@ export function UserNotificationCenter() {
     setNotifications(nextNotifications);
     setUnreadCount(data.unreadCount ?? unread.length);
 
-    const nextPopup = (canViewProducts ? unread.find((item) => item.type.startsWith("product_workflow")) : undefined)
-      ?? unread.find((item) => !item.type.startsWith("product_workflow") && !shownIdsRef.current.has(item.id));
-    if (nextPopup) {
-      const nextIndex = nextNotifications.filter((item) => !item.readAt && item.type.startsWith("product_workflow")).findIndex((item) => item.id === nextPopup.id);
-      if (!shownIdsRef.current.has(nextPopup.id)) {
+    const pending = canViewProducts && Array.isArray(data.pendingWorkflowNotifications) ? data.pendingWorkflowNotifications : [];
+    setPendingWorkflow(pending);
+    const sessionKey = data.notificationSessionKey;
+    if (sessionKey && workflowSessionRef.current !== sessionKey) {
+      workflowSessionRef.current = sessionKey;
+      workflowDismissedRef.current = false;
+      shownIdsRef.current.clear();
+      setPopup(null);
+    }
+    const storageKey = `workflow-popup:${shellUser?.organizationId ?? ""}:${shellUser?.userId ?? ""}`;
+    let alreadyShown = workflowDismissedRef.current;
+    try {
+      alreadyShown ||= localStorage.getItem(storageKey) === sessionKey;
+    } catch { /* In-memory suppression still works when browser storage is unavailable. */ }
+    if (pending.length && sessionKey && !alreadyShown) {
+      workflowDismissedRef.current = true;
+      try {
+        localStorage.setItem(storageKey, sessionKey);
+      } catch { /* The current mount still suppresses repeated polling. */ }
+      setPopupIndex(0);
+      setPopup(pending[0]);
+    } else {
+      // Keep an open reminder aligned with task completion, without reopening a dismissed one.
+      setPopup((current) => current?.type.startsWith("product_workflow")
+        ? (pending.length ? current : null)
+        : current);
+      const nextPopup = unread.find((item) => !item.type.startsWith("product_workflow") && !shownIdsRef.current.has(item.id));
+      if (nextPopup) {
         shownIdsRef.current.add(nextPopup.id);
-        setPopupIndex(Math.max(0, nextIndex));
-        setPopup(nextPopup);
+        setPopup((current) => current ?? nextPopup);
       }
     }
     notificationsRef.current = nextNotifications;
-    initializedRef.current = true;
-  }, [canViewProducts]);
+  }, [canViewProducts, shellUser?.organizationId, shellUser?.userId]);
 
   useEffect(() => {
     void loadNotifications();
@@ -81,7 +109,10 @@ export function UserNotificationCenter() {
       void loadNotifications();
     }, 15000);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      ++loadSequenceRef.current;
+    };
   }, [loadNotifications]);
 
   const markRead = useCallback(async (ids: string[]) => {
@@ -119,17 +150,16 @@ export function UserNotificationCenter() {
     setUnreadCount(0);
   }
 
-  const workflowUnread = notifications.filter((item) => !item.readAt && item.type.startsWith("product_workflow"));
-  const popupWorkflow = popup?.type.startsWith("product_workflow") ? workflowUnread : [];
-  const popupItem = popupWorkflow.length ? popupWorkflow[Math.min(popupIndex, popupWorkflow.length - 1)] : popup;
+  const popupWorkflow = popup?.type.startsWith("product_workflow") ? pendingWorkflow : [];
+  const displayedPopupIndex = Math.min(popupIndex, Math.max(0, popupWorkflow.length - 1));
+  const popupItem = popupWorkflow.length ? popupWorkflow[displayedPopupIndex] : popup;
   const popupMetadata = popupItem?.metadata && typeof popupItem.metadata === "object" ? popupItem.metadata as Record<string, unknown> : {};
   const popupDueAt = typeof popupMetadata.dueAt === "string" ? popupMetadata.dueAt : "";
   const overdue = popupItem?.type === "product_workflow_overdue" || (popupDueAt && new Date(popupDueAt).getTime() < Date.now());
   const popupLink = popupItem ? getProductWorkflowNotificationLink(popupItem) : null;
   const closePopup = useCallback(() => {
     setPopup(null);
-    const currentId = getCurrentPopupNotificationId(popupItem);
-    if (currentId) void markRead([currentId]);
+    if (popupItem && !popupItem.type.startsWith("product_workflow")) void markRead([popupItem.id]);
   }, [markRead, popupItem]);
   async function openNotificationProduct(item: UserNotification) {
     const link = getProductWorkflowNotificationLink(item);
@@ -244,7 +274,7 @@ export function UserNotificationCenter() {
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div>
                 <p className="text-sm font-bold text-foreground">业务流转提醒</p>
-                <p className="mt-0.5 text-xs font-medium text-muted">登录后自动提示当前账号相关的新任务</p>
+                <p className="mt-0.5 text-xs font-medium text-muted">每次登录提示尚未完成的任务，关闭后本次登录不再弹出</p>
               </div>
               <button type="button" className="rounded-md p-1 text-muted transition-colors hover:bg-surface-muted hover:text-foreground" title="关闭" onClick={closePopup}>
                 <X className="h-4 w-4" />
@@ -260,13 +290,13 @@ export function UserNotificationCenter() {
               </div> : null}
               {actionError ? <p role="alert" className="text-sm text-red-700">{actionError} <button className="underline" onClick={() => void markRead([popupItem?.id ?? ""])}>重试</button></p> : null}
               <div className="flex flex-wrap justify-end gap-2">
-                {popupWorkflow.length > 1 ? <Button variant="secondary" onClick={() => setPopupIndex((current) => (current + 1) % popupWorkflow.length)}>下一条（{popupIndex + 1}/{popupWorkflow.length}）</Button> : null}
+                {popupWorkflow.length > 1 ? <Button variant="secondary" onClick={() => setPopupIndex((current) => (Math.min(current, popupWorkflow.length - 1) + 1) % popupWorkflow.length)}>下一条（{displayedPopupIndex + 1}/{popupWorkflow.length}）</Button> : null}
                 <Button variant="secondary" onClick={closePopup}>
                   <X className="h-4 w-4" />
-                  关闭并标记已读
+                  关闭提醒
                 </Button>
                 {popupItem?.type.startsWith("product_workflow") && canViewProducts ? <Button onClick={() => void openNotificationProduct(popupItem)} disabled={!popupLink} title={!popupLink ? "通知缺少商品或工作区信息" : undefined}>打开商品</Button> : null}
-                <Button onClick={() => void closePopup()}>
+                <Button onClick={closePopup}>
                   <Bell className="h-4 w-4" />
                   知道了
                 </Button>
