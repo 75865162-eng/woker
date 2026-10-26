@@ -168,7 +168,15 @@ test("run polling preserves filters when switching to verified listing and adver
 test("listing current and advertising product daily browse locally and expose narrow Agent exports", async ({ page }) => {
   const { calls } = await setup(page, "domain=listings");
   await expect(page.getByRole("columnheader", { name: "7天销量", exact: true })).toBeVisible();
-  await expect(page.getByLabel("开始日期")).toBeDisabled();
+  await expect(page.getByLabel("开始日期")).toBeEnabled();
+  await expect(page.getByLabel("结束日期")).toBeEnabled();
+  await expect(page.getByLabel("开始日期")).toHaveValue("");
+  await expect(page.getByLabel("结束日期")).toHaveValue("");
+  expect(calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.has("from")).toBe(false);
+  await expect(page.getByLabel("日期快捷")).toBeEnabled();
+  await expect(page.getByLabel("配对状态（未同步）", { exact: true })).toBeDisabled();
+  await page.getByLabel("开始日期").fill("2024-01-15");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("from")).toBe("2024-01-15");
   await page.getByLabel("Listing 状态").selectOption("active");
   await expect.poll(() => calls.filter((call) => call.path.endsWith("/listings")).at(-1)?.query.get("status")).toBe("active");
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /listings\/export.*agent=1/);

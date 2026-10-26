@@ -1,5 +1,17 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 上架时间范围筛选 · BOX LOCAL ONLY
+
+基线 HEAD `c952c75`，分支 `codex/operations-p0-catalog-replenishment`。仅解锁 listings「上架时间」日期输入和既有快捷项，复用 `from` / `to` 对 `sellfox_listing_current` 的类型 TEXT 列 `openDate`（YYYY-MM-DD）作含首尾的范围比较；不是 `sourceUpdatedAt`「更新时间」。未设日期时保留全部 Listing，不默认昨天；只设一端时仅限制该端，设置任意范围时 NULL openDate 不匹配。「全部历史」和重置可清空范围。列表、计数、汇总、导出及 Agent 窄表共用此口径，facets 仍仅受组织/工作区/店铺/站点范围限制。
+
+不改 `defaultVisible`、schema/migration、其他域日期语义；stores 日期仍禁用。配对状态 / 划线价类型 / AWD / salesperson / fee 筛选保持锁定，**Fee-mining remains paused**；inventory range、firstSaleDate、bsrRank、dxmPublishState 筛选不属于本 slice，DXM 发布状态不解释为配对。无 live Sellfox API 或真实数据库写入，不 push/deploy/SSH/Mac。回滚仅还原本次 UI 与两条查询路径的 openDate 条件及配套测试，无数据操作。
+
+验证使用隔离 Prisma stub：browse-filters、listings-read、agent-read、workbench-read、browse-api 的 node:test，TypeScript、触及文件 ESLint 与 `git diff --check`；浏览器定向运行 `npm run test:sellfox:browser -- --grep 'listing current and advertising product daily'`，若 Chromium SIGTRAP 则记录、不绕过沙箱。完整 check/build、真实库与 P95 验证留待单独授权的合码/发布或性能专项。
+
+本轮结果：listings-read、agent-read、workbench-read、browse-api 文件通过；browse-filters 新增日期用例和其余既有用例通过，唯独旧广告默认列用例仍把标签/品牌/发货方式断言为未勾选，与 HEAD 已有默认配置不符。取 HEAD 原测试复跑同样失败，本轮不修改默认列或该无关断言。TypeScript、触及文件 ESLint、`git diff --check` 通过。浏览器启动在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，日期请求序列化页面断言未执行；未绕过沙箱，需在允许 Chromium 的环境补跑上述单项用例。
+
+---
+
 ## 2026-10-27 — listings 默认显示 DXM 发布状态 · BOX LOCAL ONLY
 
 基线 HEAD `e24796d`（`e24796d49ff66d22faa123c695968f3c18b516f1`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `dxmPublishState`「DXM 发布状态」`defaultVisible` 从 `false` 改为 `true`；**label 与 requiresField 不变**（`Listing 当前快照 dxmPublishState 类型投影；原值展示，非配对状态`）。status → dxmPublishState → fulfillment → image 源顺序保持不变。默认表头、初始勾选和无显式选列 CSV/XLSX 增加「DXM 发布状态」，紧接「状态」。仍只展示去首尾空格的字符串原值（如 `delete`），**不等于配对状态**；配对状态 / 划线价类型筛选继续灰显。显式单选、空选、取消 DXM 后会话保留继续优先，不迁移已有选择。

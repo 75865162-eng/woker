@@ -11,6 +11,35 @@ function elements(node: ReactNode): React.ReactElement<Props>[] {
   return [node, ...elements(node.props.children)];
 }
 
+test("listings use enabled openDate range inputs and shortcuts, patch dates and reset; stores stay disabled", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "listings", from: "2024-01-15", to: "2024-02-20" }, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    assert.ok(nodes.some(node => node.type === "span" && node.props.children === "上架时间"));
+    for (const [label, key, value] of [["开始日期", "from", "2024-01-15"], ["结束日期", "to", "2024-02-20"]] as const) {
+      const input = nodes.find(node => node.type === "input" && node.props["aria-label"] === label)!;
+      assert.equal(input.props.disabled, false);
+      assert.equal(input.props.value, value);
+      input.props.onChange!({ target: { value: "2024-02-01" } });
+      assert.deepEqual(patches.at(-1), { [key]: "2024-02-01", allDates: false });
+    }
+    const shortcut = nodes.find(node => node.type === "select" && node.props["aria-label"] === "日期快捷")!;
+    assert.ok(shortcut); assert.ok(!shortcut.props.disabled);
+    assert.deepEqual(elements(shortcut.props.children).map(node => [node.props.value, node.props.children]), [["custom", "自定义"], ["0", "今天"], ["-1", "昨天"], ["-6", "近7天"], ["-29", "近30天"], ["all", "全部历史"]]);
+    shortcut.props.onChange!({ target: { value: "all" } });
+    assert.deepEqual(patches.at(-1), { from: "", to: "", allDates: true });
+    nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+    assert.equal(patches.at(-1)?.from, "");
+    assert.equal(patches.at(-1)?.to, "");
+    assert.equal(patches.at(-1)?.allDates, false);
+    const stores = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "stores" }, stores: [], onChange: () => {}, onColumns: () => {} }));
+    for (const label of ["开始日期", "结束日期"]) assert.equal(stores.find(node => node.props["aria-label"] === label)!.props.disabled, true);
+    assert.equal(stores.some(node => node.props["aria-label"] === "日期快捷"), false);
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
+
 test("ads column picker defaults to image, rating, ratingCount and Buy Box across six tabs and respects explicit selections", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;

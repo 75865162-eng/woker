@@ -94,6 +94,40 @@ function factWhere(sql: Prisma.Sql) {
   return sql.text.slice(start, end > start ? end : undefined).replace(/\$\d+/g, "?");
 }
 
+test("agent listings rows, counts and export use optional openDate ranges; sales keeps reportDate and inventory ignores ranges", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory"] as const) {
+      for (const range of ["", "from=2024-01-15", "to=2024-02-20", "from=2024-01-15&to=2024-02-20"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        assert.equal(factWhere(calls[0]), factWhere(calls[1]));
+        assert.equal(factWhere(calls[0]), factWhere(calls[2]));
+        for (const sql of calls) {
+          for (const [date, operator] of [[query.from, ">="], [query.to, "<="]] as const) {
+            const openDate = new RegExp(`s\\."openDate"${operator}\\$(\\d+)`);
+            const reportDate = new RegExp(`"reportDate"${operator}\\$(\\d+)`);
+            if (domain === "inventory" || !date) {
+              assert.doesNotMatch(sql.text, openDate);
+              assert.doesNotMatch(sql.text, reportDate);
+              continue;
+            }
+            const match = sql.text.match(domain === "listings" ? openDate : reportDate);
+            assert.ok(match);
+            assert.equal(sql.values[Number(match[1]) - 1], date);
+            assert.doesNotMatch(sql.text, domain === "listings" ? reportDate : openDate);
+          }
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});
+
 test("agent rows, pagination counts and long-table export honor current Listing fulfillment", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const calls: Prisma.Sql[] = [];

@@ -6,6 +6,27 @@ import { sellfoxSortColumns } from "@/lib/sellfox/sort-columns";
 import { columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv } from "@/components/sellfox/workbench-types";
 
 const scope = { organizationId: "org-listing", workspaceId: "ws-listing" };
+test("listings range filters typed openDate inclusively for browse and export while facets stay scope-only", () => {
+  for (const exporting of [false, true]) for (const range of ["", "from=2024-01-15", "to=2024-02-20", "from=2024-01-15&to=2024-02-20"]) {
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`), "listings");
+    const sql = workbenchReadSql("listings", query, scope, exporting);
+    for (const [date, predicate] of [[query.from, /s\."openDate">=\$(\d+)/], [query.to, /s\."openDate"<=\$(\d+)/]] as const) {
+      if (date) {
+        const match = sql.text.match(predicate);
+        assert.ok(match);
+        assert.equal(sql.values[Number(match[1]) - 1], date);
+      } else assert.doesNotMatch(sql.text, predicate);
+    }
+    assert.doesNotMatch(sql.text, /"reportDate"[<>]=|"sourceUpdatedAt"[<>]=|payload/);
+    if (!exporting) {
+      const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+      assert.doesNotMatch(facets, /openDate/);
+      assert.match(facets, /s\."organizationId"=/);
+      assert.match(facets, /s\."workspaceId"=/);
+    }
+  }
+});
+
 test("DXM publish state is a default-visible listing-only raw text column, distinct from price and pairing", () => {
   const config = visibleColumns("listings", ["dxmPublishState"]);
   assert.equal(config.length, 1);

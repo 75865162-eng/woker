@@ -19,6 +19,8 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
   if (query.buyBox) filters.push(Prisma.sql`s."buyBoxWinner"=${query.buyBox === "yes" ? "是" : "否"}`);
   if (query.brand) filters.push(Prisma.sql`s.brand=${query.brand}`);
   if (query.productTag) filters.push(Prisma.sql`s."productTagNames" @> ARRAY[${query.productTag}]::text[]`);
+  if (query.from) filters.push(Prisma.sql`s."openDate">=${query.from}`);
+  if (query.to) filters.push(Prisma.sql`s."openDate"<=${query.to}`);
   const searchKeys = ["asin", "msku", "sku", "title", "parentAsin"];
   if (query.searchType && !searchKeys.includes(query.searchType)) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) {
