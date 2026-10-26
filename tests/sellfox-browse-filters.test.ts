@@ -719,6 +719,32 @@ test("listings show price min/max inputs, reset clears them, and hide elsewhere"
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
 
+test("listings show revenue7 min/max inputs, reset clears them, and hide elsewhere", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const view: SellfoxView = { ...defaultSellfoxView, domain: "listings", revenue7Min: "1.5", revenue7Max: "48" };
+    const nodes = elements(SellfoxBrowseFilters({ view, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    const label = nodes.find(node => node.type === "span" && node.props.children === "7天销售额")!;
+    assert.match(label.props.title!, /revenue7/); assert.match(label.props.title!, /NULL/);
+    for (const [aria, key, next] of [["7天销售额下限", "revenue7Min", "0"], ["7天销售额上限", "revenue7Max", "100"]] as const) {
+      const inputs = nodes.filter(node => node.type === "input" && node.props["aria-label"] === aria);
+      assert.equal(inputs.length, 1); assert.equal(inputs[0].props.type, "number");
+      assert.equal(inputs[0].props.step, "any");
+      assert.equal(inputs[0].props.value, view[key]);
+      inputs[0].props.onChange!({ target: { value: next } });
+      assert.deepEqual(patches.at(-1), { [key]: next });
+    }
+    nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+    for (const key of ["revenue7Min", "revenue7Max"] as const) assert.equal(patches.at(-1)?.[key], "");
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = elements(SellfoxBrowseFilters({ view: { ...view, domain }, stores: [], onChange: () => {}, onColumns: () => {} }));
+      for (const aria of ["7天销售额下限", "7天销售额上限"]) assert.equal(other.some(node => node.props["aria-label"] === aria), false);
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
+
 test("listings show reservedQty min/max inputs, reset clears them, and hide elsewhere", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;

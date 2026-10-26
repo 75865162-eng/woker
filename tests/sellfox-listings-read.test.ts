@@ -317,6 +317,36 @@ test("sales30 min/max filter typed column on listing_current; facets stay scope-
   }
 });
 
+test("revenue7 min/max filter typed column on listing_current; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "revenue7Min=0", "revenue7Max=10000", "revenue7Min=1.5&revenue7Max=48"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&shopExternalId=shop&site=US`), "listings");
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      const hasRange = query.revenue7Min != null || query.revenue7Max != null;
+      if (hasRange) {
+        assert.match(sql.text, /s\."revenue7" IS NOT NULL/);
+        for (const [value, pattern] of [[query.revenue7Min, /s\."revenue7">=\$(\d+)/], [query.revenue7Max, /s\."revenue7"<=\$(\d+)/]] as const) {
+          const match = sql.text.match(pattern);
+          if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+      } else {
+        assert.doesNotMatch(sql.text, /s\."revenue7" IS NOT NULL|s\."revenue7">=|s\."revenue7"<=/);
+      }
+      if (!exporting) {
+        const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+        assert.doesNotMatch(facets, /revenue7Min|revenue7Max|s\."revenue7">=|s\."revenue7"<=/);
+        for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?revenue7Min=1&revenue7Max=9"), domain);
+    const sql = workbenchReadSql(domain, query, scope, false);
+    assert.doesNotMatch(sql.text, /s\."revenue7" IS NOT NULL|revenue7Min/);
+  }
+});
+
 test("listingQuantity min/max filter typed column on listing_current; facets stay scope-only", () => {
   for (const exporting of [false, true]) {
     for (const range of ["", "listingQuantityMin=0", "listingQuantityMax=10000", "listingQuantityMin=1&listingQuantityMax=5000"]) {
