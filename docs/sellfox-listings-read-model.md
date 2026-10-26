@@ -1,5 +1,38 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 默认显示父SKU / FNSKU · BOX LOCAL ONLY
+
+基线 HEAD `9ac197b`（`9ac197bd18f9935e4f17ffa7ae31529eb862a262`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `parentSku`「父SKU」、`fnsku`「FNSKU」两个 `defaultVisible` 从 `false` 改为 `true`；labels、requiresField 及 parentAsin → parentSku → fnsku → sku 源顺序保持不变。默认表头、初始勾选和无显式选列 CSV/XLSX 增加这两列；显式单选、空选、各自/成组选列与隐藏继续优先，切换数据域保留取消状态，不迁移已有会话选择。文本前导零保留，NULL/缺失为空白。
+
+`dxmPublishState` 保持默认隐藏，只展示原文，**不等于配对状态**；配对、父体、业务员等锁定入口不解锁。salesperson、ads / sales / performance、尾部独立 msku / marketplace / capturedAt / currency 和费用 keys 不改。**Fee-mining remains paused**。不新增字段、live Sellfox API、schema/migration、SQL、服务端请求或真实数据库写入。回滚仅还原这两个默认值及对应测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连接真实数据库，不加载 `.env`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+git diff --word-diff=porcelain --unified=0 -- src/components/sellfox/workbench-types.ts
+# 单项隔离模拟浏览器；若 Chromium 在 BOX sandbox 中 SIGTRAP，记录结果，不绕过：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand, amazonBrand'
+```
+
+验证结果：三个指定测试文件全部通过（Prisma stub，零失败）；TypeScript 和指定 ESLint 通过。精确默认集合、parentAsin → parentSku → fnsku → sku 顺序、默认 CSV/XLSX、两列各自/成组选列及隐藏、显式空选、前导零文本和 NULL/缺失均已覆盖。word-diff 的全部变化 token 恰为两组 `-false` / `+true`；逐字节比对确认整个生产文件等于基线加这两处 listings 默认值替换。`git diff --check` 通过。
+
+单项模拟浏览器已尝试，Chromium 启动在 `sandbox_host_linux.cc:41` 报 `Operation not permitted`，以 SIGTRAP 退出，页面断言未执行；未绕过沙箱。已扩展的默认表头、初始勾选、取消后会话保留及 CSV/Excel 导出移除断言，需在允许 Chromium 的本地环境补跑。
+
+全 workbench 域默认隐藏扫描（仅统计已有类型数据且非 unavailable/missing 的列；代码/已有 stub 验证，不宣称本轮实库覆盖）：
+
+- listings：5 列，`dxmPublishState` / `msku` / `marketplace` / `capturedAt` / `currency`。DXM 的既有 delete/空值观察不足以解释配对，仍属较弱候选；其余是此次明确冻结的尾部列，MSKU/站点还与组合列重复。
+- sales：3 列，`inventoryCapturedAt` / `currency` / `marketplace`。库存快照时间来自既有 current 库存补充，是当前库存采集时间，不是销售日历史库存时间。
+- performance：85 列；`asin` / `title` / `marketplace`，77 个既有可选成本/费用/赔偿/收入列（从 `commodityCost` 到 `promotionTaxAmount`，含广告费用分项），以及 `refundRate` / `refundPrice` / `refundNum` / `fbaQuantity` / `fbmQuantity`。已有类型读路径不代表获得默认展示或继续 fee-mining 授权；均保持不变。
+- ads、ads_targeting、ads_search_term、ads_campaign、ads_ad_group、ads_placement：各 4 列，均为 `msku` / `title` / `name` / `marketplace`；title 与产品信息组合列重复，其他独立身份/店铺列需另评估展示价值。
+
+下一非费用候选为 **sales.inventoryCapturedAt**：有既有类型值和 current 库存补充/导出测试，可明确现有总库存的采集时间，但属于另一个域，必须单独授权并保留“当前快照、非销售日历史”的口径。本 slice 的硬边界已到：listings 余项均为弱语义 DXM 或明确冻结的尾部列；不可用的业务员、AWD、运营/销量洞察、广告策略不计入真实类型数据候选。未访问真实库、重新采集或继续费用挖掘。
+
+仅 BOX 本地，不 push/fetch/deploy/SSH，不读写 `.env`，不写其他主机路径。跳过完整 check/build、数据库集成与真实 P95：本轮仅两个既有列的默认标记，合码/发布或查询/性能专项再补对应验证。仓库外 parity-gap 文档留给父进程更新。下方为历史批次，以本节为当前状态。
+
 ## 2026-10-27 — listings 默认显示五列费用簇 · BOX LOCAL ONLY
 
 基线 HEAD `88be03e`（`88be03e7d9fb3a37bbc7f9d5be76723d82584a9f`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `purchaseCost`「采购成本」、`fbaFees`「FBA费用」、`referralFee`「佣金」、`totalFee`「总费用」、`headTripCost`「头程」五个 `defaultVisible` 从 `false` 改为 `true`。labels、numeric、requiresField 和 bsrCategory → purchaseCost → fbaFees → referralFee → totalFee → headTripCost → buyBoxWinner 源顺序保持不变。复用既有类型投影，默认表头、初始勾选及无显式选列 CSV/XLSX 增加这五列；显式单选、空选、单独/成组选列与隐藏继续优先，切换数据域保留取消状态，不迁移已有会话选择。NULL/缺失保持空白，零值与原始小数保持数值。
