@@ -396,7 +396,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'ratingCount',''\)::float AS "ratingCount"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."bsrRank",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",/);
   const config = visibleColumns("listings", ["ratingCount"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "评论数");
@@ -426,7 +426,7 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.match(sql.text, /string_agg\(DISTINCT btrim\(label\.value->>'labelName'\), '、' ORDER BY btrim\(label\.value->>'labelName'\)\)/);
   assert.doesNotMatch(sql.text, /productTagNames|product_labels|array_to_string/);
   assert.match(sql.text, /AS "productTags"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."bsrRank",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
   const config = visibleColumns("listings", ["productTags"]);
   assert.equal(config.length, 1);
@@ -449,7 +449,7 @@ test("listings expose optional text openDate from the current snapshot and prese
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'openDate',''\) AS "openDate"/);
-  assert.match(sql.text, /l\."productTags",l\."openDate",l\."bsrRank",/);
+  assert.match(sql.text, /l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",/);
   const config = visibleColumns("listings", ["openDate"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "上架时间");
@@ -467,6 +467,32 @@ test("listings expose optional text openDate from the current snapshot and prese
   }
 });
 
+test("listings expose optional text firstSaleDate from the current snapshot and preserve it in CSV", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  for (const exporting of [false, true]) {
+    const sql = workbenchReadSql("listings", query, scope, exporting);
+    assert.match(sql.text, /COALESCE\(NULLIF\(p\.payload->>'firstSaleDate',''\),NULLIF\(p\.payload->>'firstOrderDate',''\)\) AS "firstSaleDate"/);
+    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",/);
+  }
+  const config = visibleColumns("listings", ["firstSaleDate"]);
+  assert.equal(config.length, 1);
+  assert.equal(config[0].labelZh, "首次售出");
+  assert.equal(config[0].unavailable, undefined);
+  assert.equal(config[0].numeric, undefined);
+  assert.equal(config[0].defaultVisible, false);
+  assert.equal(config[0].requiresField, "Listing 当前快照 payload.firstSaleDate（空则 firstOrderDate；123 上 firstSaleDate 常空）");
+  assert.ok(!defaultVisibleColumnKeys("listings").includes("firstSaleDate"));
+  assert.deepEqual(visibleColumns("listings", ["bsrRank", "firstSaleDate", "openDate"]).map(c => c.key), ["openDate", "firstSaleDate", "bsrRank"]);
+  assert.equal(sellfoxColumnValue(config[0], { firstSaleDate: null, firstOrderDate: "2024-01-14" }), null);
+  assert.equal(sellfoxColumnValue(config[0], { firstSaleDate: "2024-01-15" }), "2024-01-15");
+  assert.equal(visibleColumnCsv(config, [{ firstSaleDate: null }, { firstSaleDate: "2024-01-15" }, { firstSaleDate: "" }]).trim(), '"首次售出"\r\n""\r\n"2024-01-15"\r\n""');
+  for (const domain of ["ads", "sales", "performance"]) assert.deepEqual(visibleColumns(domain, ["firstSaleDate"]), []);
+  for (const domain of ["ads_report", "sales", "performance"] as const) {
+    for (const exporting of [false, true]) assert.doesNotMatch(workbenchReadSql(domain, query, scope, exporting).text, /firstSaleDate/);
+  }
+});
+
 test("listings null exact BSR sentinel 9999999 after numeric cast, preferring bigCategory then array order", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/"));
   const scope = { organizationId: "org", workspaceId: "ws" };
@@ -477,7 +503,7 @@ test("listings null exact BSR sentinel 9999999 after numeric cast, preferring bi
     assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'bsrRank'\)='array' THEN p\.payload->'bsrRank' ELSE '\[\]'::jsonb END\) WITH ORDINALITY elem\(value,ordinality\)/);
     assert.ok(sql.text.includes("WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'"));
     assert.match(sql.text, /ORDER BY CASE WHEN elem\.value->>'bigCategory' IN \('true','TRUE','1'\) THEN 0 ELSE 1 END,elem\.ordinality\s+LIMIT 1\s+\) AS "bsrRank"/);
-    assert.match(sql.text, /l\."openDate",l\."bsrRank",/);
+    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",/);
   }
   const config = visibleColumns("listings", ["bsrRank"]);
   assert.equal(config.length, 1);
@@ -534,6 +560,27 @@ test("listing openDate exports as unchanged text or an empty XLSX cell", async (
     await book.xlsx.load(await response.arrayBuffer());
     const sheet = book.worksheets[0];
     assert.equal(sheet.getRow(1).getCell(1).value, "上架时间");
+    assert.equal(sheet.getRow(2).getCell(1).value, "2024-01-15");
+    assert.equal(sheet.getRow(3).getCell(1).value, null);
+  } finally { globals.prisma = previous; }
+});
+
+test("selected listing firstSaleDate exports as unchanged text or an empty CSV/XLSX cell", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ firstSaleDate: "2024-01-15" }, { firstSaleDate: null, firstOrderDate: "2024-01-14" }], total: 2, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?column=firstSaleDate&format=csv");
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    const csv = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    assert.equal((await csv.text()).trim(), '"首次售出"\r\n"2024-01-15"\r\n""');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.columnCount, 1);
+    assert.equal(sheet.getRow(1).getCell(1).value, "首次售出");
     assert.equal(sheet.getRow(2).getCell(1).value, "2024-01-15");
     assert.equal(sheet.getRow(3).getCell(1).value, null);
   } finally { globals.prisma = previous; }
