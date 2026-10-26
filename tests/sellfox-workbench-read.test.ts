@@ -576,7 +576,7 @@ test("selected listing amazonBrand and bsrCategory export text and empty CSV/XLS
   } finally { globals.prisma = previous; }
 });
 
-test("ads expose optional current Listing image, rating, review count, tags, brand and fulfillment across all report tabs", () => {
+test("ads expose optional current Listing image, rating, review count, tags, brand, fulfillment and Buy Box across all report tabs", () => {
   const scope = { organizationId: "org", workspaceId: "ws" };
   const keys = ["rating", "productTags", "image"];
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
@@ -596,8 +596,9 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
     assert.match(config[2].requiresField!, /mainImage/);
     for (const key of ["enabled", "serviceStatus", "adStrategy", "salesperson"]) assert.equal(columns[columnDomain].find(c => c.key === key)!.unavailable, true);
     assert.ok(!columns[columnDomain].some(c => /广告组合|否定|AMC/.test(c.labelZh) && !c.unavailable));
-    const textConfig = visibleColumns(columnDomain, ["brand", "fulfillment"]);
-    assert.deepEqual(textConfig.map(c => c.labelZh), ["品牌", "发货方式"]);
+    const textConfig = visibleColumns(columnDomain, ["buyBoxWinner", "fulfillment", "brand"]);
+    assert.deepEqual(textConfig.map(c => c.key), ["brand", "fulfillment", "buyBoxWinner"]);
+    assert.deepEqual(textConfig.map(c => c.labelZh), ["品牌", "发货方式", "Buy Box"]);
     for (const c of textConfig) {
       assert.equal(c.unavailable, undefined);
       assert.equal(c.defaultVisible, false);
@@ -606,7 +607,12 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
       assert.match(c.requiresField!, new RegExp(`Listing 当前快照 ${c.key} 类型投影`));
       for (const value of [null, "", "00123"]) assert.equal(sellfoxColumnValue(c, { [c.key]: value }), value);
     }
-    assert.equal(visibleColumnCsv(textConfig, [{ brand: "品牌", fulfillment: "AFN" }, { brand: "00123", fulfillment: "MFN" }, { brand: "", fulfillment: "未知" }, { brand: null, fulfillment: null }]).trim(), '"品牌","发货方式"\r\n"品牌","AFN"\r\n"00123","MFN"\r\n"","未知"\r\n"",""');
+    assert.equal(visibleColumnCsv(textConfig.slice(0, 2), [{ brand: "品牌", fulfillment: "AFN" }, { brand: "00123", fulfillment: "MFN" }, { brand: "", fulfillment: "未知" }, { brand: null, fulfillment: null }]).trim(), '"品牌","发货方式"\r\n"品牌","AFN"\r\n"00123","MFN"\r\n"","未知"\r\n"",""');
+    const [buyBoxWinner] = visibleColumns(columnDomain, ["buyBoxWinner"]);
+    assert.equal(buyBoxWinner.requiresField, "Listing 当前快照 buyBoxWinner 类型投影（boolean→是/否）");
+    for (const value of [null, "是", "否"]) assert.equal(sellfoxColumnValue(buyBoxWinner, { buyBoxWinner: value }), value);
+    assert.equal(sellfoxColumnValue(buyBoxWinner, {}), undefined);
+    assert.equal(visibleColumnCsv([buyBoxWinner], [{ buyBoxWinner: null }, { buyBoxWinner: "是" }, { buyBoxWinner: "否" }, {}]).trim(), '"Buy Box"\r\n""\r\n"是"\r\n"否"\r\n""');
     const [ratingCount] = visibleColumns(columnDomain, ["ratingCount"]);
     assert.equal(ratingCount.labelZh, "评论数");
     assert.equal(ratingCount.numeric, true);
@@ -616,7 +622,7 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
     assert.ok(!defaultVisibleColumnKeys(columnDomain).includes("ratingCount"));
     for (const value of [null, 0, 128]) assert.equal(sellfoxColumnValue(ratingCount, { ratingCount: value }), value);
     assert.equal(visibleColumnCsv([ratingCount], [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
-    for (const exporting of [false, true]) for (const sortBy of ["rating", "ratingCount", "productTags", "brand", "fulfillment"]) {
+    for (const exporting of [false, true]) for (const sortBy of ["rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) {
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=desc&productTag=ignored&brand=ignored&fulfillment=AFN&buyBox=yes`), domain);
       const sql = workbenchReadSql(domain, query, scope, exporting);
       assert.match(sql.text, /l\.rating AS "listingRating",l\."ratingCount" AS "listingRatingCount",l\."productTags" AS "listingProductTags"/);
@@ -627,6 +633,8 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
       assert.match(sql.text, /l\.brand AS "listingBrand",l\.fulfillment AS "listingFulfillment"/);
       assert.match(sql.text, /CASE WHEN count\("listingBrand"\)=count\(\*\) AND count\(DISTINCT "listingBrand"\)=1 THEN min\("listingBrand"\) END AS brand/);
       assert.match(sql.text, /CASE WHEN count\("listingFulfillment"\)=count\(\*\) AND count\(DISTINCT "listingFulfillment"\)=1 THEN min\("listingFulfillment"\) END AS fulfillment/);
+      assert.match(sql.text, /l\."buyBoxWinner" AS "listingBuyBoxWinner"/);
+      assert.match(sql.text, /CASE WHEN count\("listingBuyBoxWinner"\)=count\(\*\) AND count\(DISTINCT "listingBuyBoxWinner"\)=1 THEN min\("listingBuyBoxWinner"\) END AS "buyBoxWinner"/);
       assert.ok(sql.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
       assert.doesNotMatch(sql.text, /payload|productTagNames|matchesProductTag|AS facets|AND l\.(?:brand|fulfillment|"buyBoxWinner")=/);
       assert.ok(!sql.values.includes("ignored"));
@@ -729,7 +737,7 @@ test("listing optional replenishment and profitability columns stay after headTr
     assert.equal(config[0].defaultVisible, false);
     assert.equal(config[0].requiresField, `Listing 当前快照 payload.${key}${key === "buyBoxWinner" ? "（boolean→是/否）" : ""}`);
     assert.ok(!defaultVisibleColumnKeys("listings").includes(key));
-    for (const domain of ["ads", "sales", ...(key === "shippingPrice" ? [] : ["performance"])]) assert.deepEqual(visibleColumns(domain, [key]), []);
+    for (const domain of [...(key === "buyBoxWinner" ? [] : ["ads"]), "sales", ...(key === "shippingPrice" ? [] : ["performance"])]) assert.deepEqual(visibleColumns(domain, [key]), []);
   }
 });
 
@@ -747,7 +755,7 @@ test("listing-only columns extract Listing payload values without altering perfo
     for (const domain of ["ads_report", "sales"] as const) {
       const sql = workbenchReadSql(domain, query, scope, exporting).text;
       assert.doesNotMatch(sql, /reservedQty|shippingPrice|shipCost|profitPrice|profitRate/);
-      assert.doesNotMatch(sql.slice(sql.indexOf("base AS")), /buyBoxWinner/);
+      if (domain === "sales") assert.doesNotMatch(sql.slice(sql.indexOf("base AS")), /buyBoxWinner/);
     }
   }
 });

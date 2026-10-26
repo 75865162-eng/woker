@@ -130,6 +130,7 @@ test("ads tabs enable all six daily reports with distinct columns and explain de
       if (adsTab === "campaign") assert.ok(labels.includes("显示活动名称列"));
       if (adsTab === "adGroup") assert.ok(labels.includes("显示广告组名称列"));
       if (adsTab === "placement") assert.ok(labels.includes("显示广告位列"));
+      for (const label of ["Buy Box", "品牌", "发货方式", "产品标签"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
       const search = nodes.find(node => node.type === "select" && node.props["aria-label"] === "搜索类型")!;
       const options = elements(search.props.children).map(node => node.props.value);
       assert.equal(options.includes("adGroupId"), adsTab !== "campaign");

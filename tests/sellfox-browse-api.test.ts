@@ -374,7 +374,7 @@ test("ads current Listing columns reach browse and selected CSV/XLSX exports wit
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
   const calls: Prisma.Sql[] = [];
-  const rows = [{ id: "matched", rating: "4.4", ratingCount: 128, productTags: "新品、重点", brand: "品牌", fulfillment: "AFN", mainImage: "https://example.test/product.jpg" }, { id: "unmatched", rating: null, ratingCount: null, productTags: null, brand: null, fulfillment: null, mainImage: null }, { id: "zero", rating: null, ratingCount: 0, productTags: null, brand: "00123", fulfillment: "MFN", mainImage: null }, { id: "unknown", rating: null, ratingCount: null, productTags: null, brand: "", fulfillment: "未知", mainImage: null }];
+  const rows = [{ id: "matched", rating: "4.4", ratingCount: 128, productTags: "新品、重点", brand: "品牌", fulfillment: "AFN", buyBoxWinner: "是", mainImage: "https://example.test/product.jpg" }, { id: "unmatched", rating: null, ratingCount: null, productTags: null, brand: null, fulfillment: null, buyBoxWinner: null, mainImage: null }, { id: "zero", rating: null, ratingCount: 0, productTags: null, brand: "00123", fulfillment: "MFN", buyBoxWinner: "否", mainImage: null }, { id: "unknown", rating: null, ratingCount: null, productTags: null, brand: "", fulfillment: "未知", buyBoxWinner: null, mainImage: null }];
   globals.prisma = {
     workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return [{ total: rows.length, totals: [], rows: structuredClone(rows) }]; },
@@ -385,38 +385,45 @@ test("ads current Listing columns reach browse and selected CSV/XLSX exports wit
     for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) {
       const context = { params: Promise.resolve({ domain }) };
       for (const layout of ["", "layout=workbench&"]) {
-        for (const sortBy of ["rating", "ratingCount", "productTags", "brand", "fulfillment"]) {
-          const response = await browse(request(domain, `${layout}sortBy=${sortBy}&sortOrder=desc`), context);
+        for (const sortBy of ["rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) {
+          const response = await browse(request(domain, `${layout}sortBy=${sortBy}&sortOrder=desc&buyBox=yes&brand=ignored&fulfillment=AFN&productTag=ignored`), context);
           assert.equal(response.status, 200);
           const data = await response.json();
-          assert.deepEqual(data.rows.map((r: Record<string, unknown>) => [r.rating, r.ratingCount, r.productTags, r.mainImage, r.brand, r.fulfillment]), rows.map(r => [r.rating, r.ratingCount, r.productTags, r.mainImage, r.brand, r.fulfillment]));
+          assert.deepEqual(data.rows.map((r: Record<string, unknown>) => [r.rating, r.ratingCount, r.productTags, r.mainImage, r.brand, r.fulfillment, r.buyBoxWinner]), rows.map(r => [r.rating, r.ratingCount, r.productTags, r.mainImage, r.brand, r.fulfillment, r.buyBoxWinner]));
           assert.ok(calls.at(-1)!.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
         }
         for (const format of ["csv", "xlsx"]) {
           // Keep the no-layout/no-sort selected-column route covered too.
-          const sort = layout ? `sortBy=${format === "csv" ? "brand" : "fulfillment"}&sortOrder=asc&` : "";
-          const response = await csv(request(domain, `${layout}${sort}column=rating&column=ratingCount&column=productTags&column=brand&column=fulfillment&column=image&format=${format}`), context);
+          const sort = layout ? `sortBy=buyBoxWinner&sortOrder=asc&` : "";
+          const response = await csv(request(domain, `${layout}${sort}buyBox=yes&brand=ignored&fulfillment=AFN&productTag=ignored&column=rating&column=ratingCount&column=productTags&column=brand&column=fulfillment&column=buyBoxWinner&column=image&format=${format}`), context);
           assert.equal(response.status, 200);
           assert.match(calls.at(-1)!.text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
-          if (layout) assert.ok(calls.at(-1)!.text.includes(`ORDER BY "${format === "csv" ? "brand" : "fulfillment"}" ASC NULLS LAST, id ASC`));
-          if (format === "csv") assert.equal((await response.text()).trim(), '"星级","评论数","标签","品牌","发货方式","图片"\r\n"4.4",128,"新品、重点","品牌","AFN","https://example.test/product.jpg"\r\n"","","","","",""\r\n"",0,"","00123","MFN",""\r\n"","","","","未知",""');
+          if (layout) assert.ok(calls.at(-1)!.text.includes(`ORDER BY "buyBoxWinner" ASC NULLS LAST, id ASC`));
+          if (format === "csv") assert.equal((await response.text()).trim(), '"星级","评论数","标签","品牌","发货方式","Buy Box","图片"\r\n"4.4",128,"新品、重点","品牌","AFN","是","https://example.test/product.jpg"\r\n"","","","","","",""\r\n"",0,"","00123","MFN","否",""\r\n"","","","","未知","",""');
           else {
             const { default: ExcelJS } = await import("exceljs");
             const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
             const sheet = book.worksheets[0];
-            assert.deepEqual([1, 2, 3, 4, 5, 6].map(i => sheet.getRow(1).getCell(i).value), ["星级", "评论数", "标签", "品牌", "发货方式", "图片"]);
-            assert.deepEqual([1, 2, 3, 4, 5, 6].map(i => sheet.getRow(2).getCell(i).value), ["4.4", 128, "新品、重点", "品牌", "AFN", "https://example.test/product.jpg"]);
+            assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map(i => sheet.getRow(1).getCell(i).value), ["星级", "评论数", "标签", "品牌", "发货方式", "Buy Box", "图片"]);
+            assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map(i => sheet.getRow(2).getCell(i).value), ["4.4", 128, "新品、重点", "品牌", "AFN", "是", "https://example.test/product.jpg"]);
             assert.equal(sheet.getRow(4).getCell(2).value, 0);
             assert.equal(sheet.getRow(4).getCell(4).value, "00123");
             assert.equal(sheet.getRow(4).getCell(5).value, "MFN");
+            assert.equal(sheet.getRow(4).getCell(6).value, "否");
+            assert.equal(sheet.getRow(5).getCell(6).value, null);
             assert.equal(sheet.getRow(5).getCell(5).value, "未知");
             assert.ok([null, ""].includes(sheet.getRow(5).getCell(4).value as null | string));
-            for (const i of [1, 2, 3, 4, 5, 6]) assert.ok([null, ""].includes(sheet.getRow(3).getCell(i).value as null | string));
+            for (const i of [1, 2, 3, 4, 5, 6, 7]) assert.ok([null, ""].includes(sheet.getRow(3).getCell(i).value as null | string));
           }
         }
       }
     }
-    for (const sql of calls) { assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws")); }
+    for (const sql of calls) {
+      assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
+      assert.match(sql.text, /l\."buyBoxWinner" AS "listingBuyBoxWinner"/);
+      assert.doesNotMatch(sql.text, /AND l\.(?:brand|fulfillment|"buyBoxWinner")=|matchesProductTag|AS facets/);
+      assert.ok(!sql.values.includes("ignored"));
+    }
   } finally {
     globals.prisma = previous;
     for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
