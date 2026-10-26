@@ -1,5 +1,30 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 默认显示 openDate「上架时间」 · BOX LOCAL ONLY
+
+基线 `ad559c8fdb710ddf1b2ba13cf84c3db1cd838d14`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.listings.openDate.defaultVisible` 从 `false` 改为 `true`，保留标签、requiresField 与 productTags → openDate → firstSaleDate 源顺序；默认列表、初始勾选与无显式选列 CSV/XLSX 的表头为「评论数」「上架时间」「Buy Box」。复用已有文本投影，NULL/缺失保持空白。显式会话 `columnSelection`（含空集合、只选 title、手动隐藏 openDate）继续优先，不迁移保存选择。
+
+firstSaleDate / amazonBrand / fulfillment / totalInventory / productTags / 费用等仍默认隐藏；openDate 筛选、库存筛选、配对、父体 tab、业务员、AWD 保持锁定。sales / performance / ads / ads_* 配置逐字节不变。**Fee-mining remains paused**。无 SQL、schema/migration、API、服务端或新增请求/计算。回滚仅还原本次默认值及测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连真实数据库）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+# 单项模拟浏览器回归；BOX sandbox 若拒绝 Chromium，保留断言并在允许的本地环境补跑：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand'
+```
+
+验证结果：上述三个定向测试文件全部通过（零失败），TypeScript、touched ESLint 通过；覆盖精确默认集合/源顺序、默认 CSV/XLSX 表头、文本/NULL/缺失及显式/空/隐藏选列。`git diff --word-diff=porcelain` 仅显示 `false → true`，逐字节比对确认生产源码除该标记外与基线完全一致。单项浏览器已尝试，Chromium 在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未绕过沙箱，需允许浏览器的本地环境补跑。
+
+仅 BOX 本地：无 push/fetch、deploy、SSH、live Sellfox API、真实数据库读写或 `.env` 操作。跳过完整 check/build、数据库集成与真实 P95：本次只改一个 UI 默认标记；合码/发布或 SQL/schema/性能专项才补对应验证。仓库外 `/workspace/sellfox-parity-gap.md` 不在可写根目录内，留给父进程更新。下方为历史批次。
+
+
+本地提交完成（父进程 · 2026-10-27 03:09:26 Asia/Shanghai）：Codex 因 sandbox 无法写 `.git/index.lock`；父进程在 BOX 用临时 `GIT_INDEX_FILE` 完成本地提交 `feat(sellfox): default-show listings openDate column`（见当前 HEAD）。未 push/fetch。精确 SHA 以 `git rev-parse HEAD` / 仓库外 gap 为准。
+
+
 ## 2026-10-27 02:32:00 Asia/Shanghai — listings unlock buyBoxWinner「Buy Box」filter · Owner: Chen Jieliang · BOX LOCAL ONLY
 
 基线 `9b632506905c2f5ea02de3025522d0e6de352f28`，分支 `codex/operations-p0-catalog-replenishment`。在线商品 Buy Box 筛选（UI「全部 / 是 / 否」，参数 `"" / "yes" / "no"`）与 sales/performance/ads 同口径：对 Listing current typed `buyBoxWinner` 文本精确匹配「是」/「否」；NULL/空/非布尔/未知参数只计入「全部」。本轮补齐 browse 路由：仅带 `buyBox=`、无 layout/排序/选列时也进入 workbench/`listingsReadSql`（与既有 `brand=` 单独入 workbench 对称），保留 facets.brands/productTags 与库存补充；CSV/XLSX 原本已走 workbench。显式 `agent=1` 导出仍在 listings Agent 窄表上应用同一 typed 谓词。

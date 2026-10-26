@@ -736,13 +736,13 @@ test("ads log navigation opens existing sync runs without submitting a sync", as
   await expect(page).toHaveURL(/page=2/);
 });
 
-test("listings default brand, rating, ratingCount and Buy Box remain checked until explicitly hidden in the session", async ({ page }) => {
+test("listings default brand, rating, ratingCount, openDate and Buy Box remain checked until explicitly hidden in the session", async ({ page }) => {
   await setup(page, "domain=listings");
-  for (const label of ["品牌", "星级", "评论数", "Buy Box"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
+  for (const label of ["品牌", "星级", "评论数", "上架时间", "Buy Box"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
   for (const label of ["亚马逊品牌", "总库存", "发货方式"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
   for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).not.toHaveAttribute("href", /column=/);
   await page.getByText("自定义列", { exact: true }).click();
-  for (const label of ["品牌", "星级", "评论数", "Buy Box"]) {
+  for (const label of ["品牌", "星级", "评论数", "上架时间", "Buy Box"]) {
     const checkbox = page.getByRole("checkbox", { name: `显示${label}列`, exact: true });
     await expect(checkbox).toBeChecked();
     await checkbox.uncheck();
@@ -756,11 +756,18 @@ test("listings default brand, rating, ratingCount and Buy Box remain checked unt
     expect(selected).not.toContain("rating");
     expect(selected).not.toContain("ratingCount");
     expect(selected).not.toContain("buyBoxWinner");
+    expect(selected).not.toContain("openDate");
   }
   const tabs = page.getByRole("navigation", { name: "赛狐数据域" });
   await tabs.getByRole("button", { name: "销量", exact: true }).click();
   await tabs.getByRole("button", { name: "在线商品", exact: true }).click();
-  for (const label of ["品牌", "星级", "评论数", "Buy Box"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const label of ["品牌", "星级", "评论数", "上架时间", "Buy Box"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const name of ["CSV", "Excel"]) {
+    const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
+    expect(new URL(href!, "http://127.0.0.1:43221").searchParams.getAll("column")).not.toContain("openDate");
+  }
+  await page.getByText("自定义列", { exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "显示上架时间列", exact: true })).not.toBeChecked();
 });
 
 test("listing DXM publish state is optional and does not imply pairing or strikethrough price type", async ({ page }) => {
