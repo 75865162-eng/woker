@@ -396,7 +396,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'ratingCount',''\)::float AS "ratingCount"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
   const config = visibleColumns("listings", ["ratingCount"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "评论数");
@@ -423,7 +423,7 @@ test("listings expose optional numeric purchaseCost from the current snapshot wi
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
     assert.match(sql.text, /NULLIF\(p\.payload->>'purchaseCost',''\)::float AS "purchaseCost"/);
-    assert.match(sql.text, /l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
+    assert.match(sql.text, /l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
   }
   const config = visibleColumns("listings", ["purchaseCost"]);
   assert.equal(config.length, 1);
@@ -475,6 +475,95 @@ for (const [key, label] of [["fbaFees", "FBA费用"], ["referralFee", "佣金"],
 test("listing fee columns follow purchaseCost and precede parentAsin in configured order", () => {
   assert.deepEqual(visibleColumns("listings", ["parentAsin", "headTripCost", "totalFee", "referralFee", "fbaFees", "purchaseCost"]).map(c => c.key),
     ["purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "parentAsin"]);
+});
+
+test("listing optional replenishment and profitability columns stay after headTripCost and before parentAsin", () => {
+  const keys = ["buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate"];
+  assert.deepEqual(visibleColumns("listings", ["profitRate", "parentAsin", "reservedQty", "headTripCost", "profitPrice", "buyBoxWinner", "shippingPrice"]).map(c => c.key), ["headTripCost", ...keys, "parentAsin"]);
+  for (const [key, label, numeric] of [["buyBoxWinner", "Buy Box", undefined], ["reservedQty", "预留", true], ["shippingPrice", "运费", true], ["profitPrice", "预估利润", true], ["profitRate", "利润率", true]] as const) {
+    const config = visibleColumns("listings", [key]);
+    assert.equal(config[0].labelZh, label);
+    assert.equal(config[0].numeric, numeric);
+    assert.equal(config[0].unavailable, undefined);
+    assert.equal(config[0].defaultVisible, false);
+    assert.equal(config[0].requiresField, `Listing 当前快照 payload.${key}${key === "buyBoxWinner" ? "（boolean→是/否）" : ""}`);
+    assert.ok(!defaultVisibleColumnKeys("listings").includes(key));
+    for (const domain of ["ads", "sales", ...(key === "shippingPrice" ? [] : ["performance"])]) assert.deepEqual(visibleColumns(domain, [key]), []);
+  }
+});
+
+test("listing-only columns extract Listing payload values without altering performance shippingPrice", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  for (const exporting of [false, true]) {
+    const listingSql = workbenchReadSql("listings", query, scope, exporting).text;
+    // JSONB equality matches real booleans, leaving strings, null and missing keys unknown.
+    assert.match(listingSql, /CASE WHEN p\.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p\.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner"/);
+    assert.doesNotMatch(listingSql, /p\.payload->>'buyBoxWinner'|buyBoxWinner[^,;]*::float/);
+    assert.match(listingSql, /l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
+    for (const key of ["reservedQty", "shippingPrice", "profitPrice", "profitRate"]) {
+      assert.ok(listingSql.includes(`NULLIF(p.payload->>'${key}','')::float AS "${key}",`));
+    }
+    const performanceSql = workbenchReadSql("performance", query, scope, exporting).text;
+    assert.ok(performanceSql.includes("NULLIF(s.payload->>'shippingPrice','')::float AS \"shippingPrice\""));
+    assert.doesNotMatch(performanceSql, /buyBoxWinner|reservedQty|profitPrice|profitRate/);
+    assert.doesNotMatch(performanceSql, /p\.payload->>'shippingPrice'/);
+    for (const domain of ["ads_report", "sales"] as const) {
+      const sql = workbenchReadSql(domain, query, scope, exporting).text;
+      assert.doesNotMatch(sql, /buyBoxWinner|reservedQty|shippingPrice|profitPrice|profitRate/);
+    }
+  }
+});
+
+for (const [key, label] of [["reservedQty", "预留"], ["shippingPrice", "运费"], ["profitPrice", "预估利润"], ["profitRate", "利润率"]]) {
+  test(`listing ${key} preserves null, missing, zero and raw numeric values`, () => {
+    const config = visibleColumns("listings", [key]);
+    const values = [null, 0, 0.25, ...(key === "profitPrice" ? [-0.25, -9.66] : [])];
+    for (const value of values) assert.equal(sellfoxColumnValue(config[0], { [key]: value }), value);
+    assert.equal(sellfoxColumnValue(config[0], {}), undefined);
+    assert.equal(visibleColumnCsv(config, [...values.map(value => ({ [key]: value })), {}]).trim(),
+      `"${label}"\r\n${values.map(value => value === null ? '""' : String(value)).join("\r\n")}\r\n""`);
+  });
+}
+
+test("Buy Box boolean labels remain text in the UI and CSV", () => {
+  const config = visibleColumns("listings", ["buyBoxWinner"]);
+  assert.equal(sellfoxColumnValue(config[0], { buyBoxWinner: "是" }), "是");
+  assert.equal(sellfoxColumnValue(config[0], { buyBoxWinner: "否" }), "否");
+  assert.equal(sellfoxColumnValue(config[0], { buyBoxWinner: null }), null);
+  assert.equal(sellfoxColumnValue(config[0], {}), undefined);
+  assert.equal(visibleColumnCsv(config, [{ buyBoxWinner: "是" }, { buyBoxWinner: "否" }, { buyBoxWinner: null }, {}]).trim(), '"Buy Box"\r\n"是"\r\n"否"\r\n""\r\n""');
+});
+
+test("selected Listing-only numeric columns export null, zero, decimals and negative profit in CSV and XLSX", async () => {
+  const keys = ["buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate"];
+  const labels = ["Buy Box", "预留", "运费", "预估利润", "利润率"];
+  const rows = [
+    Object.fromEntries(keys.map(key => [key, null])),
+    { buyBoxWinner: "否", reservedQty: 0, shippingPrice: 0, profitPrice: 0, profitRate: 0 },
+    { buyBoxWinner: "是", reservedQty: 1, shippingPrice: 0.25, profitPrice: -0.25, profitRate: 0.0 },
+    { buyBoxWinner: null, reservedQty: 13, shippingPrice: 9.68, profitPrice: -9.66, profitRate: 0.125 },
+    {},
+  ];
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows, total: rows.length, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?column=profitRate&column=buyBoxWinner&column=profitPrice&column=shippingPrice&column=reservedQty&format=csv");
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    const csv = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    assert.equal((await csv.text()).trim(), '"Buy Box","预留","运费","预估利润","利润率"\r\n"","","","",""\r\n"否",0,0,0,0\r\n"是",1,0.25,-0.25,0\r\n"",13,9.68,-9.66,0.125\r\n"","","","",""');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.columnCount, keys.length);
+    assert.deepEqual(keys.map((_, index) => sheet.getRow(1).getCell(index + 1).value), labels);
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      assert.deepEqual(keys.map((_, index) => sheet.getRow(rowIndex + 2).getCell(index + 1).value), keys.map(key => (rows[rowIndex] as Record<string, unknown>)[key] ?? null));
+    }
+  } finally { globals.prisma = previous; }
 });
 
 test("selected listing fees export null, zero and decimals in CSV and XLSX", async () => {
@@ -536,7 +625,7 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.match(sql.text, /string_agg\(DISTINCT btrim\(label\.value->>'labelName'\), '、' ORDER BY btrim\(label\.value->>'labelName'\)\)/);
   assert.doesNotMatch(sql.text, /productTagNames|product_labels|array_to_string/);
   assert.match(sql.text, /AS "productTags"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
   const config = visibleColumns("listings", ["productTags"]);
   assert.equal(config.length, 1);
@@ -559,7 +648,7 @@ test("listings expose optional text openDate from the current snapshot and prese
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'openDate',''\) AS "openDate"/);
-  assert.match(sql.text, /l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
+  assert.match(sql.text, /l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
   const config = visibleColumns("listings", ["openDate"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "上架时间");
@@ -583,7 +672,7 @@ test("listings expose optional text firstSaleDate from the current snapshot and 
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
     assert.match(sql.text, /COALESCE\(NULLIF\(p\.payload->>'firstSaleDate',''\),NULLIF\(p\.payload->>'firstOrderDate',''\)\) AS "firstSaleDate"/);
-    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
+    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
   }
   const config = visibleColumns("listings", ["firstSaleDate"]);
   assert.equal(config.length, 1);
@@ -613,7 +702,7 @@ test("listings null exact BSR sentinel 9999999 after numeric cast, preferring bi
     assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'bsrRank'\)='array' THEN p\.payload->'bsrRank' ELSE '\[\]'::jsonb END\) WITH ORDINALITY elem\(value,ordinality\)/);
     assert.ok(sql.text.includes("WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'"));
     assert.match(sql.text, /ORDER BY CASE WHEN elem\.value->>'bigCategory' IN \('true','TRUE','1'\) THEN 0 ELSE 1 END,elem\.ordinality\s+LIMIT 1\s+\) AS "bsrRank"/);
-    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
+    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
   }
   const config = visibleColumns("listings", ["bsrRank"]);
   assert.equal(config.length, 1);
