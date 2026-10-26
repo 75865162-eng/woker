@@ -730,13 +730,13 @@ test("ads log navigation opens existing sync runs without submitting a sync", as
   await expect(page).toHaveURL(/page=2/);
 });
 
-test("listings default brand and rating remain checked until explicitly hidden in the session", async ({ page }) => {
+test("listings default brand, rating, ratingCount and Buy Box remain checked until explicitly hidden in the session", async ({ page }) => {
   await setup(page, "domain=listings");
-  for (const label of ["品牌", "星级"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
-  for (const label of ["亚马逊品牌", "评论数", "Buy Box", "总库存", "发货方式"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const label of ["品牌", "星级", "评论数", "Buy Box"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
+  for (const label of ["亚马逊品牌", "总库存", "发货方式"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
   for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).not.toHaveAttribute("href", /column=/);
   await page.getByText("自定义列", { exact: true }).click();
-  for (const label of ["品牌", "星级"]) {
+  for (const label of ["品牌", "星级", "评论数", "Buy Box"]) {
     const checkbox = page.getByRole("checkbox", { name: `显示${label}列`, exact: true });
     await expect(checkbox).toBeChecked();
     await checkbox.uncheck();
@@ -748,11 +748,13 @@ test("listings default brand and rating remain checked until explicitly hidden i
     expect(selected).toContain("title");
     expect(selected).not.toContain("brand");
     expect(selected).not.toContain("rating");
+    expect(selected).not.toContain("ratingCount");
+    expect(selected).not.toContain("buyBoxWinner");
   }
   const tabs = page.getByRole("navigation", { name: "赛狐数据域" });
   await tabs.getByRole("button", { name: "销量", exact: true }).click();
   await tabs.getByRole("button", { name: "在线商品", exact: true }).click();
-  for (const label of ["品牌", "星级"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const label of ["品牌", "星级", "评论数", "Buy Box"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
 });
 
 test("listing DXM publish state is optional and does not imply pairing or strikethrough price type", async ({ page }) => {

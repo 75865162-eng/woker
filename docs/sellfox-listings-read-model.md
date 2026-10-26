@@ -1,5 +1,27 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 02:27:31 Asia/Shanghai — listings 默认显示 ratingCount「评论数」+ buyBoxWinner「Buy Box」 · Owner: Chen Jieliang · BOX LOCAL ONLY
+
+基线 `6090d99990f935307aeab756d93d50ec49141d7a`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.listings.ratingCount` / `buyBoxWinner` 的 `defaultVisible` 从 `false` 改为 `true`；brand / rating 继续默认显示。源顺序保持 rating → ratingCount、headTripCost → buyBoxWinner → reservedQty，不重排。默认列表、列选择器初始勾选及无显式选列的 CSV/XLSX 增加「评论数」「Buy Box」；显式会话 `columnSelection`（含空集合、只选旧列、隐藏新默认列）仍优先，不迁移保存选择。
+
+amazonBrand / openDate / firstSaleDate / 库存扩展（totalInventory、inventoryCapturedAt、listingQuantity、unsellable、warehousing）/ productTags / BSR / 费用 / fulfillment / dxmPublishState 等继续可选；业务员 / AWD 等缺失入口不解锁。sales / performance / ads 及广告子页默认配置与基线逐字节一致；ads 的 ratingCount / buyBoxWinner 仍为 `defaultVisible: false`。**Fee-mining remains paused**。无 SQL、schema、migration、API、服务端或数据边界改动，无新请求或计算。回滚仅还原这两处默认值及配套测试/文档，无数据回退。
+
+验证已通过：三个定向单测文件（Prisma stub，无真实数据库）、TypeScript、touched ESLint；源码比对确认除这两个 listings 标记外与 HEAD 完全一致。单测覆盖精确默认列集合/源顺序、显式及空选列、无选列 CSV/XLSX、评论数 NULL/缺失/0/128、Buy Box 是/否/空值，保留 brand/rating 默认、可选列排除及 ads 可选断言。浏览器用例同步扩展默认表头/初始勾选/显式隐藏/会话切页保留；尝试单个用例时 Chromium 启动被 BOX sandbox 拒绝（`sandbox_host_linux.cc:41` / `Operation not permitted` / SIGTRAP），页面断言未执行，未绕过沙箱。
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+# 需允许 Chromium 的本地环境补跑：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand'
+```
+
+仅 BOX 本地：无 push/fetch、deploy、SSH、migrate-on-123、真实数据库写入、live Sellfox API、schedules 或 `.env` 操作。未跑完整 check/build、数据库集成或真实 P95；本次按两处 UI 默认配置变更采用定向验证，准备合码/上线或变更 SQL/schema 时再补相应完整/专项检查。仓库外 `/workspace/sellfox-parity-gap.md` 同步状态，不纳入 repo commit。下方旧状态保留为历史记录，本节为当前状态。
+
+本地提交受阻：`git add` 无法创建 `.git/index.lock`（Read-only file system），因此 commit 未执行；未强制或绕过沙箱。4 个仓库文件保留为未暂存 diff，`git diff --check` 已通过，HEAD 保持 `6090d99990f935307aeab756d93d50ec49141d7a`。父进程需提交：`feat(sellfox): default-show listings ratingCount/buyBoxWinner columns`。仓库外状态文件不进入提交。
+
+
 ## 2026-10-27 02:21:51 Asia/Shanghai — listings 默认显示 brand「品牌」+ rating「星级」 · Owner: Chen Jieliang · BOX LOCAL ONLY
 
 基线 `c7b818ee2ffc86830f56b33cc9f628ac7b7e51c5`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.listings.brand` / `rating` 的 `defaultVisible` 改为 `true`，保留 `requiresField` 与源顺序 brand → amazonBrand → rating → ratingCount。默认列表、列选择器初始勾选及无显式选列 CSV/XLSX 包含「品牌」「星级」；显式会话 `columnSelection`（含空集合或隐藏其中一列）仍优先，不迁移保存选择。
