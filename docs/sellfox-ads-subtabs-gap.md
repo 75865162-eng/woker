@@ -1,6 +1,6 @@
 # Sellfox 广告子页：Phase A / B 已接入与剩余缺口
 
-2026-10-26。仅仓库实现与隔离验证；未部署、未启用任何计划，未调用真实 createTask。
+2026-10-26。Phase A/B 已对照本机真实 Sellfox XLSX 确认列映射并修复投放 ID；本轮仅 box 本机修改和离线解析，未部署、未迁移、未启用计划，未调用 createTask。
 
 ## 报告来源与同步
 
@@ -21,21 +21,38 @@ reportTypeCode 依据用户提供的 [sellfox-mcp `src/cli.ts` enum](https://git
 
 新增浏览接口为 `/api/sellfox/ads_targeting`、`/api/sellfox/ads_search_term`、`/api/sellfox/ads_campaign`、`/api/sellfox/ads_ad_group`、`/api/sellfox/ads_placement`，支持 workbench、CSV、Agent 窄列导出及按需 payload；沿用组织/工作区权限、分页、10,000 条导出上限。页面 `domain=ads&adsTab=product|targeting|searchTerm|campaign|adGroup|placement`，省略 adsTab 默认 product。子页分别保留列选择，当前子页决定同步资源，支持 sp/sb/sd 筛选。
 
-## 暂定 XLSX 列，尚未通过真实文件验证
+## 真实 XLSX 确认与本轮修复矩阵（2026-10-26）
 
-以下列映射仅来自任务约定，不能标记为真实接口验收通过：
+证据为从 123 的 SellfoxReportTask 下载后留在本机的文件：`/workspace/sellfox-ads-xlsx-samples/`，表头记录见 `headers-exceljs.json`，文件清单见同目录 `MANIFEST.md`。本轮只离线读取已有样本，不访问服务器/API，不提交 XLSX 二进制。以下确认只覆盖列出的广告类型与空/非空样本，不代表其他类型或生产全量验收。
 
-- 共用必需列：店铺、日期、广告活动ID、广告曝光量、广告点击量、广告花费、广告订单量、广告销售额。投放、搜索词和广告组另外必需广告组ID。
-- 广告活动（adCampaignReport）：唯一键 `[storeId, reportDate, adType, campaignId]`；不要求、不按广告组ID划分。可选广告活动名称/广告活动，优先前者。
-- 广告组（adGroupReport）：唯一键 `[storeId, reportDate, adType, campaignId, adGroupId]`；可选广告组名称/广告组，优先前者；投放/匹配类型仅元数据。
-- 广告位（adSpaceReport）：**暂定精确必需列「广告位」**，不猜 placement/广告位置等其他名字。采用常见 CPC 活动级 placement 日报粒度，唯一键 `[storeId, reportDate, adType, campaignId, placement]`。广告组ID可选、空值存 NULL，仅作元数据，不进唯一键或 ID 哈希。相同活动/广告位/日期出现多广告组行时整份拒绝，禁止静默合并或覆盖；若真实报告证明是组级粒度，须先修改契约和新增迁移再接收。跨日汇总仅在广告组ID完整且一致时显示，否则 NULL。
-- 新三域均允许无 ASIN/SKU 的行；可选 asin/ASIN、sku/SKU，currency 仍为 NULL，不从“币种”猜取。所有新身份只用稳定字段，绝不用行号。
-- 投放：优先必需投放ID；**仅缺少整个投放ID列时**允许投放文本兜底，生成 `text:` + SHA256(JSON([campaignId, adGroupId, targetingText, matchType]))。存在投放ID列但单元格为空时拒绝，不按行号造 ID。文本/匹配类型变动会改变兜底身份。
-- 搜索词：必需用户搜索词；唯一键为店铺/广告类型/日期/活动/广告组/用户搜索词/投放ID。缺少整个投放ID列使用空串 sentinel，防止 PostgreSQL NULL 绕过唯一键；存在该列则要求每行有值。不得把用户搜索词改名为搜索词后猜取。
-- 可选窄列：投放、匹配类型、asin/ASIN、sku/SKU；搜索词另可选投放ID。同义大小写同时出现则拒绝。currency 保持 NULL，即便额外列出现“币种”也暂不映射；指标空单元格保持 NULL。
-- 共用大小/解压大小/条目数/单工作表/行数/重复列/公式/店铺/日期/唯一身份校验。任一行不满足契约则整文件拒绝，保留旧窗口数据；禁止静默丢行或猜列。
+共用必需列 **C**：`店铺`、`日期`、`广告活动ID`、`广告曝光量`、`广告点击量`、`广告花费`、`广告订单量`、`广告销售额`。下表的 C 均指这八列。
 
-真实 SP/SB/非空 SD 文件、各广告类型的 ID/匹配类型语义、下载分片及币种来源仍须在另行授权的受控联调核验。禁止为了验证枚举反复创建生产任务。
+| reportTypeCode | 真实样本确认的必需列及关键列 | 确认 / 修复 | 离线解析结果 |
+| --- | --- | --- | --- |
+| adProductReport | C + `广告组ID`、`广告产品ID`、`asin`/`ASIN`、`sku`/`SKU`；SP 小写，SB/SD 大写 | **确认已有映射**，大小写回退已覆盖 | SP 14 行；SB/SD 仅表头，均通过 |
+| adTargeringReport | C + `广告组ID`；真实 ID 列为 **`广告投放ID`**，另有 `投放`、`匹配类型` | **本轮修复**：原来只读 `投放ID`，真实文件误走 text hash；现在读 `广告投放ID`，保留旧别名 | SP 10 行，首行 ID `120449591864118`；SB 仅表头通过 |
+| adSearchTermReport | C + `广告组ID`、`用户搜索词`；真实 ID 列为 **`广告投放ID`**，另有 `投放`、`匹配类型`、`币种` | **本轮修复**：原来忽略真实 ID，空串身份导致重复拒绝；现在按真实 ID 区分行；currency 仍为 NULL | SP 空报告通过；NJ 店非空 SP **540 行通过** |
+| adCampaignReport | C；名称列 `广告活动`，无 `广告组ID` | **确认已有映射**，名称回退有效，粒度为活动/日 | SP 14 行通过 |
+| adGroupReport | C + `广告组ID`；名称列 `广告组`，另有 `广告活动` | **确认已有映射**，名称回退有效，粒度为活动/组/日 | SP 14 行通过 |
+| adSpaceReport | C + 精确列 **`广告位`**；真实文件**没有 `广告组ID`**，广告位值包括 `商品详情页` | **确认已有映射与唯一键**，粒度为**活动 + 广告位 + 日期** | SP 41 行通过 |
+
+身份与兼容规则：
+
+- 投放与搜索词均先识别 `广告投放ID`，不存在时兼容 `投放ID`；两列同时存在一律按重复/歧义列拒绝，即便值一致或文件仅有表头。已选 ID 列每行必须有去首尾空格后的非空值，空值不得回退。
+- 仅投放报告在**两个 ID 列都不存在**且 `投放` 非空时，保留 `text:` + SHA256(JSON([campaignId, adGroupId, targetingText, matchType])) 回退；文本/匹配类型变动会改变身份，绝不用行号造 ID。
+- 搜索词唯一键为店铺/广告类型/日期/活动/广告组/用户搜索词/targetingId；两个 ID 列都不存在时仍用空串 sentinel（不改成 hash 或 NULL）。相同搜索词/活动/组但不同 `广告投放ID` 可共存，无 ID 的重复身份整文件拒绝。
+- 活动唯一键 `[storeId, reportDate, adType, campaignId]`，组唯一键再加 adGroupId；名称仍兼容 `广告活动名称`/`广告活动`、`广告组名称`/`广告组`，优先前者。
+- 广告位唯一键 `[storeId, reportDate, adType, campaignId, placement]` 已由真实文件确认。可选广告组ID仅保留兼容元数据、空值为 NULL，不参与身份；同一活动/广告位/日期多行仍整文件拒绝。跨日汇总仅在组ID完整且一致时展示，否则 NULL。
+- 产品报告要求 ASIN/SKU 列，其他五域允许无 ASIN/SKU；可选大小写别名同时出现则拒绝。所有报告 currency 保持 NULL，搜索词的 `币种` 仍只留在 payload；指标空单元格保持 NULL。
+- 共用大小/解压大小/条目数/单工作表/行数/重复列/公式/店铺/日期/唯一身份校验不变。任一行不满足契约则整文件拒绝，保留旧窗口数据；禁止静默丢行或猜列。
+
+### 既有数据纠正（部署后另行授权执行）
+
+修复不会自动改写已入库数据。根据任务提供的生产盘点，修复前约 4.8 万投放行可能带 `text:` targetingId；搜索词可能保留空串 targetingId，或在重复检查时整文件失败。此数量本轮未连接数据库复核。
+
+后续部署修复后，应从现有 storage 缓存 **`sellfox-reports/...`** 文件重新解析，并沿既有组织/工作区/店铺/广告类型/日期窗口的原子替换边界纠正身份；不能仅按新 ID upsert 而留下旧 hash/空串行。先盘点受影响窗口、保留原文件和可恢复快照、验证新 ID/行数/重复身份及租户边界，再执行受控替换；**不创建新 createTask、不重复下载**。缓存文件缺失时先报告缺口，不自动重建上游任务。本轮没有执行重解析入库或数据库写入。
+
+仍待证据：非空 SB/SD 投放与搜索词、非空 SD 产品，以及活动/组/位的 SB/SD 文件、全量 ID/匹配类型语义、下载分片与币种业务口径；不得将表头/空报告通过写成非空数据验收。
 
 `/saihu-search-merge` 继续作为独立的人工上传合并工具，本轮没有修改、调用或替换该路径。
 
@@ -55,9 +72,11 @@ reportTypeCode 依据用户提供的 [sellfox-mcp `src/cli.ts` enum](https://git
 
 Phase A 迁移 `20261026030000_sellfox_ads_targeting_search_term` 保持不变，使用事务：为既有任务增加带 adProductReport 默认值的 reportTypeCode、替换唯一索引、新增两张日报表与只读视图。Phase B 新增独立事务迁移 `20261026040000_sellfox_ads_campaign_group_placement`，仅新增三张日报表、索引、SellfoxStore 外键和只读视图；不修改 SellfoxReportTask 或 Phase A 迁移。模型/SQL 视图均保留 org/workspace/store 维度，ACoS/ROAS 分母为零时 NULL。
 
-未来部署前需按仓库迁移审核流程执行；本轮只做 schema-to-schema diff、生成 SQL/Prisma Client，并在独立内存 PostgreSQL 验证，不连接任何配置数据库，不执行生产迁移。所有五个新增计划均默认关闭，开启前需另行评估串行队列容量。
+Phase A/B 初始实现曾做 schema-to-schema diff、SQL/Prisma Client 生成及独立内存 PostgreSQL 验证；本轮列映射修复不改 schema、不生成或执行迁移。未来部署仍需按仓库迁移审核流程执行。所有五个新增计划均默认关闭，开启前需另行评估串行队列容量。
 
-隔离验证：
+本轮列映射修复验证：两份 Phase A/B 契约测试（含真实 ID/旧别名、空值、双列歧义、搜索词身份碰撞）、TypeScript、变更 TS 的 ESLint、离线读取上述十份样本及 `git diff --check`。临时解析脚本验证后删除；未跑全量 check、构建、浏览器 E2E 或真实数据库测试，发布时再走 CI 完整校验。
+
+Phase A/B 初始实现的较广验证路线（本轮不重复）：
 
 ```bash
 npx tsx --test tests/sellfox-*.test.ts

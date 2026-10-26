@@ -11,7 +11,7 @@ async function xlsx(rows: Record<string, unknown>[], headers = Object.keys(rows[
   if (extraSheet) book.addWorksheet("other");
   return Buffer.from(await book.xlsx.writeBuffer());
 }
-test("provisional targeting contract retains IDs, optional uppercase ASIN/SKU, raw evidence and null currency", async () => {
+test("targeting contract retains legacy IDs, optional uppercase ASIN/SKU, raw evidence and null currency", async () => {
   const raw = { ...base, 投放ID: "target", 投放: "关键词", 匹配类型: "EXACT", ASIN: "B0TEST", SKU: "MSKU", 币种: "USD" };
   const [row] = await parseSellfoxAdTargetingReport(await xlsx([raw]), scope);
   assert.equal(row.targetingId, "target"); assert.equal(row.targetingText, "关键词"); assert.equal(row.matchType, "EXACT");
@@ -19,6 +19,30 @@ test("provisional targeting contract retains IDs, optional uppercase ASIN/SKU, r
   assert.equal(row.adOrders, 0); assert.equal(row.adSales, 0); assert.deepEqual(row.payload, raw);
   assert.deepEqual(await parseSellfoxAdTargetingReport(await xlsx([], Object.keys(raw)), scope), []);
 });
+for (const [name, parse] of [["targeting", parseSellfoxAdTargetingReport], ["search term", parseSellfoxAdSearchTermReport]] as const) {
+  test(`${name} reads live 广告投放ID, trims either ID alias, rejects blank IDs and ambiguous aliases`, async () => {
+    const raw = { ...base, 用户搜索词: "query", 投放: "关键词", 匹配类型: "EXACT", 币种: "USD" };
+    for (const column of ["广告投放ID", "投放ID"]) {
+      const rows = await parse(await xlsx([
+        { ...raw, [column]: " 120449591864118 " },
+        { ...raw, [column]: "120449591864119" },
+      ]), scope);
+      assert.deepEqual(rows.map(row => row.targetingId), ["120449591864118", "120449591864119"]);
+      assert.equal(rows[0].currency, null);
+      assert.equal(rows[0].payload[column], " 120449591864118 ");
+      for (const blank of ["", "   ", null]) {
+        await assert.rejects(async () => parse(await xlsx([{ ...raw, [column]: blank }]), scope), /身份/);
+      }
+      await assert.rejects(async () => parse(await xlsx([
+        { ...raw, [column]: "120449591864118" },
+        { ...raw, [column]: " 120449591864118 " },
+      ]), scope), /重复实体/);
+    }
+    const ambiguous = { ...raw, 广告投放ID: "120449591864118", 投放ID: "120449591864118" };
+    await assert.rejects(async () => parse(await xlsx([ambiguous]), scope), /重复列/);
+    await assert.rejects(async () => parse(await xlsx([], Object.keys(ambiguous)), scope), /重复列/);
+  });
+}
 test("targeting text fallback is deterministic across dates, includes campaign/group/match, and never replaces blank explicit IDs", async () => {
   const raw = { ...base, 投放: "关键词", 匹配类型: "EXACT" };
   const parse = async (rows: Record<string, unknown>[]) => parseSellfoxAdTargetingReport(await xlsx(rows), scope);
