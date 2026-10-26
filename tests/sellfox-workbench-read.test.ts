@@ -238,7 +238,7 @@ test("visible-column export matches ordered matrix headers, leaves unsupported v
 
 test("rollup defaults omit duplicate names and product clutter while preserving core metrics and picker overrides", () => {
   const sales = ["image", "identity", "analysis", "fulfillable", "subtotal", "trend"];
-  const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
+  const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
   for (const dimension of ["store", "developer", "spu"]) {
     for (const [domain, expected] of [["sales", sales], ["performance", performance]] as const) {
       assert.deepEqual(defaultVisibleColumnKeys(domain, dimension), expected);
@@ -259,7 +259,7 @@ test("rollup defaults omit duplicate names and product clutter while preserving 
 
 test("sales product defaults omit unavailable operations columns while other defaults stay unchanged", () => {
   const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "fulfillable", "subtotal", "trend"];
-  const performance = ["image", "identity", "name", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
+  const performance = ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
   for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
     assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
     assert.deepEqual(visibleColumns("sales", undefined, [], dimension).map(c => c.key), sales);
@@ -983,7 +983,7 @@ test("performance optional costs and refunds read typed columns and sum by entit
     ["refundPrice", "退款金额", true, false, undefined], ["refundNum", "退款量", true, false, undefined],
   ]);
   assert.deepEqual(config.map(c => captions[c.key]), ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "退款金额", "退款量"]);
-  assert.deepEqual(defaultVisibleColumnKeys("performance"), ["image", "identity", "name", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"]);
+  assert.deepEqual(defaultVisibleColumnKeys("performance"), ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"]);
   for (const key of ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"]) {
     assert.deepEqual(visibleColumns("listings", [key]), []);
     assert.deepEqual(visibleColumns("sales", [key]), []);
@@ -1449,17 +1449,17 @@ test("sales trend remains derived from seven complete in-range quantity days ind
   } finally { globals.prisma = previous; }
 });
 
-test("performance evaluation and channel quantities are optional typed facts with unchanged defaults", () => {
+test("performance evaluation and channel quantities are default-visible typed facts matching Sellfox table", () => {
   const keys = ["evaluationSaleNum", "channelSaleNum"];
   const config = visibleColumns("performance", keys);
   assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), [
-    ["evaluationSaleNum", "测评销量", true, false, undefined],
-    ["channelSaleNum", "多渠道销量", true, false, undefined],
+    ["evaluationSaleNum", "测评销量", true, true, undefined],
+    ["channelSaleNum", "多渠道销量", true, true, undefined],
   ]);
   for (const c of config) {
     assert.equal(captions[c.key], c.labelZh);
     assert.ok(c.requiresField.includes(`销售利润 payload.${c.key} 类型投影`));
-    assert.ok(!defaultVisibleColumnKeys("performance").includes(c.key));
+    assert.ok(defaultVisibleColumnKeys("performance").includes(c.key));
     assert.deepEqual(visibleColumns("sales", [c.key]), []);
     assert.deepEqual(visibleColumns("listings", [c.key]), []);
   }

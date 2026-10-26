@@ -1,5 +1,22 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-26 销售利润默认列对齐赛狐截图（Owner: Chen Jieliang；仅 BOX 本地）
+
+- performance 默认可见列打开：`parentAsin`「父ASIN」、`sku`「品名/SKU」、`netProfitRate`「净销售额毛利率」、`netRevenue`「净销售额」、`evaluationSaleNum`「测评销量」、`channelSaleNum`「多渠道销量」。列序贴近赛狐：图片/标题ASIN → 父ASIN → 品名SKU → 毛利/毛利率/净销售额毛利率 → 销售额/净销售额 → 订单/FBA可售/销量 → 测评/多渠道 → 促销折扣/礼品包装费 → 广告花费/币种。
+- 费用与退款等重列（commodityCost/shipping/tax/headTrip/avgPurchase/amazonCommission/refund*）及业务员/ASIN/标题/站点仍默认隐藏；店铺/开发员/SPU 汇总视图继续隐藏 name/parentAsin/sku，避免产品字段噪音。销量域默认列本轮不变。
+- 无 schema/migration/API/SQL 变更；仅 workbench-types 默认可见与汇总隐藏名单。CSV/XLSX 跟随默认可见列。仅本地提交，不 push、不部署、不连真实库、不向123迁移、不调用 live Sellfox API。回滚本地提交即可恢复旧默认列。
+
+离线复验（不加载 `.env`，测试使用 Prisma fixture）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts
+git diff --check
+```
+
+本轮结果：四个定向文件共111例通过，覆盖利润默认列含父ASIN/品名/净销售额毛利率/净销售额/测评/多渠道、汇总隐藏产品字段、费用列仍默认隐藏、CSV/XLSX 显式选列；类型、改动文件 lint 和 diff 检查通过。复验预期全部通过。本轮未改 SQL/路由/存储，按要求跳过 PGlite、浏览器、生产构建和完整 check。
+
 ## 2026-10-26 销量趋势默认显示（Owner: Chen Jieliang；仅 BOX 本地）
 
 - sales 的 `trend`「销量趋势」移出默认隐藏列组，商品及店铺/开发员/SPU 汇总视图均默认显示，继续使用现有 Sparkline；`average7`「均值」仍为可选隐藏列。显式选列保持用户选择；CSV/XLSX 沿用可见列导出，趋势为文本，缺日为空。
