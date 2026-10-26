@@ -22,7 +22,7 @@
 ## 方案与一致性
 
 - 复用现有 Snapshot + 完整 Head + current view，不引入第二张同步表、Redis 或新 API。
-- 增量迁移 `20261026030000_sellfox_listing_typed_read_model` 添加品牌、评分、标签、日期文本、BSR、费用、利润、Listing 库存、配送与 Buy Box 等类型列；view 只追加列，保留已有顺序与旧 Agent 列。
+- 增量迁移 `20261026050000_sellfox_listing_typed_read_model` 添加品牌、评分、标签、日期文本、BSR、费用、利润、Listing 库存、配送与 Buy Box 等类型列；view 只追加列，保留已有顺序与旧 Agent 列。
 - 数据库 `sellfox_listing_project_write` 在 INSERT / UPDATE OF payload 时计算列，复用已有同步 upsert 事务，包括旧应用、断点重试。读取不解析 JSON。原始 payload 保留。
 - 迁移一次性回填**全部已保存快照**，涵盖可能续跑并成为 Head 的半成品批次；不改变 Head，不请求赛狐，不等待下次采集才可读。
 - 数值缺失/非法/溢出为 NULL；0 不丢失；布尔字符串不冒充真布尔；标签去重、精确匹配，包含 `、` 的完整标签不拆分；BSR 同一元素提供 rank/category，先 bigCategory，精确 sentinel 9999999 为 NULL。日期文本保留源格式及 firstOrderDate fallback。

@@ -11,7 +11,7 @@ type Row = Record<string, unknown>;
 type Query = (sql: string, values?: unknown[]) => Promise<{ rows: Row[] }>;
 type Statement = { text: string; values: unknown[] };
 type Result = { rows: Row[]; total: number; totals: Row[]; facets: { productTags: string[]; brands: string[] } };
-const migrationPath = "prisma/migrations/20261026030000_sellfox_listing_typed_read_model/migration.sql";
+const migrationPath = "prisma/migrations/20261026050000_sellfox_listing_typed_read_model/migration.sql";
 const scope = { organizationId: "org", workspaceId: "ws" };
 
 export async function verifySellfoxListingReadModel(query: Query, before?: Statement) {
