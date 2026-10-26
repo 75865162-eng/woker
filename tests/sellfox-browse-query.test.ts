@@ -167,9 +167,9 @@ test("sort rejects unknown, cross-domain, prototype and injection keys and inval
   assert.equal(readSellfoxView(new URLSearchParams("domain=stores&sortBy=cost")).sortBy, "");
 });
 
-test("ads current Listing rating and tags sort across tabs; images remain unsortable", () => {
+test("ads current Listing rating, review count and tags sort across tabs; images remain unsortable", () => {
   for (const [tab, domain] of [["product", "ads_report"], ["targeting", "ads_targeting"], ["searchTerm", "ads_search_term"], ["campaign", "ads_campaign"], ["adGroup", "ads_ad_group"], ["placement", "ads_placement"]]) {
-    for (const sortBy of ["rating", "productTags"]) {
+    for (const sortBy of ["rating", "ratingCount", "productTags"]) {
       const view = readSellfoxView(new URLSearchParams({ domain: "ads", adsTab: tab, sortBy, sortOrder: "desc" }));
       assert.equal(readSellfoxView(sellfoxViewParams(view)).sortBy, sortBy);
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?${sellfoxViewParams(view, true)}`), domain);

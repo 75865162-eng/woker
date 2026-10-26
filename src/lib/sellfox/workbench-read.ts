@@ -109,7 +109,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));
   const listing = Prisma.sql`listing AS (
     SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
-      ${domain === "sales" || ads ? Prisma.sql`l."productTags",` : Prisma.empty}l.brand,l.rating,l."buyBoxWinner",l.fulfillment,
+      ${domain === "sales" || ads ? Prisma.sql`l."productTags",` : Prisma.empty}l.brand,l.rating,${ads ? Prisma.sql`l."ratingCount",` : Prisma.empty}l."buyBoxWinner",l.fulfillment,
       ${needTagFilter ? Prisma.sql`l."productTagNames" @> ARRAY[${query.productTag}]::text[] AS "matchesProductTag",` : Prisma.empty}
       COALESCE(l.developer,'未分配开发员') AS developer,
       COALESCE(l.spu,'未分配SPU') AS spu
@@ -117,7 +117,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    ${domain === "sales" ? Prisma.sql`l.brand AS "listingBrand",l."productTags" AS "listingProductTags",` : Prisma.empty}${ads ? Prisma.sql`l.rating AS "listingRating",l."productTags" AS "listingProductTags",` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
+    ${domain === "sales" ? Prisma.sql`l.brand AS "listingBrand",l."productTags" AS "listingProductTags",` : Prisma.empty}${ads ? Prisma.sql`l.rating AS "listingRating",l."ratingCount" AS "listingRatingCount",l."productTags" AS "listingProductTags",` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
     ${Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {
@@ -154,6 +154,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${domain === "ads_targeting" || domain === "ads_search_term" || domain === "ads_ad_group" ? Prisma.sql`CASE WHEN count(DISTINCT "targetingText")=1 THEN min("targetingText") END AS "targetingText",CASE WHEN count(DISTINCT "matchType")=1 THEN min("matchType") END AS "matchType",` : Prisma.empty}min(id) AS id,min(asin) AS asin,min(msku) AS msku,${domain === "performance" ? Prisma.sql`min(NULLIF("mainImageCandidate",'')) AS "mainImage",CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,CASE WHEN count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",CASE WHEN count(*)=1 THEN min("refundRate") END AS "refundRate",` : Prisma.sql`min("listingTitle") AS title,min("listingPrice") AS price,
         min(NULLIF("listingMainImage",'')) AS "mainImage",
         CASE WHEN count("listingRating")=count(*) AND count(DISTINCT "listingRating")=1 THEN min("listingRating") END AS rating,
+        CASE WHEN count("listingRatingCount")=count(*) AND count(DISTINCT "listingRatingCount")=1 THEN min("listingRatingCount") END AS "ratingCount",
         CASE WHEN count("listingProductTags")=count(*) AND count(DISTINCT "listingProductTags")=1 THEN min("listingProductTags") END AS "productTags",`}
       ${domain === "performance" && ["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},${marketplace} AS marketplace,array_agg(DISTINCT msku) AS members,${crossStore ? Prisma.sql`jsonb_agg(DISTINCT jsonb_build_array("storeId",msku)) AS "stockMembers",` : Prisma.empty}
       ${Prisma.join(aggregateColumns.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`))}

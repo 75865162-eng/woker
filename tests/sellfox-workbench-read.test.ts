@@ -576,7 +576,7 @@ test("selected listing amazonBrand and bsrCategory export text and empty CSV/XLS
   } finally { globals.prisma = previous; }
 });
 
-test("ads expose optional current Listing image, rating and tags across all report tabs", () => {
+test("ads expose optional current Listing image, rating, review count and tags across all report tabs", () => {
   const scope = { organizationId: "org", workspaceId: "ws" };
   const keys = ["rating", "productTags", "image"];
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
@@ -596,12 +596,21 @@ test("ads expose optional current Listing image, rating and tags across all repo
     assert.match(config[2].requiresField!, /mainImage/);
     for (const key of ["enabled", "serviceStatus", "adStrategy", "salesperson"]) assert.equal(columns[columnDomain].find(c => c.key === key)!.unavailable, true);
     assert.ok(!columns[columnDomain].some(c => /广告组合|否定|AMC/.test(c.labelZh) && !c.unavailable));
-    assert.deepEqual(visibleColumns(columnDomain, ["ratingCount"]), []);
-    for (const exporting of [false, true]) for (const sortBy of ["rating", "productTags"]) {
+    const [ratingCount] = visibleColumns(columnDomain, ["ratingCount"]);
+    assert.equal(ratingCount.labelZh, "评论数");
+    assert.equal(ratingCount.numeric, true);
+    assert.equal(ratingCount.defaultVisible, false);
+    assert.equal(ratingCount.unavailable, undefined);
+    assert.equal(ratingCount.requiresField, "Listing 当前快照 ratingCount 类型投影");
+    assert.ok(!defaultVisibleColumnKeys(columnDomain).includes("ratingCount"));
+    for (const value of [null, 0, 128]) assert.equal(sellfoxColumnValue(ratingCount, { ratingCount: value }), value);
+    assert.equal(visibleColumnCsv([ratingCount], [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
+    for (const exporting of [false, true]) for (const sortBy of ["rating", "ratingCount", "productTags"]) {
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=desc&productTag=ignored&brand=ignored&fulfillment=AFN&buyBox=yes`), domain);
       const sql = workbenchReadSql(domain, query, scope, exporting);
-      assert.match(sql.text, /l\.rating AS "listingRating",l\."productTags" AS "listingProductTags"/);
+      assert.match(sql.text, /l\.rating AS "listingRating",l\."ratingCount" AS "listingRatingCount",l\."productTags" AS "listingProductTags"/);
       assert.match(sql.text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
+      assert.match(sql.text, /CASE WHEN count\("listingRatingCount"\)=count\(\*\) AND count\(DISTINCT "listingRatingCount"\)=1 THEN min\("listingRatingCount"\) END AS "ratingCount"/);
       assert.match(sql.text, /CASE WHEN count\("listingRating"\)=count\(\*\) AND count\(DISTINCT "listingRating"\)=1 THEN min\("listingRating"\) END AS rating/);
       assert.match(sql.text, /CASE WHEN count\("listingProductTags"\)=count\(\*\) AND count\(DISTINCT "listingProductTags"\)=1 THEN min\("listingProductTags"\) END AS "productTags"/);
       assert.ok(sql.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
@@ -632,8 +641,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   assert.equal(sellfoxColumnValue(config[0], { ratingCount: 128 }), 128);
   assert.equal(visibleColumnCsv(config, [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
   assert.equal(visibleColumns("ads", ["rating"])[0].unavailable, undefined);
-  assert.deepEqual(visibleColumns("ads", ["ratingCount"]), []);
-  for (const domain of ["sales", "performance", "ads_report"] as const) {
+  for (const domain of ["sales", "performance"] as const) {
     assert.doesNotMatch(workbenchReadSql(domain, query, scope).text, /ratingCount/);
   }
 });

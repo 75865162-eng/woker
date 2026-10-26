@@ -1,8 +1,8 @@
 # Sellfox 广告子页：Phase A / B 已接入与剩余缺口
 
-> 2026-10-26 · Owner Chen Jieliang · 仅 BOX 本地：广告产品及五个子页解锁默认隐藏的 `image`「图片」、`rating`「星级」、`productTags`「标签」。沿现有 MSKU 优先、ASIN 回退、LIMIT 1 的 Listing current join 读取 typed `mainImage` / `rating` / `productTags`，不解析 payload、不改变事实粒度；无匹配保留 NULL，图片取非空最小值，星级/标签仅在全部成员非 NULL 且一致时显示。这些是当前资料，不是广告报告日历史属性。星级/标签支持分页前排序；图片不排序。选列 CSV/XLSX（含无 layout 参数）保留图片 URL/文本，NULL 为空白。
+> 2026-10-27 · Owner Chen Jieliang · 仅 BOX 本地：广告产品及五个子页解锁默认隐藏的 `image`「图片」、`rating`「星级」、`ratingCount`「评论数」、`productTags`「标签」。沿现有 MSKU 优先、ASIN 回退、LIMIT 1 的 Listing current join 读取 typed `mainImage` / `rating` / `ratingCount` / `productTags`，不解析 payload、不改变事实粒度；无匹配保留 NULL，图片取非空最小值，星级/评论数/标签仅在全部成员非 NULL 且一致时显示；评论数为数字列，全部为 0 时保留 0。这些是当前资料，不是广告报告日历史属性。星级/评论数/标签支持分页前排序；图片不排序。选列 CSV/XLSX（含无 layout 参数）保留图片 URL/文本和数字类型，NULL 为空白、0 为数字 0。
 >
-> `enabled` / `serviceStatus` / `adStrategy` / `salesperson`、广告组合、否定、AMC 继续锁定；不新增广告标签 facets、brand/fulfillment/Buy Box 筛选或 ratingCount。Agent 广告英文长表不追加：目前无 Listing join，其列清单同时供 workbench 读取事实表，避免本轮扩大共享契约；该长表继续拒绝星级/标签排序并提示使用 workbench。sales/performance/listings 默认列不变。无 schema/新 migration，无 push/fetch、部署、SSH、远程库访问、live Sellfox API 或计划启用。回滚本地提交即可恢复旧列/导出分流，无数据库回退。
+> `enabled` / `serviceStatus` / `adStrategy` / `salesperson`、广告组合、否定、AMC 继续锁定；不新增广告标签 facets、brand/fulfillment/Buy Box 筛选。Agent 广告英文长表不追加：目前无 Listing join，其列清单同时供 workbench 读取事实表，避免本轮扩大共享契约；该长表继续拒绝星级/评论数/标签排序并提示使用 workbench。sales/performance/listings 默认列不变；fee-mining 继续暂停。无 schema/新 migration，无 push/fetch、部署、SSH、远程库访问、live Sellfox API 或计划启用。回滚本地提交即可恢复旧列/导出分流，无数据库回退。
 
 本轮离线验证（不加载 `.env`；Prisma 均为 stub，PGlite 为一次性内存库）：
 
@@ -10,11 +10,11 @@
 NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-agent-read.test.ts
 NODE_ENV=test node --import tsx tests/integration/sellfox-ads-phase-b.ts
 npm run typecheck
-node node_modules/eslint/bin/eslint.js 'src/app/api/sellfox/[domain]/export/route.ts' src/components/sellfox/workbench-types.ts src/lib/sellfox/sort-columns.ts src/lib/sellfox/workbench-read.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-api.test.ts tests/integration/sellfox-ads-phase-a.ts tests/integration/sellfox-ads-phase-b.ts
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts src/lib/sellfox/sort-columns.ts src/lib/sellfox/workbench-read.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-api.test.ts tests/integration/sellfox-ads-phase-a.ts tests/integration/sellfox-ads-phase-b.ts
 git diff --check
 ```
 
-预期全通过；SQL fixture 覆盖六页的 MSKU 优先/ASIN 回退、组织/工作区/店铺隔离、无匹配、混合缺失/冲突、空图片及不重复计算花费。未跑商品利润迁移链、浏览器、完整 check、生产 build 或真实 P95；本轮无相关 schema/布局变更，发布或性能验收时另补对应检查。
+本轮 155 项定向测试、PGlite、TypeScript、改动 TS ESLint 与 diff 检查均通过。预期复验全通过；SQL fixture 覆盖六页的 MSKU 优先/ASIN 回退、组织/工作区/店铺隔离、无匹配、评论数一致/冲突→NULL/匹配缺值→NULL/无匹配→NULL/一致 0、空图片及不重复计算花费。未跑商品利润迁移链、浏览器、完整 check、生产 build 或真实 P95；本轮无相关 schema/布局变更，发布或性能验收时另补对应检查。
 
 2026-10-26。Phase A/B 已对照本机真实 Sellfox XLSX 确认列映射并修复投放 ID；本轮仅 box 本机修改和离线解析，未部署、未迁移、未启用计划，未调用 createTask。
 

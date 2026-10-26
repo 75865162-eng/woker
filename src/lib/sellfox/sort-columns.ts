@@ -1,6 +1,6 @@
 /** Shared UI/API allowlist: only fields available before pagination belong here. */
 const product = ["identity", "name", "marketplace", "asin", "msku", "sku", "title", "parentAsin", "price", "currency"];
-const ads = ["asin", "msku", "title", "name", "marketplace", "campaignId", "adGroupId", "adType", "currency", "price", "rating", "productTags", "impressions", "clicks", "cost", "adOrders", "adSales", "acos", "roas"];
+const ads = ["asin", "msku", "title", "name", "marketplace", "campaignId", "adGroupId", "adType", "currency", "price", "rating", "ratingCount", "productTags", "impressions", "clicks", "cost", "adOrders", "adSales", "acos", "roas"];
 export const sellfoxSortColumns: Record<string, readonly string[]> = {
   stores: ["name", "externalId", "marketplace", "country", "status", "lastSyncedAt"],
   inventory: ["reportDate", "capturedAt", "name", "marketplace", "asin", "msku", "sku", "fnsku", "quantity", "totalInventory", "inTransit", "inboundWorking", "inboundShipped", "inboundReceiving", "reservedTransfer", "reservedProcessing", "reservedCustomerorders", "unfulfillable", "warehouseName"],
