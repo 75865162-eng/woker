@@ -730,6 +730,31 @@ test("ads log navigation opens existing sync runs without submitting a sync", as
   await expect(page).toHaveURL(/page=2/);
 });
 
+test("listings default brand and rating remain checked until explicitly hidden in the session", async ({ page }) => {
+  await setup(page, "domain=listings");
+  for (const label of ["品牌", "星级"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
+  for (const label of ["亚马逊品牌", "评论数", "Buy Box", "总库存", "发货方式"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).not.toHaveAttribute("href", /column=/);
+  await page.getByText("自定义列", { exact: true }).click();
+  for (const label of ["品牌", "星级"]) {
+    const checkbox = page.getByRole("checkbox", { name: `显示${label}列`, exact: true });
+    await expect(checkbox).toBeChecked();
+    await checkbox.uncheck();
+  }
+  await page.keyboard.press("Escape");
+  for (const name of ["CSV", "Excel"]) {
+    const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
+    const selected = new URL(href!, "http://127.0.0.1:43221").searchParams.getAll("column");
+    expect(selected).toContain("title");
+    expect(selected).not.toContain("brand");
+    expect(selected).not.toContain("rating");
+  }
+  const tabs = page.getByRole("navigation", { name: "赛狐数据域" });
+  await tabs.getByRole("button", { name: "销量", exact: true }).click();
+  await tabs.getByRole("button", { name: "在线商品", exact: true }).click();
+  for (const label of ["品牌", "星级"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+});
+
 test("listing DXM publish state is optional and does not imply pairing or strikethrough price type", async ({ page }) => {
   await setup(page, "domain=listings");
   await expect(page.getByRole("columnheader", { name: "DXM 发布状态", exact: true })).toHaveCount(0);

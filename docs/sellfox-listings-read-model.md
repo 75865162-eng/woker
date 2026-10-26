@@ -1,5 +1,26 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 02:21:51 Asia/Shanghai — listings 默认显示 brand「品牌」+ rating「星级」 · Owner: Chen Jieliang · BOX LOCAL ONLY
+
+基线 `c7b818ee2ffc86830f56b33cc9f628ac7b7e51c5`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.listings.brand` / `rating` 的 `defaultVisible` 改为 `true`，保留 `requiresField` 与源顺序 brand → amazonBrand → rating → ratingCount。默认列表、列选择器初始勾选及无显式选列 CSV/XLSX 包含「品牌」「星级」；显式会话 `columnSelection`（含空集合或隐藏其中一列）仍优先，不迁移保存选择。
+
+amazonBrand / ratingCount / buyBoxWinner / fulfillment / 库存扩展 / productTags / 日期 / BSR / 费用等保持可选；业务员 / AWD 等缺失入口继续锁定。sales（含已交付 average7）/ performance / ads 及子页默认配置与基线逐字节一致。**Fee-mining remains paused**。只复用已有字段，无 SQL、schema、migration、API 或服务端改动，无新请求或计算。回滚仅还原这两处默认显示值及配套测试/文档，无数据回退。
+
+验证：三个定向测试文件全部通过；TypeScript、touched ESLint、`git diff --check` 已通过，源码比对确认除两处 listings 默认值外与 HEAD 完全一致。新增测试覆盖默认列集合/源顺序、显式/空选列、默认及显式 CSV/XLSX、NULL/零文本/品牌前导零；现有可选列断言保留。浏览器回归已补默认表头/列选择器勾选、显式隐藏及会话切页保留；Chromium 启动被 BOX sandbox 拒绝（`sandbox_host_linux.cc:41` / `Operation not permitted` / SIGTRAP），页面断言未执行，未绕过沙箱。
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+# 本轮已尝试，需允许 Chromium 的本地环境补跑：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand and rating'
+```
+
+仅 BOX 本地：无 push/fetch、SSH、deploy/restart、migrate-on-123、真实数据库写入、live Sellfox API、schedules 或 `.env` 操作；单测使用 Prisma stub，不连接真实数据库。未跑完整 check/build、Prisma/PGlite 或真实 P95：本次仅两处默认显示配置，合码/发布前按仓库规则补完整检查；SQL/schema 或性能验收才触发专项。仓库外 `/workspace/sellfox-parity-gap.md` 同步状态，不纳入 repo commit。
+
+本地提交受阻：`git add` 无法创建 `.git/index.lock`（Read-only file system），因此未执行 commit，未强制或绕过沙箱。4 个仓库文件保留为未暂存 diff；HEAD 保持 `c7b818ee2ffc86830f56b33cc9f628ac7b7e51c5`，父进程需提交：`feat(sellfox): default-show listings brand/rating columns`。仓库外状态文件不进入提交。
+
 ## Performance fact 费用类型投影（2026-10-26，本地完成，未部署）
 
 - 增量迁移 `20261026080000_sellfox_product_daily_typed_fees` 在 `70000` 之后给现有 `SellfoxProductDailySnapshot` 添加 nullable DOUBLE PRECISION：`refundPrice`、`refundNum`、`commodityCost`、`shippingPrice`、`taxPrice`。复用 `50000` 的 `sellfox_listing_number(text)`：空/缺失/非法/溢出为 NULL，保留 0；没有新表或索引。

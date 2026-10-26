@@ -506,11 +506,48 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   const rating = visibleColumns("listings", ["rating"]).find(c => c.key === "rating")!;
   assert.equal(brand.unavailable, undefined);
   assert.equal(rating.unavailable, undefined);
-  assert.equal(brand.defaultVisible, false);
-  assert.equal(rating.defaultVisible, false);
+  assert.equal(brand.defaultVisible, true);
+  assert.equal(rating.defaultVisible, true);
+  const defaults = defaultVisibleColumnKeys("listings");
+  assert.deepEqual(defaults, ["status", "image", "asin", "title", "brand", "rating", "parentAsin", "sku", "name", "price", "sales7", "sales14", "sales30", "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "fulfillable", "sourceUpdatedAt"]);
+  assert.deepEqual(visibleColumns("listings").map(c => c.key), defaults);
+  const sourceKeys = columns.listings.map(c => c.key);
+  assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("brand"), sourceKeys.indexOf("ratingCount") + 1), ["brand", "amazonBrand", "rating", "ratingCount"]);
+  for (const selected of [[], ["title", "asin"], ["rating"], ["brand"]]) {
+    const original = [...selected];
+    assert.deepEqual(visibleColumns("listings", selected).map(c => c.key), sourceKeys.filter(key => original.includes(key)));
+    assert.deepEqual(selected, original);
+  }
   assert.equal(sellfoxColumnValue(brand, { brand: "Acme" }), "Acme");
   assert.equal(sellfoxColumnValue(rating, { rating: "4.4" }), "4.4");
   assert.equal(visibleColumnCsv([brand, rating], [{ brand: "Acme", rating: "4.4" }]).trim(), '"品牌","星级"\r\n"Acme","4.4"');
+});
+
+test("listings default CSV/XLSX include brand and rating while explicit selections stay authoritative", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const rows = [{ brand: "Acme", rating: "4.4", title: "Sample" }, { brand: null, rating: null, title: "Missing" }, { brand: "00123", rating: "0", title: "Zero" }];
+  globals.prisma = { $queryRaw: async () => [{ total: rows.length, totals: [], rows }] } as unknown as PrismaClient;
+  try {
+    const { default: ExcelJS } = await import("exceljs");
+    for (const layout of ["", "layout=workbench&"]) for (const selection of ["", "column=title", "column=brand", "column=rating", "columns=custom"]) {
+      const url = new URL(`http://localhost/?${layout}${selection}`);
+      const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
+      const keys = selection ? selection === "columns=custom" ? [] : [selection.slice("column=".length)] : defaultVisibleColumnKeys("listings");
+      const config = visibleColumns("listings", keys);
+      const csv = await (await sellfoxWorkbenchExport("listings", query, scope, url)).text();
+      assert.equal(csv.trim(), visibleColumnCsv(config, rows).trim());
+      if (!selection) assert.match(csv.split("\r\n")[0], /"标题","品牌","星级","父ASIN"/);
+      url.searchParams.set("format", "xlsx");
+      const book = new ExcelJS.Workbook();
+      await book.xlsx.load(await (await sellfoxWorkbenchExport("listings", query, scope, url)).arrayBuffer());
+      const sheet = book.worksheets[0];
+      assert.equal(sheet.columnCount, keys.length);
+      for (const [i, column] of config.entries()) {
+        assert.equal(sheet.getRow(1).getCell(i + 1).value, column.labelZh);
+        for (const [r, row] of rows.entries()) assert.equal(sheet.getRow(r + 2).getCell(i + 1).value, sellfoxColumnValue(column, row) ?? null);
+      }
+    }
+  } finally { globals.prisma = previous; }
 });
 
 test("listings expose amazonBrand and bsrCategory as optional text columns in source order", () => {
