@@ -31,6 +31,12 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
     // Match workbench enrichment: storeId+msku sum only when every warehouse row has non-NULL totalInventory.
     filters.push(Prisma.sql`EXISTS (SELECT 1 FROM (SELECT CASE WHEN count(i."totalInventory")=count(*) THEN sum(i."totalInventory") END AS inv FROM sellfox_inventory_current i WHERE i."organizationId"=s."organizationId" AND i."workspaceId"=s."workspaceId" AND i."storeId"=s."storeId" AND i.msku=s.msku GROUP BY i."storeId", i.msku) stock WHERE ${Prisma.join(bounds, " AND ")})`);
   }
+  // Typed bsrRank; NULL excluded when either bound is set (comparisons never match NULL).
+  if (query.bsrRankMin != null || query.bsrRankMax != null) {
+    filters.push(Prisma.sql`s."bsrRank" IS NOT NULL`);
+    if (query.bsrRankMin != null) filters.push(Prisma.sql`s."bsrRank">=${query.bsrRankMin}`);
+    if (query.bsrRankMax != null) filters.push(Prisma.sql`s."bsrRank"<=${query.bsrRankMax}`);
+  }
   const searchKeys = ["asin", "msku", "sku", "title", "parentAsin"];
   if (query.searchType && !searchKeys.includes(query.searchType)) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) {

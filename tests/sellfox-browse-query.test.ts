@@ -402,3 +402,33 @@ test("ratingCount min/max validate as safe integers, round trip ads-only forRequ
   assert.throws(() => query("ratingCountMin=10&ratingCountMax=1"), /评论数上限不得小于下限/);
 });
 
+test("bsrRank min/max validate as safe integers, round trip listings-only, reject inverted range", () => {
+  for (const range of ["", "bsrRankMin=0", "bsrRankMax=10000", "bsrRankMin=1&bsrRankMax=5000", "bsrRankMin=-1&bsrRankMax=0"]) {
+    const params = new URLSearchParams(`domain=listings&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.bsrRankMin, params.has("bsrRankMin") ? Number(params.get("bsrRankMin")) : undefined);
+    assert.equal(parsed.bsrRankMax, params.has("bsrRankMax") ? Number(params.get("bsrRankMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("bsrRankMin"), params.get("bsrRankMin"));
+      assert.equal(sellfoxViewParams(other).get("bsrRankMax"), params.get("bsrRankMax"));
+      assert.equal(sellfoxViewParams(other, true).has("bsrRankMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("bsrRankMax"), false);
+    }
+  }
+  for (const key of ["bsrRankMin", "bsrRankMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1.5", "1e2", "NaN", "abc", "01.0", "9007199254740992"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是整数/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("bsrRankMin=%200%20").bsrRankMin, 0);
+  assert.equal(query("bsrRankMax=0").bsrRankMax, 0);
+  assert.throws(() => query("bsrRankMin=10&bsrRankMax=1"), /BSR上限不得小于下限/);
+});
+

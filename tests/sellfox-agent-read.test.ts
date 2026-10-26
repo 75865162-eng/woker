@@ -707,3 +707,33 @@ test("agent totalInventory min/max affect listings rows/count/export only via in
     }
   } finally { globals.prisma = previous; }
 });
+
+test("agent bsrRank min/max affect listings rows/count/export only via typed bsrRank", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory", "performance", "ads_report"] as const) {
+      for (const range of ["", "bsrRankMin=0", "bsrRankMax=10000", "bsrRankMin=1&bsrRankMax=5000"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        for (const sql of calls) {
+          const hasRange = domain === "listings" && (query.bsrRankMin != null || query.bsrRankMax != null);
+          if (hasRange) {
+            assert.match(sql.text, /s\."bsrRank" IS NOT NULL/);
+            for (const [value, pattern] of [[query.bsrRankMin, /s\."bsrRank">=\$(\d+)/], [query.bsrRankMax, /s\."bsrRank"<=\$(\d+)/]] as const) {
+              const match = sql.text.match(pattern);
+              if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+              else assert.equal(match, null);
+            }
+          } else {
+            assert.doesNotMatch(sql.text, /s\."bsrRank" IS NOT NULL|s\."bsrRank">=|s\."bsrRank"<=/);
+          }
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});

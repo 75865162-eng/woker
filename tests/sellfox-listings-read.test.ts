@@ -166,3 +166,33 @@ test("totalInventory min/max use inventory_current storeId+msku sum semantics; f
     assert.doesNotMatch(sql.text, /stock\.inv|totalInventoryMin/);
   }
 });
+
+test("bsrRank min/max filter typed column on listing_current; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "bsrRankMin=0", "bsrRankMax=10000", "bsrRankMin=1&bsrRankMax=5000"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&shopExternalId=shop&site=US`), "listings");
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      const hasRange = query.bsrRankMin != null || query.bsrRankMax != null;
+      if (hasRange) {
+        assert.match(sql.text, /s\."bsrRank" IS NOT NULL/);
+        for (const [value, pattern] of [[query.bsrRankMin, /s\."bsrRank">=\$(\d+)/], [query.bsrRankMax, /s\."bsrRank"<=\$(\d+)/]] as const) {
+          const match = sql.text.match(pattern);
+          if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+      } else {
+        assert.doesNotMatch(sql.text, /s\."bsrRank" IS NOT NULL|s\."bsrRank">=|s\."bsrRank"<=/);
+      }
+      if (!exporting) {
+        const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+        assert.doesNotMatch(facets, /bsrRank/);
+        for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?bsrRankMin=1&bsrRankMax=9"), domain);
+    const sql = workbenchReadSql(domain, query, scope, false);
+    assert.doesNotMatch(sql.text, /s\."bsrRank" IS NOT NULL|bsrRankMin/);
+  }
+});

@@ -341,6 +341,11 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
     if (query.totalInventoryMax != null) bounds.push(Prisma.sql`stock.inv<=${query.totalInventoryMax}`);
     clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM (SELECT CASE WHEN count(i."totalInventory")=count(*) THEN sum(i."totalInventory") END AS inv FROM sellfox_inventory_current i WHERE i."organizationId"=s."organizationId" AND i."workspaceId"=s."workspaceId" AND i."storeId"=s."storeId" AND i.msku=s.msku GROUP BY i."storeId", i.msku) stock WHERE ${Prisma.join(bounds, " AND ")})`);
   }
+  if (domain === "listings" && (query.bsrRankMin != null || query.bsrRankMax != null)) {
+    clauses.push(Prisma.sql`s."bsrRank" IS NOT NULL`);
+    if (query.bsrRankMin != null) clauses.push(Prisma.sql`s."bsrRank">=${query.bsrRankMin}`);
+    if (query.bsrRankMax != null) clauses.push(Prisma.sql`s."bsrRank"<=${query.bsrRankMax}`);
+  }
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);
   if (query.site) clauses.push(Prisma.sql`marketplace=${query.site}`);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
