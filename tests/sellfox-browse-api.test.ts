@@ -459,3 +459,44 @@ test("salesperson reaches performance browse and CSV/XLSX/Agent exports; sales i
     for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
+
+test("selected profit quantity exports reach typed workbench CSV/XLSX with or without layout", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    sellfoxStore: { findMany: async () => [] },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return [{ rows: [{ evaluationSaleNum: 0, channelSaleNum: 1 }], total: 1, totals: [] }];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    for (const layout of ["", "layout=workbench&"]) for (const format of ["csv", "xlsx"]) for (const handler of [performanceCsv, (r: Request) => csv(r, { params: Promise.resolve({ domain: "performance" }) })]) {
+      const request = new Request(`http://localhost/api/sellfox/performance/export?${layout}from=2026-10-25&to=2026-10-25&column=evaluationSaleNum&column=channelSaleNum&format=${format}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+      const response = await handler(request);
+      assert.equal(response.status, 200);
+      if (format === "csv") assert.equal((await response.text()).trim(), '"测评销量","多渠道销量"\r\n0,1');
+      else {
+        const { default: ExcelJS } = await import("exceljs");
+        const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
+        assert.deepEqual([1, 2].map(i => book.worksheets[0].getRow(1).getCell(i).value), ["测评销量", "多渠道销量"]);
+        assert.deepEqual([1, 2].map(i => book.worksheets[0].getRow(2).getCell(i).value), [0, 1]);
+      }
+    }
+    assert.equal(calls.length, 8);
+    for (const sql of calls) {
+      assert.doesNotMatch(sql.text, /payload/);
+      for (const key of ["evaluationSaleNum", "channelSaleNum"]) {
+        assert.ok(sql.text.includes(`s."${key}"`));
+        assert.ok(sql.text.includes(`COALESCE(sum("${key}"),0)::float`));
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});

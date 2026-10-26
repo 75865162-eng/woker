@@ -1,5 +1,29 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-26 测评销量 / 多渠道销量（Owner: Chen Jieliang；仅 BOX 本地）
+
+- performance 新增默认隐藏数字列 `evaluationSaleNum`「测评销量」、`channelSaleNum`「多渠道销量」。截图 `/tmp/sellfox-compare/sellfox-sales-profit.png` 确认是**测评销量，不是测评销售额**；交接的只读证据表明两键均存在，0 是有效数量，未发现 `evaluationSalePrice` / `evaluationSaleAmount` / `evaluationSale`，不得发明金额映射。本轮不重新连接真实库。
+- `20261026110000_sellfox_product_daily_eval_channel_qty` 必须在 100000 后：追加两个 nullable DOUBLE PRECISION，保留原八项费用及 userNameList 的函数/trigger，`UPDATE SET payload=payload` 回填派生列，原 payload 不变；视图严格保持 100000 列序后追加两列，无新索引。同步沿用 `sellfoxNumber`，缺值NULL、非法输入拒绝同步；数据库 safe-number 投影对缺/空/非法/溢出返回NULL，保留0。
+- browse、排序、可见列CSV/Excel及footer/totals读取类型列，实体与币种聚合使用 `COALESCE(sum(...),0)`；热路径不解析这两项 payload。两个利润导出入口的显式选列即使没有 layout 也进入 workbench。Agent英文日级长表末尾追加两项并支持排序，事实NULL仍为空、0仍为0，不从Listing补数。默认可见列、结算/币种/姓名隔离不变。
+- `evaluationCapital` / `evaluationFee` / `evaluationCommission`、channel成本键、销量域对应字段、销售小组、业绩归属人、实时统计、运营及禁用维度均未解锁。123需要全部前置迁移（含50000 helper、80000、90000、100000）+110000，只有用户明确说「上」才另行评审发布。本轮没有 push、SSH、部署、真实库迁移/写入、Sellfox API/sync或计划启用。未来应用前评估全表回填锁/WAL/磁盘/维护窗口；未做真实P95 benchmark。应用回退保留加法schema和trigger，不自动删列或回滚数据库。
+
+离线复验（不加载运行时 `.env`；Prisma仅用假地址，不执行 migrate deploy）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-{sync-recovery,workbench-read,agent-read,browse-query,browse-filters,browse-api,listing-identity,snapshot-sync}.test.ts
+# 按文件直接运行也会打印每个测试用例的统计。
+for test_file in tests/sellfox-{sync-recovery,workbench-read,agent-read,browse-query,browse-filters,browse-api,listing-identity,snapshot-sync}.test.ts; do NODE_ENV=test node --import tsx "$test_file" || exit 1; done
+SELLFOX_P0_TEST_DATABASE_URL= SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+SELLFOX_P0_TEST_DATABASE_URL= SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-listings-read-model.ts
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js generate
+npm run typecheck
+git diff --name-only HEAD -- '*.ts' '*.tsx' | xargs node node_modules/eslint/bin/eslint.js
+git diff --check
+```
+
+预期：8个定向文件共152例通过；PGlite实际执行80000→90000→100000→110000，验证视图列序、回填、旧费用/姓名、INSERT/UPDATE/缺失/非法/0/非零channel=1、COALESCE、币种/结算隔离、排序及Agent空值；Listing及跨店一次性SQL夹具通过（补全它们跳过迁移时缺少的原三项费用和新数量列）。普通PostgreSQL入口未配置会SKIP，离线verifier独立PASS；TypeScript、改动TS ESLint、假地址Prisma validate/generate与diff check通过。未跑浏览器/生产构建/完整check/真实P95；本轮复用列与导出组件、无布局/依赖变更，以相关API/SQL和实际CSV/XLSX读写回归验收，发布前由CI及受控容量验收补齐。
+
 本轮仅覆盖 `/sellfox?domain=sales` 和 `/sellfox?domain=performance`。不发布、不启用计划、不调用真实赛狐、不回填历史数据；后续部署目标是 `123.207.47.225`。
 
 ## 2026-10-26 销量品牌 / 产品标签 / 售价（仅 BOX 本地）

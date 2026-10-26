@@ -40,7 +40,8 @@ export async function verifySellfoxP0Sql(query: Query) {
     const priorFeeKeys = ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"];
     const extraFeeKeys = ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"];
     const feeKeys = [...priorFeeKeys, ...extraFeeKeys];
-    const backfillPayload = { refundPrice: "2", refundNum: 1, commodityCost: "3", shippingPrice: 4, taxPrice: "5", headTripPrice: "6.5", avgPurchaseCost: 0, amazonCommissionPrice: "-8", userNameList: [" 温见清 ", "陈馨", "温见清", "", "  "] };
+    const qtyKeys = ["evaluationSaleNum", "channelSaleNum"];
+    const backfillPayload = { refundPrice: "2", refundNum: 1, commodityCost: "3", shippingPrice: 4, taxPrice: "5", headTripPrice: "6.5", avgPurchaseCost: 0, amazonCommissionPrice: "-8", evaluationSaleNum: "0", channelSaleNum: "1", userNameList: [" 温见清 ", "陈馨", "温见清", "", "  "] };
     await query('UPDATE "SellfoxProductDailySnapshot" SET payload=$1::jsonb WHERE id=\'all\'', [JSON.stringify(backfillPayload)]);
     const viewColumns = async () => (await query(`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='sellfox_profit_daily' ORDER BY ordinal_position`, [schema])).rows.map(row => row.column_name);
     const oldColumns = await viewColumns();
@@ -51,8 +52,12 @@ export async function verifySellfoxP0Sql(query: Query) {
     const columns90000 = await viewColumns();
     await query(await readFile("prisma/migrations/20261026100000_sellfox_product_daily_typed_fee_extras/migration.sql", "utf8"));
     assert.deepEqual(await viewColumns(), [...columns90000, ...extraFeeKeys]);
+    const columns100000 = await viewColumns();
+    await query(await readFile("prisma/migrations/20261026110000_sellfox_product_daily_eval_channel_qty/migration.sql", "utf8"));
+    assert.deepEqual(await viewColumns(), [...columns100000, ...qtyKeys]);
     const backfilled = (await query('SELECT * FROM "SellfoxProductDailySnapshot" WHERE id=\'all\'')).rows[0];
     assert.deepEqual(backfilled.payload, backfillPayload);
+    assert.deepEqual(qtyKeys.map(key => backfilled[key]), [0, 1]);
     assert.deepEqual((backfilled.userNameList as string[]).sort(), ["温见清", "陈馨"].sort());
     assert.ok((await query(`SELECT indexdef FROM pg_indexes WHERE schemaname=$1 AND indexname='sellfox_product_daily_user_name_list'`, [schema])).rows.some(row => String(row.indexdef).includes('USING gin ("userNameList")')));
     assert.deepEqual(feeKeys.map(key => backfilled[key]), [2, 1, 3, 4, 5, 6.5, 0, -8]);
@@ -65,7 +70,7 @@ export async function verifySellfoxP0Sql(query: Query) {
       VALUES ('settled','org','ws','s','2026-10-24','m1','m1','A','USD','{}',now(),40,8,2,true);`);
     const read = async (domain: "sales" | "performance", params: string) => {
       const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL(`http://localhost/?from=2026-10-24&to=2026-10-24&${params}`)), {organizationId:"org",workspaceId:"ws"});
-      assert.doesNotMatch(sql.text, /s\.payload->>'(?:refundPrice|refundNum|commodityCost|shippingPrice|taxPrice|headTripPrice|avgPurchaseCost|amazonCommissionPrice)'/);
+      assert.doesNotMatch(sql.text, /s\.payload->>'(?:refundPrice|refundNum|commodityCost|shippingPrice|taxPrice|headTripPrice|avgPurchaseCost|amazonCommissionPrice|evaluationSaleNum|channelSaleNum)'/);
       const result = (await query(sql.text, sql.values)).rows[0];
       return result as {rows: Record<string, unknown>[]; totals: Record<string, unknown>[]; total: number; facets: { salespersons?: string[] }};
     };
@@ -101,7 +106,11 @@ export async function verifySellfoxP0Sql(query: Query) {
     assert.equal(all.total, 1); assert.equal(all.totals[0].saleRevenue, 100);
     assert.equal(all.rows[0].promotionDiscount, 0); assert.equal(all.totals[0].giftWrapFee, 0);
     assert.deepEqual(feeKeys.map(key => all.rows[0][key]), [2, 1, 3, 4, 5, 6.5, 0, -8]);
+    assert.deepEqual(qtyKeys.map(key => all.rows[0][key]), [0, 1]);
+    assert.deepEqual(qtyKeys.map(key => all.totals[0][key]), [0, 1]);
     assert.deepEqual(feeKeys.map(key => all.totals[0][key]), [2, 1, 3, 4, 5, 6.5, 0, -8]);
+    assert.deepEqual(qtyKeys.map(key => settled.rows[0][key]), [0, 0]);
+    assert.deepEqual(qtyKeys.map(key => settled.totals[0][key]), [0, 0]);
     assert.equal(settled.total, 1); assert.equal(settled.totals[0].saleRevenue, 40);
     assert.equal(settled.rows[0].mainImage, orders.rows[0].mainImage);
     assert.deepEqual(feeKeys.map(key => settled.rows[0][key]), [0, 0, 0, 0, 0, 0, 0, 0]);
@@ -120,14 +129,16 @@ export async function verifySellfoxP0Sql(query: Query) {
     // Optional fees coalesce at entity and totals levels; unknown core metrics
     // remain null. Different currencies and settlement partitions never mix.
     await query(`INSERT INTO "SellfoxProductDailySnapshot" (id,"organizationId","workspaceId","storeId","reportDate","sourceKey",msku,asin,currency,payload,"updatedAt","promotionDiscount","giftWrapFee")
-      VALUES ('fee','org','ws','s','2026-10-24','m2','m2','A','USD','{"userNameList":["陈馨"],"refundPrice":"2.5","refundNum":0,"commodityCost":3,"shippingPrice":4,"taxPrice":-0.5,"headTripPrice":1.5,"avgPurchaseCost":"2","amazonCommissionPrice":3}',now(),12.5,1.25),
-        ('fee-null','org','ws','s','2026-10-24','m3','m3','B','USD','{"refundPrice":"invalid","refundNum":"","commodityCost":null,"shippingPrice":"Infinity","taxPrice":"1e999","headTripPrice":"invalid","avgPurchaseCost":null,"amazonCommissionPrice":"Infinity"}',now(),NULL,NULL),
-        ('fee-cad','org','ws','s','2026-10-24','mc','mc','C','CAD','{"refundPrice":10,"refundNum":1,"commodityCost":20,"shippingPrice":30,"taxPrice":40,"headTripPrice":50,"avgPurchaseCost":60,"amazonCommissionPrice":70}',now(),9,2);`);
+      VALUES ('fee','org','ws','s','2026-10-24','m2','m2','A','USD','{"userNameList":["陈馨"],"refundPrice":"2.5","refundNum":0,"commodityCost":3,"shippingPrice":4,"taxPrice":-0.5,"headTripPrice":1.5,"avgPurchaseCost":"2","amazonCommissionPrice":3,"evaluationSaleNum":"2","channelSaleNum":0}',now(),12.5,1.25),
+        ('fee-null','org','ws','s','2026-10-24','m3','m3','B','USD','{"refundPrice":"invalid","refundNum":"","commodityCost":null,"shippingPrice":"Infinity","taxPrice":"1e999","headTripPrice":"invalid","avgPurchaseCost":null,"amazonCommissionPrice":"Infinity","evaluationSaleNum":"invalid","channelSaleNum":"Infinity"}',now(),NULL,NULL),
+        ('fee-cad','org','ws','s','2026-10-24','mc','mc','C','CAD','{"refundPrice":10,"refundNum":1,"commodityCost":20,"shippingPrice":30,"taxPrice":40,"headTripPrice":50,"avgPurchaseCost":60,"amazonCommissionPrice":70,"evaluationSaleNum":4,"channelSaleNum":5}',now(),9,2);`);
     // INSERT supplies fees only through payload; trigger replaces nullable defaults.
     const insertedFees = (await query('SELECT * FROM "SellfoxProductDailySnapshot" WHERE id=\'fee\'')).rows[0];
     assert.deepEqual(feeKeys.map(key => insertedFees[key]), [2.5, 0, 3, 4, -0.5, 1.5, 2, 3]);
+    assert.deepEqual(qtyKeys.map(key => insertedFees[key]), [2, 0]);
     const invalidFees = (await query('SELECT * FROM "SellfoxProductDailySnapshot" WHERE id=\'fee-null\'')).rows[0];
     assert.deepEqual(feeKeys.map(key => invalidFees[key]), [null, null, null, null, null, null, null, null]);
+    assert.deepEqual(qtyKeys.map(key => invalidFees[key]), [null, null]);
     const personOnly = await read("performance", "dimension=asin&salesperson=" + encodeURIComponent("温见清"));
     assert.equal(personOnly.rows.length, 1); assert.equal(personOnly.rows[0].saleRevenue, 100);
     assert.equal(personOnly.totals[0].saleRevenue, 100); assert.equal(personOnly.totals[0].refundPrice, 2);
@@ -139,7 +150,11 @@ export async function verifySellfoxP0Sql(query: Query) {
     assert.equal(combined.promotionDiscount, 12.5); assert.equal(combined.giftWrapFee, 1.25);
     assert.deepEqual(feeKeys.map(key => combined[key]), [4.5, 1, 6, 8, 4.5, 8, 2, -5]);
     assert.equal(combined.saleRevenue, null);
+    assert.deepEqual(qtyKeys.map(key => combined[key]), [2, 1]);
+    assert.deepEqual(qtyKeys.map(key => fees.totals.find(row => row.currency === "USD")?.[key]), [2, 1]);
+    assert.deepEqual(qtyKeys.map(key => fees.totals.find(row => row.currency === "CAD")?.[key]), [4, 5]);
     const nullFees = fees.rows.find(row => row.identity === "B")!;
+    assert.deepEqual(qtyKeys.map(key => nullFees[key]), [0, 0]);
     assert.equal(nullFees.promotionDiscount, 0); assert.equal(nullFees.giftWrapFee, 0);
     assert.deepEqual(feeKeys.map(key => nullFees[key]), [0, 0, 0, 0, 0, 0, 0, 0]);
     assert.deepEqual(feeKeys.map(key => fees.totals.find(row => row.currency === "USD")?.[key]), [4.5, 1, 6, 8, 4.5, 8, 2, -5]);
@@ -147,20 +162,30 @@ export async function verifySellfoxP0Sql(query: Query) {
     assert.equal(fees.totals.find(row => row.currency === "USD")?.promotionDiscount, 12.5);
     assert.equal(fees.totals.find(row => row.currency === "USD")?.giftWrapFee, 1.25);
     assert.equal(fees.totals.find(row => row.currency === "CAD")?.promotionDiscount, 9);
-    for (const key of extraFeeKeys) {
+    for (const key of [...extraFeeKeys, ...qtyKeys]) {
       const sorted = await read("performance", `dimension=asin&sortBy=${key}&sortOrder=desc&pageSize=1`);
       assert.equal(sorted.rows[0].currency, "CAD");
       assert.deepEqual(sorted.totals, fees.totals);
     }
+    globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => (await query(sql.text, sql.values)).rows } as unknown as PrismaClient;
+    try {
+      for (const exporting of [false, true]) for (const key of qtyKeys) for (const sortOrder of ["asc", "desc"]) {
+        const agent = await readSellfoxAgentRows("performance", sellfoxBrowseQuery(new URL(`http://localhost/?reportDate=2026-10-24&sortBy=${key}&sortOrder=${sortOrder}`), "performance"), { organizationId: "org", workspaceId: "ws" }, exporting);
+        assert.deepEqual(qtyKeys.map(key => agent.rows.find(row => row.id === "all")?.[key]), [0, 1]);
+        assert.deepEqual(qtyKeys.map(key => agent.rows.find(row => row.id === "fee-null")?.[key]), [null, null]);
+        assert.equal(agent.rows[0].id, sortOrder === "desc" ? "fee-cad" : key === "evaluationSaleNum" ? "all" : "fee");
+      }
+    } finally { globals.prisma = previous; }
     const paged = await read("performance", "dimension=asin&pageSize=1");
     assert.equal(paged.rows.length, 1); assert.deepEqual(paged.totals, fees.totals);
     const settledFees = await read("performance", "dimension=asin&onlySettle=1");
     assert.equal(settledFees.totals[0].promotionDiscount, 0);
     assert.equal(settledFees.totals[0].giftWrapFee, 0);
     // UPDATE OF payload refreshes all eight fees, clearing stale values on missing keys.
-    await query('UPDATE "SellfoxProductDailySnapshot" SET payload=$1::jsonb WHERE id=\'fee\'', [JSON.stringify({ refundPrice: 0, refundNum: "2.5", commodityCost: "", shippingPrice: "bad", taxPrice: null, headTripPrice: "0", avgPurchaseCost: "2.5", amazonCommissionPrice: "bad" })]);
+    await query('UPDATE "SellfoxProductDailySnapshot" SET payload=$1::jsonb WHERE id=\'fee\'', [JSON.stringify({ refundPrice: 0, refundNum: "2.5", commodityCost: "", shippingPrice: "bad", taxPrice: null, headTripPrice: "0", avgPurchaseCost: "2.5", amazonCommissionPrice: "bad", evaluationSaleNum: "0", channelSaleNum: "2" })]);
     const updatedFees = (await query('SELECT * FROM "SellfoxProductDailySnapshot" WHERE id=\'fee\'')).rows[0];
     assert.deepEqual(feeKeys.map(key => updatedFees[key]), [0, 2.5, null, null, null, 0, 2.5, null]);
+    assert.deepEqual(qtyKeys.map(key => updatedFees[key]), [0, 2]);
     assert.equal(updatedFees.promotionDiscount, 12.5); assert.equal(updatedFees.giftWrapFee, 1.25);
     const updated = await read("performance", "dimension=msku&searchType=msku&search=m2&exactMatch=1");
     assert.deepEqual(feeKeys.map(key => updated.rows[0][key]), [0, 2.5, 0, 0, 0, 0, 2.5, 0]);
@@ -169,11 +194,13 @@ export async function verifySellfoxP0Sql(query: Query) {
     const cleared = (await query('SELECT * FROM sellfox_profit_daily WHERE id=\'fee\'')).rows[0];
     assert.deepEqual(feeKeys.map(key => cleared[key]), [null, null, null, null, null, null, null, null]);
     assert.deepEqual(cleared.userNameList, []);
+    assert.deepEqual(qtyKeys.map(key => cleared[key]), [null, null]);
     // Use the same numeric contract for each new typed fact; Listing names are never aliases.
     for (const value of [null, "", " ", "bad", "Infinity", "-Infinity", "NaN", "1e999", {}, [], true]) {
-      await query('UPDATE "SellfoxProductDailySnapshot" SET payload=$1::jsonb WHERE id=\'fee\'', [JSON.stringify(Object.fromEntries(extraFeeKeys.map(key => [key, value])))]);
+      await query('UPDATE "SellfoxProductDailySnapshot" SET payload=$1::jsonb WHERE id=\'fee\'', [JSON.stringify(Object.fromEntries([...extraFeeKeys, ...qtyKeys].map(key => [key, value])))]);
       const invalid = (await query('SELECT * FROM sellfox_profit_daily WHERE id=\'fee\'')).rows[0];
       assert.deepEqual(extraFeeKeys.map(key => invalid[key]), [null, null, null]);
+      assert.deepEqual(qtyKeys.map(key => invalid[key]), [null, null]);
     }
     await query('UPDATE "SellfoxProductDailySnapshot" SET payload=$1::jsonb WHERE id=\'fee\'', [JSON.stringify({ headTripCost: 999, purchaseCost: 999, referralFee: 999 })]);
     const listingNames = (await query('SELECT * FROM sellfox_profit_daily WHERE id=\'fee\'')).rows[0];
@@ -249,7 +276,7 @@ if (process.argv[1]?.endsWith("sellfox-sales-profit-p0.ts")) {
     const db = new PGlite();
     try {
       await verifySellfoxP0Sql(async (sql, values) => values?.length ? db.query(sql, values) : (await db.exec(sql)).at(-1)!);
-      console.log("Sales/profit 80000 + 90000 + 100000 migration, fee extras, trigger, salesperson containment/facets/totals/Agent: PASS (disposable PGlite)");
+      console.log("Sales/profit 80000 + 90000 + 100000 + 110000 migration, fee extras and evaluation/channel quantities, trigger, salesperson containment/facets/totals/Agent: PASS (disposable PGlite)");
     } finally { await db.close(); }
   })().catch(error => { console.error(error); process.exitCode = 1; });
 }

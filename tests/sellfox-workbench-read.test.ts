@@ -16,7 +16,7 @@ function assertListingProjection(sql: string) {
 }
 
 test("performance footer includes visible numeric fees and quantities without summing rates or unavailable columns", () => {
-  const keys = ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "fbaQuantity", "fbmQuantity"];
+  const keys = ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "fbaQuantity", "fbmQuantity", "evaluationSaleNum", "channelSaleNum"];
   assert.deepEqual(summableColumnKeys(visibleColumns("performance", ["identity", ...keys])).sort(), [...keys].sort());
   assert.ok(summableColumnKeys(columns.performance).includes("saleRevenue"));
   assert.deepEqual(summableColumnKeys([
@@ -1409,5 +1409,53 @@ test("sales trend remains derived from seven complete in-range quantity days ind
     const result = await readSellfoxWorkbench("sales", sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-20&to=2026-10-26&metric=orders")), { organizationId: "org", workspaceId: "ws" });
     assert.equal(result.rows[0].trend, "0 | 1 | 2 | 3 | 4 | 5 | 6"); assert.equal(result.rows[0].average7, 3);
     for (const row of result.rows.slice(1)) { assert.equal(row.trend, null); assert.equal(row.average7, null); }
+  } finally { globals.prisma = previous; }
+});
+
+test("performance evaluation and channel quantities are optional typed facts with unchanged defaults", () => {
+  const keys = ["evaluationSaleNum", "channelSaleNum"];
+  const config = visibleColumns("performance", keys);
+  assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), [
+    ["evaluationSaleNum", "测评销量", true, false, undefined],
+    ["channelSaleNum", "多渠道销量", true, false, undefined],
+  ]);
+  for (const c of config) {
+    assert.equal(captions[c.key], c.labelZh);
+    assert.ok(c.requiresField.includes(`销售利润 payload.${c.key} 类型投影`));
+    assert.ok(!defaultVisibleColumnKeys("performance").includes(c.key));
+    assert.deepEqual(visibleColumns("sales", [c.key]), []);
+    assert.deepEqual(visibleColumns("listings", [c.key]), []);
+  }
+  assert.ok(config[0].requiresField.includes("数量"));
+  for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer"]) {
+    for (const onlySettle of [false, true]) for (const key of keys) for (const sortOrder of ["asc", "desc"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&from=2026-10-24&to=2026-10-25&onlySettle=${Number(onlySettle)}&sortBy=${key}&sortOrder=${sortOrder}`), "performance");
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting);
+        for (const qty of keys) {
+          assert.ok(sql.text.includes(`s."${qty}"`));
+          assert.equal(sql.text.split(`COALESCE(sum("${qty}"),0)::float AS "${qty}"`).length - 1, 2);
+        }
+        assert.doesNotMatch(sql.text, /payload/);
+        assert.ok(sql.text.includes(`ORDER BY "${key}" ${sortOrder.toUpperCase()} NULLS LAST, id ASC LIMIT`));
+      }
+    }
+  }
+  assert.doesNotMatch(workbenchReadSql("sales", sellfoxBrowseQuery(new URL("http://localhost/")), { organizationId: "org", workspaceId: "ws" }).text, /evaluationSaleNum|channelSaleNum/);
+});
+
+test("selected profit quantity columns export zero and nonzero numbers in CSV and Excel", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ evaluationSaleNum: 0, channelSaleNum: 1 }, { evaluationSaleNum: 2, channelSaleNum: 0 }], total: 2, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?reportDate=2026-10-25&column=evaluationSaleNum&column=channelSaleNum");
+  const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    assert.equal((await (await sellfoxWorkbenchExport("performance", query, scope, url)).text()).trim(), '"测评销量","多渠道销量"\r\n0,1\r\n2,0');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("performance", query, scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    assert.deepEqual(book.worksheets[0].getSheetValues().slice(1).map(row => (row as unknown[]).slice(1)), [["测评销量", "多渠道销量"], [0, 1], [2, 0]]);
   } finally { globals.prisma = previous; }
 });

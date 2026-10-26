@@ -286,10 +286,10 @@ test("agent salesperson containment uses only typed performance column including
 
 test("Agent extra performance fees use typed profit view columns, numeric CSV and safe sorting", async () => {
   const keys = ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"];
-  assert.deepEqual(sellfoxAgentColumns.performance.slice(-3), keys);
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-5, -2), keys);
   const csv = sellfoxAgentCsv("performance", [{ headTripPrice: 0, avgPurchaseCost: 2.5, amazonCommissionPrice: -3 }, {}]);
-  assert.ok(csv.split("\r\n")[0].endsWith('"headTripPrice","avgPurchaseCost","amazonCommissionPrice"'));
-  assert.ok(csv.split("\r\n")[1].endsWith('0,2.5,-3'));
+  assert.ok(csv.split("\r\n")[0].endsWith('"headTripPrice","avgPurchaseCost","amazonCommissionPrice","evaluationSaleNum","channelSaleNum"'));
+  assert.ok(csv.split("\r\n")[1].endsWith('0,2.5,-3,"",""'));
   assert.ok(csv.split("\r\n")[2].endsWith('"","",""'));
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
@@ -329,6 +329,31 @@ test("sales Agent appends typed current catalog columns with stable MSKU-first s
       assert.match(sql.text, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1/);
       assert.ok(sql.text.includes(`ORDER BY "${key}" DESC NULLS LAST, id ASC LIMIT`));
       assert.doesNotMatch(sql.text, /payload|userNameList/);
+    }
+  } finally { globals.prisma = previous; }
+});
+
+test("Agent appends profit evaluation and channel quantities with null empty, zero preserved and safe sort", async () => {
+  const keys = ["evaluationSaleNum", "channelSaleNum"];
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-2), keys);
+  assert.ok(keys.every(key => !(sellfoxAgentColumns.sales as readonly string[]).includes(key)));
+  const csv = sellfoxAgentCsv("performance", [{ evaluationSaleNum: 0, channelSaleNum: 1 }, { evaluationSaleNum: 2, channelSaleNum: 0 }, { evaluationSaleNum: null, channelSaleNum: null }]);
+  assert.ok(csv.split("\r\n")[0].endsWith('"evaluationSaleNum","channelSaleNum"'));
+  assert.ok(csv.split("\r\n")[1].endsWith('0,1'));
+  assert.ok(csv.split("\r\n")[2].endsWith('2,0'));
+  assert.ok(csv.split("\r\n")[3].endsWith('"",""'));
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
+    assert.match(sql.text, /FROM sellfox_profit_daily s/);
+    assert.doesNotMatch(sql.text, /payload/);
+    if (!sql.text.includes("count(*)")) assert.match(sql.text, /ORDER BY "(?:evaluationSaleNum|channelSaleNum)" (?:ASC|DESC) NULLS LAST, id ASC LIMIT/);
+    return sql.text.includes("count(*)") ? [{ total: 2 }] : [{ evaluationSaleNum: 0, channelSaleNum: 1 }, { evaluationSaleNum: null, channelSaleNum: null }];
+  } } as unknown as PrismaClient;
+  try {
+    for (const key of keys) for (const exporting of [false, true]) for (const sortOrder of ["asc", "desc"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${key}&sortOrder=${sortOrder}&reportDate=2026-10-25`), "performance");
+      const result = await readSellfoxAgentRows("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting);
+      assert.deepEqual(result.rows.map(row => keys.map(key => row[key])), [[0, 1], [null, null]]);
     }
   } finally { globals.prisma = previous; }
 });
