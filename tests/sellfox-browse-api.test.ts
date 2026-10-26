@@ -39,7 +39,7 @@ test("sales always browses workbench aggregates, preserving scope, permissions a
       sqlCalls.push(sql);
       if (failRead) throw new Error("private database failure");
       if (!sql.text.includes("FROM sellfox_sales_daily")) return [];
-      return [{ total: overflow ? 10001 : 1, totals, rows: [{ id: "aggregate", storeId: "store-a", name: "GG", identity: "store-a", currency: "USD", members: ["sku-a", "sku-b"], subtotal: 109, daily: { [date]: 109 }, dailyQuantity: { [date]: 109 } }] }];
+      return [{ total: overflow ? 10001 : 1, totals, rows: [{ id: "aggregate", storeId: "store-a", name: "GG", identity: "store-a", currency: "USD", members: ["sku-a", "sku-b"], subtotal: 109, brand: "品牌", productTags: "新品、重点", price: 0, daily: { [date]: 109 }, dailyQuantity: { [date]: 109 } }] }];
     },
   } as unknown as PrismaClient;
   const context = () => ({ params: Promise.resolve({ domain: "sales" }) });
@@ -62,6 +62,7 @@ test("sales always browses workbench aggregates, preserving scope, permissions a
         assert.deepEqual(data.pagination, { page: 1, pageSize: 50, total: 1 });
         assert.deepEqual(data.dates, [date]); assert.deepEqual(data.totals, totals);
         assert.equal(data.rows.length, 1); assert.equal(data.rows[0].subtotal, 109);
+        assert.equal(data.rows[0].brand, "品牌"); assert.equal(data.rows[0].productTags, "新品、重点"); assert.equal(data.rows[0].price, 0);
         assert.equal(data.rows[0][`day:${date}`], 109); assert.equal(data.rows[0].msku, null);
         if (params.includes("dimension=store")) {
           assert.equal(data.rows[0].identity, "GG");
@@ -78,6 +79,18 @@ test("sales always browses workbench aggregates, preserving scope, permissions a
     const exported = await csv(await request(exportParams), context());
     assert.equal(exported.status, 200); assert.match(exported.headers.get("Content-Type")!, /text\/csv/);
     assert.match(await exported.text(), /GG/);
+    // Explicit selections use the wide-table export even without a layout flag.
+    for (const layout of ["", "layout=workbench&"]) for (const format of ["csv", "xlsx"]) {
+      const response = await csv(await request(`${layout}from=${date}&to=${date}&column=brand&column=productTags&column=price&format=${format}`), context());
+      assert.equal(response.status, 200);
+      if (format === "csv") assert.equal((await response.text()).trim(), '"商品品牌","产品标签","售价"\r\n"品牌","新品、重点",0');
+      else {
+        const { default: ExcelJS } = await import("exceljs");
+        const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
+        assert.deepEqual([1, 2, 3].map(i => book.worksheets[0].getRow(1).getCell(i).value), ["商品品牌", "产品标签", "售价"]);
+        assert.deepEqual([1, 2, 3].map(i => book.worksheets[0].getRow(2).getCell(i).value), ["品牌", "新品、重点", 0]);
+      }
+    }
     assert.equal((await csv(await request(exportParams, "designer"), context())).status, 403);
     assert.equal((await csv(await request(`${exportParams}&storeId=foreign`), context())).status, 403);
     assert.equal((await csv(await request(`${exportParams}&shopExternalId=foreign`), context())).status, 403);

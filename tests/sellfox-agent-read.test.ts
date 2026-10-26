@@ -86,6 +86,14 @@ test("listing transaction failure cannot publish current; retry reuses capture a
   await syncSellfoxListings({ ...input, capturedAt: "2026-10-25T03:00:00Z" }, { db, post }); assert.equal(head, "2026-10-25T03:00:00.000Z"); assert.equal(count, 1);
 });
 
+// Sales metadata adds a scoped lateral join; compare only the outer fact predicates.
+function factWhere(sql: Prisma.Sql) {
+  const marker = " l ON TRUE WHERE ";
+  const start = sql.text.includes(marker) ? sql.text.indexOf(marker) + marker.length : sql.text.indexOf(" WHERE ") + 7;
+  const end = sql.text.startsWith("SELECT count") ? -1 : sql.text.lastIndexOf(" ORDER BY ");
+  return sql.text.slice(start, end > start ? end : undefined).replace(/\$\d+/g, "?");
+}
+
 test("agent rows, pagination counts and long-table export honor current Listing fulfillment", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const calls: Prisma.Sql[] = [];
@@ -98,8 +106,8 @@ test("agent rows, pagination counts and long-table export honor current Listing 
         const result = await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
         assert.equal(result.pagination.total, 0);
         assert.equal(calls.length, 2);
-        const where = calls[0].text.split(" WHERE ")[1].split(" ORDER BY ")[0];
-        assert.ok(calls[1].text.includes(where));
+        assert.equal(factWhere(calls[0]), factWhere(calls[1]));
+        assert.deepEqual(calls[0].values.slice(domain === "sales" ? 2 : 0, -2), calls[1].values);
         await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
         for (const sql of calls) {
           if (domain === "listings") {
@@ -149,11 +157,12 @@ test("agent Buy Box rows, counts and export match only real booleans on the chos
           assert.ok(sql.values.includes("org") && sql.values.includes("ws"));
           assert.match(sql.text, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
         }
-        assert.equal(calls[0].text.slice(calls[0].text.indexOf(" WHERE "), calls[0].text.lastIndexOf(" ORDER BY ")), calls[1].text.slice(calls[1].text.indexOf(" WHERE ")));
+        assert.equal(factWhere(calls[0]), factWhere(calls[1]));
+        assert.deepEqual(calls[0].values.slice(domain === "sales" ? 2 : 0, -2), calls[1].values);
       }
       calls.length = 0;
       await readSellfoxAgentRows(domain, sellfoxBrowseQuery(new URL("http://localhost/?buyBox=")), { organizationId: "org", workspaceId: "ws" });
-      for (const sql of calls) assert.doesNotMatch(sql.text, /buyBoxWinner|sellfox_listing_current candidate/);
+      for (const sql of calls) assert.doesNotMatch(factWhere(sql), /buyBoxWinner|sellfox_listing_current candidate/);
     }
     for (const domain of ["inventory", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
       calls.length = 0;
@@ -193,12 +202,13 @@ test("agent brand matches the selected scoped current Listing after MSKU-first/A
           assert.doesNotMatch(sql.text, /amazonBrand|btrim\(p.payload->>'brand'\)\s*=/);
           assert.ok(!sql.values.includes(`%${brand}%`));
         }
-        assert.equal(calls[0].text.slice(calls[0].text.indexOf(" WHERE "), calls[0].text.lastIndexOf(" ORDER BY ")), calls[1].text.slice(calls[1].text.indexOf(" WHERE ")));
+        assert.equal(factWhere(calls[0]), factWhere(calls[1]));
+        assert.deepEqual(calls[0].values.slice(domain === "sales" ? 2 : 0, -2), calls[1].values);
       }
       for (const brand of ["", "   "]) {
         calls.length = 0;
         await readSellfoxAgentRows(domain, sellfoxBrowseQuery(new URL(`http://localhost/?brand=${brand}`)), { organizationId: "org", workspaceId: "ws" });
-        for (const sql of calls) assert.doesNotMatch(sql.text, /payload->>'brand'|sellfox_listing_current candidate/);
+        for (const sql of calls) assert.doesNotMatch(factWhere(sql), /payload->>'brand'|sellfox_listing_current candidate/);
       }
     }
     for (const domain of ["inventory", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
@@ -234,7 +244,8 @@ test("agent productTag membership uses the selected scoped Listing before matchi
         assert.ok(sql.values.includes(query.productTag)); assert.ok(!sql.values.includes(`%${query.productTag}%`));
         assert.match(sql.text, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
       }
-      assert.equal(calls[0].text.slice(calls[0].text.indexOf(" WHERE "), calls[0].text.lastIndexOf(" ORDER BY ")), calls[1].text.slice(calls[1].text.indexOf(" WHERE ")));
+      assert.equal(factWhere(calls[0]), factWhere(calls[1]));
+      assert.deepEqual(calls[0].values.slice(domain === "sales" ? 2 : 0, -2), calls[1].values);
     }
   } finally { globals.prisma = previous; }
 });
@@ -293,6 +304,31 @@ test("Agent extra performance fees use typed profit view columns, numeric CSV an
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${key}&sortOrder=desc&reportDate=2026-10-25`), "performance");
       const result = await readSellfoxAgentRows("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting);
       assert.equal(result.rows[0][key], key === "headTripPrice" ? 0 : key === "avgPurchaseCost" ? 2.5 : -3);
+    }
+  } finally { globals.prisma = previous; }
+});
+
+test("sales Agent appends typed current catalog columns with stable MSKU-first selection and SQL sorting", async () => {
+  assert.deepEqual(sellfoxAgentColumns.sales.slice(-4), ["orders", "brand", "productTags", "price"]);
+  const csv = sellfoxAgentCsv("sales", [{ brand: "品牌", productTags: "新品、重点", price: 0 }, {}]);
+  assert.ok(csv.split("\r\n")[0].endsWith('"orders","brand","productTags","price"'));
+  assert.ok(csv.split("\r\n")[1].endsWith('"品牌","新品、重点",0'));
+  assert.ok(csv.split("\r\n")[2].endsWith('"","",""'));
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 1 }] : [{ brand: "品牌", productTags: "新品、重点", price: 0 }]; } } as unknown as PrismaClient;
+  try {
+    for (const key of ["brand", "productTags", "price"]) for (const exporting of [false, true]) {
+      calls.length = 0;
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?from=2026-10-24&to=2026-10-24&sortBy=${key}&sortOrder=desc`), "sales");
+      const result = await readSellfoxAgentRows("sales", query, { organizationId: "org", workspaceId: "ws" }, exporting);
+      assert.equal(result.rows[0].price, 0);
+      const sql = calls[0];
+      assert.match(sql.text, /LEFT JOIN LATERAL[\s\S]*candidate\."storeId"=s\."storeId"/);
+      assert.match(sql.text, /candidate\."organizationId"=\$\d+ AND candidate\."workspaceId"=\$\d+/);
+      assert.match(sql.text, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1/);
+      assert.ok(sql.text.includes(`ORDER BY "${key}" DESC NULLS LAST, id ASC LIMIT`));
+      assert.doesNotMatch(sql.text, /payload|userNameList/);
     }
   } finally { globals.prisma = previous; }
 });

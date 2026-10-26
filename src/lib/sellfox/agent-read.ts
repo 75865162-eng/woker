@@ -86,7 +86,10 @@ export const sellfoxAgentColumns = {
     "shopExternalId",
     "name",
     "marketplace",
-    "orders"
+    "orders",
+    "brand",
+    "productTags",
+    "price"
   ],
   "performance": [
     "id",
@@ -275,10 +278,25 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
     if (!query.from && !query.to && !query.allDates) clauses.push(Prisma.sql`"reportDate"=${query.reportDate ?? sellfoxDateAt(new Date(), -1)}`);
   }
   const source = Prisma.raw(views[domain]); // closed constant map, never request text
-  const columns = Prisma.join(sellfoxAgentColumns[domain].map((key) => Prisma.raw(`"${key}"`)));
+  // Append current Listing metadata without changing the sales-day grain or historical facts.
+  const listing = domain === "sales" ? Prisma.sql`LEFT JOIN LATERAL (
+    SELECT candidate.brand AS "listingBrand",candidate."productTags" AS "listingProductTags",candidate.price AS "listingPrice"
+    FROM sellfox_listing_current candidate
+    WHERE candidate."organizationId"=${scope.organizationId} AND candidate."workspaceId"=${scope.workspaceId}
+      AND candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))
+    ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1
+  ) l ON TRUE` : Prisma.empty;
+  const columns = Prisma.join(sellfoxAgentColumns[domain].map((key) => {
+    if (domain === "sales") {
+      if (key === "brand") return Prisma.sql`l."listingBrand" AS brand`;
+      if (key === "productTags") return Prisma.sql`l."listingProductTags" AS "productTags"`;
+      if (key === "price") return Prisma.sql`l."listingPrice" AS price`;
+    }
+    return Prisma.raw(`"${key}"`);
+  }));
   const where = Prisma.join(clauses, " AND ");
   const order = sortColumn ? sellfoxSqlOrder(query, Prisma.raw(`"${sortColumn}"`)) : Prisma.raw(domain === "inventory" || domain === "listings" ? '"capturedAt" DESC, id' : '"reportDate" DESC, id');
-  const rows = await prisma.$queryRaw<Record<string, unknown>[]>(Prisma.sql`SELECT ${columns} FROM ${source} s WHERE ${where} ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}`);
+  const rows = await prisma.$queryRaw<Record<string, unknown>[]>(Prisma.sql`SELECT ${columns} FROM ${source} s ${listing} WHERE ${where} ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}`);
   if (exporting && rows.length > sellfoxExportLimit) throw new SellfoxBrowseError("导出超过 10,000 条，请缩小日期或店铺范围并分段。", 413);
   const counts = exporting ? [{ total: rows.length }] : await prisma.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::integer AS total FROM ${source} s WHERE ${where}`);
   return { rows, pagination: { page: query.page, pageSize: query.pageSize, total: counts[0].total } };

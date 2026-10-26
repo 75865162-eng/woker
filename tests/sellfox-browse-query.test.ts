@@ -205,3 +205,13 @@ test("performance extra fee selections and sorting round trip without Listing al
     assert.equal(parsed.sortBy, key);
   }
 });
+
+test("sales catalog sort keys round trip UI, browse and export; trend sorting stays unavailable", () => {
+  for (const key of ["brand", "productTags", "price"]) {
+    const view = readSellfoxView(new URLSearchParams(`domain=sales&sortBy=${key}&sortOrder=desc&page=2`));
+    assert.equal(view.sortBy, key);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${sellfoxViewParams(view, true)}`), "sales").sortBy, key);
+  }
+  for (const key of ["trend", "average7", "salesperson", "sales7"]) assert.throws(() => sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${key}`), "sales"));
+});

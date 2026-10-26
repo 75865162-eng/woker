@@ -20,7 +20,7 @@ export async function verifySellfoxP0Sql(query: Query) {
       INSERT INTO "SellfoxStore" VALUES ('s','org','ws','shop','店铺','US'),('foreign','other','ws','foreign-shop','其他组织','US');
       CREATE TABLE "SellfoxSalesDayCoverage" ("storeId" text,"reportDate" text,"capturedAt" timestamp);
       CREATE TABLE sellfox_listing_current ("storeId" text,msku text,"parentAsin" text,title text,price float,"mainImage" text,"organizationId" text,"workspaceId" text,
-        id text,asin text,brand text,rating text,"buyBoxWinner" text,fulfillment text,developer text,spu text,"productTagNames" text[]);`);
+        id text,asin text,brand text,rating text,"buyBoxWinner" text,fulfillment text,developer text,spu text,"productTagNames" text[],"productTags" text);`);
     const prior = await readFile("prisma/migrations/20261025020000_sellfox_agent_read_models/migration.sql", "utf8");
     const sales = await readFile("prisma/migrations/20261024020000_add_sellfox_snapshots_sync_schedule/migration.sql", "utf8");
     await query(sales.slice(sales.indexOf('CREATE TABLE "SellfoxSalesDailySnapshot"'), sales.indexOf('CREATE TABLE "SellfoxSyncSchedule"')));
@@ -178,6 +178,57 @@ export async function verifySellfoxP0Sql(query: Query) {
     await query('UPDATE "SellfoxProductDailySnapshot" SET payload=$1::jsonb WHERE id=\'fee\'', [JSON.stringify({ headTripCost: 999, purchaseCost: 999, referralFee: 999 })]);
     const listingNames = (await query('SELECT * FROM sellfox_profit_daily WHERE id=\'fee\'')).rows[0];
     assert.deepEqual(extraFeeKeys.map(key => listingNames[key]), [null, null, null]);
+    // Catalog supplementation: execute both aggregation levels and Agent long-table SQL
+    // in disposable PostgreSQL-compatible storage, never a persistent database.
+    await query(`INSERT INTO sellfox_listing_current (id,"organizationId","workspaceId","storeId",msku,asin,brand,"productTags",price) VALUES
+      ('cat-1','org','ws','s','cat1','CAT','品牌','新品、重点',0),
+      ('cat-2','org','ws','s','cat2','CAT','品牌','新品、重点',0),
+      ('cat-sibling','org','ws','s','aaa','CAT','错误兄弟','错误',999),
+      ('cat-foreign','other','ws','s','cat1','CAT','其他组织','错误',999),
+      ('cat-workspace','org','other','s','cat1','CAT','其他工作区','错误',999),
+      ('cat-store','org','ws','foreign','cat1','CAT','其他店铺','错误',999),
+      ('cat-sort','org','ws','s','sort','SORT','A','A',25);
+      INSERT INTO "SellfoxSalesDayCoverage" VALUES ('s','2026-10-20','2026-10-25'),('s','2026-10-21','2026-10-25');
+      INSERT INTO "SellfoxSalesDailySnapshot" (id,"organizationId","workspaceId","storeId","reportDate","sourceKey",msku,asin,sku,quantity,revenue,currency,payload,"updatedAt","syncedAt",orders) VALUES
+      ('cat1','org','ws','s','2026-10-20','cat1','cat1','CAT','catalog',1,10,'USD','{}',now(),'2026-10-25',1),
+      ('cat2','org','ws','s','2026-10-21','cat2','cat2','CAT','catalog',2,20,'USD','{}',now(),'2026-10-25',2),
+      ('cat-sort','org','ws','s','2026-10-20','sort','sort','SORT','sort',3,30,'USD','{}',now(),'2026-10-25',3),
+      ('cat-null','org','ws','s','2026-10-20','missing','missing','MISSING','missing',4,40,'USD','{}',now(),'2026-10-25',4);`);
+    const catalogQuery = (params = "") => sellfoxBrowseQuery(new URL(`http://localhost/?from=2026-10-20&to=2026-10-21&dimension=sku&${params}`), "sales");
+    const catalog = async (params = "") => {
+      const sql = workbenchReadSql("sales", catalogQuery(params), { organizationId: "org", workspaceId: "ws" });
+      return (await query(sql.text, sql.values)).rows[0] as { rows: Record<string, unknown>[]; totals: Record<string, unknown>[]; total: number };
+    };
+    const fields = (row: Record<string, unknown>) => [row.brand, row.productTags, row.price];
+    const unanimous = await catalog();
+    assert.deepEqual(fields(unanimous.rows.find(r => r.identity === "catalog")!), ["品牌", "新品、重点", 0]);
+    assert.deepEqual(fields(unanimous.rows.find(r => r.identity === "missing")!), [null, null, null]);
+    assert.equal(unanimous.totals[0].subtotal, 10);
+    assert.ok(!Object.hasOwn(unanimous.totals[0], "price"));
+    for (const key of ["brand", "productTags", "price"]) {
+      const sorted = await catalog(`sortBy=${key}&sortOrder=asc&pageSize=1`);
+      assert.equal(sorted.rows[0].identity, key === "price" ? "catalog" : "sort");
+      assert.equal(sorted.total, 3); assert.deepEqual(sorted.totals, unanimous.totals);
+      const desc = await catalog(`sortBy=${key}&sortOrder=desc&pageSize=1`);
+      assert.equal(desc.rows[0].identity, key === "price" ? "sort" : "catalog");
+    }
+    // Different values and partially missing values must clear the final row across days.
+    for (const value of [null, "冲突"]) {
+      await query('UPDATE sellfox_listing_current SET brand=$1,"productTags"=$1,price=$2 WHERE id=\'cat-2\'', [value, value === null ? null : 99]);
+      assert.deepEqual(fields((await catalog()).rows.find(r => r.identity === "catalog")!), [null, null, null]);
+    }
+    // The same member disagreement within one day also propagates through grouped.
+    await query('UPDATE "SellfoxSalesDailySnapshot" SET "reportDate"=\'2026-10-20\' WHERE id=\'cat2\'');
+    assert.deepEqual(fields((await catalog()).rows.find(r => r.identity === "catalog")!), [null, null, null]);
+    globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => (await query(sql.text, sql.values)).rows } as unknown as PrismaClient;
+    try {
+      for (const exporting of [false, true]) for (const key of ["brand", "productTags", "price"]) {
+        const agent = await readSellfoxAgentRows("sales", catalogQuery(`sortBy=${key}&sortOrder=asc`), { organizationId: "org", workspaceId: "ws" }, exporting);
+        assert.equal(agent.pagination.total, 4);
+        assert.deepEqual(fields(agent.rows.find(r => r.id === "cat1")!), ["品牌", "新品、重点", 0]);
+        assert.deepEqual(fields(agent.rows.find(r => r.id === "cat-null")!), [null, null, null]);
+      }
+    } finally { globals.prisma = previous; }
   } finally { await query(`ROLLBACK; SET search_path TO public; DROP SCHEMA "${schema}" CASCADE`); }
 }
 

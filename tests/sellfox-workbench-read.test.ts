@@ -811,7 +811,7 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.ok(visibleColumns("ads", ["productTags"])[0].unavailable);
   assert.doesNotMatch(workbenchReadSql("ads_report", query, scope).text, /productLabelList|productTags/);
   for (const domain of ["sales", "performance"] as const) {
-    assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, /productLabelList|productTags/);
+    assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, domain === "sales" ? /productLabelList|productTagNames/ : /productLabelList|productTags/);
   }
 });
 
@@ -1152,7 +1152,7 @@ test("untagged sales and performance browse keep label expansion out of the main
   for (const domain of ["sales", "performance"] as const) {
     const sql = workbenchReadSql(domain, query, scope);
     const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
-    assert.doesNotMatch(listing, /productLabelList|labelDetailList|productTag|product_labels/);
+    assert.doesNotMatch(listing, /productLabelList|labelDetailList|productTagNames|product_labels/);
     assert.match(sql.text, /unnest\(l\."productTagNames"\)/); assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements/);
     assert.match(sql.text, /jsonb_build_object\('productTags',[\s\S]*SELECT DISTINCT tag\."labelName" FROM sellfox_listing_current l/);
     assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, /productLabelList|AS facets/);
@@ -1354,5 +1354,60 @@ test("performance selected salesperson exports typed names in CSV and Excel with
     const sheet = book.worksheets[0];
     assert.equal(sheet.getCell("A1").value, "业务员"); assert.equal(sheet.getCell("A2").value, names.join("、"));
     assert.ok(!sheet.getCell("A3").value);
+  } finally { globals.prisma = previous; }
+});
+
+test("sales catalog columns are optional current metadata and require unanimity across members and days", () => {
+  const config = visibleColumns("sales", ["brand", "productTags", "price"]);
+  assert.deepEqual(config.map(c => c.labelZh), ["商品品牌", "产品标签", "售价"]);
+  assert.ok(config.every(c => !c.defaultVisible && !c.unavailable && /Listing 当前快照.*类型投影/.test(c.requiresField)));
+  assert.deepEqual(visibleColumns("performance", ["brand", "productTags"]), []);
+  for (const dimension of ["msku", "asin", "parentAsin", "sku", "store", "developer", "spu"]) {
+    for (const key of ["brand", "productTags", "price"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&sortBy=${key}&sortOrder=desc`), "sales");
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }, exporting).text;
+        const member = ({ brand: "listingBrand", productTags: "listingProductTags", price: "listingPrice" })[key]!;
+        assert.ok(sql.includes(`CASE WHEN count("${member}")=count(*) AND count(DISTINCT "${member}")=1 THEN min("${member}") END`));
+        const col = key === "productTags" ? '"productTags"' : key;
+        assert.ok(sql.includes(`CASE WHEN count(${col})=count(*) AND count(DISTINCT ${col})=1 THEN min(${col}) END`));
+        assert.ok(sql.includes(`ORDER BY "${key}" DESC NULLS LAST, id ASC`));
+        assert.doesNotMatch(sql, /payload|sum\((?:brand|"productTags"|price)\)/);
+      }
+    }
+  }
+});
+
+test("sales selected catalog columns export identical CSV and numeric XLSX with missing values blank", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const rows = [{ brand: "品牌", productTags: "新品、重点", price: 0 }, { brand: null, productTags: null, price: null }];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => sql.text.startsWith("WITH") ? [{ rows: rows.map(row => ({ ...row })), total: 2, totals: [{ currency: "USD", subtotal: 3 }] }] : [] } as unknown as PrismaClient;
+  try {
+    const url = new URL("http://localhost/?from=2026-10-24&to=2026-10-24&column=brand&column=productTags&column=price");
+    const query = sellfoxBrowseQuery(url, "sales"), scope = { organizationId: "org", workspaceId: "ws" };
+    const csv = await (await sellfoxWorkbenchExport("sales", query, scope, url)).text();
+    assert.equal(csv.trim(), '"商品品牌","产品标签","售价"\r\n"品牌","新品、重点",0\r\n"","",""');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("sales", query, scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.deepEqual([1, 2, 3].map(i => sheet.getRow(1).getCell(i).value), ["商品品牌", "产品标签", "售价"]);
+    assert.deepEqual([1, 2, 3].map(i => sheet.getRow(2).getCell(i).value), ["品牌", "新品、重点", 0]);
+    assert.equal(sheet.getCell("C3").value, null);
+  } finally { globals.prisma = previous; }
+});
+
+test("sales trend remains derived from seven complete in-range quantity days independent of the selected metric", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const dates = Array.from({ length: 7 }, (_, i) => `2026-10-${20 + i}`);
+  const quantities = Object.fromEntries(dates.map((d, i) => [d, i]));
+  globals.prisma = { $queryRaw: async () => [{ total: 3, totals: [], rows: [
+    { dailyQuantity: quantities }, { dailyQuantity: { ...quantities, [dates[0]]: null } }, { dailyQuantity: {} },
+  ] }] } as unknown as PrismaClient;
+  try {
+    const result = await readSellfoxWorkbench("sales", sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-20&to=2026-10-26&metric=orders")), { organizationId: "org", workspaceId: "ws" });
+    assert.equal(result.rows[0].trend, "0 | 1 | 2 | 3 | 4 | 5 | 6"); assert.equal(result.rows[0].average7, 3);
+    for (const row of result.rows.slice(1)) { assert.equal(row.trend, null); assert.equal(row.average7, null); }
   } finally { globals.prisma = previous; }
 });

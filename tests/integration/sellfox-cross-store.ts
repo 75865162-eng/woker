@@ -22,6 +22,7 @@ export async function verifySellfoxCrossStoreSql(query: Query) {
         ('l1','org','ws','s1','shared','A','P','商品',NULL,10,'开发员甲','SPU甲',NULL,NULL,NULL,NULL,'{}'),
         ('l2','org','ws','s2','shared','A','P','商品',NULL,10,'开发员甲','SPU甲',NULL,NULL,NULL,NULL,'{}'),
         ('l3','org','ws','s1','solo','B','Q','单品',NULL,20,'开发员乙','SPU乙',NULL,NULL,NULL,NULL,'{}');
+      ALTER TABLE sellfox_listing_current ADD COLUMN "productTags" text;
       CREATE TABLE sellfox_sales_daily (id text,"organizationId" text,"workspaceId" text,"storeId" text,"reportDate" text,asin text,msku text,sku text,currency text,quantity float,revenue float,orders float,complete boolean);
       INSERT INTO sellfox_sales_daily VALUES
         ('a','org','ws','s1','2026-10-24','A','shared','sku','USD',2,20,1,true),

@@ -2,6 +2,25 @@
 
 本轮仅覆盖 `/sellfox?domain=sales` 和 `/sellfox?domain=performance`。不发布、不启用计划、不调用真实赛狐、不回填历史数据；后续部署目标是 `123.207.47.225`。
 
+## 2026-10-26 销量品牌 / 产品标签 / 售价（仅 BOX 本地）
+
+- 销量宽表新增默认隐藏的 `brand`「商品品牌」、`productTags`「产品标签」，位于标题之后；原默认隐藏 `price`「售价」保留位置并补充来源说明。三项均来自现有 `sellfox_listing_current` 类型投影，非销售日历史属性。`productTags` 直接复用已按名称排序、去重并以「、」连接的类型字符串，不解析 payload、不猜上游字段。
+- 复用既有同组织/工作区/店铺的 MSKU 优先、ASIN 回退 Listing 选择。品牌/标签在日级与跨日实体级均要求所有成员非NULL且一致，否则显示空；售价沿用相同规则，不计入 footer/totals 求和。销量新增品牌/标签排序，保留售价排序；CSV/XLSX 跟随勾选列，无 layout 的显式选列导出也进入相同宽表路径。Agent 保留英文日级长表与原列序，末尾追加 brand/productTags/price，同样支持排序；仅 Agent 销量行查询补充一次 LATERAL Listing 查询，不扩展利润 UI。
+- 趋势/均值保留原有默认隐藏列：仅取所选日期窗末尾7个完整销量日（dailyQuantity），有缺日/NULL则为空；不引入实时趋势 API，不使用 Listing sales7 冒充日趋势。继续灰显：销量业务员维度/筛选/列、实时统计、运营、业绩归属人、分类、销量洞察与 AWD；销量日快照只有 orderNum/productNum/salePrice，没有 userNameList。
+- 无 schema/migration/依赖改动，不连接真实数据库、不调用 Sellfox API/同步、不推送或部署。依赖已有 Listing 类型投影；回退仅撤销本代码提交，无数据库回退。额外聚合和 Agent Listing 补充查询尚无真实容量/P95 benchmark，不宣称性能改善；后续发布另行授权并按真实规模验收。
+
+验证通过：6个定向单测文件共125例（列/默认值、URL/排序、browse/API、CSV/XLSX、Agent、趋势缺日）；隔离 PGlite 实际执行生成 SQL，验证同值/冲突/缺值、跨日与日内聚合、售价0、排序分页/totals、租户及 MSKU 优先隔离、Agent 日级粒度。普通 PostgreSQL 测试未配置专用地址 SKIP，离线 verifier 独立 PASS；未连接持久库。TypeScript、全部改动 TS 的 ESLint 和 diff check 通过。
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-agent-read.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+NODE_ENV=test SELLFOX_P0_TEST_DATABASE_URL= SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+npm run typecheck
+git diff --name-only -- '*.ts' '*.tsx' | xargs node node_modules/eslint/bin/eslint.js
+git diff --check
+```
+
+本轮无新布局/构建链改动，按任务指定最小验证路线执行；未跑浏览器、全量check/生产构建或真实P95，后续发布前由CI及受控容量验收补齐。本轮未运行任何迁移到真实库；PGlite仅用既有迁移建立一次性测试夹具。
+
 ## 2026-10-26 利润可选费用补充（仅 BOX 本地）
 
 - 销售利润追加三个默认隐藏的数字列：`headTripPrice`「头程」、`avgPurchaseCost`「采购成本」、`amazonCommissionPrice`「亚马逊佣金」。只读 performance payload 同名键的事实类型列；不取 Listing `headTripCost` / `purchaseCost` / `referralFee`。默认可见列、80000 五项费用和 90000 `userNameList`/业务员筛选保持原状。销售小组、业绩归属人、实时统计、利润 SPU 及销量业务员继续灰显。

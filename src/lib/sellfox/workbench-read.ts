@@ -109,7 +109,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));
   const listing = Prisma.sql`listing AS (
     SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
-      l.brand,l.rating,l."buyBoxWinner",l.fulfillment,
+      ${domain === "sales" ? Prisma.sql`l."productTags",` : Prisma.empty}l.brand,l.rating,l."buyBoxWinner",l.fulfillment,
       ${needTagFilter ? Prisma.sql`l."productTagNames" @> ARRAY[${query.productTag}]::text[] AS "matchesProductTag",` : Prisma.empty}
       COALESCE(l.developer,'未分配开发员') AS developer,
       COALESCE(l.spu,'未分配SPU') AS spu
@@ -117,7 +117,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
+    ${domain === "sales" ? Prisma.sql`l.brand AS "listingBrand",l."productTags" AS "listingProductTags",` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
     ${Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {
@@ -130,6 +130,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const groups = domain === "sales" ? Prisma.sql`days AS (
     SELECT ${storeColumn},identity,currency,"reportDate",min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,
       ${["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},${marketplace} AS marketplace,CASE WHEN count("listingTitle")=count(*) AND count(DISTINCT "listingTitle")=1 THEN min("listingTitle") END AS title,CASE WHEN count("listingPrice")=count(*) AND count(DISTINCT "listingPrice")=1 THEN min("listingPrice") END AS price,CASE WHEN count("listingParentAsin")=count(*) AND count(DISTINCT "listingParentAsin")=1 THEN min("listingParentAsin") END AS "parentAsin",
+      CASE WHEN count("listingBrand")=count(*) AND count(DISTINCT "listingBrand")=1 THEN min("listingBrand") END AS brand,
+      CASE WHEN count("listingProductTags")=count(*) AND count(DISTINCT "listingProductTags")=1 THEN min("listingProductTags") END AS "productTags",
       min(NULLIF("listingMainImage",'')) AS "mainImage",
       CASE WHEN bool_and(complete AND orders IS NOT NULL) THEN sum(orders)::float END AS orders,
       CASE WHEN bool_and(complete AND quantity IS NOT NULL) THEN sum(quantity)::float END AS quantity,
@@ -139,6 +141,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   ), grouped AS (
     SELECT ${storeColumn},identity,currency,min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,min(name) AS name,${crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min(marketplace) END` : Prisma.sql`min(marketplace)`} AS marketplace,CASE WHEN count(title)=count(*) AND count(DISTINCT title)=1 THEN min(title) END AS title,
       CASE WHEN count(price)=count(*) AND count(DISTINCT price)=1 THEN min(price) END AS price,CASE WHEN count("parentAsin")=count(*) AND count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",
+      CASE WHEN count(brand)=count(*) AND count(DISTINCT brand)=1 THEN min(brand) END AS brand,
+      CASE WHEN count("productTags")=count(*) AND count(DISTINCT "productTags")=1 THEN min("productTags") END AS "productTags",
       min(NULLIF("mainImage",'')) AS "mainImage",
       jsonb_object_agg("reportDate",quantity) AS "dailyQuantity",jsonb_object_agg("reportDate",${Prisma.raw(salesMetric)}) AS daily,
       ${query.metric === "orders" ? Prisma.sql`CASE WHEN count(*)=${workbenchDateRange(query).length} THEN ${safeSum(salesMetric)} END` : safeSum(salesMetric)} AS subtotal,${safeSum("quantity")} AS quantity,
@@ -173,7 +177,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const totals = Prisma.sql`(SELECT COALESCE(jsonb_agg(t),'[]'::jsonb) FROM (SELECT currency,${totalKeys.length ? Prisma.join(totalKeys.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`)) : Prisma.sql`count(*)::int AS count`}  ${dailyTotals} FROM filtered GROUP BY currency) t)`;
   // Facets ignore brand/tag/search/status so selections never remove other options.
   // Read typed current columns independently so facets neither materialize the main Listing CTE
-  // nor force per-Listing label arrays onto every report member. Still one round trip.
+  // nor force per-Listing label arrays onto every report member. Sales uses the typed
+  // display string for unanimous metadata; facets stay independent. Still one round trip.
   const facetFilters = [scoped("l", scope)];
   if (query.shopExternalIds.length) facetFilters.push(Prisma.sql`st."externalId" IN (${Prisma.join(query.shopExternalIds)})`);
   if (query.storeId) facetFilters.push(Prisma.sql`l."storeId"=${query.storeId}`);
