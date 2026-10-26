@@ -1,5 +1,39 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-27 — performance 默认显示 payment/closing/imaging/netCo/vat/cod 七列 · BOX LOCAL ONLY
+
+基线 HEAD `aa71178`（`aa71178fc14f2a68484463fde11551b132c17771`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下七个既有且仍默认隐藏的 numeric 列移出 performance trailing `.map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `otherPriceIncomeAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
+
+| key | 列名 | 原样保留的 requiresField |
+| --- | --- | --- |
+| paymentMethodFeeAmount | 支付方式费 | 销售利润 payload.paymentMethodFeeAmount 类型投影 |
+| fixedClosingFeeAmount | 固定成交费 | 销售利润 payload.fixedClosingFeeAmount 类型投影 |
+| variableClosingFeeAmount | 可变成交费 | 销售利润 payload.variableClosingFeeAmount 类型投影 |
+| imagingServicesFeeAmount | 影像服务费 | 销售利润 payload.imagingServicesFeeAmount 类型投影 |
+| netCoAmount | 净Co金额 | 销售利润 payload.netCoAmount 类型投影 |
+| comminglingVatAmount | 混卖VAT | 销售利润 payload.comminglingVatAmount 类型投影 |
+| codFeeAmount | COD费用 | 销售利润 payload.codFeeAmount 类型投影 |
+
+生产变更仅七列结构移动：逆向移回七列并移除新增的显式 `defaultVisible: true` 后，完整源码与基线逐字节一致；column key 多重集合不变，无新增 key，无 label、numeric 或 requiresField 修改。evaluation capital / deal/coupon participation / SAFE-T / affordability / withheld / chargeback-guarantee income / promotion sales-shipping-tax / refunds / identity map-tail 及 sales/listings/ads 保持原样。performance 共 106 列，默认显示 86 列，剩余默认隐藏 **20 列**（3 个身份列、12 个 numeric map-tail、5 个 refund/qty numbers-map）。**Fee-mining remains paused**。下一批候选为既有类型列 evaluation/deal/coupon/SAFE-T/affordability/withheld/income/promotion cluster，本轮不实施。
+
+复验命令（Prisma stub，不连接真实数据库；跳过完整 check/build）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'performance core cost defaults'
+```
+
+两个定向测试文件、TypeScript、指定三文件 ESLint 和 `git diff --check` 验证通过。扩展七种维度精确默认顺序、七列 default-true、默认/显式 CSV 及真实 ExcelJS XLSX 回读、正负数/零/NULL；逐列选择、逐列隐藏、整组隐藏和空集合仍以显式选列为准。API 测试通过，无需修改 `tests/sellfox-browse-api.test.ts`。
+
+浏览器断言已扩展七个中文列名，覆盖默认表头顺序、默认勾选、取消后跨域保留及 CSV/Excel 显式选列排除。定向执行时 Chromium 在启动阶段于 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未修改启动参数或绕过沙箱，需在允许启动 Chromium 的本地环境补跑。此次仅列配置变更，按要求选择定向测试、类型及 lint，跳过完整 check/build。
+
+仅 BOX 本地，四个仓库文件；仓库外 parity-gap 由父进程更新。无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL 或真实数据库写入，未加载/修改 `.env`。回滚为将七列放回原隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+---
+
 ## 2026-10-27 — performance 默认显示 avgHeadTrip/purchaseRefund/revenue/FBA-refund/deferred/tax/income 八列 · BOX LOCAL ONLY
 
 基线 HEAD `f2db0c4`（`f2db0c4427024e074c2f2a04deb7f0b5ad4505ec`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下八个既有且仍默认隐藏的 numeric 列移出 performance trailing `.map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `otherServiceFeeAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
