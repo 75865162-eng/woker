@@ -114,3 +114,27 @@ test("agent rows, pagination counts and long-table export honor current Listing 
     }
   } finally { globals.prisma = previous; }
 });
+
+test("agent productTag membership uses the selected scoped Listing before matching exact label names", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["sales", "performance", "listings"] as const) {
+      calls.length = 0;
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ productTag: "1年以内产品、完整标签" })}`));
+      await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+      await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+      assert.equal(calls.length, 3);
+      for (const sql of calls) {
+        assert.match(sql.text, /EXISTS \(SELECT 1 FROM unnest\(\(SELECT ARRAY\(SELECT DISTINCT btrim\(label.value->>'labelName'\)/);
+        assert.match(sql.text, /LIMIT 1\)\) tag\("labelName"\)\s+WHERE tag\."labelName"=\$\d+/);
+        assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
+        assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
+        assert.ok(sql.values.includes(query.productTag)); assert.ok(!sql.values.includes(`%${query.productTag}%`));
+        assert.match(sql.text, domain === "listings" ? /candidate.id=s.id/ : /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
+      }
+      assert.equal(calls[0].text.slice(calls[0].text.indexOf(" WHERE "), calls[0].text.lastIndexOf(" ORDER BY ")), calls[1].text.slice(calls[1].text.indexOf(" WHERE ")));
+    }
+  } finally { globals.prisma = previous; }
+});

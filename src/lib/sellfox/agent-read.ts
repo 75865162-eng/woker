@@ -1,3 +1,4 @@
+import { sellfoxProductTagNamesSql } from "./product-tags-sql";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sellfoxBrowseQuery, SellfoxBrowseError, sellfoxExportLimit } from "./browse-query";
@@ -157,6 +158,17 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
       WHERE candidate."organizationId"=${scope.organizationId} AND candidate."workspaceId"=${scope.workspaceId}
         AND candidate."storeId"=s."storeId" AND ${match}
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.fulfillment}`);
+  }
+  if (query.productTag && ["sales", "performance", "listings"].includes(domain)) {
+    // Select the same stable candidate BEFORE testing membership (no ASIN sibling substitution).
+    const match = domain === "listings" ? Prisma.sql`candidate.id=s.id` : Prisma.sql`((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))`;
+    clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM unnest((SELECT ${sellfoxProductTagNamesSql(Prisma.sql`p.payload`)}
+      FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id
+        AND p."organizationId"=${scope.organizationId} AND p."workspaceId"=${scope.workspaceId}
+      WHERE candidate."organizationId"=${scope.organizationId} AND candidate."workspaceId"=${scope.workspaceId}
+        AND candidate."storeId"=s."storeId" AND ${match}
+      ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)) tag("labelName")
+      WHERE tag."labelName"=${query.productTag})`);
   }
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);
   if (query.site) clauses.push(Prisma.sql`marketplace=${query.site}`);

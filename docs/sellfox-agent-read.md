@@ -310,4 +310,15 @@ Listing 按同组织/工作区/店铺的快照 ID 精确关联。销量/利润�
 
 普通 CSV/XLSX 使用 workbench 导出路径；显式传 fulfillment 而未传 layout 的请求也使用此路径。`agent=1` 保留原英文窄列长表与 10,000 行上限，按相同 Listing 匹配筛选，分页 count 与读取复用谓词；不新增 fulfillment 窄表字段或修改 SQL view。未选筛选时不新增 Agent 关联；workbench 复用已有 Listing 关联。真实库 P95 尚未测量，部署后需在 123 验证筛选/汇总/空结果/导出一致性及查询耗时。本地验证为查询参数、SQL 结构和模拟 API 回归，不替代真实数据库执行或 UI 验收。
 
-本次不修改 schema、migration、sync 或 worker；回滚撤销本次应用代码即可，无数据回滚。产品标签（已观测 labels 数组为空）、业务员及其他未验证能力继续灰显。
+本次不修改 schema、migration、sync 或 worker；回滚撤销本次应用代码即可，无数据回滚。业务员及其他未验证能力继续灰显；产品标签筛选见下节。
+
+
+### 产品标签筛选（2026-10-26，本地待部署）
+
+在线商品、销量、销售利润支持 `productTag=<标签完整名称>`；参数去首尾空格，空值表示全部，无固定标签白名单，重置会清空。来源仅为同组织/工作区/店铺的 current Listing payload `productLabelList[].labelDetailList[].labelName`，不是历史报表日标签；缺失或非数组按空列表处理。名称去首尾空格、去重后作为数组保存于查询 CTE，`EXISTS` 对数组内 `labelName` 做参数化等值匹配，不拆分展示用「、」，不做子串 LIKE。原在线商品 productTags 列继续按「、」连接展示，空列表仍显示空值。
+
+销量/利润沿用发货方式和主图的 Listing 稳定匹配：先选精确 MSKU、再回退 ASIN 的一条候选，之后匹配标签，禁止先过滤候选而改选兄弟 Listing。成员行在日/实体/KPI 汇总前筛选，分页、总数和 CSV/XLSX/Agent 导出使用同一口径；未带 layout 的显式 productTag 请求也应用筛选。广告、业务员、AWD、运营等能力不在本次范围。
+
+browse 同一 SQL 响应附带 `facets.productTags`：复用 scoped Listing CTE 的标签数组，按当前组织/工作区及店铺/站点范围取全部非空 distinct 名称并排序，不受分页、所选标签、搜索或 Listing 状态影响。UI 使用动态选项与「全部」，并保留 URL 当前标签以便显示空结果和重置；切换工作区清空旧选项，迟到响应沿用已有取消/epoch 防护。无新增逐行请求；导出不计算 facets，未选标签的销量/利润导出不解析标签列表。
+
+无 schema、migration、sync、worker 或数据写入；回滚本次应用代码即可。验证选用相关单元/模拟 API/组件元素树测试、TypeScript、相关 ESLint 与 diff 检查；未运行 Chromium、生产构建或真实数据库查询/P95。动态 facets 会在 browse 查询中读取当前范围 Listing 标签，真实库查询耗时及页面交互应在后续明确部署验收时验证。本次仅本地交付，不推送或发布。

@@ -11,6 +11,9 @@ export const sellfoxExportLimit = 10_000;
 export function sellfoxFulfillment(value: string | null | undefined): "" | "AFN" | "MFN" {
   return value === "AFN" || value === "MFN" ? value : "";
 }
+export function sellfoxProductTag(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
 export function sellfoxBrowseQuery(url: URL) {
   const p = url.searchParams;
   function integer(key: string, fallback: number, max: number) {
@@ -27,7 +30,7 @@ export function sellfoxBrowseQuery(url: URL) {
   const from = date("from"), to = date("to"), reportDate = date("reportDate");
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   return {
-    layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")),
+    layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), productTag: sellfoxProductTag(p.get("productTag")),
     dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as SellfoxBrowseDimension,
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",

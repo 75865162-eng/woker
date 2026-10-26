@@ -157,7 +157,10 @@ test("developer and SPU use one primary-resolved Listing row per fact without ar
       assert.doesNotMatch(sql.text, /b\."storeId"=days\."storeId"/);
     }
     assert.match(sql.text, /COALESCE\(l\.developer,'未分配开发员'\) ILIKE|COALESCE\(l\.spu,'未分配SPU'\) ILIKE/);
-    assert.doesNotMatch(sql.text, /CROSS JOIN LATERAL jsonb_array_elements/);
+    // Label arrays are scalar subqueries; neither labels nor developers fan out fact rows.
+    const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf("grouped AS ("));
+    assert.doesNotMatch(base, /CROSS JOIN LATERAL jsonb_array_elements/);
+    assert.doesNotMatch(sql.text, /CROSS JOIN LATERAL jsonb_array_elements\(CASE WHEN jsonb_typeof\(p.payload->'devList'/);
     assert.ok(sql.values.includes(`%${label}%`));
   }
   assert.match(workbenchReadSql("performance", sellfoxBrowseQuery(new URL("http://localhost/?dimension=spu")), scope).text, /COALESCE\(NULLIF\(s\."asin",''\), NULLIF\(s\.msku,''\), s\.id\) AS identity/);
@@ -420,8 +423,8 @@ test("listings flatten current productLabelList into an optional productTags col
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'productLabelList'\)='array' THEN p\.payload->'productLabelList' ELSE '\[\]'::jsonb END\) label_group\(value\)/);
   assert.match(sql.text, /CROSS JOIN LATERAL jsonb_array_elements\(CASE WHEN jsonb_typeof\(label_group\.value->'labelDetailList'\)='array' THEN label_group\.value->'labelDetailList' ELSE '\[\]'::jsonb END\) label\(value\)/);
-  assert.match(sql.text, /string_agg\(DISTINCT NULLIF\(btrim\(label\.value->>'labelName'\),''\),/);
-  assert.match(sql.text, /'、' ORDER BY NULLIF\(btrim\(label\.value->>'labelName'\),''\)\)/);
+  assert.match(sql.text, /ARRAY\(SELECT DISTINCT btrim\(label\.value->>'labelName'\)/);
+  assert.match(sql.text, /NULLIF\(array_to_string\(product_labels.names, '、'\),''\)/);
   assert.match(sql.text, /AS "productTags"/);
   assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
@@ -435,8 +438,9 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.equal(sellfoxColumnValue(config[0], { productTags }), productTags);
   assert.equal(visibleColumnCsv(config, [{ productTags }, { productTags: null }]).trim(), `"产品标签"\r\n"${productTags}"\r\n""`);
   assert.ok(visibleColumns("ads", ["productTags"])[0].unavailable);
-  for (const domain of ["sales", "performance", "ads_report"] as const) {
-    assert.doesNotMatch(workbenchReadSql(domain, query, scope).text, /productLabelList|productTags/);
+  assert.doesNotMatch(workbenchReadSql("ads_report", query, scope).text, /productLabelList|productTags/);
+  for (const domain of ["sales", "performance"] as const) {
+    assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, /productLabelList|productTags/);
   }
 });
 
@@ -586,4 +590,52 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
   assert.equal(config[0].unavailable, undefined);
   assert.equal(defaultVisibleColumnKeys("listings").includes("fulfillment"), false);
   assert.equal(visibleColumnCsv(config, [{ fulfillment: "AFN" }, { fulfillment: "MFN" }, { fulfillment: null }]).trim(), '"发货方式"\r\n"AFN"\r\n"MFN"\r\n""');
+});
+
+
+test("productTag exact membership filters current Listing members before aggregation and reuses scoped facets", () => {
+  const scope = { organizationId: "org-tag", workspaceId: "ws-tag" };
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    for (const dimension of ["msku", "asin", "parentAsin", "store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
+      for (const tag of ["1年以内产品", "1年以内产品延长", "标签、含分隔符", "%' OR TRUE--"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ productTag: tag, dimension, fulfillment: "AFN", site: "US", shopExternalId: "shop-tag" })}`));
+        for (const exporting of [false, true]) {
+          const sql = workbenchReadSql(domain, query, scope, exporting);
+          const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf("grouped AS ("));
+          assert.match(base, /EXISTS \(SELECT 1 FROM unnest\(l\."productTagNames"\) tag\("labelName"\) WHERE tag\."labelName"=\$\d+\)/);
+          assert.match(sql.text, /SELECT DISTINCT btrim\(label\.value->>'labelName'\)/);
+          assert.ok(sql.values.includes(tag));
+          assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
+          assert.ok(!sql.values.includes(`%${tag}%`));
+          assert.doesNotMatch(base, /"productTags" (?:I?LIKE|=)/);
+          assert.match(base, /l.fulfillment=/);
+          if (domain !== "listings") assert.match(base, /candidate.msku=s.msku[\s\S]*LIMIT 1/);
+          if (exporting) assert.doesNotMatch(sql.text, /AS facets/);
+          else {
+            const facets = sql.text.slice(sql.text.indexOf("jsonb_build_object('productTags'"));
+            assert.match(facets, /SELECT DISTINCT tag\."labelName" FROM listing l/);
+            assert.match(facets, /st\."externalId" IN/); assert.match(facets, /st.marketplace=/);
+            assert.doesNotMatch(facets, /tag\."labelName"=|ILIKE/);
+          }
+        }
+      }
+    }
+    assert.doesNotMatch(workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope).text, /WHERE tag\."labelName"=/);
+  }
+  const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?productTag=ignored")), scope);
+  assert.doesNotMatch(ads.text, /productTag|productLabel/); assert.ok(!ads.values.includes("ignored"));
+});
+
+test("browse returns all dynamic tag facets even for an empty result page without extra reads", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  let calls = 0;
+  const facets = { productTags: ["1年以内产品", "新标签、完整名称"] };
+  globals.prisma = { $queryRaw: async () => { calls++; return [{ rows: [], total: 0, totals: [], facets }]; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "performance"] as const) {
+      const result = await readSellfoxWorkbench(domain, sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-25&to=2026-10-25&productTag=不存在")), { organizationId: "org", workspaceId: "ws" });
+      assert.deepEqual(result.facets, facets); assert.deepEqual(result.rows, []);
+    }
+    assert.equal(calls, 3);
+  } finally { globals.prisma = previous; }
 });

@@ -1,3 +1,4 @@
+import { sellfoxProductTagNamesSql } from "./product-tags-sql";
 import { sellfoxAgentColumns } from "./agent-read";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -29,6 +30,8 @@ export function workbenchDateRange(query: SellfoxBrowseQuery) {
 // All joins stay in the authenticated workspace. Current metadata is supplemental,
 // never historical parent identity, price or inventory at the sale date.
 export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
+  const supportsProductTags = ["sales", "performance", "listings"].includes(domain);
+  const includeTagNames = supportsProductTags && (!exporting || Boolean(query.productTag) || domain === "listings");
   const filters: Prisma.Sql[] = [scoped("s", scope)];
   if (query.shopExternalIds.length) filters.push(Prisma.sql`st."externalId" IN (${Prisma.join(query.shopExternalIds)})`);
   if (query.storeId) filters.push(Prisma.sql`s."storeId"=${query.storeId}`);
@@ -52,6 +55,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
   // Blank/unknown values remain in all, never in the AFN/MFN subsets.
   if (query.fulfillment && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
+  if (query.productTag && supportsProductTags) filters.push(Prisma.sql`EXISTS (SELECT 1 FROM unnest(l."productTagNames") tag("labelName") WHERE tag."labelName"=${query.productTag})`);
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
@@ -82,10 +86,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       NULLIF(p.payload->>'brand','') AS brand,
       NULLIF(p.payload->>'rating','') AS rating,
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'ratingCount','')::float AS "ratingCount",
-      (SELECT string_agg(DISTINCT NULLIF(btrim(label.value->>'labelName'),''), '、' ORDER BY NULLIF(btrim(label.value->>'labelName'),''))
-        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'productLabelList')='array' THEN p.payload->'productLabelList' ELSE '[]'::jsonb END) label_group(value)
-        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(label_group.value->'labelDetailList')='array' THEN label_group.value->'labelDetailList' ELSE '[]'::jsonb END) label(value)
-      ) AS "productTags",` : Prisma.empty}
+      NULLIF(array_to_string(product_labels.names, '、'),'') AS "productTags",` : Prisma.empty}
+      ${includeTagNames ? Prisma.sql`product_labels.names AS "productTagNames",` : Prisma.empty}
       CASE WHEN p.payload->>'switchFulfillmentTo' IN ('AFN','MFN') THEN p.payload->>'switchFulfillmentTo' END AS fulfillment,
       COALESCE(
         (SELECT NULLIF(item.value->>'devName','') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'devList')='array' THEN p.payload->'devList' ELSE '[]'::jsonb END) WITH ORDINALITY item(value,ordinality) WHERE NULLIF(p.payload->>'devId','') IS NOT NULL AND item.value->>'devId'=p.payload->>'devId' ORDER BY item.ordinality LIMIT 1),
@@ -94,6 +96,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ) AS developer,
       COALESCE(NULLIF(p.payload->>'commodityName',''),NULLIF(p.payload->>'commoditySku',''),'未分配SPU') AS spu
     FROM sellfox_listing_current l JOIN "SellfoxListingSnapshot" p ON p.id=l.id AND ${scoped("p", scope)}
+    ${includeTagNames ? Prisma.sql`CROSS JOIN LATERAL (SELECT ${sellfoxProductTagNamesSql(Prisma.sql`p.payload`)} AS names) product_labels` : Prisma.empty}
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
@@ -140,14 +143,25 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const dailyTotals = domain === "sales" ? Prisma.sql`,(SELECT jsonb_object_agg(d.date,d.value) FROM (SELECT day.date,CASE WHEN count(day.value)=count(*) AND count(*)=(SELECT count(*) FROM filtered f WHERE f.currency IS NOT DISTINCT FROM filtered.currency) THEN sum(day.value::float) END AS value FROM filtered fday CROSS JOIN LATERAL jsonb_each_text(fday.daily) day(date,value) WHERE fday.currency IS NOT DISTINCT FROM filtered.currency GROUP BY day.date) d) AS daily` : Prisma.empty;
   const totalKeys = domain === "sales" ? ["subtotal"] : domain === "listings" ? [] : aggregateColumns;
   const totals = Prisma.sql`(SELECT COALESCE(jsonb_agg(t),'[]'::jsonb) FROM (SELECT currency,${totalKeys.length ? Prisma.join(totalKeys.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`)) : Prisma.sql`count(*)::int AS count`}  ${dailyTotals} FROM filtered GROUP BY currency) t)`;
+  // Facets ignore tag/search/status so choosing a tag never removes other options.
+  // Reuse the scoped Listing CTE; no per-row request or extra database round trip.
+  const facetFilters = [Prisma.sql`true`];
+  if (query.shopExternalIds.length) facetFilters.push(Prisma.sql`st."externalId" IN (${Prisma.join(query.shopExternalIds)})`);
+  if (query.storeId) facetFilters.push(Prisma.sql`l."storeId"=${query.storeId}`);
+  if (query.site) facetFilters.push(Prisma.sql`st.marketplace=${query.site}`);
+  const facets = !exporting && supportsProductTags ? Prisma.sql`,jsonb_build_object('productTags',
+    ARRAY(SELECT DISTINCT tag."labelName" FROM listing l
+      JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
+      CROSS JOIN LATERAL unnest(l."productTagNames") tag("labelName")
+      WHERE ${Prisma.join(facetFilters, " AND ")} ORDER BY tag."labelName")) AS facets` : Prisma.empty;
   return Prisma.sql`WITH ${listing},${base},${groups}, filtered AS (SELECT * FROM grouped WHERE ${Prisma.join(finalFilters, " AND ")})
     SELECT (SELECT count(*)::int FROM filtered) AS total,${totals} AS totals,
-      COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY id LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows`;
+      COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY id LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows${facets}`;
 }
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
-  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[] }[]>(workbenchReadSql(domain, query, scope, exporting));
-  const { rows, total, totals } = result[0];
+  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
+  const { rows, total, totals, facets } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);
   // Page-bounded supplemental lookup, never one network call per entity or full payload reads.
   // Exact source pairs avoid attributing an MSKU to unrelated stores on the page.
@@ -191,5 +205,5 @@ export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: Sellf
       row.roas = row.adSales != null && Number(row.cost) > 0 ? Number(row.adSales) / Number(row.cost) : null;
     }
   }
-  return { rows, dates, totals, pagination: { page: query.page, pageSize: query.pageSize, total } };
+  return { rows, dates, totals, ...(facets ? { facets } : {}), pagination: { page: query.page, pageSize: query.pageSize, total } };
 }

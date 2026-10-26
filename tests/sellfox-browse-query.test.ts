@@ -79,3 +79,22 @@ test("fulfillment accepts only AFN/MFN and round trips UI, API and export parame
   const view = readSellfoxView(new URLSearchParams("domain=ads&fulfillment=AFN"));
   assert.equal(sellfoxViewParams(view, true).has("fulfillment"), false);
 });
+
+
+test("productTag trims arbitrary exact names and round trips UI, browse and export parameters", () => {
+  for (const tag of ["1年以内产品", "1-3年产品", "3年以上老品", "6个月以内", "新标签、含分隔符", "%' OR TRUE--"]) {
+    for (const domain of ["listings", "sales", "performance"]) {
+      const view = readSellfoxView(new URLSearchParams({ domain, productTag: `  ${tag}  ` }));
+      assert.equal(view.productTag, tag);
+      assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+      assert.equal(query(sellfoxViewParams(view, true).toString()).productTag, tag);
+    }
+  }
+  for (const productTag of ["", "   ", "\t\n"]) {
+    assert.equal(query(new URLSearchParams({ productTag }).toString()).productTag, "");
+    const view = readSellfoxView(new URLSearchParams({ domain: "listings", productTag }));
+    assert.equal(view.productTag, ""); assert.equal(sellfoxViewParams(view).has("productTag"), false);
+  }
+  const ads = readSellfoxView(new URLSearchParams("domain=ads&productTag=标签"));
+  assert.equal(sellfoxViewParams(ads, true).has("productTag"), false);
+});
