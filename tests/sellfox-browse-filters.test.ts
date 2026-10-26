@@ -11,6 +11,36 @@ function elements(node: ReactNode): React.ReactElement<Props>[] {
   return [node, ...elements(node.props.children)];
 }
 
+test("Buy Box selects yes/no or all beside fulfillment and reset clears it only in supported domains", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    for (const domain of ["sales", "performance", "listings"] as const) {
+      for (const buyBox of ["", "yes", "no"] as const) {
+        const patches: Partial<SellfoxView>[] = [];
+        const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain, buyBox }, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+        const selects = nodes.filter(node => node.type === "select");
+        const select = selects.find(node => node.props["aria-label"] === "Buy Box")!;
+        assert.ok(select); assert.ok(!select.props.disabled); assert.equal(select.props.value, buyBox);
+        assert.equal(selects[selects.indexOf(select) - 1].props["aria-label"], "发货方式");
+        const options = elements(select.props.children).filter(node => node.type === "option");
+        assert.deepEqual(options.map(node => [node.props.value, node.props.children]), [["", "全部"], ["yes", "是"], ["no", "否"]]);
+        for (const value of ["yes", "no", "", "true"]) {
+          select.props.onChange!({ target: { value } });
+          assert.deepEqual(patches.at(-1), { buyBox: value === "true" ? "" : value });
+        }
+        nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+        assert.equal(patches.at(-1)?.buyBox, "");
+        assert.equal(patches.at(-1)?.fulfillment, "");
+      }
+    }
+    for (const domain of ["overview", "stores", "inventory", "ads", "runs"] as const) {
+      const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain, buyBox: "yes" }, stores: [], onChange: () => {}, onColumns: () => {} }));
+      assert.equal(nodes.some(node => node.props["aria-label"] === "Buy Box"), false);
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
+
 test("product tag selects use dynamic distinct names, preserve URL selections, change and reset across all three domains", () => {
   // tsx uses the classic JSX transform for the repository's jsx:preserve setting.
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;

@@ -192,6 +192,52 @@ test("fulfillment reaches browse and CSV/XLSX/Agent export SQL, including withou
   }
 });
 
+test("buyBox reaches browse and CSV/XLSX/Agent export SQL, including without layout", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [] }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    for (const domain of ["sales", "performance", "listings"]) {
+      for (const buyBox of ["yes", "no"]) {
+        const context = { params: Promise.resolve({ domain }) };
+        const request = (extra = "") => new Request(`http://localhost/api/sellfox/${domain}?from=2026-10-25&to=2026-10-25&buyBox=${buyBox}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+        const browseHandler = domain === "sales" ? salesBrowse : domain === "performance" ? performanceBrowse : (r: Request) => browse(r, context);
+        const handlers = [
+          () => browseHandler(request()),
+          () => browseHandler(request("&layout=workbench")),
+          ...["&format=csv", "&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1"].map(extra => () => csv(request(extra), context)),
+          ...(domain === "performance" ? ["&format=csv", "&format=xlsx", "&agent=1"].map(extra => () => performanceCsv(request(extra))) : []),
+        ];
+        for (const handler of handlers) {
+          calls.length = 0;
+          const response = await handler();
+          assert.equal(response.status, 200);
+          assert.ok(calls.length > 0);
+          for (const sql of calls) {
+            const workbench = sql.text.startsWith("WITH");
+            assert.ok(sql.values.includes(workbench ? buyBox === "yes" ? "是" : "否" : buyBox));
+            assert.match(sql.text, /p.payload->'buyBoxWinner' = 'true'::jsonb/);
+            assert.match(sql.text, /p.payload->'buyBoxWinner' = 'false'::jsonb/);
+            assert.match(sql.text, workbench ? /AND l\."buyBoxWinner"=\$\d+/ : /LIMIT 1\)=\$\d+/);
+          }
+        }
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
 test("productTag reaches browse facets and CSV/XLSX/Agent export with and without layout", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };

@@ -57,6 +57,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
   // Blank/unknown values remain in all, never in the AFN/MFN subsets.
   if (query.fulfillment && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
+  // Current Listing Buy Box: blank/non-boolean values stay in all, never in yes/no subsets.
+  if (query.buyBox && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l."buyBoxWinner"=${query.buyBox === "yes" ? "是" : "否"}`);
   // Test the chosen Listing, never prefilter candidates before the MSKU/ASIN LIMIT 1.
   if (needTagFilter) filters.push(Prisma.sql`l."matchesProductTag"`);
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
@@ -104,7 +106,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'referralFee','')::float AS "referralFee",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'totalFee','')::float AS "totalFee",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'headTripCost','')::float AS "headTripCost",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner",` : Prisma.empty}
+      CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner",
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'reservedQty','')::float AS "reservedQty",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'shippingPrice','')::float AS "shippingPrice",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'profitPrice','')::float AS "profitPrice",` : Prisma.empty}

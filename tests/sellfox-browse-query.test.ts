@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sellfoxBrowseQuery, sellfoxSnapshotWhere, sellfoxRunWhere, sellfoxHourlyWhere } from "@/lib/sellfox/browse-query";
+import { sellfoxBrowseQuery, sellfoxBuyBox, sellfoxSnapshotWhere, sellfoxRunWhere, sellfoxHourlyWhere } from "@/lib/sellfox/browse-query";
 import { readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
 import { sellfoxPayloadPreview } from "@/lib/sellfox/payload-preview";
 
@@ -80,6 +80,31 @@ test("fulfillment accepts only AFN/MFN and round trips UI, API and export parame
   assert.equal(sellfoxViewParams(view, true).has("fulfillment"), false);
 });
 
+
+test("Buy Box accepts only yes/no and round trips URLs, requests and domain switches like fulfillment", () => {
+  for (const buyBox of ["", "yes", "no"] as const) {
+    assert.equal(sellfoxBuyBox(buyBox), buyBox);
+    assert.equal(query(new URLSearchParams({ buyBox }).toString()).buyBox, buyBox);
+    for (const domain of ["sales", "performance", "listings"]) {
+      const view = readSellfoxView(new URLSearchParams({ domain, buyBox }));
+      assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+      assert.equal(query(sellfoxViewParams(view, true).toString()).buyBox, buyBox);
+      const switched = { ...view, domain: "ads" as const };
+      assert.equal(sellfoxViewParams(switched, true).has("buyBox"), false);
+      const restored = { ...readSellfoxView(sellfoxViewParams(switched)), domain: view.domain };
+      assert.equal(query(sellfoxViewParams(restored, true).toString()).buyBox, buyBox);
+      assert.equal(sellfoxViewParams({ ...view, buyBox: "" }).has("buyBox"), false);
+    }
+  }
+  for (const value of [null, undefined, "true", "false", "YES", " no ", "yes' OR TRUE--"]) {
+    assert.equal(sellfoxBuyBox(value), "");
+    const params = new URLSearchParams(value == null ? {} : { buyBox: value });
+    assert.equal(query(params.toString()).buyBox, "");
+    const view = readSellfoxView(params);
+    assert.equal(view.buyBox, "");
+    assert.equal(sellfoxViewParams(view, true).has("buyBox"), false);
+  }
+});
 
 test("productTag trims arbitrary exact names and round trips UI, browse and export parameters", () => {
   for (const tag of ["1年以内产品", "1-3年产品", "3年以上老品", "6个月以内", "新标签、含分隔符", "%' OR TRUE--"]) {

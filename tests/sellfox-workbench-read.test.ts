@@ -506,11 +506,13 @@ test("listing-only columns extract Listing payload values without altering perfo
     }
     const performanceSql = workbenchReadSql("performance", query, scope, exporting).text;
     assert.ok(performanceSql.includes("NULLIF(s.payload->>'shippingPrice','')::float AS \"shippingPrice\""));
-    assert.doesNotMatch(performanceSql, /buyBoxWinner|reservedQty|profitPrice|profitRate/);
+    assert.doesNotMatch(performanceSql, /reservedQty|profitPrice|profitRate/);
+    assert.doesNotMatch(performanceSql.slice(performanceSql.indexOf("base AS")), /buyBoxWinner/);
     assert.doesNotMatch(performanceSql, /p\.payload->>'shippingPrice'/);
     for (const domain of ["ads_report", "sales"] as const) {
       const sql = workbenchReadSql(domain, query, scope, exporting).text;
-      assert.doesNotMatch(sql, /buyBoxWinner|reservedQty|shippingPrice|profitPrice|profitRate/);
+      assert.doesNotMatch(sql, /reservedQty|shippingPrice|profitPrice|profitRate/);
+      assert.doesNotMatch(sql.slice(sql.indexOf("base AS")), /buyBoxWinner/);
     }
   }
 });
@@ -933,6 +935,45 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
   assert.equal(visibleColumnCsv(config, [{ fulfillment: "AFN" }, { fulfillment: "MFN" }, { fulfillment: null }]).trim(), '"发货方式"\r\n"AFN"\r\n"MFN"\r\n""');
 });
 
+
+test("Buy Box filters scoped current Listing boolean members before rollups, totals, pagination and export", () => {
+  const scope = { organizationId: "org-buybox", workspaceId: "ws-buybox" };
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
+      for (const buyBox of ["yes", "no"] as const) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&buyBox=${buyBox}&from=2026-10-25&to=2026-10-25&onlySettle=1&fulfillment=AFN&productTag=tag`));
+        for (const exporting of [false, true]) {
+          const sql = workbenchReadSql(domain, query, scope, exporting);
+          assert.match(sql.text, /CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner"/);
+          assert.doesNotMatch(sql.text, /p.payload->>'buyBoxWinner'|buyBoxWinner[^,;]*::float/);
+          const base = sql.text.slice(sql.text.indexOf("base AS"), sql.text.indexOf(domain === "sales" ? "days AS" : "grouped AS"));
+          const parameter = base.match(/WHERE [\s\S]* AND l\."buyBoxWinner"=\$(\d+)/);
+          assert.ok(parameter);
+          assert.equal(sql.values[Number(parameter[1]) - 1], buyBox === "yes" ? "是" : "否");
+          assert.match(base, /AND l.fulfillment=/); assert.match(base, /AND l\."matchesProductTag"/);
+          assert.match(sql.text, /p.id=l.id AND p\."organizationId"=[\s\S]*p\."workspaceId"=/);
+          assert.match(sql.text, /WHERE l\."organizationId"=[\s\S]*l\."workspaceId"=/);
+          assert.ok(sql.values.includes(scope.organizationId) && sql.values.includes(scope.workspaceId));
+          if (domain === "listings") {
+            assert.match(base, /l\."buyBoxWinner",/);
+            assert.match(base, /LEFT JOIN listing l ON l.id=s.id AND l\."storeId"=s\."storeId"/);
+          } else {
+            assert.match(base, /LEFT JOIN LATERAL \(SELECT candidate\.\* FROM listing candidate WHERE candidate\."storeId"=s\."storeId"/);
+            assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\) l ON TRUE/);
+            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), domain === "performance" ? ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] : []);
+          }
+        }
+      }
+    }
+    for (const exporting of [false, true]) {
+      const all = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?buyBox=")), scope, exporting);
+      assert.doesNotMatch(all.text, /AND l\."buyBoxWinner"=/);
+    }
+  }
+  const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?buyBox=yes")), scope);
+  assert.doesNotMatch(ads.text, /AND l\."buyBoxWinner"=/);
+  assert.ok(!ads.values.includes("是"));
+});
 
 test("untagged sales and performance browse keep label expansion out of the main Listing CTE", () => {
   const scope = { organizationId: "org-tag", workspaceId: "ws-tag" };

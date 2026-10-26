@@ -313,6 +313,14 @@ Listing 按同组织/工作区/店铺的快照 ID 精确关联。销量/利润�
 本次不修改 schema、migration、sync 或 worker；回滚撤销本次应用代码即可，无数据回滚。业务员及其他未验证能力继续灰显；产品标签筛选见下节。
 
 
+### Buy Box 筛选（2026-10-26，本地待部署）
+
+销量、销售利润和在线商品支持 `buyBox=yes|no`，省略或空值表示全部，其他参数值按全部处理；UI 与发货方式并列，选项「全部 / 是 / 否」，重置会清空。只匹配 current Listing 快照 `payload.buyBoxWinner` 的 JSONB boolean true/false；字符串、null、缺失字段和未匹配 Listing 仅保留在全部。现有 Buy Box 列及 CSV 的「是/否」显示保持不变。
+
+匹配边界与发货方式一致：同组织/工作区/店铺，在线商品按快照 ID；销量/利润先按 MSKU 优先、ASIN 回退稳定选定一条 Listing，再判断 Buy Box。成员筛选在日/实体/KPI 汇总前应用，分页和 CSV/XLSX/Agent 导出保持同一子集，未带 layout 的显式筛选同样生效。Workbench 复用已有 Listing 关联和 boolean→是/否 CASE，Agent 用同一候选的 boolean→yes/no 标量子查询；不先过滤候选，不改销售利润 shippingPrice 等费用口径。
+
+无需 schema、migration 或 worker 变更；回滚撤销应用代码即可，不涉及数据回滚。验证按 `tests/sellfox-{browse-query,browse-filters,workbench-read,agent-read,browse-api}.test.ts` 展开文件，逐个运行 `node --import tsx <测试文件>`（避免 tsx CLI 在沙箱创建 IPC），共 85 项通过；`npm run typecheck`、改动文件 ESLint 和 `git diff --check` 通过。未运行 Chromium、生产构建或真实数据库/P95 验证。业务员、AWD、运营及销量洞察继续保持原有不可用状态。
+
 ### 产品标签筛选（2026-10-26，本地待部署）
 
 在线商品、销量、销售利润支持 `productTag=<标签完整名称>`；参数去首尾空格，空值表示全部，无固定标签白名单，重置会清空。来源仅为同组织/工作区/店铺的 current Listing payload `productLabelList[].labelDetailList[].labelName`，不是历史报表日标签；缺失或非数组按空列表处理。Workbench 仅在选择标签时用嵌套 JSON 数组上的 `EXISTS` 对 `btrim(labelName)` 做参数化等值匹配，不构建标签数组、不拆分展示用「、」、不做子串 LIKE；Agent 窄表导出保留原精确数组成员匹配。原在线商品 productTags 列直接用 `string_agg(DISTINCT ... ORDER BY ...)` 按「、」连接非空名称，空列表仍显示空值。
