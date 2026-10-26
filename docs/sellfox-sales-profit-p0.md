@@ -1,5 +1,41 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-27 — performance 默认显示 coupon/deal/vine/star/subscription 五列 · BOX LOCAL ONLY
+
+基线 HEAD `0b8a238`（`0b8a238f21cf7686128d966900022189cff18c6f`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下五个既有且仍在隐藏尾组的 numeric 列移出 performance trailing `.map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `regulatoryFeeAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
+
+| key | 列名 | 原样保留的 requiresField |
+| --- | --- | --- |
+| couponPaymentAmount | 优惠券支付 | 销售利润 payload.couponPaymentAmount 类型投影 |
+| sellerDealPaymentAmount | Deal费用 | 销售利润 payload.sellerDealPaymentAmount 类型投影 |
+| vineFeeAmount | Vine费用 | 销售利润 payload.vineFeeAmount 类型投影 |
+| starStorageFeeAmount | 星级仓储费 | 销售利润 payload.starStorageFeeAmount 类型投影 |
+| subscriptionAmount | 订阅费 | 销售利润 payload.subscriptionAmount 类型投影 |
+
+生产变更仅五列结构移动：逆向移回五列并移除新增的显式 `defaultVisible: true` 后，源码与基线逐字节一致；column key 多重集合不变，无新增 key，无 label、numeric 或 requiresField 修改。FBA return/inbound 长尾、退款、身份 map-tail 及 sales/listings/ads 保持原样。performance 共 106 列，默认显示 55 列，剩余默认隐藏 **51 列**（3 个身份列、48 个 numeric 列）。**Fee-mining remains paused**。下一批为 FBA return/inbound cluster，本轮不实施。
+
+复验命令（Prisma stub，不连接真实数据库；跳过完整 check/build）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'performance core cost defaults'
+```
+
+两个定向测试文件、TypeScript、指定三文件 ESLint 和 `git diff --check` 验证通过。扩展七种维度精确默认顺序、五列 default-true、默认/显式 CSV 及真实 ExcelJS XLSX 回读、正负数/零/NULL；逐列选择、逐列隐藏、整组隐藏和空集合仍以显式选列为准。FBA return/inbound 伴随列继续断言为默认隐藏，API 测试通过，无需修改。
+
+浏览器断言已扩展五个中文列名，覆盖默认表头顺序、默认勾选、取消后跨域保留及 CSV/Excel 显式选列排除。定向执行时 Chromium 在启动阶段于 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未调整启动参数或绕过沙箱，需在允许启动 Chromium 的本地环境补跑。此次仅列配置变更，按要求选择定向测试、类型及 lint，跳过完整 check/build；后续合码/发布或查询/存储变化时另行安排高成本检查。
+
+仅 BOX 本地，四个仓库文件；仓库外 parity-gap 由父进程更新。无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL 或真实数据库写入，未加载/修改 `.env`。回滚为将五列放回原隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+本地提交待父进程处理：`git add` 无法创建 `.git/index.lock`（Read-only file system），四个文件保留未暂存改动，HEAD 仍为基线；未 chmod/强制或绕过沙箱。父进程可使用其 `GIT_INDEX_FILE` 流程提交：`feat(sellfox): default-show performance coupon deal vine star subscription columns`。
+
+下方为历史批次。
+
+---
+
 ## 2026-10-27 — performance 默认显示 promotion/chargeback/guarantee/digital/other/shipping/regulatory 七列 · BOX LOCAL ONLY
 
 基线 HEAD `49fe05d`（`49fe05da6bcf236b98ca6ed48d64fbb460cd235e`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下七个既有且默认隐藏的 numeric 列移出 performance trailing `.map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `evaluationFee` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
