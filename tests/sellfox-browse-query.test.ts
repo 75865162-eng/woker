@@ -914,6 +914,37 @@ test("adSpend7 min/max validate as finite numbers, round trip listings-only, rej
   assert.throws(() => query("adSpend7Min=10&adSpend7Max=1"), /7天广告花费上限不得小于下限/);
 });
 
+test("adSpend14 min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
+  for (const range of ["", "adSpend14Min=0", "adSpend14Max=100", "adSpend14Min=1.5&adSpend14Max=48", "adSpend14Min=0&adSpend14Max=0"]) {
+    const params = new URLSearchParams(`domain=listings&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.adSpend14Min, params.has("adSpend14Min") ? Number(params.get("adSpend14Min")) : undefined);
+    assert.equal(parsed.adSpend14Max, params.has("adSpend14Max") ? Number(params.get("adSpend14Max")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("adSpend14Min"), params.get("adSpend14Min"));
+      assert.equal(sellfoxViewParams(other).get("adSpend14Max"), params.get("adSpend14Max"));
+      assert.equal(sellfoxViewParams(other, true).has("adSpend14Min"), false);
+      assert.equal(sellfoxViewParams(other, true).has("adSpend14Max"), false);
+    }
+  }
+  for (const key of ["adSpend14Min", "adSpend14Max"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1e2", "NaN", "abc", "4.5.1", "--1", "Infinity"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是数字/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("adSpend14Min=%201.5%20").adSpend14Min, 1.5);
+  assert.equal(query("adSpend14Max=0").adSpend14Max, 0);
+  assert.equal(query("adSpend14Min=.5").adSpend14Min, 0.5);
+  assert.throws(() => query("adSpend14Min=10&adSpend14Max=1"), /14天广告花费上限不得小于下限/);
+});
+
 test("reservedQty min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
   for (const range of ["", "reservedQtyMin=0", "reservedQtyMax=100", "reservedQtyMin=1.5&reservedQtyMax=48", "reservedQtyMin=0&reservedQtyMax=0"]) {
     const params = new URLSearchParams(`domain=listings&${range}`);
