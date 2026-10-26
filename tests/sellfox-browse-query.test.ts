@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { sellfoxBrowseQuery, sellfoxBrand, sellfoxBuyBox, sellfoxSnapshotWhere, sellfoxRunWhere, sellfoxHourlyWhere } from "@/lib/sellfox/browse-query";
-import { readSellfoxView, sellfoxViewParams, sellfoxSortPatch } from "@/lib/sellfox/workbench-view";
+import { readSellfoxView, sellfoxViewParams, sellfoxSortPatch, sellfoxAdsResource } from "@/lib/sellfox/workbench-view";
 import { sellfoxPayloadPreview } from "@/lib/sellfox/payload-preview";
 
 const query = (params: string) => sellfoxBrowseQuery(new URL(`http://localhost/?${params}`));
@@ -120,8 +120,16 @@ test("productTag trims arbitrary exact names and round trips UI, browse and expo
     const view = readSellfoxView(new URLSearchParams({ domain: "listings", productTag }));
     assert.equal(view.productTag, ""); assert.equal(sellfoxViewParams(view).has("productTag"), false);
   }
-  const ads = readSellfoxView(new URLSearchParams("domain=ads&productTag=标签"));
-  assert.equal(sellfoxViewParams(ads, true).has("productTag"), false);
+  for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"]) {
+    for (const tag of ["标签", "标签、完整", "%' OR TRUE--"]) {
+      const ads = readSellfoxView(new URLSearchParams({ domain: "ads", adsTab, productTag: ` ${tag} `, brand: "ignored", fulfillment: "AFN", buyBox: "yes", salesperson: "ignored" }));
+      assert.deepEqual(readSellfoxView(sellfoxViewParams(ads)), ads);
+      const params = sellfoxViewParams(ads, true);
+      assert.equal(params.get("productTag"), tag); assert.equal(params.get("layout"), "workbench");
+      assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${params}`), sellfoxAdsResource(ads)).productTag, tag);
+      for (const key of ["brand", "fulfillment", "buyBox", "salesperson"]) assert.equal(params.has(key), false);
+    }
+  }
 });
 
 test("brand trims arbitrary exact names and round trips UI, browse and export parameters", () => {

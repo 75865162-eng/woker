@@ -43,7 +43,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const order = sortKey ? sellfoxSqlOrder(query, sortExpression) : Prisma.sql`id`;
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
   const adIdentity = domain === "ads_campaign" ? Prisma.sql`"adType","campaignId"` : domain === "ads_ad_group" ? Prisma.sql`"adType","campaignId","adGroupId"` : domain === "ads_placement" ? Prisma.sql`"adType","campaignId",placement` : domain === "ads_targeting" ? Prisma.sql`"adType","campaignId","adGroupId","targetingId"` : domain === "ads_search_term" ? Prisma.sql`"adType","campaignId","adGroupId","searchTerm","targetingId"` : Prisma.sql`"adType","campaignId","adGroupId","productId"`;
-  const supportsProductTags = ["sales", "performance", "listings"].includes(domain);
+  const supportsProductTags = ads || ["sales", "performance", "listings"].includes(domain);
   const needTagFilter = supportsProductTags && Boolean(query.productTag);
   const needTagFacets = supportsProductTags && !exporting;
   const filters: Prisma.Sql[] = [scoped("s", scope)];
@@ -194,10 +194,10 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     ARRAY(SELECT DISTINCT tag."labelName" FROM sellfox_listing_current l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
       CROSS JOIN LATERAL unnest(l."productTagNames") tag("labelName")
-      WHERE ${Prisma.join(facetFilters, " AND ")} ORDER BY tag."labelName"),
-    'brands', ARRAY(SELECT DISTINCT l.brand FROM sellfox_listing_current l
+      WHERE ${Prisma.join(facetFilters, " AND ")} ORDER BY tag."labelName")
+    ${ads ? Prisma.empty : Prisma.sql`,'brands', ARRAY(SELECT DISTINCT l.brand FROM sellfox_listing_current l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
-      WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)
+      WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)`}
     ${domain === "performance" ? Prisma.sql`,'salespersons',ARRAY(
       SELECT DISTINCT person.name FROM "SellfoxProductDailySnapshot" s
       JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
@@ -210,7 +210,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
-  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
+  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands?: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
   const { rows, total, totals, facets } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);
   // Page-bounded supplemental lookup, never one network call per entity or full payload reads.

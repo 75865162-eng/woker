@@ -1,22 +1,26 @@
 # Sellfox 广告子页：Phase A / B 已接入与剩余缺口
 
-> 2026-10-27 · Owner Chen Jieliang · 仅 BOX 本地：在 ba33f44（品牌/发货方式）、fbd3bcf（评论数）、44e0c48（图片/星级/标签）之后，广告产品及五个子页继续解锁默认隐藏的 `buyBoxWinner`「Buy Box」文本列，共享配置顺序：标签 → 品牌 → 发货方式 → Buy Box。复用现有 MSKU 优先、ASIN 回退、LIMIT 1 的 Listing current join，从 `sellfox_listing_current` 类型投影读取「是」/「否」（boolean→是/否）；不解析 payload、不改变事实粒度。全部成员非 NULL 且一致才显示，冲突、匹配缺值或无匹配均为 NULL。这是当前资料，不是广告报告日历史属性。六页支持分页前文本排序、可见列 CSV/XLSX（含无 layout 参数），NULL→空白、「是」/「否」保持文本，无额外导出 route 改动。
+> 2026-10-27 01:21:45 Asia/Shanghai · Owner: Chen Jieliang · **BOX LOCAL ONLY**：六个广告工作台页（`ads_report` / `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`）现已解锁 `productTag`「产品标签」筛选和 `facets.productTags`。基于本地 HEAD `0b64ec7c19710cfcc9c749f084ec5802e9cf9ad8`，无 schema / 新 migration。
 >
-> 此前图片/星级/评论数/标签/品牌/发货方式列保留；图片取非空最小值，其他属性仅在全部成员非 NULL 且一致时显示；评论数一致 0 保留数字 0，品牌/发货方式沿用 typed 原值和空字符串语义。
+> 复用 Listing current 的 typed `productTagNames`，请求名称 trim 后用 `@> ARRAY[tag]::text[]` 精确成员匹配，不拆分含「、」的完整标签名、不做 LIKE。沿既有 MSKU 优先 / ASIN 回退 / LIMIT 1 join **先选 Listing，再筛选成员行，最后汇总广告指标**；不从其他 ASIN 子体借标签，不放大花费。无商品身份、无匹配 Listing 或无匹配标签均排除。这是当前资料，不代表报告日历史标签。
 >
-> `enabled` / `serviceStatus` / `adStrategy` / `salesperson`、广告组合、否定、AMC 继续锁定；**不新增 ads Buy Box/brand/fulfillment/productTag 筛选或 facets**。Agent 广告英文长表保持不追加 Listing 字段，继续拒绝这些 Listing 属性排序并提示使用 workbench。sales/performance/listings 默认列不变；fee-mining 继续暂停。无 schema/新 migration，无 push/fetch、部署、SSH、远程库访问、live Sellfox API 或计划启用。回滚本地提交即可恢复旧列，无数据库回退。
+> facets 沿用 sales/listings 的 **当前 Listing 组织/工作区/店铺/站点范围**，去重并排序，独立于当前 productTag/search，也不限定广告报告日期/adType/quickFilter；即使结果为空仍保留选项。ads 只返回标签 facets，不返回 brands/salespersons。UI 显示「产品标签」，支持 URL、六子页 API 参数、切页和重置；CSV/XLSX 复用同一筛选 SQL。修正仅带标签、无 layout/排序/选列时的普通浏览/导出分流，防止忽略筛选。显式 `agent=1` 导出维持既有英文长表契约及行为（不添加 Listing SELECT 字段、不应用 ads 标签筛选，Listing 属性排序仍报错提示 workbench）。
+>
+> 此前图片/星级/评论数/标签/品牌/发货方式/Buy Box 可选列保留；sales/performance/listings 默认列及现有标签筛选不变。`enabled` / `serviceStatus` / `adStrategy` / `salesperson`、广告组合、否定、AMC 继续锁定；**ads Buy Box/brand/fulfillment 筛选及其 facets 仍未解锁**。**Fee-mining remains paused**。
+>
+> 仅 BOX 本地：无 push/fetch、SSH、deploy/restart、migrate-on-123、真实数据库写入、live Sellfox API 或 schedules 变更；未加载 `.env`。回滚本次应用改动即可关闭标签筛选/facets，无数据库回退。只读 facet 查询新增为原单次 SQL 内子查询；未做真实规模/P95 benchmark，不宣称性能收益。
 
-本轮离线验证（不加载 `.env`；Prisma 均为 stub，PGlite 为一次性内存库）：
+本轮离线验证已通过（五个定向测试文件；Prisma 均 stub，PGlite 为一次性内存库，不连接真实数据库）：
 
 ```bash
 NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-agent-read.test.ts
 NODE_ENV=test node --import tsx tests/integration/sellfox-ads-phase-b.ts
 npm run typecheck
-node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts src/lib/sellfox/sort-columns.ts src/lib/sellfox/workbench-read.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/integration/sellfox-ads-phase-b.ts
+node node_modules/eslint/bin/eslint.js 'src/app/api/sellfox/[domain]/route.ts' 'src/app/api/sellfox/[domain]/export/route.ts' src/components/sellfox/browse-filters.tsx src/lib/sellfox/workbench-read.ts src/lib/sellfox/workbench-view.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/integration/sellfox-ads-phase-a.ts tests/integration/sellfox-ads-phase-b.ts
 git diff --check
 ```
 
-本轮上述检查全部通过，复验预期全绿：155 项定向测试；六页共用一次性 PGlite fixture，覆盖 MSKU 优先/ASIN 回退、组织/工作区/店铺隔离、不重复计算花费、Buy Box 一致「是」/「否」、冲突→NULL、匹配缺值→NULL、无匹配→NULL；真实 ExcelJS 生成/回读验证文本与空白。TypeScript、改动 TS ESLint 与 diff 检查通过。另验证广告六页均无 Buy Box/品牌/发货方式/产品标签可用筛选及 SQL facets。未跑商品利润迁移链、浏览器、完整 check、生产 build 或真实 P95；本轮无 schema/布局变更，发布或性能验收时另补对应检查。
+覆盖六页 match/no-match、trim/完整标签名精确成员匹配、组织/工作区/店铺隔离、MSKU 优先/ASIN 回退、join 不重复计算花费、筛选先于汇总、空结果 scoped facets、UI 选择/重置、URL/API 参数往返、无 layout 的普通浏览/CSV/XLSX 路由及显式 Agent 导出/排序守卫。旧列的真实 ExcelJS 生成/回读回归仍通过。按最小范围验证路线未跑完整 check/build、浏览器或真实 P95；发布前运行完整发布检查，真实规模性能验收另做 benchmark。
 
 2026-10-26。Phase A/B 已对照本机真实 Sellfox XLSX 确认列映射并修复投放 ID；本轮仅 box 本机修改和离线解析，未部署、未迁移、未启用计划，未调用 createTask。
 

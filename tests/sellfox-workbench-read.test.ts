@@ -623,7 +623,7 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
     for (const value of [null, 0, 128]) assert.equal(sellfoxColumnValue(ratingCount, { ratingCount: value }), value);
     assert.equal(visibleColumnCsv([ratingCount], [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
     for (const exporting of [false, true]) for (const sortBy of ["rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) {
-      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=desc&productTag=ignored&brand=ignored&fulfillment=AFN&buyBox=yes`), domain);
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=desc&productTag=标签&brand=ignored&fulfillment=AFN&buyBox=yes`), domain);
       const sql = workbenchReadSql(domain, query, scope, exporting);
       assert.match(sql.text, /l\.rating AS "listingRating",l\."ratingCount" AS "listingRatingCount",l\."productTags" AS "listingProductTags"/);
       assert.match(sql.text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
@@ -636,7 +636,7 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
       assert.match(sql.text, /l\."buyBoxWinner" AS "listingBuyBoxWinner"/);
       assert.match(sql.text, /CASE WHEN count\("listingBuyBoxWinner"\)=count\(\*\) AND count\(DISTINCT "listingBuyBoxWinner"\)=1 THEN min\("listingBuyBoxWinner"\) END AS "buyBoxWinner"/);
       assert.ok(sql.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
-      assert.doesNotMatch(sql.text, /payload|productTagNames|matchesProductTag|AS facets|AND l\.(?:brand|fulfillment|"buyBoxWinner")=/);
+      assert.doesNotMatch(sql.text, /payload|AND l\.(?:brand|fulfillment|"buyBoxWinner")=/);
       assert.ok(!sql.values.includes("ignored"));
       assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
     }
@@ -1268,8 +1268,25 @@ test("productTag exact membership filters current Listing members before aggrega
     }
     assert.doesNotMatch(workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope).text, /matchesProductTag/);
   }
-  const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?productTag=ignored")), scope);
-  assert.doesNotMatch(ads.text, /productTagNames|matchesProductTag|productLabel|AS facets/); assert.ok(!ads.values.includes("ignored"));
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const exporting of [false, true]) {
+      const ads = workbenchReadSql(domain, sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ productTag: " 标签、完整 ", search: "needle", site: "US", shopExternalId: "shop", storeId: "store" })}`), domain), scope, exporting);
+      assert.match(ads.text, /l\."productTagNames" @> ARRAY\[\$\d+\]::text\[\] AS "matchesProductTag"/);
+      assert.ok(ads.values.includes("标签、完整")); assert.ok(!ads.values.includes("%标签、完整%"));
+      const base = ads.text.slice(ads.text.indexOf("base AS ("), ads.text.indexOf("grouped AS ("));
+      const candidate = base.slice(base.indexOf("LEFT JOIN LATERAL"), base.indexOf("LIMIT 1) l ON TRUE"));
+      assert.doesNotMatch(candidate, /matchesProductTag|productTagNames/);
+      assert.match(base, /LIMIT 1\) l ON TRUE WHERE [\s\S]*l\."matchesProductTag"/);
+      if (exporting) assert.doesNotMatch(ads.text, /AS facets/);
+      else {
+        const facets = ads.text.slice(ads.text.indexOf("jsonb_build_object('productTags'"));
+        assert.match(facets, /unnest\(l\."productTagNames"\)/);
+        assert.match(facets, /l\."organizationId"=\$\d+ AND l\."workspaceId"=\$\d+/);
+        assert.match(facets, /st\."externalId" IN/); assert.match(facets, /l\."storeId"=/); assert.match(facets, /st.marketplace=/);
+        assert.doesNotMatch(facets, /brands|salespersons|ILIKE|matchesProductTag|tag\."labelName"=/);
+      }
+    }
+  }
 });
 
 test("brand exact match filters selected Listing members before rollup with independent scoped facets", () => {
@@ -1318,7 +1335,7 @@ test("brand exact match filters selected Listing members before rollup with inde
     }
   }
   const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?brand=ignored")), scope);
-  assert.doesNotMatch(ads.text, /AND l.brand=|AS facets/); assert.ok(!ads.values.includes("ignored"));
+  assert.doesNotMatch(ads.text, /AND l.brand=|'brands'/); assert.ok(!ads.values.includes("ignored"));
 });
 
 test("browse returns all dynamic tag and brand facets even for an empty result page without extra reads", async () => {
