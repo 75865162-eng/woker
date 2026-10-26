@@ -800,6 +800,37 @@ test("agent sales7 min/max affect listings rows/count/export only via typed sale
   } finally { globals.prisma = previous; }
 });
 
+
+test("agent sales14 min/max affect listings rows/count/export only via typed sales14", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory", "performance", "ads_report"] as const) {
+      for (const range of ["", "sales14Min=0", "sales14Max=10000", "sales14Min=1&sales14Max=5000"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        for (const sql of calls) {
+          const hasRange = domain === "listings" && (query.sales14Min != null || query.sales14Max != null);
+          if (hasRange) {
+            assert.match(sql.text, /s\."sales14" IS NOT NULL/);
+            for (const [value, pattern] of [[query.sales14Min, /s\."sales14">=\$(\d+)/], [query.sales14Max, /s\."sales14"<=\$(\d+)/]] as const) {
+              const match = sql.text.match(pattern);
+              if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+              else assert.equal(match, null);
+            }
+          } else {
+            assert.doesNotMatch(sql.text, /s\."sales14" IS NOT NULL|s\."sales14">=|s\."sales14"<=/);
+          }
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});
+
 test("agent listingQuantity min/max affect listings rows/count/export only via typed listingQuantity", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const calls: Prisma.Sql[] = [];
