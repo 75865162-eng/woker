@@ -467,12 +467,16 @@ test("listings expose optional text openDate from the current snapshot and prese
   }
 });
 
-test("listings expose optional numeric BSR from the current snapshot without losing null or zero", () => {
+test("listings select numeric BSR from the current snapshot array, preferring bigCategory then array order", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/"));
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
-    assert.match(sql.text, /NULLIF\(p\.payload->>'bsrRank',''\)::float AS "bsrRank"/);
+    assert.doesNotMatch(sql.text, /p\.payload->>'bsrRank'/);
+    assert.match(sql.text, /SELECT NULLIF\(elem\.value->>'rank',''\)::float/);
+    assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'bsrRank'\)='array' THEN p\.payload->'bsrRank' ELSE '\[\]'::jsonb END\) WITH ORDINALITY elem\(value,ordinality\)/);
+    assert.ok(sql.text.includes("WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'"));
+    assert.match(sql.text, /ORDER BY CASE WHEN elem\.value->>'bigCategory' IN \('true','TRUE','1'\) THEN 0 ELSE 1 END,elem\.ordinality\s+LIMIT 1\s+\) AS "bsrRank"/);
     assert.match(sql.text, /l\."openDate",l\."bsrRank",/);
   }
   const config = visibleColumns("listings", ["bsrRank"]);
@@ -481,7 +485,7 @@ test("listings expose optional numeric BSR from the current snapshot without los
   assert.equal(config[0].unavailable, undefined);
   assert.equal(config[0].numeric, true);
   assert.equal(config[0].defaultVisible, false);
-  assert.equal(config[0].requiresField, "Listing 当前快照 payload.bsrRank");
+  assert.equal(config[0].requiresField, "Listing 当前快照 payload.bsrRank[].rank（优先 bigCategory）");
   assert.ok(!defaultVisibleColumnKeys("listings").includes("bsrRank"));
   assert.deepEqual(visibleColumns("listings", ["ratingCount", "openDate", "bsrRank"]).map(c => c.key), ["ratingCount", "openDate", "bsrRank"]);
   assert.equal(sellfoxColumnValue(config[0], { bsrRank: null }), null);
