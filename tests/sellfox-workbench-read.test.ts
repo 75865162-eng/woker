@@ -681,10 +681,10 @@ test("listing-only columns extract Listing payload values without altering perfo
     const listingSql = workbenchReadSql("listings", query, scope, exporting).text;
     assertListingProjection(listingSql);
     const performanceSql = workbenchReadSql("performance", query, scope, exporting).text;
-    assert.ok(performanceSql.includes("NULLIF(s.payload->>'shippingPrice','')::float AS \"shippingPrice\""));
+    assert.ok(performanceSql.includes('s."shippingPrice"'));
     assert.doesNotMatch(performanceSql, /reservedQty|profitPrice|profitRate/);
     assert.doesNotMatch(performanceSql.slice(performanceSql.indexOf("base AS")), /buyBoxWinner/);
-    assert.doesNotMatch(performanceSql, /p\.payload->>'shippingPrice'|shipCost/);
+    assert.doesNotMatch(performanceSql, /[ps]\.payload->>'shippingPrice'|shipCost/);
     for (const domain of ["ads_report", "sales"] as const) {
       const sql = workbenchReadSql(domain, query, scope, exporting).text;
       assert.doesNotMatch(sql, /reservedQty|shippingPrice|shipCost|profitPrice|profitRate/);
@@ -974,7 +974,7 @@ test("performance browse selects and sums elevated fee fields and prefers listin
   assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\."imageUrl"/);
 });
 
-test("performance optional costs and refunds read payload scalars and sum by entity and currency without changing refund rates", () => {
+test("performance optional costs and refunds read typed columns and sum by entity and currency without changing refund rates", () => {
   const keys = ["commodityCost", "shippingPrice", "taxPrice", "refundPrice", "refundNum"];
   const config = visibleColumns("performance", keys);
   assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), [
@@ -990,7 +990,8 @@ test("performance optional costs and refunds read payload scalars and sum by ent
       for (const exporting of [false, true]) {
         const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting);
         for (const key of keys) {
-          assert.ok(sql.text.includes(`NULLIF(s.payload->>'${key}','')::float AS "${key}"`));
+          assert.ok(sql.text.includes(`s."${key}"`));
+          assert.ok(!sql.text.includes(`s.payload->>'${key}'`));
           assert.equal(sql.text.split(`COALESCE(sum("${key}"),0)::float AS "${key}"`).length - 1, 2);
           assert.ok(!sql.text.includes(`count("${key}")`));
         }
@@ -1079,8 +1080,8 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
           {
             assert.match(base, /candidate\."storeId"=s\."storeId"/);
             assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1/);
-            // Profit reads only explicit cost/refund scalars, never the full payload.
-            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), domain === "performance" ? ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] : []);
+            // Fact reads use typed columns, never payload scalars.
+            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), []);
             assert.doesNotMatch(base, /s\.payload(?:\s|,)/);
           }
         }
@@ -1119,7 +1120,7 @@ test("Buy Box filters scoped current Listing boolean members before rollups, tot
           {
             assert.match(base, /LEFT JOIN LATERAL \(SELECT candidate\.\* FROM listing candidate WHERE candidate\."storeId"=s\."storeId"/);
             assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\) l ON TRUE/);
-            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), domain === "performance" ? ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] : []);
+            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), []);
           }
         }
       }

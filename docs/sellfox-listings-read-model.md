@@ -1,5 +1,13 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## Performance fact 费用类型投影（2026-10-26，本地完成，未部署）
+
+- 增量迁移 `20261026080000_sellfox_product_daily_typed_fees` 在 `70000` 之后给现有 `SellfoxProductDailySnapshot` 添加 nullable DOUBLE PRECISION：`refundPrice`、`refundNum`、`commodityCost`、`shippingPrice`、`taxPrice`。复用 `50000` 的 `sellfox_listing_number(text)`：空/缺失/非法/溢出为 NULL，保留 0；没有新表或索引。
+- `sellfox_product_daily_project_write` 在 INSERT / UPDATE OF payload 时原子维护这五列；`extractPerformanceFields` 同时用既有 `sellfoxNumber` 在同步写侧提取（非法值沿用同步校验失败规则）。一次性 `UPDATE payload=payload` 回填全部历史事实，payload 内容不变。已存在的 `promotionDiscount` / `giftWrapFee` / `imageUrl` 不重新投影；profit view 保留 `20000` 的完整列序，再在末尾追加五列。
+- performance browse/导出只读类型列；实体和币种页脚仍用 `COALESCE(sum(...),0)`，refundRate、销售域、结算分区和灰显入口不变。workbench / Agent / listings 读 SQL 已无这五个费用键的 payload 解析。剩余 payload 接触包括写侧（Listing 与 product-daily trigger、同步保留/合并原始 payload）及既有 `/api/sellfox/[domain]/[id]` 按需详情预览（`payload-preview.ts`）；预览保持原始资料用途，不参与费用聚合。`product-tags-sql.ts` 的旧 JSON helper 仍保留，当前 browse/Agent/listings 不调用；本轮不清理无关代码。
+- 验证：指定六文件单测 **104/104**；TypeScript、改动 TS ESLint、dummy URL 的 Prisma validate、`git diff --check`；隔离 PGlite 的 listings-read-model / cross-store / sales-profit-p0 全部通过，涵盖旧行回填、view 旧列序、INSERT/UPDATE、NULL/0/非法值、促销/礼品包装保持、分页/币种/结算与汇总。后两者无 standalone main，通过导出的 `verifySellfoxCrossStoreSql` / `verifySellfoxP0Sql` 传入独立 PGlite query/exec 执行；未配置真实数据库 URL，默认 PostgreSQL node:test 包装用例跳过不影响实际 PGlite 验证。
+- 仅本地：未 push、SSH、部署、真实库迁移或请求 Sellfox API。123 仍待 `60000` + `70000` + `80000`，等待用户「上」后才进入发布流程。真实 apply 前审核历史行数、WAL/磁盘和 DDL/行锁窗口，先迁移并 generate 再启动新代码；回退应用时保留新增列/trigger/view，不做数据库 down/drop。本次未跑全量 check、生产构建、浏览器 E2E 或真实 P95；合码/上线及性能验收时再执行。
+
 范围：只改本地 ERP listings 读路径；未连接生产、未发布、未推送、未启用计划，也没有新增 Sellfox API 调用。ProductRecord、销量/利润报表聚合不变。
 
 ## 销量/表现复用类型投影（2026-10-26）
@@ -8,7 +16,7 @@
 - Agent sales/performance 的四种共享筛选同样读取所选 current 候选的类型列。仍先按 MSKU 优先、ASIN 回退及原稳定排序选一行，再判断字段，不能预筛候选而换成同 ASIN 的其他商品。列表响应、灰显入口、报表聚合和币种/结算分区口径保持原样。
 - 新迁移 `20261026070000_sellfox_listing_developer_spu` 在 `20261026060000` 后添加两个 nullable TEXT，扩展原 trigger，在 current view 末尾追加列。developer 保留旧 SQL 的精确规则：第一个 devId 匹配的 devName 非空则用它，否则第一个非空 devName；重复匹配不跳到第二个匹配项，空字符串与空格不同，不额外 trim。SPU 优先非空 commodityName，再 commoditySku。缺失存 NULL，读 CTE 用 COALESCE 显示「未分配开发员」/「未分配SPU」。performance 的 SPU 仍按原行为回退 ASIN。
 - 一次性 `UPDATE payload=payload` 触发全历史/半成品回填，不改变 payload 内容、Head 或 ProductRecord；其余已投影字段按原函数重算。真实库应用前须审核保留行数、WAL/磁盘及 DDL/行锁窗口，先迁移并 generate，再启动新代码。本轮仅在内存 PGlite 执行。回滚应用保留新增列/函数/view，不做数据库回滚；旧应用写 payload 仍会维护投影。
-- 剩余 payload 读取仅为 performance fact 的 refundPrice/refundNum/commodityCost/shippingPrice/taxPrice；它们来自 `SellfoxProductDailySnapshot`，不是 Listing。写入 trigger 仍负责解析 Listing 原始 payload，读取路径不解析。
+- 后续 `80000` 已将 performance fact 的 refundPrice/refundNum/commodityCost/shippingPrice/taxPrice 改为类型列读取；Listing 与 product-daily 写入 trigger 仍负责解析原始 payload，browse 读取路径不解析这些字段。
 - 定向验证：下列 94 项测试、TypeScript、改动 TS 文件 ESLint、Prisma validate、`git diff --check`；隔离 PGlite 另覆盖新增迁移/backfill/view 旧列顺序、插入/更新与 NULL/重复 devId/空格、报表 MSKU/ASIN 选择、筛选/空页 facets/导出/分页/totals/结算分区，以及跨店 developer/SPU 与共享广告查询。未运行生产构建、浏览器 E2E 或真实并发/P95 benchmark；合码/上线或性能验收时再执行，不能把隔离 fixture 当作生产性能承诺。
 
 ```bash

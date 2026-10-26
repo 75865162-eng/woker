@@ -1125,6 +1125,11 @@ model SellfoxProductDailySnapshot {
   giftWrapFee     Float?
   imageUrl        String?
   refundRate      Float?
+  refundPrice     Float?
+  refundNum       Float?
+  commodityCost   Float?
+  shippingPrice   Float?
+  taxPrice        Float?
   payload         Json
   syncedAt        DateTime     @default(now())
   createdAt       DateTime     @default(now())

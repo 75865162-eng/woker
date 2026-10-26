@@ -33,9 +33,10 @@ async function verifyReportListingProjection(query: Query) {
       1::float AS "grossProfit",NULL::float AS "grossProfitRate",1::float AS "adCost",
       NULL::float AS "promotionDiscount",NULL::float AS "giftWrapFee",revenue AS "netRevenue",
       NULL::float AS "refundRate",orders AS "orderNum",quantity AS "fbaQuantity",0::float AS "fbmQuantity",
+      2::float AS "refundPrice",1::float AS "refundNum",3::float AS "commodityCost",4::float AS "shippingPrice",5::float AS "taxPrice",
       '{"refundPrice":2,"refundNum":1,"commodityCost":3,"shippingPrice":4,"taxPrice":5}'::jsonb AS payload
     FROM sellfox_sales_daily;
-    INSERT INTO "SellfoxProductDailySnapshot" SELECT id||'-settled',"organizationId","workspaceId","storeId",asin,msku,quantity,"sourceKey",sku,currency,"reportDate",revenue,orders,complete,"syncedAt","shopExternalId",name,marketplace,"saleQuantity","saleRevenue",true,title,"parentAsin","imageUrl","grossProfit","grossProfitRate","adCost","promotionDiscount","giftWrapFee","netRevenue","refundRate","orderNum","fbaQuantity","fbmQuantity",payload FROM "SellfoxProductDailySnapshot";
+    INSERT INTO "SellfoxProductDailySnapshot" SELECT id||'-settled',"organizationId","workspaceId","storeId",asin,msku,quantity,"sourceKey",sku,currency,"reportDate",revenue,orders,complete,"syncedAt","shopExternalId",name,marketplace,"saleQuantity","saleRevenue",true,title,"parentAsin","imageUrl","grossProfit","grossProfitRate","adCost","promotionDiscount","giftWrapFee","netRevenue","refundRate","orderNum","fbaQuantity","fbmQuantity","refundPrice","refundNum","commodityCost","shippingPrice","taxPrice",payload FROM "SellfoxProductDailySnapshot";
     CREATE VIEW sellfox_profit_daily AS SELECT * FROM "SellfoxProductDailySnapshot";`);
   for (const domain of ["sales", "performance"] as const) {
     const read = async (params = "", exporting = false) => {
@@ -44,6 +45,7 @@ async function verifyReportListingProjection(query: Query) {
       const browse = sellfoxBrowseQuery(url);
       const sql = workbenchReadSql(domain, browse, scope, exporting);
       assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"/);
+      assert.doesNotMatch(sql.text, /s\.payload->>'(?:refundPrice|refundNum|commodityCost|shippingPrice|taxPrice)'/);
       const result = (await query(sql.text, sql.values)).rows[0] as Result;
       return { browse, result };
     };
@@ -82,7 +84,7 @@ async function verifyReportListingProjection(query: Query) {
     const paged = (await read("pageSize=1&page=2")).result;
     assert.equal(paged.rows.length, 1); assert.equal(paged.total, all.total); assert.deepEqual(paged.totals, all.totals);
     if (domain === "performance") {
-      assert.equal(all.totals[0].shippingPrice, 16); // Performance fact fees still come from its own payload.
+      assert.equal(all.totals[0].shippingPrice, 16); // Performance totals sum typed fact fees.
       const settled = (await read("onlySettle=1")).result;
       assert.equal(settled.total, all.total); assert.deepEqual(settled.totals, all.totals);
       assert.deepEqual((await read("dimension=spu")).result, (await read("dimension=asin")).result);

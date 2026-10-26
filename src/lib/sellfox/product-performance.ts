@@ -40,6 +40,11 @@ export function extractPerformanceFields(row: RecordLike) {
     promotionDiscount: sellfoxNumber(row, "promotionDiscountAmount"),
     giftWrapFee: sellfoxNumber(row, "giftWrapAmount"),
     imageUrl: text(row, "imageUrl") || null,
+    refundPrice: sellfoxNumber(row, "refundPrice"),
+    refundNum: sellfoxNumber(row, "refundNum"),
+    commodityCost: sellfoxNumber(row, "commodityCost"),
+    shippingPrice: sellfoxNumber(row, "shippingPrice"),
+    taxPrice: sellfoxNumber(row, "taxPrice"),
   };
 }
 function pageFrom(payload: unknown) {

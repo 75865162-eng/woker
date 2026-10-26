@@ -26,12 +26,20 @@ test("performance text extracts scalar identities without stringifying objects",
 });
 
 test("performance extraction maps confirmed fee and image payload keys to narrow fields", () => {
-  assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: "4.25", giftWrapAmount: 1.5, imageUrl: " https://example.test/item.jpg " }), {
+  assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: "4.25", giftWrapAmount: 1.5, imageUrl: " https://example.test/item.jpg ", refundPrice: "2.5", refundNum: 1, commodityCost: "3", shippingPrice: 4, taxPrice: "-0.5" }), {
     promotionDiscount: 4.25, giftWrapFee: 1.5, imageUrl: "https://example.test/item.jpg",
+    refundPrice: 2.5, refundNum: 1, commodityCost: 3, shippingPrice: 4, taxPrice: -0.5,
   });
   assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: null, giftWrapAmount: "", imageUrl: "" }), {
     promotionDiscount: null, giftWrapFee: null, imageUrl: null,
+    refundPrice: null, refundNum: null, commodityCost: null, shippingPrice: null, taxPrice: null,
   });
+  for (const key of ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] as const) {
+    for (const value of [null, undefined, "", 0, "0", 2.5, "-3.25"]) {
+      assert.equal(extractPerformanceFields({ [key]: value })[key], value == null || value === "" ? null : Number(value), `${key}: ${value}`);
+    }
+    assert.throws(() => extractPerformanceFields({ [key]: "invalid" }), /数值无效/);
+  }
 });
 
 function fixture(storeIds = ["a", "b"]) {
