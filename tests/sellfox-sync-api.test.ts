@@ -56,7 +56,7 @@ test("Sellfox permissions, configuration and response-contract gates reject befo
       { resource: "inventory", reportDate: "2000-01-01" },
       { resource: "hourly", reportDate: "2000-01-01" },
     ]) assert.equal((await sync(await request("owner", body))).status, 400);
-    for (const adTypes of [[], ["invalid"], "sp"]) assert.equal((await sync(await request("owner", { resource: "ads_report", adTypes }))).status, 400);
+    for (const resource of ["ads_report", "ads_targeting", "ads_search_term"]) for (const adTypes of [[], ["invalid"], "sp"]) assert.equal((await sync(await request("owner", { resource, adTypes }))).status, 400);
     assert.equal(runWrites, 0);
     await assert.rejects(() => processSellfoxSyncRun("old-run"), /有效的赛狐同步资源/);
     assert.equal(status, "failed");

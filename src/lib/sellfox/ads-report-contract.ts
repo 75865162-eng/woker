@@ -2,8 +2,8 @@ import ExcelJS from "exceljs";
 import { isSellfoxDate, SellfoxSyncInputError } from "./sync-contract";
 import { sellfoxNumber, type SellfoxRow } from "./narrow-contracts";
 const required = ["店铺", "日期", "asin", "sku", "广告活动ID", "广告组ID", "广告产品ID", "广告曝光量", "广告点击量", "广告花费", "广告订单量", "广告销售额"];
-/** Verified SP/SB and empty SD adProductReport XLSX 2026-10-25. No currency column: keep currency null. */
-export async function parseSellfoxAdProductReport(buffer: Buffer, input: { storeName: string; startDate: string; endDate: string }) {
+/** Shared strict XLSX envelope; report-specific required columns are supplied by each contract. */
+export async function readSellfoxAdReport(buffer: Buffer, input: { storeName: string; startDate: string; endDate: string }, required: readonly string[]) {
   if (buffer.length > 25 * 1024 * 1024) throw new SellfoxSyncInputError("广告报告超过 25MB，请缩小日期范围。");
   // Inspect ZIP central-directory declared uncompressed sizes before ExcelJS inflates entries.
   let expanded = 0; let entries = 0;
@@ -29,9 +29,8 @@ export async function parseSellfoxAdProductReport(buffer: Buffer, input: { store
   for (const key of ["asin", "sku"]) {
     if (columns[key] && columns[key.toUpperCase()]) throw new SellfoxSyncInputError("广告报告存在重复列。");
   }
-  if (required.some((key) => !columns[key] && !(["asin", "sku"].includes(key) && columns[key.toUpperCase()]))) throw new SellfoxSyncInputError("广告产品报告缺少已验证列。");
+  if (required.some((key) => !columns[key] && !(["asin", "sku"].includes(key) && columns[key.toUpperCase()]))) throw new SellfoxSyncInputError("广告报告缺少必需列。");
   const rows = [];
-  const identities = new Set<string>();
   for (let index = 2; index <= sheet.rowCount; index++) {
     const excelRow = sheet.getRow(index); if (!excelRow.hasValues) continue;
     const raw: SellfoxRow = {};
@@ -42,6 +41,16 @@ export async function parseSellfoxAdProductReport(buffer: Buffer, input: { store
     }
     const reportDate = String(raw["日期"] ?? "");
     if (!isSellfoxDate(reportDate) || reportDate < input.startDate || reportDate > input.endDate || raw["店铺"] !== input.storeName) throw new SellfoxSyncInputError("广告报告日期或店铺不匹配。");
+    rows.push(raw);
+  }
+  return { rows, columns };
+}
+/** Verified SP/SB and empty SD adProductReport XLSX 2026-10-25. Currency stays null. */
+export async function parseSellfoxAdProductReport(buffer: Buffer, input: { storeName: string; startDate: string; endDate: string }) {
+  const { rows: rawRows } = await readSellfoxAdReport(buffer, input, required);
+  const rows = []; const identities = new Set<string>();
+  for (const raw of rawRows) {
+    const reportDate = String(raw["日期"]);
     const campaignId = String(raw["广告活动ID"] ?? ""), adGroupId = String(raw["广告组ID"] ?? ""), productId = String(raw["广告产品ID"] ?? "");
     if (!campaignId || !adGroupId || !productId) throw new SellfoxSyncInputError("广告报告缺少稳定实体 ID。");
     const identity = JSON.stringify([reportDate, campaignId, adGroupId, productId]);
@@ -52,6 +61,7 @@ export async function parseSellfoxAdProductReport(buffer: Buffer, input: { store
   }
   return rows;
 }
+
 export function sellfoxReportDownloadUrl(value: unknown) {
   if (typeof value !== "string") throw new SellfoxSyncInputError("广告报告下载地址无效。");
   const url = new URL(value);

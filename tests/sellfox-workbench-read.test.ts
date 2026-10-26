@@ -1291,3 +1291,18 @@ test("browse returns all dynamic tag and brand facets even for an empty result p
     assert.equal(calls, 3);
   } finally { globals.prisma = previous; }
 });
+
+test("targeting/search-term use their own views and stable identity while applying scoped typed search and ads quick filters", () => {
+  for (const domain of ["ads_targeting", "ads_search_term"] as const) {
+    const searchType = domain === "ads_targeting" ? "targetingId" : "searchTerm";
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?from=2026-10-23&to=2026-10-24&adType=sb&quickFilter=clicksNoOrders&searchType=${searchType}&search=needle&exactMatch=1&shopExternalId=shop&site=US`));
+    const sql = workbenchReadSql(domain, query, { organizationId: "org", workspaceId: "ws" });
+    assert.match(sql.text, new RegExp(`FROM sellfox_${domain}_daily s`));
+    assert.match(sql.text, /s\."organizationId"=\$\d+ AND s\."workspaceId"=\$\d+/);
+    assert.match(sql.text, /s\."adType"=\$\d+/); assert.match(sql.text, /clicks>0 AND "adOrders"=0/);
+    assert.match(sql.text, new RegExp(`lower\\(s\\."${searchType}"\\)=lower\\(\\$\\d+\\)`));
+    assert.match(sql.text, /GROUP BY "storeId",currency,"adType","campaignId","adGroupId"/);
+    assert.doesNotMatch(sql.text, /"productId"|s.sku/);
+    assert.ok(sql.values.includes("needle")); assert.ok(sql.values.includes("sb")); assert.ok(sql.values.includes("shop"));
+  }
+});

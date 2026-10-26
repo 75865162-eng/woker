@@ -24,8 +24,8 @@ export async function POST(request: Request) {
   if (!isSellfoxSyncResource(resource)) {
     return NextResponse.json({ error: "请选择有效的赛狐同步资源。" }, { status: 400 });
   }
-  if (body?.adTypes !== undefined && (resource !== "ads_report" || !Array.isArray(body.adTypes) || !body.adTypes.length || body.adTypes.some((item) => !["sp", "sb", "sd"].includes(String(item))))) return NextResponse.json({ error: "adTypes 必须为 sp/sb/sd 数组。" }, { status: 400 });
-  const adTypes = resource === "ads_report" ? [...new Set((body?.adTypes as string[] | undefined) ?? ["sp"])] : undefined;
+  if (body?.adTypes !== undefined && (!["ads_report", "ads_targeting", "ads_search_term"].includes(resource) || !Array.isArray(body.adTypes) || !body.adTypes.length || body.adTypes.some((item) => !["sp", "sb", "sd"].includes(String(item))))) return NextResponse.json({ error: "adTypes 必须为 sp/sb/sd 数组。" }, { status: 400 });
+  const adTypes = ["ads_report", "ads_targeting", "ads_search_term"].includes(resource) ? [...new Set((body?.adTypes as string[] | undefined) ?? ["sp"])] : undefined;
   const scope = workspaceScopeFromRequest(request);
   if (body?.shopExternalIds !== undefined && (!Array.isArray(body.shopExternalIds) || body.shopExternalIds.some((value) => typeof value !== "string" || !value.trim()))) {
     return NextResponse.json({ error: "shopExternalIds 必须是非空店铺 ID 数组。" }, { status: 400 });

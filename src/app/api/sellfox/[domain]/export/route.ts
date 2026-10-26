@@ -23,14 +23,14 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
   const permission = await requireApiPermission("sellfox", "export", request);
   if (!permission.ok) return permission.response;
   const { domain } = await context.params;
-  if (!["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report"].includes(domain)) return new Response("数据域暂不支持导出。", { status: 404 });
+  if (!["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report", "ads_targeting", "ads_search_term"].includes(domain)) return new Response("数据域暂不支持导出。", { status: 404 });
   try {
     const scope = workspaceScopeFromRequest(request); const url = new URL(request.url);
     const common = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
     let query = sellfoxBrowseQuery(url);
     const storeIds = domain === "runs" ? undefined : await sellfoxBrowseStoreIds(query, common.organizationId, common.workspaceId);
-    if ((query.layout || ((query.fulfillment || query.buyBox || query.productTag || query.brand) && ["sales", "performance", "listings"].includes(domain))) && url.searchParams.get("agent") !== "1" && ["sales", "performance", "listings", "ads_report"].includes(domain)) return await sellfoxWorkbenchExport(domain as WorkbenchDomain, query, common, url);
-    if (isSellfoxAgentDomain(domain) && (url.searchParams.get("agent") === "1" || domain === "listings" || domain === "ads_report" || (domain === "inventory" && !query.from && !query.to && !query.allDates))) {
+    if ((query.layout || ((query.fulfillment || query.buyBox || query.productTag || query.brand) && ["sales", "performance", "listings"].includes(domain))) && url.searchParams.get("agent") !== "1" && ["sales", "performance", "listings", "ads_report", "ads_targeting", "ads_search_term"].includes(domain)) return await sellfoxWorkbenchExport(domain as WorkbenchDomain, query, common, url);
+    if (isSellfoxAgentDomain(domain) && (url.searchParams.get("agent") === "1" || domain === "listings" || ["ads_report", "ads_targeting", "ads_search_term"].includes(domain) || (domain === "inventory" && !query.from && !query.to && !query.allDates))) {
       const { rows } = await readSellfoxAgentRows(domain, query, common, true);
       return new Response(sellfoxAgentCsv(domain, rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="sellfox-${domain}-agent.csv"`, "Cache-Control": "no-store" } });
     }
