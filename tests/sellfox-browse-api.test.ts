@@ -328,7 +328,8 @@ test("brand reaches browse facets and CSV/XLSX/Agent export with and without lay
             assert.match(sql.text, /SELECT btrim\(p.payload->>'brand'\)/);
             assert.match(sql.text, /LIMIT 1\)=\$\d+/);
           }
-          assert.doesNotMatch(sql.text, /amazonBrand/);
+          if (domain !== "listings") assert.doesNotMatch(sql.text, /amazonBrand/);
+          assert.doesNotMatch(sql.text, /l\."amazonBrand"\s*=/);
           assert.ok(sql.values.includes("Goghost-乐器")); assert.ok(!sql.values.includes("%Goghost-乐器%"));
         }
       }
