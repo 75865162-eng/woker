@@ -1,5 +1,41 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-27 — performance 默认显示 inbound/AGL/paidServices/HRR/upstream/MFN/adjustment/otherService 九列 · BOX LOCAL ONLY
+
+基线 HEAD `f302b59`（`f302b59b1bc397eba6eb7fc352d69a1526d3d07e`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下九个既有且仍默认隐藏的 numeric 列移出 performance trailing `.map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `orderOtherPriceAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
+
+| key | 列名 | 原样保留的 requiresField |
+| --- | --- | --- |
+| fbaInboundTransportationProgramFee | FBA入库运输计划费 | 销售利润 payload.fbaInboundTransportationProgramFee 类型投影 |
+| aglFeeAmount | AGL费用 | 销售利润 payload.aglFeeAmount 类型投影 |
+| paidServicesFeeAmount | 付费服务费 | 销售利润 payload.paidServicesFeeAmount 类型投影 |
+| customerReturnHrrUnitFeeAmount | HRR退货单位费 | 销售利润 payload.customerReturnHrrUnitFeeAmount 类型投影 |
+| amazonUpstreamStorageTransportationFeeAmount | 上游仓储运输费 | 销售利润 payload.amazonUpstreamStorageTransportationFeeAmount 类型投影 |
+| amazonUpstreamProcessingFeeAmount | 上游处理费 | 销售利润 payload.amazonUpstreamProcessingFeeAmount 类型投影 |
+| mfnPostageFeeAmount | MFN邮资 | 销售利润 payload.mfnPostageFeeAmount 类型投影 |
+| adjustmentFeeAmount | 调整费 | 销售利润 payload.adjustmentFeeAmount 类型投影 |
+| otherServiceFeeAmount | 其他服务费 | 销售利润 payload.otherServiceFeeAmount 类型投影 |
+
+生产变更仅九列结构移动：逆向移回九列并移除新增的显式 `defaultVisible: true` 后，完整源码与基线逐字节一致；column key 多重集合不变，无新增 key，无 label、numeric 或 requiresField 修改。avgHeadTrip / purchaseRefund / revenue / FBA refund / deferred / tax / income / payment/closing / imaging / netCo / vat / cod / evaluation capital / deal/coupon participation / SAFE-T / affordability / withheld / chargeback-guarantee income / promotion sales-shipping-tax / refunds / identity map-tail 及 sales/listings/ads 保持原样。performance 共 106 列，默认显示 71 列，剩余默认隐藏 **35 列**（3 个身份列、32 个 numeric 列）。**Fee-mining remains paused**。下一批候选为既有类型列 avgHeadTrip/purchaseRefund/revenue/FBA-refund/deferred/tax/income cluster，本轮不实施。
+
+复验命令（Prisma stub，不连接真实数据库；跳过完整 check/build）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'performance core cost defaults'
+```
+
+两个定向测试文件、TypeScript、指定三文件 ESLint 和 `git diff --check` 验证通过。扩展七种维度精确默认顺序、九列 default-true、默认/显式 CSV 及真实 ExcelJS XLSX 回读、正负数/零/NULL；逐列选择、逐列隐藏、整组隐藏和空集合仍以显式选列为准。API 测试通过，无需修改 `tests/sellfox-browse-api.test.ts`。
+
+浏览器断言已扩展九个中文列名，覆盖默认表头顺序、默认勾选、取消后跨域保留及 CSV/Excel 显式选列排除。定向执行时 Chromium 在启动阶段于 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未修改启动参数或绕过沙箱，需在允许启动 Chromium 的本地环境补跑。此次仅列配置变更，按要求选择定向测试、类型及 lint，跳过完整 check/build。
+
+仅 BOX 本地，四个仓库文件；仓库外 parity-gap 由父进程更新。无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL 或真实数据库写入，未加载/修改 `.env`。回滚为将九列放回原隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+---
+
 ## 2026-10-27 — performance 默认显示 FBA return/inbound 七列 · BOX LOCAL ONLY
 
 基线 HEAD `5844e66`（`5844e663637754c5e74c647b64459734fd80df4e`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下七个既有且仍默认隐藏的 numeric 列移出 performance trailing `.map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `subscriptionAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
