@@ -2343,6 +2343,32 @@ test("ratingValue filters ads Listing members before rollup; non-ads ignore", ()
   }
 });
 
+test("cost filters ads daily members before rollup; non-ads ignore", () => {
+  const scope = { organizationId: "org-cost", workspaceId: "ws-cost" };
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const range of ["costMin=0", "costMax=100", "costMin=1.5&costMax=48", "costMin=.5&costMax=99"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql(domain, query, scope, exporting);
+        assert.match(sql.text, /s\.cost IS NOT NULL/);
+        const params = new URLSearchParams(range);
+        if (params.has("costMin")) {
+          const match = sql.text.match(/s\.cost>=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("costMin")));
+        } else assert.doesNotMatch(sql.text, /s\.cost>=/);
+        if (params.has("costMax")) {
+          const match = sql.text.match(/s\.cost<=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("costMax")));
+        } else assert.doesNotMatch(sql.text, /s\.cost<=/);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?costMin=1&costMax=9")), scope, false).text;
+    assert.doesNotMatch(sql, /s\.cost IS NOT NULL|s\.cost>=|s\.cost<=/);
+  }
+});
+
 test("ratingCount filters ads Listing members before rollup; non-ads ignore", () => {
   const scope = { organizationId: "org-rating-count", workspaceId: "ws-rating-count" };
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {

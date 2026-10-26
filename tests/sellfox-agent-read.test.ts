@@ -858,6 +858,37 @@ test("agent warehousing min/max affect listings rows/count/export only via typed
   } finally { globals.prisma = previous; }
 });
 
+test("agent cost min/max affect ads rows/count/export via typed cost; non-ads ignore", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
+    for (const domain of [...ads, "listings", "sales", "inventory", "performance"] as const) {
+      for (const range of ["", "costMin=0", "costMax=10000", "costMin=1&costMax=5000"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        for (const sql of calls) {
+          const hasRange = (ads as readonly string[]).includes(domain) && (query.costMin != null || query.costMax != null);
+          if (hasRange) {
+            assert.match(sql.text, /cost IS NOT NULL/);
+            for (const [value, pattern] of [[query.costMin, /cost>=\$(\d+)/], [query.costMax, /cost<=\$(\d+)/]] as const) {
+              const match = sql.text.match(pattern);
+              if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+              else assert.equal(match, null);
+            }
+          } else {
+            assert.doesNotMatch(sql.text, /cost IS NOT NULL|cost>=|cost<=/);
+          }
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});
+
 test("agent bsrCategory filters listings rows/count/export exactly; other domains ignore it", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const calls: Prisma.Sql[] = [];
