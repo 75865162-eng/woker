@@ -337,8 +337,12 @@ test("productToDraft hydrates legacy image arrays into displayable image assets"
   assert.deepEqual(draft.images, ["https://example.com/legacy-2.webp"]);
 });
 
-test("nextSku uses the 0000-9999 range before switching to letter-prefixed SKUs", () => {
+test("nextSku starts at 0001 and uses numeric SKUs before letter-prefixed SKUs", () => {
+  assert.equal(nextSku([]), "0001");
+  assert.equal(nextSku([{ sku: "" }, { sku: "not-a-sku" }]), "0001");
   assert.equal(nextSku([{ sku: "0000" }]), "0001");
+  assert.equal(nextSku([{ sku: "0001" }]), "0002");
+  assert.equal(nextSku([{ sku: "not-a-sku" }, { sku: "0007" }]), "0008");
   assert.equal(nextSku([{ sku: "9999" }]), "A001");
   assert.equal(nextSku([{ sku: "A999" }]), "B001");
 });

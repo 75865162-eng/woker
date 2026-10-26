@@ -1548,7 +1548,7 @@ Workspace 页的筛选主要靠四类条件：
 - `src/components/products/product-workbench-data.ts` 里的 `createProductShellFromListItem`：把列表摘要压缩成产品壳，用于列表页初次加载，避免一开始就拉全部明细。
 - `src/components/products/product-workbench-utils.ts` 里的 `calculateExcelPricing`：按厘米、磅、汇率和 FBA 费用计算海运头程、佣金、仓储费、保本价和利润率，是利润试算表格的实时引擎。
 - `src/components/products/product-workbench-utils.ts` 里的 `calculateTrialPricing`：另一套试产试算公式，输出体积重、轻货/重货/超大件运费等指标，供试产草稿区展示。
-- `src/components/products/product-workbench-utils.ts` 里的 `nextSku` / `formatSkuSequence`：按现有 SKU 推导下一个可用编码，保证新产品编号连续且可逆解析。
+- `src/components/products/product-workbench-utils.ts` 里的 `nextSku` / `formatSkuSequence`：按现有 SKU 推导下一个可用编码，保证新产品编号连续且可逆解析。空列表或无法解析的 SKU 从 `0001` 起编；已有数字号仍顺延，`9999` 之后进入 `A001`。
 - `src/components/products/product-workbook-detail-sections.tsx` 里的 `on*Change` 回调：所有区块都走受控更新，页面不直接改对象，而是由上层统一同步到草稿状态。
 
 ### 17.24 workspace 明细行为补充

@@ -147,10 +147,11 @@ export function isOverdueProduct(product: Product) {
 }
 
 export function nextSku(products: Array<Pick<Product, "sku">>) {
+  // Floor at 0 so an empty or unparseable list emits 0001. Existing 0000 still increments to 0001.
   const max = products.reduce((currentMax, product) => {
     const sequence = parseSkuSequence(product.sku);
     return sequence === null ? currentMax : Math.max(currentMax, sequence);
-  }, -1);
+  }, 0);
 
   return formatSkuSequence(max + 1);
 }
