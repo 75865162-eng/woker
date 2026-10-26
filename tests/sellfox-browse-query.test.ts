@@ -488,6 +488,36 @@ test("ratingCount min/max validate as safe integers, round trip ads-only forRequ
   assert.throws(() => query("ratingCountMin=10&ratingCountMax=1"), /评论数上限不得小于下限/);
 });
 
+test("impressions min/max validate as safe integers, round trip ads-only forRequest, reject inverted range", () => {
+  for (const range of ["", "impressionsMin=0", "impressionsMax=100", "impressionsMin=0&impressionsMax=100", "impressionsMin=-1&impressionsMax=0"]) {
+    const params = new URLSearchParams(`domain=ads&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.impressionsMin, params.has("impressionsMin") ? Number(params.get("impressionsMin")) : undefined);
+    assert.equal(parsed.impressionsMax, params.has("impressionsMax") ? Number(params.get("impressionsMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "listings", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("impressionsMin"), params.get("impressionsMin"));
+      assert.equal(sellfoxViewParams(other).get("impressionsMax"), params.get("impressionsMax"));
+      assert.equal(sellfoxViewParams(other, true).has("impressionsMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("impressionsMax"), false);
+    }
+  }
+  for (const key of ["impressionsMin", "impressionsMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1.5", "1e2", "NaN", "abc", "01.0", "9007199254740992"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是整数/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("impressionsMin=%200%20").impressionsMin, 0);
+  assert.equal(query("impressionsMax=0").impressionsMax, 0);
+  assert.throws(() => query("impressionsMin=10&impressionsMax=1"), /曝光上限不得小于下限/);
+});
+
 test("bsrRank min/max validate as safe integers, round trip listings-only, reject inverted range", () => {
   for (const range of ["", "bsrRankMin=0", "bsrRankMax=10000", "bsrRankMin=1&bsrRankMax=5000", "bsrRankMin=-1&bsrRankMax=0"]) {
     const params = new URLSearchParams(`domain=listings&${range}`);

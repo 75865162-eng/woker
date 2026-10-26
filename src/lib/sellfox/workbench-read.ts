@@ -99,6 +99,12 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     if (query.adSalesMin != null) filters.push(Prisma.sql`s."adSales">=${query.adSalesMin}`);
     if (query.adSalesMax != null) filters.push(Prisma.sql`s."adSales"<=${query.adSalesMax}`);
   }
+  // Ads daily typed impressions (Int?); filter member rows before entity/KPI rollup; NULL excluded when either bound is set.
+  if (ads && (query.impressionsMin != null || query.impressionsMax != null)) {
+    filters.push(Prisma.sql`s.impressions IS NOT NULL`);
+    if (query.impressionsMin != null) filters.push(Prisma.sql`s.impressions>=${query.impressionsMin}`);
+    if (query.impressionsMax != null) filters.push(Prisma.sql`s.impressions<=${query.impressionsMax}`);
+  }
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(dimension);

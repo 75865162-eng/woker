@@ -2395,6 +2395,32 @@ test("adSales filters ads daily members before rollup; non-ads ignore", () => {
   }
 });
 
+test("impressions filters ads daily members before rollup; non-ads ignore", () => {
+  const scope = { organizationId: "org-impressions", workspaceId: "ws-impressions" };
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const range of ["impressionsMin=0", "impressionsMax=100", "impressionsMin=1&impressionsMax=48", "impressionsMin=5&impressionsMax=99"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql(domain, query, scope, exporting);
+        assert.match(sql.text, /s\.impressions IS NOT NULL/);
+        const params = new URLSearchParams(range);
+        if (params.has("impressionsMin")) {
+          const match = sql.text.match(/s\.impressions>=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("impressionsMin")));
+        } else assert.doesNotMatch(sql.text, /s\.impressions>=/);
+        if (params.has("impressionsMax")) {
+          const match = sql.text.match(/s\.impressions<=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("impressionsMax")));
+        } else assert.doesNotMatch(sql.text, /s\.impressions<=/);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?impressionsMin=1&impressionsMax=9")), scope, false).text;
+    assert.doesNotMatch(sql, /s\.impressions IS NOT NULL|s\.impressions>=|s\.impressions<=/);
+  }
+});
+
 test("ratingCount filters ads Listing members before rollup; non-ads ignore", () => {
   const scope = { organizationId: "org-rating-count", workspaceId: "ws-rating-count" };
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
