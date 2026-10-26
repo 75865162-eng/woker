@@ -80,6 +80,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
   const revenue7Min = optionalNumber("revenue7Min"), revenue7Max = optionalNumber("revenue7Max");
   const revenue14Min = optionalNumber("revenue14Min"), revenue14Max = optionalNumber("revenue14Max");
   const revenue30Min = optionalNumber("revenue30Min"), revenue30Max = optionalNumber("revenue30Max");
+  const adSpend7Min = optionalNumber("adSpend7Min"), adSpend7Max = optionalNumber("adSpend7Max");
   const listingQuantityMin = optionalNumber("listingQuantityMin"), listingQuantityMax = optionalNumber("listingQuantityMax");
   const reservedQtyMin = optionalNumber("reservedQtyMin"), reservedQtyMax = optionalNumber("reservedQtyMax");
   const unsellableMin = optionalNumber("unsellableMin"), unsellableMax = optionalNumber("unsellableMax");
@@ -103,6 +104,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
   if (revenue7Min != null && revenue7Max != null && revenue7Min > revenue7Max) throw new SellfoxBrowseError("7天销售额上限不得小于下限。");
   if (revenue14Min != null && revenue14Max != null && revenue14Min > revenue14Max) throw new SellfoxBrowseError("14天销售额上限不得小于下限。");
   if (revenue30Min != null && revenue30Max != null && revenue30Min > revenue30Max) throw new SellfoxBrowseError("30天销售额上限不得小于下限。");
+  if (adSpend7Min != null && adSpend7Max != null && adSpend7Min > adSpend7Max) throw new SellfoxBrowseError("7天广告花费上限不得小于下限。");
   if (listingQuantityMin != null && listingQuantityMax != null && listingQuantityMin > listingQuantityMax) throw new SellfoxBrowseError("Listing库存上限不得小于下限。");
   if (reservedQtyMin != null && reservedQtyMax != null && reservedQtyMin > reservedQtyMax) throw new SellfoxBrowseError("预留上限不得小于下限。");
   if (unsellableMin != null && unsellableMax != null && unsellableMin > unsellableMax) throw new SellfoxBrowseError("不可售上限不得小于下限。");
@@ -114,7 +116,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
-    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax, ratingMin, ratingMax, ratingCountMin, ratingCountMax, costMin, costMax, adSalesMin, adSalesMax, impressionsMin, impressionsMax, clicksMin, clicksMax, adOrdersMin, adOrdersMax, bsrRankMin, bsrRankMax, fulfillableMin, fulfillableMax, sales7Min, sales7Max, sales14Min, sales14Max, sales30Min, sales30Max, priceMin, priceMax, revenue7Min, revenue7Max, revenue14Min, revenue14Max, revenue30Min, revenue30Max, listingQuantityMin, listingQuantityMax, reservedQtyMin, reservedQtyMax, unsellableMin, unsellableMax, warehousingMin, warehousingMax,
+    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax, ratingMin, ratingMax, ratingCountMin, ratingCountMax, costMin, costMax, adSalesMin, adSalesMax, impressionsMin, impressionsMax, clicksMin, clicksMax, adOrdersMin, adOrdersMax, bsrRankMin, bsrRankMax, fulfillableMin, fulfillableMax, sales7Min, sales7Max, sales14Min, sales14Max, sales30Min, sales30Max, priceMin, priceMax, revenue7Min, revenue7Max, revenue14Min, revenue14Max, revenue30Min, revenue30Max, adSpend7Min, adSpend7Max, listingQuantityMin, listingQuantityMax, reservedQtyMin, reservedQtyMax, unsellableMin, unsellableMax, warehousingMin, warehousingMax,
     status: p.get("status")?.trim() || undefined,
     searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",
