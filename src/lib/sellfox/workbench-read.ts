@@ -99,6 +99,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
         ORDER BY CASE WHEN elem.value->>'bigCategory' IN ('true','TRUE','1') THEN 0 ELSE 1 END,elem.ordinality
         LIMIT 1
       ) AS "bsrRank",` : Prisma.empty}
+      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'purchaseCost','')::float AS "purchaseCost",` : Prisma.empty}
       ${needTagFilter ? Prisma.sql`${sellfoxProductTagMatchSql(Prisma.sql`p.payload`, query.productTag)} AS "matchesProductTag",` : Prisma.empty}
       CASE WHEN p.payload->>'switchFulfillmentTo' IN ('AFN','MFN') THEN p.payload->>'switchFulfillmentTo' END AS fulfillment,
       COALESCE(
@@ -111,7 +112,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    ${domain === "listings" ? Prisma.sql`l.fulfillment,l.brand,l.rating,l."ratingCount",l."productTags",l."openDate",l."firstSaleDate",l."bsrRank",` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
+    ${domain === "listings" ? Prisma.sql`l.fulfillment,l.brand,l.rating,l."ratingCount",l."productTags",l."openDate",l."firstSaleDate",l."bsrRank",l."purchaseCost",` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
     ${domain === "listings" ? Prisma.sql`LEFT JOIN listing l ON l.id=s.id AND l."storeId"=s."storeId"` : Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {
