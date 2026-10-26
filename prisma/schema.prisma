@@ -1137,6 +1137,12 @@ model SellfoxProductDailySnapshot {
   fbaLongTermStorageFeeAmount Float?
   fbaRemovalFeeAmount Float?
   fbaDisposalFeeAmount Float?
+  customAsinFee Float?
+  customShopFee Float?
+  serviceFeeAmount Float?
+  storageFeeAmount Float?
+  compensationAmount Float?
+  evaluationFee Float?
   evaluationSaleNum Float?
   channelSaleNum  Float?
   adSpCost        Float?

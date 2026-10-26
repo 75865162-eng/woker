@@ -204,7 +204,7 @@ test("salesperson trims exact names and round trips browse, UI and export for pe
 });
 
 test("performance extra fee selections and sorting round trip without Listing aliases", () => {
-  const keys = ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "evaluationSaleNum", "channelSaleNum", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount"];
+  const keys = ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "evaluationSaleNum", "channelSaleNum", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount", "customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee"];
   for (const key of keys) {
     const params = new URLSearchParams({ domain: "performance", sortBy: key, sortOrder: "desc" });
     const view = readSellfoxView(params);

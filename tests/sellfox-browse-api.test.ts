@@ -516,13 +516,14 @@ test("selected profit quantity and ad channel exports reach typed workbench CSV/
     sellfoxStore: { findMany: async () => [] },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
-      return [{ rows: [{ evaluationSaleNum: 0, channelSaleNum: 1, adSpCost: 0, adSdCost: 2.5, adSbCost: 4, adSbvCost: 5, adSbsCost: 6.75, fbaStorageFeeAmount: 0, fbaLongTermStorageFeeAmount: 2.5, fbaRemovalFeeAmount: 4, fbaDisposalFeeAmount: 5 }], total: 1, totals: [] }];
+      return [{ rows: [{ evaluationSaleNum: 0, channelSaleNum: 1, adSpCost: 0, adSdCost: 2.5, adSbCost: 4, adSbvCost: 5, adSbsCost: 6.75, fbaStorageFeeAmount: 0, fbaLongTermStorageFeeAmount: 2.5, fbaRemovalFeeAmount: 4, fbaDisposalFeeAmount: 5, customAsinFee: 0, customShopFee: 2.5, serviceFeeAmount: 4, storageFeeAmount: 5, compensationAmount: 6, evaluationFee: 7 }], total: 1, totals: [] }];
     },
   } as unknown as PrismaClient;
   try {
     const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
     const selections = [
       { keys: ["fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount"], labels: ["FBA仓储费", "长期仓储费", "FBA移除费", "FBA弃置费"], values: [0, 2.5, 4, 5] },
+      { keys: ["customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee"], labels: ["产品自定义费用", "店铺自定义费用", "服务费", "仓储费", "赔偿金", "测评费"], values: [0, 2.5, 4, 5, 6, 7] },
       { keys: ["evaluationSaleNum", "channelSaleNum"], labels: ["测评销量", "多渠道销量"], values: [0, 1] },
       { keys: ["adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost"], labels: ["SP广告费", "SD广告费", "SB广告费", "SBV广告费", "SBS广告费"], values: [0, 2.5, 4, 5, 6.75] },
     ];
@@ -538,7 +539,7 @@ test("selected profit quantity and ad channel exports reach typed workbench CSV/
         assert.deepEqual(keys.map((_, i) => book.worksheets[0].getRow(2).getCell(i + 1).value), values);
       }
     }
-    assert.equal(calls.length, 24);
+    assert.equal(calls.length, 32);
     for (const sql of calls) {
       assert.doesNotMatch(sql.text, /payload/);
       for (const key of selections.flatMap(selection => selection.keys)) {

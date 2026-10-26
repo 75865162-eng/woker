@@ -1,5 +1,25 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+> 2026-10-26 23:15:55 Asia/Shanghai · Owner: Chen Jieliang · **仅 BOX 本地，未上线**：performance 解锁默认隐藏数字列 customAsinFee「产品自定义费用」、customShopFee「店铺自定义费用」、serviceFeeAmount「服务费」、storageFeeAmount「仓储费」、compensationAmount「赔偿金」、evaluationFee「测评费」。同名profit payload→typed product-daily→聚合/排序/选列CSV/XLSX，Agent英文长表末尾追加六列；明细NULL空、0保留，实体及币种汇总 `COALESCE(sum(...),0)`。storageFeeAmount 与 fbaStorageFeeAmount「FBA仓储费」独立；evaluationFee 是金额，evaluationSaleNum 仍为数量。evaluationCapital / evaluationCommission 继续锁定；不映射 Listing fbaFees / referralFee 或商品试算「月仓储费」，不增加 *Percent 或 sales 域列。销售小组/业绩归属人/实时统计/运营/分类/AWD/sales业务员/广告组合/否定/AMC 仍锁定。
+>
+> 加法迁移 `20261026140000_sellfox_product_daily_misc_fees` 接在130000之后，保留全部旧投影/trigger/视图列序后追加六列，无新索引，一次 `payload=payload` 回填。**123需全部前置迁移+140000，仅用户说「上」后另行评审。** 真实回填会产生全历史更新、锁及WAL/磁盘成本，执行前评估行数与维护窗口；回退应用提交，保留加法列/trigger，不自动回退数据库。本轮不连接真实库、不调live API、不启用计划、不push/SSH/部署/远程迁移/重启。
+
+本轮复验命令（预期定向测试、PGlite、typecheck、lint、Prisma validate/generate和diff检查通过；PG入口未配置专用库时SKIP，但独立PGlite verifier必须输出PASS）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,listing-identity,browse-api,browse-filters}.test.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts src/lib/sellfox/{product-performance,workbench-read,sort-columns,agent-read}.ts tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,browse-api}.test.ts tests/integration/sellfox-{sales-profit-p0,cross-store,listings-read-model}.ts
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js generate
+git diff --check
+```
+
+共享 `performance-misc-fees.json` 在同步与实际140000迁移PGlite中共用，覆盖非零/0/null/非法；包括回填、INSERT/UPDATE清空、COALESCE、列序、无新索引、全部旧投影、币种/结算/组织/工作区隔离和Agent排序。Listing/跨店fixture同步追加类型列。范围内采用定向测试和专项验证；未跑完整check、生产build、浏览器或真实P95，发布/真实性能验收时再由CI和受控benchmark补齐。fixture通过不代表真实费用线上验收。
+
+---
+
 > 2026-10-26 · Owner: Chen Jieliang · **仅 BOX 本地**：performance 追加默认隐藏 numeric 列 `fbaStorageFeeAmount`「FBA仓储费」、`fbaLongTermStorageFeeAmount`「长期仓储费」、`fbaRemovalFeeAmount`「FBA移除费」、`fbaDisposalFeeAmount`「FBA弃置费」。同名 profit payload → nullable Float 类型投影 → 实体/币种 `COALESCE(sum(...),0)` → 排序及选列 CSV/XLSX；Agent 英文长表末尾追加四列。明细 NULL 空、0 保留。Listing `fbaFees` / `referralFee`、商品试算「月仓储费」与这些利润键不同，不作别名或补数；sales 列不变。销售小组/业绩归属人/实时统计/运营/分类/AWD/sales业务员继续锁定。
 >
 > 加法迁移 `20261026130000_sellfox_product_daily_storage_fees` 接在120000后，保留全部旧投影与 trigger、视图旧列序后追加四列，无新索引；一次 `payload=payload` 回填保留 payload/adCost。**123 需要全部前置迁移（含50000 helper及80000～120000）+130000，只有用户说「上」后另行评审。** 实际回填前评估行数、锁、WAL/磁盘与维护窗口；代码回退本地提交，保留加法 schema/trigger，不自动回退数据库。本轮未连接真实库、未调用 live API/启用计划、未 push/fetch/SSH/部署/迁移/重启。

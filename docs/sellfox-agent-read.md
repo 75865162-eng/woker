@@ -1,5 +1,7 @@
 # 赛狐本地读取约定
 
+2026-10-26 23:15:55 Asia/Shanghai BOX本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留130000列序，末尾依次追加 `customAsinFee` / `customShopFee` / `serviceFeeAmount` / `storageFeeAmount` / `compensationAmount` / `evaluationFee` nullable类型列；Agent英文长表同序追加并支持排序。分别为产品自定义费用/店铺自定义费用/服务费/仓储费/赔偿金/测评费，performance默认隐藏，明细CSV NULL空、0保留，工作台实体/币种totals沿用 `COALESCE(sum(...),0)`。storageFeeAmount不同于fbaStorageFeeAmount；evaluationFee不同于evaluationSaleNum；不映射Listing费用，evaluationCapital/evaluationCommission及原锁定业务列保持锁定，sales不变。123需全部前置迁移+140000，仅用户说「上」后评审；回填成本/回退/离线验证见 [P0文档顶部](sellfox-sales-profit-p0.md)。
+
 2026-10-26 BOX 本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留120000列序，末尾追加 `fbaStorageFeeAmount` / `fbaLongTermStorageFeeAmount` / `fbaRemovalFeeAmount` / `fbaDisposalFeeAmount` nullable 类型列；Agent 英文长表按相同顺序追加并允许排序。分别为FBA仓储费/长期仓储费/FBA移除费/FBA弃置费，performance默认隐藏。明细CSV NULL空、0保留，工作台实体/币种totals为 `COALESCE(sum(...),0)`。只使用同名profit payload键，不映射Listing `fbaFees` / `referralFee`或商品「月仓储费」。sales及未证实业务列继续锁定；123需全部前置迁移+130000，用户说「上」后另行评审。回填成本/回退/离线验证命令见 [P0文档顶部](sellfox-sales-profit-p0.md)。
 
 Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出」CSV，不调用 `openapi.sellfox.com`，也不依赖赛狐网页登录。ProductRecord 仍是商品主档，以下均为可重建的只读报表层，禁止反写主档或广告。

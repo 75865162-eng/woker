@@ -129,7 +129,13 @@ export const sellfoxAgentColumns = {
     "fbaStorageFeeAmount",
     "fbaLongTermStorageFeeAmount",
     "fbaRemovalFeeAmount",
-    "fbaDisposalFeeAmount"
+    "fbaDisposalFeeAmount",
+    "customAsinFee",
+    "customShopFee",
+    "serviceFeeAmount",
+    "storageFeeAmount",
+    "compensationAmount",
+    "evaluationFee"
   ],
   "ads_campaign": ["id", "organizationId", "workspaceId", "storeId", "reportDate", "adType", "campaignId", "campaignName", "asin", "msku", "currency", "impressions", "clicks", "cost", "adOrders", "adSales", "syncedAt", "shopExternalId", "name", "marketplace", "acos", "roas"],
   "ads_ad_group": ["id", "organizationId", "workspaceId", "storeId", "reportDate", "adType", "campaignId", "adGroupId", "adGroupName", "targetingText", "matchType", "asin", "msku", "currency", "impressions", "clicks", "cost", "adOrders", "adSales", "syncedAt", "shopExternalId", "name", "marketplace", "acos", "roas"],
