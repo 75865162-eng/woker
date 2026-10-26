@@ -1,5 +1,27 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 默认显示 amazonBrand「亚马逊品牌」 · BOX LOCAL ONLY
+
+基线 HEAD `6072ac6`（`6072ac631cbe0acfc82c8ea71d21d4240da5b11f`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 `columns.listings.amazonBrand.defaultVisible` 从 `false` 改为 `true`，保留「亚马逊品牌」、`requiresField: "Listing 当前快照 payload.amazonBrand"` 和 brand → amazonBrand → rating → ratingCount 源顺序。复用已有 current Listing 类型投影及文本列，无显式选列的列表/CSV/XLSX 默认包含「亚马逊品牌」；列选择器初始勾选。显式选列（含空集合、单独选择 amazonBrand、隐藏 amazonBrand）继续优先，切换数据域后保留取消状态，不迁移已有会话选择。
+
+productTags / firstSaleDate / bsrRank / bsrCategory / 费用 / dxmPublishState / 业务员 / 库存扩展保持原默认隐藏或不可用状态；openDate/库存筛选、配对、父体、业务员、AWD 等原锁定入口不解锁。sales / performance / ads 及子页配置逐字节不变，ads.brand / ads.productTags / ads.fulfillment 保持原配置。**Fee-mining remains paused**。不新增字段、SQL、schema/migration、API、服务端逻辑或请求/计算。回滚仅还原该默认值及配套测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连接真实数据库，不加载 `.env`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+git diff --word-diff=porcelain -- src/components/sellfox/workbench-types.ts
+# 单项隔离模拟浏览器；若 Chromium 在 BOX sandbox 中 SIGTRAP，记录结果，不绕过：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand, amazonBrand'
+```
+
+验证结果：三个定向测试文件全部通过（零失败），TypeScript、touched ESLint 通过。精确默认集合/源顺序及默认 CSV/XLSX 已覆盖 amazonBrand，显式单选、隐藏与空选列继续优先；文本、NULL/缺失、前导零字符串保持原值。生产文件 word-diff 的变更 token 仅 `-false,` / `+true,`，逐字节比对确认整个文件等于基线加这一个 listings amazonBrand 默认值替换，其他域配置完全一致。单项浏览器已尝试，但 Chromium 启动在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未绕过沙箱，需在允许 Chromium 的本地环境补跑默认表头、初始勾选、取消后会话保留及导出移除断言。
+
+仅 BOX 本地，不 push/fetch/deploy/SSH，不调用 live Sellfox API，不做真实数据库读写或 `.env` 操作。跳过完整 check/build、数据库集成与真实 P95：本轮仅一个 UI 默认标记，后续合码/发布或 SQL/schema/性能专项才补对应验证。仓库外 `/workspace/sellfox-parity-gap.md` 留给父进程更新。下方为历史批次，以本节为当前状态。
+
 
 ## 2026-10-27 — listings 默认显示 fulfillment「发货方式」 · BOX LOCAL ONLY
 
