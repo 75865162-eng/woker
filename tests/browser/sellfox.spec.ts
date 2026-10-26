@@ -73,6 +73,37 @@ test("daily multi-store browsing, shared filters, pagination and browser navigat
   await expect.poll(() => calls.filter(call => call.path.endsWith("/sales")).at(-1)?.query.get("layout")).toBe("workbench");
 });
 
+test("performance core cost defaults remain checked until explicitly hidden in the session and exports", async ({ page }) => {
+  await setup(page, "domain=performance&from=2026-10-24&to=2026-10-24");
+  const keys = ["commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "fbaStorageFeeAmount"];
+  const labels = ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "SP广告费", "FBA仓储费"];
+  for (const label of labels) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
+  const headers = await page.locator("thead th").allTextContents();
+  expect(headers.slice(headers.indexOf("广告花费") + 1, headers.indexOf("币种"))).toEqual(labels);
+  for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).not.toHaveAttribute("href", /column=/);
+  await page.getByText("自定义列", { exact: true }).click();
+  for (const label of labels) {
+    const checkbox = page.getByRole("checkbox", { name: `显示${label}列`, exact: true });
+    await expect(checkbox).toBeEnabled(); await expect(checkbox).toBeChecked();
+    await checkbox.uncheck();
+  }
+  for (const label of ["退款金额", "退款量", "SD广告费", "SB广告费", "SBV广告费", "SBS广告费", "长期仓储费", "FBA移除费", "FBA弃置费"]) {
+    await expect(page.getByRole("checkbox", { name: `显示${label}列`, exact: true })).not.toBeChecked();
+  }
+  await page.keyboard.press("Escape");
+  await page.getByRole("navigation", { name: "赛狐数据域" }).getByRole("button", { name: "销量", exact: true }).click();
+  await page.getByRole("navigation", { name: "赛狐数据域" }).getByRole("button", { name: "销售利润", exact: true }).click();
+  for (const label of labels) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const name of ["CSV", "Excel"]) {
+    const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
+    const selected = new URL(href!, "http://127.0.0.1:43221").searchParams.getAll("column");
+    expect(selected).toContain("adCost"); expect(selected).toContain("currency");
+    for (const key of keys) expect(selected).not.toContain(key);
+  }
+  await page.getByText("自定义列", { exact: true }).click();
+  for (const label of labels) await expect(page.getByRole("checkbox", { name: `显示${label}列`, exact: true })).not.toBeChecked();
+});
+
 test("performance retains metrics and Excel; raw details load only on explicit expansion", async ({ page }) => {
   const { calls } = await setup(page, "domain=performance");
   await page.getByText("自定义列", { exact: true }).click();

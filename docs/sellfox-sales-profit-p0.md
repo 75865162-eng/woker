@@ -1,6 +1,46 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
 
+## 2026-10-27 — performance 默认显示八个核心成本/费用列 · BOX LOCAL ONLY
+
+基线 HEAD `2066f19`（`2066f19b1d42eed9dce2ec684e14e0b2cfa27fc5`），分支 `codex/operations-p0-catalog-replenishment`。仅将八个既有 numeric 列从 performance 的默认隐藏 map-tail 移出，按以下顺序放在 `adCost`「广告花费」之后、`currency`「币种」之前，显式设置 `defaultVisible: true`：
+
+| key | 列名 | 保留的 requiresField |
+| --- | --- | --- |
+| commodityCost | 商品成本 | 销售利润 payload.commodityCost |
+| shippingPrice | 运费 | 销售利润 payload.shippingPrice |
+| taxPrice | 税费 | 销售利润 payload.taxPrice |
+| headTripPrice | 头程 | 销售利润 payload.headTripPrice |
+| avgPurchaseCost | 采购成本 | 销售利润 payload.avgPurchaseCost |
+| amazonCommissionPrice | 亚马逊佣金 | 销售利润 payload.amazonCommissionPrice |
+| adSpCost | SP广告费 | 销售利润 payload.adSpCost 类型投影 |
+| fbaStorageFeeAmount | FBA仓储费 | 销售利润 payload.fbaStorageFeeAmount 类型投影 |
+
+七种商品/汇总维度的默认列和无显式选列的 CSV/XLSX 均包含这八列。已有显式选列仍为权威，包含逐列选择、手动隐藏八列和空集合，不迁移已保存配置。逐字节重建本次预期源码并与基线比对通过：生产改动恰为八列结构移动与显式可见标记；无新 key，标签、numeric、requiresField 原样保留，performance 之外源码不变。
+
+剩余 map-tail 仍统一 `defaultVisible: false`：77 列（3 个身份列 asin/title/marketplace，74 个 numeric 指标/费用/退款列）。可供后续另行选择的既有类型列包括 adSdCost/adSbCost/adSbvCost/adSbsCost、fbaLongTermStorageFeeAmount/fbaRemovalFeeAmount/fbaDisposalFeeAmount、customAsinFee/customShopFee/serviceFeeAmount/storageFeeAmount；refundPrice/refundNum、其他 FBA 费用和长尾费用继续隐藏。**Fee-mining remains paused**，本轮不扩展字段或挖掘费用。
+
+验证通过：两个定向测试文件（Prisma stub，无真实库），覆盖默认顺序、七维度默认/显式选列、中文 CSV 与真实 ExcelJS XLSX 回读、非零/零/NULL，以及其他广告渠道/FBA费用/退款仍隐藏；TypeScript、指定文件 ESLint、`git diff --check`。浏览器测试已补默认八列 header/顺序/勾选、取消后切换数据域仍隐藏及 CSV/Excel 链接排除的断言；尝试运行时 Chromium 在启动阶段报 `sandbox_host_linux.cc:41` / `Operation not permitted` / SIGTRAP，页面断言未执行，未绕过沙箱。需在允许启动 Chromium 的本地环境补跑该用例。
+
+复验命令：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'performance core cost defaults'
+```
+
+本轮仅四个仓库文件；不更新仓库外 parity-gap 文档（由父进程负责）。无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL、同步/计划或真实数据库读写，未加载/修改 `.env`。按本轮约定跳过完整 check/build、数据库集成及真实性能 benchmark；将来合码/发布或查询/存储变更时另行安排对应检查。回滚为把这八列放回原隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+本地提交尝试受阻：`git add` 无法创建 `.git/index.lock`（Read-only file system），未暂存、未执行 commit，未 chmod/强制或绕过沙箱。四个文件保留未暂存改动，供父进程通过其 `GIT_INDEX_FILE` 流程提交：`feat(sellfox): default-show performance core cost columns`；HEAD 仍为上述基线。
+
+下方为历史批次。
+
+---
+
+
 ## 2026-10-27 02:33:37 Asia/Shanghai — sales 默认显示 totalInventory「总库存」 · Owner: Chen Jieliang · BOX LOCAL ONLY
 
 基线 `137ab4f3fae27083f3f12dff324c9a8712a3c02e`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.sales.totalInventory` 移出默认隐藏组，紧跟 `average7`「均值」（相对顺序不变），保持 numeric；商品（ASIN/MSKU/SKU/父ASIN）与 store/developer/spu 默认列、未显式选列的 CSV/XLSX 均包含「总库存」。显式会话 `columnSelection`（含空集合、手动隐藏总库存）原样生效，不迁移已保存选列。
