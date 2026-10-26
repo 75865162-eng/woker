@@ -396,6 +396,74 @@ test("listings expose optional inventory columns immediately after fulfillable w
   for (const domain of ["ads", "performance"]) assert.deepEqual(visibleColumns(domain, ["totalInventory", "inventoryCapturedAt"]), []);
 });
 
+test("Listing payload stock columns stay optional, summable and contiguous with the inventory cluster", () => {
+  const keys = ["listingQuantity", "unsellable", "warehousing"];
+  const cluster = ["fulfillable", "totalInventory", "inventoryCapturedAt", ...keys];
+  const configured = columns.listings.map(c => c.key);
+  assert.deepEqual(configured.slice(configured.indexOf("fulfillable"), configured.indexOf("fulfillable") + cluster.length), cluster);
+  assert.deepEqual(visibleColumns("listings", [...cluster].reverse()).map(c => c.key), cluster);
+  const config = visibleColumns("listings", [...keys].reverse());
+  assert.deepEqual(config.map(c => c.labelZh), ["Listing库存", "不可售", "入库中"]);
+  assert.deepEqual(summableColumnKeys(config), keys);
+  for (const c of config) {
+    assert.equal(c.numeric, true);
+    assert.equal(c.defaultVisible, false);
+    assert.equal(c.unavailable, undefined);
+    assert.equal(c.requiresField, `Listing 当前快照 payload.${c.key === "listingQuantity" ? "quantity" : c.key}`);
+    assert.ok(!defaultVisibleColumnKeys("listings").includes(c.key));
+    for (const value of [null, 0, 48]) assert.equal(sellfoxColumnValue(c, { [c.key]: value }), value);
+    assert.equal(sellfoxColumnValue(c, {}), undefined);
+  }
+  assert.ok(!configured.includes("quantity"));
+  for (const domain of ["sales", "performance", "ads"]) assert.deepEqual(visibleColumns(domain, keys), []);
+});
+
+test("Listing payload stock SQL extracts and projects separate nullable numbers only for listings", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  for (const exporting of [false, true]) {
+    const sql = workbenchReadSql("listings", query, scope, exporting).text;
+    for (const [key, field] of [["listingQuantity", "quantity"], ["unsellable", "unsellable"], ["warehousing", "warehousing"]]) {
+      assert.ok(sql.includes(`NULLIF(p.payload->>'${field}','')::float AS "${key}",`));
+    }
+    assert.ok(sql.includes('l."listingQuantity",l.unsellable,l.warehousing,'));
+    for (const domain of ["sales", "performance", "ads_report"] as const) {
+      const otherSql = workbenchReadSql(domain, query, scope, exporting).text;
+      assert.doesNotMatch(otherSql, /listingQuantity|unsellable|warehousing|p\.payload->>'quantity'/);
+    }
+  }
+});
+
+test("Listing payload stock exports null, zero and 48 in CSV/XLSX independently of inventory values", async () => {
+  const keys = ["fulfillable", "totalInventory", "listingQuantity", "unsellable", "warehousing"];
+  const labels = ["可售", "总库存", "Listing库存", "不可售", "入库中"];
+  const rows = [null, 0, 48, undefined].map((value, index) => ({
+    storeId: "s1", msku: `m${index}`, fulfillable: 19,
+    ...(value === undefined ? {} : { listingQuantity: value, unsellable: value, warehousing: value }),
+  }));
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => sql.text.startsWith("WITH")
+    ? [{ rows, total: rows.length, totals: [] }]
+    : rows.map(row => ({ storeId: row.storeId, msku: row.msku, fulfillable: 99, totalInventory: 180 })) } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?column=warehousing&column=unsellable&column=listingQuantity&column=totalInventory&column=fulfillable&format=csv");
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    const csv = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    assert.equal((await csv.text()).trim(), '"可售","总库存","Listing库存","不可售","入库中"\r\n19,180,"","",""\r\n19,180,0,0,0\r\n19,180,48,48,48\r\n19,180,"","",""');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.columnCount, keys.length);
+    assert.deepEqual(keys.map((_, index) => sheet.getRow(1).getCell(index + 1).value), labels);
+    for (const [index, value] of [null, 0, 48, null].entries()) {
+      assert.deepEqual(keys.map((_, column) => sheet.getRow(index + 2).getCell(column + 1).value), [19, 180, value, value, value]);
+    }
+  } finally { globals.prisma = previous; }
+});
+
 test("selected listing inventory columns export numeric stock and text timestamps with null cells in CSV/XLSX", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const capturedAt = "2026-10-26T10:20:30.000Z";
@@ -625,17 +693,18 @@ test("listing-only columns extract Listing payload values without altering perfo
     assert.match(listingSql, /CASE WHEN p\.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p\.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner"/);
     assert.doesNotMatch(listingSql, /p\.payload->>'buyBoxWinner'|buyBoxWinner[^,;]*::float/);
     assert.match(listingSql, /l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
-    for (const key of ["reservedQty", "shippingPrice", "profitPrice", "profitRate"]) {
+    for (const key of ["reservedQty", "profitPrice", "profitRate"]) {
       assert.ok(listingSql.includes(`NULLIF(p.payload->>'${key}','')::float AS "${key}",`));
     }
+    assert.ok(listingSql.includes("NULLIF(COALESCE(NULLIF(p.payload->>'shippingPrice',''), NULLIF(p.payload->>'shipCost','')),'')::float AS \"shippingPrice\""));
     const performanceSql = workbenchReadSql("performance", query, scope, exporting).text;
     assert.ok(performanceSql.includes("NULLIF(s.payload->>'shippingPrice','')::float AS \"shippingPrice\""));
     assert.doesNotMatch(performanceSql, /reservedQty|profitPrice|profitRate/);
     assert.doesNotMatch(performanceSql.slice(performanceSql.indexOf("base AS")), /buyBoxWinner/);
-    assert.doesNotMatch(performanceSql, /p\.payload->>'shippingPrice'/);
+    assert.doesNotMatch(performanceSql, /p\.payload->>'shippingPrice'|shipCost/);
     for (const domain of ["ads_report", "sales"] as const) {
       const sql = workbenchReadSql(domain, query, scope, exporting).text;
-      assert.doesNotMatch(sql, /reservedQty|shippingPrice|profitPrice|profitRate/);
+      assert.doesNotMatch(sql, /reservedQty|shippingPrice|shipCost|profitPrice|profitRate/);
       assert.doesNotMatch(sql.slice(sql.indexOf("base AS")), /buyBoxWinner/);
     }
   }

@@ -117,9 +117,12 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'headTripCost','')::float AS "headTripCost",` : Prisma.empty}
       CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner",
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'reservedQty','')::float AS "reservedQty",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'shippingPrice','')::float AS "shippingPrice",` : Prisma.empty}
+      ${domain === "listings" ? Prisma.sql`NULLIF(COALESCE(NULLIF(p.payload->>'shippingPrice',''), NULLIF(p.payload->>'shipCost','')),'')::float AS "shippingPrice",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'profitPrice','')::float AS "profitPrice",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'profitRate','')::float AS "profitRate",` : Prisma.empty}
+      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'quantity','')::float AS "listingQuantity",` : Prisma.empty}
+      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'unsellable','')::float AS "unsellable",` : Prisma.empty}
+      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'warehousing','')::float AS "warehousing",` : Prisma.empty}
       ${needTagFilter ? Prisma.sql`${sellfoxProductTagMatchSql(Prisma.sql`p.payload`, query.productTag)} AS "matchesProductTag",` : Prisma.empty}
       CASE WHEN p.payload->>'switchFulfillmentTo' IN ('AFN','MFN') THEN p.payload->>'switchFulfillmentTo' END AS fulfillment,
       COALESCE(
@@ -132,7 +135,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    ${domain === "listings" ? Prisma.sql`l.fulfillment,l.brand,l."amazonBrand",l.rating,l."ratingCount",l."productTags",l."openDate",l."firstSaleDate",l."bsrRank",l."bsrCategory",l."purchaseCost",l."fbaFees",l."referralFee",l."totalFee",l."headTripCost",l."buyBoxWinner",l."reservedQty",l."shippingPrice",l."profitPrice",l."profitRate",` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
+    ${domain === "listings" ? Prisma.sql`l.fulfillment,l.brand,l."amazonBrand",l.rating,l."ratingCount",l."productTags",l."openDate",l."firstSaleDate",l."bsrRank",l."bsrCategory",l."purchaseCost",l."fbaFees",l."referralFee",l."totalFee",l."headTripCost",l."buyBoxWinner",l."reservedQty",l."shippingPrice",l."profitPrice",l."profitRate",l."listingQuantity",l.unsellable,l.warehousing,` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
     ${domain === "listings" ? Prisma.sql`LEFT JOIN listing l ON l.id=s.id AND l."storeId"=s."storeId"` : Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {
