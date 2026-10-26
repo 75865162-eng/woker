@@ -272,3 +272,27 @@ test("agent salesperson containment uses only typed performance column including
     }
   } finally { globals.prisma = previous; }
 });
+
+test("Agent extra performance fees use typed profit view columns, numeric CSV and safe sorting", async () => {
+  const keys = ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"];
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-3), keys);
+  const csv = sellfoxAgentCsv("performance", [{ headTripPrice: 0, avgPurchaseCost: 2.5, amazonCommissionPrice: -3 }, {}]);
+  assert.ok(csv.split("\r\n")[0].endsWith('"headTripPrice","avgPurchaseCost","amazonCommissionPrice"'));
+  assert.ok(csv.split("\r\n")[1].endsWith('0,2.5,-3'));
+  assert.ok(csv.split("\r\n")[2].endsWith('"","",""'));
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
+    assert.match(sql.text, /FROM sellfox_profit_daily s/);
+    assert.doesNotMatch(sql.text, /payload|headTripCost|purchaseCost|referralFee/);
+    if (!sql.text.includes("count(*)")) assert.match(sql.text, /ORDER BY "(?:headTripPrice|avgPurchaseCost|amazonCommissionPrice)" DESC NULLS LAST, id ASC LIMIT/);
+    if (!sql.text.includes("count(*)")) for (const key of keys) assert.ok(sql.text.includes(`"${key}"`));
+    return sql.text.includes("count(*)") ? [{ total: 1 }] : [{ headTripPrice: 0, avgPurchaseCost: 2.5, amazonCommissionPrice: -3 }];
+  } } as unknown as PrismaClient;
+  try {
+    for (const key of keys) for (const exporting of [false, true]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${key}&sortOrder=desc&reportDate=2026-10-25`), "performance");
+      const result = await readSellfoxAgentRows("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting);
+      assert.equal(result.rows[0][key], key === "headTripPrice" ? 0 : key === "avgPurchaseCost" ? 2.5 : -3);
+    }
+  } finally { globals.prisma = previous; }
+});

@@ -45,6 +45,9 @@ export function extractPerformanceFields(row: RecordLike) {
     commodityCost: sellfoxNumber(row, "commodityCost"),
     shippingPrice: sellfoxNumber(row, "shippingPrice"),
     taxPrice: sellfoxNumber(row, "taxPrice"),
+    headTripPrice: sellfoxNumber(row, "headTripPrice"),
+    avgPurchaseCost: sellfoxNumber(row, "avgPurchaseCost"),
+    amazonCommissionPrice: sellfoxNumber(row, "amazonCommissionPrice"),
     userNameList: Array.isArray(row.userNameList) ? [...new Set(row.userNameList.filter((name): name is string => typeof name === "string").map(name => name.trim()).filter(Boolean))].sort() : [],
   };
 }

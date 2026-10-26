@@ -190,3 +190,18 @@ test("salesperson trims exact names and round trips browse, UI and export for pe
   }
   for (const domain of ["sales", "listings", "ads"] as const) assert.equal(sellfoxViewParams({ ...view, domain }, true).has("salesperson"), false);
 });
+
+test("performance extra fee selections and sorting round trip without Listing aliases", () => {
+  const keys = ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"];
+  for (const key of keys) {
+    const params = new URLSearchParams({ domain: "performance", sortBy: key, sortOrder: "desc" });
+    const view = readSellfoxView(params);
+    assert.equal(view.sortBy, key);
+    const exported = sellfoxViewParams(view, true);
+    // The workbench adds the selected columns to its export URL separately from view state.
+    keys.forEach(key => exported.append("column", key));
+    assert.deepEqual(new URL(`http://localhost/?${exported}`).searchParams.getAll("column"), keys);
+    const parsed = sellfoxBrowseQuery(new URL(`http://localhost/?${exported}`), "performance");
+    assert.equal(parsed.sortBy, key);
+  }
+});

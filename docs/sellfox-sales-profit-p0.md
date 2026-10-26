@@ -2,6 +2,27 @@
 
 本轮仅覆盖 `/sellfox?domain=sales` 和 `/sellfox?domain=performance`。不发布、不启用计划、不调用真实赛狐、不回填历史数据；后续部署目标是 `123.207.47.225`。
 
+## 2026-10-26 利润可选费用补充（仅 BOX 本地）
+
+- 销售利润追加三个默认隐藏的数字列：`headTripPrice`「头程」、`avgPurchaseCost`「采购成本」、`amazonCommissionPrice`「亚马逊佣金」。只读 performance payload 同名键的事实类型列；不取 Listing `headTripCost` / `purchaseCost` / `referralFee`。默认可见列、80000 五项费用和 90000 `userNameList`/业务员筛选保持原状。销售小组、业绩归属人、实时统计、利润 SPU 及销量业务员继续灰显。
+- 加法迁移 `20261026100000_sellfox_product_daily_typed_fee_extras` 在 90000 后增加三个 nullable DOUBLE PRECISION；复用 `sellfox_listing_number(text)`，缺失/空/非法/溢出→NULL，保留0；替换原投影函数并保留 INSERT / UPDATE OF payload trigger 和姓名处理。一次 `UPDATE SET payload=payload` 回填派生列，原 payload 不变；`sellfox_profit_daily` 严格保留 90000 列序，末尾追加这三列。
+- 同步提取沿用 `sellfoxNumber`（非法输入拒绝同步，缺值NULL）；browse、排序、CSV、利润 Excel、页脚和 Agent 读类型列。实体及按币种 totals 沿用其他费用的 `COALESCE(sum(...),0)`，全NULL显示0；`avgPurchaseCost` 同样沿用费用求和口径，不另做平均。Agent 英文长表末尾追加三项，不改既有列序。币种、onlySettle、业务员筛选均保留现有隔离语义。
+- 本轮只在隔离 PGlite 执行迁移；无真实库、API、计划或服务器操作。未来发布前必须先审核/应用全部前置迁移（含50000 helper、80000、90000）；评估全表回填的锁、WAL、磁盘和维护窗口，未经真实 benchmark 不宣称 P95 改善。应用回退可保留加法 schema、原费用/姓名 trigger；不自动删列或回滚数据库。
+
+本轮验证命令（业务测试不加载运行时 `.env`；Prisma 显式假地址覆盖配置）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-sync-recovery.test.ts tests/sellfox-agent-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listing-identity.test.ts tests/sellfox-snapshot-sync.test.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js generate
+npm run typecheck
+git diff --name-only -- '*.ts' '*.tsx' | xargs node node_modules/eslint/bin/eslint.js
+git diff --check
+```
+
+定向回归覆盖列配置/默认列不变、URL/排序、数字CSV/XLSX、同步提取及写入、Agent；PGlite实际执行80000→90000→100000，验证视图列序、回填、payload不变、INSERT/UPDATE/清空、NULL/0/非法值、币种/结算/姓名筛选和聚合。普通 PostgreSQL 入口未配置时仍SKIP，离线 verifier 独立执行。未跑生产构建、完整 check、浏览器或全站E2E；本轮无布局/构建链改动，已有模拟browse/filter/API回归覆盖入口，发布前再由CI与受控真实容量验收补齐。
+
 ## 2026-10-26 业务员列与筛选（Owner: Chen Jieliang；仅 BOX 本地）
 
 - 仅销售利润启用「业务员」单选筛选与默认隐藏的列。URL/API：`salesperson=温见清`（正常 URL 编码）。来源是利润 payload 的 `userNameList` 字符串数组，经 `SellfoxProductDailySnapshot.userNameList TEXT[]` 类型投影；不是 Listing `developer` / 开发员。缺键、非数组、空数组返回 `[]`；只保留去空格、非空、去重的字符串，不猜测人员身份。

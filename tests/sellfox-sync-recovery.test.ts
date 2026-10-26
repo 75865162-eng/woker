@@ -26,19 +26,19 @@ test("performance text extracts scalar identities without stringifying objects",
 });
 
 test("performance extraction maps confirmed fee and image payload keys to narrow fields", () => {
-  assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: "4.25", giftWrapAmount: 1.5, imageUrl: " https://example.test/item.jpg ", refundPrice: "2.5", refundNum: 1, commodityCost: "3", shippingPrice: 4, taxPrice: "-0.5" }), {
+  assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: "4.25", giftWrapAmount: 1.5, imageUrl: " https://example.test/item.jpg ", refundPrice: "2.5", refundNum: 1, commodityCost: "3", shippingPrice: 4, taxPrice: "-0.5", headTripPrice: "6.5", avgPurchaseCost: 7, amazonCommissionPrice: "-8" }), {
     promotionDiscount: 4.25, giftWrapFee: 1.5, imageUrl: "https://example.test/item.jpg",
-    refundPrice: 2.5, refundNum: 1, commodityCost: 3, shippingPrice: 4, taxPrice: -0.5, userNameList: [],
+    refundPrice: 2.5, refundNum: 1, commodityCost: 3, shippingPrice: 4, taxPrice: -0.5, headTripPrice: 6.5, avgPurchaseCost: 7, amazonCommissionPrice: -8, userNameList: [],
   });
   assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: null, giftWrapAmount: "", imageUrl: "" }), {
     promotionDiscount: null, giftWrapFee: null, imageUrl: null,
-    refundPrice: null, refundNum: null, commodityCost: null, shippingPrice: null, taxPrice: null, userNameList: [],
+    refundPrice: null, refundNum: null, commodityCost: null, shippingPrice: null, taxPrice: null, headTripPrice: null, avgPurchaseCost: null, amazonCommissionPrice: null, userNameList: [],
   });
-  for (const key of ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] as const) {
+  for (const key of ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"] as const) {
     for (const value of [null, undefined, "", 0, "0", 2.5, "-3.25"]) {
       assert.equal(extractPerformanceFields({ [key]: value })[key], value == null || value === "" ? null : Number(value), `${key}: ${value}`);
     }
-    assert.throws(() => extractPerformanceFields({ [key]: "invalid" }), /数值无效/);
+    for (const invalid of ["invalid", "Infinity", "NaN", "1e999", {}, []]) assert.throws(() => extractPerformanceFields({ [key]: invalid }), /数值无效/);
   }
 });
 
@@ -92,10 +92,11 @@ const page = (prefix: string, size: number, totalPage: number) => ({ rows: Array
 
 test("single-object performance identities reach upsert as extracted values", async () => {
   const f = fixture(["a"]);
-  f.setResponse(() => ({ rows: [{ mskuList: { msku: "M1" }, skuList: { sku: "S1" }, asinList: { asin: "B0X" }, parentAsinList: { parentAsin: "P1" }, promotionDiscountAmount: 4.25, giftWrapAmount: 1.5, imageUrl: "https://example.test/item.jpg" }], totalPage: 1 }));
+  f.setResponse(() => ({ rows: [{ mskuList: { msku: "M1" }, skuList: { sku: "S1" }, asinList: { asin: "B0X" }, parentAsinList: { parentAsin: "P1" }, promotionDiscountAmount: 4.25, giftWrapAmount: 1.5, imageUrl: "https://example.test/item.jpg", headTripPrice: "6.5", avgPurchaseCost: 0, amazonCommissionPrice: "-8" }], totalPage: 1 }));
   await syncSellfoxProductDailySnapshots(input, f.dependencies);
   const row = [...f.rows.values()][0] as Record<string, unknown>;
   assert.deepEqual([row.sourceKey, row.msku, row.sku, row.asin, row.parentAsin], ["M1", "M1", "S1", "B0X", "P1"]);
+  assert.deepEqual([row.headTripPrice, row.avgPurchaseCost, row.amazonCommissionPrice], [6.5, 0, -8]);
   assert.deepEqual([row.promotionDiscount, row.giftWrapFee, row.imageUrl], [4.25, 1.5, "https://example.test/item.jpg"]);
 });
 

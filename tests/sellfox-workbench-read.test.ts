@@ -16,7 +16,7 @@ function assertListingProjection(sql: string) {
 }
 
 test("performance footer includes visible numeric fees and quantities without summing rates or unavailable columns", () => {
-  const keys = ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "fbaQuantity", "fbmQuantity"];
+  const keys = ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "fbaQuantity", "fbmQuantity"];
   assert.deepEqual(summableColumnKeys(visibleColumns("performance", ["identity", ...keys])).sort(), [...keys].sort());
   assert.ok(summableColumnKeys(columns.performance).includes("saleRevenue"));
   assert.deepEqual(summableColumnKeys([
@@ -975,14 +975,24 @@ test("performance browse selects and sums elevated fee fields and prefers listin
 });
 
 test("performance optional costs and refunds read typed columns and sum by entity and currency without changing refund rates", () => {
-  const keys = ["commodityCost", "shippingPrice", "taxPrice", "refundPrice", "refundNum"];
+  const keys = ["commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "refundPrice", "refundNum"];
   const config = visibleColumns("performance", keys);
   assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), [
     ["commodityCost", "商品成本", true, false, undefined], ["shippingPrice", "运费", true, false, undefined], ["taxPrice", "税费", true, false, undefined],
+    ["headTripPrice", "头程", true, false, undefined], ["avgPurchaseCost", "采购成本", true, false, undefined], ["amazonCommissionPrice", "亚马逊佣金", true, false, undefined],
     ["refundPrice", "退款金额", true, false, undefined], ["refundNum", "退款量", true, false, undefined],
   ]);
-  assert.deepEqual(config.map(c => captions[c.key]), ["商品成本", "运费", "税费", "退款金额", "退款量"]);
-  for (const c of config.slice(0, 3)) assert.equal(c.requiresField, `销售利润 payload.${c.key}`);
+  assert.deepEqual(config.map(c => captions[c.key]), ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "退款金额", "退款量"]);
+  assert.deepEqual(defaultVisibleColumnKeys("performance"), ["image", "identity", "name", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"]);
+  for (const key of ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"]) {
+    assert.deepEqual(visibleColumns("listings", [key]), []);
+    assert.deepEqual(visibleColumns("sales", [key]), []);
+    for (const sortOrder of ["asc", "desc"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${key}&sortOrder=${sortOrder}`), "performance");
+      assert.ok(workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" }).text.includes(`ORDER BY "${key}" ${sortOrder.toUpperCase()} NULLS LAST, id ASC LIMIT`));
+    }
+  }
+  for (const c of config.slice(0, 6)) assert.equal(c.requiresField, `销售利润 payload.${c.key}`);
   for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer"]) {
     assert.ok(defaultVisibleColumnKeys("performance", dimension).every(key => !keys.includes(key)));
     for (const onlySettle of [false, true]) {
@@ -995,6 +1005,7 @@ test("performance optional costs and refunds read typed columns and sum by entit
           assert.equal(sql.text.split(`COALESCE(sum("${key}"),0)::float AS "${key}"`).length - 1, 2);
           assert.ok(!sql.text.includes(`count("${key}")`));
         }
+        assert.doesNotMatch(sql.text, /payload|headTripCost|purchaseCost|referralFee/);
         assert.ok(sql.values.includes(onlySettle));
         assert.match(sql.text, /FROM filtered GROUP BY currency/);
         assert.match(sql.text, /CASE WHEN count\(\*\)=1 THEN min\("refundRate"\) END AS "refundRate"/);
@@ -1005,20 +1016,20 @@ test("performance optional costs and refunds read typed columns and sum by entit
 
 test("optional cost and refund columns export numeric values in CSV and XLSX", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
-  globals.prisma = { $queryRaw: async () => [{ rows: [{ commodityCost: 8.25, shippingPrice: 3.5, taxPrice: -0.5, refundPrice: 12.5, refundNum: 2 }, { commodityCost: 0, shippingPrice: 0, taxPrice: 0, refundPrice: 0, refundNum: 0 }], total: 2, totals: [] }] } as unknown as PrismaClient;
-  const url = new URL("http://localhost/?reportDate=2026-10-25&column=commodityCost&column=shippingPrice&column=taxPrice&column=refundPrice&column=refundNum");
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ commodityCost: 8.25, shippingPrice: 3.5, taxPrice: -0.5, headTripPrice: 6.5, avgPurchaseCost: 7, amazonCommissionPrice: -8, refundPrice: 12.5, refundNum: 2 }, { commodityCost: 0, shippingPrice: 0, taxPrice: 0, headTripPrice: 0, avgPurchaseCost: 0, amazonCommissionPrice: 0, refundPrice: 0, refundNum: 0 }], total: 2, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?reportDate=2026-10-25&column=commodityCost&column=shippingPrice&column=taxPrice&column=headTripPrice&column=avgPurchaseCost&column=amazonCommissionPrice&column=refundPrice&column=refundNum");
   const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
   try {
-    assert.equal((await (await sellfoxWorkbenchExport("performance", query, scope, url)).text()).trim(), '"商品成本","运费","税费","退款金额","退款量"\r\n8.25,3.5,-0.5,12.5,2\r\n0,0,0,0,0');
+    assert.equal((await (await sellfoxWorkbenchExport("performance", query, scope, url)).text()).trim(), '"商品成本","运费","税费","头程","采购成本","亚马逊佣金","退款金额","退款量"\r\n8.25,3.5,-0.5,6.5,7,-8,12.5,2\r\n0,0,0,0,0,0,0,0');
     url.searchParams.set("format", "xlsx");
     const response = await sellfoxWorkbenchExport("performance", query, scope, url);
     const { default: ExcelJS } = await import("exceljs");
     const book = new ExcelJS.Workbook();
     await book.xlsx.load(await response.arrayBuffer());
     const sheet = book.worksheets[0];
-    assert.deepEqual([1, 2, 3, 4, 5].map(col => sheet.getRow(1).getCell(col).value), ["商品成本", "运费", "税费", "退款金额", "退款量"]);
-    assert.deepEqual([1, 2, 3, 4, 5].map(col => sheet.getRow(2).getCell(col).value), [8.25, 3.5, -0.5, 12.5, 2]);
-    assert.deepEqual([1, 2, 3, 4, 5].map(col => sheet.getRow(3).getCell(col).value), [0, 0, 0, 0, 0]);
+    assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map(col => sheet.getRow(1).getCell(col).value), ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "退款金额", "退款量"]);
+    assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map(col => sheet.getRow(2).getCell(col).value), [8.25, 3.5, -0.5, 6.5, 7, -8, 12.5, 2]);
+    assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map(col => sheet.getRow(3).getCell(col).value), [0, 0, 0, 0, 0, 0, 0, 0]);
   } finally { globals.prisma = previous; }
 });
 
