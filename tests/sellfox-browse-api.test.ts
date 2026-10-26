@@ -210,12 +210,12 @@ test("buyBox reaches browse and CSV/XLSX/Agent export SQL, including without lay
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
-  const calls: Prisma.Sql[] = [];
+  const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["品牌"] };
   globals.prisma = {
     workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
-      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [] }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
     },
   } as unknown as PrismaClient;
   try {
@@ -225,9 +225,14 @@ test("buyBox reaches browse and CSV/XLSX/Agent export SQL, including without lay
         const context = { params: Promise.resolve({ domain }) };
         const request = (extra = "") => new Request(`http://localhost/api/sellfox/${domain}?from=2026-10-25&to=2026-10-25&buyBox=${buyBox}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
         const browseHandler = domain === "sales" ? salesBrowse : domain === "performance" ? performanceBrowse : (r: Request) => browse(r, context);
+        for (const extra of ["", "&layout=workbench"]) {
+          calls.length = 0;
+          const response = await browseHandler(request(extra));
+          assert.equal(response.status, 200);
+          if (domain === "listings") assert.deepEqual((await response.json()).facets, facets);
+          assert.ok(calls.some(sql => /[ls]\."buyBoxWinner"=\$\d+/.test(sql.text) && sql.values.includes(buyBox === "yes" ? "是" : "否")));
+        }
         const handlers = [
-          () => browseHandler(request()),
-          () => browseHandler(request("&layout=workbench")),
           ...["&format=csv", "&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1"].map(extra => () => csv(request(extra), context)),
           ...(domain === "performance" ? ["&format=csv", "&format=xlsx", "&agent=1"].map(extra => () => performanceCsv(request(extra))) : []),
         ];
@@ -570,6 +575,70 @@ test("ads Buy Box alone routes six-tab browse and CSV/XLSX before rollup while A
         }
         const guarded = await csv(request(domain, buyBox, "&agent=1&sortBy=buyBoxWinner"), context);
         assert.equal(guarded.status, 400); assert.match((await guarded.json()).error, /workbench/);
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+test("listings Buy Box alone routes browse and CSV/XLSX through workbench; NULL/missing stay in 全部", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["品牌"] };
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const context = { params: Promise.resolve({ domain: "listings" }) };
+    const request = (buyBox: string, extra = "") => new Request(`http://localhost/api/sellfox/listings?${new URLSearchParams({ buyBox })}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+    for (const buyBox of ["yes", "no"]) {
+      for (const extra of ["", "&layout=workbench", "&brand=品牌&productTag=新品&fulfillment=AFN"]) {
+        for (const format of ["browse", "csv", "xlsx"] as const) {
+          calls.length = 0;
+          const response = format === "browse" ? await browse(request(buyBox, extra), context) : await csv(request(buyBox, `${extra}&format=${format}`), context);
+          assert.equal(response.status, 200);
+          const sql = calls.find(s => s.text.startsWith("WITH"))!;
+          assert.ok(sql);
+          assert.match(sql.text, /s\."buyBoxWinner"=/);
+          assert.ok(sql.values.includes(buyBox === "yes" ? "是" : "否"));
+          assert.ok(!sql.values.includes("yes") && !sql.values.includes("no"));
+          if (extra.includes("productTag")) {
+            assert.match(sql.text, /s\."productTagNames" @>/);
+            assert.match(sql.text, /s\.fulfillment=/);
+            assert.match(sql.text, /s\.brand=/);
+          }
+          if (format === "browse") {
+            assert.match(sql.text, /AS facets/);
+            assert.deepEqual((await response.json()).facets, facets);
+          } else {
+            assert.doesNotMatch(sql.text, /AS facets/);
+            assert.match(response.headers.get("Content-Type")!, format === "csv" ? /text\/csv/ : /spreadsheetml/);
+          }
+        }
+      }
+      // Explicit agent export still applies typed Buy Box on listings current rows.
+      calls.length = 0;
+      const agent = await csv(request(buyBox, "&agent=1"), context);
+      assert.equal(agent.status, 200);
+      assert.match(agent.headers.get("Content-Disposition")!, /-agent\.csv/);
+      assert.ok(calls.some(sql => /s\."buyBoxWinner"=/.test(sql.text) && sql.values.includes(buyBox === "yes" ? "是" : "否")));
+    }
+    // blank / unknown buyBox params are treated as 全部 — no Buy Box predicate.
+    for (const value of ["", "maybe", "true", "false", "是", "否"]) {
+      calls.length = 0;
+      const response = await browse(new Request(`http://localhost/api/sellfox/listings?${value ? `buyBox=${encodeURIComponent(value)}&` : ""}layout=workbench`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } }), context);
+      assert.equal(response.status, 200);
+      for (const sql of calls) {
+        assert.doesNotMatch(sql.text, /buyBoxWinner=/);
+        assert.ok(!sql.values.includes("是") && !sql.values.includes("否"));
       }
     }
   } finally {

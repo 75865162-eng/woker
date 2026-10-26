@@ -1,5 +1,23 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 02:32:00 Asia/Shanghai — listings unlock buyBoxWinner「Buy Box」filter · Owner: Chen Jieliang · BOX LOCAL ONLY
+
+基线 `9b632506905c2f5ea02de3025522d0e6de352f28`，分支 `codex/operations-p0-catalog-replenishment`。在线商品 Buy Box 筛选（UI「全部 / 是 / 否」，参数 `"" / "yes" / "no"`）与 sales/performance/ads 同口径：对 Listing current typed `buyBoxWinner` 文本精确匹配「是」/「否」；NULL/空/非布尔/未知参数只计入「全部」。本轮补齐 browse 路由：仅带 `buyBox=`、无 layout/排序/选列时也进入 workbench/`listingsReadSql`（与既有 `brand=` 单独入 workbench 对称），保留 facets.brands/productTags 与库存补充；CSV/XLSX 原本已走 workbench。显式 `agent=1` 导出仍在 listings Agent 窄表上应用同一 typed 谓词。
+
+品牌筛选此前已交付，本轮不重复；不解锁 openDate/库存筛选；业务员 / AWD 等缺失入口继续锁定。sales / performance / ads 默认与筛选行为未改（ads Buy Box 筛选保持 `6cb590b`）。**Fee-mining remains paused**。无 schema / Prisma migration / SQL 结构变更，无 live API、真实 DB 写入。回滚仅还原 browse 路由条件及配套测试/文档。
+
+验证：定向单测（含 listings Buy Box alone → workbench、是/否精确匹配、非法值当全部、联合 brand/productTag/fulfillment、Agent 导出仍过滤）、listings-read / workbench-read、TypeScript、touched ESLint、`git diff --check`。Prisma stub，不连真实库。未跑完整 check/build、浏览器或真实 P95。
+
+验证命令：
+
+    NODE_ENV=test node --import tsx --test tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-query.test.ts
+    npm run typecheck
+    node node_modules/eslint/bin/eslint.js 'src/app/api/sellfox/[domain]/route.ts' tests/sellfox-browse-api.test.ts
+    git diff --check
+
+仅 BOX 本地：无 push/fetch、deploy、SSH、migrate-on-123、live Sellfox、schedules 或 .env。仓库外 /workspace/sellfox-parity-gap.md 同步，不入库。
+
+
 ## 2026-10-27 02:27:31 Asia/Shanghai — listings 默认显示 ratingCount「评论数」+ buyBoxWinner「Buy Box」 · Owner: Chen Jieliang · BOX LOCAL ONLY
 
 基线 `6090d99990f935307aeab756d93d50ec49141d7a`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.listings.ratingCount` / `buyBoxWinner` 的 `defaultVisible` 从 `false` 改为 `true`；brand / rating 继续默认显示。源顺序保持 rating → ratingCount、headTripCost → buyBoxWinner → reservedQty，不重排。默认列表、列选择器初始勾选及无显式选列的 CSV/XLSX 增加「评论数」「Buy Box」；显式会话 `columnSelection`（含空集合、只选旧列、隐藏新默认列）仍优先，不迁移保存选择。
