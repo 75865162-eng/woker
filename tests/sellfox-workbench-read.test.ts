@@ -373,6 +373,57 @@ test("order totals preserve null and image columns use current scoped Listing me
   }
 });
 
+test("listings expose optional inventory columns immediately after fulfillable without changing other domains", () => {
+  const keys = columns.listings.map(c => c.key);
+  assert.deepEqual(keys.slice(keys.indexOf("fulfillable"), keys.indexOf("fulfillable") + 3), ["fulfillable", "totalInventory", "inventoryCapturedAt"]);
+  const config = visibleColumns("listings", ["inventoryCapturedAt", "totalInventory", "fulfillable"]);
+  assert.deepEqual(config.map(c => c.key), ["fulfillable", "totalInventory", "inventoryCapturedAt"]);
+  assert.deepEqual(config.map(c => c.labelZh), ["可售", "总库存", "库存快照时间"]);
+  assert.equal(config[1].requiresField, "sellfox_inventory_current.totalInventory（按 storeId+msku 最新完整库存快照汇总；非销售日库存）");
+  assert.equal(config[2].requiresField, "sellfox_inventory_current.capturedAt（最新完整库存快照）");
+  assert.equal(config[1].numeric, true);
+  assert.equal(config[2].numeric, undefined);
+  for (const column of config.slice(1)) {
+    assert.equal(column.defaultVisible, false);
+    assert.equal(column.unavailable, undefined);
+    assert.ok(!defaultVisibleColumnKeys("listings").includes(column.key));
+  }
+  assert.deepEqual(summableColumnKeys(config), ["fulfillable", "totalInventory"]);
+  const sales = visibleColumns("sales", ["inventoryCapturedAt", "totalInventory", "fulfillable"]);
+  assert.deepEqual(sales.map(c => c.key), ["fulfillable", "totalInventory", "inventoryCapturedAt"]);
+  assert.equal(sales[1].numeric, true);
+  assert.ok(sales.slice(1).every(c => !c.defaultVisible && !c.unavailable));
+  for (const domain of ["ads", "performance"]) assert.deepEqual(visibleColumns(domain, ["totalInventory", "inventoryCapturedAt"]), []);
+});
+
+test("selected listing inventory columns export numeric stock and text timestamps with null cells in CSV/XLSX", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const capturedAt = "2026-10-26T10:20:30.000Z";
+  const stocks = [null, 0, 180].map((totalInventory, index) => ({ storeId: "s1", msku: `m${index}`, totalInventory, inventoryCapturedAt: totalInventory === null ? null : capturedAt }));
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => sql.text.startsWith("WITH")
+    ? [{ rows: stocks.map(stock => ({ storeId: stock.storeId, msku: stock.msku, fulfillable: 19 })), total: stocks.length, totals: [] }]
+    : stocks } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?column=inventoryCapturedAt&column=totalInventory&column=fulfillable&format=csv");
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    const csv = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    assert.equal((await csv.text()).trim(), `"可售","总库存","库存快照时间"\r\n19,"",""\r\n19,0,"${capturedAt}"\r\n19,180,"${capturedAt}"`);
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.columnCount, 3);
+    assert.deepEqual(sheet.getRow(1).values, [, "可售", "总库存", "库存快照时间"]);
+    assert.equal(sheet.getRow(2).getCell(1).value, 19);
+    assert.equal(sheet.getRow(2).getCell(2).value, null);
+    assert.equal(sheet.getRow(2).getCell(3).value, null);
+    assert.deepEqual(sheet.getRow(3).values, [, 19, 0, capturedAt]);
+    assert.deepEqual(sheet.getRow(4).values, [, 19, 180, capturedAt]);
+  } finally { globals.prisma = previous; }
+});
+
 test("listings expose brand and rating from the scoped current Listing snapshot", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/?status=active"));
   const sql = workbenchReadSql("listings", query, { organizationId: "org", workspaceId: "ws" });
