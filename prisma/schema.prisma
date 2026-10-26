@@ -1875,6 +1875,7 @@ model SellfoxListingSnapshot {
   adSpend30 Float?
   sourceUpdatedAt String?
   // Write-time derived list columns, maintained by sellfox_listing_project_write.
+  dxmPublishState String?
   brand String?
   amazonBrand String?
   productTags String?

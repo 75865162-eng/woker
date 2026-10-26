@@ -2,6 +2,15 @@
 
 范围：只改本地 ERP listings 读路径；未连接生产、未发布、未推送、未启用计划，也没有新增 Sellfox API 调用。ProductRecord、销量/利润报表聚合不变。
 
+## 可选发布状态补充（2026-10-26）
+
+- 本地字段盘点：`narrow-contracts.ts`、Agent 字段表及 `listing-page.json` 一致将 `standardPrice` 映射为既有 `price`（价格）；fixture 没有 `dxmPublishState` / `listingPrice` / `listingPricing` 的枚举或中文业务定义。用户提供的现存 payload 观察是 `dxmPublishState` 有 `delete`/空值，不能据此认定为配对状态。`listingPrice` / `listingPricing` 仅有非空数量，无独立用途证据，不新增重复或猜义的价格列。
+- 新增默认隐藏的「DXM 发布状态」，只展示 `dxmPublishState` 文本原值，不翻译 `delete` 为配对结果。配对状态、划线价类型筛选仍灰显，tooltip 分别指出缺少配对字段/稳定枚举及价格字段语义/类型枚举。没有新建 facets、排序、JSONB WHERE 或 API。
+- 增量迁移 `20261026060000_sellfox_listing_publish_state`（在 `20261026050000` 之后）只加可空 TEXT，扩展既有 `sellfox_listing_project()`，仍由原 `sellfox_listing_project_write` 原子维护。current view 末尾追加一列，旧列顺序保留；新 browse/可见列 CSV 读取类型列，Agent 窄列不扩张。字符串去首尾空格，空/缺失/非字符串为 NULL，未知非空字符串照常显示。
+- 回填覆盖全部保留和半成品快照，仅更新新列，不重写 payload、不切 Head、不请求赛狐。没有新索引。应用到真实库前须审核历史行数、WAL/磁盘及 DDL 锁窗口，先迁移并 generate 再启动新代码；本轮仅在隔离 PGlite 执行。回滚应用可保留新增列/扩展函数/view，不做 migrate down。
+- 同轮广告「日志」复用工作台 `onChange({ domain: "runs", page: 1 })`；导航层已有域切换时清理 searchType/sort 的逻辑，运行请求不携带广告专属参数（地址栏沿用既有行为保留非活动域选择）。tooltip 明示同步任务日志，未新增广告日志 API；广告组合/否定/AMC 仍待接。
+- 定向验收：browse-filters/listings-read/workbench-read/listing-identity 单测、TypeScript、改动文件 ESLint、Prisma validate、隔离 PGlite 及四项模拟浏览器回归（两项原广告导航、一项日志跳转/后退、一项可选列/灰态原因）。生产构建、全量 E2E 和真实环境 benchmark 不属于此次本地切片；合码/上线或真实性能验收时再运行。
+
 ## 证据与根因
 
 `4ab7a42` 的 `workbenchReadSql("listings")` 把普通 `sellfox_listing_current` 视图再连接回快照 payload，计算品牌、评分、费用、标签、BSR 等；`filtered` 被 count/totals/page 多次引用，因此宽行先物化全部匹配记录再分页。facets 又独立读取 payload。库存补充已是分页后一次批量读取，并非逐行网络 N+1。

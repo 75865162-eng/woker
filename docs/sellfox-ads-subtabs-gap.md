@@ -46,7 +46,8 @@ reportTypeCode 依据用户提供的 [sellfox-mcp `src/cli.ts` enum](https://git
 | 广告组合 | 需要 portfolios 结构 API，无本地结构模型 |
 | 否定 | 需要否定关键词/否定商品结构 API，无下载报告来源 |
 | AMC | 暂无已知 Sellfox Open API 下载来源 |
-| 日志 | 非报表下载，请使用顶部同步日志（domain=runs） |
+
+日志导航已接通：点击广告「日志」复用 `onChange({ domain: "runs", page: 1 })` 打开现有同步任务日志，移除「· 待接」。tooltip 明示 `domain=runs`，非广告专属日志 API；不创建同步任务、不引入日志下载资源。域切换沿用工作台已有状态处理。
 
 业务员、AWD、运营、销量洞察、配对状态、划线价类型等未因本轮开放。
 

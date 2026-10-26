@@ -3,8 +3,28 @@ import assert from "node:assert/strict";
 import { workbenchReadSql } from "@/lib/sellfox/workbench-read";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 import { sellfoxSortColumns } from "@/lib/sellfox/sort-columns";
+import { columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv } from "@/components/sellfox/workbench-types";
 
 const scope = { organizationId: "org-listing", workspaceId: "ws-listing" };
+test("DXM publish state is an optional listing-only raw text column, distinct from price and pairing", () => {
+  const config = visibleColumns("listings", ["dxmPublishState"]);
+  assert.equal(config.length, 1);
+  assert.equal(config[0].labelZh, "DXM 发布状态");
+  assert.equal(config[0].defaultVisible, false);
+  assert.ok(!config[0].unavailable);
+  assert.equal(defaultVisibleColumnKeys("listings").includes("dxmPublishState"), false);
+  assert.equal(visibleColumnCsv(config, [{ dxmPublishState: "delete" }, { dxmPublishState: "future-state" }, { dxmPublishState: null }]).trim(), '"DXM 发布状态"\r\n"delete"\r\n"future-state"\r\n""');
+  assert.equal(columns.listings.filter(column => column.key === "price").length, 1);
+  assert.equal(columns.listings.some(column => ["listingPrice", "listingPricing", "pairingStatus"].includes(column.key)), false);
+  assert.equal(sellfoxSortColumns.listings.includes("dxmPublishState"), false);
+  for (const exporting of [false, true]) {
+    const sql = workbenchReadSql("listings", sellfoxBrowseQuery(new URL("http://localhost/")), scope, exporting);
+    assert.match(sql.text, /s\."dxmPublishState"/);
+    assert.doesNotMatch(sql.text, /payload|jsonb_array_elements/);
+  }
+  for (const domain of ["sales", "performance", "ads"]) assert.deepEqual(visibleColumns(domain, ["dxmPublishState"]), []);
+});
+
 test("listings default and common filters read typed projection without payload or enrichment joins", () => {
   for (const exporting of [false,true]) for (const dimension of ["asin","msku","parentAsin"]) {
     const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&pageSize=20&status=active&brand=Brand&fulfillment=AFN&buyBox=yes&productTag=${encodeURIComponent("标签、完整")}&shopExternalId=shop&site=US`));

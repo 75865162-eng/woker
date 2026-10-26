@@ -43,7 +43,7 @@ async function setup(page: Page, params = "domain=sales&from=2026-10-24&to=2026-
     const from = url.searchParams.get("from") || (domain === "performance" ? "2026-10-16" : "2026-10-24"), to = url.searchParams.get("to") || from;
     const dates = Array.from({length: Math.min(90,Math.max(1,(Date.parse(to)-Date.parse(from))/86400000+1))}, (_,i)=>new Date(Date.parse(from)+i*86400000).toISOString().slice(0,10));
     const daily = Object.fromEntries(dates.map(d=>[d,2]));
-    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2, promotionDiscount:url.searchParams.has("onlySettle") ? "0" : "12.5", giftWrapFee:0}] : ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain ?? "") ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : domain === "sales" ? [{ currency:"USD", subtotal:2, daily }] : [], dates: domain === "sales" || domain === "performance" ? dates : [], rows: Array.from({length: rowCount}, (_, index) => ({ id: index ? `row-${index}` : "row", identity: `${workspace}-entity-page${url.searchParams.get("page") || 1}${index ? `-${index}` : ""}`, asin: `B0SAMPLE${String(index).padStart(3,"0")}`, daily, dailyQuantity: daily, ...Object.fromEntries(dates.map(d=>[`day:${d}`,2])), mainImage: index === 0 ? "https://m.media-amazon.com/images/I/fixture.jpg?width=80&format=jpg" : null, average7:2, title: `布局样本商品标题 ${index+1}`, grossProfit: -10, saleRevenue:200, netRevenue:180, orderNum:4, adCost:2, promotionDiscount:url.searchParams.has("onlySettle") ? 0 : "0", giftWrapFee:url.searchParams.has("onlySettle") ? "0" : "1234.5", subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", campaignId: "campaign-fixture", campaignName: "fixture campaign", adGroupId: "group-fixture", adGroupName: "fixture group", placement: "搜索结果顶部", targetingId: "target-fixture", targetingText: "keyword", searchTerm: "customer query", matchType: "EXACT", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, acos:0.125, roas:8, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, summary: { progress: { count: 42 } }, SellfoxStore: store })), pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: Number(url.searchParams.get("pageSize") || 50), total: 51 } } });
+    if (["sales", "performance", "runs", "inventory", "hourly", "stores", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain ?? "")) return route.fulfill({ json: { totals: domain === "performance" ? [{currency:"USD", grossProfit:10, saleRevenue:200, netRevenue:180, orderNum:4, saleQuantity:5, adCost:2, promotionDiscount:url.searchParams.has("onlySettle") ? "0" : "12.5", giftWrapFee:0}] : ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain ?? "") ? [{currency:null,cost:10,clicks:20,adOrders:2,adSales:200}] : domain === "sales" ? [{ currency:"USD", subtotal:2, daily }] : [], dates: domain === "sales" || domain === "performance" ? dates : [], rows: Array.from({length: rowCount}, (_, index) => ({ id: index ? `row-${index}` : "row", identity: `${workspace}-entity-page${url.searchParams.get("page") || 1}${index ? `-${index}` : ""}`, asin: `B0SAMPLE${String(index).padStart(3,"0")}`, daily, dailyQuantity: daily, ...Object.fromEntries(dates.map(d=>[`day:${d}`,2])), mainImage: index === 0 ? "https://m.media-amazon.com/images/I/fixture.jpg?width=80&format=jpg" : null, average7:2, title: `布局样本商品标题 ${index+1}`, grossProfit: -10, saleRevenue:200, netRevenue:180, orderNum:4, adCost:2, promotionDiscount:url.searchParams.has("onlySettle") ? 0 : "0", giftWrapFee:url.searchParams.has("onlySettle") ? "0" : "1234.5", subtotal: 2, reportDate: "2026-10-24", sku: `${workspace}-SKU-page${url.searchParams.get("page") || 1}`, msku: "test-msku", campaignId: "campaign-fixture", campaignName: "fixture campaign", adGroupId: "group-fixture", adGroupName: "fixture group", placement: "搜索结果顶部", targetingId: "target-fixture", targetingText: "keyword", searchTerm: "customer query", matchType: "EXACT", quantity: null, revenue: 20, currency: "USD", saleQuantity: 2, fbaQuantity: 1, fbmQuantity: 1, grossProfitRate: 0.1, refundRate: 0.05, impressions: 100, clicks: 2, cost: 1.5, adOrders: 1, adSales: 12, acos:0.125, roas:8, sales7: 2, fulfillable: 0, resource: domain === "runs" ? "performance" : undefined, status: domain === "runs" ? "running" : domain === "listings" ? "active" : undefined, ...(domain === "listings" ? { dxmPublishState: "delete" } : {}), summary: { progress: { count: 42 } }, SellfoxStore: store })), pagination: { page: Number(url.searchParams.get("page") || 1), pageSize: Number(url.searchParams.get("pageSize") || 50), total: 51 } } });
     throw new Error(`Unexpected test request: ${url.pathname}`);
   });
   await page.goto(`http://127.0.0.1:43221/?${params}`);
@@ -556,7 +556,7 @@ test("ads targeting/search-term tabs navigate endpoints, columns, export, histor
     await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", new RegExp(`${resource}/export`));
     await expect(page.getByLabel("立即同步资源")).toHaveValue(resource);
   }
-  for (const label of ["广告组合", "否定", "AMC", "日志"]) await expect(page.getByRole("button", { name: `${label} · 待接`, exact: true })).toBeDisabled();
+  for (const label of ["广告组合", "否定", "AMC"]) await expect(page.getByRole("button", { name: `${label} · 待接`, exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "查看记录 row", exact: true }).click();
   await page.getByText("展开原始摘要", { exact: true }).click();
   await expect.poll(() => calls.some(c => c.path.endsWith("/ads_search_term/row"))).toBe(true);
@@ -587,7 +587,7 @@ test("ads campaign/group/placement tabs expose daily reports, typed search, expo
     await page.goBack();
     await expect(button).toHaveAttribute("aria-current", "page");
   }
-  for (const label of ["广告组合", "否定", "AMC", "日志"]) {
+  for (const label of ["广告组合", "否定", "AMC"]) {
     const button = page.getByRole("button", { name: `${label} · 待接`, exact: true });
     await expect(button).toBeDisabled(); await expect(button).toHaveAttribute("title", /portfolios|结构 API|暂无已知|domain=runs/);
   }
@@ -667,4 +667,41 @@ test("changing domains or ad subtabs clears stale sort and unsupported columns s
   await page.getByRole("button", { name: "广告活动", exact: true }).click();
   await expect(page.getByRole("button", { name: "按活动名称排序", exact: true })).toBeEnabled();
   expect(new URL(page.url()).searchParams.has("sortBy")).toBe(false);
+});
+
+
+test("ads log navigation opens existing sync runs without submitting a sync", async ({ page }) => {
+  const { calls } = await setup(page, "domain=ads&adsTab=targeting&page=2&searchType=targetingId&adType=sb&sortBy=cost&sortOrder=desc");
+  const logs = page.getByRole("button", { name: "日志", exact: true });
+  await expect(logs).toBeEnabled();
+  await expect(logs).toHaveAttribute("title", /同步日志.*domain=runs.*非广告专属/);
+  await expect(page.getByRole("button", { name: "日志 · 待接", exact: true })).toHaveCount(0);
+  await logs.click();
+  await expect(page).toHaveURL(/domain=runs/);
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/runs")).at(-1)?.query.get("page")).toBe("1");
+  for (const key of ["searchType", "sortBy"]) expect(new URL(page.url()).searchParams.has(key)).toBe(false);
+  // Existing navigation retains inactive ad choices in the URL, but runs requests omit them.
+  for (const key of ["searchType", "adsTab", "adType", "sortBy"]) expect(calls.filter(call => call.path.endsWith("/runs")).at(-1)!.query.has(key)).toBe(false);
+  expect(calls.filter(call => call.body !== null)).toEqual([]);
+  await page.goBack();
+  await expect(page.getByRole("button", { name: "投放", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/page=2/);
+});
+
+test("listing DXM publish state is optional and does not imply pairing or strikethrough price type", async ({ page }) => {
+  await setup(page, "domain=listings");
+  await expect(page.getByRole("columnheader", { name: "DXM 发布状态", exact: true })).toHaveCount(0);
+  for (const [label, reason] of [["配对状态", /dxmPublishState.*尚无配对状态字段与稳定枚举/], ["划线价类型", /listingPrice\/listingPricing.*枚举尚未验证/]] as const) {
+    const select = page.getByLabel(`${label}（未同步）`, { exact: true });
+    await expect(select).toBeDisabled();
+    await expect(select.locator("..")).toHaveAttribute("title", reason);
+  }
+  await page.getByText("自定义列", { exact: true }).click();
+  await page.getByLabel("显示DXM 发布状态列", { exact: true }).check();
+  const header = page.getByRole("columnheader", { name: "DXM 发布状态", exact: true });
+  await expect(header).toBeVisible();
+  await expect(header.getByRole("button")).toHaveCount(0);
+  const headers = await page.locator("thead th").allTextContents();
+  await expect(page.locator("tbody tr").first().locator("td").nth(headers.indexOf("DXM 发布状态"))).toHaveText("delete");
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /column=dxmPublishState/);
 });

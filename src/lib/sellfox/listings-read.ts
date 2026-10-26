@@ -3,7 +3,7 @@ import { sellfoxAgentColumns } from "./agent-read";
 import { SellfoxBrowseError, sellfoxExportLimit, type SellfoxBrowseQuery } from "./browse-query";
 import { sellfoxSortKey, sellfoxSqlOrder } from "./browse-sort";
 
-const projectedColumns = ["fulfillment", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "listingQuantity", "unsellable", "warehousing"];
+const projectedColumns = ["dxmPublishState", "fulfillment", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "listingQuantity", "unsellable", "warehousing"];
 type Scope = { organizationId: string; workspaceId: string };
 
 /** Listing current already joins Store and the last complete Head. Never rejoin its payload. */

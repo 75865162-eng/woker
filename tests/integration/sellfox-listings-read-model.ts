@@ -12,6 +12,7 @@ type Query = (sql: string, values?: unknown[]) => Promise<{ rows: Row[] }>;
 type Statement = { text: string; values: unknown[] };
 type Result = { rows: Row[]; total: number; totals: Row[]; facets: { productTags: string[]; brands: string[] } };
 const migrationPath = "prisma/migrations/20261026050000_sellfox_listing_typed_read_model/migration.sql";
+const publishStateMigrationPath = "prisma/migrations/20261026060000_sellfox_listing_publish_state/migration.sql";
 const scope = { organizationId: "org", workspaceId: "ws" };
 
 export async function verifySellfoxListingReadModel(query: Query, before?: Statement) {
@@ -29,6 +30,7 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     await query(await readFile("prisma/migrations/20261025040000_sellfox_listing_identity_image/migration.sql", "utf8"));
     const oldColumns = (await query(`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='sellfox_listing_current' ORDER BY ordinal_position`, [schema])).rows.map(r => r.column_name);
     const payload = {
+      dxmPublishState: " delete ",
       brand: " Brand ", amazonBrand: " Amazon ", rating: "4.5", ratingCount: 0,
       buyBoxWinner: false, switchFulfillmentTo: "AFN", firstSaleDate: "", firstOrderDate: "2024-01-15",
       bsrRank: [{ rank: "bad", bigCategory: true }, { rank: "10", categoryName: "Small" }, { rank: "9999999.0", categoryName: " Big ", bigCategory: true }],
@@ -46,10 +48,18 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     await query(`INSERT INTO "SellfoxSnapshotHead" VALUES ('s','listings','2026-10-26'),('foreign','listings','2026-10-26')`);
     // Execute the shipped additive migration over populated data and existing view.
     await query(await readFile(migrationPath, "utf8"));
+    const priorProjection = (await query('SELECT * FROM sellfox_listing_current WHERE id=\'a\'')).rows[0];
+    const typedColumns = (await query(`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='sellfox_listing_current' ORDER BY ordinal_position`, [schema])).rows.map(r=>r.column_name);
+    await query(await readFile(publishStateMigrationPath, "utf8"));
     const columns = (await query(`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='sellfox_listing_current' ORDER BY ordinal_position`, [schema])).rows.map(r=>r.column_name);
     assert.deepEqual(columns.slice(0,oldColumns.length),oldColumns);
+    assert.deepEqual(columns, [...typedColumns, "dxmPublishState"]);
     assert.equal((await query('SELECT id,msku FROM sellfox_listing_current WHERE "organizationId"=\'org\'')).rows[0].id,"a");
     const projected = (await query('SELECT * FROM sellfox_listing_current WHERE id=\'a\'')).rows[0];
+    const { dxmPublishState, ...unchangedProjection } = projected;
+    assert.equal(dxmPublishState, "delete");
+    assert.deepEqual(unchangedProjection, priorProjection);
+    assert.deepEqual((await query('SELECT "dxmPublishState" FROM "SellfoxListingSnapshot" ORDER BY id')).rows.map(row => row.dxmPublishState), ["delete", "delete", "delete", "delete"]);
     for (const [key,value] of Object.entries({ brand:"Brand",amazonBrand:"Amazon",rating:"4.5",ratingCount:0,firstSaleDate:"2024-01-15",bsrRank:null,bsrCategory:"Big",listingQuantity:48,unsellable:0,warehousing:null,purchaseCost:12.5,fbaFees:0,referralFee:2,totalFee:3,headTripCost:1.5,reservedQty:0,shippingPrice:2.5,profitPrice:-1.5,profitRate:-0.1,buyBoxWinner:"否",fulfillment:"AFN",productTags:"标签、完整" })) assert.equal(projected[key],value,key);
     assert.deepEqual(projected.productTagNames,["标签、完整"]);
     // Partial/history rows also backfilled, so publishing a resumed Head cannot expose holes.
@@ -66,6 +76,8 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     };
     const one = await read("fulfillment=AFN&buyBox=no&brand=Brand&productTag="+encodeURIComponent("标签、完整"));
     assert.equal(one.total,1); assert.equal(one.rows[0].id,"a");
+    assert.equal(one.rows[0].dxmPublishState, "delete");
+    assert.equal((await read("", true)).rows[0].dxmPublishState, "delete");
     assert.deepEqual(one.totals,[{currency:"USD",count:1}]);
     assert.deepEqual(one.facets,{productTags:["标签、完整"],brands:["Brand"]});
     const empty = await read("brand=absent&search=absent&status=delete");
@@ -84,11 +96,13 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     }
     // Normal sync insert/update both execute the trigger. Missing, malformed, zero,
     // real boolean vs string boolean, and deleted rows without MSKU are preserved.
-    await insert("b","org","s","2026-10-26",{...payload,brand:"Other",rating:"10",buyBoxWinner:true,bsrRank:[{rank:"2",categoryName:"First"},{rank:"3",bigCategory:true,categoryName:"Big"}]},null);
-    await insert("c","org","s","2026-10-26",{rating:"bad",ratingCount:"1e9999",buyBoxWinner:"true",switchFulfillmentTo:"unknown",productLabelList:{},bsrRank:"bad",quantity:"NaN",profitPrice:"Infinity"});
+    await insert("b","org","s","2026-10-26",{...payload,dxmPublishState:"future-state",brand:"Other",rating:"10",buyBoxWinner:true,bsrRank:[{rank:"2",categoryName:"First"},{rank:"3",bigCategory:true,categoryName:"Big"}]},null);
+    await insert("c","org","s","2026-10-26",{dxmPublishState:{state:"delete"},rating:"bad",ratingCount:"1e9999",buyBoxWinner:"true",switchFulfillmentTo:"unknown",productLabelList:{},bsrRank:"bad",quantity:"NaN",profitPrice:"Infinity"});
     await query(`UPDATE "SellfoxListingSnapshot" SET status='delete' WHERE id='b'`);
     const three = await read("sortBy=rating&sortOrder=asc");
     assert.deepEqual(three.rows.map(r=>r.id),["a","b","c"]);
+    assert.equal(three.rows[1].dxmPublishState, "future-state");
+    assert.equal(three.rows[2].dxmPublishState, null);
     const missing = three.rows[2];
     for (const key of ["ratingCount","buyBoxWinner","fulfillment","productTags","bsrRank","listingQuantity","profitPrice"]) assert.equal(missing[key],null,key);
     assert.equal(missing.rating,"bad");
@@ -96,8 +110,15 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     assert.equal((await read("status=delete")).rows[0].msku,null);
     assert.equal((await read("pageSize=1&page=2&sortBy=rating&sortOrder=asc")).rows[0].id,"b");
     assert.equal((await read("buyBox=yes")).total,1);
+    for (const value of [null, "", "  ", 0, false, [], {}]) {
+      await query('UPDATE "SellfoxListingSnapshot" SET payload=jsonb_set(payload,\'{dxmPublishState}\',$1::jsonb) WHERE id=\'b\'', [JSON.stringify(value)]);
+      assert.equal((await read("status=delete")).rows[0].dxmPublishState, null);
+    }
+    await query('UPDATE "SellfoxListingSnapshot" SET payload=jsonb_set(payload,\'{dxmPublishState}\',\'" delete "\'::jsonb) WHERE id=\'b\'');
+    assert.equal((await read("status=delete")).rows[0].dxmPublishState, "delete");
     await query('UPDATE "SellfoxListingSnapshot" SET payload=$1::jsonb WHERE id=\'a\'',[JSON.stringify({brand:"Changed",rating:0})]);
     const updated = (await read("brand=Changed")).rows[0];
+    assert.equal(updated.dxmPublishState, null);
     assert.equal(updated.rating,"0"); assert.equal(updated.productTags,null); assert.equal(updated.bsrRank,null);
     // Complete Head remains the publication boundary; old/history/partial never leak.
     await query(`UPDATE "SellfoxSnapshotHead" SET "capturedAt"='2026-10-27' WHERE "storeId"='s'`);
@@ -120,7 +141,7 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
       const after = await read();
       assert.equal(old.total,10000); assert.deepEqual(after.totals,old.totals); assert.deepEqual(after.facets,old.facets);
       // Keep the previous rating display string and all row fields unchanged.
-      assert.deepEqual(after.rows,old.rows);
+      assert.deepEqual(after.rows.map(row => { const original = { ...row }; delete original.dxmPublishState; return original; }),old.rows);
       plans.before = await explain(before);
     }
     for (const key of ["default","brand","sales7"] as const) {

@@ -168,6 +168,7 @@ COMMIT;
 | 销量/销售额/订单量 | productSaleDayOpenVo[].day + productNum/salePrice/orderNum | reportDate + quantity/revenue/orders |
 | Listing MSKU/内部SKU/状态 | sku / commoditySku / onlineStatus | msku / sku / status |
 | Listing售价/可售 | standardPrice / inventoryManage.available | price / fulfillable（不使用quantity冒充FBA库存） |
+| Listing DXM 发布状态（可选列） | dxmPublishState | 类型投影 dxmPublishState，默认隐藏；仅展示去首尾空格的字符串原值，缺失/空串/非字符串为 NULL。用户提供的现存 payload 观察为 delete/空值，不解释为配对状态，不据此建立配对枚举 |
 | 7/14/30天销量、销额、广告费 | day7/14/30SaleNum、day7/14/30SalePrice、day7/14/30AdTotalCost | sales7/14/30、revenue7/14/30、adSpend7/14/30 |
 | 利润/毛利率/订单/净销售额 | profit / profitRate / orderNum / salesPriceNet | grossProfit / grossProfitRate / orderNum / netRevenue |
 | 利润销量、销售额、广告费、退款率 | saleNum / salePrice / adTotalCost / refundPercent | saleQuantity / saleRevenue / adCost / refundRate |

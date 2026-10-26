@@ -4,7 +4,7 @@ import React, { type ReactNode } from "react";
 import { SellfoxBrowseFilters } from "@/components/sellfox/browse-filters";
 import { defaultSellfoxView, type SellfoxView } from "@/lib/sellfox/workbench-view";
 
-type Props = { children?: ReactNode; "aria-label"?: string; value?: string; disabled?: boolean; onClick?: () => void; onChange?: (event: { target: { value: string } }) => void };
+type Props = { children?: ReactNode; "aria-label"?: string; title?: string; value?: string; disabled?: boolean; onClick?: () => void; onChange?: (event: { target: { value: string } }) => void };
 function elements(node: ReactNode): React.ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!React.isValidElement<Props>(node)) return [];
@@ -115,11 +115,17 @@ test("ads tabs enable all six daily reports with distinct columns and explain de
         assert.ok(button); assert.equal(button.props.disabled, false); button.props.onClick!();
         assert.deepEqual(patches.at(-1), { adsTab: tab, searchType: "", page: 1 });
       }
-      for (const label of ["广告组合", "否定", "AMC", "日志"]) {
+      for (const label of ["广告组合", "否定", "AMC"]) {
         const button = nodes.find(node => node.type === "button" && Array.isArray(node.props.children) && node.props.children[0] === label)!;
         assert.ok(button); assert.equal(button.props.disabled, true);
         assert.ok((button.props as { title?: string }).title);
       }
+      const logs = nodes.find(node => node.type === "button" && Array.isArray(node.props.children) && node.props.children[0] === "日志")!;
+      assert.equal(logs.props.disabled, false);
+      assert.match(logs.props.title!, /同步日志.*domain=runs.*非广告专属/);
+      assert.deepEqual(logs.props.children, ["日志", null]);
+      logs.props.onClick!();
+      assert.deepEqual(patches.at(-1), { domain: "runs", page: 1 });
       const labels = nodes.filter(node => node.type === "input").map(node => node.props["aria-label"]);
       if (adsTab === "campaign") assert.ok(labels.includes("显示活动名称列"));
       if (adsTab === "adGroup") assert.ok(labels.includes("显示广告组名称列"));
@@ -131,5 +137,22 @@ test("ads tabs enable all six daily reports with distinct columns and explain de
       if (adsTab === "targeting") assert.ok(labels.includes("显示投放ID列"));
       if (adsTab === "searchTerm") assert.ok(labels.includes("显示用户搜索词列"));
     }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
+
+test("listing pairing and strikethrough type stay disabled with specific evidence gaps", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "listings" }, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    for (const [label, reason] of [["配对状态", /dxmPublishState.*DXM 发布状态.*尚无配对状态字段与稳定枚举/], ["划线价类型", /standardPrice.*listingPrice\/listingPricing.*枚举尚未验证/]] as const) {
+      const select = nodes.find(node => node.type === "select" && node.props["aria-label"] === `${label}（未同步）`)!;
+      assert.equal(select.props.disabled, true);
+      const parent = nodes.find(node => node.type === "label" && elements(node.props.children).includes(select))!;
+      assert.match(parent.props.title!, reason);
+      assert.equal(select.props.onChange, undefined);
+    }
+    assert.deepEqual(patches, []);
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
