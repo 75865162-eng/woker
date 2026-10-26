@@ -377,6 +377,36 @@ test("revenue14 min/max filter typed column on listing_current; facets stay scop
   }
 });
 
+test("revenue30 min/max filter typed column on listing_current; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "revenue30Min=0", "revenue30Max=10000", "revenue30Min=1.5&revenue30Max=48"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&shopExternalId=shop&site=US`), "listings");
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      const hasRange = query.revenue30Min != null || query.revenue30Max != null;
+      if (hasRange) {
+        assert.match(sql.text, /s\."revenue30" IS NOT NULL/);
+        for (const [value, pattern] of [[query.revenue30Min, /s\."revenue30">=\$(\d+)/], [query.revenue30Max, /s\."revenue30"<=\$(\d+)/]] as const) {
+          const match = sql.text.match(pattern);
+          if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+      } else {
+        assert.doesNotMatch(sql.text, /s\."revenue30" IS NOT NULL|s\."revenue30">=|s\."revenue30"<=/);
+      }
+      if (!exporting) {
+        const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+        assert.doesNotMatch(facets, /revenue30Min|revenue30Max|s\."revenue30">=|s\."revenue30"<=/);
+        for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?revenue30Min=1&revenue30Max=9"), domain);
+    const sql = workbenchReadSql(domain, query, scope, false);
+    assert.doesNotMatch(sql.text, /s\."revenue30" IS NOT NULL|revenue30Min/);
+  }
+});
+
 test("listingQuantity min/max filter typed column on listing_current; facets stay scope-only", () => {
   for (const exporting of [false, true]) {
     for (const range of ["", "listingQuantityMin=0", "listingQuantityMax=10000", "listingQuantityMin=1&listingQuantityMax=5000"]) {

@@ -852,6 +852,37 @@ test("revenue14 min/max validate as finite numbers, round trip listings-only, re
   assert.throws(() => query("revenue14Min=10&revenue14Max=1"), /14天销售额上限不得小于下限/);
 });
 
+test("revenue30 min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
+  for (const range of ["", "revenue30Min=0", "revenue30Max=100", "revenue30Min=1.5&revenue30Max=48", "revenue30Min=0&revenue30Max=0"]) {
+    const params = new URLSearchParams(`domain=listings&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.revenue30Min, params.has("revenue30Min") ? Number(params.get("revenue30Min")) : undefined);
+    assert.equal(parsed.revenue30Max, params.has("revenue30Max") ? Number(params.get("revenue30Max")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("revenue30Min"), params.get("revenue30Min"));
+      assert.equal(sellfoxViewParams(other).get("revenue30Max"), params.get("revenue30Max"));
+      assert.equal(sellfoxViewParams(other, true).has("revenue30Min"), false);
+      assert.equal(sellfoxViewParams(other, true).has("revenue30Max"), false);
+    }
+  }
+  for (const key of ["revenue30Min", "revenue30Max"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1e2", "NaN", "abc", "4.5.1", "--1", "Infinity"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是数字/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("revenue30Min=%201.5%20").revenue30Min, 1.5);
+  assert.equal(query("revenue30Max=0").revenue30Max, 0);
+  assert.equal(query("revenue30Min=.5").revenue30Min, 0.5);
+  assert.throws(() => query("revenue30Min=10&revenue30Max=1"), /30天销售额上限不得小于下限/);
+});
+
 test("reservedQty min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
   for (const range of ["", "reservedQtyMin=0", "reservedQtyMax=100", "reservedQtyMin=1.5&reservedQtyMax=48", "reservedQtyMin=0&reservedQtyMax=0"]) {
     const params = new URLSearchParams(`domain=listings&${range}`);
