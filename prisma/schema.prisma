@@ -1187,6 +1187,18 @@ model SellfoxProductDailySnapshot {
   netCoAmount Float?
   comminglingVatAmount Float?
   codFeeAmount Float?
+  evaluationCapital Float?
+  evaluationCommission Float?
+  dealPerformanceFeeAmount Float?
+  couponParticipationFeeAmount Float?
+  safetReimbursedAmount Float?
+  affordabilityExpenseAmount Float?
+  withheldFeeAmount Float?
+  chargebackIncomeAmount Float?
+  guaranteeClaimIncomeAmount Float?
+  promotionSalesAmount Float?
+  promotionShippingAmount Float?
+  promotionTaxAmount Float?
   evaluationSaleNum Float?
   channelSaleNum  Float?
   adSpCost        Float?

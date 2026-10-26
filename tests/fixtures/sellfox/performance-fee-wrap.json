@@ -1,0 +1,58 @@
+{
+  "backfill": {
+    "evaluationCapital": "1.5",
+    "evaluationCommission": 0,
+    "dealPerformanceFeeAmount": 3,
+    "couponParticipationFeeAmount": "14.25",
+    "safetReimbursedAmount": 5,
+    "affordabilityExpenseAmount": 6,
+    "withheldFeeAmount": 7,
+    "chargebackIncomeAmount": 8,
+    "guaranteeClaimIncomeAmount": 9,
+    "promotionSalesAmount": 10,
+    "promotionShippingAmount": 11,
+    "promotionTaxAmount": 12
+  },
+  "insert": {
+    "evaluationCapital": 0,
+    "evaluationCommission": "2.5",
+    "dealPerformanceFeeAmount": 4,
+    "couponParticipationFeeAmount": 5,
+    "safetReimbursedAmount": 6,
+    "affordabilityExpenseAmount": 7,
+    "withheldFeeAmount": 8,
+    "chargebackIncomeAmount": 9,
+    "guaranteeClaimIncomeAmount": 10,
+    "promotionSalesAmount": 11,
+    "promotionShippingAmount": 12,
+    "promotionTaxAmount": 13
+  },
+  "cad": {
+    "evaluationCapital": 10,
+    "evaluationCommission": 20,
+    "dealPerformanceFeeAmount": 30,
+    "couponParticipationFeeAmount": 40,
+    "safetReimbursedAmount": 50,
+    "affordabilityExpenseAmount": 60,
+    "withheldFeeAmount": 70,
+    "chargebackIncomeAmount": 80,
+    "guaranteeClaimIncomeAmount": 90,
+    "promotionSalesAmount": 100,
+    "promotionShippingAmount": 110,
+    "promotionTaxAmount": 120
+  },
+  "invalid": {
+    "evaluationCapital": "invalid",
+    "evaluationCommission": "",
+    "dealPerformanceFeeAmount": null,
+    "couponParticipationFeeAmount": "Infinity",
+    "safetReimbursedAmount": "1e999",
+    "affordabilityExpenseAmount": "NaN",
+    "withheldFeeAmount": {},
+    "chargebackIncomeAmount": [],
+    "guaranteeClaimIncomeAmount": true,
+    "promotionSalesAmount": "-Infinity",
+    "promotionShippingAmount": " ",
+    "promotionTaxAmount": null
+  }
+}

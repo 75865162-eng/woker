@@ -1,5 +1,38 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+**190000 fee-wrap 收尾（2026-10-27 00:27:11 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地）**
+
+`evaluationCapital`「测评本金」、`evaluationCommission`「测评佣金」、`dealPerformanceFeeAmount`「Deal表现费」、`couponParticipationFeeAmount`「优惠券参与费」、`safetReimbursedAmount`「SAFE-T赔偿」、`affordabilityExpenseAmount`「可负担性费用」、`withheldFeeAmount`「预扣费用」、`chargebackIncomeAmount`「拒付收入」、`guaranteeClaimIncomeAmount`「A-Z索赔收入」、`promotionSalesAmount`「促销销售额」、`promotionShippingAmount`「促销运费」、`promotionTaxAmount`「促销税费」。全部为 performance 默认隐藏数字列；同名 profit payload → nullable 类型投影 → typed SQL 聚合/排序/选列 CSV/XLSX；Agent 英文长表末尾追加。明细 NULL 空、0 保留，实体及币种 totals 用 `COALESCE(sum(...),0)`。
+
+evaluationCapital「测评本金」/evaluationCommission「测评佣金」分别独立于 evaluationFee「测评费」和 evaluationSaleNum（数量）；chargebackIncomeAmount「拒付收入」≠ chargebackAmount「拒付退款」，guaranteeClaimIncomeAmount「A-Z索赔收入」≠ guaranteeClaimAmount「A-Z索赔退款」；promotionSalesAmount「促销销售额」≠ promotionDiscount「促销折扣」≠ promotionTotalAmount「促销费」，亦独立于 promotionShippingAmount/promotionTaxAmount；withheldFeeAmount「预扣费用」≠ withheldTaxAmount「商城代扣税」。不映射 Listing fees。
+
+**Fee mining wraps / pauses here**：本批为费用挖掘收尾；mfregulatory*、purchaseCost* splits 及无明确标签的 long-tail 继续锁定，等待 Sellfox web label verify 后另行授权。销售小组 / 业绩归属人 / 实时统计 / 运营 / 分类 / AWD / sales业务员 / 广告组合 / 否定 / AMC 仍锁定；sales 域不增加这些列。
+
+190000 为加法迁移：保留 180000 所有函数投影/trigger 和精确视图列序，末尾追加 12 列，无新索引；一次 `UPDATE payload=payload` 回填。未来应用前评估全历史锁/WAL/磁盘与维护窗口；回退应用代码并保留加法 schema，不自动删列/数据库回滚。未做真实 P95 benchmark。 仅 BOX 本地，Owner: Chen Jieliang；无 push/fetch、SSH/deploy/restart、123 迁移/真实库写入、live Sellfox API/sync 或计划启用。123 需全部前置迁移（含 180000）+ 190000，只有用户说「上」后另行评审。
+
+验证完成：177 项定向测试通过；190000 / Listing / cross-store 三个独立 PGlite verifier 均 PASS（可选专用 PG 子测未配置，SKIP）；TypeScript、改动 TS ESLint、fake-URL Prisma validate/generate、git diff --check 通过。额外逐字审计确认 180000 函数投影与视图前缀完全保留，仅追加指定 12 列且无新索引。
+
+本地提交受阻：`.git` 为只读文件系统，`chmod -R u+w .git` 失败，`git add -A` 无法创建 `.git/index.lock`。未暂存/提交，完整改动留在当前分支工作区供父进程完成本地提交；HEAD 仍为 `0261c18`。
+
+离线复验（预期定向测试零失败，三个 disposable PGlite verifier 均 PASS；专用 PG 子测未配置时 SKIP，类型/lint/Prisma/diff 零错误）：
+
+```bash
+NODE_ENV=test node --import tsx --test --test-concurrency=1 tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,listing-identity,browse-api,browse-filters}.test.ts
+SELLFOX_P0_TEST_DATABASE_URL= SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+SELLFOX_P0_TEST_DATABASE_URL= SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-listings-read-model.ts
+SELLFOX_P0_TEST_DATABASE_URL= SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-cross-store.ts
+npm run typecheck
+# 对本轮变更的 TS/TSX 执行 ESLint（包含 src 和 tests）。
+git diff --name-only -- '*.ts' '*.tsx' | xargs node_modules/.bin/eslint
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node_modules/.bin/prisma validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node_modules/.bin/prisma generate
+git diff --check
+```
+
+共享 `performance-fee-wrap.json` 覆盖非零/0/null/非法；SQL 验证 180000 后历史回填、INSERT、payload=payload、UPDATE 清空、COALESCE、精确视图追加列序、旧字段/索引、结算/币种隔离及 Agent 排序。完整 check/build/浏览器/真实 P95 留待明确合码、发布或真实性能验收。下方为历史批次记录，其锁定/提交状态以本节与当前 Git 状态为准。
+
+---
+
 **180000 增量（2026-10-27 00:13:06 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地）**
 
 全部 12 个 service/refund/Tl 列已接入，performance 默认隐藏；完整键/中文标签见 `performance-service-fees.json` 与 workbench captions。两项 FBA 退款不是基础费用；otherPriceIncomeAmount「其他收入」≠ otherPriceAmount「其他费用」≠ orderOtherPriceAmount「订单其他费」，Tl deferred/withheldTax 与 taxPrice 独立。Agent 长表末尾追加 12 列，选列 CSV/XLSX 保留 0/空 NULL；sales、Listing aliases、evaluationCapital/evaluationCommission 与灰显项不变。

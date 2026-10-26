@@ -109,6 +109,18 @@ export function extractPerformanceFields(row: RecordLike) {
     netCoAmount: sellfoxNumber(row, "netCoAmount"),
     comminglingVatAmount: sellfoxNumber(row, "comminglingVatAmount"),
     codFeeAmount: sellfoxNumber(row, "codFeeAmount"),
+    evaluationCapital: sellfoxNumber(row, "evaluationCapital"),
+    evaluationCommission: sellfoxNumber(row, "evaluationCommission"),
+    dealPerformanceFeeAmount: sellfoxNumber(row, "dealPerformanceFeeAmount"),
+    couponParticipationFeeAmount: sellfoxNumber(row, "couponParticipationFeeAmount"),
+    safetReimbursedAmount: sellfoxNumber(row, "safetReimbursedAmount"),
+    affordabilityExpenseAmount: sellfoxNumber(row, "affordabilityExpenseAmount"),
+    withheldFeeAmount: sellfoxNumber(row, "withheldFeeAmount"),
+    chargebackIncomeAmount: sellfoxNumber(row, "chargebackIncomeAmount"),
+    guaranteeClaimIncomeAmount: sellfoxNumber(row, "guaranteeClaimIncomeAmount"),
+    promotionSalesAmount: sellfoxNumber(row, "promotionSalesAmount"),
+    promotionShippingAmount: sellfoxNumber(row, "promotionShippingAmount"),
+    promotionTaxAmount: sellfoxNumber(row, "promotionTaxAmount"),
     userNameList: Array.isArray(row.userNameList) ? [...new Set(row.userNameList.filter((name): name is string => typeof name === "string").map(name => name.trim()).filter(Boolean))].sort() : [],
   };
 }
