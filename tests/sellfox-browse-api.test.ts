@@ -680,11 +680,11 @@ test("ads default image and selected Listing columns reach CSV/XLSX exports acro
             assert.ok(imageIndex >= 0);
             assert.equal(headers[imageIndex + 1], '"产品信息"');
             assert.deepEqual(headers.slice(headers.indexOf('"价格"'), headers.indexOf('"价格"') + 3), ['"价格"', '"星级"', '"评论数"']);
-            assert.deepEqual(headers.filter(label => ['"星级"', '"评论数"', '"Buy Box"'].includes(label)), ['"星级"', '"评论数"', '"Buy Box"']);
+            assert.deepEqual(headers.filter(label => ['"星级"', '"评论数"', '"标签"', '"品牌"', '"发货方式"', '"Buy Box"'].includes(label)), ['"星级"', '"评论数"', '"标签"', '"品牌"', '"发货方式"', '"Buy Box"']);
             if (domain === "ads_report") assert.equal(imageIndex, 0);
             assert.equal(lines[1].split(",")[imageIndex], '"https://example.test/product.jpg"');
             assert.equal(lines[2].split(",")[imageIndex], '""');
-            for (const label of ["MSKU", "标题", "店铺", "站点", "标签", "品牌", "发货方式"]) assert.ok(!headers.includes(`"${label}"`));
+            for (const label of ["MSKU", "标题", "店铺", "站点"]) assert.ok(!headers.includes(`"${label}"`));
           } else {
             const { default: ExcelJS } = await import("exceljs");
             const book = new ExcelJS.Workbook(); await book.xlsx.load(await defaults.arrayBuffer());
@@ -694,11 +694,11 @@ test("ads default image and selected Listing columns reach CSV/XLSX exports acro
             assert.ok(imageIndex >= 0);
             assert.equal(headers[imageIndex + 1], "产品信息");
             assert.deepEqual(headers.slice(headers.indexOf("价格"), headers.indexOf("价格") + 3), ["价格", "星级", "评论数"]);
-            assert.deepEqual(headers.filter(label => ["星级", "评论数", "Buy Box"].includes(String(label))), ["星级", "评论数", "Buy Box"]);
+            assert.deepEqual(headers.filter(label => ["星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"].includes(String(label))), ["星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]);
             if (domain === "ads_report") assert.equal(imageIndex, 0);
             assert.equal(sheet.getRow(2).getCell(imageIndex + 1).value, "https://example.test/product.jpg");
             assert.ok([null, ""].includes(sheet.getRow(3).getCell(imageIndex + 1).value as null | string));
-            for (const label of ["MSKU", "标题", "店铺", "站点", "标签", "品牌", "发货方式"]) assert.ok(!headers.includes(label));
+            for (const label of ["MSKU", "标题", "店铺", "站点"]) assert.ok(!headers.includes(label));
           }
           // Keep the no-layout/no-sort selected-column route covered too.
           const sort = layout ? `sortBy=buyBoxWinner&sortOrder=asc&` : "";

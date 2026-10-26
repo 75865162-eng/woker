@@ -559,7 +559,7 @@ test("profit thumbnails load safely, missing images stay blank and fee zeros/num
 });
 
 
-test("ads default image precedes product info across six tabs and explicit column selections survive tab changes", async ({ page }) => {
+test("ads default image precedes product info with tags, brand and fulfillment across six tabs and explicit column selections survive tab changes", async ({ page }) => {
   await setup(page, "domain=ads&from=2026-10-24&to=2026-10-24");
   for (const label of ["广告产品", "投放", "搜索词", "广告活动", "广告组", "广告位"]) {
     await page.getByRole("button", { name: label, exact: true }).click();
@@ -568,9 +568,10 @@ test("ads default image precedes product info across six tabs and explicit colum
     await expect(image.getByRole("button")).toHaveCount(0);
     const headers = await page.locator("thead th").allTextContents();
     expect(headers[headers.indexOf("图片") + 1]).toBe("产品信息");
+    for (const name of ["标签", "品牌", "发货方式"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
     await page.getByText("自定义列", { exact: true }).click();
-    for (const name of ["图片", "星级", "评论数", "Buy Box"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).toBeChecked();
-    for (const name of ["MSKU", "标题", "店铺", "站点", "标签", "品牌", "发货方式"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).not.toBeChecked();
+    for (const name of ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).toBeChecked();
+    for (const name of ["MSKU", "标题", "店铺", "站点"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).not.toBeChecked();
     await page.getByText("自定义列", { exact: true }).click();
     for (const name of ["CSV", "Excel"]) {
       const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
@@ -579,7 +580,7 @@ test("ads default image precedes product info across six tabs and explicit colum
   }
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("checkbox", { name: "显示图片列", exact: true }).uncheck();
-  for (const name of ["星级", "评论数", "Buy Box"]) {
+  for (const name of ["星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) {
     await page.getByRole("checkbox", { name: `显示${name}列`, exact: true }).uncheck();
     await expect(page.getByRole("columnheader", { name, exact: true })).toHaveCount(0);
   }
@@ -588,13 +589,13 @@ test("ads default image precedes product info across six tabs and explicit colum
     const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
     const params = new URL(href!, page.url()).searchParams;
     expect(params.get("columns")).toBe("custom");
-    for (const key of ["image", "rating", "ratingCount", "buyBoxWinner"]) expect(params.getAll("column")).not.toContain(key);
+    for (const key of ["image", "rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) expect(params.getAll("column")).not.toContain(key);
   }
   await page.getByText("自定义列", { exact: true }).click();
   await page.getByRole("button", { name: "广告产品", exact: true }).click();
-  for (const name of ["图片", "星级", "评论数", "Buy Box"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
+  for (const name of ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "广告位", exact: true }).click();
-  for (const name of ["图片", "星级", "评论数", "Buy Box"]) await expect(page.getByRole("columnheader", { name, exact: true })).toHaveCount(0);
+  for (const name of ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("columnheader", { name, exact: true })).toHaveCount(0);
 });
 
 test("ads targeting/search-term tabs navigate endpoints, columns, export, history and active sync resource", async ({ page }) => {

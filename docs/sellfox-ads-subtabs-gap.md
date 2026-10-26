@@ -1,5 +1,32 @@
 # Sellfox 广告子页：Phase A / B 已接入与剩余缺口
 
+## 2026-10-27 — ads 默认显示标签 / 品牌 / 发货方式 · BOX LOCAL ONLY
+
+基线 HEAD `cec772e41190a8c93b472e75841731827b5b6851`，分支 `codex/operations-p0-catalog-replenishment`。生产代码仅将 `columns.ads` 的 `productTags`「标签」、`brand`「品牌」、`fulfillment`「发货方式」三个 `defaultVisible: false` 改为 `true`；六页 ads / ads_targeting / ads_search_term / ads_campaign / ads_ad_group / ads_placement 沿现有共享列继承，不在 ads_* 重复定义。
+
+labels、requiresField 和源顺序 campaignId → adGroupId → productTags → brand → fulfillment → buyBoxWinner 保持不变（活动页继续沿用既有排除 adGroupId 的规则）。现有 Listing current 类型投影、筛选与 facets 不变；默认表头与未显式选列的 CSV/XLSX 包含三列，显式选列及空选列保持权威。测试扩展三列默认勾选、隐藏后的导出参数省略、切页选择保留及默认导出表头；既有 SQL/filter/CSV 覆盖保留。
+
+Word-diff 严格为三组 `-false,` / `+true,`；按基线仅替换三项后与整个生产文件逐字节一致，listings / sales / performance 配置分别逐字节相同。回滚只需将这三个 ads 默认标志恢复为 false，无数据库回退。**Fee-mining remains paused**；不解锁其余待接列或子页，无新增字段、schema/migration/SQL 或服务端修改。
+
+仅 BOX 本地：无 push/fetch/deploy/SSH、live Sellfox API 或真实数据库写入，未加载/修改 `.env`；Prisma 仅使用 stub。三份定向测试文件、TypeScript、四个变更 TS 文件 ESLint 与 `git diff --check` 通过。浏览器定向用例已尝试，Chromium 启动时报 `sandbox_host_linux.cc:41` / `Operation not permitted`，SIGTRAP 退出，页面断言未执行；未绕过 sandbox，需在允许 Chromium 的本地环境补跑。
+
+验证命令：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+# 默认 CSV/XLSX 循环同样补充三列表头，额外检查该测试文件：
+node node_modules/eslint/bin/eslint.js tests/sellfox-browse-api.test.ts
+git diff --check
+npm run test:sellfox:browser -- --grep 'ads default image'
+git diff --word-diff=porcelain --unified=0 -- src/components/sellfox/workbench-types.ts
+```
+
+本次仅默认列配置，采用定向回归与类型/lint 验证；按范围跳过完整 check/build、真实库与性能测试。后续合码/发布或 SQL/schema/性能任务再按对应门槛验证。下一候选为 listings bsrRank + bsrCategory，本轮未修改；仓库外 parity gap 由父进程更新。
+
+---
+
 ## 2026-10-27 — ads 默认显示星级 / 评论数 / Buy Box · BOX LOCAL ONLY
 
 > 基线 HEAD `f2ca9792653e2d6f06fa10eed08fac45082a062d`；完成状态见当前 HEAD / gap。生产代码仅将 `columns.ads` 的 `rating`「星级」、`ratingCount`「评论数」、`buyBoxWinner`「Buy Box」三个 `defaultVisible: false` 改为 `true`。六个广告页通过现有共享列继承生效，不重复定义；默认勾选及未显式选列的 CSV/XLSX 均包含三列。

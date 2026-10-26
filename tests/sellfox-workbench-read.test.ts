@@ -674,7 +674,7 @@ test("selected listing amazonBrand and bsrCategory export text and empty CSV/XLS
   } finally { globals.prisma = previous; }
 });
 
-test("ads default to current Listing image before product info plus rating, ratingCount and Buy Box across all report tabs", () => {
+test("ads default to current Listing image before product info plus rating, ratingCount, productTags, brand, fulfillment and Buy Box across all report tabs", () => {
   const scope = { organizationId: "org", workspaceId: "ws" };
   const keys = ["image", "rating", "productTags"];
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
@@ -684,9 +684,9 @@ test("ads default to current Listing image before product info plus rating, rati
     assert.deepEqual(config.map(c => c.labelZh), ["图片", "星级", "标签"]);
     for (const c of config) {
       assert.equal(c.unavailable, undefined);
-      assert.equal(c.defaultVisible, c.key !== "productTags");
+      assert.equal(c.defaultVisible, true);
       assert.match(c.requiresField!, /Listing 当前快照/);
-      assert.equal(defaultVisibleColumnKeys(columnDomain).includes(c.key), c.key !== "productTags");
+      assert.equal(defaultVisibleColumnKeys(columnDomain).includes(c.key), true);
     }
     assert.deepEqual(config[0].parts, ["mainImage"]);
     assert.match(config[0].requiresField!, /mainImage/);
@@ -695,8 +695,9 @@ test("ads default to current Listing image before product info plus rating, rati
     const defaults = defaultVisibleColumnKeys(columnDomain);
     assert.deepEqual(defaults.slice(defaults.indexOf("image"), defaults.indexOf("image") + 4), ["image", "asin", "enabled", "serviceStatus"]);
     assert.deepEqual(defaults.slice(defaults.indexOf("price"), defaults.indexOf("price") + 3), ["price", "rating", "ratingCount"]);
+    assert.deepEqual(defaults.slice(defaults.indexOf("productTags"), defaults.indexOf("buyBoxWinner") + 1), ["productTags", "brand", "fulfillment", "buyBoxWinner"]);
     const sourceKeys = columns[columnDomain].map(c => c.key);
-    assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("brand"), sourceKeys.indexOf("buyBoxWinner") + 1), ["brand", "fulfillment", "buyBoxWinner"]);
+    assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("productTags"), sourceKeys.indexOf("buyBoxWinner") + 1), ["productTags", "brand", "fulfillment", "buyBoxWinner"]);
     assert.deepEqual(columns[columnDomain].slice(-4).map(c => c.key), ["msku", "title", "name", "marketplace"]);
     for (const key of ["msku", "title", "name", "marketplace"]) assert.equal(columns[columnDomain].find(c => c.key === key)!.defaultVisible, false);
     assert.deepEqual(visibleColumns(columnDomain, ["asin", "cost"]).map(c => c.key), ["asin", "cost"]);
@@ -708,9 +709,9 @@ test("ads default to current Listing image before product info plus rating, rati
     assert.deepEqual(textConfig.map(c => c.labelZh), ["品牌", "发货方式", "Buy Box"]);
     for (const c of textConfig) {
       assert.equal(c.unavailable, undefined);
-      assert.equal(c.defaultVisible, c.key === "buyBoxWinner");
+      assert.equal(c.defaultVisible, true);
       assert.ok(!c.numeric);
-      assert.equal(defaults.includes(c.key), c.key === "buyBoxWinner");
+      assert.equal(defaults.includes(c.key), true);
       assert.match(c.requiresField!, new RegExp(`Listing 当前快照 ${c.key} 类型投影`));
       for (const value of [null, "", "00123"]) assert.equal(sellfoxColumnValue(c, { [c.key]: value }), value);
     }
