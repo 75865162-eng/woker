@@ -1,5 +1,25 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+**UI polish：performance 业务员默认显示（2026-10-27 01:07:17 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地）**
+
+`performance.salesperson`「业务员」移出默认隐藏列组，位于币种之后，使用 `column()` 的 `defaultVisible: true`；商品维度和 store/developer/spu 默认列及无显式选列的 CSV/XLSX 均包含该列。仍读取既有 `userNameList` 类型投影并以「、」连接，requiresField、筛选/facets/包含语义不变。业务员统计维度仍禁用，sales 业务员与 Listing/ads 业务员仍锁定，其余灰显不变；可选费用列继续默认隐藏，**fee-mining remains paused**。已有显式选列继续遵循用户配置。回滚仅还原本轮 UI/测试改动，无数据操作。
+
+本轮无 schema/migration/SQL/sync 改动；无 push/fetch、SSH/deploy/restart、migrate-on-123、真实库读写、live Sellfox API 或计划启用。离线复验（预期定向测试和浏览器测试零失败，类型/lint/diff 零错误）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-agent-read.test.ts
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'salesperson|store dimension'
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+```
+
+验证通过：156 项定向 fixture 测试、3 项隔离浏览器测试、TypeScript、touched TS ESLint 和 `git diff --check`。无显式选列 CSV/XLSX 经真实 ExcelJS 生成/回读验证姓名连接与空值。仅列默认值变更，采用定向 fixture/浏览器、TypeScript 与 touched ESLint；不运行完整 check/build、PGlite 或 Prisma validate/generate（无 schema/SQL 改动），不依赖数据库隧道。下方为历史批次。
+
+本地提交受阻：`git add` 无法创建 `.git/index.lock`（Read-only file system），已授权的 `chmod -R u+w .git` 同样失败。4 个仓库文件完整保留为未暂存改动，供父进程完成本地提交；HEAD 仍为 `03918dec796ed61ec9352597fba805b5c4b2b4da`，本轮无新 SHA。
+
+---
+
 **190000 fee-wrap 收尾（2026-10-27 00:27:11 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地）**
 
 `evaluationCapital`「测评本金」、`evaluationCommission`「测评佣金」、`dealPerformanceFeeAmount`「Deal表现费」、`couponParticipationFeeAmount`「优惠券参与费」、`safetReimbursedAmount`「SAFE-T赔偿」、`affordabilityExpenseAmount`「可负担性费用」、`withheldFeeAmount`「预扣费用」、`chargebackIncomeAmount`「拒付收入」、`guaranteeClaimIncomeAmount`「A-Z索赔收入」、`promotionSalesAmount`「促销销售额」、`promotionShippingAmount`「促销运费」、`promotionTaxAmount`「促销税费」。全部为 performance 默认隐藏数字列；同名 profit payload → nullable 类型投影 → typed SQL 聚合/排序/选列 CSV/XLSX；Agent 英文长表末尾追加。明细 NULL 空、0 保留，实体及币种 totals 用 `COALESCE(sum(...),0)`。

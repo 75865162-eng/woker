@@ -238,7 +238,7 @@ test("visible-column export matches ordered matrix headers, leaves unsupported v
 
 test("rollup defaults omit duplicate names and product clutter while preserving core metrics and picker overrides", () => {
   const sales = ["image", "identity", "analysis", "brand", "productTags", "price", "fulfillable", "subtotal", "trend"];
-  const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
+  const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency", "salesperson"];
   for (const dimension of ["store", "developer", "spu"]) {
     for (const [domain, expected] of [["sales", sales], ["performance", performance]] as const) {
       assert.deepEqual(defaultVisibleColumnKeys(domain, dimension), expected);
@@ -259,7 +259,7 @@ test("rollup defaults omit duplicate names and product clutter while preserving 
 
 test("sales product defaults omit unavailable operations columns while other defaults stay unchanged", () => {
   const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "brand", "productTags", "price", "fulfillable", "subtotal", "trend"];
-  const performance = ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
+  const performance = ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency", "salesperson"];
   for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
     assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
     assert.deepEqual(visibleColumns("sales", undefined, [], dimension).map(c => c.key), sales);
@@ -1050,7 +1050,7 @@ test("performance optional costs and refunds read typed columns and sum by entit
     ["refundPrice", "退款金额", true, false, undefined], ["refundNum", "退款量", true, false, undefined],
   ]);
   assert.deepEqual(config.map(c => captions[c.key]), ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "退款金额", "退款量"]);
-  assert.deepEqual(defaultVisibleColumnKeys("performance"), ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"]);
+  assert.deepEqual(defaultVisibleColumnKeys("performance"), ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency", "salesperson"]);
   for (const key of ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"]) {
     assert.deepEqual(visibleColumns("listings", [key]), []);
     assert.deepEqual(visibleColumns("sales", [key]), []);
@@ -1421,6 +1421,30 @@ test("performance selected salesperson exports typed names in CSV and Excel with
     const sheet = book.worksheets[0];
     assert.equal(sheet.getCell("A1").value, "业务员"); assert.equal(sheet.getCell("A2").value, names.join("、"));
     assert.ok(!sheet.getCell("A3").value);
+  } finally { globals.prisma = previous; }
+});
+
+test("performance default CSV and Excel include salesperson names in product and rollup dimensions without column or layout selections", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ total: 2, totals: [], rows: [{ id: "named", userNameList: ["温见清", "陈馨"] }, { id: "empty", userNameList: [] }] }] } as unknown as PrismaClient;
+  try {
+    const { default: ExcelJS } = await import("exceljs");
+    for (const dimension of ["asin", "msku", "sku", "parentAsin", "store", "developer", "spu"]) {
+      const url = new URL(`http://localhost/?from=2026-10-24&to=2026-10-24&dimension=${dimension}`);
+      const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
+      const csv = await (await sellfoxWorkbenchExport("performance", query, scope, url)).text();
+      const lines = csv.trim().split("\r\n");
+      assert.ok(lines[0].endsWith(',"币种","业务员"'));
+      assert.ok(lines[1].endsWith(',"温见清、陈馨"'));
+      assert.ok(lines[2].endsWith(',""'));
+      url.searchParams.set("format", "xlsx");
+      const response = await sellfoxWorkbenchExport("performance", query, scope, url);
+      const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
+      const sheet = book.worksheets[0], last = sheet.columnCount;
+      assert.equal(sheet.getRow(1).getCell(last).value, "业务员");
+      assert.equal(sheet.getRow(2).getCell(last).value, "温见清、陈馨");
+      assert.ok(!sheet.getRow(3).getCell(last).value);
+    }
   } finally { globals.prisma = previous; }
 });
 

@@ -707,8 +707,11 @@ test("listing DXM publish state is optional and does not imply pairing or strike
 });
 
 
-test("performance salesperson selection, names column, URL, exports and reset; sales stays disabled", async ({ page }) => {
+test("performance salesperson selection, default names column, URL, exports and reset; sales stays disabled", async ({ page }) => {
   const { calls } = await setup(page, "domain=performance&from=2026-10-24&to=2026-10-24");
+  await expect(page.getByRole("columnheader", { name: "业务员", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "温见清、陈馨", exact: true })).toBeVisible();
+  for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).not.toHaveAttribute("href", /column=/);
   const select = page.getByRole("combobox", { name: "业务员", exact: true });
   await expect(select).toBeEnabled(); await select.selectOption("温见清");
   await expect.poll(() => calls.filter(c => c.path.endsWith("/performance")).at(-1)?.query.get("salesperson")).toBe("温见清");
@@ -716,11 +719,11 @@ test("performance salesperson selection, names column, URL, exports and reset; s
   await expect(tabs.getByRole("button", { name: "业务员", exact: true })).toBeDisabled();
   await page.getByText("自定义列", { exact: true }).click();
   const column = page.getByRole("checkbox", { name: "显示业务员列", exact: true });
-  await expect(column).toBeEnabled(); await column.check();
+  await expect(column).toBeEnabled(); await expect(column).toBeChecked();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("columnheader", { name: "业务员", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "温见清、陈馨", exact: true })).toBeVisible();
-  for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute("href", /salesperson=.*column=salesperson|column=salesperson.*salesperson=/);
+  for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute("href", /salesperson=/);
   await page.reload(); await expect(select).toHaveValue("温见清");
   await page.getByRole("button", { name: "重置", exact: true }).click(); await expect(select).toHaveValue("");
   await expect.poll(() => calls.filter(c => c.path.endsWith("/performance")).at(-1)?.query.has("salesperson")).toBe(false);
