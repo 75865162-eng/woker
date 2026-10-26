@@ -372,3 +372,33 @@ test("rating min/max validate as finite numbers, round trip ads-only forRequest,
   assert.throws(() => query("ratingMin=5&ratingMax=4"), /星级上限不得小于下限/);
 });
 
+test("ratingCount min/max validate as safe integers, round trip ads-only forRequest, reject inverted range", () => {
+  for (const range of ["", "ratingCountMin=0", "ratingCountMax=100", "ratingCountMin=0&ratingCountMax=100", "ratingCountMin=-1&ratingCountMax=0"]) {
+    const params = new URLSearchParams(`domain=ads&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.ratingCountMin, params.has("ratingCountMin") ? Number(params.get("ratingCountMin")) : undefined);
+    assert.equal(parsed.ratingCountMax, params.has("ratingCountMax") ? Number(params.get("ratingCountMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "listings", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("ratingCountMin"), params.get("ratingCountMin"));
+      assert.equal(sellfoxViewParams(other).get("ratingCountMax"), params.get("ratingCountMax"));
+      assert.equal(sellfoxViewParams(other, true).has("ratingCountMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("ratingCountMax"), false);
+    }
+  }
+  for (const key of ["ratingCountMin", "ratingCountMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1.5", "1e2", "NaN", "abc", "01.0", "9007199254740992"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是整数/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("ratingCountMin=%200%20").ratingCountMin, 0);
+  assert.equal(query("ratingCountMax=0").ratingCountMax, 0);
+  assert.throws(() => query("ratingCountMin=10&ratingCountMax=1"), /评论数上限不得小于下限/);
+});
+

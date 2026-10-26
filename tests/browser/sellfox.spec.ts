@@ -226,6 +226,15 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page).toHaveURL(/ratingMin=4\.5/);
   await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /ratingMin=4\.5/);
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /ratingMax=5/);
+  await expect(page.getByLabel("评论数下限", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("评论数上限", { exact: true })).toHaveValue("");
+  await page.getByLabel("评论数下限", { exact: true }).fill("0");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.get("ratingCountMin")).toBe("0");
+  await page.getByLabel("评论数上限", { exact: true }).fill("100");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.get("ratingCountMax")).toBe("100");
+  await expect(page).toHaveURL(/ratingCountMin=0/);
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /ratingCountMin=0/);
+  await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /ratingCountMax=100/);
   expect(calls.some((call) => call.path.endsWith("/hourly"))).toBe(false);
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /ads_report\/export.*agent=1/);
 });

@@ -1,3 +1,9 @@
+## 2026-10-27 Asia/Shanghai — ads ratingCount Int min/max filter · BOX LOCAL ONLY · FILTER PIVOT
+
+基线 HEAD `1eb6f03`，分支 `codex/operations-p0-catalog-replenishment`。六广告子页新增可选参数 `ratingCountMin` / `ratingCountMax`（安全整数，含 0；可只设一端；min>max 拒绝「评论数上限不得小于下限」）。对 Listing current 类型列 `ratingCount` 在 MSKU 优先 / ASIN 回退 LIMIT 1 lateral join **之后**、实体/KPI 汇总 **之前** 做含首尾比较；设置任意一端时 `ratingCount IS NOT NULL`。与 `ratingMin`/`ratingMax`（`ratingValue`）并列，互不覆盖。
+
+browse / CSV / XLSX（无 layout 亦然）走 workbench；显式 `agent=1` 英文长表导出与 brand/rating 同口径 **忽略** Listing 评论数筛选。UI「评论数」双 number（step=1，下限/上限 aria），重置清空；跨域 URL 可保留，forRequest 仅 `domain=ads` 序列化。sales / performance / listings 不应用此参数。不发明 bsrRank/acos 筛选。**Fee-mining remains paused**。无 schema/migration、无 push/deploy/SSH、无 live Sellfox、无真实 DB 写入。
+
 ## 2026-10-27 Asia/Shanghai — ads rating numeric min/max filter · BOX LOCAL ONLY · FILTER PIVOT
 
 基线 HEAD `8153614`，分支 `codex/operations-p0-catalog-replenishment`。六广告子页（`ads_report` / `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`）新增可选参数 `ratingMin` / `ratingMax`（有限小数，含 0；可只设一端；min>max 拒绝「星级上限不得小于下限」）。对 Listing current 类型列 `ratingValue`（Float，由 payload rating 解析）在 MSKU 优先 / ASIN 回退 LIMIT 1 lateral join **之后**、实体/KPI 汇总 **之前** 做含首尾比较；设置任意一端时 `ratingValue IS NOT NULL`。显示列 `rating` 仍聚合文本 `listingRating`，筛选只用 typed `ratingValue`。listing CTE 在 ads 时投影 `ratingValue`。

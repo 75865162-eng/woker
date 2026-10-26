@@ -81,6 +81,12 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     if (query.ratingMin != null) filters.push(Prisma.sql`l."ratingValue">=${query.ratingMin}`);
     if (query.ratingMax != null) filters.push(Prisma.sql`l."ratingValue"<=${query.ratingMax}`);
   }
+  // Ads Listing-joined typed ratingCount; NULL excluded when either bound is set.
+  if (ads && (query.ratingCountMin != null || query.ratingCountMax != null)) {
+    filters.push(Prisma.sql`l."ratingCount" IS NOT NULL`);
+    if (query.ratingCountMin != null) filters.push(Prisma.sql`l."ratingCount">=${query.ratingCountMin}`);
+    if (query.ratingCountMax != null) filters.push(Prisma.sql`l."ratingCount"<=${query.ratingCountMax}`);
+  }
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(dimension);

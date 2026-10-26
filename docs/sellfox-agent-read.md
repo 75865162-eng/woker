@@ -1,3 +1,5 @@
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads `ratingCountMin`/`ratingCountMax` 仅 workbench 六子页对 Listing `ratingCount` 生效；显式 `agent=1` 广告英文长表导出与 brand/rating 一样 **不** 应用评论数筛选。listings/sales/performance Agent 忽略该参数。配对/fee 仍锁定。无 push/deploy/真实库写入。
+
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads `ratingMin`/`ratingMax` 仅 workbench 六子页对 Listing `ratingValue` 生效；显式 `agent=1` 广告英文长表导出与 brand/fulfillment/Buy Box 一样 **不** 应用星级筛选（无 listing join）。listings/sales/performance Agent 忽略该参数。配对/fee 仍锁定。无 push/deploy/真实库写入。
 
 # 赛狐本地读取约定

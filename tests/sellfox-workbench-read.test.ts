@@ -2343,3 +2343,35 @@ test("ratingValue filters ads Listing members before rollup; non-ads ignore", ()
   }
 });
 
+test("ratingCount filters ads Listing members before rollup; non-ads ignore", () => {
+  const scope = { organizationId: "org-rating-count", workspaceId: "ws-rating-count" };
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const range of ["ratingCountMin=0", "ratingCountMax=100", "ratingCountMin=10&ratingCountMax=50"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql(domain, query, scope, exporting);
+        const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
+        assert.match(listing, /l\."ratingCount"/);
+        assert.match(sql.text, /l\."ratingCount" IS NOT NULL/);
+        const params = new URLSearchParams(range);
+        if (params.has("ratingCountMin")) {
+          const match = sql.text.match(/l\."ratingCount">=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("ratingCountMin")));
+        } else assert.doesNotMatch(sql.text, /l\."ratingCount">=/);
+        if (params.has("ratingCountMax")) {
+          const match = sql.text.match(/l\."ratingCount"<=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("ratingCountMax")));
+        } else assert.doesNotMatch(sql.text, /l\."ratingCount"</);
+      }
+    }
+    for (const exporting of [false, true]) {
+      const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope, exporting).text;
+      assert.doesNotMatch(sql, /ratingCount" IS NOT NULL|ratingCount">=|ratingCount"</);
+    }
+  }
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?ratingCountMin=1&ratingCountMax=9")), scope, false);
+    assert.doesNotMatch(sql.text, /l\."ratingCount"|ratingCount" IS NOT NULL|ratingCount">=|ratingCount"</);
+  }
+});
+
