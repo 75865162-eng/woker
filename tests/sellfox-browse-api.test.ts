@@ -369,6 +369,52 @@ test("brand reaches browse facets and CSV/XLSX/Agent export with and without lay
   }
 });
 
+test("ads current Listing columns reach browse and selected CSV/XLSX exports with or without layout", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [];
+  const rows = [{ id: "matched", rating: "4.4", productTags: "新品、重点", mainImage: "https://example.test/product.jpg" }, { id: "unmatched", rating: null, productTags: null, mainImage: null }];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return [{ total: 2, totals: [], rows: structuredClone(rows) }]; },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const request = (domain: string, params: string) => new Request(`http://localhost/api/sellfox/${domain}?from=2026-10-25&to=2026-10-25&${params}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+    for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) {
+      const context = { params: Promise.resolve({ domain }) };
+      for (const layout of ["", "layout=workbench&"]) {
+        for (const sortBy of ["rating", "productTags"]) {
+          const response = await browse(request(domain, `${layout}sortBy=${sortBy}&sortOrder=desc`), context);
+          assert.equal(response.status, 200);
+          const data = await response.json();
+          assert.deepEqual(data.rows.map((r: Record<string, unknown>) => [r.rating, r.productTags, r.mainImage]), rows.map(r => [r.rating, r.productTags, r.mainImage]));
+          assert.ok(calls.at(-1)!.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
+        }
+        for (const format of ["csv", "xlsx"]) {
+          const response = await csv(request(domain, `${layout}column=rating&column=productTags&column=image&format=${format}`), context);
+          assert.equal(response.status, 200);
+          assert.match(calls.at(-1)!.text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
+          if (format === "csv") assert.equal((await response.text()).trim(), '"星级","标签","图片"\r\n"4.4","新品、重点","https://example.test/product.jpg"\r\n"","",""');
+          else {
+            const { default: ExcelJS } = await import("exceljs");
+            const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
+            const sheet = book.worksheets[0];
+            assert.deepEqual([1, 2, 3].map(i => sheet.getRow(1).getCell(i).value), ["星级", "标签", "图片"]);
+            assert.deepEqual([1, 2, 3].map(i => sheet.getRow(2).getCell(i).value), ["4.4", "新品、重点", "https://example.test/product.jpg"]);
+            for (const i of [1, 2, 3]) assert.ok([null, ""].includes(sheet.getRow(3).getCell(i).value as null | string));
+          }
+        }
+      }
+    }
+    for (const sql of calls) { assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws")); }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
 test("legacy browse shells apply validated server ordering with filters and pagination", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }; const previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };

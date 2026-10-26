@@ -576,6 +576,43 @@ test("selected listing amazonBrand and bsrCategory export text and empty CSV/XLS
   } finally { globals.prisma = previous; }
 });
 
+test("ads expose optional current Listing image, rating and tags across all report tabs", () => {
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  const keys = ["rating", "productTags", "image"];
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    const columnDomain = domain === "ads_report" ? "ads" : domain;
+    const config = visibleColumns(columnDomain, keys);
+    assert.deepEqual(config.map(c => c.key), keys);
+    assert.deepEqual(config.map(c => c.labelZh), ["星级", "标签", "图片"]);
+    for (const c of config) {
+      assert.equal(c.unavailable, undefined);
+      assert.equal(c.defaultVisible, false);
+      assert.match(c.requiresField!, /Listing 当前快照/);
+      assert.ok(!defaultVisibleColumnKeys(columnDomain).includes(c.key));
+    }
+    assert.deepEqual(config[2].parts, ["mainImage"]);
+    assert.match(config[0].requiresField!, /rating 类型投影/);
+    assert.match(config[1].requiresField!, /productTags.*productLabelList/);
+    assert.match(config[2].requiresField!, /mainImage/);
+    for (const key of ["enabled", "serviceStatus", "adStrategy", "salesperson"]) assert.equal(columns[columnDomain].find(c => c.key === key)!.unavailable, true);
+    assert.ok(!columns[columnDomain].some(c => /广告组合|否定|AMC/.test(c.labelZh) && !c.unavailable));
+    assert.deepEqual(visibleColumns(columnDomain, ["ratingCount"]), []);
+    for (const exporting of [false, true]) for (const sortBy of ["rating", "productTags"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=desc&productTag=ignored&brand=ignored&fulfillment=AFN&buyBox=yes`), domain);
+      const sql = workbenchReadSql(domain, query, scope, exporting);
+      assert.match(sql.text, /l\.rating AS "listingRating",l\."productTags" AS "listingProductTags"/);
+      assert.match(sql.text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
+      assert.match(sql.text, /CASE WHEN count\("listingRating"\)=count\(\*\) AND count\(DISTINCT "listingRating"\)=1 THEN min\("listingRating"\) END AS rating/);
+      assert.match(sql.text, /CASE WHEN count\("listingProductTags"\)=count\(\*\) AND count\(DISTINCT "listingProductTags"\)=1 THEN min\("listingProductTags"\) END AS "productTags"/);
+      assert.ok(sql.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
+      assert.doesNotMatch(sql.text, /payload|productTagNames|matchesProductTag|AS facets|AND l\.(?:brand|fulfillment|"buyBoxWinner")=/);
+      assert.ok(!sql.values.includes("ignored"));
+      assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
+    }
+    assert.equal(visibleColumnCsv(config, [{ rating: "4.4", productTags: "新品、重点", mainImage: "https://example.test/product.jpg" }, { rating: null, productTags: null, mainImage: null }]).trim(), '"星级","标签","图片"\r\n"4.4","新品、重点","https://example.test/product.jpg"\r\n"","",""');
+  }
+});
+
 test("listings expose optional numeric ratingCount from the current snapshot without losing null or zero", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/"));
   const scope = { organizationId: "org", workspaceId: "ws" };
@@ -594,7 +631,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   assert.equal(sellfoxColumnValue(config[0], { ratingCount: 0 }), 0);
   assert.equal(sellfoxColumnValue(config[0], { ratingCount: 128 }), 128);
   assert.equal(visibleColumnCsv(config, [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
-  assert.ok(visibleColumns("ads", ["rating"])[0].unavailable);
+  assert.equal(visibleColumns("ads", ["rating"])[0].unavailable, undefined);
   assert.deepEqual(visibleColumns("ads", ["ratingCount"]), []);
   for (const domain of ["sales", "performance", "ads_report"] as const) {
     assert.doesNotMatch(workbenchReadSql(domain, query, scope).text, /ratingCount/);
@@ -808,8 +845,8 @@ test("listings flatten current productLabelList into an optional productTags col
   const productTags = "1-3年产品、重点产品";
   assert.equal(sellfoxColumnValue(config[0], { productTags }), productTags);
   assert.equal(visibleColumnCsv(config, [{ productTags }, { productTags: null }]).trim(), `"产品标签"\r\n"${productTags}"\r\n""`);
-  assert.ok(visibleColumns("ads", ["productTags"])[0].unavailable);
-  assert.doesNotMatch(workbenchReadSql("ads_report", query, scope).text, /productLabelList|productTags/);
+  assert.equal(visibleColumns("ads", ["productTags"])[0].unavailable, undefined);
+  assert.match(workbenchReadSql("ads_report", query, scope).text, /l\."productTags" AS "listingProductTags"/);
   for (const domain of ["sales", "performance"] as const) {
     assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, domain === "sales" ? /productLabelList|productTagNames/ : /productLabelList|productTags/);
   }
@@ -1202,7 +1239,7 @@ test("productTag exact membership filters current Listing members before aggrega
     assert.doesNotMatch(workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope).text, /matchesProductTag/);
   }
   const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?productTag=ignored")), scope);
-  assert.doesNotMatch(ads.text, /productTag|productLabel/); assert.ok(!ads.values.includes("ignored"));
+  assert.doesNotMatch(ads.text, /productTagNames|matchesProductTag|productLabel|AS facets/); assert.ok(!ads.values.includes("ignored"));
 });
 
 test("brand exact match filters selected Listing members before rollup with independent scoped facets", () => {

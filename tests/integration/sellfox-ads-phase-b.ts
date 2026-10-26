@@ -50,4 +50,60 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
       assert.equal((await read("quickFilter=spend")).rows[0].adGroupId, null);
     }
   }
+  // Ads product + sibling tabs use the same current Listing enrichment. No live DB.
+  const prior = await readFile("prisma/migrations/20261025020000_sellfox_agent_read_models/migration.sql", "utf8");
+  const productTable = prior.slice(prior.indexOf('CREATE TABLE "SellfoxAdsProductDaily"'));
+  await query(productTable.slice(0, productTable.indexOf("\n);\n") + 4));
+  await query(prior.split("\n").find(line => line.startsWith("CREATE VIEW sellfox_ads_product_daily AS"))!);
+  await query(`INSERT INTO "SellfoxAdsProductDaily" (id,"organizationId","workspaceId","storeId","reportDate","adType","campaignId","adGroupId","productId",cost,payload) VALUES
+    ('a','org','ws','s','2026-10-23','sp','c','g','p',2,'{}'),('b','org','ws','s','2026-10-24','sp','c','g','p',3,'{}')`);
+  await query(`INSERT INTO sellfox_listing_current (id,"organizationId","workspaceId","storeId",msku,asin,"mainImage",rating,"productTags") VALUES
+    ('exact','org','ws','s','exact','ASIN','https://example.test/exact.jpg','4.4','新品、重点'),
+    ('sibling','org','ws','s','aaa','ASIN','https://example.test/sibling.jpg','1.0','其他'),
+    ('foreign-org','foreign','ws','s','exact','ASIN','foreign','0','foreign'),
+    ('foreign-ws','org','foreign','s','exact','ASIN','foreign','0','foreign'),
+    ('foreign-store','org','ws','f','exact','ASIN','foreign','0','foreign')`);
+  for (const [model, domain] of [
+    ["SellfoxAdsProductDaily", "ads_report"], ["SellfoxAdsTargetingDaily", "ads_targeting"], ["SellfoxAdsSearchTermDaily", "ads_search_term"],
+    ["SellfoxAdsCampaignDaily", "ads_campaign"], ["SellfoxAdsAdGroupDaily", "ads_ad_group"], ["SellfoxAdsPlacementDaily", "ads_placement"],
+  ] as const) {
+    const read = async (exporting = false) => {
+      const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-23&to=2026-10-24&quickFilter=spend&sortBy=rating&sortOrder=desc"), domain), { organizationId: "org", workspaceId: "ws" }, exporting);
+      const result = (await query(sql.text, sql.values)).rows[0] as { rows: Record<string, unknown>[] };
+      assert.equal(result.rows.length, 1);
+      assert.equal(result.rows[0].cost, 5); // LIMIT 1 must never multiply facts.
+      return result.rows[0];
+    };
+    const fields = (row: Record<string, unknown>) => [row.mainImage, row.rating, row.productTags];
+    // Missing product identity on campaign/placement stays NULL-safe.
+    assert.deepEqual(fields(await read()), [null, null, null]);
+    await query(`UPDATE "${model}" SET msku='exact',asin='ASIN' WHERE id IN ('a','b')`);
+    for (const exporting of [false, true]) assert.deepEqual(fields(await read(exporting)), ["https://example.test/exact.jpg", "4.4", "新品、重点"]);
+    // ASIN fallback chooses aaa; mixed ratings/tags must not pick an arbitrary min.
+    await query(`UPDATE "${model}" SET msku='absent' WHERE id='b'`);
+    assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null]);
+    await query(`UPDATE "${model}" SET asin=NULL WHERE id='b'`);
+    assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null]);
+    await query(`UPDATE "${model}" SET msku=NULL,asin=NULL WHERE id='a'`);
+    assert.deepEqual(fields(await read()), [null, null, null]);
+    await query(`UPDATE sellfox_listing_current SET "mainImage"='' WHERE id='exact'`);
+    await query(`UPDATE "${model}" SET msku='exact',asin='ASIN' WHERE id IN ('a','b')`);
+    assert.deepEqual(fields(await read()), [null, "4.4", "新品、重点"]);
+    await query(`UPDATE sellfox_listing_current SET "mainImage"='https://example.test/exact.jpg' WHERE id='exact'`);
+  }
+}
+
+// Standalone disposable verifier; never reads DATABASE_URL or connects remotely.
+if (process.argv[1]?.endsWith("sellfox-ads-phase-b.ts")) {
+  void (async () => {
+    const moduleName = process.env.SELLFOX_TEST_PGLITE_MODULE || "@electric-sql/pglite";
+    const { PGlite } = await import(moduleName) as { PGlite: new () => {
+      query: Query; exec: (sql: string) => Promise<{ rows: Record<string, unknown>[] }[]>; close: () => Promise<void>;
+    } };
+    const db = new PGlite();
+    try {
+      await verifySellfoxAdsPhaseBSql(async (sql, values) => values?.length ? db.query(sql, values) : (await db.exec(sql)).at(-1)!);
+      console.log("PASS: ads Phase A/B and six-tab Listing image/rating/productTags parity (disposable PGlite)");
+    } finally { await db.close(); }
+  })().catch(error => { console.error(error); process.exitCode = 1; });
 }
