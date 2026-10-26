@@ -1,3 +1,13 @@
+## 2026-10-27 Asia/Shanghai — ads adOrders Int min/max filter · BOX LOCAL ONLY · FILTER PIVOT · ADS TYPED NEAR-WALL
+
+基线 HEAD `251a590`，分支 `codex/operations-p0-catalog-replenishment`。六广告子页新增可选参数 `adOrdersMin` / `adOrdersMax`（安全整数，含 0；可只设一端；min>max 拒绝「广告订单上限不得小于下限」）。对广告日报类型列 `adOrders`（Int?，六 `SellfoxAds*Daily` 均已类型化）在实体/KPI 汇总 **之前** 对成员行做含首尾比较；设置任意一端时 `s."adOrders" IS NOT NULL`。与 typed `impressions`/`clicks`/`cost`/`adSales` 并列，互不覆盖。Agent 窄表对同类型列 `adOrders` **应用**筛选。UI ads-only 双数字输入（step=1）；重置清空；forRequest 仅 ads。
+
+**Ads daily typed ranges near-wall**：cost / adSales / impressions / clicks / adOrders 已齐；**acos** 仍跳过（派生比，不 invent）。不改 `defaultVisible`、schema/migration；fee/pairing 锁定，**Fee-mining remains paused**。无 live Sellfox / 真实库写入，不 push/deploy/SSH。回滚仅还原参数、UI 与测试。
+
+验证：browse-query / browse-filters / workbench-read / agent-read / browse-api 定向 node:test，TypeScript、触及 ESLint、`git diff --check`；浏览器定向断言。完整 check/build、真实库与 P95 留待单独授权。
+
+---
+
 ## 2026-10-27 Asia/Shanghai — ads clicks Int min/max filter · BOX LOCAL ONLY · FILTER PIVOT
 
 基线 HEAD `5cd3872`，分支 `codex/operations-p0-catalog-replenishment`。六广告子页新增可选参数 `clicksMin` / `clicksMax`（安全整数，含 0；可只设一端；min>max 拒绝「点击上限不得小于下限」）。对广告日报类型列 `clicks`（Int?，六 `SellfoxAds*Daily` 均已类型化）在实体/KPI 汇总 **之前** 对成员行做含首尾比较；设置任意一端时 `s.clicks IS NOT NULL`。与 typed `impressions`/`cost`/`adSales` 并列，互不覆盖。Agent 窄表对同类型列 `clicks` **应用**筛选。UI ads-only 双数字输入（step=1）；重置清空；forRequest 仅 ads。

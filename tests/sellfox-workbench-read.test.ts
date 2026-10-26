@@ -2447,6 +2447,32 @@ test("clicks filters ads daily members before rollup; non-ads ignore", () => {
   }
 });
 
+test("adOrders filters ads daily members before rollup; non-ads ignore", () => {
+  const scope = { organizationId: "org-adOrders", workspaceId: "ws-adOrders" };
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const range of ["adOrdersMin=0", "adOrdersMax=100", "adOrdersMin=1&adOrdersMax=48", "adOrdersMin=5&adOrdersMax=99"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql(domain, query, scope, exporting);
+        assert.match(sql.text, /s\."adOrders" IS NOT NULL/);
+        const params = new URLSearchParams(range);
+        if (params.has("adOrdersMin")) {
+          const match = sql.text.match(/s\."adOrders">=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("adOrdersMin")));
+        } else assert.doesNotMatch(sql.text, /s\."adOrders">=/);
+        if (params.has("adOrdersMax")) {
+          const match = sql.text.match(/s\."adOrders"<=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("adOrdersMax")));
+        } else assert.doesNotMatch(sql.text, /s\."adOrders"<=/);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?adOrdersMin=1&adOrdersMax=9")), scope, false).text;
+    assert.doesNotMatch(sql, /s\."adOrders" IS NOT NULL|s\."adOrders">=|s\."adOrders"<=/);
+  }
+});
+
 test("ratingCount filters ads Listing members before rollup; non-ads ignore", () => {
   const scope = { organizationId: "org-rating-count", workspaceId: "ws-rating-count" };
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {

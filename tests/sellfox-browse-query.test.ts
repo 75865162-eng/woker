@@ -548,6 +548,36 @@ test("clicks min/max validate as safe integers, round trip ads-only forRequest, 
   assert.throws(() => query("clicksMin=10&clicksMax=1"), /点击上限不得小于下限/);
 });
 
+test("adOrders min/max validate as safe integers, round trip ads-only forRequest, reject inverted range", () => {
+  for (const range of ["", "adOrdersMin=0", "adOrdersMax=100", "adOrdersMin=0&adOrdersMax=100", "adOrdersMin=-1&adOrdersMax=0"]) {
+    const params = new URLSearchParams(`domain=ads&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.adOrdersMin, params.has("adOrdersMin") ? Number(params.get("adOrdersMin")) : undefined);
+    assert.equal(parsed.adOrdersMax, params.has("adOrdersMax") ? Number(params.get("adOrdersMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "listings", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("adOrdersMin"), params.get("adOrdersMin"));
+      assert.equal(sellfoxViewParams(other).get("adOrdersMax"), params.get("adOrdersMax"));
+      assert.equal(sellfoxViewParams(other, true).has("adOrdersMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("adOrdersMax"), false);
+    }
+  }
+  for (const key of ["adOrdersMin", "adOrdersMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1.5", "1e2", "NaN", "abc", "01.0", "9007199254740992"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是整数/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("adOrdersMin=%200%20").adOrdersMin, 0);
+  assert.equal(query("adOrdersMax=0").adOrdersMax, 0);
+  assert.throws(() => query("adOrdersMin=10&adOrdersMax=1"), /广告订单上限不得小于下限/);
+});
+
 test("bsrRank min/max validate as safe integers, round trip listings-only, reject inverted range", () => {
   for (const range of ["", "bsrRankMin=0", "bsrRankMax=10000", "bsrRankMin=1&bsrRankMax=5000", "bsrRankMin=-1&bsrRankMax=0"]) {
     const params = new URLSearchParams(`domain=listings&${range}`);
