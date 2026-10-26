@@ -402,6 +402,7 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 ### Sellfox 只读同步
 
 - `npm run sellfox:ads-reparse-cache -- --organization-id=<id> --workspace-id=<id>`：仅从现有 task.fileKey 缓存重解析完成/已下载广告报告，默认 dry-run，只有 `--write` 才按原窗口事务替换；默认投放与搜索词，不创建/轮询/下载上游任务。上线后另行授权执行，范围、空报告及回滚注意事项见 `docs/sellfox-ads-subtabs-gap.md`「既有数据纠正」。
+- `npm run sellfox:ads-reset-stuck-creating -- --organization-id=<id> --workspace-id=<id>`：将卡住的广告报告任务（`creating` 且无 externalTaskId/fileKey）标为 `failed` 以便重提；默认 dry-run，只有 `--write` 才更新 status；不删行、不调赛狐。123 上 SD×adTargeringReport 等用法见 `docs/sellfox-ads-subtabs-gap.md`「部署后重置卡住 creating」。
 
 - 广告 Phase A/B 新增 `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`，报告代码精确为 `adTargeringReport` / `adSearchTermReport` / `adCampaignReport` / `adGroupReport` / `adSpaceReport`；2026-10-26 已对照真实 XLSX 确认列映射（覆盖范围见缺口文档）；投放/搜索词真实 ID 列为 `广告投放ID`，兼容 `投放ID`，双列歧义或显式空 ID 拒绝。五计划默认关闭、1440 分钟、Asia/Shanghai 06:30；广告位已确认活动/广告位/日期唯一，真实文件无广告组ID，兼容广告组仅元数据，重复身份整文件拒绝。列/身份/回退与灰显范围见 `docs/sellfox-ads-subtabs-gap.md`；`/saihu-search-merge` 人工上传保持独立。
 

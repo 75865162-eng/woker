@@ -23,6 +23,7 @@
     "worker:sellfox-sync": "tsx scripts/sellfox-sync-worker.ts",
     "sellfox:backfill-sales": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-sales-backfill.ts",
     "sellfox:ads-reparse-cache": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reparse-from-cache.ts",
+    "sellfox:ads-reset-stuck-creating": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reset-stuck-creating.ts",
     "ops:cli": "tsx scripts/ops-cli.ts",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",

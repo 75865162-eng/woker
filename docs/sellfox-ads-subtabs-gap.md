@@ -24,9 +24,31 @@
 2. `failed` + 空 externalTaskId 允许同 run 安全重提 createTask；`creating` 锁与「创建结果不明」守卫不变。
 3. 聚合 `SellfoxStoreSyncError` 附带最多 3 条 unit 原因示例，便于 runs 错误列直接看见。
 
-**已有 39 行不会被本修复自动改写**（禁止本任务写 123）。部署后若需给 SD 投放重新建任务，需运维先把这些 `creating`+空 externalTaskId 标为 `failed`（或删行）再同步；真超时遗留仍须人工关联，禁止盲目重提。是否上游拒绝 SD×adTargeringReport 需部署后看新的明确错误码确认；本轮未调用 live createTask。
+**已有 39 行不会被 `879ffe3` 自动改写**（禁止本任务写 123）。部署含该修复的 release 后，用运维 CLI `sellfox:ads-reset-stuck-creating`（默认 dry-run）把匹配的 `creating`+空 `externalTaskId`+空 `fileKey` 行标为 `failed`，再同步即可安全重提 createTask；**禁止删行**。真超时/有 upstream id 的遗留仍须人工关联，本 CLI 永不碰带 `externalTaskId` 的行。是否上游拒绝 SD×adTargeringReport 需部署后看新的明确错误码确认；本轮未调用 live createTask。
 
-`text:` targetingId 纠正仍依赖部署 `e791d14`+重解析 CLI，与本修复独立。
+### 部署后重置卡住 creating（另行授权；本次只交付命令）
+
+已新增 `scripts/sellfox-ads-reset-stuck-creating.ts`（npm：`sellfox:ads-reset-stuck-creating`）。只读写本地 `SellfoxReportTask`（及只读 join 店铺 / run 的 `executionAttempts`）；**不删行、不调赛狐 API、不改日报表、不碰有 `externalTaskId` 的行**。`SellfoxReportTask` 无 `lastError` 列：`--write` 仅把 `status` 改为 `failed`；备注 `ops reset stuck creating without externalTaskId` 出现在 CLI 逐任务 JSON / 摘要的 `lastError` 字段，供审计。
+
+必填 `--organization-id` / `--workspace-id`；可选 `--report-type`、`--ad-type=sp|sb|sd`、`--task-id`、`--older-than-minutes=<非负整数>`。硬筛选恒为 `status=creating` 且 `externalTaskId`/`fileKey` 均为空；写路径 `updateMany` 再次断言这组条件，竞态下若行已获得上游 id 则不会被改。
+
+在 123 已部署含 `879ffe3`（及本 CLI）的 current release 目录执行（替换真实组织/工作区 ID；建议维护窗口、确认无重叠广告同步）：
+
+```bash
+cd /opt/amazon-ad-bulk-current
+ORG_ID='替换为实际组织ID'
+WORKSPACE_ID='替换为实际工作区ID'
+
+# 只读 dry-run：列出卡住 creating 行（含 shop、attempts、updatedAt）
+npm run sellfox:ads-reset-stuck-creating -- --organization-id="$ORG_ID" --workspace-id="$WORKSPACE_ID" --report-type=adTargeringReport --ad-type=sd
+
+# 审核 JSON 后，另行授权写 failed
+npm run sellfox:ads-reset-stuck-creating -- --organization-id="$ORG_ID" --workspace-id="$WORKSPACE_ID" --report-type=adTargeringReport --ad-type=sd --write
+```
+
+写完后可再开一次含 sd 的投放同步（新 createTask）；仍失败则看 runs 错误列里的明确业务码。`text:` targetingId 纠正仍依赖部署 `e791d14`+`sellfox:ads-reparse-cache`，与本重置独立。
+
+残余风险：dry-run 与 write 之间若同步写入了 `externalTaskId`，write 会跳过该行（count 可能小于 dry-run 清单）。误把仍在飞行的 createTask 标 failed 后再同步可能重复建上游任务——仅用于盘点确认的永久卡住行；可用 `--older-than-minutes` 收紧。本 CLI 不验证上游是否真无对应任务。
 
 
 ## 报告来源与同步
