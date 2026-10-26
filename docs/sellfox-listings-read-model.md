@@ -1,5 +1,27 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 默认显示库存扩展四列 · BOX LOCAL ONLY
+
+基线 HEAD `4b99f25`（`4b99f25253d51196fe2925cfbc360914638da594`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `inventoryCapturedAt`「库存快照时间」、`listingQuantity`「Listing库存」、`unsellable`「不可售」、`warehousing`「入库中」四个 `defaultVisible` 从 `false` 改为 `true`。labels、numeric、requiresField 与 totalInventory → inventoryCapturedAt → listingQuantity → unsellable → warehousing → salesperson → sourceUpdatedAt 源顺序保持不变；fulfillable / totalInventory 原默认配置不变。复用既有类型投影，默认表头、初始勾选及无显式选列 CSV/XLSX 增加这四列，显式单选、空选、单独/成组隐藏继续优先，切换数据域保留取消状态，不迁移已有会话选择。NULL/缺失保持空白，库存零值保持数值。
+
+费用、parentSku、fnsku、dxmPublishState、profitPrice / profitRate / shippingPrice / reservedQty 保持原配置；openDate/库存筛选、配对、父体、业务员、AWD 等锁定入口不解锁。ads / sales / performance 及广告子页配置保持基线原样。**Fee-mining remains paused**。不新增字段、live Sellfox API、SQL、schema/migration、服务端逻辑或请求/计算，不做真实数据库写入。回滚仅还原四个默认值及配套测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连接真实数据库，不加载 `.env`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+git diff --word-diff=porcelain -- src/components/sellfox/workbench-types.ts
+# 单项隔离模拟浏览器；若 Chromium 在 BOX sandbox 中 SIGTRAP，记录结果，不绕过：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand, amazonBrand'
+```
+
+验证结果：三个定向测试文件全部通过（零失败），TypeScript、指定 ESLint 与 `git diff --check` 通过。精确默认集合、库存簇源顺序、默认 CSV/XLSX、四列各自单选/隐藏、成组选列/隐藏及空选列均有覆盖，数值、零值、NULL/缺失保持现有行为。word-diff 的变更 token 恰为四组 `-false,` / `+true,`；逐字节比对确认整个生产文件等于基线加这四处 listings 库存扩展默认值替换，其他配置完全一致。单项浏览器已尝试，Chromium 在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未绕过沙箱，需在允许 Chromium 的本地环境补跑默认表头、初始勾选、取消后会话保留及 CSV/Excel 导出移除断言。
+
+仅 BOX 本地，不 push/fetch/deploy/SSH，不读写 `.env`。跳过完整 check/build、数据库集成与真实 P95：本轮仅四个既有列的 UI 默认标记，后续合码/发布或查询/性能专项再补对应验证。仓库外 `/workspace/sellfox-parity-gap.md` 留给父进程更新。下方为历史批次，以本节为当前状态。
+
 ## 2026-10-27 — listings 默认显示 BSR / BSR类目 · BOX LOCAL ONLY
 
 基线 HEAD `da35b80`（`da35b805df58675b994886392841a83a0f401c2e`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `bsrRank` / `bsrCategory` 两个 `defaultVisible` 从 `false` 改为 `true`。保留「BSR」「BSR类目」、numeric、requiresField 与 firstSaleDate → bsrRank → bsrCategory → purchaseCost 源顺序；复用既有类型投影，rank/categoryName 取同一元素并优先 bigCategory。默认列表、初始勾选及无显式选列 CSV/XLSX 增加这组列，默认可见顺序为 firstSaleDate → bsrRank → bsrCategory → buyBoxWinner。显式单选、空选及单独/成组隐藏继续优先，切换数据域后保留取消状态，不迁移已有会话选择；NULL/缺失保持空白，BSR 的零值保持数值。

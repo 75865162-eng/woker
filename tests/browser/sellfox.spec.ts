@@ -741,12 +741,12 @@ test("ads log navigation opens existing sync runs without submitting a sync", as
   await expect(page).toHaveURL(/page=2/);
 });
 
-test("listings default brand, amazonBrand, rating, ratingCount, productTags, openDate, firstSaleDate, BSR, BSR类目, Buy Box, totalInventory and fulfillment remain checked until explicitly hidden in the session", async ({ page }) => {
+test("listings default brand, amazonBrand, rating, ratingCount, productTags, openDate, firstSaleDate, BSR, BSR类目, Buy Box, totalInventory, inventory extras and fulfillment remain checked until explicitly hidden in the session", async ({ page }) => {
   await setup(page, "domain=listings");
-  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "Buy Box", "总库存"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
+  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "Buy Box", "总库存", "库存快照时间", "Listing库存", "不可售", "入库中"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
   for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).not.toHaveAttribute("href", /column=/);
   await page.getByText("自定义列", { exact: true }).click();
-  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "Buy Box", "总库存"]) {
+  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "Buy Box", "总库存", "库存快照时间", "Listing库存", "不可售", "入库中"]) {
     const checkbox = page.getByRole("checkbox", { name: `显示${label}列`, exact: true });
     await expect(checkbox).toBeChecked();
     await checkbox.uncheck();
@@ -767,12 +767,13 @@ test("listings default brand, amazonBrand, rating, ratingCount, productTags, ope
     expect(selected).not.toContain("bsrRank");
     expect(selected).not.toContain("bsrCategory");
     expect(selected).not.toContain("totalInventory");
+    for (const key of ["inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing"]) expect(selected).not.toContain(key);
     expect(selected).not.toContain("fulfillment");
   }
   const tabs = page.getByRole("navigation", { name: "赛狐数据域" });
   await tabs.getByRole("button", { name: "销量", exact: true }).click();
   await tabs.getByRole("button", { name: "在线商品", exact: true }).click();
-  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "Buy Box", "总库存"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "Buy Box", "总库存", "库存快照时间", "Listing库存", "不可售", "入库中"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
   for (const name of ["CSV", "Excel"]) {
     const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
     const selected = new URL(href!, "http://127.0.0.1:43221").searchParams.getAll("column");
@@ -783,6 +784,7 @@ test("listings default brand, amazonBrand, rating, ratingCount, productTags, ope
     expect(selected).not.toContain("bsrRank");
     expect(selected).not.toContain("bsrCategory");
     expect(selected).not.toContain("totalInventory");
+    for (const key of ["inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing"]) expect(selected).not.toContain(key);
     expect(selected).not.toContain("fulfillment");
   }
   await page.getByText("自定义列", { exact: true }).click();
@@ -794,6 +796,7 @@ test("listings default brand, amazonBrand, rating, ratingCount, productTags, ope
   await expect(page.getByRole("checkbox", { name: "显示总库存列", exact: true })).not.toBeChecked();
   await expect(page.getByRole("checkbox", { name: "显示发货方式列", exact: true })).not.toBeChecked();
   await expect(page.getByRole("checkbox", { name: "显示产品标签列", exact: true })).not.toBeChecked();
+  for (const label of ["库存快照时间", "Listing库存", "不可售", "入库中"]) await expect(page.getByRole("checkbox", { name: `显示${label}列`, exact: true })).not.toBeChecked();
 });
 
 test("listing DXM publish state is optional and does not imply pairing or strikethrough price type", async ({ page }) => {
