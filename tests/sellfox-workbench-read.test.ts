@@ -388,6 +388,32 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   assert.equal(visibleColumnCsv([brand, rating], [{ brand: "Acme", rating: "4.4" }]).trim(), '"品牌","星级"\r\n"Acme","4.4"');
 });
 
+test("listings flatten current productLabelList into an optional productTags column and CSV", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  const sql = workbenchReadSql("listings", query, scope);
+  assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'productLabelList'\)='array' THEN p\.payload->'productLabelList' ELSE '\[\]'::jsonb END\) label_group\(value\)/);
+  assert.match(sql.text, /CROSS JOIN LATERAL jsonb_array_elements\(CASE WHEN jsonb_typeof\(label_group\.value->'labelDetailList'\)='array' THEN label_group\.value->'labelDetailList' ELSE '\[\]'::jsonb END\) label\(value\)/);
+  assert.match(sql.text, /string_agg\(DISTINCT NULLIF\(btrim\(label\.value->>'labelName'\),''\),/);
+  assert.match(sql.text, /'、' ORDER BY NULLIF\(btrim\(label\.value->>'labelName'\),''\)\)/);
+  assert.match(sql.text, /AS "productTags"/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."productTags",/);
+  assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
+  const config = visibleColumns("listings", ["productTags"]);
+  assert.equal(config.length, 1);
+  assert.equal(config[0].unavailable, undefined);
+  assert.equal(config[0].defaultVisible, false);
+  assert.match(config[0].requiresField!, /productLabelList\[\]\.labelDetailList\[\]\.labelName/);
+  assert.ok(!defaultVisibleColumnKeys("listings").includes("productTags"));
+  const productTags = "1-3年产品、重点产品";
+  assert.equal(sellfoxColumnValue(config[0], { productTags }), productTags);
+  assert.equal(visibleColumnCsv(config, [{ productTags }, { productTags: null }]).trim(), `"产品标签"\r\n"${productTags}"\r\n""`);
+  assert.ok(visibleColumns("ads", ["productTags"])[0].unavailable);
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    assert.doesNotMatch(workbenchReadSql(domain, query, scope).text, /productLabelList|productTags/);
+  }
+});
+
 test("performance browse selects and sums elevated fee fields and prefers listing image over payload fallback", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-01&to=2026-10-02"));
   const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" });

@@ -81,6 +81,10 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
       NULLIF(p.payload->>'brand','') AS brand,
       NULLIF(p.payload->>'rating','') AS rating,
+      ${domain === "listings" ? Prisma.sql`(SELECT string_agg(DISTINCT NULLIF(btrim(label.value->>'labelName'),''), '、' ORDER BY NULLIF(btrim(label.value->>'labelName'),''))
+        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'productLabelList')='array' THEN p.payload->'productLabelList' ELSE '[]'::jsonb END) label_group(value)
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(label_group.value->'labelDetailList')='array' THEN label_group.value->'labelDetailList' ELSE '[]'::jsonb END) label(value)
+      ) AS "productTags",` : Prisma.empty}
       CASE WHEN p.payload->>'switchFulfillmentTo' IN ('AFN','MFN') THEN p.payload->>'switchFulfillmentTo' END AS fulfillment,
       COALESCE(
         (SELECT NULLIF(item.value->>'devName','') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'devList')='array' THEN p.payload->'devList' ELSE '[]'::jsonb END) WITH ORDINALITY item(value,ordinality) WHERE NULLIF(p.payload->>'devId','') IS NOT NULL AND item.value->>'devId'=p.payload->>'devId' ORDER BY item.ordinality LIMIT 1),
@@ -92,7 +96,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    ${domain === "listings" ? Prisma.sql`l.fulfillment,l.brand,l.rating,` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
+    ${domain === "listings" ? Prisma.sql`l.fulfillment,l.brand,l.rating,l."productTags",` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
     ${domain === "listings" ? Prisma.sql`LEFT JOIN listing l ON l.id=s.id AND l."storeId"=s."storeId"` : Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {

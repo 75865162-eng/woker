@@ -63,10 +63,11 @@ test("narrow SQL and both CSV paths expose only promoted columns; remaining unsu
   assert.match(csv, /FNSKU-VERIFIED/); assert.match(csv, /PARENT-SKU/); assert.match(csv, /m.media-amazon.com/); assert.doesNotMatch(csv, /payload|never-export/);
   const columns = visibleColumns("listings", ["fnsku", "parentSku", "image", "productTags"]);
   assert.ok(columns.filter(c => ["fnsku", "parentSku", "image"].includes(c.key)).every(c => !c.unavailable));
-  assert.ok(columns.find(c => c.key === "productTags")?.unavailable);
+  assert.equal(columns.find(c => c.key === "productTags")?.unavailable, undefined);
+  assert.ok(visibleColumns("listings", ["salesperson"])[0].unavailable);
   assert.match(visibleColumnCsv(columns, [mapped]), /m.media-amazon.com/);
   const sql = workbenchReadSql("listings", sellfoxBrowseQuery(new URL("http://local/?shopExternalId=124687")), { organizationId: "org", workspaceId: "ws" });
-  assert.match(sql.text, /s\."mainImage"/); assert.doesNotMatch(sql.text, /payload/);
+  assert.match(sql.text, /s\."mainImage"/); assert.doesNotMatch(sql.text, /s\."?payload"?|SELECT p\.payload(?:\s|,)/);
   assert.ok(sql.values.includes("124687")); assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
   assert.equal(visibleColumns("sales").find(c => c.key === "image")?.unavailable, undefined);
 });
