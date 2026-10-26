@@ -423,8 +423,8 @@ test("listings flatten current productLabelList into an optional productTags col
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'productLabelList'\)='array' THEN p\.payload->'productLabelList' ELSE '\[\]'::jsonb END\) label_group\(value\)/);
   assert.match(sql.text, /CROSS JOIN LATERAL jsonb_array_elements\(CASE WHEN jsonb_typeof\(label_group\.value->'labelDetailList'\)='array' THEN label_group\.value->'labelDetailList' ELSE '\[\]'::jsonb END\) label\(value\)/);
-  assert.match(sql.text, /ARRAY\(SELECT DISTINCT btrim\(label\.value->>'labelName'\)/);
-  assert.match(sql.text, /NULLIF\(array_to_string\(product_labels.names, '、'\),''\)/);
+  assert.match(sql.text, /string_agg\(DISTINCT btrim\(label\.value->>'labelName'\), '、' ORDER BY btrim\(label\.value->>'labelName'\)\)/);
+  assert.doesNotMatch(sql.text, /productTagNames|product_labels|array_to_string/);
   assert.match(sql.text, /AS "productTags"/);
   assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
@@ -593,7 +593,20 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
 });
 
 
-test("productTag exact membership filters current Listing members before aggregation and reuses scoped facets", () => {
+test("untagged sales and performance browse keep label expansion out of the main Listing CTE", () => {
+  const scope = { organizationId: "org-tag", workspaceId: "ws-tag" };
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  for (const domain of ["sales", "performance"] as const) {
+    const sql = workbenchReadSql(domain, query, scope);
+    const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
+    assert.doesNotMatch(listing, /productLabelList|labelDetailList|productTag|product_labels/);
+    assert.doesNotMatch(sql.text, /productTagNames|product_labels|unnest|array_to_string/);
+    assert.match(sql.text, /jsonb_build_object\('productTags',[\s\S]*SELECT DISTINCT tag\."labelName" FROM sellfox_listing_current l/);
+    assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, /productLabelList|AS facets/);
+  }
+});
+
+test("productTag exact membership filters current Listing members before aggregation with independent scoped facets", () => {
   const scope = { organizationId: "org-tag", workspaceId: "ws-tag" };
   for (const domain of ["sales", "performance", "listings"] as const) {
     for (const dimension of ["msku", "asin", "parentAsin", "store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
@@ -601,26 +614,41 @@ test("productTag exact membership filters current Listing members before aggrega
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ productTag: tag, dimension, fulfillment: "AFN", site: "US", shopExternalId: "shop-tag" })}`));
         for (const exporting of [false, true]) {
           const sql = workbenchReadSql(domain, query, scope, exporting);
-          const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf("grouped AS ("));
-          assert.match(base, /EXISTS \(SELECT 1 FROM unnest\(l\."productTagNames"\) tag\("labelName"\) WHERE tag\."labelName"=\$\d+\)/);
-          assert.match(sql.text, /SELECT DISTINCT btrim\(label\.value->>'labelName'\)/);
+          const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
+          const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf(domain === "sales" ? "days AS (" : "grouped AS ("));
+          assert.match(listing, /EXISTS \(SELECT 1 FROM jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'productLabelList'\)='array'/);
+          assert.match(listing, /AND btrim\(label\.value->>'labelName'\)=\$\d+\) AS "matchesProductTag"/);
+          assert.match(listing, /WHERE NULLIF\(btrim\(label\.value->>'labelName'\),''\) IS NOT NULL/);
+          assert.match(base, /AND l\."matchesProductTag"\)/);
+          assert.doesNotMatch(sql.text, /productTagNames|unnest|product_labels/);
           assert.ok(sql.values.includes(tag));
           assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
           assert.ok(!sql.values.includes(`%${tag}%`));
           assert.doesNotMatch(base, /"productTags" (?:I?LIKE|=)/);
           assert.match(base, /l.fulfillment=/);
-          if (domain !== "listings") assert.match(base, /candidate.msku=s.msku[\s\S]*LIMIT 1/);
+          if (domain !== "listings") {
+            const candidate = base.slice(base.indexOf("LEFT JOIN LATERAL"), base.indexOf("LIMIT 1) l ON TRUE"));
+            assert.match(candidate, /candidate.msku=s.msku/);
+            assert.doesNotMatch(candidate, /matchesProductTag|labelName|productLabelList/);
+            assert.match(base, /LIMIT 1\) l ON TRUE WHERE [\s\S]*l\."matchesProductTag"/);
+          }
           if (exporting) assert.doesNotMatch(sql.text, /AS facets/);
           else {
             const facets = sql.text.slice(sql.text.indexOf("jsonb_build_object('productTags'"));
-            assert.match(facets, /SELECT DISTINCT tag\."labelName" FROM listing l/);
+            assert.match(facets, /SELECT DISTINCT tag\."labelName" FROM sellfox_listing_current l/);
+            assert.match(facets, /JOIN "SellfoxListingSnapshot" p ON p.id=l.id AND p\."organizationId"=\$\d+ AND p\."workspaceId"=\$\d+/);
+            assert.match(facets, /st\."organizationId"=\$\d+ AND st\."workspaceId"=\$\d+/);
+            assert.match(facets, /WHERE l\."organizationId"=\$\d+ AND l\."workspaceId"=\$\d+/);
+            assert.match(facets, /CROSS JOIN LATERAL \(SELECT btrim\(label\.value->>'labelName'\) AS "labelName"/);
+            assert.match(facets, /NULLIF\(btrim\(label\.value->>'labelName'\),''\) IS NOT NULL/);
+            assert.match(facets, /ORDER BY tag\."labelName"/);
             assert.match(facets, /st\."externalId" IN/); assert.match(facets, /st.marketplace=/);
-            assert.doesNotMatch(facets, /tag\."labelName"=|ILIKE/);
+            assert.doesNotMatch(facets, /tag\."labelName"=|ILIKE|FROM listing l|matchesProductTag|status|fulfillment/);
           }
         }
       }
     }
-    assert.doesNotMatch(workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope).text, /WHERE tag\."labelName"=/);
+    assert.doesNotMatch(workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope).text, /matchesProductTag/);
   }
   const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?productTag=ignored")), scope);
   assert.doesNotMatch(ads.text, /productTag|productLabel/); assert.ok(!ads.values.includes("ignored"));

@@ -223,8 +223,14 @@ test("productTag reaches browse facets and CSV/XLSX/Agent export with and withou
         assert.equal((await handler()).status, 200);
         assert.ok(calls.length > 0);
         for (const sql of calls) {
-          assert.match(sql.text, /EXISTS \(SELECT 1 FROM unnest/);
-          assert.match(sql.text, /WHERE tag\."labelName"=\$\d+/);
+          if (sql.text.startsWith("WITH")) {
+            assert.match(sql.text, /EXISTS \(SELECT 1 FROM jsonb_array_elements/);
+            assert.match(sql.text, /AND btrim\(label\.value->>'labelName'\)=\$\d+\) AS "matchesProductTag"/);
+            assert.match(sql.text, /AND l\."matchesProductTag"\)/);
+          } else {
+            assert.match(sql.text, /EXISTS \(SELECT 1 FROM unnest/);
+            assert.match(sql.text, /WHERE tag\."labelName"=\$\d+/);
+          }
           assert.ok(sql.values.includes("新标签、完整")); assert.ok(!sql.values.includes("%新标签、完整%"));
         }
       }

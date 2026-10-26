@@ -315,10 +315,10 @@ Listing 按同组织/工作区/店铺的快照 ID 精确关联。销量/利润�
 
 ### 产品标签筛选（2026-10-26，本地待部署）
 
-在线商品、销量、销售利润支持 `productTag=<标签完整名称>`；参数去首尾空格，空值表示全部，无固定标签白名单，重置会清空。来源仅为同组织/工作区/店铺的 current Listing payload `productLabelList[].labelDetailList[].labelName`，不是历史报表日标签；缺失或非数组按空列表处理。名称去首尾空格、去重后作为数组保存于查询 CTE，`EXISTS` 对数组内 `labelName` 做参数化等值匹配，不拆分展示用「、」，不做子串 LIKE。原在线商品 productTags 列继续按「、」连接展示，空列表仍显示空值。
+在线商品、销量、销售利润支持 `productTag=<标签完整名称>`；参数去首尾空格，空值表示全部，无固定标签白名单，重置会清空。来源仅为同组织/工作区/店铺的 current Listing payload `productLabelList[].labelDetailList[].labelName`，不是历史报表日标签；缺失或非数组按空列表处理。Workbench 仅在选择标签时用嵌套 JSON 数组上的 `EXISTS` 对 `btrim(labelName)` 做参数化等值匹配，不构建标签数组、不拆分展示用「、」、不做子串 LIKE；Agent 窄表导出保留原精确数组成员匹配。原在线商品 productTags 列直接用 `string_agg(DISTINCT ... ORDER BY ...)` 按「、」连接非空名称，空列表仍显示空值。
 
 销量/利润沿用发货方式和主图的 Listing 稳定匹配：先选精确 MSKU、再回退 ASIN 的一条候选，之后匹配标签，禁止先过滤候选而改选兄弟 Listing。成员行在日/实体/KPI 汇总前筛选，分页、总数和 CSV/XLSX/Agent 导出使用同一口径；未带 layout 的显式 productTag 请求也应用筛选。广告、业务员、AWD、运营等能力不在本次范围。
 
-browse 同一 SQL 响应附带 `facets.productTags`：复用 scoped Listing CTE 的标签数组，按当前组织/工作区及店铺/站点范围取全部非空 distinct 名称并排序，不受分页、所选标签、搜索或 Listing 状态影响。UI 使用动态选项与「全部」，并保留 URL 当前标签以便显示空结果和重置；切换工作区清空旧选项，迟到响应沿用已有取消/epoch 防护。无新增逐行请求；导出不计算 facets，未选标签的销量/利润导出不解析标签列表。
+browse 同一 SQL 响应附带 `facets.productTags`：独立子查询从 scoped `sellfox_listing_current` 和 `SellfoxListingSnapshot` 提取非空 `btrim(labelName)`，按当前组织/工作区及店铺/站点范围去重并排序，不引用主 Listing CTE、不构建每行标签数组，不受分页、所选标签、搜索或 Listing 状态影响。未选择标签的销量/利润主 Listing CTE 不解析标签列表；在线商品仍保留展示字符串。UI 使用动态选项与「全部」，并保留 URL 当前标签以便显示空结果和重置；切换工作区清空旧选项，迟到响应沿用已有取消/epoch 防护。无新增逐行请求；导出不计算 facets，未选标签的销量/利润导出不解析标签列表。
 
 无 schema、migration、sync、worker 或数据写入；回滚本次应用代码即可。验证选用相关单元/模拟 API/组件元素树测试、TypeScript、相关 ESLint 与 diff 检查；未运行 Chromium、生产构建或真实数据库查询/P95。动态 facets 会在 browse 查询中读取当前范围 Listing 标签，真实库查询耗时及页面交互应在后续明确部署验收时验证。本次仅本地交付，不推送或发布。
