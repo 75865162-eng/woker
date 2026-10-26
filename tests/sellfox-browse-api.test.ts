@@ -578,7 +578,7 @@ test("ads Buy Box alone routes six-tab browse and CSV/XLSX before rollup while A
   }
 });
 
-test("ads current Listing columns reach browse and selected CSV/XLSX exports with or without layout", async () => {
+test("ads default image and selected Listing columns reach CSV/XLSX exports across six tabs with or without layout", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
@@ -602,26 +602,51 @@ test("ads current Listing columns reach browse and selected CSV/XLSX exports wit
           assert.ok(calls.at(-1)!.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
         }
         for (const format of ["csv", "xlsx"]) {
+          const defaults = await csv(request(domain, `${layout}buyBox=yes&brand=00123&fulfillment=AFN&productTag=标签&format=${format}`), context);
+          assert.equal(defaults.status, 200);
+          if (format === "csv") {
+            const lines = (await defaults.text()).trim().split("\r\n");
+            const headers = lines[0].split(",");
+            const imageIndex = headers.indexOf('"图片"');
+            assert.ok(imageIndex >= 0);
+            assert.equal(headers[imageIndex + 1], '"产品信息"');
+            if (domain === "ads_report") assert.equal(imageIndex, 0);
+            assert.equal(lines[1].split(",")[imageIndex], '"https://example.test/product.jpg"');
+            assert.equal(lines[2].split(",")[imageIndex], '""');
+            for (const label of ["MSKU", "标题", "店铺", "站点", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) assert.ok(!headers.includes(`"${label}"`));
+          } else {
+            const { default: ExcelJS } = await import("exceljs");
+            const book = new ExcelJS.Workbook(); await book.xlsx.load(await defaults.arrayBuffer());
+            const sheet = book.worksheets[0];
+            const headers = Array.from({ length: sheet.columnCount }, (_, i) => sheet.getRow(1).getCell(i + 1).value);
+            const imageIndex = headers.indexOf("图片");
+            assert.ok(imageIndex >= 0);
+            assert.equal(headers[imageIndex + 1], "产品信息");
+            if (domain === "ads_report") assert.equal(imageIndex, 0);
+            assert.equal(sheet.getRow(2).getCell(imageIndex + 1).value, "https://example.test/product.jpg");
+            assert.ok([null, ""].includes(sheet.getRow(3).getCell(imageIndex + 1).value as null | string));
+            for (const label of ["MSKU", "标题", "店铺", "站点", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) assert.ok(!headers.includes(label));
+          }
           // Keep the no-layout/no-sort selected-column route covered too.
           const sort = layout ? `sortBy=buyBoxWinner&sortOrder=asc&` : "";
           const response = await csv(request(domain, `${layout}${sort}buyBox=yes&brand=00123&fulfillment=AFN&productTag=标签&column=rating&column=ratingCount&column=productTags&column=brand&column=fulfillment&column=buyBoxWinner&column=image&format=${format}`), context);
           assert.equal(response.status, 200);
           assert.match(calls.at(-1)!.text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
           if (layout) assert.ok(calls.at(-1)!.text.includes(`ORDER BY "buyBoxWinner" ASC NULLS LAST, id ASC`));
-          if (format === "csv") assert.equal((await response.text()).trim(), '"星级","评论数","标签","品牌","发货方式","Buy Box","图片"\r\n"4.4",128,"新品、重点","品牌","AFN","是","https://example.test/product.jpg"\r\n"","","","","","",""\r\n"",0,"","00123","MFN","否",""\r\n"","","","","未知","",""');
+          if (format === "csv") assert.equal((await response.text()).trim(), '"图片","星级","评论数","标签","品牌","发货方式","Buy Box"\r\n"https://example.test/product.jpg","4.4",128,"新品、重点","品牌","AFN","是"\r\n"","","","","","",""\r\n"","",0,"","00123","MFN","否"\r\n"","","","","","未知",""');
           else {
             const { default: ExcelJS } = await import("exceljs");
             const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
             const sheet = book.worksheets[0];
-            assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map(i => sheet.getRow(1).getCell(i).value), ["星级", "评论数", "标签", "品牌", "发货方式", "Buy Box", "图片"]);
-            assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map(i => sheet.getRow(2).getCell(i).value), ["4.4", 128, "新品、重点", "品牌", "AFN", "是", "https://example.test/product.jpg"]);
-            assert.equal(sheet.getRow(4).getCell(2).value, 0);
-            assert.equal(sheet.getRow(4).getCell(4).value, "00123");
-            assert.equal(sheet.getRow(4).getCell(5).value, "MFN");
-            assert.equal(sheet.getRow(4).getCell(6).value, "否");
-            assert.equal(sheet.getRow(5).getCell(6).value, null);
-            assert.equal(sheet.getRow(5).getCell(5).value, "未知");
-            assert.ok([null, ""].includes(sheet.getRow(5).getCell(4).value as null | string));
+            assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map(i => sheet.getRow(1).getCell(i).value), ["图片", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]);
+            assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map(i => sheet.getRow(2).getCell(i).value), ["https://example.test/product.jpg", "4.4", 128, "新品、重点", "品牌", "AFN", "是"]);
+            assert.equal(sheet.getRow(4).getCell(3).value, 0);
+            assert.equal(sheet.getRow(4).getCell(5).value, "00123");
+            assert.equal(sheet.getRow(4).getCell(6).value, "MFN");
+            assert.equal(sheet.getRow(4).getCell(7).value, "否");
+            assert.equal(sheet.getRow(5).getCell(7).value, null);
+            assert.equal(sheet.getRow(5).getCell(6).value, "未知");
+            assert.ok([null, ""].includes(sheet.getRow(5).getCell(5).value as null | string));
             for (const i of [1, 2, 3, 4, 5, 6, 7]) assert.ok([null, ""].includes(sheet.getRow(3).getCell(i).value as null | string));
           }
         }

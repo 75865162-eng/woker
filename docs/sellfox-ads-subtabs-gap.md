@@ -1,5 +1,34 @@
 # Sellfox 广告子页：Phase A / B 已接入与剩余缺口
 
+## 2026-10-27 02:02:45 Asia/Shanghai — ads 默认显示 image「图片」 · Owner: Chen Jieliang · BOX LOCAL ONLY
+
+> **BOX LOCAL ONLY**：基线 `6cb590b3358fea8059d5565224d7a50bed00542c`；只把 `columns.ads.image` 从可选尾部移到共享广告列首位、紧邻 `asin`「产品信息」之前，恢复 `defaultVisible: true`。六域 `ads` / `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement` 的默认列与未显式选列的工作台 CSV/XLSX 均包含图片；各子页原有身份列前缀不变。
+>
+> 广告列选择器的默认勾选集合来自 `defaultVisibleColumnKeys`，图片默认勾选；现有广告 UI 没有独立「精简」按钮（该按钮仅利润页有），本轮不新增交互。显式 `columnSelection`（包括空集合、手动隐藏图片）继续原样生效，无保存选列迁移。图片仍不可排序，继续使用既有 Listing `mainImage` join 和渲染，不新增图片预载、网络请求、SQL 或 payload 解析。
+>
+> `enabled` / `serviceStatus` 的位置和待接状态不变；`rating` / `ratingCount` / `productTags` / `brand` / `fulfillment` / `buyBoxWinner` 仍可选，`msku` / `title` / `name` / `marketplace` 仍在可选尾部。已交付的 productTag / fulfillment / brand / Buy Box 筛选、facets、Agent ads 英文长表与排序守卫均未改；sales / performance / listings 配置逐字节保持基线。adStrategy / salesperson、广告组合 / 否定 / AMC 继续锁定。**Fee-mining remains paused**。
+>
+> 无 schema / migration / SQL / 服务端代码变更；无 push/fetch、SSH、deploy/restart、migrate-on-123、真实数据库写入、live Sellfox API 或 schedules 变更，未加载/修改 `.env`。回滚仅需将 `columns.ads.image` 放回基线可选尾部并恢复默认隐藏，无数据库回退。
+
+离线验证：五个定向测试文件、TypeScript、touched ESLint 通过；覆盖六域默认图片/紧邻产品信息、列选择器勾选、显式/空选列、CSV 与真实 ExcelJS 生成回读、可选列、筛选和 Agent 守卫。`git diff --check` 通过。Prisma 为 stub，不连接真实数据库。另核对 `workbench-types.ts` 除 `columns.ads` 行以外内容与 HEAD 完全一致，确认其他域默认配置未变。
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-agent-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+# 已尝试；3 个用例在 Chromium 启动时受 BOX sandbox 限制，页面断言未执行：
+npm run test:sellfox:browser -- --grep 'ads default image|reference layout keeps|changing domains or ad subtabs'
+```
+
+> 本轮本地提交受阻：`git add` 无法创建 `.git/index.lock`（Read-only file system），未执行 commit、未强制或绕过沙箱。6 个仓库文件保留为未暂存改动，父进程需提交：`feat(sellfox): default-show ads listing image column`。HEAD 仍为 `6cb590b3358fea8059d5565224d7a50bed00542c`；仓库外状态文件另行保留。
+
+浏览器限制：`sandbox_host_linux.cc:41` / `Operation not permitted`（SIGTRAP），没有绕过沙箱；需父进程在允许 Chromium 的本地环境补跑上述 3 项。完整 check/build、PGlite/Prisma、真实 P95 未运行：本轮仅默认列配置，发布前按仓库要求补完整检查，SQL/schema 变化或专项性能验收时再运行相应验证。仓库外 `/workspace/sellfox-parity-gap.md` 已同步本状态，但不纳入 repo commit。
+
+---
+
+### 上轮 Buy Box 筛选状态（历史记录）
+
 > 2026-10-27 01:52:01 Asia/Shanghai · Owner: Chen Jieliang · **BOX LOCAL ONLY**：六个广告工作台页（`ads_report` / `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`）已解锁 `buyBox`「Buy Box」静态筛选，UI「全部 / 是 / 否」，参数 `"" / "yes" / "no"`。基线 `b6d3250e657bf03a4da22a6b3355d4fc161394ae` 的 productTag / fulfillment / brand 筛选及 productTags / brands facets 保留；无新 facets、schema 或 Prisma migration。
 >
 > 与 sales/performance/listings 同口径：SQL 对 Listing current typed `buyBoxWinner` 文本精确匹配「是」/「否」，复用既有 MSKU 优先 / ASIN 回退 / LIMIT 1 lateral join；**先选 Listing，再筛成员，最后汇总实体/KPI**。NULL、空值、非布尔/未知文本、缺身份、无匹配和来源已归 NULL 的冲突只计入「全部」，不借其他 ASIN 子体答案、不放大花费。广告实体的未筛选成员答案冲突时列仍为 NULL；选择是/否后仅汇总匹配成员（fixture 的 cost 5 → 是 2 / 否 3），不拿汇总列做事后筛选。

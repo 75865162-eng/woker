@@ -4,12 +4,30 @@ import React, { type ReactNode } from "react";
 import { SellfoxBrowseFilters } from "@/components/sellfox/browse-filters";
 import { defaultSellfoxView, type SellfoxView } from "@/lib/sellfox/workbench-view";
 
-type Props = { children?: ReactNode; "aria-label"?: string; title?: string; value?: string; disabled?: boolean; onClick?: () => void; onChange?: (event: { target: { value: string } }) => void };
+type Props = { children?: ReactNode; "aria-label"?: string; title?: string; value?: string; checked?: boolean; disabled?: boolean; onClick?: () => void; onChange?: (event: { target: { value: string } }) => void };
 function elements(node: ReactNode): React.ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!React.isValidElement<Props>(node)) return [];
   return [node, ...elements(node.props.children)];
 }
+
+test("ads column picker defaults to image across six tabs and respects explicit selections", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"] as const) {
+      for (const selectedColumns of [undefined, ["asin", "cost"], []]) {
+        const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "ads", adsTab }, stores: [], selectedColumns, onChange: () => {}, onColumns: () => {} }));
+        const image = nodes.find(node => node.props["aria-label"] === "显示图片列")!;
+        assert.ok(image);
+        assert.equal(image.props.checked, selectedColumns === undefined);
+        for (const name of ["MSKU", "标题", "店铺", "站点", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) {
+          assert.equal(nodes.find(node => node.props["aria-label"] === `显示${name}列`)!.props.checked, false);
+        }
+      }
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
 
 test("ads fulfillment selects all/AFN/MFN across six tabs and resets without unlocking other filters", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;

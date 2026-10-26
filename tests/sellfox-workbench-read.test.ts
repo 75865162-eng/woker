@@ -348,7 +348,8 @@ test("reference columns combine only visible identity fields and export identica
   assert.equal(sellfoxColumnValue(profit,{identity:"MSKU-1"}),"MSKU-1");
   const listing = visibleColumns("listings").find(c=>c.key === "asin")!;
   assert.equal(sellfoxColumnValue(listing,{asin:"ASIN-1",msku:"MSKU-1"}),"ASIN-1\nMSKU-1");
-  assert.ok(!visibleColumns("ads").some(c=>["image","msku","title"].includes(c.key)));
+  assert.deepEqual(visibleColumns("ads").slice(0, 2).map(c => c.key), ["image", "asin"]);
+  assert.ok(!visibleColumns("ads").some(c=>["msku","title","name","marketplace"].includes(c.key)));
 });
 
 
@@ -576,24 +577,30 @@ test("selected listing amazonBrand and bsrCategory export text and empty CSV/XLS
   } finally { globals.prisma = previous; }
 });
 
-test("ads expose optional current Listing image, rating, review count, tags, brand, fulfillment and Buy Box across all report tabs", () => {
+test("ads default to current Listing image before product info and keep other Listing attributes optional across all report tabs", () => {
   const scope = { organizationId: "org", workspaceId: "ws" };
-  const keys = ["rating", "productTags", "image"];
+  const keys = ["image", "rating", "productTags"];
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
     const columnDomain = domain === "ads_report" ? "ads" : domain;
     const config = visibleColumns(columnDomain, keys);
     assert.deepEqual(config.map(c => c.key), keys);
-    assert.deepEqual(config.map(c => c.labelZh), ["星级", "标签", "图片"]);
+    assert.deepEqual(config.map(c => c.labelZh), ["图片", "星级", "标签"]);
     for (const c of config) {
       assert.equal(c.unavailable, undefined);
-      assert.equal(c.defaultVisible, false);
+      assert.equal(c.defaultVisible, c.key === "image");
       assert.match(c.requiresField!, /Listing 当前快照/);
-      assert.ok(!defaultVisibleColumnKeys(columnDomain).includes(c.key));
+      assert.equal(defaultVisibleColumnKeys(columnDomain).includes(c.key), c.key === "image");
     }
-    assert.deepEqual(config[2].parts, ["mainImage"]);
-    assert.match(config[0].requiresField!, /rating 类型投影/);
-    assert.match(config[1].requiresField!, /productTags.*productLabelList/);
-    assert.match(config[2].requiresField!, /mainImage/);
+    assert.deepEqual(config[0].parts, ["mainImage"]);
+    assert.match(config[0].requiresField!, /mainImage/);
+    assert.match(config[1].requiresField!, /rating 类型投影/);
+    assert.match(config[2].requiresField!, /productTags.*productLabelList/);
+    const defaults = defaultVisibleColumnKeys(columnDomain);
+    assert.deepEqual(defaults.slice(defaults.indexOf("image"), defaults.indexOf("image") + 4), ["image", "asin", "enabled", "serviceStatus"]);
+    assert.deepEqual(columns[columnDomain].slice(-4).map(c => c.key), ["msku", "title", "name", "marketplace"]);
+    for (const key of ["msku", "title", "name", "marketplace"]) assert.equal(columns[columnDomain].find(c => c.key === key)!.defaultVisible, false);
+    assert.deepEqual(visibleColumns(columnDomain, ["asin", "cost"]).map(c => c.key), ["asin", "cost"]);
+    assert.deepEqual(visibleColumns(columnDomain, []), []);
     for (const key of ["enabled", "serviceStatus", "adStrategy", "salesperson"]) assert.equal(columns[columnDomain].find(c => c.key === key)!.unavailable, true);
     assert.ok(!columns[columnDomain].some(c => /广告组合|否定|AMC/.test(c.labelZh) && !c.unavailable));
     const textConfig = visibleColumns(columnDomain, ["buyBoxWinner", "fulfillment", "brand"]);
@@ -642,7 +649,7 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
       assert.match(sql.text, /AND l.fulfillment=/); assert.ok(sql.values.includes("AFN"));
       assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
     }
-    assert.equal(visibleColumnCsv(config, [{ rating: "4.4", productTags: "新品、重点", mainImage: "https://example.test/product.jpg" }, { rating: null, productTags: null, mainImage: null }]).trim(), '"星级","标签","图片"\r\n"4.4","新品、重点","https://example.test/product.jpg"\r\n"","",""');
+    assert.equal(visibleColumnCsv(config, [{ rating: "4.4", productTags: "新品、重点", mainImage: "https://example.test/product.jpg" }, { rating: null, productTags: null, mainImage: null }]).trim(), '"图片","星级","标签"\r\n"https://example.test/product.jpg","4.4","新品、重点"\r\n"","",""');
   }
 });
 

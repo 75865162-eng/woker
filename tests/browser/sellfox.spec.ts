@@ -259,7 +259,7 @@ test("reference layout keeps compact filter bands and domain-specific identity c
     sales:["图片","ASIN","店铺/站点","分析","父ASIN","MSKU","品名/SKU","标题","FBA可售","小计"],
     performance:["图片","标题/ASIN","店铺/站点","分析","毛利润"],
     listings:["","状态","图片","ASIN/MSKU","标题"],
-    ads:["","产品信息","有效未接","服务状态未接","FBA可售","价格","广告活动","广告组"],
+    ads:["","图片","产品信息","有效未接","服务状态未接","FBA可售","价格","广告活动","广告组"],
   };
   for (const [domain,tab] of [["sales","销量"],["performance","销售利润"],["listings","在线商品"],["ads","广告"]]) {
     await page.getByRole("navigation", {name:"赛狐数据域"}).getByRole("button",{name:tab,exact:true}).click();
@@ -544,6 +544,40 @@ test("profit thumbnails load safely, missing images stay blank and fee zeros/num
   expect(calls.filter(call => call.body !== null)).toEqual([]);
 });
 
+
+test("ads default image precedes product info across six tabs and explicit column selections survive tab changes", async ({ page }) => {
+  await setup(page, "domain=ads&from=2026-10-24&to=2026-10-24");
+  for (const label of ["广告产品", "投放", "搜索词", "广告活动", "广告组", "广告位"]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    const image = page.getByRole("columnheader", { name: "图片", exact: true });
+    await expect(image).toBeVisible();
+    await expect(image.getByRole("button")).toHaveCount(0);
+    const headers = await page.locator("thead th").allTextContents();
+    expect(headers[headers.indexOf("图片") + 1]).toBe("产品信息");
+    await page.getByText("自定义列", { exact: true }).click();
+    await expect(page.getByRole("checkbox", { name: "显示图片列", exact: true })).toBeChecked();
+    for (const name of ["MSKU", "标题", "店铺", "站点", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) await expect(page.getByRole("checkbox", { name: `显示${name}列`, exact: true })).not.toBeChecked();
+    await page.getByText("自定义列", { exact: true }).click();
+    for (const name of ["CSV", "Excel"]) {
+      const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
+      expect(new URL(href!, page.url()).searchParams.has("column")).toBe(false);
+    }
+  }
+  await page.getByText("自定义列", { exact: true }).click();
+  await page.getByRole("checkbox", { name: "显示图片列", exact: true }).uncheck();
+  await expect(page.getByRole("columnheader", { name: "图片", exact: true })).toHaveCount(0);
+  for (const name of ["CSV", "Excel"]) {
+    const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
+    const params = new URL(href!, page.url()).searchParams;
+    expect(params.get("columns")).toBe("custom");
+    expect(params.getAll("column")).not.toContain("image");
+  }
+  await page.getByText("自定义列", { exact: true }).click();
+  await page.getByRole("button", { name: "广告产品", exact: true }).click();
+  await expect(page.getByRole("columnheader", { name: "图片", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "广告位", exact: true }).click();
+  await expect(page.getByRole("columnheader", { name: "图片", exact: true })).toHaveCount(0);
+});
 
 test("ads targeting/search-term tabs navigate endpoints, columns, export, history and active sync resource", async ({ page }) => {
   const { calls } = await setup(page, "domain=ads&from=2026-10-24&to=2026-10-24&adType=sb");
