@@ -34,9 +34,9 @@ async function verifyReportListingProjection(query: Query) {
       NULL::float AS "promotionDiscount",NULL::float AS "giftWrapFee",revenue AS "netRevenue",
       NULL::float AS "refundRate",orders AS "orderNum",quantity AS "fbaQuantity",0::float AS "fbmQuantity",
       2::float AS "refundPrice",1::float AS "refundNum",3::float AS "commodityCost",4::float AS "shippingPrice",5::float AS "taxPrice",
-      '{"refundPrice":2,"refundNum":1,"commodityCost":3,"shippingPrice":4,"taxPrice":5}'::jsonb AS payload
+      ARRAY[]::text[] AS "userNameList",'{"refundPrice":2,"refundNum":1,"commodityCost":3,"shippingPrice":4,"taxPrice":5}'::jsonb AS payload
     FROM sellfox_sales_daily;
-    INSERT INTO "SellfoxProductDailySnapshot" SELECT id||'-settled',"organizationId","workspaceId","storeId",asin,msku,quantity,"sourceKey",sku,currency,"reportDate",revenue,orders,complete,"syncedAt","shopExternalId",name,marketplace,"saleQuantity","saleRevenue",true,title,"parentAsin","imageUrl","grossProfit","grossProfitRate","adCost","promotionDiscount","giftWrapFee","netRevenue","refundRate","orderNum","fbaQuantity","fbmQuantity","refundPrice","refundNum","commodityCost","shippingPrice","taxPrice",payload FROM "SellfoxProductDailySnapshot";
+    INSERT INTO "SellfoxProductDailySnapshot" SELECT id||'-settled',"organizationId","workspaceId","storeId",asin,msku,quantity,"sourceKey",sku,currency,"reportDate",revenue,orders,complete,"syncedAt","shopExternalId",name,marketplace,"saleQuantity","saleRevenue",true,title,"parentAsin","imageUrl","grossProfit","grossProfitRate","adCost","promotionDiscount","giftWrapFee","netRevenue","refundRate","orderNum","fbaQuantity","fbmQuantity","refundPrice","refundNum","commodityCost","shippingPrice","taxPrice","userNameList",payload FROM "SellfoxProductDailySnapshot";
     CREATE VIEW sellfox_profit_daily AS SELECT * FROM "SellfoxProductDailySnapshot";`);
   for (const domain of ["sales", "performance"] as const) {
     const read = async (params = "", exporting = false) => {
@@ -53,7 +53,7 @@ async function verifyReportListingProjection(query: Query) {
     assert.equal(all.total, 4);
     const metric = domain === "sales" ? "subtotal" : "saleQuantity";
     assert.equal(all.totals[0][metric], 17);
-    assert.deepEqual(all.facets, { brands: ["Brand", "Other"], productTags: ["标签、完整"] });
+    assert.deepEqual(all.facets, { brands: ["Brand", "Other"], productTags: ["标签、完整"], ...(domain === "performance" ? { salespersons: [] } : {}) });
     for (const [params, ids, quantity] of [
       ["fulfillment=AFN&buyBox=no&brand=Brand&productTag="+encodeURIComponent("标签、完整"), ["exact", "fallback"], 7],
       ["buyBox=yes", [], 0], // ASIN sibling b must not override the exact MSKU or stable ASIN fallback.

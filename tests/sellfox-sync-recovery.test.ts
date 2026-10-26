@@ -28,11 +28,11 @@ test("performance text extracts scalar identities without stringifying objects",
 test("performance extraction maps confirmed fee and image payload keys to narrow fields", () => {
   assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: "4.25", giftWrapAmount: 1.5, imageUrl: " https://example.test/item.jpg ", refundPrice: "2.5", refundNum: 1, commodityCost: "3", shippingPrice: 4, taxPrice: "-0.5" }), {
     promotionDiscount: 4.25, giftWrapFee: 1.5, imageUrl: "https://example.test/item.jpg",
-    refundPrice: 2.5, refundNum: 1, commodityCost: 3, shippingPrice: 4, taxPrice: -0.5,
+    refundPrice: 2.5, refundNum: 1, commodityCost: 3, shippingPrice: 4, taxPrice: -0.5, userNameList: [],
   });
   assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: null, giftWrapAmount: "", imageUrl: "" }), {
     promotionDiscount: null, giftWrapFee: null, imageUrl: null,
-    refundPrice: null, refundNum: null, commodityCost: null, shippingPrice: null, taxPrice: null,
+    refundPrice: null, refundNum: null, commodityCost: null, shippingPrice: null, taxPrice: null, userNameList: [],
   });
   for (const key of ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] as const) {
     for (const value of [null, undefined, "", 0, "0", 2.5, "-3.25"]) {
@@ -184,4 +184,12 @@ test("settled IDs cannot collide with an all-orders MSKU that ends in settled", 
   f.setResponse(() => ({rows:[{mskuList:["MSKU"],saleNum:1}],totalPage:1}));
   await syncSellfoxProductDailySnapshots({...input,onlySettle:true}, f.dependencies);
   assert.equal(f.rows.size,2);
+});
+
+
+test("performance salesperson projects only distinct nonempty strings, never Listing developer", () => {
+  assert.deepEqual(extractPerformanceFields({ userNameList: [" 温见清 ", "陈馨", "温见清", "", "  ", null, 1, { name: "虚构" }] }).userNameList.sort(), ["温见清", "陈馨"].sort());
+  for (const userNameList of [undefined, null, "温见清", {}, [], 1]) {
+    assert.deepEqual(extractPerformanceFields({ userNameList, developer: "开发员" }).userNameList, []);
+  }
 });

@@ -177,3 +177,16 @@ test("header sort toggles asc/desc, resets pagination and starts new columns asc
   assert.equal(sellfoxSortPatch(desc, "subtotal").sortOrder, "asc");
   assert.equal(sellfoxSortPatch(desc, "identity").sortOrder, "asc");
 });
+
+
+test("salesperson trims exact names and round trips browse, UI and export for performance only", () => {
+  const view = readSellfoxView(new URLSearchParams({ domain: "performance", salesperson: " 温见清 " }));
+  assert.equal(view.salesperson, "温见清");
+  assert.equal(readSellfoxView(sellfoxViewParams(view)).salesperson, "温见清");
+  assert.equal(query(sellfoxViewParams(view, true).toString()).salesperson, "温见清");
+  for (const salesperson of ["", "  ", "\t\n"]) {
+    assert.equal(query(new URLSearchParams({ salesperson }).toString()).salesperson, "");
+    assert.equal(sellfoxViewParams(readSellfoxView(new URLSearchParams({ domain: "performance", salesperson }))).has("salesperson"), false);
+  }
+  for (const domain of ["sales", "listings", "ads"] as const) assert.equal(sellfoxViewParams({ ...view, domain }, true).has("salesperson"), false);
+});

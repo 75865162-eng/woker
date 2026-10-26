@@ -1130,6 +1130,7 @@ model SellfoxProductDailySnapshot {
   commodityCost   Float?
   shippingPrice   Float?
   taxPrice        Float?
+  userNameList    String[] @default([])
   payload         Json
   syncedAt        DateTime     @default(now())
   createdAt       DateTime     @default(now())

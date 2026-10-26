@@ -240,6 +240,7 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
         AND candidate."storeId"=s."storeId" AND ${match}
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.brand}`);
   }
+  if (domain === "performance" && query.salesperson) clauses.push(Prisma.sql`s."userNameList" @> ARRAY[${query.salesperson}]::text[]`);
   if (domain === "listings" && query.productTag) clauses.push(Prisma.sql`s."productTagNames" @> ARRAY[${query.productTag}]::text[]`);
   else if (query.productTag && ["sales", "performance"].includes(domain)) {
     // Select the same stable candidate BEFORE testing membership (no ASIN sibling substitution).

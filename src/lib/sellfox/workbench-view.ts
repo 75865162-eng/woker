@@ -1,6 +1,6 @@
 import { isSellfoxSortable, type SellfoxSortOrder } from "./sort-columns";
 import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
-import { sellfoxBrand, sellfoxBuyBox, sellfoxFulfillment, sellfoxProductTag, type SellfoxBrowseDimension } from "./browse-query";
+import { sellfoxBrand, sellfoxBuyBox, sellfoxFulfillment, sellfoxProductTag, sellfoxSalesperson, type SellfoxBrowseDimension } from "./browse-query";
 
 export const sellfoxDomains = [
   { id: "overview", label: "概览" }, { id: "stores", label: "店铺" }, { id: "inventory", label: "库存" },
@@ -8,7 +8,7 @@ export const sellfoxDomains = [
   { id: "ads", label: "广告" }, { id: "runs", label: "同步日志" },
 ] as const;
 export type SellfoxDomain = (typeof sellfoxDomains)[number]["id"];
-export type SellfoxView = { sortBy?: string; sortOrder?: SellfoxSortOrder; adsTab?: "product" | "targeting" | "searchTerm" | "campaign" | "adGroup" | "placement"; domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; productTag?: string; brand?: string; fulfillment?: "" | "AFN" | "MFN"; buyBox?: "" | "yes" | "no"; dimension?: SellfoxBrowseDimension; metric?: string; hideZero?: boolean; onlySettle?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
+export type SellfoxView = { sortBy?: string; sortOrder?: SellfoxSortOrder; adsTab?: "product" | "targeting" | "searchTerm" | "campaign" | "adGroup" | "placement"; domain: SellfoxDomain; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; productTag?: string; brand?: string; salesperson?: string; fulfillment?: "" | "AFN" | "MFN"; buyBox?: "" | "yes" | "no"; dimension?: SellfoxBrowseDimension; metric?: string; hideZero?: boolean; onlySettle?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
 export function sellfoxAdsResource(view: Pick<SellfoxView, "adsTab">) { return view.adsTab === "campaign" ? "ads_campaign" : view.adsTab === "adGroup" ? "ads_ad_group" : view.adsTab === "placement" ? "ads_placement" : view.adsTab === "targeting" ? "ads_targeting" : view.adsTab === "searchTerm" ? "ads_search_term" : "ads_report"; }
 export function sellfoxColumnDomain(view: Pick<SellfoxView, "domain" | "adsTab">) { return view.domain === "ads" && view.adsTab && view.adsTab !== "product" ? sellfoxAdsResource(view) : view.domain; }
 export const defaultSellfoxView: SellfoxView = { adsTab: "product", domain: "overview", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "asin", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "", pageSize: 20, salesView: "wide" };
@@ -21,7 +21,7 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     adsTab: params.get("adsTab") === "campaign" ? "campaign" : params.get("adsTab") === "adGroup" ? "adGroup" : params.get("adsTab") === "placement" ? "placement" : params.get("adsTab") === "targeting" ? "targeting" : params.get("adsTab") === "searchTerm" ? "searchTerm" : "product",
     domain: sellfoxDomains.some((item) => item.id === domain) ? domain as SellfoxDomain : "overview",
     from: isSellfoxDate(params.get("from")) ? params.get("from")! : "", to: isSellfoxDate(params.get("to")) ? params.get("to")! : "",
-    fulfillment: sellfoxFulfillment(params.get("fulfillment")), buyBox: sellfoxBuyBox(params.get("buyBox")), productTag: sellfoxProductTag(params.get("productTag")), brand: sellfoxBrand(params.get("brand")),
+    fulfillment: sellfoxFulfillment(params.get("fulfillment")), buyBox: sellfoxBuyBox(params.get("buyBox")), productTag: sellfoxProductTag(params.get("productTag")), brand: sellfoxBrand(params.get("brand")), salesperson: sellfoxSalesperson(params.get("salesperson")),
     status: ["active", "inActive", "delete", "incomplete"].includes(params.get("status") ?? "") ? params.get("status")! : "",
     dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(params.get("dimension") ?? "") ? params.get("dimension") : "asin") as SellfoxBrowseDimension,
     metric: ["quantity", "orders", "revenue"].includes(params.get("metric") ?? "") ? params.get("metric")! : "quantity",
@@ -52,6 +52,7 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
   if (view.buyBox && (!forRequest || ["sales", "performance", "listings"].includes(view.domain))) params.set("buyBox", view.buyBox);
   if (view.productTag && (!forRequest || ["sales", "performance", "listings"].includes(view.domain))) params.set("productTag", sellfoxProductTag(view.productTag));
   if (view.brand && (!forRequest || ["sales", "performance", "listings"].includes(view.domain))) params.set("brand", sellfoxBrand(view.brand));
+  if (view.salesperson && (!forRequest || view.domain === "performance")) params.set("salesperson", sellfoxSalesperson(view.salesperson));
   if (view.status && (!forRequest || view.domain === "listings")) params.set("status", view.status);
   if (forRequest && ["sales", "performance", "listings", "ads"].includes(view.domain)) params.set("layout", "workbench");
   for (const key of ["dimension", "metric", "currency", "adType", "quickFilter"] as const) {

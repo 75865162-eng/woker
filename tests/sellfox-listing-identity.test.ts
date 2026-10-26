@@ -71,3 +71,14 @@ test("narrow SQL and both CSV paths expose only promoted columns; remaining unsu
   assert.ok(sql.values.includes("124687")); assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
   assert.equal(visibleColumns("sales").find(c => c.key === "image")?.unavailable, undefined);
 });
+
+
+test("salesperson column is available only for profit and exports typed array joined with Chinese separator", () => {
+  const config = visibleColumns("performance", ["salesperson"]);
+  assert.equal(config.length, 1); assert.equal(config[0].unavailable, undefined); assert.equal(config[0].defaultVisible, false);
+  assert.match(config[0].requiresField, /payload.userNameList 类型投影.*非 Listing developer/);
+  assert.match(visibleColumnCsv(config, [{ userNameList: ["温见清", "陈馨"] }]), /温见清、陈馨/);
+  assert.ok(visibleColumns("sales", ["salesperson"])[0].unavailable);
+  assert.match(visibleColumns("sales", ["salesperson"])[0].requiresField, /销量日快照无 userNameList/);
+  for (const domain of ["listings", "ads"]) assert.ok(visibleColumns(domain, ["salesperson"])[0].unavailable);
+});

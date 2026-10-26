@@ -2,6 +2,31 @@
 
 本轮仅覆盖 `/sellfox?domain=sales` 和 `/sellfox?domain=performance`。不发布、不启用计划、不调用真实赛狐、不回填历史数据；后续部署目标是 `123.207.47.225`。
 
+## 2026-10-26 业务员列与筛选（Owner: Chen Jieliang；仅 BOX 本地）
+
+- 仅销售利润启用「业务员」单选筛选与默认隐藏的列。URL/API：`salesperson=温见清`（正常 URL 编码）。来源是利润 payload 的 `userNameList` 字符串数组，经 `SellfoxProductDailySnapshot.userNameList TEXT[]` 类型投影；不是 Listing `developer` / 开发员。缺键、非数组、空数组返回 `[]`；只保留去空格、非空、去重的字符串，不猜测人员身份。
+- browse、Agent 与导出都在汇总前用 `s."userNameList" @> ARRAY[姓名]::text[]` 精确包含筛选；同一事实行多人命中时仍完整计入一次，不按姓名拆分或分摊。不同姓名分别查询的结果可能重叠，不能相加作为全员总计。不筛选时金额口径不变。姓名单独聚合去重，以「、」连接供表格/CSV/Excel 使用，不展开金额行。
+- 业务员 facets 从当前组织/工作区/店铺/站点/日期/币种/结算口径内的利润事实行 `unnest(userNameList)` 去重；忽略当前姓名、品牌、标签和搜索选择，零结果时仍能切换其他姓名。无需新增同步表或调用 API。
+- 「业务员」分组维度继续灰显：多人数组无独立业务员主键。销量快照没有该键，销量筛选/列继续灰显，提示「销量日快照无 userNameList；不从 Listing developer 伪造」。Listing/广告及销售小组保持原边界。
+- 本地迁移 `20261026090000_sellfox_product_daily_user_name_list` 在 80000 后追加数组列、GIN 索引，替换现有投影函数并保留五项费用和同名 trigger；`UPDATE SET payload=payload` 只回填派生列，视图严格保留 80000 列序后追加 `userNameList`。未向任何真实库应用。123 仍需先补齐已有前置迁移（含 50000 的数字 helper 与 80000），仅在用户明确说「上」后另行评审/发布，不能仅发布代码。正式应用前评估全表回填/DDL 的锁、WAL、磁盘与运行窗口；无真实 P95 验证结论。
+- 回滚应用到先前版本并保留加法 schema/索引/触发器；旧费用投影仍生效，不自动删列、回退数据库或重同步。未新增依赖/计划/worker/外部请求。
+
+离线验证（不加载 `.env`、不使用 `DATABASE_URL`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-workbench-read.test.ts tests/sellfox-listing-identity.test.ts tests/sellfox-sync-recovery.test.ts tests/sellfox-agent-read.test.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-listings-read-model.ts
+npm run test:sellfox:browser -- --grep 'salesperson|store dimension'
+npm run typecheck
+git diff --name-only -- '*.ts' '*.tsx' | xargs node node_modules/eslint/bin/eslint.js
+git diff --check
+```
+
+测试显式设置 `NODE_ENV=test`，避免 BOX 的 production 环境阻止本地模拟认证。API 回归同时覆盖带/不带 `layout` 的 browse、CSV、Excel、Agent；修正了原有四处要求 payload 解析的陈旧断言，继续断言类型投影。业务员筛选也会将不带 `layout` 的利润导出路由送入相同 workbench 路径，避免旧导出忽略筛选。
+
+预期：单测通过；PGlite 打印 `PASS (disposable PGlite)`，验证实际 80000→90000 迁移、列序/原 payload/费用/GIN/触发器、包含筛选、facets、空数组、隔离与汇总；普通 PostgreSQL 测试未配置专用地址会显示 SKIP，但离线 verifier 已执行。浏览器 3 个用例通过，覆盖灰显维度/销量、姓名展示、URL/刷新/导出/重置；所有 API/图片由 fixture 拦截。Prisma validate/generate 使用 `postgresql://fixture:fixture@127.0.0.1:1/fixture` 假地址，仅校验/生成客户端，不执行迁移。未运行完整 check/生产构建/全站 E2E；发布前由 CI 补齐构建和生产容量验收。
+
 ## 2026-10-26 显示与日期稳定性修补（本地，覆盖下方历史显示说明）
 
 - 两页的有效 `https://m.media-amazon.com` 主图渲染为可点击的28px缩略图；保留查询参数，点击打开原链接。复用原有严格 URL 校验，不放宽主机或协议。图片懒加载、异步解码、低优先级请求；缺图/非法 URL 显示 —，加载失败显示 — 并保留原图链接。销量来源仍为 Listing current，利润仍优先 Listing current、其次已有利润 imageUrl；不改变聚合中的缺图/冲突处理，不改 Listing/广告页显示。

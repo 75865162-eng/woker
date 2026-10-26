@@ -21,6 +21,9 @@ export function sellfoxProductTag(value: string | null | undefined): string {
 export function sellfoxBrand(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
+export function sellfoxSalesperson(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
 export function sellfoxBrowseQuery(url: URL, domain?: string) {
   const p = url.searchParams;
   const sortBy = p.get("sortBy") ?? "";
@@ -42,7 +45,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   return {
     sortBy, sortOrder: sortOrder as SellfoxSortOrder,
-    layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")),
+    layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")), salesperson: sellfoxSalesperson(p.get("salesperson")),
     dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as SellfoxBrowseDimension,
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",

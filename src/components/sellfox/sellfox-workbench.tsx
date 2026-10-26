@@ -37,6 +37,7 @@ export function SellfoxWorkbench() {
   const [syncResource, setSyncResource] = useState("stores"); const [notice, setNotice] = useState(""); const [error, setError] = useState("");
   const [dates, setDates] = useState<string[]>([]); const [totals, setTotals] = useState<Row[]>([]);
   const [productTags, setProductTags] = useState<string[]>([]);
+  const [salespersons, setSalespersons] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [columnSelection, setColumnSelection] = useState<Record<string, string[]>>({});
   // Explicit choices belong to this dimension, including back/forward navigation.
@@ -54,9 +55,9 @@ export function SellfoxWorkbench() {
   useEffect(() => {
     const initial = readSellfoxView(new URLSearchParams(window.location.search));
     setScope(readScope()); setView(initial); setSyncResource(resourceForDomain(initial)); setReady(true);
-    const pop = () => { const next = readSellfoxView(new URLSearchParams(window.location.search)); setView(next); setSyncResource(resourceForDomain(next)); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setPagination({ page: 1, pageSize: 20, total: 0 }); setError(""); };
+    const pop = () => { const next = readSellfoxView(new URLSearchParams(window.location.search)); setView(next); setSyncResource(resourceForDomain(next)); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setSalespersons([]); setPagination({ page: 1, pageSize: 20, total: 0 }); setError(""); };
     const changed = () => {
-      scopeEpoch.current += 1; setScope(readScope()); setBackfillStart(""); setOverview(null); setSchedules([]); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setSelectedRow(null);
+      scopeEpoch.current += 1; setScope(readScope()); setBackfillStart(""); setOverview(null); setSchedules([]); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setSalespersons([]); setSelectedRow(null);
       setPagination({ page: 1, pageSize: 20, total: 0 }); setError(""); setOverviewError(""); setNotice(""); setWorking(false); setScheduleWorking(false); setLoading(true);
       const next = { ...readSellfoxView(new URLSearchParams(window.location.search)), shops: [], site: "", page: 1 };
       setView(next);
@@ -68,7 +69,7 @@ export function SellfoxWorkbench() {
   }, []);
 
   function navigate(patch: Partial<SellfoxView>, replace = false) {
-    const next = { ...view, page: 1, ...((patch.domain && patch.domain !== view.domain) || (patch.adsTab && patch.adsTab !== view.adsTab) ? { sortBy: "", sortOrder: "asc" as const } : {}), ...(patch.domain && patch.domain !== view.domain ? { searchType: "" } : {}), ...patch }; if (patch.adsTab) setSyncResource(resourceForDomain(next)); setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setPagination({ page: next.page, pageSize: next.pageSize ?? 20, total: 0 }); setLoading(true); setError("");
+    const next = { ...view, page: 1, ...((patch.domain && patch.domain !== view.domain) || (patch.adsTab && patch.adsTab !== view.adsTab) ? { sortBy: "", sortOrder: "asc" as const } : {}), ...(patch.domain && patch.domain !== view.domain ? { searchType: "" } : {}), ...patch }; if (patch.adsTab) setSyncResource(resourceForDomain(next)); setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setSalespersons([]); setPagination({ page: next.page, pageSize: next.pageSize ?? 20, total: 0 }); setLoading(true); setError("");
     const url = `${window.location.pathname}?${withScope(sellfoxViewParams(next))}`;
     if (replace) window.history.replaceState(null, "", url); else window.history.pushState(null, "", url);
   }
@@ -109,7 +110,7 @@ export function SellfoxWorkbench() {
         const response = await fetch(`${endpoint(view)}?${withScope(sellfoxViewParams(view, true))}`, { headers, cache: "no-store", signal: controller.signal });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || "读取赛狐数据失败。");
         if (!canceled && scopeEpoch.current === epoch) {
-          setProductTags(data.facets?.productTags ?? []); setBrands(data.facets?.brands ?? []); setRows(data.rows ?? []); setDates(data.dates ?? []); setTotals(data.totals ?? []); setPagination(data.pagination ?? { page: view.page, pageSize: 20, total: 0 });
+          setProductTags(data.facets?.productTags ?? []); setBrands(data.facets?.brands ?? []); setSalespersons(data.facets?.salespersons ?? []); setRows(data.rows ?? []); setDates(data.dates ?? []); setTotals(data.totals ?? []); setPagination(data.pagination ?? { page: view.page, pageSize: 20, total: 0 });
           const resolved = backfillSellfoxViewDates(view, data.dates);
           if (resolved !== view) {
             setView(resolved);
@@ -187,7 +188,7 @@ export function SellfoxWorkbench() {
         <label className="flex flex-wrap items-center gap-2 border border-border bg-white p-3 text-xs text-muted">销量历史补数起始日<input type="date" aria-label="销量补数起始日" value={backfillStart || schedules.find((item) => item.resource === "sales")?.backfillStart || ""} onChange={(event) => setBackfillStart(event.target.value)} className="h-8 border border-border px-2" /><span>下次启用销量计划时保存；修改起始日将重置补数游标。每天 T-1 + 默认7天历史，失败保留断点。{schedules.find((item) => item.resource === "sales")?.backfillNextDate ? `当前游标：${schedules.find((item) => item.resource === "sales")?.backfillNextDate}` : ""}</span></label>
         <SellfoxRecentRuns runs={latestRuns} onAll={() => navigate({ domain: "runs" })} />
       </> : <>
-        <SellfoxBrowseFilters brands={brands} productTags={productTags} onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[columnSelectionKey]} onColumns={keys => setColumnSelection(current => ({ ...current, [columnSelectionKey]: keys }))} />
+        <SellfoxBrowseFilters salespersons={salespersons} brands={brands} productTags={productTags} onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[columnSelectionKey]} onColumns={keys => setColumnSelection(current => ({ ...current, [columnSelectionKey]: keys }))} />
         <div className={view.domain === "ads" ? "grid min-w-0 gap-2 sm:grid-cols-[140px_minmax(0,1fr)]" : "min-w-0"}>{view.domain === "ads" ? <aside aria-label="广告组合列表" className="border border-border bg-white p-3 text-xs"><h3 className="font-semibold">广告组合</h3><p className="mt-3 text-muted">暂无本地数据 · 待接</p><p className="mt-2 text-muted">赛狐有、API/本地无</p></aside> : null}<SellfoxResourceTable sortBy={view.sortBy} sortOrder={view.sortOrder} onSort={key => navigate(sellfoxSortPatch(view, key))} columnDomain={sellfoxColumnDomain(view)} metric={view.metric} matrix={view.salesView === "matrix"} dates={dates} totals={totals} selectedColumns={columnSelection[columnSelectionKey]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} emptyMessage={browseEmptyMessage(view.domain, overview)} onEmptySync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} /></div>
         <details className="border border-border bg-white px-3 py-2 text-[11px] text-muted"><summary className="cursor-pointer">读取口径与数据来源 · 本地快照只读</summary><div className="mt-2 space-y-2">
         <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "默认读取最近完整快照；选择日期或全部历史可回看历史采集。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>

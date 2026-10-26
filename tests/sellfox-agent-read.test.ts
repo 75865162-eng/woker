@@ -252,3 +252,23 @@ test("inventory current sorts in SQL before pagination and rejects unavailable n
     await assert.rejects(() => readSellfoxAgentRows("inventory", { ...query, sortBy: "payload" }, { organizationId: "org", workspaceId: "ws" }), /排序/);
   } finally { globals.prisma = previous; }
 });
+
+
+test("agent salesperson containment uses only typed performance column including export and count", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?salesperson=" + encodeURIComponent("温见清")));
+    for (const domain of ["performance", "sales", "listings", "ads_report"] as const) {
+      calls.length = 0;
+      await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+      await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+      for (const sql of calls) {
+        if (domain === "performance") { assert.match(sql.text, /s\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/); assert.ok(sql.values.includes("温见清")); }
+        else { assert.doesNotMatch(sql.text, /userNameList/); assert.ok(!sql.values.includes("温见清")); }
+        assert.doesNotMatch(sql.text, /payload/);
+      }
+    }
+  } finally { globals.prisma = previous; }
+});

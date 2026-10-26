@@ -181,7 +181,8 @@ test("fulfillment reaches browse and CSV/XLSX/Agent export SQL, including withou
           assert.ok(calls.length > 0);
           for (const sql of calls) {
             assert.ok(sql.values.includes(fulfillment));
-            assert.match(sql.text, domain === "listings" ? /s.fulfillment=/ : /switchFulfillmentTo/);
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, domain === "listings" ? /s.fulfillment=/ : sql.text.startsWith("WITH") ? /AND l.fulfillment=/ : /SELECT candidate.fulfillment/);
           }
         }
       }
@@ -230,9 +231,9 @@ test("buyBox reaches browse and CSV/XLSX/Agent export SQL, including without lay
               continue;
             }
             const workbench = sql.text.startsWith("WITH");
-            assert.ok(sql.values.includes(workbench ? buyBox === "yes" ? "是" : "否" : buyBox));
-            assert.match(sql.text, /p.payload->'buyBoxWinner' = 'true'::jsonb/);
-            assert.match(sql.text, /p.payload->'buyBoxWinner' = 'false'::jsonb/);
+            assert.ok(sql.values.includes(buyBox === "yes" ? "是" : "否"));
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, /\."buyBoxWinner"/);
             assert.match(sql.text, workbench ? /AND l\."buyBoxWinner"=\$\d+/ : /LIMIT 1\)=\$\d+/);
           }
         }
@@ -279,12 +280,13 @@ test("productTag reaches browse facets and CSV/XLSX/Agent export with and withou
             assert.doesNotMatch(sql.text, /payload/);
             assert.match(sql.text, /s\."productTagNames" @> ARRAY\[/);
           } else if (sql.text.startsWith("WITH")) {
-            assert.match(sql.text, /EXISTS \(SELECT 1 FROM jsonb_array_elements/);
-            assert.match(sql.text, /AND btrim\(label\.value->>'labelName'\)=\$\d+\) AS "matchesProductTag"/);
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, /l\."productTagNames" @> ARRAY\[\$\d+\]::text\[\] AS "matchesProductTag"/);
             assert.match(sql.text, /AND l\."matchesProductTag"\)/);
           } else {
-            assert.match(sql.text, /EXISTS \(SELECT 1 FROM unnest/);
-            assert.match(sql.text, /WHERE tag\."labelName"=\$\d+/);
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, /SELECT candidate\."productTagNames"/);
+            assert.match(sql.text, /LIMIT 1\) @> ARRAY\[\$\d+\]::text\[\]/);
           }
           assert.ok(sql.values.includes("新标签、完整")); assert.ok(!sql.values.includes("%新标签、完整%"));
         }
@@ -334,10 +336,12 @@ test("brand reaches browse facets and CSV/XLSX/Agent export with and without lay
             assert.match(sql.text, /s.brand=/);
           } else if (sql.text.startsWith("WITH")) {
             assert.match(sql.text, /AND l.brand=\$\d+/);
-            assert.match(sql.text, /NULLIF\(btrim\(p.payload->>'brand'\),''\) AS brand/);
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, /l.brand/);
             assert.doesNotMatch(sql.text, /AS facets/);
           } else {
-            assert.match(sql.text, /SELECT btrim\(p.payload->>'brand'\)/);
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, /SELECT candidate.brand/);
             assert.match(sql.text, /LIMIT 1\)=\$\d+/);
           }
           if (domain !== "listings") assert.doesNotMatch(sql.text, /amazonBrand/);
@@ -395,4 +399,50 @@ test("legacy browse shells apply validated server ordering with filters and pagi
     await browse(request("stores", ""), { params: Promise.resolve({ domain: "stores" }) });
     assert.deepEqual(calls.at(-1)!.orderBy, [{ name: "asc" }, { id: "asc" }]);
   } finally { globals.prisma = previous; Object.assign(process.env, env); if (env.DATABASE_URL === undefined) delete process.env.DATABASE_URL; if (env.AUTH_DRIVER === undefined) delete process.env.AUTH_DRIVER; }
+});
+
+
+test("salesperson reaches performance browse and CSV/XLSX/Agent exports; sales ignores it", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [], facets = { productTags: [], brands: [], salespersons: ["温见清", "陈馨"] };
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    for (const domain of ["performance", "sales"]) {
+      const context = { params: Promise.resolve({ domain }) };
+      const request = (extra = "") => new Request(`http://localhost/api/sellfox/${domain}?from=2026-10-25&to=2026-10-25&${new URLSearchParams({ salesperson: " 温见清 " })}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+      const browseHandler = domain === "performance" ? performanceBrowse : salesBrowse;
+      for (const extra of ["", "&layout=workbench"]) {
+        calls.length = 0;
+        const response = await browseHandler(request(extra)); assert.equal(response.status, 200);
+        if (domain === "performance") assert.deepEqual((await response.json()).facets, facets);
+        assert.ok(calls.length > 0);
+        for (const sql of calls) assert.equal(sql.values.includes("温见清"), domain === "performance");
+      }
+      const handlers = [
+        ...(domain === "performance" ? ["&format=csv", "&format=xlsx", "&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1", "&layout=workbench&agent=1"] : ["&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1"]).map(extra => () => csv(request(extra), context)),
+        ...(domain === "performance" ? ["&format=csv", "&format=xlsx", "&agent=1"].map(extra => () => performanceCsv(request(extra))) : []),
+      ];
+      for (const handler of handlers) {
+        calls.length = 0; assert.equal((await handler()).status, 200); assert.ok(calls.length > 0);
+        for (const sql of calls) {
+          assert.doesNotMatch(sql.text, /payload/);
+          if (domain === "performance") assert.match(sql.text, /s\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/);
+          else assert.doesNotMatch(sql.text, /userNameList/);
+          assert.equal(sql.values.includes("温见清"), domain === "performance");
+        }
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
 });

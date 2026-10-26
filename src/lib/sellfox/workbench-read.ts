@@ -64,6 +64,9 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   }
   if (ads && query.adType) filters.push(Prisma.sql`s."adType"=${query.adType}`);
   if (domain === "performance") filters.push(Prisma.sql`s."onlySettle"=${query.onlySettle}`);
+  // Facets follow fact scope/date/currency/settlement, ignoring member selections/search.
+  const salespersonFacetFilters = [...filters];
+  if (domain === "performance" && query.salesperson) filters.push(Prisma.sql`s."userNameList" @> ARRAY[${query.salesperson}]::text[]`);
   // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
   // Blank/unknown values remain in all, never in the AFN/MFN subsets.
   if (query.fulfillment && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
@@ -102,7 +105,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.searchType && !selectedSearch) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) filters.push(Prisma.sql`(${Prisma.join((selectedSearch ? [selectedSearch] : searchFields).map(field => query.exactMatch ? Prisma.sql`lower(${field})=lower(${query.search})` : Prisma.sql`${field} ILIKE ${`%${query.search}%`}`), " OR ")})`);
   const fields = domain === "sales" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.quantity,s.revenue,s.orders,s.complete,${baseIdentity} AS identity`
-    : domain === "performance" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.title,s."parentAsin",s."saleQuantity",s."saleRevenue",s."grossProfit",s."adCost",s."promotionDiscount",s."giftWrapFee",s."imageUrl",s."orderNum",s."netRevenue",s."refundRate",s."refundPrice",s."refundNum",s."commodityCost",s."shippingPrice",s."taxPrice",s."fbaQuantity",s."fbmQuantity",${baseIdentity} AS identity`
+    : domain === "performance" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s."userNameList",s.title,s."parentAsin",s."saleQuantity",s."saleRevenue",s."grossProfit",s."adCost",s."promotionDiscount",s."giftWrapFee",s."imageUrl",s."orderNum",s."netRevenue",s."refundRate",s."refundPrice",s."refundNum",s."commodityCost",s."shippingPrice",s."taxPrice",s."fbaQuantity",s."fbmQuantity",${baseIdentity} AS identity`
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));
   const listing = Prisma.sql`listing AS (
     SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
@@ -149,6 +152,16 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${Prisma.join(aggregateColumns.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`))}
     FROM base GROUP BY ${crossStore ? Prisma.sql`identity,currency` : Prisma.sql`"storeId",currency,${domain === "performance" ? Prisma.sql`identity` : adIdentity}`}
   )`;
+  // Aggregate names separately; unnest never expands monetary/quantity fact rows.
+  const names = domain === "performance" ? Prisma.sql`,salesperson_names AS (
+    SELECT ${storeGrain}identity,currency,array_agg(DISTINCT person.name ORDER BY person.name) AS "userNameList"
+    FROM base CROSS JOIN LATERAL unnest("userNameList") person(name)
+    GROUP BY ${storeGrain}identity,currency
+  ), enriched AS (
+    SELECT g.*,COALESCE(n."userNameList",ARRAY[]::text[]) AS "userNameList" FROM grouped g
+    LEFT JOIN salesperson_names n ON n.identity=g.identity AND n.currency IS NOT DISTINCT FROM g.currency
+      ${crossStore ? Prisma.empty : Prisma.sql`AND n."storeId"=g."storeId"`}
+  )` : Prisma.empty;
   const finalFilters = [Prisma.sql`true`];
   if (domain === "sales" && query.hideZero) finalFilters.push(Prisma.sql`quantity IS DISTINCT FROM 0`);
   if (ads && query.quickFilter === "spend") finalFilters.push(Prisma.sql`cost>0`);
@@ -172,15 +185,20 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       WHERE ${Prisma.join(facetFilters, " AND ")} ORDER BY tag."labelName"),
     'brands', ARRAY(SELECT DISTINCT l.brand FROM sellfox_listing_current l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
-      WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)) AS facets` : Prisma.empty;
-  return Prisma.sql`WITH ${listing},${base},${groups}, filtered AS (SELECT * FROM grouped WHERE ${Prisma.join(finalFilters, " AND ")})
+      WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)
+    ${domain === "performance" ? Prisma.sql`,'salespersons',ARRAY(
+      SELECT DISTINCT person.name FROM "SellfoxProductDailySnapshot" s
+      JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
+      CROSS JOIN LATERAL unnest(s."userNameList") person(name)
+      WHERE ${Prisma.join(salespersonFacetFilters, " AND ")} ORDER BY person.name)` : Prisma.empty}) AS facets` : Prisma.empty;
+  return Prisma.sql`WITH ${listing},${base},${groups}${names}, filtered AS (SELECT * FROM ${domain === "performance" ? Prisma.sql`enriched` : Prisma.sql`grouped`} WHERE ${Prisma.join(finalFilters, " AND ")})
     SELECT (SELECT count(*)::int FROM filtered) AS total,${totals} AS totals,
       COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows${facets}`;
 }
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
-  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
+  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
   const { rows, total, totals, facets } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);
   // Page-bounded supplemental lookup, never one network call per entity or full payload reads.

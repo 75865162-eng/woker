@@ -1305,3 +1305,43 @@ test("unsupported profit SPU dimension still sorts by its fallback ASIN identity
   const query = sellfoxBrowseQuery(new URL("http://localhost/?dimension=spu&sortBy=identity&sortOrder=asc"), "performance");
   assert.match(workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" }).text, /FROM filtered ORDER BY "identity" ASC NULLS LAST, id ASC LIMIT/);
 });
+
+
+test("performance salesperson filters typed facts before aggregation and facets remain scoped; sales ignore it", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-24&to=2026-10-25&salesperson=" + encodeURIComponent("温见清")));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  for (const exporting of [false, true]) {
+    const sql = workbenchReadSql("performance", query, scope, exporting);
+    assert.match(sql.text, /s\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/);
+    assert.ok(sql.text.indexOf('s."userNameList" @>') < sql.text.indexOf('grouped AS'));
+    assert.ok(sql.values.includes("温见清")); assert.doesNotMatch(sql.text, /payload|developer.*userNameList/);
+    assert.match(sql.text, /salesperson_names AS/);
+    if (!exporting) { assert.match(sql.text, /'salespersons',ARRAY/); assert.match(sql.text, /unnest\(s\."userNameList"\)/); }
+    else assert.doesNotMatch(sql.text, /AS facets/);
+    const sales = workbenchReadSql("sales", query, scope, exporting);
+    assert.doesNotMatch(sales.text, /userNameList|salesperson/); assert.ok(!sales.values.includes("温见清"));
+  }
+});
+
+
+test("performance selected salesperson exports typed names in CSV and Excel with identical containment", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const names = ["温见清", "陈馨"];
+  const url = new URL("http://localhost/?from=2026-10-24&to=2026-10-24&column=salesperson&salesperson=" + encodeURIComponent("温见清"));
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
+    assert.match(sql.text, /s\."userNameList" @> ARRAY\[\$\d+\]::text\[\]/); assert.ok(sql.values.includes("温见清"));
+    return [{ total: 2, totals: [], rows: [{ id: "named", userNameList: names }, { id: "empty", userNameList: [] }] }];
+  } } as unknown as PrismaClient;
+  try {
+    const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
+    const csv = await (await sellfoxWorkbenchExport("performance", query, scope, url)).text();
+    assert.equal(csv.trim(), '"业务员"\r\n"温见清、陈馨"\r\n""');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("performance", query, scope, url);
+    const { default: ExcelJS } = await import("exceljs"); const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.getCell("A1").value, "业务员"); assert.equal(sheet.getCell("A2").value, names.join("、"));
+    assert.ok(!sheet.getCell("A3").value);
+  } finally { globals.prisma = previous; }
+});
