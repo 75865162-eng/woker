@@ -7,6 +7,14 @@ import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxV
 import { browseEmptyMessage, captions, columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv, sellfoxColumnValue, summableColumnKeys } from "@/components/sellfox/workbench-types";
 import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
 
+// Payload normalization is covered by tests/integration/sellfox-listings-read-model.ts.
+function assertListingProjection(sql: string) {
+  assert.doesNotMatch(sql, /payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"|LEFT JOIN/);
+  assert.match(sql, /filtered AS NOT MATERIALIZED/);
+  assert.match(sql, /FROM sellfox_listing_current s WHERE s\."organizationId"=/);
+  for (const key of ["brand", "rating", "productTags", "bsrRank", "listingQuantity", "buyBoxWinner"]) assert.ok(sql.includes(`s."${key}"`));
+}
+
 test("performance footer includes visible numeric fees and quantities without summing rates or unavailable columns", () => {
   const keys = ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "fbaQuantity", "fbmQuantity"];
   assert.deepEqual(summableColumnKeys(visibleColumns("performance", ["identity", ...keys])).sort(), [...keys].sort());
@@ -423,10 +431,7 @@ test("Listing payload stock SQL extracts and projects separate nullable numbers 
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting).text;
-    for (const [key, field] of [["listingQuantity", "quantity"], ["unsellable", "unsellable"], ["warehousing", "warehousing"]]) {
-      assert.ok(sql.includes(`NULLIF(p.payload->>'${field}','')::float AS "${key}",`));
-    }
-    assert.ok(sql.includes('l."listingQuantity",l.unsellable,l.warehousing,'));
+    assertListingProjection(sql);
     for (const domain of ["sales", "performance", "ads_report"] as const) {
       const otherSql = workbenchReadSql(domain, query, scope, exporting).text;
       assert.doesNotMatch(otherSql, /listingQuantity|unsellable|warehousing|p\.payload->>'quantity'/);
@@ -495,10 +500,7 @@ test("selected listing inventory columns export numeric stock and text timestamp
 test("listings expose brand and rating from the scoped current Listing snapshot", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/?status=active"));
   const sql = workbenchReadSql("listings", query, { organizationId: "org", workspaceId: "ws" });
-  assert.match(sql.text, /NULLIF\(btrim\(p\.payload->>'brand'\),''\) AS brand/);
-  assert.match(sql.text, /NULLIF\(p\.payload->>'rating',''\) AS rating/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\."amazonBrand",l\.rating,/);
-  assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
+  assertListingProjection(sql.text);
   const brand = visibleColumns("listings", ["brand"]).find(c => c.key === "brand")!;
   const rating = visibleColumns("listings", ["rating"]).find(c => c.key === "rating")!;
   assert.equal(brand.unavailable, undefined);
@@ -536,16 +538,7 @@ test("listing-only amazonBrand is trimmed and bsrCategory selects the same eleme
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
-    assert.match(sql.text, /NULLIF\(btrim\(p\.payload->>'amazonBrand'\),''\) AS "amazonBrand"/);
-    const rank = sql.text.match(/SELECT NULLIF\(NULLIF\(elem\.value->>'rank',''\)::float,9999999\)\s+(FROM[\s\S]*?)\) AS "bsrRank"/);
-    const category = sql.text.match(/SELECT NULLIF\(btrim\(elem\.value->>'categoryName'\),''\)\s+(FROM[\s\S]*?)\) AS "bsrCategory"/);
-    assert.ok(rank);
-    assert.ok(category);
-    assert.equal(category[1], rank[1]);
-    assert.ok(category[1].includes("WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'"));
-    assert.match(category[1], /ORDER BY CASE WHEN elem\.value->>'bigCategory' IN \('true','TRUE','1'\) THEN 0 ELSE 1 END,elem\.ordinality\s+LIMIT 1/);
-    assert.match(sql.text, /l\.brand,l\."amazonBrand",l\.rating/);
-    assert.match(sql.text, /l\."bsrRank",l\."bsrCategory",l\."purchaseCost"/);
+    assertListingProjection(sql.text);
     for (const domain of ["sales", "performance", "ads_report"] as const) {
       assert.doesNotMatch(workbenchReadSql(domain, query, scope, exporting).text, /amazonBrand|bsrCategory/);
     }
@@ -587,8 +580,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   const query = sellfoxBrowseQuery(new URL("http://localhost/"));
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
-  assert.match(sql.text, /NULLIF\(p\.payload->>'ratingCount',''\)::float AS "ratingCount"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\."amazonBrand",l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."bsrCategory",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
+  assertListingProjection(sql.text);
   const config = visibleColumns("listings", ["ratingCount"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "评论数");
@@ -614,8 +606,7 @@ test("listings expose optional numeric purchaseCost from the current snapshot wi
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
-    assert.match(sql.text, /NULLIF\(p\.payload->>'purchaseCost',''\)::float AS "purchaseCost"/);
-    assert.match(sql.text, /l\."bsrRank",l\."bsrCategory",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
+    assertListingProjection(sql.text);
   }
   const config = visibleColumns("listings", ["purchaseCost"]);
   assert.equal(config.length, 1);
@@ -642,8 +633,7 @@ for (const [key, label] of [["fbaFees", "FBA费用"], ["referralFee", "佣金"],
     const scope = { organizationId: "org", workspaceId: "ws" };
     for (const exporting of [false, true]) {
       const sql = workbenchReadSql("listings", query, scope, exporting);
-      assert.ok(sql.text.includes(`NULLIF(p.payload->>'${key}','')::float AS "${key}",`));
-      assert.ok(sql.text.includes(`l."${key}",`));
+      assertListingProjection(sql.text);
     }
     const config = visibleColumns("listings", [key]);
     assert.equal(config.length, 1);
@@ -689,14 +679,7 @@ test("listing-only columns extract Listing payload values without altering perfo
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
     const listingSql = workbenchReadSql("listings", query, scope, exporting).text;
-    // JSONB equality matches real booleans, leaving strings, null and missing keys unknown.
-    assert.match(listingSql, /CASE WHEN p\.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p\.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner"/);
-    assert.doesNotMatch(listingSql, /p\.payload->>'buyBoxWinner'|buyBoxWinner[^,;]*::float/);
-    assert.match(listingSql, /l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
-    for (const key of ["reservedQty", "profitPrice", "profitRate"]) {
-      assert.ok(listingSql.includes(`NULLIF(p.payload->>'${key}','')::float AS "${key}",`));
-    }
-    assert.ok(listingSql.includes("NULLIF(COALESCE(NULLIF(p.payload->>'shippingPrice',''), NULLIF(p.payload->>'shipCost','')),'')::float AS \"shippingPrice\""));
+    assertListingProjection(listingSql);
     const performanceSql = workbenchReadSql("performance", query, scope, exporting).text;
     assert.ok(performanceSql.includes("NULLIF(s.payload->>'shippingPrice','')::float AS \"shippingPrice\""));
     assert.doesNotMatch(performanceSql, /reservedQty|profitPrice|profitRate/);
@@ -815,13 +798,7 @@ test("listings flatten current productLabelList into an optional productTags col
   const query = sellfoxBrowseQuery(new URL("http://localhost/"));
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
-  assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'productLabelList'\)='array' THEN p\.payload->'productLabelList' ELSE '\[\]'::jsonb END\) label_group\(value\)/);
-  assert.match(sql.text, /CROSS JOIN LATERAL jsonb_array_elements\(CASE WHEN jsonb_typeof\(label_group\.value->'labelDetailList'\)='array' THEN label_group\.value->'labelDetailList' ELSE '\[\]'::jsonb END\) label\(value\)/);
-  assert.match(sql.text, /string_agg\(DISTINCT btrim\(label\.value->>'labelName'\), '、' ORDER BY btrim\(label\.value->>'labelName'\)\)/);
-  assert.doesNotMatch(sql.text, /productTagNames|product_labels|array_to_string/);
-  assert.match(sql.text, /AS "productTags"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\."amazonBrand",l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."bsrCategory",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
-  assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
+  assertListingProjection(sql.text);
   const config = visibleColumns("listings", ["productTags"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].unavailable, undefined);
@@ -842,8 +819,7 @@ test("listings expose optional text openDate from the current snapshot and prese
   const query = sellfoxBrowseQuery(new URL("http://localhost/"));
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
-  assert.match(sql.text, /NULLIF\(p\.payload->>'openDate',''\) AS "openDate"/);
-  assert.match(sql.text, /l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."bsrCategory",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
+  assertListingProjection(sql.text);
   const config = visibleColumns("listings", ["openDate"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "上架时间");
@@ -866,8 +842,7 @@ test("listings expose optional text firstSaleDate from the current snapshot and 
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
-    assert.match(sql.text, /COALESCE\(NULLIF\(p\.payload->>'firstSaleDate',''\),NULLIF\(p\.payload->>'firstOrderDate',''\)\) AS "firstSaleDate"/);
-    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."bsrCategory",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
+    assertListingProjection(sql.text);
   }
   const config = visibleColumns("listings", ["firstSaleDate"]);
   assert.equal(config.length, 1);
@@ -892,12 +867,7 @@ test("listings null exact BSR sentinel 9999999 after numeric cast, preferring bi
   const scope = { organizationId: "org", workspaceId: "ws" };
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
-    assert.doesNotMatch(sql.text, /p\.payload->>'bsrRank'/);
-    assert.match(sql.text, /SELECT NULLIF\(NULLIF\(elem\.value->>'rank',''\)::float,9999999\)/);
-    assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'bsrRank'\)='array' THEN p\.payload->'bsrRank' ELSE '\[\]'::jsonb END\) WITH ORDINALITY elem\(value,ordinality\)/);
-    assert.ok(sql.text.includes("WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'"));
-    assert.match(sql.text, /ORDER BY CASE WHEN elem\.value->>'bigCategory' IN \('true','TRUE','1'\) THEN 0 ELSE 1 END,elem\.ordinality\s+LIMIT 1\s+\) AS "bsrRank"/);
-    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."bsrCategory",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",l\."buyBoxWinner",l\."reservedQty",l\."shippingPrice",l\."profitPrice",l\."profitRate",/);
+    assertListingProjection(sql.text);
   }
   const config = visibleColumns("listings", ["bsrRank"]);
   assert.equal(config.length, 1);
@@ -1099,16 +1069,14 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&fulfillment=${fulfillment}&from=2026-10-25&to=2026-10-25&onlySettle=1`));
         for (const exporting of [false, true]) {
           const sql = workbenchReadSql(domain, query, scope, exporting);
+          if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s.fulfillment=/); continue; }
           assert.ok(sql.values.includes(fulfillment));
           assert.match(sql.text, /CASE WHEN p.payload->>'switchFulfillmentTo' IN \('AFN','MFN'\) THEN p.payload->>'switchFulfillmentTo' END AS fulfillment/);
           const base = sql.text.slice(sql.text.indexOf("base AS"), sql.text.indexOf(domain === "sales" ? "days AS" : "grouped AS"));
           assert.match(base, /WHERE [\s\S]* AND l.fulfillment=\$\d+\)/);
           assert.match(sql.text, /p.id=l.id AND p\."organizationId"=[\s\S]*p\."workspaceId"=/);
           assert.ok(sql.values.includes(scope.organizationId) && sql.values.includes(scope.workspaceId));
-          if (domain === "listings") {
-            assert.match(base, /l.fulfillment,/);
-            assert.match(base, /LEFT JOIN listing l ON l.id=s.id AND l\."storeId"=s\."storeId"/);
-          } else {
+          {
             assert.match(base, /candidate\."storeId"=s\."storeId"/);
             assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1/);
             // Profit reads only explicit cost/refund scalars, never the full payload.
@@ -1137,6 +1105,7 @@ test("Buy Box filters scoped current Listing boolean members before rollups, tot
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&buyBox=${buyBox}&from=2026-10-25&to=2026-10-25&onlySettle=1&fulfillment=AFN&productTag=tag`));
         for (const exporting of [false, true]) {
           const sql = workbenchReadSql(domain, query, scope, exporting);
+          if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s\."buyBoxWinner"=/); assert.ok(sql.values.includes(buyBox === "yes" ? "是" : "否")); continue; }
           assert.match(sql.text, /CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner"/);
           assert.doesNotMatch(sql.text, /p.payload->>'buyBoxWinner'|buyBoxWinner[^,;]*::float/);
           const base = sql.text.slice(sql.text.indexOf("base AS"), sql.text.indexOf(domain === "sales" ? "days AS" : "grouped AS"));
@@ -1147,10 +1116,7 @@ test("Buy Box filters scoped current Listing boolean members before rollups, tot
           assert.match(sql.text, /p.id=l.id AND p\."organizationId"=[\s\S]*p\."workspaceId"=/);
           assert.match(sql.text, /WHERE l\."organizationId"=[\s\S]*l\."workspaceId"=/);
           assert.ok(sql.values.includes(scope.organizationId) && sql.values.includes(scope.workspaceId));
-          if (domain === "listings") {
-            assert.match(base, /l\."buyBoxWinner",/);
-            assert.match(base, /LEFT JOIN listing l ON l.id=s.id AND l\."storeId"=s\."storeId"/);
-          } else {
+          {
             assert.match(base, /LEFT JOIN LATERAL \(SELECT candidate\.\* FROM listing candidate WHERE candidate\."storeId"=s\."storeId"/);
             assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\) l ON TRUE/);
             assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), domain === "performance" ? ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] : []);
@@ -1189,6 +1155,7 @@ test("productTag exact membership filters current Listing members before aggrega
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ productTag: tag, dimension, fulfillment: "AFN", site: "US", shopExternalId: "shop-tag" })}`));
         for (const exporting of [false, true]) {
           const sql = workbenchReadSql(domain, query, scope, exporting);
+          if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s\."productTagNames" @> ARRAY\[/); assert.ok(sql.values.includes(tag)); continue; }
           const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
           const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf(domain === "sales" ? "days AS (" : "grouped AS ("));
           assert.match(listing, /EXISTS \(SELECT 1 FROM jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'productLabelList'\)='array'/);
@@ -1201,7 +1168,7 @@ test("productTag exact membership filters current Listing members before aggrega
           assert.ok(!sql.values.includes(`%${tag}%`));
           assert.doesNotMatch(base, /"productTags" (?:I?LIKE|=)/);
           assert.match(base, /l.fulfillment=/);
-          if (domain !== "listings") {
+          if (["sales", "performance"].includes(domain)) {
             const candidate = base.slice(base.indexOf("LEFT JOIN LATERAL"), base.indexOf("LIMIT 1) l ON TRUE"));
             assert.match(candidate, /candidate.msku=s.msku/);
             assert.doesNotMatch(candidate, /matchesProductTag|labelName|productLabelList/);
@@ -1237,17 +1204,17 @@ test("brand exact match filters selected Listing members before rollup with inde
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ brand: ` ${brand} `, dimension, productTag: "tag", fulfillment: "AFN", buyBox: "yes", search: "needle", status: "active", site: "US", shopExternalId: "shop-brand", storeId: "store-brand" })}`));
         for (const exporting of [false, true]) {
           const sql = workbenchReadSql(domain, query, scope, exporting);
+          if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s.brand=/); assert.ok(sql.values.includes(brand)); continue; }
           const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
           const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf(domain === "sales" ? "days AS (" : "grouped AS ("));
           assert.match(listing, /NULLIF\(btrim\(p.payload->>'brand'\),''\) AS brand/);
           const parameter = base.match(/AND l.brand=\$(\d+)/);
           assert.ok(parameter); assert.equal(sql.values[Number(parameter[1]) - 1], brand);
-          if (domain !== "listings") assert.doesNotMatch(sql.text, /amazonBrand/);
+          if (["sales", "performance"].includes(domain)) assert.doesNotMatch(sql.text, /amazonBrand/);
           assert.doesNotMatch(base.slice(base.indexOf(" WHERE ")), /amazonBrand/);
           assert.ok(!sql.values.includes(`%${brand}%`));
           assert.match(base, /l.fulfillment=/); assert.match(base, /l\."buyBoxWinner"=/); assert.match(base, /l\."matchesProductTag"/);
-          if (domain === "listings") assert.match(base, /LEFT JOIN listing l ON l.id=s.id AND l\."storeId"=s\."storeId"/);
-          else {
+          {
             const candidate = base.slice(base.indexOf("LEFT JOIN LATERAL"), base.indexOf("LIMIT 1) l ON TRUE"));
             assert.match(candidate, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
             assert.match(candidate, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id/);
@@ -1320,8 +1287,8 @@ test("workbench sorts the entire filtered aggregate before LIMIT/OFFSET with sta
     const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=${sortOrder}&page=3&pageSize=20&site=US&shopExternalId=shop-a&search=needle`), domain);
     for (const exporting of [false, true]) {
       const sql = workbenchReadSql(domain, query, scope, exporting);
-      assert.ok(sql.text.includes(`FROM filtered ORDER BY ${expression} ${sortOrder.toUpperCase()} NULLS LAST, id ASC LIMIT`));
-      const pagination = sql.text.match(/FROM filtered ORDER BY .* LIMIT \$(\d+) OFFSET \$(\d+)/)!;
+      assert.ok(sql.text.replace(/\s+/g, " ").includes(`FROM filtered ORDER BY ${expression} ${sortOrder.toUpperCase()} NULLS LAST, id ASC LIMIT`));
+      const pagination = sql.text.match(/FROM filtered ORDER BY [\s\S]*?LIMIT \$(\d+) OFFSET \$(\d+)/)!;
       assert.equal(sql.values[Number(pagination[1]) - 1], exporting ? 10001 : 20);
       assert.equal(sql.values[Number(pagination[2]) - 1], exporting ? 0 : 40);
       for (const value of [scope.organizationId, scope.workspaceId, "US", "shop-a", "%needle%"]) assert.ok(sql.values.includes(value));

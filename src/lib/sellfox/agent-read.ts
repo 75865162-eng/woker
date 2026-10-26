@@ -210,7 +210,8 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
   if (query.shopExternalIds.length) clauses.push(Prisma.sql`"shopExternalId" IN (${Prisma.join(query.shopExternalIds)})`);
   if (domain === "listings" && query.status) clauses.push(Prisma.sql`status ILIKE ${query.status}`);
   if (domain === "performance") clauses.push(Prisma.sql`"onlySettle"=${query.onlySettle}`);
-  if (query.fulfillment && ["sales", "performance", "listings"].includes(domain)) {
+  if (domain === "listings" && query.fulfillment) clauses.push(Prisma.sql`s.fulfillment=${query.fulfillment}`);
+  else if (query.fulfillment && ["sales", "performance"].includes(domain)) {
     // Match the same current Listing as workbench images, then test its value.
     // Do not prefilter candidates: an ASIN sibling must not override an exact MSKU.
     const match = domain === "listings" ? Prisma.sql`candidate.id=s.id` : Prisma.sql`((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))`;
@@ -221,7 +222,8 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
         AND candidate."storeId"=s."storeId" AND ${match}
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.fulfillment}`);
   }
-  if (query.buyBox && ["sales", "performance", "listings"].includes(domain)) {
+  if (domain === "listings" && query.buyBox) clauses.push(Prisma.sql`s."buyBoxWinner"=${query.buyBox === "yes" ? "是" : "否"}`);
+  else if (query.buyBox && ["sales", "performance"].includes(domain)) {
     // Select the same current Listing before testing its boolean; unknown values never match.
     const match = domain === "listings" ? Prisma.sql`candidate.id=s.id` : Prisma.sql`((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))`;
     clauses.push(Prisma.sql`(SELECT CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN 'yes' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN 'no' END
@@ -231,7 +233,8 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
         AND candidate."storeId"=s."storeId" AND ${match}
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.buyBox}`);
   }
-  if (query.brand && ["sales", "performance", "listings"].includes(domain)) {
+  if (domain === "listings" && query.brand) clauses.push(Prisma.sql`s.brand=${query.brand}`);
+  else if (query.brand && ["sales", "performance"].includes(domain)) {
     // Test the chosen current Listing after MSKU-first/ASIN-fallback selection.
     const match = domain === "listings" ? Prisma.sql`candidate.id=s.id` : Prisma.sql`((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))`;
     clauses.push(Prisma.sql`(SELECT btrim(p.payload->>'brand')
@@ -241,7 +244,8 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
         AND candidate."storeId"=s."storeId" AND ${match}
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.brand}`);
   }
-  if (query.productTag && ["sales", "performance", "listings"].includes(domain)) {
+  if (domain === "listings" && query.productTag) clauses.push(Prisma.sql`s."productTagNames" @> ARRAY[${query.productTag}]::text[]`);
+  else if (query.productTag && ["sales", "performance"].includes(domain)) {
     // Select the same stable candidate BEFORE testing membership (no ASIN sibling substitution).
     const match = domain === "listings" ? Prisma.sql`candidate.id=s.id` : Prisma.sql`((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))`;
     clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM unnest((SELECT ${sellfoxProductTagNamesSql(Prisma.sql`p.payload`)}

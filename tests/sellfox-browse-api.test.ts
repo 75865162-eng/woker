@@ -181,7 +181,7 @@ test("fulfillment reaches browse and CSV/XLSX/Agent export SQL, including withou
           assert.ok(calls.length > 0);
           for (const sql of calls) {
             assert.ok(sql.values.includes(fulfillment));
-            assert.match(sql.text, /switchFulfillmentTo/);
+            assert.match(sql.text, domain === "listings" ? /s.fulfillment=/ : /switchFulfillmentTo/);
           }
         }
       }
@@ -223,6 +223,12 @@ test("buyBox reaches browse and CSV/XLSX/Agent export SQL, including without lay
           assert.equal(response.status, 200);
           assert.ok(calls.length > 0);
           for (const sql of calls) {
+            if (domain === "listings") {
+              assert.doesNotMatch(sql.text, /payload/);
+              assert.match(sql.text, /s\."buyBoxWinner"=/);
+              assert.ok(sql.values.includes(buyBox === "yes" ? "是" : "否"));
+              continue;
+            }
             const workbench = sql.text.startsWith("WITH");
             assert.ok(sql.values.includes(workbench ? buyBox === "yes" ? "是" : "否" : buyBox));
             assert.match(sql.text, /p.payload->'buyBoxWinner' = 'true'::jsonb/);
@@ -269,7 +275,10 @@ test("productTag reaches browse facets and CSV/XLSX/Agent export with and withou
         assert.equal((await handler()).status, 200);
         assert.ok(calls.length > 0);
         for (const sql of calls) {
-          if (sql.text.startsWith("WITH")) {
+          if (domain === "listings") {
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, /s\."productTagNames" @> ARRAY\[/);
+          } else if (sql.text.startsWith("WITH")) {
             assert.match(sql.text, /EXISTS \(SELECT 1 FROM jsonb_array_elements/);
             assert.match(sql.text, /AND btrim\(label\.value->>'labelName'\)=\$\d+\) AS "matchesProductTag"/);
             assert.match(sql.text, /AND l\."matchesProductTag"\)/);
@@ -309,7 +318,7 @@ test("brand reaches browse facets and CSV/XLSX/Agent export with and without lay
         calls.length = 0;
         const response = await browseHandler(request(extra));
         assert.equal(response.status, 200); assert.deepEqual((await response.json()).facets, facets);
-        assert.ok(calls.some(sql => /AND l.brand=\$\d+/.test(sql.text) && sql.values.includes("Goghost-乐器")));
+        assert.ok(calls.some(sql => /AND [ls].brand=\$\d+/.test(sql.text) && sql.values.includes("Goghost-乐器")));
       }
       const handlers = [
         ...["&format=csv", "&format=xlsx", "&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1", "&layout=workbench&agent=1"].map(extra => () => csv(request(extra), context)),
@@ -320,7 +329,10 @@ test("brand reaches browse facets and CSV/XLSX/Agent export with and without lay
         assert.equal((await handler()).status, 200);
         assert.ok(calls.length > 0);
         for (const sql of calls) {
-          if (sql.text.startsWith("WITH")) {
+          if (domain === "listings") {
+            assert.doesNotMatch(sql.text, /payload/);
+            assert.match(sql.text, /s.brand=/);
+          } else if (sql.text.startsWith("WITH")) {
             assert.match(sql.text, /AND l.brand=\$\d+/);
             assert.match(sql.text, /NULLIF\(btrim\(p.payload->>'brand'\),''\) AS brand/);
             assert.doesNotMatch(sql.text, /AS facets/);
@@ -376,9 +388,9 @@ test("legacy browse shells apply validated server ordering with filters and pagi
       const context = { params: Promise.resolve({ domain }) };
       const params = `sortBy=${sortBy}&sortOrder=desc`;
       assert.equal((await browse(request(domain, params), context)).status, 200);
-      assert.match(sortedSql.at(-1)!.text, /FROM filtered ORDER BY .* DESC NULLS LAST, id ASC LIMIT/);
+      assert.match(sortedSql.at(-1)!.text, /FROM filtered ORDER BY .* DESC NULLS LAST, id ASC\s+LIMIT/);
       assert.equal((await csv(request(domain, params), context)).status, 200);
-      assert.match(sortedSql.at(-1)!.text, /FROM filtered ORDER BY .* DESC NULLS LAST, id ASC LIMIT/);
+      assert.match(sortedSql.at(-1)!.text, /FROM filtered ORDER BY .* DESC NULLS LAST, id ASC\s+LIMIT/);
     }
     await browse(request("stores", ""), { params: Promise.resolve({ domain: "stores" }) });
     assert.deepEqual(calls.at(-1)!.orderBy, [{ name: "asc" }, { id: "asc" }]);

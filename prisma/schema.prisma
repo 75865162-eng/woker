@@ -1874,11 +1874,44 @@ model SellfoxListingSnapshot {
   adSpend14 Float?
   adSpend30 Float?
   sourceUpdatedAt String?
+  // Write-time derived list columns, maintained by sellfox_listing_project_write.
+  brand String?
+  amazonBrand String?
+  productTags String?
+  openDate String?
+  firstSaleDate String?
+  bsrCategory String?
+  buyBoxWinner String?
+  fulfillment String?
+  rating String?
+  ratingValue Float?
+  ratingCount Float?
+  bsrRank Float?
+  purchaseCost Float?
+  fbaFees Float?
+  referralFee Float?
+  totalFee Float?
+  headTripCost Float?
+  reservedQty Float?
+  shippingPrice Float?
+  profitPrice Float?
+  profitRate Float?
+  listingQuantity Float?
+  unsellable Float?
+  warehousing Float?
+  productTagNames String[] @default([])
   payload Json
   SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
   @@unique([storeId, capturedAt, sourceKey])
   @@index([organizationId, workspaceId, storeId, msku, capturedAt])
   @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, storeId, capturedAt, id], map: "sellfox_listing_current_page")
+  @@index([organizationId, workspaceId, id], map: "sellfox_listing_scope_id")
+  @@index([organizationId, workspaceId, brand, storeId, capturedAt], map: "sellfox_listing_brand")
+  @@index([organizationId, workspaceId, fulfillment, buyBoxWinner, storeId, capturedAt], map: "sellfox_listing_fulfillment")
+  @@index([organizationId, workspaceId, sales7, id], map: "sellfox_listing_sales7")
+  @@index([organizationId, workspaceId, price, id], map: "sellfox_listing_price")
+  @@index([productTagNames], type: Gin, map: "sellfox_listing_tags")
 }
 
 model SellfoxReportTask {

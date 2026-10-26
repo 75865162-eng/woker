@@ -366,6 +366,8 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 ## 赛狐 Agent 本地读取
 
+- Listing 列表读取现有 current view 的类型投影；`sellfox_listing_project_write` 在快照写入事务内维护，禁止把默认列表恢复为逐行 payload 解析。增量迁移/全历史回填成本、隔离 benchmark 与回滚见 `docs/sellfox-listings-read-model.md`。
+
 - 销量订单量落 `SellfoxSalesDailySnapshot.orders`，旧值/缺日保持 NULL，浏览 `metric=orders`；利润按 `onlySettle=false/true` 分区同步与唯一键保存，查询/导出必须显式选口径，禁止跨分区求和。两页主图来自 Listing current，顶部 KPI 复用筛选 totals 按币种显示。增量迁移、验证和旧版回退约束见 `docs/sellfox-sales-profit-p0.md`。
 
 - `/sellfox` 四域UI列由 `workbench-types.ts` 的columns配置；`layout=workbench` 只读浏览分支按本地实体聚合/分页、销量最多90天日矩阵。CSV/利润Excel跟随可见列，Agent导出保留原英文长表。父ASIN/价格/库存补充来自current，不冒充历史；金额按币种分开，缺失不补0，无结构状态的广告控件灰显。浏览器验收使用真实Tailwind样式，运行 `npm run test:sellfox:browser`。

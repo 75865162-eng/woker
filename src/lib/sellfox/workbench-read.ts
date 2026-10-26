@@ -1,5 +1,6 @@
+import { listingsReadSql } from "./listings-read";
 import { sellfoxSortKey, sellfoxSqlOrder } from "./browse-sort";
-import { sellfoxProductTagDisplaySql, sellfoxProductTagMatchSql, sellfoxProductTagRowsSql } from "./product-tags-sql";
+import { sellfoxProductTagMatchSql, sellfoxProductTagRowsSql } from "./product-tags-sql";
 import { sellfoxAgentColumns } from "./agent-read";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -31,6 +32,7 @@ export function workbenchDateRange(query: SellfoxBrowseQuery) {
 // All joins stay in the authenticated workspace. Current metadata is supplemental,
 // never historical parent identity, price or inventory at the sale date.
 export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
+  if (domain === "listings") return listingsReadSql(query, scope, exporting);
   const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
   const sortKey = sellfoxSortKey(domain, query);
   let sortExpression = sortKey ? Prisma.raw(`"${sortKey}"`) : Prisma.sql`id`;
@@ -39,12 +41,10 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (domain === "performance" && sortKey === "netProfitRate") sortExpression = Prisma.sql`CASE WHEN "netRevenue">0 THEN "grossProfit"/"netRevenue" END`;
   if (sortKey === "acos") sortExpression = Prisma.sql`CASE WHEN "adSales">0 THEN cost/"adSales" END`;
   if (sortKey === "roas") sortExpression = Prisma.sql`CASE WHEN cost>0 THEN "adSales"/cost END`;
-  if (domain === "listings" && sortKey === "rating") sortExpression = Prisma.sql`NULLIF(rating,'')::float`;
   const order = sortKey ? sellfoxSqlOrder(query, sortExpression) : Prisma.sql`id`;
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
   const adIdentity = domain === "ads_campaign" ? Prisma.sql`"adType","campaignId"` : domain === "ads_ad_group" ? Prisma.sql`"adType","campaignId","adGroupId"` : domain === "ads_placement" ? Prisma.sql`"adType","campaignId",placement` : domain === "ads_targeting" ? Prisma.sql`"adType","campaignId","adGroupId","targetingId"` : domain === "ads_search_term" ? Prisma.sql`"adType","campaignId","adGroupId","searchTerm","targetingId"` : Prisma.sql`"adType","campaignId","adGroupId","productId"`;
   const supportsProductTags = ["sales", "performance", "listings"].includes(domain);
-  const needDisplayTags = domain === "listings";
   const needTagFilter = supportsProductTags && Boolean(query.productTag);
   const needTagFacets = supportsProductTags && !exporting;
   const filters: Prisma.Sql[] = [scoped("s", scope)];
@@ -52,19 +52,17 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.storeId) filters.push(Prisma.sql`s."storeId"=${query.storeId}`);
   if (query.site) filters.push(Prisma.sql`st.marketplace=${query.site}`);
   if (query.currency) filters.push(Prisma.sql`s.currency=${query.currency}`);
-  if (domain !== "listings") {
-    if (domain === "sales") {
-      const dates = workbenchDateRange(query);
-      filters.push(Prisma.sql`s."reportDate">=${dates[0]} AND s."reportDate"<=${dates.at(-1)}`);
-      // Exclude coverage-skew orders-only/empty shells before day/entity/KPI aggregation.
-      // Incomplete rows with quantity or revenue still propagate unknowns.
-      filters.push(Prisma.sql`NOT (NOT s.complete AND s.quantity IS NULL AND s.revenue IS NULL)`);
-    } else {
-      if (query.from) filters.push(Prisma.sql`s."reportDate">=${query.from}`);
-      if (query.to) filters.push(Prisma.sql`s."reportDate"<=${query.to}`);
-      if (!query.from && !query.to && !query.allDates) filters.push(Prisma.sql`s."reportDate"=${query.reportDate || sellfoxDateAt(new Date(), -1)}`);
-    }
-  } else if (query.status) filters.push(Prisma.sql`s.status ILIKE ${query.status}`);
+  if (domain === "sales") {
+    const dates = workbenchDateRange(query);
+    filters.push(Prisma.sql`s."reportDate">=${dates[0]} AND s."reportDate"<=${dates.at(-1)}`);
+    // Exclude coverage-skew orders-only/empty shells before day/entity/KPI aggregation.
+    // Incomplete rows with quantity or revenue still propagate unknowns.
+    filters.push(Prisma.sql`NOT (NOT s.complete AND s.quantity IS NULL AND s.revenue IS NULL)`);
+  } else {
+    if (query.from) filters.push(Prisma.sql`s."reportDate">=${query.from}`);
+    if (query.to) filters.push(Prisma.sql`s."reportDate"<=${query.to}`);
+    if (!query.from && !query.to && !query.allDates) filters.push(Prisma.sql`s."reportDate"=${query.reportDate || sellfoxDateAt(new Date(), -1)}`);
+  }
   if (ads && query.adType) filters.push(Prisma.sql`s."adType"=${query.adType}`);
   if (domain === "performance") filters.push(Prisma.sql`s."onlySettle"=${query.onlySettle}`);
   // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
@@ -88,10 +86,10 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (ads) { searchFields.splice(2, 1); searchFields.push(Prisma.sql`s."campaignId"`); if (domain !== "ads_campaign") searchFields.push(Prisma.sql`s."adGroupId"`); }
   if (domain === "sales" || domain === "performance") searchFields.push(identity);
   if ((domain === "sales" || domain === "performance") && dimension === "store") searchFields.push(Prisma.sql`st.name`);
-  if (domain === "performance" || domain === "listings") searchFields.push(Prisma.sql`s.title`);
-  const typedSearch: Record<string, Prisma.Sql> = { asin: Prisma.sql`s.asin`, msku: Prisma.sql`s.msku`, title: domain === "performance" || domain === "listings" ? Prisma.sql`s.title` : Prisma.sql`l.title` };
+  if (domain === "performance") searchFields.push(Prisma.sql`s.title`);
+  const typedSearch: Record<string, Prisma.Sql> = { asin: Prisma.sql`s.asin`, msku: Prisma.sql`s.msku`, title: domain === "performance" ? Prisma.sql`s.title` : Prisma.sql`l.title` };
   if (!ads) typedSearch.sku = Prisma.sql`s.sku`;
-  if (domain === "sales" || domain === "performance" || domain === "listings") typedSearch.parentAsin = domain === "sales" ? Prisma.sql`l."parentAsin"` : Prisma.sql`s."parentAsin"`;
+  if (domain === "sales" || domain === "performance") typedSearch.parentAsin = domain === "sales" ? Prisma.sql`l."parentAsin"` : Prisma.sql`s."parentAsin"`;
   if (ads) { typedSearch.campaignId = Prisma.sql`s."campaignId"`; if (domain !== "ads_campaign") typedSearch.adGroupId = Prisma.sql`s."adGroupId"`; }
   if (domain === "ads_targeting" || domain === "ads_search_term") {
     searchFields.push(Prisma.sql`s."targetingId"`, Prisma.sql`s."targetingText"`);
@@ -110,39 +108,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const listing = Prisma.sql`listing AS (
     SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
       NULLIF(btrim(p.payload->>'brand'),'') AS brand,
-      ${domain === "listings" ? Prisma.sql`NULLIF(btrim(p.payload->>'amazonBrand'),'') AS "amazonBrand",` : Prisma.empty}
       NULLIF(p.payload->>'rating','') AS rating,
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'ratingCount','')::float AS "ratingCount",` : Prisma.empty}
-      ${needDisplayTags ? Prisma.sql`${sellfoxProductTagDisplaySql(Prisma.sql`p.payload`)} AS "productTags",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'openDate','') AS "openDate",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`COALESCE(NULLIF(p.payload->>'firstSaleDate',''),NULLIF(p.payload->>'firstOrderDate','')) AS "firstSaleDate",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`(
-        SELECT NULLIF(NULLIF(elem.value->>'rank','')::float,9999999)
-        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'bsrRank')='array' THEN p.payload->'bsrRank' ELSE '[]'::jsonb END) WITH ORDINALITY elem(value,ordinality)
-        WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'
-        ORDER BY CASE WHEN elem.value->>'bigCategory' IN ('true','TRUE','1') THEN 0 ELSE 1 END,elem.ordinality
-        LIMIT 1
-      ) AS "bsrRank",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`(
-        SELECT NULLIF(btrim(elem.value->>'categoryName'),'')
-        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'bsrRank')='array' THEN p.payload->'bsrRank' ELSE '[]'::jsonb END) WITH ORDINALITY elem(value,ordinality)
-        WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'
-        ORDER BY CASE WHEN elem.value->>'bigCategory' IN ('true','TRUE','1') THEN 0 ELSE 1 END,elem.ordinality
-        LIMIT 1
-      ) AS "bsrCategory",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'purchaseCost','')::float AS "purchaseCost",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'fbaFees','')::float AS "fbaFees",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'referralFee','')::float AS "referralFee",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'totalFee','')::float AS "totalFee",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'headTripCost','')::float AS "headTripCost",` : Prisma.empty}
       CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner",
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'reservedQty','')::float AS "reservedQty",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(COALESCE(NULLIF(p.payload->>'shippingPrice',''), NULLIF(p.payload->>'shipCost','')),'')::float AS "shippingPrice",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'profitPrice','')::float AS "profitPrice",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'profitRate','')::float AS "profitRate",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'quantity','')::float AS "listingQuantity",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'unsellable','')::float AS "unsellable",` : Prisma.empty}
-      ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'warehousing','')::float AS "warehousing",` : Prisma.empty}
       ${needTagFilter ? Prisma.sql`${sellfoxProductTagMatchSql(Prisma.sql`p.payload`, query.productTag)} AS "matchesProductTag",` : Prisma.empty}
       CASE WHEN p.payload->>'switchFulfillmentTo' IN ('AFN','MFN') THEN p.payload->>'switchFulfillmentTo' END AS fulfillment,
       COALESCE(
@@ -155,9 +122,9 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     WHERE ${scoped("l", scope)}
   )`;
   const base = Prisma.sql`base AS (SELECT ${fields},st.name AS "storeName",st.marketplace AS "storeSite",
-    ${domain === "listings" ? Prisma.sql`l.fulfillment,l.brand,l."amazonBrand",l.rating,l."ratingCount",l."productTags",l."openDate",l."firstSaleDate",l."bsrRank",l."bsrCategory",l."purchaseCost",l."fbaFees",l."referralFee",l."totalFee",l."headTripCost",l."buyBoxWinner",l."reservedQty",l."shippingPrice",l."profitPrice",l."profitRate",l."listingQuantity",l.unsellable,l.warehousing,` : Prisma.empty}l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
+    l.title AS "listingTitle",l.price AS "listingPrice",l."parentAsin" AS "listingParentAsin",l."mainImage" AS "listingMainImage"${domain === "performance" ? Prisma.sql`,COALESCE(NULLIF(l."mainImage",''),NULLIF(s."imageUrl",'')) AS "mainImageCandidate"` : Prisma.empty}
     FROM ${source} s JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}
-    ${domain === "listings" ? Prisma.sql`LEFT JOIN listing l ON l.id=s.id AND l."storeId"=s."storeId"` : Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
+    ${Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {
     const col = Prisma.raw(`"${key}"`);
     // Optional fees/refunds use null=0 at both entity and filtered-currency-total levels.
@@ -182,7 +149,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${query.metric === "orders" ? Prisma.sql`CASE WHEN count(*)=${workbenchDateRange(query).length} THEN ${safeSum(salesMetric)} END` : safeSum(salesMetric)} AS subtotal,${safeSum("quantity")} AS quantity,
       count(*)::int AS "observedDays",(SELECT array_agg(DISTINCT b.msku) FROM base b WHERE ${crossStore ? Prisma.empty : Prisma.sql`b."storeId"=days."storeId" AND `}b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS members${crossStore ? Prisma.sql`,(SELECT jsonb_agg(DISTINCT jsonb_build_array(b."storeId",b.msku)) FROM base b WHERE b.identity=days.identity AND b.currency IS NOT DISTINCT FROM days.currency) AS "stockMembers"` : Prisma.empty}
     FROM days GROUP BY ${storeGrain}identity,currency
-  )` : domain === "listings" ? Prisma.sql`grouped AS (SELECT base.* FROM base)` : Prisma.sql`grouped AS (
+  )` : Prisma.sql`grouped AS (
     SELECT ${storeColumn},currency,${domain === "performance" ? Prisma.sql`identity` : adIdentity},
       ${domain === "ads_campaign" ? Prisma.sql`CASE WHEN count(DISTINCT "campaignName")=1 THEN min("campaignName") END AS "campaignName",` : domain === "ads_ad_group" ? Prisma.sql`CASE WHEN count(DISTINCT "adGroupName")=1 THEN min("adGroupName") END AS "adGroupName",` : domain === "ads_placement" ? Prisma.sql`CASE WHEN count("adGroupId")=count(*) AND count(DISTINCT "adGroupId")=1 THEN min("adGroupId") END AS "adGroupId",` : Prisma.empty}
       ${domain === "ads_targeting" || domain === "ads_search_term" || domain === "ads_ad_group" ? Prisma.sql`CASE WHEN count(DISTINCT "targetingText")=1 THEN min("targetingText") END AS "targetingText",CASE WHEN count(DISTINCT "matchType")=1 THEN min("matchType") END AS "matchType",` : Prisma.empty}min(id) AS id,min(asin) AS asin,min(msku) AS msku,${domain === "performance" ? Prisma.sql`min(NULLIF("mainImageCandidate",'')) AS "mainImage",CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,CASE WHEN count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",CASE WHEN count(*)=1 THEN min("refundRate") END AS "refundRate",` : Prisma.sql`min("listingTitle") AS title,min("listingPrice") AS price,`}
@@ -197,7 +164,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (ads && query.quickFilter === "spendNoClicks") finalFilters.push(Prisma.sql`cost>0 AND clicks=0`);
   if (ads && query.quickFilter === "noClicks") finalFilters.push(Prisma.sql`clicks=0`);
   const dailyTotals = domain === "sales" ? Prisma.sql`,(SELECT jsonb_object_agg(d.date,d.value) FROM (SELECT day.date,CASE WHEN count(day.value)=count(*) AND count(*)=(SELECT count(*) FROM filtered f WHERE f.currency IS NOT DISTINCT FROM filtered.currency) THEN sum(day.value::float) END AS value FROM filtered fday CROSS JOIN LATERAL jsonb_each_text(fday.daily) day(date,value) WHERE fday.currency IS NOT DISTINCT FROM filtered.currency GROUP BY day.date) d) AS daily` : Prisma.empty;
-  const totalKeys = domain === "sales" ? ["subtotal"] : domain === "listings" ? [] : aggregateColumns;
+  const totalKeys = domain === "sales" ? ["subtotal"] : aggregateColumns;
   const totals = Prisma.sql`(SELECT COALESCE(jsonb_agg(t),'[]'::jsonb) FROM (SELECT currency,${totalKeys.length ? Prisma.join(totalKeys.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`)) : Prisma.sql`count(*)::int AS count`}  ${dailyTotals} FROM filtered GROUP BY currency) t)`;
   // Facets ignore brand/tag/search/status so selections never remove other options.
   // Read snapshots independently so facets neither materialize the main Listing CTE

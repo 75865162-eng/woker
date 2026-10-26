@@ -102,13 +102,19 @@ test("agent rows, pagination counts and long-table export honor current Listing 
         assert.ok(calls[1].text.includes(where));
         await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
         for (const sql of calls) {
+          if (domain === "listings") {
+            assert.doesNotMatch(sql.text, /payload|candidate/);
+            assert.ok(sql.text.includes("s.fulfillment="));
+            assert.ok(sql.values.includes(fulfillment));
+            continue;
+          }
           assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
           assert.match(sql.text, /p\."organizationId"=[\s\S]*p\."workspaceId"=/);
           assert.match(sql.text, /candidate\."organizationId"=[\s\S]*candidate\."workspaceId"=/);
           assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
           assert.match(sql.text, /LIMIT 1\)=\$\d+/);
           assert.ok(sql.values.includes(fulfillment));
-          assert.match(sql.text, domain === "listings" ? /candidate.id=s.id/ : /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
+          assert.match(sql.text, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
         }
       }
     }
@@ -128,6 +134,12 @@ test("agent Buy Box rows, counts and export match only real booleans on the chos
         await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
         assert.equal(calls.length, 3);
         for (const sql of calls) {
+          if (domain === "listings") {
+            assert.doesNotMatch(sql.text, /payload|candidate/);
+            assert.ok(sql.text.includes("s.\"buyBoxWinner\"="));
+            assert.ok(sql.values.includes(buyBox === "yes" ? "是" : "否"));
+            continue;
+          }
           assert.match(sql.text, /SELECT CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN 'yes' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN 'no' END/);
           assert.doesNotMatch(sql.text, /p.payload->>'buyBoxWinner'/);
           assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
@@ -137,7 +149,7 @@ test("agent Buy Box rows, counts and export match only real booleans on the chos
           const parameter = sql.text.match(/ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\)=\$(\d+)/);
           assert.ok(parameter); assert.equal(sql.values[Number(parameter[1]) - 1], buyBox);
           assert.ok(sql.values.includes("org") && sql.values.includes("ws"));
-          assert.match(sql.text, domain === "listings" ? /candidate.id=s.id/ : /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
+          assert.match(sql.text, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
         }
         assert.equal(calls[0].text.slice(calls[0].text.indexOf(" WHERE "), calls[0].text.lastIndexOf(" ORDER BY ")), calls[1].text.slice(calls[1].text.indexOf(" WHERE ")));
       }
@@ -166,6 +178,12 @@ test("agent brand matches the selected scoped current Listing after MSKU-first/A
         await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
         assert.equal(calls.length, 3);
         for (const sql of calls) {
+          if (domain === "listings") {
+            assert.doesNotMatch(sql.text, /payload|candidate/);
+            assert.ok(sql.text.includes("s.brand="));
+            assert.ok(sql.values.includes(brand));
+            continue;
+          }
           assert.match(sql.text, /SELECT btrim\(p.payload->>'brand'\)/);
           assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
           assert.match(sql.text, /p\."organizationId"=\$\d+ AND p\."workspaceId"=\$\d+/);
@@ -174,7 +192,7 @@ test("agent brand matches the selected scoped current Listing after MSKU-first/A
           const parameter = sql.text.match(/ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\)=\$(\d+)/);
           assert.ok(parameter); assert.equal(sql.values[Number(parameter[1]) - 1], brand);
           assert.ok(sql.values.includes("org") && sql.values.includes("ws"));
-          assert.match(sql.text, domain === "listings" ? /candidate.id=s.id/ : /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
+          assert.match(sql.text, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
           assert.doesNotMatch(sql.text, /amazonBrand|btrim\(p.payload->>'brand'\)\s*=/);
           assert.ok(!sql.values.includes(`%${brand}%`));
         }
@@ -206,12 +224,18 @@ test("agent productTag membership uses the selected scoped Listing before matchi
       await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
       assert.equal(calls.length, 3);
       for (const sql of calls) {
+          if (domain === "listings") {
+            assert.doesNotMatch(sql.text, /payload|candidate/);
+            assert.ok(sql.text.includes("s.\"productTagNames\" @> ARRAY["));
+            assert.ok(sql.values.includes(query.productTag));
+            continue;
+          }
         assert.match(sql.text, /EXISTS \(SELECT 1 FROM unnest\(\(SELECT ARRAY\(SELECT DISTINCT btrim\(label.value->>'labelName'\)/);
         assert.match(sql.text, /LIMIT 1\)\) tag\("labelName"\)\s+WHERE tag\."labelName"=\$\d+/);
         assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
         assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
         assert.ok(sql.values.includes(query.productTag)); assert.ok(!sql.values.includes(`%${query.productTag}%`));
-        assert.match(sql.text, domain === "listings" ? /candidate.id=s.id/ : /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
+        assert.match(sql.text, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
       }
       assert.equal(calls[0].text.slice(calls[0].text.indexOf(" WHERE "), calls[0].text.lastIndexOf(" ORDER BY ")), calls[1].text.slice(calls[1].text.indexOf(" WHERE ")));
     }
