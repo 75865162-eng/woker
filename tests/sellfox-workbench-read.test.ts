@@ -396,7 +396,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'ratingCount',''\)::float AS "ratingCount"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",/);
   const config = visibleColumns("listings", ["ratingCount"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "评论数");
@@ -426,7 +426,7 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.match(sql.text, /string_agg\(DISTINCT btrim\(label\.value->>'labelName'\), '、' ORDER BY btrim\(label\.value->>'labelName'\)\)/);
   assert.doesNotMatch(sql.text, /productTagNames|product_labels|array_to_string/);
   assert.match(sql.text, /AS "productTags"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
   const config = visibleColumns("listings", ["productTags"]);
   assert.equal(config.length, 1);
@@ -442,6 +442,45 @@ test("listings flatten current productLabelList into an optional productTags col
   for (const domain of ["sales", "performance"] as const) {
     assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, /productLabelList|productTags/);
   }
+});
+
+test("listings expose optional text openDate from the current snapshot and preserve it in CSV", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  const sql = workbenchReadSql("listings", query, scope);
+  assert.match(sql.text, /NULLIF\(p\.payload->>'openDate',''\) AS "openDate"/);
+  assert.match(sql.text, /l\."productTags",l\."openDate",/);
+  const config = visibleColumns("listings", ["openDate"]);
+  assert.equal(config.length, 1);
+  assert.equal(config[0].labelZh, "上架时间");
+  assert.equal(config[0].unavailable, undefined);
+  assert.equal(config[0].numeric, undefined);
+  assert.equal(config[0].defaultVisible, false);
+  assert.equal(config[0].requiresField, "Listing 当前快照 payload.openDate");
+  assert.ok(!defaultVisibleColumnKeys("listings").includes("openDate"));
+  assert.equal(sellfoxColumnValue(config[0], { openDate: null }), null);
+  assert.equal(sellfoxColumnValue(config[0], { openDate: "2024-01-15" }), "2024-01-15");
+  assert.equal(visibleColumnCsv(config, [{ openDate: null }, { openDate: "2024-01-15" }]).trim(), '"上架时间"\r\n""\r\n"2024-01-15"');
+  assert.deepEqual(visibleColumns("ads", ["openDate"]), []);
+  for (const domain of ["ads_report", "sales", "performance"] as const) {
+    for (const exporting of [false, true]) assert.doesNotMatch(workbenchReadSql(domain, query, scope, exporting).text, /openDate/);
+  }
+});
+
+test("listing openDate exports as unchanged text or an empty XLSX cell", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ openDate: "2024-01-15" }, { openDate: null }], total: 2, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?column=openDate&format=xlsx");
+  try {
+    const response = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), { organizationId: "org", workspaceId: "ws" }, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.getRow(1).getCell(1).value, "上架时间");
+    assert.equal(sheet.getRow(2).getCell(1).value, "2024-01-15");
+    assert.equal(sheet.getRow(3).getCell(1).value, null);
+  } finally { globals.prisma = previous; }
 });
 
 test("performance browse selects and sums elevated fee fields and prefers listing image over payload fallback", () => {
