@@ -238,7 +238,7 @@ test("visible-column export matches ordered matrix headers, leaves unsupported v
 
 test("rollup defaults omit duplicate names and product clutter while preserving core metrics and picker overrides", () => {
   const sales = ["image", "identity", "analysis", "brand", "productTags", "price", "fulfillable", "subtotal", "trend", "average7", "totalInventory"];
-  const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "fbaStorageFeeAmount", "currency", "salesperson"];
+  const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "currency", "salesperson"];
   for (const dimension of ["store", "developer", "spu"]) {
     for (const [domain, expected] of [["sales", sales], ["performance", performance]] as const) {
       assert.deepEqual(defaultVisibleColumnKeys(domain, dimension), expected);
@@ -259,7 +259,7 @@ test("rollup defaults omit duplicate names and product clutter while preserving 
 
 test("sales product defaults omit unavailable operations columns while other defaults stay unchanged", () => {
   const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "brand", "productTags", "price", "fulfillable", "subtotal", "trend", "average7", "totalInventory"];
-  const performance = ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "fbaStorageFeeAmount", "currency", "salesperson"];
+  const performance = ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "currency", "salesperson"];
   for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
     assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
     assert.deepEqual(visibleColumns("sales", undefined, [], dimension).map(c => c.key), sales);
@@ -1197,7 +1197,7 @@ test("performance core costs and optional refunds read typed columns and sum by 
     ["refundPrice", "退款金额", true, false, undefined], ["refundNum", "退款量", true, false, undefined],
   ]);
   assert.deepEqual(config.map(c => captions[c.key]), ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "退款金额", "退款量"]);
-  assert.deepEqual(defaultVisibleColumnKeys("performance"), ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "fbaStorageFeeAmount", "currency", "salesperson"]);
+  assert.deepEqual(defaultVisibleColumnKeys("performance"), ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "currency", "salesperson"]);
   for (const key of ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"]) {
     assert.deepEqual(visibleColumns("listings", [key]), []);
     assert.deepEqual(visibleColumns("sales", [key]), []);
@@ -1231,9 +1231,9 @@ test("performance core costs and optional refunds read typed columns and sum by 
 });
 
 test("performance default core costs and explicit selections export matching CSV/XLSX in every dimension", async () => {
-  const keys = ["commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "fbaStorageFeeAmount"];
-  const labels = ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "SP广告费", "FBA仓储费"];
-  const values = [8.25, 3.5, -0.5, 6.5, 7, -8, 2.25, 1.5];
+  const keys = ["commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount"];
+  const labels = ["商品成本", "运费", "税费", "头程", "采购成本", "亚马逊佣金", "SP广告费", "SD广告费", "SB广告费", "SBV广告费", "SBS广告费", "FBA仓储费"];
+  const values = [8.25, 3.5, -0.5, 6.5, 7, -8, 2.25, 3.25, 4.25, 5.25, 6.25, 1.5];
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async () => [{ total: 3, totals: [], rows: [
     Object.fromEntries(keys.map((key, i) => [key, values[i]])),
@@ -1245,7 +1245,7 @@ test("performance default core costs and explicit selections export matching CSV
     for (const dimension of ["asin", "msku", "sku", "parentAsin", "store", "developer", "spu"]) {
       const defaults = defaultVisibleColumnKeys("performance", dimension);
       assert.deepEqual(defaults.slice(defaults.indexOf("adCost") + 1, defaults.indexOf("currency")), keys);
-      for (const selected of [undefined, keys, ...keys.map(key => [key]), defaults.filter(key => !keys.includes(key)), []]) {
+      for (const selected of [undefined, keys, ...keys.map(key => [key]), ...keys.map(hidden => defaults.filter(key => key !== hidden)), defaults.filter(key => !keys.includes(key)), []]) {
         const original = selected && [...selected];
         const config = visibleColumns("performance", selected, [], dimension);
         assert.deepEqual(config.map(c => c.key), selected ?? defaults);
@@ -1266,7 +1266,7 @@ test("performance default core costs and explicit selections export matching CSV
         assert.deepEqual(indices.map(i => csv[1].split(",")[i]), included.map(key => String(values[keys.indexOf(key)])));
         assert.deepEqual(indices.map(i => csv[2].split(",")[i]), included.map(() => "0"));
         assert.deepEqual(indices.map(i => csv[3].split(",")[i]), included.map(() => '""'));
-        for (const label of ["退款金额", "退款量", "SD广告费", "SB广告费", "SBV广告费", "SBS广告费", "长期仓储费", "FBA移除费", "FBA弃置费"]) assert.ok(!expectedLabels.includes(label));
+        for (const label of ["退款金额", "退款量", "长期仓储费", "FBA移除费", "FBA弃置费"]) assert.ok(!expectedLabels.includes(label));
         url.searchParams.set("format", "xlsx");
         const book = new ExcelJS.Workbook();
         await book.xlsx.load(await (await sellfoxWorkbenchExport("performance", query, scope, url)).arrayBuffer());
@@ -1852,18 +1852,18 @@ test("selected profit quantity columns export zero and nonzero numbers in CSV an
   } finally { globals.prisma = previous; }
 });
 
-test("performance ad channel costs keep only adSpCost default-visible among typed columns, aggregate twice and sort without payload", () => {
+test("performance ad channel costs are all default-visible typed columns, aggregate twice and sort without payload", () => {
   const keys = ["adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost"];
   const labels = ["SP广告费", "SD广告费", "SB广告费", "SBV广告费", "SBS广告费"];
   const config = visibleColumns("performance", keys);
-  assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), keys.map((key, i) => [key, labels[i], true, key === "adSpCost", undefined]));
+  assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), keys.map((key, i) => [key, labels[i], true, true, undefined]));
   assert.ok(defaultVisibleColumnKeys("performance").includes("adCost"));
   assert.equal(visibleColumns("performance", ["adCost"])[0].labelZh, "广告花费");
   assert.deepEqual(visibleColumns("performance", ["adTotalCost"]), []);
   for (const c of config) {
     assert.equal(captions[c.key], c.labelZh);
     assert.equal(c.requiresField, `销售利润 payload.${c.key} 类型投影`);
-    assert.equal(defaultVisibleColumnKeys("performance").includes(c.key), c.key === "adSpCost");
+    assert.equal(defaultVisibleColumnKeys("performance").includes(c.key), true);
     assert.deepEqual(visibleColumns("sales", [c.key]), []);
     assert.deepEqual(visibleColumns("listings", [c.key]), []);
   }

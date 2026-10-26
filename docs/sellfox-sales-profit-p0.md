@@ -1,5 +1,38 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-27 — performance 默认显示其余四个广告渠道费用列 · BOX LOCAL ONLY
+
+基线 HEAD `d3d3c4a`（`d3d3c4a9b9a916d312c454ec4e02794531ac498f`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下四个既有 numeric 列移出 performance 默认隐藏 map-tail，依次插在已默认显示的 `adSpCost` 之后、`fbaStorageFeeAmount` 之前，显式设置 `defaultVisible: true`：
+
+| key | 列名 | 原样保留的 requiresField |
+| --- | --- | --- |
+| adSdCost | SD广告费 | 销售利润 payload.adSdCost 类型投影 |
+| adSbCost | SB广告费 | 销售利润 payload.adSbCost 类型投影 |
+| adSbvCost | SBV广告费 | 销售利润 payload.adSbvCost 类型投影 |
+| adSbsCost | SBS广告费 | 销售利润 payload.adSbsCost 类型投影 |
+
+生产源码与基线加上述四列结构移动的预期结果逐字节一致：没有新增 key，没有标签、numeric 或 requiresField 变更，其他数据域及其余源码不变。七种维度的默认列和默认 CSV/XLSX 均包含五个 ad*Cost；显式选列（逐列选择、逐列隐藏、整组隐藏及空集合）继续为权威，不迁移已保存选列。退款、FBA storage extras、自定义/服务费用和身份 map-tail 保持隐藏。performance 剩余默认隐藏 **73 列**（3 个身份列、70 个 numeric 列）。**Fee-mining remains paused**。下一批为 FBA storage extras，本轮不实施。
+
+验证通过：以下两个定向测试文件（Prisma stub，不连真实库）、TypeScript、指定文件 ESLint 和 `git diff --check`。覆盖七种维度默认顺序、五个广告渠道默认可见、默认/显式 CSV 与真实 ExcelJS XLSX 回读、非零/零/NULL 和选列权威性。浏览器用例已扩展四个中文列名，验证默认 header 顺序和勾选、手动隐藏后跨域保留以及 CSV/Excel 选列排除；尝试运行时 Chromium 在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行，未绕过沙箱。需在允许启动 Chromium 的本地环境补跑。
+
+复验命令：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'performance core cost defaults'
+```
+
+本轮仅四个仓库文件；仓库外 parity-gap 文档由父进程更新。仅 BOX 本地，无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL 或真实数据库写入，未加载/修改 `.env`。按本轮约定跳过完整 check/build；定向测试和类型/lint 足以覆盖本次列配置变更，未来合码/发布或查询/存储变化时另行安排高成本检查。回滚为将这四列放回原隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+本地提交待父进程处理：`git add` 无法创建 `.git/index.lock`（Read-only file system），四个文件保持未暂存，HEAD 仍为基线；未 chmod/强制或绕过沙箱。父进程可用其 `GIT_INDEX_FILE` 流程提交：`feat(sellfox): default-show performance ad-channel cost columns`。
+
+下方为历史批次。
+
+---
+
 
 ## 2026-10-27 — performance 默认显示八个核心成本/费用列 · BOX LOCAL ONLY
 
