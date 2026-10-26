@@ -427,6 +427,37 @@ test("cost min/max validate as finite numbers, round trip ads-only forRequest, r
   assert.throws(() => query("costMin=10&costMax=1"), /花费上限不得小于下限/);
 });
 
+test("adSales min/max validate as finite numbers, round trip ads-only forRequest, reject inverted range", () => {
+  for (const range of ["", "adSalesMin=0", "adSalesMax=100", "adSalesMin=1.5&adSalesMax=48", "adSalesMin=0&adSalesMax=0", "adSalesMin=0.5&adSalesMax=100"]) {
+    const params = new URLSearchParams(`domain=ads&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.adSalesMin, params.has("adSalesMin") ? Number(params.get("adSalesMin")) : undefined);
+    assert.equal(parsed.adSalesMax, params.has("adSalesMax") ? Number(params.get("adSalesMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "listings", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("adSalesMin"), params.get("adSalesMin"));
+      assert.equal(sellfoxViewParams(other).get("adSalesMax"), params.get("adSalesMax"));
+      assert.equal(sellfoxViewParams(other, true).has("adSalesMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("adSalesMax"), false);
+    }
+  }
+  for (const key of ["adSalesMin", "adSalesMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1e2", "NaN", "abc", "4.5.1", "--1", "Infinity"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是数字/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("adSalesMin=%201.5%20").adSalesMin, 1.5);
+  assert.equal(query("adSalesMax=0").adSalesMax, 0);
+  assert.equal(query("adSalesMin=.5").adSalesMin, 0.5);
+  assert.throws(() => query("adSalesMin=10&adSalesMax=1"), /广告销售额上限不得小于下限/);
+});
+
 test("ratingCount min/max validate as safe integers, round trip ads-only forRequest, reject inverted range", () => {
   for (const range of ["", "ratingCountMin=0", "ratingCountMax=100", "ratingCountMin=0&ratingCountMax=100", "ratingCountMin=-1&ratingCountMax=0"]) {
     const params = new URLSearchParams(`domain=ads&${range}`);

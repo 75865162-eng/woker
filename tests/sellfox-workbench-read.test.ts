@@ -2369,6 +2369,32 @@ test("cost filters ads daily members before rollup; non-ads ignore", () => {
   }
 });
 
+test("adSales filters ads daily members before rollup; non-ads ignore", () => {
+  const scope = { organizationId: "org-adSales", workspaceId: "ws-adSales" };
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const range of ["adSalesMin=0", "adSalesMax=100", "adSalesMin=1.5&adSalesMax=48", "adSalesMin=.5&adSalesMax=99"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql(domain, query, scope, exporting);
+        assert.match(sql.text, /s\."adSales" IS NOT NULL/);
+        const params = new URLSearchParams(range);
+        if (params.has("adSalesMin")) {
+          const match = sql.text.match(/s\."adSales">=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("adSalesMin")));
+        } else assert.doesNotMatch(sql.text, /s\."adSales">=/);
+        if (params.has("adSalesMax")) {
+          const match = sql.text.match(/s\."adSales"<=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("adSalesMax")));
+        } else assert.doesNotMatch(sql.text, /s\."adSales"<=/);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?adSalesMin=1&adSalesMax=9")), scope, false).text;
+    assert.doesNotMatch(sql, /s\."adSales" IS NOT NULL|s\."adSales">=|s\."adSales"<=/);
+  }
+});
+
 test("ratingCount filters ads Listing members before rollup; non-ads ignore", () => {
   const scope = { organizationId: "org-rating-count", workspaceId: "ws-rating-count" };
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
