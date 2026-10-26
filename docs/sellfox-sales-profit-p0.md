@@ -1,5 +1,32 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+**状态更新（2026-10-26 23:41:49 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地，未部署）**
+
+- 本轮 performance 解锁 12 个默认隐藏数字列：`couponPaymentAmount`「优惠券支付」、`sellerDealPaymentAmount`「Deal费用」、`vineFeeAmount`「Vine费用」、`starStorageFeeAmount`「星级仓储费」、`subscriptionAmount`「订阅费」、`fbaCustomerReturnAmount`「FBA买家退货费」、`fbaInboundConvenienceFeeAmount`「FBA入库配置费」、`inboundTransportationFeeAmount`「入库运输费」、`shippingChargebackAmount`「买家运费扣除」、`giftwrapChargebackAmount`「礼品包装费扣除」、`costOfPointsGrantedAmount`「积分费用」、`orderOtherPriceAmount`「订单其他费」。同名 profit payload → nullable typed product-daily → 实体/币种 `COALESCE(sum(...),0)`、排序、选列 CSV/XLSX；Agent 英文长表同序追加。明细 NULL 空、0 保留，hot path 不解析 payload，sales 不变。
+- 独立字段：starStorageFeeAmount ≠ storageFeeAmount / fbaStorageFeeAmount / fbaLongTermStorageFeeAmount / fbaOverageFeeAmount；shippingChargebackAmount ≠ shippingChargeAmount；giftwrapChargebackAmount ≠ giftWrapFee；orderOtherPriceAmount ≠ otherPriceAmount。Listing fees 不作别名。
+- 160000 接在 150000 后，保留全部旧投影/trigger 和精确视图列序后追加 12 列；无新索引，一次 payload=payload 回填。**123 需全部前置迁移 + 160000，仅用户说「上」后评审。** 执行前评估全历史回填锁/WAL/磁盘及维护窗口；回退应用代码，保留加法 schema/trigger，不自动回滚数据库。
+- evaluationCapital/evaluationCommission、*Percent、销售小组/业绩归属人/实时统计/运营/分类/AWD/sales业务员/广告组合/否定/AMC 仍锁定；fbaInboundTransportationProgramFee / aglFee* / paidServicesFee* 未接入。
+- 本轮 no push / no fetch / no deploy / no SSH / no migrate-on-123 / no live DB writes / no live Sellfox API；未启用计划。验证使用 fixtures/PGlite 和 fake DATABASE_URL；线上真实费用/P95 未验收。
+
+离线复验（预期定向测试全绿，PGlite 含 `160000` / `PASS`；未配置专用 PG 时 PG 子测 SKIP，独立 PGlite 必须 PASS）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,listing-identity,browse-api,browse-filters}.test.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-listings-read-model.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts src/lib/sellfox/{product-performance,workbench-read,sort-columns,agent-read}.ts tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,browse-api}.test.ts tests/integration/sellfox-{sales-profit-p0,cross-store,listings-read-model}.ts
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js generate
+git diff --check
+```
+
+本轮已执行：165 项定向测试全绿；强化 fixture 区分后相关 14 项重跑通过；sales-profit 160000 / Listing / cross-store PGlite 均 PASS，typecheck、touched lint、fake-URL Prisma validate/generate、diff 检查通过。专用 PG 子测因未配置而 SKIP；PGlite 独立 verifier 已执行。
+
+共享 `performance-contig-fees.json` 覆盖非零/0/null/非法、INSERT、150000 后历史回填、UPDATE 清空、聚合、币种/结算隔离、列序、无新索引及旧字段保留；Listing/跨店 fixtures 同步追加类型列。定向测试 + PGlite + TypeScript/lint/Prisma 覆盖本次边界；完整 check/build/浏览器/真实 P95 留待明确发布或真实性能验收。
+
+---
+
 > 2026-10-26 23:29:44 Asia/Shanghai · Owner: Chen Jieliang · **仅 BOX 本地，未上线**：performance 新增八个默认隐藏数字列 `promotionTotalAmount`「促销费」、`fbaOverageFeeAmount`「FBA超量仓储费」、`chargebackAmount`「拒付退款」、`guaranteeClaimAmount`「A-Z索赔退款」、`digitalServicesFeeAmount`「数字服务费」、`otherPriceAmount`「其他费用」、`shippingChargeAmount`「买家运费」、`regulatoryFeeAmount`「监管费」。同名 profit payload → typed product-daily → 实体/币种 `COALESCE(sum(...),0)`、排序及选列 CSV/XLSX；Agent 英文长表末尾同序追加八列。明细 NULL 空、0 保留；hot path 不解析 payload。`promotionTotalAmount` ≠ `promotionDiscount`「促销折扣」，均保留；Listing fees 不作别名，sales 不变，不增加 *Percent。
 >
 > 加法迁移 `20261026150000_sellfox_product_daily_optional_fees` 在 140000 后执行，保留所有旧投影/trigger/视图列序，无新索引，一次 `payload=payload` 回填。**123 需全部前置迁移 + 150000，仅用户说「上」后另行评审。** 真实执行前评估全历史回填锁、WAL/磁盘及维护窗口；回退应用代码并保留加法 schema/trigger，不自动回滚数据库。evaluationCapital/evaluationCommission、销售小组/业绩归属人/实时统计/运营/分类/AWD/sales业务员/广告组合/否定/AMC 继续锁定。本轮无 push/fetch、SSH/部署/迁移到123/重启、live Sellfox API、真实库写入或计划启用。

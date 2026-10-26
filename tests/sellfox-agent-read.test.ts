@@ -286,11 +286,11 @@ test("agent salesperson containment uses only typed performance column including
 
 test("Agent extra performance fees use typed profit view columns, numeric CSV and safe sorting", async () => {
   const keys = ["headTripPrice", "avgPurchaseCost", "amazonCommissionPrice"];
-  assert.deepEqual(sellfoxAgentColumns.performance.slice(-28, -25), keys);
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-40, -37), keys);
   const csv = sellfoxAgentCsv("performance", [{ headTripPrice: 0, avgPurchaseCost: 2.5, amazonCommissionPrice: -3 }, {}]);
   assert.ok(csv.split("\r\n")[0].includes('"headTripPrice","avgPurchaseCost","amazonCommissionPrice","evaluationSaleNum","channelSaleNum",'));
-  assert.ok(csv.split("\r\n")[1].endsWith('0,2.5,-3,"","","","","","","","","","","","","","","","",""' + "," + Array(8).fill('""').join(",")));
-  assert.ok(csv.split("\r\n")[2].endsWith('"","","","","","","","",""' + "," + Array(8).fill('""').join(",")));
+  assert.ok(csv.split("\r\n")[1].endsWith('0,2.5,-3,"","","","","","","","","","","","","","","","",""' + "," + Array(20).fill('""').join(",")));
+  assert.ok(csv.split("\r\n")[2].endsWith('"","","","","","","","",""' + "," + Array(20).fill('""').join(",")));
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
     assert.match(sql.text, /FROM sellfox_profit_daily s/);
@@ -335,13 +335,13 @@ test("sales Agent appends typed current catalog columns with stable MSKU-first s
 
 test("Agent appends profit evaluation and channel quantities with null empty, zero preserved and safe sort", async () => {
   const keys = ["evaluationSaleNum", "channelSaleNum"];
-  assert.deepEqual(sellfoxAgentColumns.performance.slice(-25, -23), keys);
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-37, -35), keys);
   assert.ok(keys.every(key => !(sellfoxAgentColumns.sales as readonly string[]).includes(key)));
   const csv = sellfoxAgentCsv("performance", [{ evaluationSaleNum: 0, channelSaleNum: 1 }, { evaluationSaleNum: 2, channelSaleNum: 0 }, { evaluationSaleNum: null, channelSaleNum: null }]);
   assert.ok(csv.split("\r\n")[0].includes('"evaluationSaleNum","channelSaleNum",'));
-  assert.ok(csv.split("\r\n")[1].endsWith('0,1,"","","","","","","","","","","","","","",""' + "," + Array(8).fill('""').join(",")));
-  assert.ok(csv.split("\r\n")[2].endsWith('2,0,"","","","","","","","","","","","","","",""' + "," + Array(8).fill('""').join(",")));
-  assert.ok(csv.split("\r\n")[3].endsWith('"","","","","","","",""' + "," + Array(8).fill('""').join(",")));
+  assert.ok(csv.split("\r\n")[1].endsWith('0,1,"","","","","","","","","","","","","","",""' + "," + Array(20).fill('""').join(",")));
+  assert.ok(csv.split("\r\n")[2].endsWith('2,0,"","","","","","","","","","","","","","",""' + "," + Array(20).fill('""').join(",")));
+  assert.ok(csv.split("\r\n")[3].endsWith('"","","","","","","",""' + "," + Array(20).fill('""').join(",")));
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
     assert.match(sql.text, /FROM sellfox_profit_daily s/);
@@ -360,14 +360,14 @@ test("Agent appends profit evaluation and channel quantities with null empty, ze
 
 test("Agent appends optional ad channel costs with typed sorting, zero and NULL CSV", async () => {
   const keys = ["adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost"];
-  assert.deepEqual(sellfoxAgentColumns.performance.slice(-23, -18), keys);
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-35, -30), keys);
   assert.ok(keys.every(key => !(sellfoxAgentColumns.sales as readonly string[]).includes(key)));
   assert.ok(!(sellfoxAgentColumns.performance as readonly string[]).includes("adTotalCost"));
   const rows = [{ adSpCost: 0, adSdCost: 2.5, adSbCost: 4, adSbvCost: 5, adSbsCost: 6.75 }, {}];
   const csv = sellfoxAgentCsv("performance", rows).split("\r\n");
   assert.ok(csv[0].includes(keys.map(key => `"${key}"`).join(",")));
-  assert.ok(csv[1].endsWith('0,2.5,4,5,6.75,"","","","","","","","","",""' + "," + Array(8).fill('""').join(",")));
-  assert.ok(csv[2].endsWith('"","","","","","","","","","",""' + "," + Array(8).fill('""').join(",")));
+  assert.ok(csv[1].endsWith('0,2.5,4,5,6.75,"","","","","","","","","",""' + "," + Array(20).fill('""').join(",")));
+  assert.ok(csv[2].endsWith('"","","","","","","","","","",""' + "," + Array(20).fill('""').join(",")));
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
     assert.match(sql.text, /FROM sellfox_profit_daily s/);
@@ -388,14 +388,14 @@ test("Agent appends optional ad channel costs with typed sorting, zero and NULL 
 
 test("Agent appends optional FBA storage/removal/disposal fees with typed sorting, zero and NULL CSV", async () => {
   const keys = ["fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount"];
-  assert.deepEqual(sellfoxAgentColumns.performance.slice(-18, -14), keys);
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-30, -26), keys);
   assert.ok(keys.every(key => !(sellfoxAgentColumns.sales as readonly string[]).includes(key)));
   assert.ok(!(sellfoxAgentColumns.performance as readonly string[]).includes("adTotalCost"));
   const rows = [{ fbaStorageFeeAmount: 0, fbaLongTermStorageFeeAmount: 2.5, fbaRemovalFeeAmount: 4, fbaDisposalFeeAmount: 5 }, {}];
   const csv = sellfoxAgentCsv("performance", rows).split("\r\n");
   assert.ok(csv[0].includes(keys.map(key => `"${key}"`).join(",")));
-  assert.ok(csv[1].endsWith("0,2.5,4,5,\"\",\"\",\"\",\"\",\"\",\"\"" + "," + Array(8).fill('""').join(",")));
-  assert.ok(csv[2].endsWith('"","","","","","","","","",""' + "," + Array(8).fill('""').join(",")));
+  assert.ok(csv[1].endsWith("0,2.5,4,5,\"\",\"\",\"\",\"\",\"\",\"\"" + "," + Array(20).fill('""').join(",")));
+  assert.ok(csv[2].endsWith('"","","","","","","","","",""' + "," + Array(20).fill('""').join(",")));
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
     assert.match(sql.text, /FROM sellfox_profit_daily s/);
@@ -416,14 +416,14 @@ test("Agent appends optional FBA storage/removal/disposal fees with typed sortin
 
 test("Agent appends optional custom/service/storage/compensation/evaluation fees with typed sorting, zero and NULL CSV", async () => {
   const keys = ["customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee"];
-  assert.deepEqual(sellfoxAgentColumns.performance.slice(-14, -8), keys);
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-26, -20), keys);
   assert.ok(keys.every(key => !(sellfoxAgentColumns.sales as readonly string[]).includes(key)));
   assert.ok(!(sellfoxAgentColumns.performance as readonly string[]).includes("adTotalCost"));
   const rows = [Object.fromEntries(keys.map((key, i) => [key, [0, 2.5, 4, 5, 6, 7][i]])), Object.fromEntries(keys.map(key => [key, null]))];
   const csv = sellfoxAgentCsv("performance", rows).split("\r\n");
   assert.ok(csv[0].includes(keys.map(key => `"${key}"`).join(",")));
-  assert.ok(csv[1].endsWith("0,2.5,4,5,6,7" + "," + Array(8).fill('""').join(",")));
-  assert.ok(csv[2].endsWith('"","","","","",""' + "," + Array(8).fill('""').join(",")));
+  assert.ok(csv[1].endsWith("0,2.5,4,5,6,7" + "," + Array(20).fill('""').join(",")));
+  assert.ok(csv[2].endsWith('"","","","","",""' + "," + Array(20).fill('""').join(",")));
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
     assert.match(sql.text, /FROM sellfox_profit_daily s/);
@@ -444,14 +444,14 @@ test("Agent appends optional custom/service/storage/compensation/evaluation fees
 
 test("Agent appends optional promo/overage/chargeback/claim/dsf/other/buyer/regulatory fees with typed sorting, zero and NULL CSV", async () => {
   const keys = ["promotionTotalAmount", "fbaOverageFeeAmount", "chargebackAmount", "guaranteeClaimAmount", "digitalServicesFeeAmount", "otherPriceAmount", "shippingChargeAmount", "regulatoryFeeAmount"];
-  assert.deepEqual(sellfoxAgentColumns.performance.slice(-8), keys);
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-20, -12), keys);
   assert.ok(keys.every(key => !(sellfoxAgentColumns.sales as readonly string[]).includes(key)));
   assert.ok(!(sellfoxAgentColumns.performance as readonly string[]).includes("adTotalCost"));
   const rows = [Object.fromEntries(keys.map((key, i) => [key, [0, 2.5, 4, 5, 6, 7, 8, 9][i]])), Object.fromEntries(keys.map(key => [key, null]))];
   const csv = sellfoxAgentCsv("performance", rows).split("\r\n");
-  assert.ok(csv[0].endsWith(keys.map(key => `"${key}"`).join(",")));
-  assert.ok(csv[1].endsWith("0,2.5,4,5,6,7,8,9"));
-  assert.ok(csv[2].endsWith('"","","","","","","",""'));
+  assert.ok(csv[0].endsWith(keys.map(key => `"${key}"`).join(",") + "," + sellfoxAgentColumns.performance.slice(-12).map(key => `"${key}"`).join(",")));
+  assert.ok(csv[1].endsWith("0,2.5,4,5,6,7,8,9" + "," + Array(12).fill('""').join(",")));
+  assert.ok(csv[2].endsWith(Array(20).fill('""').join(",")));
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
     assert.match(sql.text, /FROM sellfox_profit_daily s/);
@@ -459,6 +459,34 @@ test("Agent appends optional promo/overage/chargeback/claim/dsf/other/buyer/regu
     if (!sql.text.includes("count(*)")) {
       for (const key of keys) assert.ok(sql.text.includes(`"${key}"`));
       assert.match(sql.text, /ORDER BY "(?:promotionTotalAmount|fbaOverageFeeAmount|chargebackAmount|guaranteeClaimAmount|digitalServicesFeeAmount|otherPriceAmount|shippingChargeAmount|regulatoryFeeAmount)" (?:ASC|DESC) NULLS LAST, id ASC LIMIT/);
+    }
+    return sql.text.includes("count(*)") ? [{ total: 2 }] : rows;
+  } } as unknown as PrismaClient;
+  try {
+    for (const key of keys) for (const exporting of [false, true]) for (const sortOrder of ["asc", "desc"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${key}&sortOrder=${sortOrder}&reportDate=2026-10-25`), "performance");
+      assert.deepEqual((await readSellfoxAgentRows("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting)).rows, rows);
+    }
+  } finally { globals.prisma = previous; }
+});
+
+test("Agent appends contiguous coupon/deal/vine/star/sub/return/inbound and companion fees with typed sorting, zero and NULL CSV", async () => {
+  const keys = ["couponPaymentAmount", "sellerDealPaymentAmount", "vineFeeAmount", "starStorageFeeAmount", "subscriptionAmount", "fbaCustomerReturnAmount", "fbaInboundConvenienceFeeAmount", "inboundTransportationFeeAmount", "shippingChargebackAmount", "giftwrapChargebackAmount", "costOfPointsGrantedAmount", "orderOtherPriceAmount"];
+  assert.deepEqual(sellfoxAgentColumns.performance.slice(-12), keys);
+  assert.ok(keys.every(key => !(sellfoxAgentColumns.sales as readonly string[]).includes(key)));
+  assert.ok(!(sellfoxAgentColumns.performance as readonly string[]).includes("adTotalCost"));
+  const rows = [Object.fromEntries(keys.map((key, i) => [key, [0, 2.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13][i]])), Object.fromEntries(keys.map(key => [key, null]))];
+  const csv = sellfoxAgentCsv("performance", rows).split("\r\n");
+  assert.ok(csv[0].endsWith(keys.map(key => `"${key}"`).join(",")));
+  assert.ok(csv[1].endsWith("0,2.5,4,5,6,7,8,9,10,11,12,13"));
+  assert.ok(csv[2].endsWith(keys.map(() => '""').join(",")));
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => {
+    assert.match(sql.text, /FROM sellfox_profit_daily s/);
+    assert.doesNotMatch(sql.text, /payload|adTotalCost/);
+    if (!sql.text.includes("count(*)")) {
+      for (const key of keys) assert.ok(sql.text.includes(`"${key}"`));
+      assert.match(sql.text, /ORDER BY "(?:couponPaymentAmount|sellerDealPaymentAmount|vineFeeAmount|starStorageFeeAmount|subscriptionAmount|fbaCustomerReturnAmount|fbaInboundConvenienceFeeAmount|inboundTransportationFeeAmount|shippingChargebackAmount|giftwrapChargebackAmount|costOfPointsGrantedAmount|orderOtherPriceAmount)" (?:ASC|DESC) NULLS LAST, id ASC LIMIT/);
     }
     return sql.text.includes("count(*)") ? [{ total: 2 }] : rows;
   } } as unknown as PrismaClient;

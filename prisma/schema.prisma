@@ -1151,6 +1151,18 @@ model SellfoxProductDailySnapshot {
   otherPriceAmount Float?
   shippingChargeAmount Float?
   regulatoryFeeAmount Float?
+  couponPaymentAmount Float?
+  sellerDealPaymentAmount Float?
+  vineFeeAmount Float?
+  starStorageFeeAmount Float?
+  subscriptionAmount Float?
+  fbaCustomerReturnAmount Float?
+  fbaInboundConvenienceFeeAmount Float?
+  inboundTransportationFeeAmount Float?
+  shippingChargebackAmount Float?
+  giftwrapChargebackAmount Float?
+  costOfPointsGrantedAmount Float?
+  orderOtherPriceAmount Float?
   evaluationSaleNum Float?
   channelSaleNum  Float?
   adSpCost        Float?
