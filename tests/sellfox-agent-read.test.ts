@@ -738,6 +738,37 @@ test("agent bsrRank min/max affect listings rows/count/export only via typed bsr
   } finally { globals.prisma = previous; }
 });
 
+
+test("agent fulfillable min/max affect listings rows/count/export only via typed fulfillable", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory", "performance", "ads_report"] as const) {
+      for (const range of ["", "fulfillableMin=0", "fulfillableMax=10000", "fulfillableMin=1&fulfillableMax=5000"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        for (const sql of calls) {
+          const hasRange = domain === "listings" && (query.fulfillableMin != null || query.fulfillableMax != null);
+          if (hasRange) {
+            assert.match(sql.text, /s\."fulfillable" IS NOT NULL/);
+            for (const [value, pattern] of [[query.fulfillableMin, /s\."fulfillable">=\$(\d+)/], [query.fulfillableMax, /s\."fulfillable"<=\$(\d+)/]] as const) {
+              const match = sql.text.match(pattern);
+              if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+              else assert.equal(match, null);
+            }
+          } else {
+            assert.doesNotMatch(sql.text, /s\."fulfillable" IS NOT NULL|s\."fulfillable">=|s\."fulfillable"<=/);
+          }
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});
+
 test("agent listingQuantity min/max affect listings rows/count/export only via typed listingQuantity", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const calls: Prisma.Sql[] = [];

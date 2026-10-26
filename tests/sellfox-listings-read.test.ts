@@ -197,6 +197,36 @@ test("bsrRank min/max filter typed column on listing_current; facets stay scope-
   }
 });
 
+test("fulfillable min/max filter typed column on listing_current; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "fulfillableMin=0", "fulfillableMax=10000", "fulfillableMin=1&fulfillableMax=500"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&shopExternalId=shop&site=US`), "listings");
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      const hasRange = query.fulfillableMin != null || query.fulfillableMax != null;
+      if (hasRange) {
+        assert.match(sql.text, /s\."fulfillable" IS NOT NULL/);
+        for (const [value, pattern] of [[query.fulfillableMin, /s\."fulfillable">=\$(\d+)/], [query.fulfillableMax, /s\."fulfillable"<=\$(\d+)/]] as const) {
+          const match = sql.text.match(pattern);
+          if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+      } else {
+        assert.doesNotMatch(sql.text, /s\."fulfillable" IS NOT NULL|s\."fulfillable">=|s\."fulfillable"<=/);
+      }
+      if (!exporting) {
+        const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+        assert.doesNotMatch(facets, /fulfillableMin|fulfillableMax|s\."fulfillable">=|s\."fulfillable"<=/);
+        for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?fulfillableMin=1&fulfillableMax=9"), domain);
+    const sql = workbenchReadSql(domain, query, scope, false);
+    assert.doesNotMatch(sql.text, /s\."fulfillable" IS NOT NULL|fulfillableMin/);
+  }
+});
+
 test("listingQuantity min/max filter typed column on listing_current; facets stay scope-only", () => {
   for (const exporting of [false, true]) {
     for (const range of ["", "listingQuantityMin=0", "listingQuantityMax=10000", "listingQuantityMin=1&listingQuantityMax=5000"]) {

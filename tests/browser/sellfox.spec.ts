@@ -209,7 +209,16 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page).toHaveURL(/totalInventoryMin=0/);
   await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /totalInventoryMin=0/);
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /totalInventoryMax=100/);
-  await expect(page.getByLabel("BSR下限", { exact: true })).toBeEnabled();
+    await expect(page.getByLabel("可售下限", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("可售上限", { exact: true })).toHaveValue("");
+  await page.getByLabel("可售下限", { exact: true }).fill("0");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("fulfillableMin")).toBe("0");
+  await page.getByLabel("可售上限", { exact: true }).fill("500");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("fulfillableMax")).toBe("500");
+  await expect(page).toHaveURL(/fulfillableMin=0/);
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /fulfillableMin=0/);
+  await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /fulfillableMax=500/);
+await expect(page.getByLabel("BSR下限", { exact: true })).toBeEnabled();
   await expect(page.getByLabel("BSR上限", { exact: true })).toHaveValue("");
   await page.getByLabel("BSR下限", { exact: true }).fill("1");
   await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("bsrRankMin")).toBe("1");

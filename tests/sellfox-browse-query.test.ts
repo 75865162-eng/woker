@@ -608,6 +608,36 @@ test("bsrRank min/max validate as safe integers, round trip listings-only, rejec
   assert.throws(() => query("bsrRankMin=10&bsrRankMax=1"), /BSR上限不得小于下限/);
 });
 
+test("fulfillable min/max validate as safe integers, round trip listings-only, reject inverted range", () => {
+  for (const range of ["", "fulfillableMin=0", "fulfillableMax=10000", "fulfillableMin=1&fulfillableMax=5000", "fulfillableMin=-1&fulfillableMax=0"]) {
+    const params = new URLSearchParams(`domain=listings&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.fulfillableMin, params.has("fulfillableMin") ? Number(params.get("fulfillableMin")) : undefined);
+    assert.equal(parsed.fulfillableMax, params.has("fulfillableMax") ? Number(params.get("fulfillableMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("fulfillableMin"), params.get("fulfillableMin"));
+      assert.equal(sellfoxViewParams(other).get("fulfillableMax"), params.get("fulfillableMax"));
+      assert.equal(sellfoxViewParams(other, true).has("fulfillableMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("fulfillableMax"), false);
+    }
+  }
+  for (const key of ["fulfillableMin", "fulfillableMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1.5", "1e2", "NaN", "abc", "01.0", "9007199254740992"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是整数/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("fulfillableMin=%200%20").fulfillableMin, 0);
+  assert.equal(query("fulfillableMax=0").fulfillableMax, 0);
+  assert.throws(() => query("fulfillableMin=10&fulfillableMax=1"), /可售上限不得小于下限/);
+});
+
 test("listingQuantity min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
   for (const range of ["", "listingQuantityMin=0", "listingQuantityMax=100", "listingQuantityMin=1.5&listingQuantityMax=48", "listingQuantityMin=0&listingQuantityMax=0"]) {
     const params = new URLSearchParams(`domain=listings&${range}`);

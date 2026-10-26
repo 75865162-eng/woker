@@ -342,6 +342,11 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
     if (query.totalInventoryMax != null) bounds.push(Prisma.sql`stock.inv<=${query.totalInventoryMax}`);
     clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM (SELECT CASE WHEN count(i."totalInventory")=count(*) THEN sum(i."totalInventory") END AS inv FROM sellfox_inventory_current i WHERE i."organizationId"=s."organizationId" AND i."workspaceId"=s."workspaceId" AND i."storeId"=s."storeId" AND i.msku=s.msku GROUP BY i."storeId", i.msku) stock WHERE ${Prisma.join(bounds, " AND ")})`);
   }
+  if (domain === "listings" && (query.fulfillableMin != null || query.fulfillableMax != null)) {
+    clauses.push(Prisma.sql`s."fulfillable" IS NOT NULL`);
+    if (query.fulfillableMin != null) clauses.push(Prisma.sql`s."fulfillable">=${query.fulfillableMin}`);
+    if (query.fulfillableMax != null) clauses.push(Prisma.sql`s."fulfillable"<=${query.fulfillableMax}`);
+  }
   if (domain === "listings" && (query.bsrRankMin != null || query.bsrRankMax != null)) {
     clauses.push(Prisma.sql`s."bsrRank" IS NOT NULL`);
     if (query.bsrRankMin != null) clauses.push(Prisma.sql`s."bsrRank">=${query.bsrRankMin}`);
