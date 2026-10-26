@@ -401,13 +401,15 @@ test("performance browse selects and sums elevated fee fields and prefers listin
   assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\."imageUrl"/);
 });
 
-test("performance refunds read payload scalars and sum by entity and currency without changing refund rates", () => {
-  const keys = ["refundPrice", "refundNum"];
+test("performance optional costs and refunds read payload scalars and sum by entity and currency without changing refund rates", () => {
+  const keys = ["commodityCost", "shippingPrice", "taxPrice", "refundPrice", "refundNum"];
   const config = visibleColumns("performance", keys);
   assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), [
+    ["commodityCost", "商品成本", true, false, undefined], ["shippingPrice", "运费", true, false, undefined], ["taxPrice", "税费", true, false, undefined],
     ["refundPrice", "退款金额", true, false, undefined], ["refundNum", "退款量", true, false, undefined],
   ]);
-  assert.deepEqual(config.map(c => captions[c.key]), ["退款金额", "退款量"]);
+  assert.deepEqual(config.map(c => captions[c.key]), ["商品成本", "运费", "税费", "退款金额", "退款量"]);
+  for (const c of config.slice(0, 3)) assert.equal(c.requiresField, `销售利润 payload.${c.key}`);
   for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer"]) {
     assert.ok(defaultVisibleColumnKeys("performance", dimension).every(key => !keys.includes(key)));
     for (const onlySettle of [false, true]) {
@@ -427,22 +429,22 @@ test("performance refunds read payload scalars and sum by entity and currency wi
   }
 });
 
-test("optional refund columns export numeric values in CSV and XLSX", async () => {
+test("optional cost and refund columns export numeric values in CSV and XLSX", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
-  globals.prisma = { $queryRaw: async () => [{ rows: [{ refundPrice: 12.5, refundNum: 2 }, { refundPrice: 0, refundNum: 0 }], total: 2, totals: [] }] } as unknown as PrismaClient;
-  const url = new URL("http://localhost/?reportDate=2026-10-25&column=refundPrice&column=refundNum");
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ commodityCost: 8.25, shippingPrice: 3.5, taxPrice: -0.5, refundPrice: 12.5, refundNum: 2 }, { commodityCost: 0, shippingPrice: 0, taxPrice: 0, refundPrice: 0, refundNum: 0 }], total: 2, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?reportDate=2026-10-25&column=commodityCost&column=shippingPrice&column=taxPrice&column=refundPrice&column=refundNum");
   const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
   try {
-    assert.equal((await (await sellfoxWorkbenchExport("performance", query, scope, url)).text()).trim(), '"退款金额","退款量"\r\n12.5,2\r\n0,0');
+    assert.equal((await (await sellfoxWorkbenchExport("performance", query, scope, url)).text()).trim(), '"商品成本","运费","税费","退款金额","退款量"\r\n8.25,3.5,-0.5,12.5,2\r\n0,0,0,0,0');
     url.searchParams.set("format", "xlsx");
     const response = await sellfoxWorkbenchExport("performance", query, scope, url);
     const { default: ExcelJS } = await import("exceljs");
     const book = new ExcelJS.Workbook();
     await book.xlsx.load(await response.arrayBuffer());
     const sheet = book.worksheets[0];
-    assert.deepEqual([sheet.getRow(1).getCell(1).value, sheet.getRow(1).getCell(2).value], ["退款金额", "退款量"]);
-    assert.deepEqual([sheet.getRow(2).getCell(1).value, sheet.getRow(2).getCell(2).value], [12.5, 2]);
-    assert.deepEqual([sheet.getRow(3).getCell(1).value, sheet.getRow(3).getCell(2).value], [0, 0]);
+    assert.deepEqual([1, 2, 3, 4, 5].map(col => sheet.getRow(1).getCell(col).value), ["商品成本", "运费", "税费", "退款金额", "退款量"]);
+    assert.deepEqual([1, 2, 3, 4, 5].map(col => sheet.getRow(2).getCell(col).value), [8.25, 3.5, -0.5, 12.5, 2]);
+    assert.deepEqual([1, 2, 3, 4, 5].map(col => sheet.getRow(3).getCell(col).value), [0, 0, 0, 0, 0]);
   } finally { globals.prisma = previous; }
 });
 
@@ -506,8 +508,8 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
           } else {
             assert.match(base, /candidate\."storeId"=s\."storeId"/);
             assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1/);
-            // Profit reads only the two explicit refund scalars, never the full payload.
-            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), domain === "performance" ? ["refundPrice", "refundNum"] : []);
+            // Profit reads only explicit cost/refund scalars, never the full payload.
+            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), domain === "performance" ? ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice"] : []);
             assert.doesNotMatch(base, /s\.payload(?:\s|,)/);
           }
         }
