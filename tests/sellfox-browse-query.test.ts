@@ -135,14 +135,15 @@ test("productTag trims arbitrary exact names and round trips UI, browse and expo
       assert.equal(params.get("productTag"), tag); assert.equal(params.get("layout"), "workbench");
       assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${params}`), sellfoxAdsResource(ads)).productTag, tag);
       assert.equal(params.get("fulfillment"), "AFN");
-      for (const key of ["brand", "buyBox", "salesperson"]) assert.equal(params.has(key), false);
+      assert.equal(params.get("brand"), "ignored");
+      for (const key of ["buyBox", "salesperson"]) assert.equal(params.has(key), false);
     }
   }
 });
 
 test("brand trims arbitrary exact names and round trips UI, browse and export parameters", () => {
-  for (const brand of ["Goghost-乐器", "Archerest-weinijia", "Nvaav", "B".repeat(512), "品牌、完整", "%' OR TRUE--"]) {
-    for (const domain of ["listings", "sales", "performance"]) {
+  for (const brand of ["00123", "Goghost-乐器", "Archerest-weinijia", "Nvaav", "B".repeat(512), "品牌、完整", "%' OR TRUE--"]) {
+    for (const domain of ["listings", "sales", "performance", "ads"]) {
       const view = readSellfoxView(new URLSearchParams({ domain, brand: `  ${brand}  ` }));
       assert.equal(view.brand, brand);
       assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
@@ -154,8 +155,13 @@ test("brand trims arbitrary exact names and round trips UI, browse and export pa
     const view = readSellfoxView(new URLSearchParams({ domain: "listings", brand }));
     assert.equal(view.brand, ""); assert.equal(sellfoxViewParams(view).has("brand"), false);
   }
-  const ads = readSellfoxView(new URLSearchParams("domain=ads&brand=Nvaav"));
-  assert.equal(sellfoxViewParams(ads, true).has("brand"), false);
+  for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"]) {
+    const ads = readSellfoxView(new URLSearchParams({ domain: "ads", adsTab, brand: " 00123 " }));
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(ads)), ads);
+    const params = sellfoxViewParams(ads, true);
+    assert.equal(params.get("brand"), "00123");
+    assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${params}`), sellfoxAdsResource(ads)).brand, "00123");
+  }
 });
 
 test("sellfoxBrand trims without a length cap or whitelist", () => {

@@ -74,7 +74,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.buyBox && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l."buyBoxWinner"=${query.buyBox === "yes" ? "是" : "否"}`);
   // Test the chosen Listing, never prefilter candidates before the MSKU/ASIN LIMIT 1.
   if (needTagFilter) filters.push(Prisma.sql`l."matchesProductTag"`);
-  if (query.brand && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l.brand=${query.brand}`);
+  if (query.brand && (ads || ["sales", "performance", "listings"].includes(domain))) filters.push(Prisma.sql`l.brand=${query.brand}`);
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(dimension);
@@ -195,9 +195,9 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
       CROSS JOIN LATERAL unnest(l."productTagNames") tag("labelName")
       WHERE ${Prisma.join(facetFilters, " AND ")} ORDER BY tag."labelName")
-    ${ads ? Prisma.empty : Prisma.sql`,'brands', ARRAY(SELECT DISTINCT l.brand FROM sellfox_listing_current l
+    ,'brands', ARRAY(SELECT DISTINCT l.brand FROM sellfox_listing_current l
       JOIN "SellfoxStore" st ON st.id=l."storeId" AND ${scoped("st", scope)}
-      WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)`}
+      WHERE ${Prisma.join(facetFilters, " AND ")} AND l.brand IS NOT NULL ORDER BY 1)
     ${domain === "performance" ? Prisma.sql`,'salespersons',ARRAY(
       SELECT DISTINCT person.name FROM "SellfoxProductDailySnapshot" s
       JOIN "SellfoxStore" st ON st.id=s."storeId" AND ${scoped("st", scope)}

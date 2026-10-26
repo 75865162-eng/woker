@@ -623,7 +623,7 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
     for (const value of [null, 0, 128]) assert.equal(sellfoxColumnValue(ratingCount, { ratingCount: value }), value);
     assert.equal(visibleColumnCsv([ratingCount], [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
     for (const exporting of [false, true]) for (const sortBy of ["rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) {
-      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=desc&productTag=标签&brand=ignored&fulfillment=AFN&buyBox=yes`), domain);
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=desc&productTag=标签&brand=00123&fulfillment=AFN&buyBox=yes`), domain);
       const sql = workbenchReadSql(domain, query, scope, exporting);
       assert.match(sql.text, /l\.rating AS "listingRating",l\."ratingCount" AS "listingRatingCount",l\."productTags" AS "listingProductTags"/);
       assert.match(sql.text, /min\(NULLIF\("listingMainImage",''\)\) AS "mainImage"/);
@@ -636,9 +636,9 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
       assert.match(sql.text, /l\."buyBoxWinner" AS "listingBuyBoxWinner"/);
       assert.match(sql.text, /CASE WHEN count\("listingBuyBoxWinner"\)=count\(\*\) AND count\(DISTINCT "listingBuyBoxWinner"\)=1 THEN min\("listingBuyBoxWinner"\) END AS "buyBoxWinner"/);
       assert.ok(sql.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
-      assert.doesNotMatch(sql.text, /payload|AND l\.(?:brand|"buyBoxWinner")=/);
+      assert.doesNotMatch(sql.text, /payload|AND l\."buyBoxWinner"=/);
+      assert.match(sql.text, /AND l.brand=/); assert.ok(sql.values.includes("00123"));
       assert.match(sql.text, /AND l.fulfillment=/); assert.ok(sql.values.includes("AFN"));
-      assert.ok(!sql.values.includes("ignored"));
       assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
     }
     assert.equal(visibleColumnCsv(config, [{ rating: "4.4", productTags: "新品、重点", mainImage: "https://example.test/product.jpg" }, { rating: null, productTags: null, mainImage: null }]).trim(), '"星级","标签","图片"\r\n"4.4","新品、重点","https://example.test/product.jpg"\r\n"","",""');
@@ -1284,7 +1284,8 @@ test("productTag exact membership filters current Listing members before aggrega
         assert.match(facets, /unnest\(l\."productTagNames"\)/);
         assert.match(facets, /l\."organizationId"=\$\d+ AND l\."workspaceId"=\$\d+/);
         assert.match(facets, /st\."externalId" IN/); assert.match(facets, /l\."storeId"=/); assert.match(facets, /st.marketplace=/);
-        assert.doesNotMatch(facets, /brands|salespersons|ILIKE|matchesProductTag|tag\."labelName"=/);
+        assert.match(facets, /'brands', ARRAY\(SELECT DISTINCT l.brand/);
+        assert.doesNotMatch(facets, /salespersons|ILIKE|matchesProductTag|tag\."labelName"=/);
       }
     }
   }
@@ -1292,9 +1293,9 @@ test("productTag exact membership filters current Listing members before aggrega
 
 test("brand exact match filters selected Listing members before rollup with independent scoped facets", () => {
   const scope = { organizationId: "org-brand", workspaceId: "ws-brand" };
-  for (const domain of ["sales", "performance", "listings"] as const) {
-    for (const dimension of ["msku", "asin", "parentAsin", "sku", "store", "developer", "spu"]) {
-      for (const brand of ["Goghost-乐器", "Nvaav", "%' OR TRUE--"]) {
+  for (const domain of ["sales", "performance", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const dimension of domain.startsWith("ads_") ? ["asin"] : ["msku", "asin", "parentAsin", "sku", "store", "developer", "spu"]) {
+      for (const brand of ["00123", "Goghost-乐器", "Nvaav", "%' OR TRUE--"]) {
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ brand: ` ${brand} `, dimension, productTag: "tag", fulfillment: "AFN", buyBox: "yes", search: "needle", status: "active", site: "US", shopExternalId: "shop-brand", storeId: "store-brand" })}`));
         for (const exporting of [false, true]) {
           const sql = workbenchReadSql(domain, query, scope, exporting);
@@ -1307,7 +1308,9 @@ test("brand exact match filters selected Listing members before rollup with inde
           if (["sales", "performance"].includes(domain)) assert.doesNotMatch(sql.text, /amazonBrand/);
           assert.doesNotMatch(base.slice(base.indexOf(" WHERE ")), /amazonBrand/);
           assert.ok(!sql.values.includes(`%${brand}%`));
-          assert.match(base, /l.fulfillment=/); assert.match(base, /l\."buyBoxWinner"=/); assert.match(base, /l\."matchesProductTag"/);
+          assert.match(base, /l.fulfillment=/); assert.match(base, /l\."matchesProductTag"/);
+          if (domain.startsWith("ads_")) assert.doesNotMatch(base, /AND l\."buyBoxWinner"=/);
+          else assert.match(base, /l\."buyBoxWinner"=/);
           {
             const candidate = base.slice(base.indexOf("LEFT JOIN LATERAL"), base.indexOf("LIMIT 1) l ON TRUE"));
             assert.match(candidate, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
@@ -1335,8 +1338,6 @@ test("brand exact match filters selected Listing members before rollup with inde
       for (const exporting of [false, true]) assert.doesNotMatch(workbenchReadSql(domain, sellfoxBrowseQuery(new URL(`http://localhost/?brand=${brand}`)), scope, exporting).text, /AND l.brand=/);
     }
   }
-  const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?brand=ignored")), scope);
-  assert.doesNotMatch(ads.text, /AND l.brand=|'brands'/); assert.ok(!ads.values.includes("ignored"));
 });
 
 test("browse returns all dynamic tag and brand facets even for an empty result page without extra reads", async () => {
@@ -1345,11 +1346,11 @@ test("browse returns all dynamic tag and brand facets even for an empty result p
   const facets = { productTags: ["1年以内产品", "新标签、完整名称"], brands: ["Goghost-乐器", "Nvaav"] };
   globals.prisma = { $queryRaw: async () => { calls++; return [{ rows: [], total: 0, totals: [], facets }]; } } as unknown as PrismaClient;
   try {
-    for (const domain of ["listings", "sales", "performance"] as const) {
+    for (const domain of ["listings", "sales", "performance", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
       const result = await readSellfoxWorkbench(domain, sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-25&to=2026-10-25&productTag=不存在")), { organizationId: "org", workspaceId: "ws" });
       assert.deepEqual(result.facets, facets); assert.deepEqual(result.rows, []);
     }
-    assert.equal(calls, 3);
+    assert.equal(calls, 9);
   } finally { globals.prisma = previous; }
 });
 

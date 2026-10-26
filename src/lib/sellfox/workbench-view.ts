@@ -51,7 +51,7 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
   if (view.fulfillment && (!forRequest || ["sales", "performance", "listings", "ads"].includes(view.domain))) params.set("fulfillment", view.fulfillment);
   if (view.buyBox && (!forRequest || ["sales", "performance", "listings"].includes(view.domain))) params.set("buyBox", view.buyBox);
   if (view.productTag && (!forRequest || ["sales", "performance", "listings", "ads"].includes(view.domain))) params.set("productTag", sellfoxProductTag(view.productTag));
-  if (view.brand && (!forRequest || ["sales", "performance", "listings"].includes(view.domain))) params.set("brand", sellfoxBrand(view.brand));
+  if (view.brand && (!forRequest || ["sales", "performance", "listings", "ads"].includes(view.domain))) params.set("brand", sellfoxBrand(view.brand));
   if (view.salesperson && (!forRequest || view.domain === "performance")) params.set("salesperson", sellfoxSalesperson(view.salesperson));
   if (view.status && (!forRequest || view.domain === "listings")) params.set("status", view.status);
   if (forRequest && ["sales", "performance", "listings", "ads"].includes(view.domain)) params.set("layout", "workbench");

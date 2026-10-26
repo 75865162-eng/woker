@@ -64,19 +64,24 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     ('foreign-ws','org','foreign','s','exact','ASIN','foreign','0','foreign',999,'foreign','未知','否'),
     ('foreign-store','org','ws','f','exact','ASIN','foreign','0','foreign',999,'foreign','未知','否')`);
   await query(`INSERT INTO "SellfoxStore" VALUES ('other','org','ws','other-shop','其他店铺','CA');
-    INSERT INTO sellfox_listing_current (id,"organizationId","workspaceId","storeId",msku,asin,"productTagNames") VALUES
-      ('other-store','org','ws','other','exact','ASIN',ARRAY['其他店']);
+    INSERT INTO sellfox_listing_current (id,"organizationId","workspaceId","storeId",msku,asin,"productTagNames",brand) VALUES
+      ('other-store','org','ws','other','exact','ASIN',ARRAY['其他店'],'其他店品牌');
     UPDATE sellfox_listing_current SET "productTagNames"=CASE
       WHEN id='exact' THEN ARRAY['新品','重点','标签、完整','重点']
       WHEN id='sibling' THEN ARRAY['其他']
-      ELSE ARRAY['foreign'] END WHERE id<>'other-store'`);
+      ELSE ARRAY['foreign'] END WHERE id<>'other-store';
+    INSERT INTO sellfox_listing_current (id,"organizationId","workspaceId","storeId",msku,asin,brand) VALUES
+      ('facet-only','org','ws','s','facet-only','FACET','00123'),
+      ('facet-duplicate','org','ws','s','facet-duplicate','FACET2','00123')`);
   for (const [model, domain] of [
     ["SellfoxAdsProductDaily", "ads_report"], ["SellfoxAdsTargetingDaily", "ads_targeting"], ["SellfoxAdsSearchTermDaily", "ads_search_term"],
     ["SellfoxAdsCampaignDaily", "ads_campaign"], ["SellfoxAdsAdGroupDaily", "ads_ad_group"], ["SellfoxAdsPlacementDaily", "ads_placement"],
   ] as const) {
     const readResult = async (params = "", exporting = false, scope = { organizationId: "org", workspaceId: "ws" }, sortBy = "ratingCount") => {
-      const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL(`http://localhost/?from=2026-10-23&to=2026-10-24&quickFilter=spend&sortBy=${sortBy}&sortOrder=desc&${params}`), domain), scope, exporting);
-      return (await query(sql.text, sql.values)).rows[0] as { total: number; rows: Record<string, unknown>[]; totals: Record<string, unknown>[]; facets?: { productTags: string[] } };
+      const url = new URL(`http://localhost/?from=2026-10-23&to=2026-10-24&quickFilter=spend&sortBy=${sortBy}&sortOrder=desc`);
+      new URLSearchParams(params).forEach((value, key) => url.searchParams.set(key, value));
+      const sql = workbenchReadSql(domain, sellfoxBrowseQuery(url, domain), scope, exporting);
+      return (await query(sql.text, sql.values)).rows[0] as { total: number; rows: Record<string, unknown>[]; totals: Record<string, unknown>[]; facets?: { productTags: string[]; brands: string[] } };
     };
     const read = async (exporting = false, sortBy = "ratingCount") => {
       const result = await readResult("", exporting, undefined, sortBy);
@@ -100,19 +105,40 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
       // The same facts always remain in 全部, including NULL/unknown/unmatched members.
       assert.equal((await readResult()).totals[0].cost, 5);
     };
+    const brandCost = async (brand: string, cost: number | null, extra = "") => {
+      for (const exporting of [false, true]) {
+        const result = await readResult(`${new URLSearchParams({ brand: ` ${brand} ` })}&${extra}`, exporting);
+        assert.equal(result.total, cost === null ? 0 : 1, `${domain}/brand=${brand}/${exporting}/${extra}`);
+        assert.equal(result.rows.length, cost === null ? 0 : 1);
+        if (cost !== null) {
+          assert.equal(result.rows[0].cost, cost); assert.equal(result.totals[0].cost, cost);
+          assert.equal(result.rows[0].brand, brand);
+        } else assert.deepEqual(result.totals, []);
+        if (exporting) assert.equal(result.facets, undefined);
+      }
+      assert.equal((await readResult()).totals[0].cost, 5);
+    };
     // Missing product identity on campaign/placement stays NULL-safe.
     assert.deepEqual(fields(await read()), [null, null, null, null, null, null, null]);
     await fulfillmentCosts(null, null);
+    await brandCost("品牌", null); // No identity/Listing does not match a selected brand.
     assert.equal((await readResult("productTag=新品")).total, 0);
     await query(`UPDATE "${model}" SET msku='exact',asin='ASIN' WHERE id IN ('a','b')`);
     await fulfillmentCosts(5, null); // MSKU wins over the MFN ASIN sibling; no join fan-out.
+    await brandCost("品牌", 5);
+    await brandCost("品牌", 5, "productTag=新品&fulfillment=AFN");
+    for (const brand of ["其他品牌", "品", "品牌、其他品牌", "missing", "foreign", "其他店品牌", "%' OR TRUE--"]) await brandCost(brand, null);
+    await brandCost("品牌", null, "productTag=其他&fulfillment=AFN");
+    await brandCost("品牌", null, "productTag=新品&fulfillment=MFN");
     assert.equal((await readResult("fulfillment=AFN&productTag=新品")).rows[0].cost, 5);
     assert.equal((await readResult("fulfillment=MFN&productTag=新品")).total, 0);
     for (const scope of [{ organizationId: "foreign", workspaceId: "ws" }, { organizationId: "org", workspaceId: "foreign" }]) {
       assert.equal((await readResult("fulfillment=AFN", false, scope)).total, 0);
+      assert.equal((await readResult("brand=foreign", false, scope)).total, 0);
     }
     for (const params of ["storeId=other", "shopExternalId=other-shop", "site=CA", "storeId=f"]) {
       assert.equal((await readResult(`fulfillment=AFN&${params}`)).total, 0);
+      assert.equal((await readResult(`brand=品牌&${params}`)).total, 0);
     }
     for (const exporting of [false, true]) assert.deepEqual(fields(await read(exporting, "buyBoxWinner")), ["https://example.test/exact.jpg", "4.4", "新品、重点", 128, "品牌", "AFN", "是"]);
     for (const exporting of [false, true]) {
@@ -125,24 +151,28 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
         assert.equal((await readResult(new URLSearchParams({ productTag: tag }).toString(), exporting)).total, 0);
       }
     }
-    // Facets follow current Listing org/workspace/store/site scope, independent of tag/search/date/adType.
-    const scopedFacets = await readResult("productTag=新品&search=impossible&shopExternalId=shop&site=US&adType=sb");
+    // Facets follow current Listing org/workspace/store/site scope, independent of selections/search/date/adType.
+    const scopedFacets = await readResult("brand=missing&productTag=新品&fulfillment=MFN&search=impossible&shopExternalId=shop&site=US&adType=sb&from=2020-01-01&to=2020-01-01");
     assert.equal(scopedFacets.total, 0);
-    assert.deepEqual(Object.keys(scopedFacets.facets!), ["productTags"]);
+    assert.deepEqual(Object.keys(scopedFacets.facets!).sort(), ["brands", "productTags"]);
+    assert.deepEqual(scopedFacets.facets!.brands, ["00123", "品牌", "其他品牌"].sort());
     assert.deepEqual(scopedFacets.facets!.productTags, ["新品", "重点", "标签、完整", "其他"].sort());
-    assert.deepEqual((await readResult("storeId=other")).facets, { productTags: ["其他店"] });
-    assert.deepEqual((await readResult("site=CA")).facets, { productTags: ["其他店"] });
-    assert.deepEqual((await readResult("shopExternalId=other-shop")).facets, { productTags: ["其他店"] });
-    assert.deepEqual((await readResult("storeId=missing")).facets, { productTags: [] });
-    assert.deepEqual((await readResult("shopExternalId=foreign-shop")).facets, { productTags: [] });
+    assert.deepEqual((await readResult("storeId=other")).facets, { productTags: ["其他店"], brands: ["其他店品牌"] });
+    assert.deepEqual((await readResult("site=CA")).facets, { productTags: ["其他店"], brands: ["其他店品牌"] });
+    assert.deepEqual((await readResult("shopExternalId=other-shop")).facets, { productTags: ["其他店"], brands: ["其他店品牌"] });
+    assert.deepEqual((await readResult("storeId=missing")).facets, { productTags: [], brands: [] });
+    assert.deepEqual((await readResult("shopExternalId=foreign-shop")).facets, { productTags: [], brands: [] });
     for (const scope of [{ organizationId: "foreign", workspaceId: "ws" }, { organizationId: "org", workspaceId: "foreign" }]) {
       const isolated = await readResult("productTag=新品", false, scope);
-      assert.equal(isolated.total, 0); assert.deepEqual(isolated.facets, { productTags: [] });
+      assert.equal(isolated.total, 0); assert.deepEqual(isolated.facets, { productTags: [], brands: [] });
     }
     // ASIN fallback chooses aaa; conflicting Listing metadata must not pick an arbitrary min.
     await query(`UPDATE "${model}" SET msku='absent' WHERE id='b'`);
     assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null, null, null, null]);
     await fulfillmentCosts(2, 3); // ASIN fallback is MFN; filter members before entity/totals rollup.
+    await brandCost("品牌", 2);
+    await brandCost("其他品牌", 3);
+    await brandCost("其他品牌", 3, "productTag=其他&fulfillment=MFN");
     assert.equal((await readResult("fulfillment=MFN&productTag=其他")).rows[0].cost, 3);
     assert.equal((await readResult("fulfillment=AFN&productTag=其他")).total, 0);
     const partial = await readResult("productTag=新品");
@@ -152,14 +182,17 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     await query(`UPDATE "${model}" SET asin=NULL WHERE id='b'`);
     assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null, null, null, null]);
     await fulfillmentCosts(2, null);
+    await brandCost("品牌", 2); await brandCost("其他品牌", null);
     await query(`UPDATE "${model}" SET msku=NULL,asin=NULL WHERE id='a'`);
     assert.deepEqual(fields(await read()), [null, null, null, null, null, null, null]);
     await fulfillmentCosts(null, null);
+    await brandCost("品牌", null);
     // Identities present only in another org/workspace/store must not supply fulfillment.
     await query(`UPDATE sellfox_listing_current SET msku='isolated',asin='ISOLATED',fulfillment='AFN'
       WHERE id IN ('foreign-org','foreign-ws','foreign-store','other-store')`);
     await query(`UPDATE "${model}" SET msku='isolated',asin='ISOLATED' WHERE id IN ('a','b')`);
     await fulfillmentCosts(null, null);
+    await brandCost("foreign", null); await brandCost("其他店品牌", null);
     await query(`UPDATE sellfox_listing_current SET msku='exact',asin='ASIN',fulfillment='未知'
       WHERE id IN ('foreign-org','foreign-ws','foreign-store','other-store')`);
     assert.equal((await readResult("productTag=新品")).total, 0);
@@ -173,6 +206,7 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     const missing = await read();
     assert.deepEqual([missing.ratingCount, missing.brand, missing.fulfillment, missing.buyBoxWinner], [null, null, null, null]);
     await fulfillmentCosts(2, null);
+    await brandCost("品牌", 2); await brandCost("其他品牌", null); // NULL brand cannot join a selected subset.
     await query(`UPDATE "${model}" SET msku='exact' WHERE id='b'`);
     await query(`UPDATE sellfox_listing_current SET "ratingCount"=0 WHERE id='exact'`);
     for (const exporting of [false, true]) assert.equal((await read(exporting)).ratingCount, 0);
@@ -180,9 +214,14 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     await query(`UPDATE sellfox_listing_current SET brand='00123',fulfillment='未知',"buyBoxWinner"='否' WHERE id='exact'`);
     const text = await read(true);
     assert.deepEqual([text.brand, text.fulfillment, text.buyBoxWinner], ["00123", "未知", "否"]);
+    await brandCost("00123", 5); await brandCost("123", null);
     await query(`UPDATE sellfox_listing_current SET brand='',fulfillment='' WHERE id='exact'`);
     const empty = await read();
     assert.deepEqual([empty.brand, empty.fulfillment], ["", ""]);
+    await brandCost("00123", null); await brandCost("品牌", null);
+    await query(`UPDATE sellfox_listing_current SET brand=NULL WHERE id='exact'`);
+    await brandCost("00123", null); await brandCost("品牌", null);
+    assert.deepEqual((await readResult("storeId=s")).facets!.brands, ["00123"]); // NULL excluded; duplicate names distinct.
     for (const value of [null, "", "未知", "afn", "AFN "]) {
       await query(`UPDATE sellfox_listing_current SET fulfillment=$1 WHERE id='exact'`, [value]);
       await fulfillmentCosts(null, null); // Exact typed comparison; no coercion to AFN/MFN.
@@ -202,7 +241,7 @@ if (process.argv[1]?.endsWith("sellfox-ads-phase-b.ts")) {
     const db = new PGlite();
     try {
       await verifySellfoxAdsPhaseBSql(async (sql, values) => values?.length ? db.query(sql, values) : (await db.exec(sql)).at(-1)!);
-      console.log("PASS: ads Phase A/B and six-tab Listing metadata + exact fulfillment/productTag filters/scoped facets (disposable PGlite)");
+      console.log("PASS: ads Phase A/B and six-tab Listing metadata + exact brand/fulfillment/productTag filters/scoped facets (disposable PGlite)");
     } finally { await db.close(); }
   })().catch(error => { console.error(error); process.exitCode = 1; });
 }

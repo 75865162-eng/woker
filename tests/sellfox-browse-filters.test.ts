@@ -29,7 +29,7 @@ test("ads fulfillment selects all/AFN/MFN across six tabs and resets without unl
         nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
         assert.equal(patches.at(-1)?.fulfillment, "");
         for (const label of ["运营状态", "服务状态", "广告策略"]) assert.ok(nodes.find(node => node.props["aria-label"] === `${label}（未同步）`)?.props.disabled);
-        for (const label of ["Buy Box", "品牌", "业务员"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
+        for (const label of ["Buy Box", "业务员"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
       }
     }
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
@@ -92,14 +92,18 @@ test("product tag selects use dynamic distinct names, preserve URL selections, c
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
 
-test("brand selects use dynamic distinct names, preserve URL selections, change and reset across all three domains", () => {
+test("brand selects use dynamic distinct names, preserve URL selections, change and reset across catalog domains and all six ads tabs", () => {
   // tsx uses the classic JSX transform for the repository's jsx:preserve setting.
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
   try {
-    for (const domain of ["listings", "sales", "performance"] as const) {
+    const views: SellfoxView[] = [
+      ...(["listings", "sales", "performance"] as const).map(domain => ({ ...defaultSellfoxView, domain })),
+      ...(["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"] as const).map(adsTab => ({ ...defaultSellfoxView, domain: "ads" as const, adsTab })),
+    ];
+    for (const view of views) {
       const patches: Partial<SellfoxView>[] = [];
-      const tree = SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain, brand: "URL专属品牌" }, stores: [], brands: ["Nvaav", "Goghost-乐器", "Nvaav"], onChange: patch => patches.push(patch), onColumns: () => {} });
+      const tree = SellfoxBrowseFilters({ view: { ...view, brand: "URL专属品牌" }, stores: [], brands: ["Nvaav", "Goghost-乐器", "Nvaav"], onChange: patch => patches.push(patch), onColumns: () => {} });
       const nodes = elements(tree);
       const select = nodes.find(node => node.type === "select" && node.props["aria-label"] === "品牌")!;
       assert.ok(select); assert.ok(!select.props.disabled); assert.equal(select.props.value, "URL专属品牌");
@@ -114,18 +118,18 @@ test("brand selects use dynamic distinct names, preserve URL selections, change 
       assert.deepEqual(options.map(node => node.props.value), ["", ...["URL专属品牌", "Nvaav", "Goghost-乐器"].sort()]);
       select.props.onChange!({ target: { value: "  Goghost-乐器  " } });
       assert.deepEqual(patches.at(-1), { brand: "Goghost-乐器" });
+      select.props.onChange!({ target: { value: " 00123 " } });
+      assert.deepEqual(patches.at(-1), { brand: "00123" });
       select.props.onChange!({ target: { value: "" } });
       assert.deepEqual(patches.at(-1), { brand: "" });
       nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
       assert.equal(patches.at(-1)?.brand, "");
-      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员（未同步）"), domain === "sales");
-      const emptyNodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain }, stores: [], onChange: () => {}, onColumns: () => {} }));
+      assert.equal(nodes.some(node => node.props["aria-label"] === "业务员（未同步）"), view.domain === "sales");
+      const emptyNodes = elements(SellfoxBrowseFilters({ view, stores: [], onChange: () => {}, onColumns: () => {} }));
       const emptySelect = emptyNodes.find(node => node.type === "select" && node.props["aria-label"] === "品牌")!;
       assert.equal(emptySelect.props.value, "");
       assert.deepEqual(elements(emptySelect.props.children).filter(node => node.type === "option").map(node => [node.props.value, node.props.children]), [["", "全部"]]);
     }
-    const ads = SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "ads" }, stores: [], brands: ["不解锁"], onChange: () => {}, onColumns: () => {} });
-    assert.equal(elements(ads).some(node => node.type === "select" && node.props["aria-label"] === "品牌"), false);
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
 
@@ -157,7 +161,8 @@ test("ads tabs enable all six daily reports with distinct columns and explain de
       if (adsTab === "adGroup") assert.ok(labels.includes("显示广告组名称列"));
       if (adsTab === "placement") assert.ok(labels.includes("显示广告位列"));
       assert.ok(nodes.some(node => node.type === "select" && node.props["aria-label"] === "产品标签" && !node.props.disabled));
-      for (const label of ["Buy Box", "品牌"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
+      assert.ok(nodes.some(node => node.type === "select" && node.props["aria-label"] === "品牌" && !node.props.disabled));
+      assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === "Buy Box"), false);
       const search = nodes.find(node => node.type === "select" && node.props["aria-label"] === "搜索类型")!;
       const options = elements(search.props.children).map(node => node.props.value);
       assert.equal(options.includes("adGroupId"), adsTab !== "campaign");
