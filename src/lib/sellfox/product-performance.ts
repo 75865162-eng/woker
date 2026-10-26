@@ -85,6 +85,18 @@ export function extractPerformanceFields(row: RecordLike) {
     giftwrapChargebackAmount: sellfoxNumber(row, "giftwrapChargebackAmount"),
     costOfPointsGrantedAmount: sellfoxNumber(row, "costOfPointsGrantedAmount"),
     orderOtherPriceAmount: sellfoxNumber(row, "orderOtherPriceAmount"),
+    fbaInboundTransportationProgramFee: sellfoxNumber(row, "fbaInboundTransportationProgramFee"),
+    aglFeeAmount: sellfoxNumber(row, "aglFeeAmount"),
+    paidServicesFeeAmount: sellfoxNumber(row, "paidServicesFeeAmount"),
+    customerReturnHrrUnitFeeAmount: sellfoxNumber(row, "customerReturnHrrUnitFeeAmount"),
+    amazonUpstreamStorageTransportationFeeAmount: sellfoxNumber(row, "amazonUpstreamStorageTransportationFeeAmount"),
+    amazonUpstreamProcessingFeeAmount: sellfoxNumber(row, "amazonUpstreamProcessingFeeAmount"),
+    mfnPostageFeeAmount: sellfoxNumber(row, "mfnPostageFeeAmount"),
+    adjustmentFeeAmount: sellfoxNumber(row, "adjustmentFeeAmount"),
+    otherServiceFeeAmount: sellfoxNumber(row, "otherServiceFeeAmount"),
+    avgHeadTripPrice: sellfoxNumber(row, "avgHeadTripPrice"),
+    purchaseRefundPrice: sellfoxNumber(row, "purchaseRefundPrice"),
+    revenueAmount: sellfoxNumber(row, "revenueAmount"),
     userNameList: Array.isArray(row.userNameList) ? [...new Set(row.userNameList.filter((name): name is string => typeof name === "string").map(name => name.trim()).filter(Boolean))].sort() : [],
   };
 }

@@ -1833,3 +1833,60 @@ test("selected performance contiguous coupon/deal/vine/star/sub/return/inbound a
     keys.forEach((_, i) => assert.ok([null, ""].includes(sheet.getRow(3).getCell(i + 1).value as null | string)));
   } finally { globals.prisma = previous; }
 });
+
+test("performance next inbound/agl/paid/hrr/upstream/mfn/adjustment/other/avg/refund/liquidation costs are optional typed columns, aggregate twice and sort without payload", () => {
+  const keys = ["fbaInboundTransportationProgramFee", "aglFeeAmount", "paidServicesFeeAmount", "customerReturnHrrUnitFeeAmount", "amazonUpstreamStorageTransportationFeeAmount", "amazonUpstreamProcessingFeeAmount", "mfnPostageFeeAmount", "adjustmentFeeAmount", "otherServiceFeeAmount", "avgHeadTripPrice", "purchaseRefundPrice", "revenueAmount"];
+  const labels = ["FBA入库运输计划费", "AGL费用", "付费服务费", "HRR退货单位费", "上游仓储运输费", "上游处理费", "MFN邮资", "调整费", "其他服务费", "平均头程", "订单内退款", "清算费"];
+  const config = visibleColumns("performance", keys);
+  assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), keys.map((key, i) => [key, labels[i], true, false, undefined]));
+  assert.ok(defaultVisibleColumnKeys("performance").includes("adCost"));
+  assert.equal(visibleColumns("performance", ["adCost"])[0].labelZh, "广告花费");
+  assert.deepEqual(visibleColumns("performance", ["adTotalCost"]), []);
+  for (const c of config) {
+    assert.equal(captions[c.key], c.labelZh);
+    assert.equal(c.requiresField, `销售利润 payload.${c.key} 类型投影`);
+    assert.ok(!defaultVisibleColumnKeys("performance").includes(c.key));
+    assert.deepEqual(visibleColumns("sales", [c.key]), []);
+    assert.deepEqual(visibleColumns("listings", [c.key]), []);
+  }
+  for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"]) {
+    for (const onlySettle of [0, 1]) for (const key of keys) for (const sortOrder of ["asc", "desc"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&onlySettle=${onlySettle}&sortBy=${key}&sortOrder=${sortOrder}`), "performance");
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting);
+        for (const cost of keys) {
+          assert.ok(sql.text.includes(`s."${cost}"`));
+          assert.equal(sql.text.split(`COALESCE(sum("${cost}"),0)::float AS "${cost}"`).length - 1, 2);
+        }
+        assert.doesNotMatch(sql.text, /payload|adTotalCost/);
+        assert.ok(sql.text.includes(`s."adCost"`));
+        assert.ok(sql.text.includes(`ORDER BY "${key}" ${sortOrder.toUpperCase()} NULLS LAST, id ASC LIMIT`));
+      }
+    }
+  }
+  assert.doesNotMatch(workbenchReadSql("sales", sellfoxBrowseQuery(new URL("http://localhost/")), { organizationId: "org", workspaceId: "ws" }).text, /fbaInboundTransportationProgramFee|aglFeeAmount|paidServicesFeeAmount|customerReturnHrrUnitFeeAmount|amazonUpstreamStorageTransportationFeeAmount|amazonUpstreamProcessingFeeAmount|mfnPostageFeeAmount|adjustmentFeeAmount|otherServiceFeeAmount|avgHeadTripPrice|purchaseRefundPrice|revenueAmount/);
+});
+
+test("selected performance next inbound/agl/paid/hrr/upstream/mfn/adjustment/other/avg/refund/liquidation CSV and Excel preserve numeric zero and empty NULL", async () => {
+  const keys = ["fbaInboundTransportationProgramFee", "aglFeeAmount", "paidServicesFeeAmount", "customerReturnHrrUnitFeeAmount", "amazonUpstreamStorageTransportationFeeAmount", "amazonUpstreamProcessingFeeAmount", "mfnPostageFeeAmount", "adjustmentFeeAmount", "otherServiceFeeAmount", "avgHeadTripPrice", "purchaseRefundPrice", "revenueAmount"];
+  const labels = ["FBA入库运输计划费", "AGL费用", "付费服务费", "HRR退货单位费", "上游仓储运输费", "上游处理费", "MFN邮资", "调整费", "其他服务费", "平均头程", "订单内退款", "清算费"];
+  const values = [0, 2.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows: [Object.fromEntries(keys.map((k, i) => [k, values[i]])), Object.fromEntries(keys.map(k => [k, null]))], total: 2, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?reportDate=2026-10-25");
+  keys.forEach(key => url.searchParams.append("column", key));
+  try {
+    const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
+    const csv = await (await sellfoxWorkbenchExport("performance", query, scope, url)).text();
+    assert.equal(csv.trim(), labels.map(l => `"${l}"`).join(",") + '\r\n' + values.join(",") + '\r\n' + keys.map(() => '""').join(","));
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("performance", query, scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.deepEqual((sheet.getRow(1).values as unknown[]).slice(1), labels);
+    assert.deepEqual((sheet.getRow(2).values as unknown[]).slice(1), values);
+    keys.forEach((_, i) => assert.ok([null, ""].includes(sheet.getRow(3).getCell(i + 1).value as null | string)));
+  } finally { globals.prisma = previous; }
+});

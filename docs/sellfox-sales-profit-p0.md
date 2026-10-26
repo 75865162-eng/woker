@@ -1,5 +1,35 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+
+**状态更新（2026-10-26 23:58:23 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地，未部署）**
+
+- **验证完成**：169 项定向测试全绿；170000 / Listing / cross-store 独立 PGlite 均 PASS（专用 PG 子测未配置而 SKIP，不影响独立 verifier）；TypeScript、改动 TS ESLint、fake-URL Prisma validate/generate、git diff --check 通过。额外核对 160000 全部函数投影逐字保留、视图前缀完全一致、恰好新增 12 列及无新索引。跨店 fixture 现可用同样的 standalone PGlite 命令离线复验。
+- **本地提交受阻**：`.git/index.lock` 创建失败（Read-only file system），`chmod u+w .git .git/index` 同样被只读文件系统拒绝。未生成新 commit、未能暂存；完整改动已留在当前分支工作区供父进程提交，基线 HEAD 为 `db68622`，未 push/fetch。
+
+- 本轮 performance 解锁 12 个默认隐藏数字列：`fbaInboundTransportationProgramFee`「FBA入库运输计划费」、`aglFeeAmount`「AGL费用」、`paidServicesFeeAmount`「付费服务费」、`customerReturnHrrUnitFeeAmount`「HRR退货单位费」、`amazonUpstreamStorageTransportationFeeAmount`「上游仓储运输费」、`amazonUpstreamProcessingFeeAmount`「上游处理费」、`mfnPostageFeeAmount`「MFN邮资」、`adjustmentFeeAmount`「调整费」、`otherServiceFeeAmount`「其他服务费」、`avgHeadTripPrice`「平均头程」、`purchaseRefundPrice`「订单内退款」、`revenueAmount`「清算费」。同名 profit payload → nullable typed product-daily → 实体/币种 `COALESCE(sum(...),0)`、排序、选列 CSV/XLSX；Agent 英文长表末尾同序追加。明细 NULL 空、0 保留，hot path 不解析 payload，sales 不增加这些列。
+- `avgHeadTripPrice`「平均头程」≠ `headTripPrice`「头程」；`purchaseRefundPrice`「订单内退款」≠ `refundPrice`「退款金额」；`revenueAmount` =「清算费」，≠ `saleRevenue` / `netRevenue`，不得解释为销售额。Listing fees 不作别名或缺值补充。
+- 加法迁移 `20261026170000_sellfox_product_daily_next_fees` 接在 160000 后，保留全部旧投影及 `userNameList` / payload 写入 trigger、精确视图列序后追加 12 列；无新索引，一次 `payload=payload` 历史回填。**123 需全部前置迁移（含 160000）+ 170000，仅用户说「上」后另行评审。** 真实执行前评估全历史回填的锁、WAL、磁盘和维护窗口；回退应用代码并保留加法 schema/trigger，不自动回滚数据库。
+- `evaluationCapital` / `evaluationCommission`、*Percent、purchaseCost* 补充/channel splits、headTripPrice* FBA/FBM splits、两项 FBA refund companions 未接入；销售小组 / 业绩归属人 / 实时统计 / 运营 / 分类 / AWD / sales业务员 / 广告组合 / 否定 / AMC 仍锁定。
+- 本轮 no push / no fetch / no deploy / no SSH / no migrate-on-123 / no live DB writes / no live Sellfox API / 未启用计划。仅 fixtures/PGlite 和 fake DATABASE_URL 验证；真实费用数据及 P95 待另行验收。
+
+离线复验（预期定向测试全绿、PGlite 含 `170000` 与 `PASS`；专用 PG 未配置时子测 SKIP，独立 PGlite 必须 PASS）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,listing-identity,browse-api,browse-filters}.test.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-listings-read-model.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-cross-store.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts src/lib/sellfox/{product-performance,workbench-read,sort-columns,agent-read}.ts tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,browse-api}.test.ts tests/integration/sellfox-{sales-profit-p0,cross-store,listings-read-model}.ts
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js generate
+git diff --check
+```
+
+共享 `performance-next-fees.json` 覆盖非零/0/null/非法，验证 INSERT、160000 后历史回填、UPDATE 清空、COALESCE、币种/结算隔离、无新索引、精确列序及既有字段保留；Listing/跨店 fixtures 追加相同类型列。采用定向测试 + PGlite + TypeScript/touched lint/Prisma；完整 check/build/浏览器/真实 P95 留待明确合码、发布或真实性能验收。
+
+---
+
 **状态更新（2026-10-26 23:41:49 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地，未部署）**
 
 - 本轮 performance 解锁 12 个默认隐藏数字列：`couponPaymentAmount`「优惠券支付」、`sellerDealPaymentAmount`「Deal费用」、`vineFeeAmount`「Vine费用」、`starStorageFeeAmount`「星级仓储费」、`subscriptionAmount`「订阅费」、`fbaCustomerReturnAmount`「FBA买家退货费」、`fbaInboundConvenienceFeeAmount`「FBA入库配置费」、`inboundTransportationFeeAmount`「入库运输费」、`shippingChargebackAmount`「买家运费扣除」、`giftwrapChargebackAmount`「礼品包装费扣除」、`costOfPointsGrantedAmount`「积分费用」、`orderOtherPriceAmount`「订单其他费」。同名 profit payload → nullable typed product-daily → 实体/币种 `COALESCE(sum(...),0)`、排序、选列 CSV/XLSX；Agent 英文长表同序追加。明细 NULL 空、0 保留，hot path 不解析 payload，sales 不变。

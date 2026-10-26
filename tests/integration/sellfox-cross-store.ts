@@ -43,7 +43,8 @@ export async function verifySellfoxCrossStoreSql(query: Query) {
       ADD COLUMN "fbaStorageFeeAmount" float, ADD COLUMN "fbaLongTermStorageFeeAmount" float, ADD COLUMN "fbaRemovalFeeAmount" float, ADD COLUMN "fbaDisposalFeeAmount" float,
       ADD COLUMN "customAsinFee" float, ADD COLUMN "customShopFee" float, ADD COLUMN "serviceFeeAmount" float, ADD COLUMN "storageFeeAmount" float, ADD COLUMN "compensationAmount" float, ADD COLUMN "evaluationFee" float,
       ADD COLUMN "promotionTotalAmount" float, ADD COLUMN "fbaOverageFeeAmount" float, ADD COLUMN "chargebackAmount" float, ADD COLUMN "guaranteeClaimAmount" float, ADD COLUMN "digitalServicesFeeAmount" float, ADD COLUMN "otherPriceAmount" float, ADD COLUMN "shippingChargeAmount" float, ADD COLUMN "regulatoryFeeAmount" float,
-      ADD COLUMN "couponPaymentAmount" float, ADD COLUMN "sellerDealPaymentAmount" float, ADD COLUMN "vineFeeAmount" float, ADD COLUMN "starStorageFeeAmount" float, ADD COLUMN "subscriptionAmount" float, ADD COLUMN "fbaCustomerReturnAmount" float, ADD COLUMN "fbaInboundConvenienceFeeAmount" float, ADD COLUMN "inboundTransportationFeeAmount" float, ADD COLUMN "shippingChargebackAmount" float, ADD COLUMN "giftwrapChargebackAmount" float, ADD COLUMN "costOfPointsGrantedAmount" float, ADD COLUMN "orderOtherPriceAmount" float;
+      ADD COLUMN "couponPaymentAmount" float, ADD COLUMN "sellerDealPaymentAmount" float, ADD COLUMN "vineFeeAmount" float, ADD COLUMN "starStorageFeeAmount" float, ADD COLUMN "subscriptionAmount" float, ADD COLUMN "fbaCustomerReturnAmount" float, ADD COLUMN "fbaInboundConvenienceFeeAmount" float, ADD COLUMN "inboundTransportationFeeAmount" float, ADD COLUMN "shippingChargebackAmount" float, ADD COLUMN "giftwrapChargebackAmount" float, ADD COLUMN "costOfPointsGrantedAmount" float, ADD COLUMN "orderOtherPriceAmount" float,
+      ADD COLUMN "fbaInboundTransportationProgramFee" float, ADD COLUMN "aglFeeAmount" float, ADD COLUMN "paidServicesFeeAmount" float, ADD COLUMN "customerReturnHrrUnitFeeAmount" float, ADD COLUMN "amazonUpstreamStorageTransportationFeeAmount" float, ADD COLUMN "amazonUpstreamProcessingFeeAmount" float, ADD COLUMN "mfnPostageFeeAmount" float, ADD COLUMN "adjustmentFeeAmount" float, ADD COLUMN "otherServiceFeeAmount" float, ADD COLUMN "avgHeadTripPrice" float, ADD COLUMN "purchaseRefundPrice" float, ADD COLUMN "revenueAmount" float;
       CREATE TABLE sellfox_inventory_current ("organizationId" text,"workspaceId" text,"storeId" text,msku text,quantity float,"totalInventory" float,"capturedAt" text);
       INSERT INTO sellfox_inventory_current VALUES
         ('org','ws','s1','shared',10,12,'2026-10-26'),('org','ws','s2','shared',20,25,'2026-10-26'),
@@ -104,3 +105,18 @@ test("developer/SPU SQL merges stores, isolates currency and supplements exact m
   try { await client.connect(); await verifySellfoxCrossStoreSql((sql, values) => client.query(sql, values)); }
   finally { await client.end(); }
 });
+
+// Standalone offline verifier. Never reads DATABASE_URL or connects to a remote database.
+if (process.argv[1]?.endsWith("sellfox-cross-store.ts")) {
+  void (async () => {
+    const moduleName = process.env.SELLFOX_TEST_PGLITE_MODULE || "@electric-sql/pglite";
+    const { PGlite } = await import(moduleName) as { PGlite: new () => {
+      query: Query; exec: (sql: string) => Promise<{ rows: Record<string, unknown>[] }[]>; close: () => Promise<void>;
+    } };
+    const db = new PGlite();
+    try {
+      await verifySellfoxCrossStoreSql(async (sql, values) => values?.length ? db.query(sql, values) : (await db.exec(sql)).at(-1)!);
+      console.log("Cross-store scope/currency/grouping/pagination: PASS (disposable PGlite)");
+    } finally { await db.close(); }
+  })().catch(error => { console.error(error); process.exitCode = 1; });
+}

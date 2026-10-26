@@ -1163,6 +1163,18 @@ model SellfoxProductDailySnapshot {
   giftwrapChargebackAmount Float?
   costOfPointsGrantedAmount Float?
   orderOtherPriceAmount Float?
+  fbaInboundTransportationProgramFee Float?
+  aglFeeAmount Float?
+  paidServicesFeeAmount Float?
+  customerReturnHrrUnitFeeAmount Float?
+  amazonUpstreamStorageTransportationFeeAmount Float?
+  amazonUpstreamProcessingFeeAmount Float?
+  mfnPostageFeeAmount Float?
+  adjustmentFeeAmount Float?
+  otherServiceFeeAmount Float?
+  avgHeadTripPrice Float?
+  purchaseRefundPrice Float?
+  revenueAmount Float?
   evaluationSaleNum Float?
   channelSaleNum  Float?
   adSpCost        Float?
