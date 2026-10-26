@@ -396,7 +396,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'ratingCount',''\)::float AS "ratingCount"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."bsrRank",/);
   const config = visibleColumns("listings", ["ratingCount"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "评论数");
@@ -426,7 +426,7 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.match(sql.text, /string_agg\(DISTINCT btrim\(label\.value->>'labelName'\), '、' ORDER BY btrim\(label\.value->>'labelName'\)\)/);
   assert.doesNotMatch(sql.text, /productTagNames|product_labels|array_to_string/);
   assert.match(sql.text, /AS "productTags"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."bsrRank",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
   const config = visibleColumns("listings", ["productTags"]);
   assert.equal(config.length, 1);
@@ -449,7 +449,7 @@ test("listings expose optional text openDate from the current snapshot and prese
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'openDate',''\) AS "openDate"/);
-  assert.match(sql.text, /l\."productTags",l\."openDate",/);
+  assert.match(sql.text, /l\."productTags",l\."openDate",l\."bsrRank",/);
   const config = visibleColumns("listings", ["openDate"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "上架时间");
@@ -465,6 +465,55 @@ test("listings expose optional text openDate from the current snapshot and prese
   for (const domain of ["ads_report", "sales", "performance"] as const) {
     for (const exporting of [false, true]) assert.doesNotMatch(workbenchReadSql(domain, query, scope, exporting).text, /openDate/);
   }
+});
+
+test("listings expose optional numeric BSR from the current snapshot without losing null or zero", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  for (const exporting of [false, true]) {
+    const sql = workbenchReadSql("listings", query, scope, exporting);
+    assert.match(sql.text, /NULLIF\(p\.payload->>'bsrRank',''\)::float AS "bsrRank"/);
+    assert.match(sql.text, /l\."openDate",l\."bsrRank",/);
+  }
+  const config = visibleColumns("listings", ["bsrRank"]);
+  assert.equal(config.length, 1);
+  assert.equal(config[0].labelZh, "BSR");
+  assert.equal(config[0].unavailable, undefined);
+  assert.equal(config[0].numeric, true);
+  assert.equal(config[0].defaultVisible, false);
+  assert.equal(config[0].requiresField, "Listing 当前快照 payload.bsrRank");
+  assert.ok(!defaultVisibleColumnKeys("listings").includes("bsrRank"));
+  assert.deepEqual(visibleColumns("listings", ["ratingCount", "openDate", "bsrRank"]).map(c => c.key), ["ratingCount", "openDate", "bsrRank"]);
+  assert.equal(sellfoxColumnValue(config[0], { bsrRank: null }), null);
+  assert.equal(sellfoxColumnValue(config[0], { bsrRank: 0 }), 0);
+  assert.equal(sellfoxColumnValue(config[0], { bsrRank: 12345 }), 12345);
+  assert.equal(visibleColumnCsv(config, [{ bsrRank: null }, { bsrRank: 0 }, { bsrRank: 12345 }]).trim(), '"BSR"\r\n""\r\n0\r\n12345');
+  for (const domain of ["ads", "sales", "performance"]) assert.deepEqual(visibleColumns(domain, ["bsrRank"]), []);
+  for (const domain of ["ads_report", "sales", "performance"] as const) {
+    for (const exporting of [false, true]) assert.doesNotMatch(workbenchReadSql(domain, query, scope, exporting).text, /bsrRank/);
+  }
+});
+
+test("selected listing BSR exports null, zero and numbers in CSV and XLSX", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ bsrRank: null }, { bsrRank: 0 }, { bsrRank: 12345 }], total: 3, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?column=bsrRank&format=csv");
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    const csv = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    assert.equal((await csv.text()).trim(), '"BSR"\r\n""\r\n0\r\n12345');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.columnCount, 1);
+    assert.equal(sheet.getRow(1).getCell(1).value, "BSR");
+    assert.equal(sheet.getRow(2).getCell(1).value, null);
+    assert.equal(sheet.getRow(3).getCell(1).value, 0);
+    assert.equal(sheet.getRow(4).getCell(1).value, 12345);
+  } finally { globals.prisma = previous; }
 });
 
 test("listing openDate exports as unchanged text or an empty XLSX cell", async () => {
