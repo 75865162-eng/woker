@@ -548,3 +548,34 @@ test("unsellable min/max validate as finite numbers, round trip listings-only, r
   assert.equal(query("unsellableMin=.5").unsellableMin, 0.5);
   assert.throws(() => query("unsellableMin=10&unsellableMax=1"), /不可售上限不得小于下限/);
 });
+
+test("warehousing min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
+  for (const range of ["", "warehousingMin=0", "warehousingMax=100", "warehousingMin=1.5&warehousingMax=48", "warehousingMin=0&warehousingMax=0"]) {
+    const params = new URLSearchParams(`domain=listings&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.warehousingMin, params.has("warehousingMin") ? Number(params.get("warehousingMin")) : undefined);
+    assert.equal(parsed.warehousingMax, params.has("warehousingMax") ? Number(params.get("warehousingMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("warehousingMin"), params.get("warehousingMin"));
+      assert.equal(sellfoxViewParams(other).get("warehousingMax"), params.get("warehousingMax"));
+      assert.equal(sellfoxViewParams(other, true).has("warehousingMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("warehousingMax"), false);
+    }
+  }
+  for (const key of ["warehousingMin", "warehousingMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1e2", "NaN", "abc", "4.5.1", "--1", "Infinity"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是数字/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("warehousingMin=%201.5%20").warehousingMin, 1.5);
+  assert.equal(query("warehousingMax=0").warehousingMax, 0);
+  assert.equal(query("warehousingMin=.5").warehousingMin, 0.5);
+  assert.throws(() => query("warehousingMin=10&warehousingMax=1"), /入库中上限不得小于下限/);
+});

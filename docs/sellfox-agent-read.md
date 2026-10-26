@@ -1,3 +1,4 @@
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `warehousingMin`/`warehousingMax` 数值过滤；类型列 `s."warehousing"`；与 unsellable 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `unsellableMin`/`unsellableMax` 数值过滤；类型列 `s."unsellable"`；与 reservedQty 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `reservedQtyMin`/`reservedQtyMax` 数值过滤；类型列 `s."reservedQty"`；与 listingQuantity 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `listingQuantityMin`/`listingQuantityMax` 数值过滤；类型列 `s."listingQuantity"`（payload.quantity）；与 bsrRank/totalInventory 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
