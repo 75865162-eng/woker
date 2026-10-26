@@ -636,7 +636,8 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
       assert.match(sql.text, /l\."buyBoxWinner" AS "listingBuyBoxWinner"/);
       assert.match(sql.text, /CASE WHEN count\("listingBuyBoxWinner"\)=count\(\*\) AND count\(DISTINCT "listingBuyBoxWinner"\)=1 THEN min\("listingBuyBoxWinner"\) END AS "buyBoxWinner"/);
       assert.ok(sql.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
-      assert.doesNotMatch(sql.text, /payload|AND l\.(?:brand|fulfillment|"buyBoxWinner")=/);
+      assert.doesNotMatch(sql.text, /payload|AND l\.(?:brand|"buyBoxWinner")=/);
+      assert.match(sql.text, /AND l.fulfillment=/); assert.ok(sql.values.includes("AFN"));
       assert.ok(!sql.values.includes("ignored"));
       assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
     }
@@ -1140,9 +1141,9 @@ test("performance fee columns are numeric and available; empty browse guidance f
   assert.match(browseEmptyMessage("sales", { workerOnline: true, latestSuccessByResource: { sales: { id: "r", resource: "sales", status: "done", startedAt: "2026-10-26" } } } as never) ?? "", /调整日期范围.*补数/);
 });
 
-test("fulfillment uses scoped current Listing and filters members before sales/profit rollups and totals", () => {
+test("fulfillment uses scoped current Listing and filters members before sales/profit/ads rollups and totals", () => {
   const scope = { organizationId: "org-fulfillment", workspaceId: "ws-fulfillment" };
-  for (const domain of ["sales", "performance", "listings"] as const) {
+  for (const domain of ["sales", "performance", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
     for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
       for (const fulfillment of ["AFN", "MFN"]) {
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&fulfillment=${fulfillment}&from=2026-10-25&to=2026-10-25&onlySettle=1`));

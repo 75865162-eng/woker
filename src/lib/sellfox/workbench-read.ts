@@ -69,7 +69,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (domain === "performance" && query.salesperson) filters.push(Prisma.sql`s."userNameList" @> ARRAY[${query.salesperson}]::text[]`);
   // Current Listing metadata: filter member rows before any entity/day/KPI rollup.
   // Blank/unknown values remain in all, never in the AFN/MFN subsets.
-  if (query.fulfillment && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
+  if (query.fulfillment && (ads || ["sales", "performance", "listings"].includes(domain))) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
   // Current Listing Buy Box: blank/non-boolean values stay in all, never in yes/no subsets.
   if (query.buyBox && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l."buyBoxWinner"=${query.buyBox === "yes" ? "是" : "否"}`);
   // Test the chosen Listing, never prefilter candidates before the MSKU/ASIN LIMIT 1.

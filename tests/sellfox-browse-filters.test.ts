@@ -11,6 +11,30 @@ function elements(node: ReactNode): React.ReactElement<Props>[] {
   return [node, ...elements(node.props.children)];
 }
 
+test("ads fulfillment selects all/AFN/MFN across six tabs and resets without unlocking other filters", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"] as const) {
+      for (const fulfillment of ["", "AFN", "MFN"] as const) {
+        const patches: Partial<SellfoxView>[] = [];
+        const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "ads", adsTab, fulfillment }, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+        const select = nodes.find(node => node.type === "select" && node.props["aria-label"] === "发货方式")!;
+        assert.ok(select); assert.ok(!select.props.disabled); assert.equal(select.props.value, fulfillment);
+        assert.deepEqual(elements(select.props.children).filter(node => node.type === "option").map(node => [node.props.value, node.props.children]), [["", "全部"], ["AFN", "AFN"], ["MFN", "MFN"]]);
+        for (const value of ["AFN", "MFN", "", "afn", "未知"]) {
+          select.props.onChange!({ target: { value } });
+          assert.deepEqual(patches.at(-1), { fulfillment: value === "AFN" || value === "MFN" ? value : "" });
+        }
+        nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+        assert.equal(patches.at(-1)?.fulfillment, "");
+        for (const label of ["运营状态", "服务状态", "广告策略"]) assert.ok(nodes.find(node => node.props["aria-label"] === `${label}（未同步）`)?.props.disabled);
+        for (const label of ["Buy Box", "品牌", "业务员"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
+      }
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
+
 test("Buy Box selects yes/no or all beside fulfillment and reset clears it only in supported domains", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
@@ -133,7 +157,7 @@ test("ads tabs enable all six daily reports with distinct columns and explain de
       if (adsTab === "adGroup") assert.ok(labels.includes("显示广告组名称列"));
       if (adsTab === "placement") assert.ok(labels.includes("显示广告位列"));
       assert.ok(nodes.some(node => node.type === "select" && node.props["aria-label"] === "产品标签" && !node.props.disabled));
-      for (const label of ["Buy Box", "品牌", "发货方式"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
+      for (const label of ["Buy Box", "品牌"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
       const search = nodes.find(node => node.type === "select" && node.props["aria-label"] === "搜索类型")!;
       const options = elements(search.props.children).map(node => node.props.value);
       assert.equal(options.includes("adGroupId"), adsTab !== "campaign");

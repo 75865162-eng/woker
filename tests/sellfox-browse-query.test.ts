@@ -76,8 +76,15 @@ test("fulfillment accepts only AFN/MFN and round trips UI, API and export parame
     assert.equal(view.fulfillment, "");
     assert.equal(sellfoxViewParams(view, true).has("fulfillment"), false);
   }
-  const view = readSellfoxView(new URLSearchParams("domain=ads&fulfillment=AFN"));
-  assert.equal(sellfoxViewParams(view, true).has("fulfillment"), false);
+  for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"]) {
+    for (const fulfillment of ["", "AFN", "MFN"]) {
+      const view = readSellfoxView(new URLSearchParams({ domain: "ads", adsTab, fulfillment }));
+      assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+      const params = sellfoxViewParams(view, true);
+      assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${params}`), sellfoxAdsResource(view)).fulfillment, fulfillment);
+      assert.equal(params.has("fulfillment"), Boolean(fulfillment));
+    }
+  }
 });
 
 
@@ -127,7 +134,8 @@ test("productTag trims arbitrary exact names and round trips UI, browse and expo
       const params = sellfoxViewParams(ads, true);
       assert.equal(params.get("productTag"), tag); assert.equal(params.get("layout"), "workbench");
       assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${params}`), sellfoxAdsResource(ads)).productTag, tag);
-      for (const key of ["brand", "fulfillment", "buyBox", "salesperson"]) assert.equal(params.has(key), false);
+      assert.equal(params.get("fulfillment"), "AFN");
+      for (const key of ["brand", "buyBox", "salesperson"]) assert.equal(params.has(key), false);
     }
   }
 });

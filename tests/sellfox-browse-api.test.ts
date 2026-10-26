@@ -416,6 +416,58 @@ test("ads productTag alone reaches browse/facets and CSV/XLSX; explicit Agent ex
   }
 });
 
+test("ads fulfillment alone reaches six-tab browse and CSV/XLSX without changing Agent exports", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: { productTags: ["新品"] } }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const request = (domain: string, params: string) => new Request(`http://localhost/api/sellfox/${domain}?${params}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+    for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) {
+      const context = { params: Promise.resolve({ domain }) };
+      for (const fulfillment of ["AFN", "MFN"]) {
+        for (const layout of ["", "&layout=workbench"]) {
+          for (const tag of ["", "&productTag=新品"]) {
+            const params = `fulfillment=${fulfillment}${layout}${tag}`;
+            for (const format of ["browse", "csv", "xlsx"]) {
+              const response = format === "browse" ? await browse(request(domain, params), context) : await csv(request(domain, `${params}&format=${format}`), context);
+              assert.equal(response.status, 200);
+              const sql = calls.at(-1)!;
+              assert.match(sql.text, /LIMIT 1\) l ON TRUE WHERE [\s\S]*AND l.fulfillment=\$\d+/);
+              assert.ok(sql.values.includes(fulfillment)); assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
+              assert.doesNotMatch(sql.text, /payload|AND l\.(?:brand|"buyBoxWinner")=/);
+              if (tag) { assert.match(sql.text, /AND l\."matchesProductTag"/); assert.ok(sql.values.includes("新品")); }
+              if (format === "browse") assert.deepEqual((await response.json()).facets, { productTags: ["新品"] });
+              else { assert.doesNotMatch(sql.text, /AS facets/); assert.match(response.headers.get("Content-Type")!, format === "csv" ? /text\/csv/ : /spreadsheetml/); }
+            }
+          }
+        }
+        const start = calls.length;
+        const agent = await csv(request(domain, `fulfillment=${fulfillment}&agent=1&layout=workbench`), context);
+        assert.equal(agent.status, 200); assert.match(agent.headers.get("Content-Disposition")!, /-agent\.csv/);
+        assert.ok(calls.length > start);
+        for (const sql of calls.slice(start)) {
+          assert.doesNotMatch(sql.text, /fulfillment|sellfox_listing_current/);
+          assert.ok(!sql.values.includes(fulfillment));
+        }
+        const guarded = await csv(request(domain, `fulfillment=${fulfillment}&agent=1&sortBy=fulfillment`), context);
+        assert.equal(guarded.status, 400); assert.match((await guarded.json()).error, /workbench/);
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
 test("ads current Listing columns reach browse and selected CSV/XLSX exports with or without layout", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
@@ -468,7 +520,8 @@ test("ads current Listing columns reach browse and selected CSV/XLSX exports wit
     for (const sql of calls) {
       assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
       assert.match(sql.text, /l\."buyBoxWinner" AS "listingBuyBoxWinner"/);
-      assert.doesNotMatch(sql.text, /AND l\.(?:brand|fulfillment|"buyBoxWinner")=/);
+      assert.doesNotMatch(sql.text, /AND l\.(?:brand|"buyBoxWinner")=/);
+      assert.match(sql.text, /AND l.fulfillment=/); assert.ok(sql.values.includes("AFN"));
       assert.ok(!sql.values.includes("ignored"));
       assert.match(sql.text, /l\."productTagNames" @> ARRAY\[/); assert.ok(sql.values.includes("标签"));
       if (sql.text.includes("AS facets")) assert.doesNotMatch(sql.text.slice(sql.text.indexOf("jsonb_build_object('productTags'")), /brands|salespersons/);
