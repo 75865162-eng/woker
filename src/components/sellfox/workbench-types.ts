@@ -51,6 +51,9 @@ export const columns: Record<string, SellfoxColumn[]> = {
   ads: [column("asin", "产品信息", { parts: ["title", "asin"], requiresField: "title,asin" }), missing("enabled", "有效", true), missing("serviceStatus", "服务状态", true), missing("adStrategy", "广告策略"), ...numbers([["fulfillable", "FBA可售"], ["price", "价格"]]), missing("rating", "星级/评论"), column("campaignId", "广告活动"), column("adGroupId", "广告组"), missing("productTags", "标签"), missing("salesperson", "业务员"), ...numbers([["impressions", "曝光"], ["clicks", "点击"], ["cost", "花费"], ["adOrders", "广告订单"], ["adSales", "广告销售额"], ["acos", "ACoS"], ["roas", "ROAS"]]), column("adType", "广告类型"), column("currency", "币种"), ...[missing("image", "图片"), column("msku", "MSKU"), column("title", "标题"), column("name", "店铺"), column("marketplace", "站点")].map(c => ({ ...c, defaultVisible: false }))],
 };
 export const unavailableReason = "赛狐有、API/本地无";
+export function summableColumnKeys(config: SellfoxColumn[]) {
+  return config.filter(c => c.numeric && !c.unavailable && !["grossProfitRate", "netProfitRate", "refundRate", "acos", "roas"].includes(c.key)).map(c => c.key);
+}
 const rollupDimensions = new Set(["store", "developer", "spu"]);
 export function defaultVisibleColumnKeys(domain: string, dimension = "msku") {
   // Rollup name already supplies identity; product fields are empty or ambiguous.

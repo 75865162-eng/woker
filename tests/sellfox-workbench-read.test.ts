@@ -4,8 +4,19 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 import { readSellfoxWorkbench, workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
 import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
-import { browseEmptyMessage, captions, columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
+import { browseEmptyMessage, captions, columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv, sellfoxColumnValue, summableColumnKeys } from "@/components/sellfox/workbench-types";
 import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
+
+test("performance footer includes visible numeric fees and quantities without summing rates or unavailable columns", () => {
+  const keys = ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "fbaQuantity", "fbmQuantity"];
+  assert.deepEqual(summableColumnKeys(visibleColumns("performance", ["identity", ...keys])).sort(), [...keys].sort());
+  assert.ok(summableColumnKeys(columns.performance).includes("saleRevenue"));
+  assert.deepEqual(summableColumnKeys([
+    ...columns.performance.filter(c => ["grossProfitRate", "netProfitRate", "refundRate"].includes(c.key)),
+    ...columns.ads.filter(c => ["acos", "roas"].includes(c.key)),
+    { ...columns.performance.find(c => c.key === "refundPrice")!, unavailable: true },
+  ]), []);
+});
 
 test("workbench matrix URL round trips independent dimensions, metric, zero filter and ad filters", () => {
   const input = { ...defaultSellfoxView, domain: "sales" as const, dimension: "parentAsin" as const, metric: "revenue", hideZero: true, shops: ["s1"], from: "2026-10-01", to: "2026-10-07" };

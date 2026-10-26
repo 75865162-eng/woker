@@ -4,7 +4,7 @@ import { useState } from "react";
 import { SellfoxAwdStockHint } from "./awd-stock-hint";
 import { Button } from "@/components/ui/button";
 import type { SellfoxDomain } from "@/lib/sellfox/workbench-view";
-import { captions, columns as domainColumns, display, runProgress, visibleColumns, sellfoxColumnValue, unavailableReason, type Row, type Pagination, type SellfoxColumn } from "./workbench-types";
+import { captions, columns as domainColumns, display, runProgress, visibleColumns, sellfoxColumnValue, summableColumnKeys, unavailableReason, type Row, type Pagination, type SellfoxColumn } from "./workbench-types";
 
 function number(value: unknown) { return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null; }
 const numericKeys = new Set(domainColumns.performance.filter(column => column.numeric).map(column => column.key));
@@ -43,6 +43,7 @@ export function SellfoxResourceTable({ domain, rows, matrix = false, dates = [],
   const legacy = domain === "runs" ? ["resource", "status", "progress", "startedAt", "finishedAt", "error"] : domain === "stores" ? ["name", "externalId", "marketplace", "country", "status", "lastSyncedAt"] : ["reportDate", "capturedAt", "name", "marketplace", "asin", "msku", "sku", "fnsku", "quantity", "totalInventory", "inTransit", "inboundWorking", "inboundShipped", "inboundReceiving", "reservedTransfer", "reservedProcessing", "reservedCustomerorders", "unfulfillable", "warehouseName"];
   const config: SellfoxColumn[] = domainColumns[domain] ? visibleColumns(domain, selectedColumns, dates, dimension, matrix) : legacy.map(key => ({ key, labelZh: captions[key] ?? key, sellfoxLabel: captions[key] ?? key, requiresField: key, defaultVisible: true }));
   const totalsKeys = domain === "sales" ? ["subtotal"] : domain === "performance" ? ["grossProfit", "saleRevenue", "netRevenue", "orderNum", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost"] : domain === "ads" ? ["impressions", "clicks", "cost", "adOrders", "adSales"] : [];
+  const footerTotalsKeys = domain === "performance" ? summableColumnKeys(config) : totalsKeys;
   const groups = [...new Set((totals.length ? totals : rows).map(row => String(row.currency || "未知币种")))];
   const stickyKey = ["sales", "performance"].includes(domain) && config.some(c => c.key === "name") ? "name" : config.find(c => ["identity", "asin", "name", "resource"].includes(c.key))?.key;
   const stickyColumns = domainColumns[domain] ? config.slice(0, config.findIndex(c => c.key === stickyKey) + 1) : config.filter(c => c.key === stickyKey);
@@ -74,9 +75,9 @@ export function SellfoxResourceTable({ domain, rows, matrix = false, dates = [],
         const sum = (key: string) => total ? number(total[key]) : members.every(row => number(row[key]) !== null) ? members.reduce((n, row) => n + Number(row[key]), 0) : null;
         const ratio = (a: string, b: string) => { const numerator = sum(a), denominator = sum(b); return numerator !== null && denominator !== null && denominator > 0 ? numerator / denominator : null; };
         return <tr key={currency}>{selectable ? <td className="sticky left-0 w-9 min-w-9 border-t border-border bg-surface-muted" /> : null}{config.map((c, index) => {
-          const pageOnly = domain === "sales" && ["fulfillable", "totalInventory", "average7"].includes(c.key);
+          const pageOnly = ["sales", "performance"].includes(domain) && ["fulfillable", "totalInventory", "average7"].includes(c.key);
           const daily = total?.daily as Row | undefined;
-          const value = c.key.startsWith("day:") ? daily?.[c.key.slice(4)] : pageOnly ? members.every(row => number(row[c.key]) !== null) ? members.reduce((n,row) => n + Number(row[c.key]),0) : null : c.key === "grossProfitRate" ? ratio("grossProfit", "saleRevenue") : c.key === "netProfitRate" ? ratio("grossProfit", "netRevenue") : c.key === "acos" ? ratio("cost", "adSales") : c.key === "roas" ? ratio("adSales", "cost") : totalsKeys.includes(c.key) ? sum(c.key) : null;
+          const value = c.key.startsWith("day:") ? daily?.[c.key.slice(4)] : pageOnly ? members.every(row => number(row[c.key]) !== null) ? members.reduce((n,row) => n + Number(row[c.key]),0) : null : c.key === "grossProfitRate" ? ratio("grossProfit", "saleRevenue") : c.key === "netProfitRate" ? ratio("grossProfit", "netRevenue") : c.key === "acos" ? ratio("cost", "adSales") : c.key === "roas" ? ratio("adSales", "cost") : footerTotalsKeys.includes(c.key) ? sum(c.key) : null;
           return <td key={c.key} style={stickyOffsets.get(c.key)} title={pageOnly ? "仅本页合计；库存来自最新快照" : `${totals.length ? "筛选合计" : "本页合计"} · ${currency}`} className={`whitespace-nowrap border-t border-border bg-surface-muted px-3 py-2 font-medium ${c.numeric ? "text-right tabular-nums" : ""} ${stickyOffsets.has(c.key) ? "sticky z-10" : ""}`}>{index === 0 ? (c.key === stickyKey ? `汇总 · ${currency}` : "汇总") : c.key === stickyKey || c.key === "currency" ? currency : pageOnly ? `本页 ${formatted(value,c.key)}` : c.numeric ? formatted(value,c.key) : ""}</td>;
         })}{hasActions ? <td className={fixedActions ? "sm:sticky sm:right-0 z-10 border-l border-t border-border bg-surface-muted" : ""} /> : null}</tr>;
       })}</tfoot> : null}</table></div>
