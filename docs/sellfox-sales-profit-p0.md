@@ -1,5 +1,26 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-27 05:54:25 Asia/Shanghai — sales 默认显示 inventoryCapturedAt「库存快照时间」 · BOX LOCAL ONLY
+
+基线 HEAD `7fb64e9`（`7fb64e9cd174c0768953be58011589675f347f8c`），分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.sales.inventoryCapturedAt`「库存快照时间」移出 trailing `...[missing(awd*), column(inventoryCapturedAt), currency, marketplace, salesperson].map(c => ({ ...c, defaultVisible: false }))`，紧跟 `totalInventory`「总库存」（相对顺序不变）；沿用 `column()` 默认 `defaultVisible: true`，不新增 requiresField（保持 key 默认，与 sales totalInventory/trend 同形；**不**抄 listings 的 `sellfox_inventory_current.capturedAt` 文案）。AWD stubs / currency / marketplace / salesperson 仍留在 `.map(... defaultVisible: false)`。
+
+口径不变：值仍来自既有 `sellfox_inventory_current` 页内补充（`max(capturedAt)` per storeId+msku），是**最新完整库存快照时间**，不是销售日历史库存时间。显式会话 `columnSelection`（含空集合、手动隐藏）原样生效，不迁移已保存选列。performance / listings / ads 默认配置与基线逐字节一致（listings `inventoryCapturedAt` 已 default-true，本轮不改）。**Fee-mining remains paused**。
+
+复验命令（Prisma stub，不连接真实数据库；跳过完整 check/build）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'sales matrix filters'
+```
+
+仅 BOX 本地；仓库外 parity-gap 由父进程更新。无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL 或真实数据库写入，未加载/修改 `.env`。回滚为将 inventoryCapturedAt 放回原默认隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+---
+
+
 ## 2026-10-27 — performance 默认显示 refund/qty numbers-map 五列 · BOX LOCAL ONLY
 
 基线 HEAD `c37b899`（`c37b899bc2071d239b8dbf8c2397b656949e9277`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下五个既有 numeric 列移出 performance trailing `...[asin/title/marketplace, ...numbers([...])].map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `promotionTaxAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`；identity `asin`/`title`/`marketplace` 仍留在 `.map(... defaultVisible: false)` 中：

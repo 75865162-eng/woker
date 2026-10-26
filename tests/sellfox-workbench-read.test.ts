@@ -237,7 +237,7 @@ test("visible-column export matches ordered matrix headers, leaves unsupported v
 });
 
 test("rollup defaults omit duplicate names and product clutter while preserving core metrics and picker overrides", () => {
-  const sales = ["image", "identity", "analysis", "brand", "productTags", "price", "fulfillable", "subtotal", "trend", "average7", "totalInventory"];
+  const sales = ["image", "identity", "analysis", "brand", "productTags", "price", "fulfillable", "subtotal", "trend", "average7", "totalInventory", "inventoryCapturedAt"];
   const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount", "fbaOverageFeeAmount", "customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee", "promotionTotalAmount", "chargebackAmount", "guaranteeClaimAmount", "digitalServicesFeeAmount", "otherPriceAmount", "shippingChargeAmount", "regulatoryFeeAmount", "couponPaymentAmount", "sellerDealPaymentAmount", "vineFeeAmount", "starStorageFeeAmount", "subscriptionAmount", "fbaCustomerReturnAmount", "fbaInboundConvenienceFeeAmount", "inboundTransportationFeeAmount", "shippingChargebackAmount", "giftwrapChargebackAmount", "costOfPointsGrantedAmount", "orderOtherPriceAmount", "fbaInboundTransportationProgramFee", "aglFeeAmount", "paidServicesFeeAmount", "customerReturnHrrUnitFeeAmount", "amazonUpstreamStorageTransportationFeeAmount", "amazonUpstreamProcessingFeeAmount", "mfnPostageFeeAmount", "adjustmentFeeAmount", "otherServiceFeeAmount", "avgHeadTripPrice", "purchaseRefundPrice", "revenueAmount", "fbaPerUnitFulfillmentFeeRefundAmount", "fbaWeightBasedFeeRefundAmount", "deferredAmount", "withheldTaxAmount", "otherPriceIncomeAmount", "paymentMethodFeeAmount", "fixedClosingFeeAmount", "variableClosingFeeAmount", "imagingServicesFeeAmount", "netCoAmount", "comminglingVatAmount", "codFeeAmount", "evaluationCapital", "evaluationCommission", "dealPerformanceFeeAmount", "couponParticipationFeeAmount", "safetReimbursedAmount", "affordabilityExpenseAmount", "withheldFeeAmount", "chargebackIncomeAmount", "guaranteeClaimIncomeAmount", "promotionSalesAmount", "promotionShippingAmount", "promotionTaxAmount", "refundRate", "refundPrice", "refundNum", "fbaQuantity", "fbmQuantity", "currency", "salesperson"];
   for (const dimension of ["store", "developer", "spu"]) {
     for (const [domain, expected] of [["sales", sales], ["performance", performance]] as const) {
@@ -258,7 +258,7 @@ test("rollup defaults omit duplicate names and product clutter while preserving 
 });
 
 test("sales product defaults omit unavailable operations columns while other defaults stay unchanged", () => {
-  const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "brand", "productTags", "price", "fulfillable", "subtotal", "trend", "average7", "totalInventory"];
+  const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "brand", "productTags", "price", "fulfillable", "subtotal", "trend", "average7", "totalInventory", "inventoryCapturedAt"];
   const performance = ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount", "fbaOverageFeeAmount", "customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee", "promotionTotalAmount", "chargebackAmount", "guaranteeClaimAmount", "digitalServicesFeeAmount", "otherPriceAmount", "shippingChargeAmount", "regulatoryFeeAmount", "couponPaymentAmount", "sellerDealPaymentAmount", "vineFeeAmount", "starStorageFeeAmount", "subscriptionAmount", "fbaCustomerReturnAmount", "fbaInboundConvenienceFeeAmount", "inboundTransportationFeeAmount", "shippingChargebackAmount", "giftwrapChargebackAmount", "costOfPointsGrantedAmount", "orderOtherPriceAmount", "fbaInboundTransportationProgramFee", "aglFeeAmount", "paidServicesFeeAmount", "customerReturnHrrUnitFeeAmount", "amazonUpstreamStorageTransportationFeeAmount", "amazonUpstreamProcessingFeeAmount", "mfnPostageFeeAmount", "adjustmentFeeAmount", "otherServiceFeeAmount", "avgHeadTripPrice", "purchaseRefundPrice", "revenueAmount", "fbaPerUnitFulfillmentFeeRefundAmount", "fbaWeightBasedFeeRefundAmount", "deferredAmount", "withheldTaxAmount", "otherPriceIncomeAmount", "paymentMethodFeeAmount", "fixedClosingFeeAmount", "variableClosingFeeAmount", "imagingServicesFeeAmount", "netCoAmount", "comminglingVatAmount", "codFeeAmount", "evaluationCapital", "evaluationCommission", "dealPerformanceFeeAmount", "couponParticipationFeeAmount", "safetReimbursedAmount", "affordabilityExpenseAmount", "withheldFeeAmount", "chargebackIncomeAmount", "guaranteeClaimIncomeAmount", "promotionSalesAmount", "promotionShippingAmount", "promotionTaxAmount", "refundRate", "refundPrice", "refundNum", "fbaQuantity", "fbmQuantity", "currency", "salesperson"];
   for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
     assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
@@ -334,7 +334,7 @@ test("typed exact search binds literal input, rejects absent fields and keeps qu
 test("reference columns combine only visible identity fields and export identical cell values", () => {
   assert.equal(readSellfoxView(new URLSearchParams("domain=sales")).dimension, "asin");
   const sales = visibleColumns("sales",undefined,["2026-10-24"],"asin");
-  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","parentAsin","msku","sku","title","brand","productTags","price","fulfillable","subtotal","trend","average7","totalInventory"]);
+  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","parentAsin","msku","sku","title","brand","productTags","price","fulfillable","subtotal","trend","average7","totalInventory","inventoryCapturedAt"]);
   const store = sales.find(c=>c.key === "name")!;
   assert.equal(sellfoxColumnValue(store,{name:"店铺",marketplace:"US"}),"店铺\nUS");
   const profit = visibleColumns("performance",undefined,[],"msku").find(c=>c.key === "identity")!;
@@ -402,7 +402,7 @@ test("listings default-show totalInventory and inventoryCapturedAt immediately a
   assert.deepEqual(sales.map(c => c.key), ["fulfillable", "totalInventory", "inventoryCapturedAt"]);
   assert.equal(sales[1].numeric, true);
   assert.equal(sales[1].defaultVisible, true);
-  assert.equal(sales[2].defaultVisible, false);
+  assert.equal(sales[2].defaultVisible, true);
   assert.ok(sales.slice(1).every(c => !c.unavailable));
   for (const domain of ["ads", "performance"]) assert.deepEqual(visibleColumns(domain, ["totalInventory", "inventoryCapturedAt"]), []);
 });
@@ -1671,9 +1671,9 @@ test("sales catalog columns are default-visible current metadata and require una
   assert.deepEqual(visibleColumns("performance", ["brand", "productTags"]), []);
   for (const dimension of ["msku", "asin", "parentAsin", "sku", "store", "developer", "spu"]) {
     const defaults = defaultVisibleColumnKeys("sales", dimension);
-    for (const key of ["inventoryCapturedAt", "currency", "marketplace", "salesperson", "awdAvailable", "awdInbound", "operations", "salesInsight"]) assert.ok(!defaults.includes(key));
+    for (const key of ["currency", "marketplace", "salesperson", "awdAvailable", "awdInbound", "operations", "salesInsight"]) assert.ok(!defaults.includes(key));
     for (const key of ["salesperson", "awdAvailable", "awdInbound", "operations", "salesInsight"]) assert.equal(columns.sales.find(c => c.key === key)!.unavailable, true);
-    for (const key of ["trend", "average7", "totalInventory", "brand", "productTags", "price"]) assert.ok(defaults.includes(key));
+    for (const key of ["trend", "average7", "totalInventory", "inventoryCapturedAt", "brand", "productTags", "price"]) assert.ok(defaults.includes(key));
     for (const key of ["brand", "productTags", "price"]) {
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&sortBy=${key}&sortOrder=desc`), "sales");
       for (const exporting of [false, true]) {
@@ -1719,20 +1719,21 @@ test("sales default and selected catalog columns export identical CSV and numeri
   } finally { globals.prisma = previous; }
 });
 
-test("sales trend, average and totalInventory are default-visible in order while explicit selections stay unchanged", () => {
-  assert.deepEqual(visibleColumns("sales", ["trend", "average7", "totalInventory"]).map(c => [c.key, c.labelZh, c.sellfoxLabel, c.defaultVisible, c.unavailable]), [
+test("sales trend, average, totalInventory and inventoryCapturedAt are default-visible in order while explicit selections stay unchanged", () => {
+  assert.deepEqual(visibleColumns("sales", ["trend", "average7", "totalInventory", "inventoryCapturedAt"]).map(c => [c.key, c.labelZh, c.sellfoxLabel, c.defaultVisible, c.unavailable]), [
     ["trend", "销量趋势", "销量趋势", true, undefined],
     ["average7", "均值", "均值", true, undefined],
     ["totalInventory", "总库存", "总库存", true, undefined],
+    ["inventoryCapturedAt", "库存快照时间", "库存快照时间", true, undefined],
   ]);
   assert.equal(columns.sales.find(c => c.key === "average7")!.numeric, true);
   assert.equal(columns.sales.find(c => c.key === "totalInventory")!.numeric, true);
-  assert.equal(columns.sales.find(c => c.key === "inventoryCapturedAt")!.defaultVisible, false);
+  assert.equal(columns.sales.find(c => c.key === "inventoryCapturedAt")!.defaultVisible, true);
   for (const key of ["awdAvailable", "awdInbound"]) assert.equal(columns.sales.find(c => c.key === key)!.unavailable, true);
   for (const dimension of ["asin", "msku", "sku", "parentAsin", "store", "developer", "spu"]) {
     const defaults = defaultVisibleColumnKeys("sales", dimension);
-    assert.deepEqual(defaults.slice(defaults.indexOf("subtotal")), ["subtotal", "trend", "average7", "totalInventory"]);
-    for (const selected of [[], ["trend"], ["average7"], ["totalInventory"], defaults.filter(key => key !== "totalInventory")]) {
+    assert.deepEqual(defaults.slice(defaults.indexOf("subtotal")), ["subtotal", "trend", "average7", "totalInventory", "inventoryCapturedAt"]);
+    for (const selected of [[], ["trend"], ["average7"], ["totalInventory"], ["inventoryCapturedAt"], defaults.filter(key => key !== "inventoryCapturedAt")]) {
       const original = [...selected];
       assert.deepEqual(visibleColumns("sales", selected, [], dimension).map(c => c.key), original);
       assert.deepEqual(selected, original);
@@ -1740,7 +1741,7 @@ test("sales trend, average and totalInventory are default-visible in order while
   }
 });
 
-test("sales default CSV/XLSX exports trend, average and totalInventory in every dimension and honors explicit columns", async () => {
+test("sales default CSV/XLSX exports trend, average, totalInventory and inventoryCapturedAt in every dimension and honors explicit columns", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const quantities = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`2026-10-${20 + i}`, i]));
   const stocks = [
@@ -1759,7 +1760,7 @@ test("sales default CSV/XLSX exports trend, average and totalInventory in every 
   try {
     const { default: ExcelJS } = await import("exceljs");
     for (const dimension of ["asin", "msku", "sku", "parentAsin", "store", "developer", "spu"]) {
-      for (const selected of [undefined, ["trend"], ["average7"], ["totalInventory"], ["trend", "average7", "totalInventory"]]) {
+      for (const selected of [undefined, ["trend"], ["average7"], ["totalInventory"], ["inventoryCapturedAt"], ["trend", "average7", "totalInventory", "inventoryCapturedAt"]]) {
         const url = new URL(`http://localhost/?dimension=${dimension}&from=2026-10-20&to=2026-10-26&metric=orders`);
         if (selected) for (const key of selected) url.searchParams.append("column", key);
         const query = sellfoxBrowseQuery(url, "sales"), scope = { organizationId: "org", workspaceId: "ws" };
@@ -1767,24 +1768,25 @@ test("sales default CSV/XLSX exports trend, average and totalInventory in every 
         const hasAverage = !selected || selected.includes("average7");
         const hasTrend = !selected || selected.includes("trend");
         const hasInventory = !selected || selected.includes("totalInventory");
-        const labels = [...(hasTrend ? ["销量趋势"] : []), ...(hasAverage ? ["均值"] : []), ...(hasInventory ? ["总库存"] : [])];
+        const hasCapturedAt = !selected || selected.includes("inventoryCapturedAt");
+        const labels = [...(hasTrend ? ["销量趋势"] : []), ...(hasAverage ? ["均值"] : []), ...(hasInventory ? ["总库存"] : []), ...(hasCapturedAt ? ["库存快照时间"] : [])];
         const suffix = labels.map(label => `"${label}"`).join(",");
         assert.ok(csv[0].endsWith(suffix));
         if (selected) assert.equal(csv[0], suffix);
-        assert.ok(!csv[0].includes('"库存快照时间"'));
+        assert.equal(csv[0].includes('"库存快照时间"'), hasCapturedAt);
         const indices = labels.map(label => csv[0].split(",").indexOf(`"${label}"`));
-        assert.deepEqual(indices.map(i => csv[1].split(",")[i]), [...(hasTrend ? ['"0 | 1 | 2 | 3 | 4 | 5 | 6"'] : []), ...(hasAverage ? ["3"] : []), ...(hasInventory ? ["180"] : [])]);
-        // row2 missing day → trend/average blank; inventory 0 kept
-        assert.deepEqual(indices.map(i => csv[2].split(",")[i]), [...(hasTrend ? ['""'] : []), ...(hasAverage ? ['""'] : []), ...(hasInventory ? ["0"] : [])]);
-        assert.deepEqual(indices.map(i => csv[3].split(",")[i]), [...(hasTrend ? ['"0 | 0 | 0 | 0 | 0 | 0 | 0"'] : []), ...(hasAverage ? ["0"] : []), ...(hasInventory ? ['""'] : [])]);
+        assert.deepEqual(indices.map(i => csv[1].split(",")[i]), [...(hasTrend ? ['"0 | 1 | 2 | 3 | 4 | 5 | 6"'] : []), ...(hasAverage ? ["3"] : []), ...(hasInventory ? ["180"] : []), ...(hasCapturedAt ? ['"2026-10-26T00:00:00.000Z"'] : [])]);
+        // row2 missing day → trend/average blank; inventory 0 kept; capturedAt kept
+        assert.deepEqual(indices.map(i => csv[2].split(",")[i]), [...(hasTrend ? ['""'] : []), ...(hasAverage ? ['""'] : []), ...(hasInventory ? ["0"] : []), ...(hasCapturedAt ? ['"2026-10-26T00:00:00.000Z"'] : [])]);
+        assert.deepEqual(indices.map(i => csv[3].split(",")[i]), [...(hasTrend ? ['"0 | 0 | 0 | 0 | 0 | 0 | 0"'] : []), ...(hasAverage ? ["0"] : []), ...(hasInventory ? ['""'] : []), ...(hasCapturedAt ? ['""'] : [])]);
         url.searchParams.set("format", "xlsx");
         const book = new ExcelJS.Workbook();
         await book.xlsx.load(await (await sellfoxWorkbenchExport("sales", query, scope, url)).arrayBuffer());
         const sheet = book.worksheets[0];
         assert.deepEqual(indices.map(i => sheet.getRow(1).getCell(i + 1).value), labels);
-        assert.deepEqual(indices.map(i => sheet.getRow(2).getCell(i + 1).value), [...(hasTrend ? ["0 | 1 | 2 | 3 | 4 | 5 | 6"] : []), ...(hasAverage ? [3] : []), ...(hasInventory ? [180] : [])]);
-        assert.deepEqual(indices.map(i => sheet.getRow(3).getCell(i + 1).value), [...(hasTrend ? [null] : []), ...(hasAverage ? [null] : []), ...(hasInventory ? [0] : [])]);
-        assert.deepEqual(indices.map(i => sheet.getRow(4).getCell(i + 1).value), [...(hasTrend ? ["0 | 0 | 0 | 0 | 0 | 0 | 0"] : []), ...(hasAverage ? [0] : []), ...(hasInventory ? [null] : [])]);
+        assert.deepEqual(indices.map(i => sheet.getRow(2).getCell(i + 1).value), [...(hasTrend ? ["0 | 1 | 2 | 3 | 4 | 5 | 6"] : []), ...(hasAverage ? [3] : []), ...(hasInventory ? [180] : []), ...(hasCapturedAt ? ["2026-10-26T00:00:00.000Z"] : [])]);
+        assert.deepEqual(indices.map(i => sheet.getRow(3).getCell(i + 1).value), [...(hasTrend ? [null] : []), ...(hasAverage ? [null] : []), ...(hasInventory ? [0] : []), ...(hasCapturedAt ? ["2026-10-26T00:00:00.000Z"] : [])]);
+        assert.deepEqual(indices.map(i => sheet.getRow(4).getCell(i + 1).value), [...(hasTrend ? ["0 | 0 | 0 | 0 | 0 | 0 | 0"] : []), ...(hasAverage ? [0] : []), ...(hasInventory ? [null] : []), ...(hasCapturedAt ? [null] : [])]);
         if (selected) assert.equal(sheet.columnCount, selected.length);
       }
     }

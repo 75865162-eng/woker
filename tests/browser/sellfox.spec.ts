@@ -184,10 +184,12 @@ test("sales matrix filters debounce, serialize dimensions and preserve visible e
   const { calls } = await setup(page);
   await expect(page.getByRole("columnheader", { name: "均值", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "总库存", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "库存快照时间", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "均值", exact: true }).getByRole("button")).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: "总库存", exact: true }).getByRole("button")).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "库存快照时间", exact: true }).getByRole("button")).toHaveCount(0);
   const defaultExport = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
-  expect(new URL(defaultExport!, "http://localhost").searchParams.getAll("column").slice(-3)).toEqual(["trend", "average7", "totalInventory"]);
+  expect(new URL(defaultExport!, "http://localhost").searchParams.getAll("column").slice(-4)).toEqual(["trend", "average7", "totalInventory", "inventoryCapturedAt"]);
   await page.getByRole("button", {name:"日矩阵（高级）", exact:true}).click();
   await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "父ASIN", exact: true }).click();
