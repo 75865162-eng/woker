@@ -1,3 +1,9 @@
+## 2026-10-27 — listings revenue14 numeric min/max · BOX LOCAL ONLY · FILTER PIVOT
+
+基线 HEAD `2946a30`，分支 `codex/operations-p0-catalog-replenishment`。交付 listings **revenue14**「14天销售额」含首尾数值筛选参数 `revenue14Min`/`revenue14Max`（有限数字；0 合法；上下限倒置拒「14天销售额上限不得小于下限」）。对类型列 `sellfox_listing_current."revenue14"`（Float?；窗口指标；workbench-types「14天销售额」）做 >= / <=；设置任意一端时排除 NULL。与 revenue7 同形双端浮点，不默认、不跨域。列表/计数/汇总/CSV/XLSX 与 Agent 窄表同口径。UI listings-only 双数字输入（step=any；7天销售额后 / Listing库存前）；重置清空；forRequest 仅 listings。单独出现亦进 workbench。
+
+不改 `defaultVisible`、schema/migration；配对 / fee 保持锁定，**Fee-mining remains paused**。无 live Sellfox / 真实库写入，不 push/deploy/SSH。回滚仅还原参数、UI 与测试。
+
 ## 2026-10-27 — listings revenue7 numeric min/max · BOX LOCAL ONLY · FILTER PIVOT
 
 基线 HEAD `6428caa`，分支 `codex/operations-p0-catalog-replenishment`。交付 listings **revenue7**「7天销售额」含首尾数值筛选参数 `revenue7Min`/`revenue7Max`（有限数字；0 合法；上下限倒置拒「7天销售额上限不得小于下限」）。对类型列 `sellfox_listing_current."revenue7"`（Float?；窗口指标；workbench-types「7天销售额」）做 >= / <=；设置任意一端时排除 NULL。与 price / listingQuantity 同形双端浮点，不默认、不跨域。列表/计数/汇总/CSV/XLSX 与 Agent 窄表同口径。UI listings-only 双数字输入（step=any；30天销量后 / Listing库存前）；重置清空；forRequest 仅 listings。单独出现亦进 workbench。

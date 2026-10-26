@@ -1,3 +1,4 @@
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `revenue14Min`/`revenue14Max` 数值过滤；类型列 `s."revenue14"`（Float? 窗口）；与 revenue7 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `revenue7Min`/`revenue7Max` 数值过滤；类型列 `s."revenue7"`（Float? 窗口）；与 price 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `sales30Min`/`sales30Max` 整数过滤；类型列 `s."sales30"`（Int? 窗口）；与 sales7/14 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `sales14Min`/`sales14Max` 整数过滤；类型列 `s."sales14"`（Int? 窗口）；与 sales7 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
