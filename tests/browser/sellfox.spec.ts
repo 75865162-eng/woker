@@ -740,12 +740,12 @@ test("ads log navigation opens existing sync runs without submitting a sync", as
   await expect(page).toHaveURL(/page=2/);
 });
 
-test("listings default brand, amazonBrand, rating, ratingCount, openDate, Buy Box, totalInventory and fulfillment remain checked until explicitly hidden in the session", async ({ page }) => {
+test("listings default brand, amazonBrand, rating, ratingCount, productTags, openDate, Buy Box, totalInventory and fulfillment remain checked until explicitly hidden in the session", async ({ page }) => {
   await setup(page, "domain=listings");
-  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "上架时间", "Buy Box", "总库存"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
+  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "Buy Box", "总库存"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
   for (const name of ["CSV", "Excel"]) await expect(page.getByRole("link", { name, exact: true })).not.toHaveAttribute("href", /column=/);
   await page.getByText("自定义列", { exact: true }).click();
-  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "上架时间", "Buy Box", "总库存"]) {
+  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "Buy Box", "总库存"]) {
     const checkbox = page.getByRole("checkbox", { name: `显示${label}列`, exact: true });
     await expect(checkbox).toBeChecked();
     await checkbox.uncheck();
@@ -757,6 +757,7 @@ test("listings default brand, amazonBrand, rating, ratingCount, openDate, Buy Bo
     expect(selected).toContain("title");
     expect(selected).not.toContain("brand");
     expect(selected).not.toContain("amazonBrand");
+    expect(selected).not.toContain("productTags");
     expect(selected).not.toContain("rating");
     expect(selected).not.toContain("ratingCount");
     expect(selected).not.toContain("buyBoxWinner");
@@ -767,11 +768,12 @@ test("listings default brand, amazonBrand, rating, ratingCount, openDate, Buy Bo
   const tabs = page.getByRole("navigation", { name: "赛狐数据域" });
   await tabs.getByRole("button", { name: "销量", exact: true }).click();
   await tabs.getByRole("button", { name: "在线商品", exact: true }).click();
-  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "上架时间", "Buy Box", "总库存"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+  for (const label of ["发货方式", "品牌", "亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "Buy Box", "总库存"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
   for (const name of ["CSV", "Excel"]) {
     const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
     const selected = new URL(href!, "http://127.0.0.1:43221").searchParams.getAll("column");
     expect(selected).not.toContain("amazonBrand");
+    expect(selected).not.toContain("productTags");
     expect(selected).not.toContain("openDate");
     expect(selected).not.toContain("totalInventory");
     expect(selected).not.toContain("fulfillment");
@@ -781,6 +783,7 @@ test("listings default brand, amazonBrand, rating, ratingCount, openDate, Buy Bo
   await expect(page.getByRole("checkbox", { name: "显示上架时间列", exact: true })).not.toBeChecked();
   await expect(page.getByRole("checkbox", { name: "显示总库存列", exact: true })).not.toBeChecked();
   await expect(page.getByRole("checkbox", { name: "显示发货方式列", exact: true })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "显示产品标签列", exact: true })).not.toBeChecked();
 });
 
 test("listing DXM publish state is optional and does not imply pairing or strikethrough price type", async ({ page }) => {
