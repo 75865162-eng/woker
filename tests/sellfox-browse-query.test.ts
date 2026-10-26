@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { sellfoxBrowseQuery, sellfoxBrand, sellfoxBuyBox, sellfoxSnapshotWhere, sellfoxRunWhere, sellfoxHourlyWhere } from "@/lib/sellfox/browse-query";
-import { readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
+import { readSellfoxView, sellfoxViewParams, sellfoxSortPatch } from "@/lib/sellfox/workbench-view";
 import { sellfoxPayloadPreview } from "@/lib/sellfox/payload-preview";
 
 const query = (params: string) => sellfoxBrowseQuery(new URL(`http://localhost/?${params}`));
@@ -146,4 +146,34 @@ test("sellfoxBrand trims without a length cap or whitelist", () => {
   for (const value of [null, undefined, "", " ", "\t\n"]) assert.equal(sellfoxBrand(value), "");
   assert.equal(sellfoxBrand("  Goghost-乐器  "), "Goghost-乐器");
   assert.equal(sellfoxBrand("B".repeat(512)).length, 512);
+});
+
+test("sort parameters round trip URL, browse and export requests without losing filters", () => {
+  const view = readSellfoxView(new URLSearchParams("domain=sales&sortBy=subtotal&sortOrder=desc&page=3&site=US&shopExternalId=a&search=SKU&metric=orders"));
+  assert.equal(view.sortBy, "subtotal"); assert.equal(view.sortOrder, "desc");
+  assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+  const request = sellfoxBrowseQuery(new URL(`http://localhost/?${sellfoxViewParams(view, true)}`), "sales");
+  assert.equal(request.sortBy, "subtotal"); assert.equal(request.sortOrder, "desc");
+  assert.equal(request.page, 3); assert.equal(request.site, "US"); assert.equal(request.search, "SKU");
+  assert.deepEqual(request.shopExternalIds, ["a"]); assert.equal(request.metric, "orders");
+});
+
+test("sort rejects unknown, cross-domain, prototype and injection keys and invalid directions", () => {
+  for (const params of ["sortBy=payload", "sortBy=__proto__", "sortBy=constructor", "sortBy=image", "sortBy=day:2026-10-24", "sortBy=cost;DROP TABLE", "sortBy=cost&sortOrder=DESC", "sortBy=", "sortOrder=desc"]) assert.throws(() => query(params));
+  assert.throws(() => sellfoxBrowseQuery(new URL("http://localhost/?sortBy=cost"), "stores"));
+  assert.throws(() => sellfoxBrowseQuery(new URL("http://localhost/?sortBy=adGroupId"), "ads_campaign"));
+  assert.equal(sellfoxBrowseQuery(new URL("http://localhost/?sortBy=cost"), "ads_report").sortOrder, "asc");
+  assert.equal(query("").sortBy, "");
+  assert.equal(readSellfoxView(new URLSearchParams("domain=stores&sortBy=cost")).sortBy, "");
+});
+
+
+test("header sort toggles asc/desc, resets pagination and starts new columns ascending", () => {
+  const view = readSellfoxView(new URLSearchParams("domain=sales&page=4&site=US"));
+  const asc = { ...view, ...sellfoxSortPatch(view, "subtotal") };
+  assert.equal(asc.page, 1); assert.equal(asc.sortOrder, "asc"); assert.equal(asc.site, "US");
+  const desc = { ...asc, ...sellfoxSortPatch(asc, "subtotal") };
+  assert.equal(desc.sortOrder, "desc");
+  assert.equal(sellfoxSortPatch(desc, "subtotal").sortOrder, "asc");
+  assert.equal(sellfoxSortPatch(desc, "identity").sortOrder, "asc");
 });

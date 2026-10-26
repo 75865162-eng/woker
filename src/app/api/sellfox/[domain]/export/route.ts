@@ -1,3 +1,4 @@
+import { sellfoxPrismaOrder } from "@/lib/sellfox/browse-sort";
 import { resolveEffectiveReportDate } from "@/lib/sellfox/browse-report-date";
 import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
 import type { WorkbenchDomain } from "@/lib/sellfox/workbench-read";
@@ -27,9 +28,9 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
   try {
     const scope = workspaceScopeFromRequest(request); const url = new URL(request.url);
     const common = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
-    let query = sellfoxBrowseQuery(url);
+    let query = sellfoxBrowseQuery(url, domain);
     const storeIds = domain === "runs" ? undefined : await sellfoxBrowseStoreIds(query, common.organizationId, common.workspaceId);
-    if ((query.layout || ((query.fulfillment || query.buyBox || query.productTag || query.brand) && ["sales", "performance", "listings"].includes(domain))) && url.searchParams.get("agent") !== "1" && ["sales", "performance", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain)) return await sellfoxWorkbenchExport(domain as WorkbenchDomain, query, common, url);
+    if ((query.layout || query.sortBy || ((query.fulfillment || query.buyBox || query.productTag || query.brand) && ["sales", "performance", "listings"].includes(domain))) && url.searchParams.get("agent") !== "1" && ["sales", "performance", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain)) return await sellfoxWorkbenchExport(domain as WorkbenchDomain, query, common, url);
     if (isSellfoxAgentDomain(domain) && (url.searchParams.get("agent") === "1" || domain === "listings" || ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain) || (domain === "inventory" && !query.from && !query.to && !query.allDates))) {
       const { rows } = await readSellfoxAgentRows(domain, query, common, true);
       return new Response(sellfoxAgentCsv(domain, rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="sellfox-${domain}-agent.csv"`, "Cache-Control": "no-store" } });
@@ -39,11 +40,11 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
     const snapshotWhere = sellfoxSnapshotWhere(query, common.organizationId, common.workspaceId, storeIds);
     let content: string;
     if (domain === "stores") {
-      const rows = await prisma.sellfoxStore.findMany({ where: sellfoxStoreWhere(query, common.organizationId, common.workspaceId, storeIds), select: { externalId: true, name: true, marketplace: true, country: true, status: true, lastSyncedAt: true }, orderBy: [{ name: "asc" }, { id: "asc" }], take: sellfoxExportLimit + 1 });
+      const rows = await prisma.sellfoxStore.findMany({ where: sellfoxStoreWhere(query, common.organizationId, common.workspaceId, storeIds), select: { externalId: true, name: true, marketplace: true, country: true, status: true, lastSyncedAt: true }, orderBy: sellfoxPrismaOrder("stores", query), take: sellfoxExportLimit + 1 });
       assertSellfoxExportComplete(rows);
       content = csv(["Shop ID", "店铺", "站点", "国家", "状态", "最近同步"], rows.map((row) => [row.externalId, row.name, row.marketplace, row.country, row.status, row.lastSyncedAt]));
     } else if (domain === "inventory") {
-      const rows = await prisma.sellfoxFbaInventorySnapshot.findMany({ where: snapshotWhere, select: { reportDate: true, capturedAt: true, sku: true, msku: true, asin: true, fnsku: true, quantity: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: [{ capturedAt: "desc" }, { asin: "asc" }, { id: "asc" }], take: sellfoxExportLimit + 1 });
+      const rows = await prisma.sellfoxFbaInventorySnapshot.findMany({ where: snapshotWhere, select: { reportDate: true, capturedAt: true, sku: true, msku: true, asin: true, fnsku: true, quantity: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: sellfoxPrismaOrder("inventory", query), take: sellfoxExportLimit + 1 });
       assertSellfoxExportComplete(rows);
       content = csv(["日期", "抓取时间", "店铺", "Shop ID", "站点", "ASIN", "MSKU", "SKU", "FNSKU", "可售库存"], rows.map((row) => [row.reportDate, row.capturedAt, row.SellfoxStore.name, row.SellfoxStore.externalId, row.SellfoxStore.marketplace, row.asin, row.msku, row.sku, row.fnsku, row.quantity]));
     } else if (domain === "sales") {
@@ -51,7 +52,7 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
       assertSellfoxExportComplete(rows);
       content = csv(["日期", "店铺", "Shop ID", "站点", "ASIN", "MSKU", "SKU", "销量", "销售额", "币种"], rows.map((row) => [row.reportDate, row.SellfoxStore.name, row.SellfoxStore.externalId, row.SellfoxStore.marketplace, row.asin, row.msku, row.sku, row.quantity, row.revenue, row.currency]));
     } else if (domain === "hourly") {
-      const rows = await prisma.sellfoxHourlyMetric.findMany({ where: sellfoxHourlyWhere(query, common.organizationId, common.workspaceId, storeIds), select: { reportDate: true, hour: true, adType: true, entityName: true, impressions: true, clicks: true, cost: true, sales: true, orders: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: [{ reportDate: "desc" }, { hour: "desc" }, { id: "asc" }], take: sellfoxExportLimit + 1 });
+      const rows = await prisma.sellfoxHourlyMetric.findMany({ where: sellfoxHourlyWhere(query, common.organizationId, common.workspaceId, storeIds), select: { reportDate: true, hour: true, adType: true, entityName: true, impressions: true, clicks: true, cost: true, sales: true, orders: true, SellfoxStore: { select: { name: true, externalId: true, marketplace: true } } }, orderBy: sellfoxPrismaOrder("hourly", query), take: sellfoxExportLimit + 1 });
       assertSellfoxExportComplete(rows);
       content = csv(["日期", "小时", "店铺", "Shop ID", "站点", "广告类型", "活动", "曝光", "点击", "花费", "销售额", "订单"], rows.map((row) => [row.reportDate, row.hour, row.SellfoxStore.name, row.SellfoxStore.externalId, row.SellfoxStore.marketplace, row.adType, row.entityName, row.impressions, row.clicks, row.cost, row.sales, row.orders]));
     } else if (domain === "performance") {
@@ -60,7 +61,7 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
       assertSellfoxExportComplete(rows);
       content = csv(["日期", "店铺", "Shop ID", "站点", "ASIN", "MSKU", "SKU", "标题", "销量", "销售额", "毛利润", "广告费", "币种"], rows.map((row) => [row.reportDate, row.SellfoxStore.name, row.SellfoxStore.externalId, row.SellfoxStore.marketplace, row.asin, row.msku, row.sku, row.title, row.saleQuantity, row.saleRevenue, row.grossProfit, row.adCost, row.currency]));
     } else {
-      const rows = await prisma.sellfoxSyncRun.findMany({ where: sellfoxRunWhere(query, common.organizationId, common.workspaceId), select: { resource: true, status: true, summary: true, error: true, startedAt: true, finishedAt: true }, orderBy: [{ startedAt: "desc" }, { id: "asc" }], take: sellfoxExportLimit + 1 });
+      const rows = await prisma.sellfoxSyncRun.findMany({ where: sellfoxRunWhere(query, common.organizationId, common.workspaceId), select: { resource: true, status: true, summary: true, error: true, startedAt: true, finishedAt: true }, orderBy: sellfoxPrismaOrder("runs", query), take: sellfoxExportLimit + 1 });
       assertSellfoxExportComplete(rows);
       content = csv(["资源", "状态", "摘要", "错误", "开始时间", "结束时间"], rows.map((row) => [row.resource, row.status, JSON.stringify(row.summary), row.error, row.startedAt, row.finishedAt]));
     }

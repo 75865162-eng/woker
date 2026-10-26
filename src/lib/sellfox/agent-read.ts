@@ -1,3 +1,4 @@
+import { sellfoxSortKey, sellfoxSqlOrder } from "./browse-sort";
 import { sellfoxProductTagNamesSql } from "./product-tags-sql";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -202,6 +203,9 @@ export type AgentDomain = keyof typeof sellfoxAgentColumns;
 const views: Record<AgentDomain, string> = { inventory: "sellfox_inventory_current", listings: "sellfox_listing_current", sales: "sellfox_sales_daily", performance: "sellfox_profit_daily", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily", ads_campaign: "sellfox_ads_campaign_daily", ads_ad_group: "sellfox_ads_ad_group_daily", ads_placement: "sellfox_ads_placement_daily" };
 export function isSellfoxAgentDomain(domain: string): domain is AgentDomain { return Object.prototype.hasOwnProperty.call(views, domain); }
 export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnType<typeof sellfoxBrowseQuery>, scope: { organizationId: string; workspaceId: string }, exporting = false) {
+  const sortKey = sellfoxSortKey(domain, query);
+  const sortColumn = sellfoxAgentColumns[domain].find(key => key === sortKey);
+  if (sortKey && !sortColumn) throw new SellfoxBrowseError("该窄表不支持此排序列，请使用 workbench 布局。");
   const clauses = [Prisma.sql`"organizationId"=${scope.organizationId}`, Prisma.sql`"workspaceId"=${scope.workspaceId}`];
   if (query.shopExternalIds.length) clauses.push(Prisma.sql`"shopExternalId" IN (${Prisma.join(query.shopExternalIds)})`);
   if (domain === "listings" && query.status) clauses.push(Prisma.sql`status ILIKE ${query.status}`);
@@ -271,7 +275,7 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
   const source = Prisma.raw(views[domain]); // closed constant map, never request text
   const columns = Prisma.join(sellfoxAgentColumns[domain].map((key) => Prisma.raw(`"${key}"`)));
   const where = Prisma.join(clauses, " AND ");
-  const order = Prisma.raw(domain === "inventory" || domain === "listings" ? '"capturedAt" DESC, id' : '"reportDate" DESC, id');
+  const order = sortColumn ? sellfoxSqlOrder(query, Prisma.raw(`"${sortColumn}"`)) : Prisma.raw(domain === "inventory" || domain === "listings" ? '"capturedAt" DESC, id' : '"reportDate" DESC, id');
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>(Prisma.sql`SELECT ${columns} FROM ${source} s WHERE ${where} ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}`);
   if (exporting && rows.length > sellfoxExportLimit) throw new SellfoxBrowseError("导出超过 10,000 条，请缩小日期或店铺范围并分段。", 413);
   const counts = exporting ? [{ total: rows.length }] : await prisma.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::integer AS total FROM ${source} s WHERE ${where}`);

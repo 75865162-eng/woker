@@ -130,7 +130,7 @@ test("run polling preserves filters when switching to verified listing and adver
   await page.getByRole("button", { name: "在线商品", exact: true }).click();
   await expect(page.getByLabel("Listing 状态")).toBeVisible();
   await page.getByRole("button", { name: "广告", exact: true }).click();
-  await expect(page.getByLabel("广告类型",{exact:true})).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "广告类型", exact: true })).toBeVisible();
 });
 
 
@@ -185,7 +185,7 @@ test("listing and ads expose only verified read filters and disabled web operati
   await expect(page.getByRole("button", { name: "广告产品", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: "投放", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "搜索词", exact: true })).toBeEnabled();
-  await page.getByLabel("广告类型", { exact: true }).selectOption("sb");
+  await page.getByRole("combobox", { name: "广告类型", exact: true }).selectOption("sb");
   await page.getByRole("button", { name: "有点击无订单", exact: true }).click();
   await expect.poll(() => calls.filter(c => c.path.endsWith("/ads_report")).at(-1)?.query.get("quickFilter")).toBe("clicksNoOrders");
   expect(calls.filter(c => c.path.endsWith("/ads_report")).at(-1)?.query.get("adType")).toBe("sb");
@@ -422,7 +422,7 @@ for (const domain of ["sales", "performance"] as const) {
     await expect(asin).not.toBeChecked();
     const latestDimension = () => calls.filter(call => call.path.endsWith(`/${domain}`)).at(-1)?.query.get("dimension");
     await expect.poll(latestDimension).toBe("store");
-    await expect(page.getByRole("columnheader", { name: domain === "sales" ? "店铺" : "标题/店铺", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "店铺", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /dimension=store/);
     if (domain === "performance") await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveAttribute("href", /dimension=store/);
     for (const name of ["业务员"]) {
@@ -441,8 +441,10 @@ for (const domain of ["sales", "performance"] as const) {
       await expect(page).toHaveURL(/dimension=spu/);
     }
     if (domain === "performance") await expect(tabs.getByRole("button", { name: "SPU", exact: true })).toHaveCount(0);
+    const lastDimension = domain === "sales" ? "spu" : "developer";
     await page.reload();
-    await expect(store).toHaveAttribute("aria-pressed", "true");
+    await expect(tabs.getByRole("button", { name: domain === "sales" ? "SPU" : "开发员", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(latestDimension).toBe(lastDimension);
     await asin.check();
     await expect.poll(latestDimension).toBe("asin");
     await asin.uncheck();
@@ -598,4 +600,71 @@ test("ads campaign/group/placement tabs expose daily reports, typed search, expo
     await expect(checkbox).toBeEnabled(); await expect(checkbox).not.toBeChecked();
     await expect(checkbox.locator("..")).toContainText("每日 06:30（北京时间）");
   }
+});
+
+for (const [domain, adsTab, endpoint, column, sortBy] of [
+  ["sales", "", "sales", "小计", "subtotal"],
+  ["performance", "", "performance", "毛利润", "grossProfit"],
+  ["listings", "", "listings", "7天销量", "sales7"],
+  ["ads", "product", "ads_report", "花费", "cost"],
+  ["ads", "targeting", "ads_targeting", "投放ID", "targetingId"],
+  ["ads", "searchTerm", "ads_search_term", "用户搜索词", "searchTerm"],
+  ["ads", "campaign", "ads_campaign", "活动名称", "campaignName"],
+  ["ads", "adGroup", "ads_ad_group", "广告组名称", "adGroupName"],
+  ["ads", "placement", "ads_placement", "广告位", "placement"],
+  ["stores", "", "stores", "店铺", "name"],
+  ["inventory", "", "inventory", "可售库存", "quantity"],
+  ["runs", "", "runs", "开始时间", "startedAt"],
+]) test(`${endpoint} headers toggle server sort, preserve filters and reset pagination`, async ({ page }) => {
+  const { calls } = await setup(page, `domain=${domain}&adsTab=${adsTab}&from=2026-10-24&to=2026-10-24&page=2&site=US&search=needle`);
+  const header = page.getByRole("columnheader", { name: column, exact: true });
+  const button = header.getByRole("button", { name: `按${column}排序`, exact: true });
+  await expect(button).toBeEnabled();
+  await expect(header).not.toHaveAttribute("aria-sort");
+  await button.click();
+  await expect(header).toHaveAttribute("aria-sort", "ascending");
+  await expect(button).toBeEnabled();
+  let latest = calls.filter(call => call.path === `/api/sellfox/${endpoint}`).at(-1)!;
+  expect(latest.query.get("sortBy")).toBe(sortBy); expect(latest.query.get("sortOrder")).toBe("asc");
+  expect(latest.query.get("page")).toBe("1"); expect(latest.query.get("search")).toBe("needle");
+  expect(latest.query.get("from")).toBe("2026-10-24");
+  expect(latest.query.get("site")).toBe(domain === "runs" ? null : "US");
+  await expect(page).toHaveURL(new RegExp(`sortBy=${sortBy}&sortOrder=asc`));
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", new RegExp(`sortBy=${sortBy}&sortOrder=asc`));
+  if (!["stores", "runs"].includes(domain)) {
+    const agent = page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）", exact: true });
+    await expect(agent).toHaveAttribute("href", /agent=1/);
+    await expect(agent).not.toHaveAttribute("href", /sortBy=/);
+  }
+  await button.click();
+  await expect(header).toHaveAttribute("aria-sort", "descending");
+  await expect(button).toBeEnabled();
+  latest = calls.filter(call => call.path === `/api/sellfox/${endpoint}`).at(-1)!;
+  expect(latest.query.get("sortOrder")).toBe("desc");
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
+  await expect(button).toBeEnabled();
+  latest = calls.filter(call => call.path === `/api/sellfox/${endpoint}`).at(-1)!;
+  expect(latest.query.get("page")).toBe("2"); expect(latest.query.get("sortOrder")).toBe("desc");
+  await page.reload();
+  await expect(header).toHaveAttribute("aria-sort", "descending");
+  await expect(button).toBeEnabled();
+  await page.goBack();
+  await expect(button).toBeEnabled();
+  expect(new URL(page.url()).searchParams.get("page")).toBeNull();
+  expect(new URL(page.url()).searchParams.get("sortOrder")).toBe("desc");
+  expect(calls.filter(call => call.body !== null)).toEqual([]);
+});
+
+test("changing domains or ad subtabs clears stale sort and unsupported columns stay plain", async ({ page }) => {
+  await setup(page, "domain=sales&sortBy=subtotal&sortOrder=desc&from=2026-10-24&to=2026-10-24");
+  await expect(page.getByRole("columnheader", { name: "小计", exact: true })).toHaveAttribute("aria-sort", "descending");
+  for (const name of ["图片", "分析", "FBA可售"]) await expect(page.getByRole("columnheader", { name, exact: true }).getByRole("button")).toHaveCount(0);
+  await page.getByRole("navigation", { name: "赛狐数据域" }).getByRole("button", { name: "广告", exact: true }).click();
+  await expect(page.getByRole("button", { name: "按花费排序", exact: true })).toBeEnabled();
+  expect(new URL(page.url()).searchParams.has("sortBy")).toBe(false);
+  await page.getByRole("button", { name: "按花费排序", exact: true }).click();
+  await expect(page.getByRole("button", { name: "按花费排序", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "广告活动", exact: true }).click();
+  await expect(page.getByRole("button", { name: "按活动名称排序", exact: true })).toBeEnabled();
+  expect(new URL(page.url()).searchParams.has("sortBy")).toBe(false);
 });

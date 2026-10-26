@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
     const scope = workspaceScopeFromRequest(request);
     const url = new URL(request.url);
-    const query = sellfoxBrowseQuery(url);
+    const query = sellfoxBrowseQuery(url, "performance");
     await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
     return NextResponse.json(await readSellfoxWorkbench("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }));
   } catch (error) {

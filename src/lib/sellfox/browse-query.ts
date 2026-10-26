@@ -1,3 +1,4 @@
+import { isSellfoxSortable, sellfoxSortColumns, type SellfoxSortOrder } from "./sort-columns";
 import type { Prisma } from "@prisma/client";
 import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 
@@ -20,8 +21,12 @@ export function sellfoxProductTag(value: string | null | undefined): string {
 export function sellfoxBrand(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
-export function sellfoxBrowseQuery(url: URL) {
+export function sellfoxBrowseQuery(url: URL, domain?: string) {
   const p = url.searchParams;
+  const sortBy = p.get("sortBy") ?? "";
+  const sortOrder = p.get("sortOrder") ?? "asc";
+  if ((sortOrder !== "asc" && sortOrder !== "desc") || (p.has("sortOrder") && !sortBy)) throw new SellfoxBrowseError("排序方向必须为 asc/desc，且必须指定排序列。");
+  if (p.has("sortBy") && (!sortBy || !(domain ? isSellfoxSortable(domain, sortBy) : Object.values(sellfoxSortColumns).some(keys => keys.includes(sortBy))))) throw new SellfoxBrowseError("当前域不支持该排序列。");
   function integer(key: string, fallback: number, max: number) {
     const value = p.get(key); if (!value) return fallback;
     const number = Number(value);
@@ -36,6 +41,7 @@ export function sellfoxBrowseQuery(url: URL) {
   const from = date("from"), to = date("to"), reportDate = date("reportDate");
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   return {
+    sortBy, sortOrder: sortOrder as SellfoxSortOrder,
     layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")),
     dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as SellfoxBrowseDimension,
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",

@@ -341,3 +341,5 @@ browse 同一 SQL 响应附带 `facets.productTags`：独立子查询从 scoped 
 browse 保留 `facets.productTags`，并在同一 SQL 响应新增 `facets.brands`：独立子查询从当前组织/工作区及店铺/站点范围 Listing 提取去空、去重、排序后的品牌，不受已选品牌、标签、搜索或状态影响；导出不计算 facets。UI 动态选项保留 URL 当前品牌，重置清空品牌，切工作区/导航时清空旧选项，复用已有迟到响应防护。广告和其他未接入控件保持原状。
 
 无 schema、migration、同步或 worker 改动；回滚应用代码即可。验证使用 browse-query、browse-filters、workbench-read、agent-read、browse-api 及 Listing 身份测试，另运行 TypeScript、相关 ESLint 与 `git diff --check`；不运行 Chromium、生产构建或真实库查询。品牌 facets 增加一次同 SQL 内 scoped Listing 扫描，真实库 P95 留待明确部署验收时评估。本次仅本地交付，不推送或发布。
+
+`/sellfox` 表格共用表头排序：点击带双向箭头的列按升序/降序切换，活动列显示方向及 `aria-sort`，换列回到升序并重置第 1 页；`sortBy` / `sortOrder=asc|desc` 保存在 URL，筛选、翻页、刷新及导出沿用。API 按域白名单校验，非法列/方向返回 400；SQL/Prisma 在完整筛选结果（工作台先聚合）上排序后再分页，同值按 ID 稳定排序，未指定排序时维持旧顺序。店铺、库存 current/历史、销量、利润、Listing 和六类广告日报均复用此路径；小时报表 API 也支持排序，页面不新增小时数据入口。图片、分析、缺失/未接列、日矩阵列、趋势/均值、进度以及分页后才补充的库存字段不提供排序，避免把当前页排序冒充全量排序。SQL 的空值排末；Prisma 保持数据库默认空值次序。回滚此功能可撤销对应提交，不涉及数据迁移；本地验证用 `npx tsx --test tests/sellfox-*.test.ts`、`npm run typecheck` 和 `npm run test:sellfox:browser`（隔离模拟接口，不访问生产）。Agent 窄列导出链接保留原始长表默认次序，不携带工作台聚合排序。尚未进行真实数据库大数据量排序性能 benchmark。

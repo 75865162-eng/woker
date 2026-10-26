@@ -1306,3 +1306,37 @@ test("targeting/search-term use their own views and stable identity while applyi
     assert.ok(sql.values.includes("needle")); assert.ok(sql.values.includes("sb")); assert.ok(sql.values.includes("shop"));
   }
 });
+
+test("workbench sorts the entire filtered aggregate before LIMIT/OFFSET with stable ties", () => {
+  const scope = { organizationId: "sort-org", workspaceId: "sort-workspace" };
+  const cases = [
+    ["sales", "subtotal", '"subtotal"'], ["listings", "sales7", '"sales7"'],
+    ["performance", "grossProfitRate", 'CASE WHEN "saleRevenue">0 THEN "grossProfit"/"saleRevenue" END'],
+    ["ads_report", "cost", '"cost"'], ["ads_targeting", "targetingText", '"targetingText"'],
+    ["ads_search_term", "searchTerm", '"searchTerm"'], ["ads_campaign", "campaignName", '"campaignName"'],
+    ["ads_ad_group", "adGroupName", '"adGroupName"'], ["ads_placement", "placement", '"placement"'],
+  ] as const;
+  for (const [domain, sortBy, expression] of cases) for (const sortOrder of ["asc", "desc"]) {
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${sortBy}&sortOrder=${sortOrder}&page=3&pageSize=20&site=US&shopExternalId=shop-a&search=needle`), domain);
+    for (const exporting of [false, true]) {
+      const sql = workbenchReadSql(domain, query, scope, exporting);
+      assert.ok(sql.text.includes(`FROM filtered ORDER BY ${expression} ${sortOrder.toUpperCase()} NULLS LAST, id ASC LIMIT`));
+      const pagination = sql.text.match(/FROM filtered ORDER BY .* LIMIT \$(\d+) OFFSET \$(\d+)/)!;
+      assert.equal(sql.values[Number(pagination[1]) - 1], exporting ? 10001 : 20);
+      assert.equal(sql.values[Number(pagination[2]) - 1], exporting ? 0 : 40);
+      for (const value of [scope.organizationId, scope.workspaceId, "US", "shop-a", "%needle%"]) assert.ok(sql.values.includes(value));
+    }
+  }
+  const defaults = sellfoxBrowseQuery(new URL("http://localhost/"));
+  assert.match(workbenchReadSql("sales", defaults, scope).text, /FROM filtered ORDER BY id LIMIT/);
+  assert.throws(() => workbenchReadSql("sales", { ...defaults, sortBy: "cost" }, scope), /排序/);
+  assert.throws(() => workbenchReadSql("sales", { ...defaults, sortBy: 'id";DROP TABLE' }, scope), /排序/);
+  const store = { ...defaults, dimension: "store" as const, sortBy: "identity", sortOrder: "asc" as const };
+  assert.match(workbenchReadSql("sales", store, scope).text, /FROM filtered ORDER BY name ASC NULLS LAST, id ASC LIMIT/);
+});
+
+
+test("unsupported profit SPU dimension still sorts by its fallback ASIN identity", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?dimension=spu&sortBy=identity&sortOrder=asc"), "performance");
+  assert.match(workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" }).text, /FROM filtered ORDER BY "identity" ASC NULLS LAST, id ASC LIMIT/);
+});

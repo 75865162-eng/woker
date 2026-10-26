@@ -24,13 +24,13 @@ export async function GET(request: Request) {
   try {
     const scope = workspaceScopeFromRequest(request);
     const url = new URL(request.url);
-    let query = sellfoxBrowseQuery(url);
+    let query = sellfoxBrowseQuery(url, "performance");
     if (url.searchParams.get("agent") === "1") {
       const { rows } = await readSellfoxAgentRows("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, true);
       return new Response(sellfoxAgentCsv("performance", rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="sellfox-profit-agent.csv"', "Cache-Control": "no-store" } });
     }
     const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
-    if (query.layout || query.fulfillment || query.buyBox || query.productTag || query.brand) return await sellfoxWorkbenchExport("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, url);
+    if (query.layout || query.sortBy || query.fulfillment || query.buyBox || query.productTag || query.brand) return await sellfoxWorkbenchExport("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, url);
     query = await resolveEffectiveReportDate("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId });
     const where = sellfoxSnapshotWhere(query, permission.user.organizationId, scope.workspaceId, storeIds, true);
     const dateLabel = url.searchParams.get("from") || url.searchParams.get("to") || (typeof where.reportDate === "string" ? where.reportDate : "history");

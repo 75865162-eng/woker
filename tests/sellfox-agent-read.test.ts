@@ -217,3 +217,17 @@ test("agent productTag membership uses the selected scoped Listing before matchi
     }
   } finally { globals.prisma = previous; }
 });
+
+test("inventory current sorts in SQL before pagination and rejects unavailable narrow fields", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }; const previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.includes("count(*)") ? [{ total: 51 }] : []; } } as unknown as PrismaClient;
+  try {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?sortBy=quantity&sortOrder=desc&page=2&pageSize=20&site=US"), "inventory");
+    await readSellfoxAgentRows("inventory", query, { organizationId: "org", workspaceId: "ws" });
+    assert.match(calls[0].text, /ORDER BY "quantity" DESC NULLS LAST, id ASC LIMIT/);
+    assert.deepEqual(calls[0].values.slice(-2), [20, 20]);
+    assert.ok(calls[0].values.includes("US"));
+    await assert.rejects(() => readSellfoxAgentRows("inventory", { ...query, sortBy: "payload" }, { organizationId: "org", workspaceId: "ws" }), /排序/);
+  } finally { globals.prisma = previous; }
+});

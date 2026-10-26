@@ -1,3 +1,4 @@
+import { sellfoxSortKey, sellfoxSqlOrder } from "./browse-sort";
 import { sellfoxProductTagDisplaySql, sellfoxProductTagMatchSql, sellfoxProductTagRowsSql } from "./product-tags-sql";
 import { sellfoxAgentColumns } from "./agent-read";
 import { Prisma } from "@prisma/client";
@@ -30,6 +31,16 @@ export function workbenchDateRange(query: SellfoxBrowseQuery) {
 // All joins stay in the authenticated workspace. Current metadata is supplemental,
 // never historical parent identity, price or inventory at the sale date.
 export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
+  const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
+  const sortKey = sellfoxSortKey(domain, query);
+  let sortExpression = sortKey ? Prisma.raw(`"${sortKey}"`) : Prisma.sql`id`;
+  if (sortKey === "identity" && ["store", "developer", "spu"].includes(dimension)) sortExpression = Prisma.sql`name`;
+  if (domain === "performance" && sortKey === "grossProfitRate") sortExpression = Prisma.sql`CASE WHEN "saleRevenue">0 THEN "grossProfit"/"saleRevenue" END`;
+  if (domain === "performance" && sortKey === "netProfitRate") sortExpression = Prisma.sql`CASE WHEN "netRevenue">0 THEN "grossProfit"/"netRevenue" END`;
+  if (sortKey === "acos") sortExpression = Prisma.sql`CASE WHEN "adSales">0 THEN cost/"adSales" END`;
+  if (sortKey === "roas") sortExpression = Prisma.sql`CASE WHEN cost>0 THEN "adSales"/cost END`;
+  if (domain === "listings" && sortKey === "rating") sortExpression = Prisma.sql`NULLIF(rating,'')::float`;
+  const order = sortKey ? sellfoxSqlOrder(query, sortExpression) : Prisma.sql`id`;
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
   const adIdentity = domain === "ads_campaign" ? Prisma.sql`"adType","campaignId"` : domain === "ads_ad_group" ? Prisma.sql`"adType","campaignId","adGroupId"` : domain === "ads_placement" ? Prisma.sql`"adType","campaignId",placement` : domain === "ads_targeting" ? Prisma.sql`"adType","campaignId","adGroupId","targetingId"` : domain === "ads_search_term" ? Prisma.sql`"adType","campaignId","adGroupId","searchTerm","targetingId"` : Prisma.sql`"adType","campaignId","adGroupId","productId"`;
   const supportsProductTags = ["sales", "performance", "listings"].includes(domain);
@@ -66,7 +77,6 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.brand && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l.brand=${query.brand}`);
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
-  const dimension = domain === "performance" && query.dimension === "spu" ? "asin" : query.dimension;
   const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(dimension);
   const storeColumn = crossStore ? Prisma.sql`CASE WHEN count("storeId")=count(*) AND count(DISTINCT "storeId")=1 THEN min("storeId") END AS "storeId"` : Prisma.sql`"storeId"`;
   const storeGrain = crossStore ? Prisma.empty : Prisma.sql`"storeId",`;
@@ -208,7 +218,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       WHERE ${Prisma.join(facetFilters, " AND ")} AND NULLIF(btrim(p.payload->>'brand'),'') IS NOT NULL ORDER BY 1)) AS facets` : Prisma.empty;
   return Prisma.sql`WITH ${listing},${base},${groups}, filtered AS (SELECT * FROM grouped WHERE ${Prisma.join(finalFilters, " AND ")})
     SELECT (SELECT count(*)::int FROM filtered) AS total,${totals} AS totals,
-      COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY id LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows${facets}`;
+      COALESCE((SELECT jsonb_agg(p) FROM (SELECT * FROM filtered ORDER BY ${order} LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows${facets}`;
 }
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);

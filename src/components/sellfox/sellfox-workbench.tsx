@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAppShellUser } from "@/components/app-shell/app-shell-context";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { sellfoxDateAt, sellfoxSyncDisabledReason } from "@/lib/sellfox/sync-contract";
-import { sellfoxAdsResource, sellfoxColumnDomain, backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxDomains, sellfoxViewParams, type SellfoxView } from "@/lib/sellfox/workbench-view";
+import { sellfoxAdsResource, sellfoxColumnDomain, sellfoxSortPatch, backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxDomains, sellfoxViewParams, type SellfoxView } from "@/lib/sellfox/workbench-view";
 import { normalizeWorkspaceScope } from "@/lib/workspace/scope";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { SellfoxConnectionBar } from "./connection-bar";
@@ -68,7 +68,7 @@ export function SellfoxWorkbench() {
   }, []);
 
   function navigate(patch: Partial<SellfoxView>, replace = false) {
-    const next = { ...view, page: 1, ...(patch.domain && patch.domain !== view.domain ? { searchType: "" } : {}), ...patch }; if (patch.adsTab) setSyncResource(resourceForDomain(next)); setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setPagination({ page: next.page, pageSize: next.pageSize ?? 20, total: 0 }); setLoading(true); setError("");
+    const next = { ...view, page: 1, ...((patch.domain && patch.domain !== view.domain) || (patch.adsTab && patch.adsTab !== view.adsTab) ? { sortBy: "", sortOrder: "asc" as const } : {}), ...(patch.domain && patch.domain !== view.domain ? { searchType: "" } : {}), ...patch }; if (patch.adsTab) setSyncResource(resourceForDomain(next)); setView(next); setSelectedRow(null); setRows([]); setDates([]); setTotals([]); setProductTags([]); setBrands([]); setPagination({ page: next.page, pageSize: next.pageSize ?? 20, total: 0 }); setLoading(true); setError("");
     const url = `${window.location.pathname}?${withScope(sellfoxViewParams(next))}`;
     if (replace) window.history.replaceState(null, "", url); else window.history.pushState(null, "", url);
   }
@@ -135,6 +135,12 @@ export function SellfoxWorkbench() {
     }
     return `${endpoint(view)}/export?${params}`;
   }, [ready, view, withScope, columnSelection, columnSelectionKey, dates]);
+  const agentExportHref = useMemo(() => {
+    if (!exportHref) return "";
+    const [path, search] = exportHref.split("?"); const params = new URLSearchParams(search);
+    params.delete("sortBy"); params.delete("sortOrder"); params.set("agent", "1");
+    return `${path}?${params}`;
+  }, [exportHref]);
   const xlsxHref = view.domain === "performance" ? exportHref.replace("format=csv", "format=xlsx") : "";
 
   async function sync(resource = view.domain === "ads" ? sellfoxAdsResource(view) : syncResource) {
@@ -182,13 +188,13 @@ export function SellfoxWorkbench() {
         <SellfoxRecentRuns runs={latestRuns} onAll={() => navigate({ domain: "runs" })} />
       </> : <>
         <SellfoxBrowseFilters brands={brands} productTags={productTags} onRefresh={() => setRefreshVersion(value => value + 1)} exportHref={canExport ? exportHref : undefined} onSync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} view={view} stores={overview?.stores ?? []} onChange={navigate} selectedColumns={columnSelection[columnSelectionKey]} onColumns={keys => setColumnSelection(current => ({ ...current, [columnSelectionKey]: keys }))} />
-        <div className={view.domain === "ads" ? "grid min-w-0 gap-2 sm:grid-cols-[140px_minmax(0,1fr)]" : "min-w-0"}>{view.domain === "ads" ? <aside aria-label="广告组合列表" className="border border-border bg-white p-3 text-xs"><h3 className="font-semibold">广告组合</h3><p className="mt-3 text-muted">暂无本地数据 · 待接</p><p className="mt-2 text-muted">赛狐有、API/本地无</p></aside> : null}<SellfoxResourceTable columnDomain={sellfoxColumnDomain(view)} metric={view.metric} matrix={view.salesView === "matrix"} dates={dates} totals={totals} selectedColumns={columnSelection[columnSelectionKey]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} emptyMessage={browseEmptyMessage(view.domain, overview)} onEmptySync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} /></div>
+        <div className={view.domain === "ads" ? "grid min-w-0 gap-2 sm:grid-cols-[140px_minmax(0,1fr)]" : "min-w-0"}>{view.domain === "ads" ? <aside aria-label="广告组合列表" className="border border-border bg-white p-3 text-xs"><h3 className="font-semibold">广告组合</h3><p className="mt-3 text-muted">暂无本地数据 · 待接</p><p className="mt-2 text-muted">赛狐有、API/本地无</p></aside> : null}<SellfoxResourceTable sortBy={view.sortBy} sortOrder={view.sortOrder} onSort={key => navigate(sellfoxSortPatch(view, key))} columnDomain={sellfoxColumnDomain(view)} metric={view.metric} matrix={view.salesView === "matrix"} dates={dates} totals={totals} selectedColumns={columnSelection[columnSelectionKey]} dimension={view.dimension} domain={view.domain} rows={rows} pagination={pagination} loading={loading} page={view.page} emptyMessage={browseEmptyMessage(view.domain, overview)} onEmptySync={() => void sync(resourceForDomain(view))} syncDisabled={!canSync || working || !overview?.configured || Boolean(sellfoxSyncDisabledReason(resourceForDomain(view)))} onPageSize={pageSize => navigate({ pageSize, page: 1 })} onPage={(page) => navigate({ page })} onSelect={setSelectedRow} /></div>
         <details className="border border-border bg-white px-3 py-2 text-[11px] text-muted"><summary className="cursor-pointer">读取口径与数据来源 · 本地快照只读</summary><div className="mt-2 space-y-2">
         <p className="text-xs text-muted">{domainLabel}{view.domain === "inventory" ? "默认读取最近完整快照；选择日期或全部历史可回看历史采集。" : ""} · 抓取与同步时间按本机时区显示。导出上限 10,000 条，超限请缩小范围。</p>
         {view.domain === "sales" ? <p className="text-xs text-muted">MSKU 日表按当前维度汇总；父ASIN/标题/价格来自最新 Listing，库存来自最新完整库存快照。未匹配父体时保留 MSKU。— 表示缺失，日矩阵最多90天；小计仅统计已知日，缺日不补零。趋势为窗口末7日，完整才算均值。</p> : null}
         {view.domain === "performance" ? <p className="text-xs text-muted">区间按店铺、维度、币种汇总；毛利率按汇总金额重算，退款率跨多条记录时留空。本地未提升的费用列不从 payload 猜取。</p> : null}
 </div></details>
-        {canExport && exportHref && view.domain !== "runs" && view.domain !== "stores" ? <a className="text-xs text-brand" href={`${exportHref}&agent=1`}>给 Agent 的导出 CSV（业务窄列）</a> : null}
+        {canExport && exportHref && view.domain !== "runs" && view.domain !== "stores" ? <a className="text-xs text-brand" href={agentExportHref}>给 Agent 的导出 CSV（业务窄列）</a> : null}
       </>}
     </main><aside className="space-y-3">{selectedRow || view.domain === "runs" ? <SellfoxSyncRunsPanel overview={overview} /> : null}{selectedRow ? <SellfoxRecordDetail key={`${scope.workspaceId}-${view.domain}-${selectedRow.id}`} row={selectedRow} rawUrl={rawUrl} headers={headers} onClose={() => setSelectedRow(null)} /> : null}</aside></div>
   </div>;

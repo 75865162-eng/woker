@@ -339,3 +339,48 @@ test("brand reaches browse facets and CSV/XLSX/Agent export with and without lay
     for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
+
+test("legacy browse shells apply validated server ordering with filters and pagination", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }; const previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Array<{ where: Record<string, unknown>; orderBy: unknown; skip: number; take: number }> = [];
+  const sortedSql: Prisma.Sql[] = [];
+  const model = { count: async () => 51, findMany: async (args: typeof calls[number]) => { calls.push(args); return []; } };
+  globals.prisma = { workspaceScope: { findUnique: async () => ({ id: "ws" }) }, sellfoxStore: model, sellfoxSyncRun: model, sellfoxHourlyMetric: model, sellfoxFbaInventorySnapshot: model,
+    $queryRaw: async (sql: Prisma.Sql) => { sortedSql.push(sql); return [{ total: 0, rows: [], totals: [] }]; },
+  } as unknown as PrismaClient;
+  const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+  function request(domain: string, params: string) { return new Request(`http://localhost/api/sellfox/${domain}?${params}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } }); }
+  try {
+    for (const [domain, key] of [["stores", "name"], ["inventory", "quantity"], ["hourly", "cost"], ["runs", "startedAt"]]) {
+      for (const sortOrder of ["asc", "desc"]) {
+        const response = await browse(request(domain, `from=2026-10-24&to=2026-10-24&search=needle&page=2&pageSize=20&sortBy=${key}&sortOrder=${sortOrder}`), { params: Promise.resolve({ domain }) });
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).pagination, { page: 2, pageSize: 20, total: 51 });
+        const args = calls.at(-1)!;
+        assert.deepEqual(args.orderBy, [{ [key]: sortOrder }, { id: "asc" }]);
+        assert.equal(args.skip, 20); assert.equal(args.take, 20);
+        assert.equal(args.where.organizationId, "org"); assert.equal(args.where.workspaceId, "ws");
+        assert.match(JSON.stringify(args.where), /needle/);
+      }
+      const before = calls.length;
+      assert.equal((await browse(request(domain, "sortBy=payload"), { params: Promise.resolve({ domain }) })).status, 400);
+      assert.equal(calls.length, before);
+    }
+    const response = await browse(request("inventory", "allDates=1&sortBy=name&sortOrder=desc"), { params: Promise.resolve({ domain: "inventory" }) });
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls.at(-1)!.orderBy, [{ SellfoxStore: { name: "desc" } }, { id: "asc" }]);
+    // No-layout requests still need derived workbench columns, including exports.
+    for (const [domain, sortBy] of [["listings", "rating"], ["ads_report", "acos"], ["ads_campaign", "campaignName"]]) {
+      const context = { params: Promise.resolve({ domain }) };
+      const params = `sortBy=${sortBy}&sortOrder=desc`;
+      assert.equal((await browse(request(domain, params), context)).status, 200);
+      assert.match(sortedSql.at(-1)!.text, /FROM filtered ORDER BY .* DESC NULLS LAST, id ASC LIMIT/);
+      assert.equal((await csv(request(domain, params), context)).status, 200);
+      assert.match(sortedSql.at(-1)!.text, /FROM filtered ORDER BY .* DESC NULLS LAST, id ASC LIMIT/);
+    }
+    await browse(request("stores", ""), { params: Promise.resolve({ domain: "stores" }) });
+    assert.deepEqual(calls.at(-1)!.orderBy, [{ name: "asc" }, { id: "asc" }]);
+  } finally { globals.prisma = previous; Object.assign(process.env, env); if (env.DATABASE_URL === undefined) delete process.env.DATABASE_URL; if (env.AUTH_DRIVER === undefined) delete process.env.AUTH_DRIVER; }
+});
