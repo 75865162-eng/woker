@@ -109,3 +109,28 @@ test("listings DXM publish state is a bound exact predicate; DISTINCT facets rem
     }
   }
 });
+
+test("firstSaleDate bounds use only typed column, independently of openDate; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "firstSaleFrom=2024-02-01", "firstSaleTo=2024-03-01", "firstSaleFrom=2024-02-01&firstSaleTo=2024-03-01"]) {
+      for (const openRange of ["", "from=2023-01-01&to=2023-12-31"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&${openRange}&shopExternalId=shop&site=US`), "listings");
+        const sql = workbenchReadSql("listings", query, scope, exporting);
+        for (const [value, pattern] of [
+          [query.firstSaleFrom, /s\."firstSaleDate">=\$(\d+)/], [query.firstSaleTo, /s\."firstSaleDate"<=\$(\d+)/],
+          [query.from, /s\."openDate">=\$(\d+)/], [query.to, /s\."openDate"<=\$(\d+)/],
+        ] as const) {
+          const match = sql.text.match(pattern);
+          if (value) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+        assert.doesNotMatch(sql.text, /payload|firstOrderDate|COALESCE\(s\."firstSaleDate"|"firstSaleDate" IS NULL|"reportDate"[<>]=/);
+        if (!exporting) {
+          const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+          assert.doesNotMatch(facets, /firstSaleDate|openDate/);
+          for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+        }
+      }
+    }
+  }
+});

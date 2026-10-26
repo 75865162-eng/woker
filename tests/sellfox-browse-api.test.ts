@@ -947,3 +947,58 @@ test("listings DXM publish state alone routes browse/facets and CSV/XLSX through
     for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
+
+test("listings firstSale bounds reach workbench and Agent browse/exports without overloading openDate or adding a gate", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const context = { params: Promise.resolve({ domain: "listings" }) };
+    for (const range of ["firstSaleFrom=2024-02-01", "firstSaleTo=2024-03-01", "firstSaleFrom=2024-02-01&firstSaleTo=2024-03-01"]) {
+      for (const open of ["", "&from=2023-01-01&to=2023-12-31"]) {
+        for (const layout of ["", "&layout=workbench"]) {
+          for (const format of ["browse", "csv", "xlsx", "agent"] as const) {
+            if (format === "xlsx" && !layout) continue;
+            calls.length = 0;
+            const params = new URLSearchParams(`${range}${open}${layout}${format === "agent" ? "&agent=1" : `&format=${format}`}`);
+            const request = new Request(`http://localhost/api/sellfox/listings?${params}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+            const response = await (format === "browse" ? browse : csv)(request, context);
+            assert.equal(response.status, 200);
+            assert.equal(calls.length, format === "browse" && !layout ? 2 : 1);
+            for (const sql of calls) {
+              assert.equal(sql.text.startsWith("WITH"), Boolean(layout) && format !== "agent");
+              for (const [key, pattern] of [
+                ["firstSaleFrom", /s\."firstSaleDate">=\$(\d+)/], ["firstSaleTo", /s\."firstSaleDate"<=\$(\d+)/],
+                ["from", /s\."openDate">=\$(\d+)/], ["to", /s\."openDate"<=\$(\d+)/],
+              ] as const) {
+                const match = sql.text.match(pattern);
+                if (params.has(key)) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], params.get(key)); }
+                else assert.equal(match, null);
+              }
+              assert.doesNotMatch(sql.text, /payload|firstOrderDate|"reportDate"[<>]=/);
+            }
+          }
+        }
+      }
+    }
+    for (const range of ["firstSaleFrom=2026-02-29", "firstSaleTo=invalid", "firstSaleFrom=2024-03-01&firstSaleTo=2024-02-01"]) {
+      for (const handler of [browse, csv]) {
+        calls.length = 0;
+        const response = await handler(new Request(`http://localhost/api/sellfox/listings?${range}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } }), context);
+        assert.equal(response.status, 400); assert.equal(calls.length, 0);
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});

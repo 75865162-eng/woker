@@ -641,3 +641,37 @@ test("agent DXM publish state filters listings rows/count/export exactly; other 
     }
   } finally { globals.prisma = previous; }
 });
+
+test("agent firstSaleDate ranges affect listings rows/count/export only and preserve other date semantics", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory", "performance", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+      for (const range of ["", "firstSaleFrom=2024-02-01", "firstSaleTo=2024-03-01", "firstSaleFrom=2024-02-01&firstSaleTo=2024-03-01"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?from=2023-01-01&to=2023-12-31&${range}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        assert.equal(factWhere(calls[0]), factWhere(calls[1]));
+        assert.equal(factWhere(calls[0]), factWhere(calls[2]));
+        for (const sql of calls) {
+          for (const [value, pattern] of [[query.firstSaleFrom, /s\."firstSaleDate">=\$(\d+)/], [query.firstSaleTo, /s\."firstSaleDate"<=\$(\d+)/]] as const) {
+            const match = sql.text.match(pattern);
+            if (domain === "listings" && value) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+            else assert.equal(match, null);
+          }
+          assert.doesNotMatch(sql.text, /payload|firstOrderDate|COALESCE\(s\."firstSaleDate"|"firstSaleDate" IS NULL/);
+          for (const [value, pattern] of domain === "listings"
+            ? [[query.from, /s\."openDate">=\$(\d+)/], [query.to, /s\."openDate"<=\$(\d+)/]] as const
+            : domain === "inventory" ? []
+            : [[query.from, /"reportDate">=\$(\d+)/], [query.to, /"reportDate"<=\$(\d+)/]] as const) {
+            const match = sql.text.match(pattern); assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value);
+          }
+          if (domain === "inventory") assert.doesNotMatch(sql.text, /"(?:openDate|reportDate)"[<>]=/);
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});

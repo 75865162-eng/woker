@@ -1,5 +1,15 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 首次售出日期范围筛选 · BOX LOCAL ONLY
+
+基线 HEAD `9adcc96`，分支 `codex/operations-p0-catalog-replenishment`。仅 listings 新增专用参数 `firstSaleFrom` / `firstSaleTo`（YYYY-MM-DD），对类型 TEXT 列 `sellfox_listing_current."firstSaleDate"` 作含首尾范围比较；**不**复用上架时间的 `from` / `to`（仍只绑定 `openDate`）。空两端不加条件；只设一端仅限制该端；设置任意范围时 NULL firstSaleDate 不匹配。触发器写入时已 COALESCE(firstSaleDate, firstOrderDate) 入列，筛选只读类型列，运行时不另写 COALESCE。列表、计数、汇总、导出及 Agent 窄表同口径；facets 仍仅受组织/工作区/店铺/站点范围限制。UI 在「上架时间」旁增加独立「首次售出」日期输入与快捷项（开始/结束 aria 标签不与 openDate 冲突）；重置清空两端。sales / performance / inventory / ads 不应用此参数；跨域 URL 可保留，但 forRequest 仅 listings 序列化。
+
+不改 `defaultVisible`、schema/migration、openDate 语义；配对 / 划线价 / inventory min-max / ads rating / fee 筛选保持锁定，**Fee-mining remains paused**。无 live Sellfox API 或真实数据库写入，不 push/deploy/SSH/Mac。回滚仅还原本次专用参数与两条查询路径条件及配套测试，无数据操作。
+
+验证使用隔离 Prisma stub：browse-query / browse-filters / listings-read / agent-read / browse-api 定向 node:test，TypeScript、触及 ESLint、`git diff --check`；浏览器定向断言已更新（首次售出开始序列化 `firstSaleFrom=` 且不清除 openDate），Chromium SIGTRAP 历史问题记录、不绕过沙箱。完整 check/build、真实库与 P95 留待单独授权。
+
+---
+
 ## 2026-10-27 — listings DXM 发布状态精确筛选与 facets · BOX LOCAL ONLY
 
 基线 HEAD `83c75ac`，分支 `codex/operations-p0-catalog-replenishment`。仅 listings 新增 `dxmPublishState=<完整原值>`：去首尾空格后，对 `sellfox_listing_current."dxmPublishState"` 类型 TEXT 列参数化 `=` 精确匹配；空参数不加条件，NULL 仅在「全部」中出现。browse、计数、汇总、CSV/XLSX 和 Agent 窄表导出同口径，参数单独出现亦进入 workbench（显式 `agent=1` 导出仍用 Agent 路径）。sales / performance / inventory / ads 均不应用此参数；跨域 URL 可保留选择，但非 listings 请求不序列化它。

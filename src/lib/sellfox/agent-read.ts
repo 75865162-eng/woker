@@ -333,6 +333,8 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
   if (domain === "listings" && query.dxmPublishState) clauses.push(Prisma.sql`s."dxmPublishState"=${query.dxmPublishState}`);
   if (domain === "listings" && query.from) clauses.push(Prisma.sql`s."openDate">=${query.from}`);
   if (domain === "listings" && query.to) clauses.push(Prisma.sql`s."openDate"<=${query.to}`);
+  if (domain === "listings" && query.firstSaleFrom) clauses.push(Prisma.sql`s."firstSaleDate">=${query.firstSaleFrom}`);
+  if (domain === "listings" && query.firstSaleTo) clauses.push(Prisma.sql`s."firstSaleDate"<=${query.firstSaleTo}`);
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);
   if (query.site) clauses.push(Prisma.sql`marketplace=${query.site}`);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);

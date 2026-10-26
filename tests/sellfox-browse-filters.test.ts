@@ -300,3 +300,44 @@ test("listings DXM publish state select uses only facets plus URL value, changes
     }
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
+
+test("listings show independent first-sale inputs and shortcuts, reset both ranges, and hide first-sale UI elsewhere", (t) => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-27T04:00:00Z") });
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const view: SellfoxView = { ...defaultSellfoxView, domain: "listings", from: "2023-01-01", to: "2023-12-31", firstSaleFrom: "2024-02-01", firstSaleTo: "2024-03-01" };
+    const nodes = elements(SellfoxBrowseFilters({ view, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    assert.ok(nodes.some(node => node.type === "span" && node.props.children === "上架时间"));
+    const label = nodes.find(node => node.type === "span" && node.props.children === "首次售出")!;
+    assert.match(label.props.title!, /firstSaleDate.*YYYY-MM-DD.*含首尾.*NULL/);
+    for (const [aria, key] of [["首次售出开始", "firstSaleFrom"], ["首次售出结束", "firstSaleTo"]] as const) {
+      const inputs = nodes.filter(node => node.type === "input" && node.props["aria-label"] === aria);
+      assert.equal(inputs.length, 1); assert.ok(!inputs[0].props.disabled);
+      assert.equal(inputs[0].props.value, view[key]);
+      inputs[0].props.onChange!({ target: { value: "2024-02-15" } });
+      assert.deepEqual(patches.at(-1), { [key]: "2024-02-15" });
+    }
+    for (const [aria, key] of [["开始日期", "from"], ["结束日期", "to"]] as const) {
+      const inputs = nodes.filter(node => node.type === "input" && node.props["aria-label"] === aria);
+      assert.equal(inputs.length, 1); assert.equal(inputs[0].props.value, view[key]);
+      inputs[0].props.onChange!({ target: { value: "2023-02-01" } });
+      assert.deepEqual(patches.at(-1), { [key]: "2023-02-01", allDates: false });
+    }
+    const shortcut = nodes.find(node => node.props["aria-label"] === "首次售出快捷")!;
+    assert.deepEqual(elements(shortcut.props.children).map(node => node.props.children), ["自定义", "今天", "昨天", "近7天", "近30天", "全部历史"]);
+    const count = patches.length;
+    shortcut.props.onChange!({ target: { value: "custom" } }); assert.equal(patches.length, count);
+    for (const [value, from, to] of [["0", "2026-10-27", "2026-10-27"], ["-1", "2026-10-26", "2026-10-26"], ["-6", "2026-10-21", "2026-10-27"], ["-29", "2026-09-28", "2026-10-27"], ["all", "", ""]]) {
+      shortcut.props.onChange!({ target: { value } });
+      assert.deepEqual(patches.at(-1), { firstSaleFrom: from, firstSaleTo: to });
+    }
+    nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+    for (const key of ["firstSaleFrom", "firstSaleTo", "from", "to"] as const) assert.equal(patches.at(-1)?.[key], "");
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = elements(SellfoxBrowseFilters({ view: { ...view, domain }, stores: [], onChange: () => {}, onColumns: () => {} }));
+      for (const aria of ["首次售出开始", "首次售出结束", "首次售出快捷"]) assert.equal(other.some(node => node.props["aria-label"] === aria), false);
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});

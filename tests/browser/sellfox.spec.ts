@@ -184,6 +184,15 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page.getByLabel("配对状态（未同步）", { exact: true })).toBeDisabled();
   await page.getByLabel("开始日期").fill("2024-01-15");
   await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("from")).toBe("2024-01-15");
+  await expect(page.getByLabel("首次售出开始", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("首次售出结束", { exact: true })).toHaveValue("");
+  await page.getByLabel("首次售出开始", { exact: true }).fill("2024-02-01");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("firstSaleFrom")).toBe("2024-02-01");
+  await expect(page.getByLabel("开始日期")).toHaveValue("2024-01-15");
+  expect(calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("from")).toBe("2024-01-15");
+  await expect(page).toHaveURL(/firstSaleFrom=2024-02-01/);
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /firstSaleFrom=2024-02-01/);
+  await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /firstSaleFrom=2024-02-01/);
   await page.getByLabel("Listing 状态").selectOption("active");
   await expect.poll(() => calls.filter((call) => call.path.endsWith("/listings")).at(-1)?.query.get("status")).toBe("active");
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /listings\/export.*agent=1/);
@@ -193,6 +202,9 @@ test("listing current and advertising product daily browse locally and expose na
   await expect.poll(() => calls.some((call) => call.path.endsWith("/ads_report"))).toBe(true);
   await expect(page.getByLabel("DXM 发布状态", { exact: true })).toHaveCount(0);
   expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("dxmPublishState")).toBe(false);
+  await expect(page.getByLabel("首次售出开始", { exact: true })).toHaveCount(0);
+  expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("firstSaleFrom")).toBe(false);
+  expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("firstSaleTo")).toBe(false);
   expect(calls.some((call) => call.path.endsWith("/hourly"))).toBe(false);
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /ads_report\/export.*agent=1/);
 });

@@ -279,3 +279,34 @@ test("DXM publish state trims arbitrary exact values and round trips listings wi
   }
   assert.equal(query("").dxmPublishState, "");
 });
+
+test("firstSale dates validate and round trip independently of openDate, with listings-only requests", () => {
+  for (const range of ["", "firstSaleFrom=2024-02-01", "firstSaleTo=2024-03-01", "firstSaleFrom=2024-02-01&firstSaleTo=2024-03-01", "firstSaleFrom=2024-02-29&firstSaleTo=2024-02-29"]) {
+    const params = new URLSearchParams(`domain=listings&from=2023-01-01&to=2023-12-31&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.firstSaleFrom, params.get("firstSaleFrom") || undefined);
+    assert.equal(parsed.firstSaleTo, params.get("firstSaleTo") || undefined);
+    assert.equal(parsed.from, "2023-01-01"); assert.equal(parsed.to, "2023-12-31");
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("firstSaleFrom"), params.get("firstSaleFrom"));
+      assert.equal(sellfoxViewParams(other).get("firstSaleTo"), params.get("firstSaleTo"));
+      assert.equal(sellfoxViewParams(other, true).has("firstSaleFrom"), false);
+      assert.equal(sellfoxViewParams(other, true).has("firstSaleTo"), false);
+    }
+  }
+  for (const key of ["firstSaleFrom", "firstSaleTo"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["2026-02-29", "2024-13-01", "2024-01-32", "2024-1-01", "invalid", "2024-01-01' OR TRUE--"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /日期必须使用有效 YYYY-MM-DD 格式/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("firstSaleFrom=%202024-02-01%20").firstSaleFrom, "2024-02-01");
+  assert.throws(() => query("firstSaleFrom=2024-03-01&firstSaleTo=2024-02-01"), /结束日期不得早于开始日期/);
+  assert.throws(() => query("from=2024-03-01&to=2024-02-01&firstSaleFrom=2024-01-01"), /结束日期不得早于开始日期/);
+});
