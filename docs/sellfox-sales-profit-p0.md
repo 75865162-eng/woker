@@ -1,5 +1,32 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+**sales average7「均值」默认显示（2026-10-27 02:09:27 Asia/Shanghai · Owner: Chen Jieliang · BOX LOCAL ONLY）**
+
+基线 `2e2e3af099b0f5fbd730af133dddc71cddc97730`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.sales.average7` 移出默认隐藏组，紧跟 `trend`「销量趋势」，保持 numeric；商品（ASIN/MSKU/SKU/父ASIN）与 store/developer/spu 默认列、未显式选列的 CSV/XLSX 均包含「均值」。显式会话 `columnSelection`（含空集合、手动隐藏均值）原样生效，不迁移已保存选列。
+
+派生继续使用所选范围末 7 个完整 `dailyQuantity` 日，与所选 quantity/orders/revenue 指标无关；缺任一天为 NULL/空白、不补零，真实 0 保留。`average7` / `trend` 排序仍拒绝。performance / listings / ads 及六广告子页配置逐字节保持基线；销量业务员 / 实时统计 / 运营 / 业绩归属人 / 分类 / AWD / 销量洞察保持锁定，totalInventory / inventoryCapturedAt / currency / marketplace 等仍默认隐藏。**Fee-mining remains paused**。
+
+无 schema/migration/SQL、服务端、同步或计划改动；无 push/fetch、SSH、deploy/restart、migrate-on-123、live Sellfox API 或真实数据库读写，未加载/修改 `.env`。仅 BOX 本地。回滚为将 average7 放回原默认隐藏组并撤销本轮测试/文档改动，不涉及数据操作。
+
+验证：以下四个定向测试文件全部通过，覆盖七种维度的默认顺序、默认及显式选列 CSV/真实 ExcelJS XLSX 回读、数值均值/零/缺日空白、显式空选列与排序守卫；TypeScript 和 touched ESLint 通过。逐字节比对确认生产源码只包含本次 sales average7 lift，其余内容与基线一致。
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-filters.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+# 已尝试，Chromium 启动受 BOX sandbox 限制，页面断言未执行：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'sales matrix filters'
+```
+
+浏览器用例已补默认均值列/勾选、不可排序、默认导出列序与手动隐藏后导出断言；本次 Chromium 在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，需父进程在允许浏览器的本地环境补跑。未绕过沙箱。未跑完整 check/build、Prisma/PGlite 或真实 P95：本次只改列默认显示，使用定向 fixture、类型、touched lint 和 diff 检查；合码/发布前补完整检查，SQL/schema 或性能专项才触发对应验证。仓库外 `/workspace/sellfox-parity-gap.md` 同步状态，不纳入 repo commit。
+
+`git diff --check` 通过。本地提交在 `git add` 阶段受阻：无法创建 `.git/index.lock`（Read-only file system），未执行 commit、未强制或绕过沙箱。4 个仓库文件完整保留为未暂存改动，HEAD 仍为 `2e2e3af099b0f5fbd730af133dddc71cddc97730`；父进程需本地提交：`feat(sellfox): default-show sales average7 column`。
+
+下方为历史批次。
+
+---
+
 **UI polish：performance 业务员默认显示（2026-10-27 01:07:17 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地）**
 
 `performance.salesperson`「业务员」移出默认隐藏列组，位于币种之后，使用 `column()` 的 `defaultVisible: true`；商品维度和 store/developer/spu 默认列及无显式选列的 CSV/XLSX 均包含该列。仍读取既有 `userNameList` 类型投影并以「、」连接，requiresField、筛选/facets/包含语义不变。业务员统计维度仍禁用，sales 业务员与 Listing/ads 业务员仍锁定，其余灰显不变；可选费用列继续默认隐藏，**fee-mining remains paused**。已有显式选列继续遵循用户配置。回滚仅还原本轮 UI/测试改动，无数据操作。

@@ -151,6 +151,10 @@ test("listing current and advertising product daily browse locally and expose na
 
 test("sales matrix filters debounce, serialize dimensions and preserve visible export columns", async ({ page }) => {
   const { calls } = await setup(page);
+  await expect(page.getByRole("columnheader", { name: "均值", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "均值", exact: true }).getByRole("button")).toHaveCount(0);
+  const defaultExport = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
+  expect(new URL(defaultExport!, "http://localhost").searchParams.getAll("column").slice(-2)).toEqual(["trend", "average7"]);
   await page.getByRole("button", {name:"日矩阵（高级）", exact:true}).click();
   await expect(page.getByRole("columnheader", { name: "10-24", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "父ASIN", exact: true }).click();
@@ -163,12 +167,16 @@ test("sales matrix filters debounce, serialize dimensions and preserve visible e
   await expect(page.getByRole("checkbox", { name: "实时统计", exact: true })).toBeDisabled();
   await expect(page.getByRole("checkbox", { name: "实时统计", exact: true })).not.toBeChecked();
   await page.getByText("自定义列", { exact: true }).click();
+  await expect(page.getByLabel("显示均值列", { exact: true })).toBeChecked();
+  await page.getByLabel("显示均值列", { exact: true }).uncheck();
+  await expect(page.getByRole("columnheader", { name: "均值", exact: true })).toHaveCount(0);
   await page.getByLabel("显示标题列", { exact: true }).check();
   await expect(page.getByRole("columnheader", { name:"标题",exact:true })).toBeVisible();
   await page.getByLabel("显示标题列", { exact: true }).uncheck();
   const href = await page.getByRole("link", { name: "CSV", exact: true }).getAttribute("href");
   const params = new URL(href!, "http://localhost").searchParams;
   expect(params.getAll("column")).not.toContain("title"); expect(params.getAll("column")).toContain("subtotal");
+  expect(params.getAll("column")).not.toContain("average7");
   await page.setViewportSize({ width: 720, height: 800 });
   await expect(page.getByRole("columnheader", { name: "父ASIN", exact: true }).first()).toHaveClass(/sticky left-0/);
   const writes = calls.filter(c => c.body !== null); expect(writes).toEqual([]);
