@@ -1,5 +1,25 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+
+## 2026-10-27 02:33:37 Asia/Shanghai — sales 默认显示 totalInventory「总库存」 · Owner: Chen Jieliang · BOX LOCAL ONLY
+
+基线 `137ab4f3fae27083f3f12dff324c9a8712a3c02e`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.sales.totalInventory` 移出默认隐藏组，紧跟 `average7`「均值」（相对顺序不变），保持 numeric；商品（ASIN/MSKU/SKU/父ASIN）与 store/developer/spu 默认列、未显式选列的 CSV/XLSX 均包含「总库存」。显式会话 `columnSelection`（含空集合、手动隐藏总库存）原样生效，不迁移已保存选列。
+
+库存仍来自既有 `sellfox_inventory_current` 页内补充查询（storeId+msku 汇总）；`inventoryCapturedAt` / currency / marketplace 继续默认隐藏；AWD stubs 仍 unavailable。销量业务员 / 实时统计 / 运营 / 业绩归属人 / 分类 / AWD / 销量洞察保持锁定。performance / listings / ads 默认配置与基线逐字节一致（listings `totalInventory` 仍 `defaultVisible: false`）。**Fee-mining remains paused**。
+
+无 schema/migration/SQL、服务端、同步或计划改动；无 push/fetch、SSH、deploy、migrate-on-123、live Sellfox API 或真实数据库读写，未加载/修改 `.env`。仅 BOX 本地。回滚为将 totalInventory 放回原默认隐藏组并撤销本轮测试/文档改动，不涉及数据操作。
+
+验证：定向单测覆盖七种维度默认顺序、默认及显式选列 CSV/真实 ExcelJS XLSX（180/0/NULL）、显式空选列与 AWD/库存时间仍隐藏；TypeScript、touched ESLint、`git diff --check`。Prisma stub，不连真实库。未跑完整 check/build、浏览器或真实 P95（Chromium 在 BOX sandbox 常 SIGTRAP）。
+
+验证命令：
+
+    NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts
+    npm run typecheck
+    node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+    git diff --check
+
+仅 BOX 本地：无 push/fetch、deploy、SSH、migrate-on-123、live Sellfox、schedules 或 `.env`。仓库外 /workspace/sellfox-parity-gap.md 同步，不入库。
+
 **sales average7「均值」默认显示（2026-10-27 02:09:27 Asia/Shanghai · Owner: Chen Jieliang · BOX LOCAL ONLY）**
 
 基线 `2e2e3af099b0f5fbd730af133dddc71cddc97730`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.sales.average7` 移出默认隐藏组，紧跟 `trend`「销量趋势」，保持 numeric；商品（ASIN/MSKU/SKU/父ASIN）与 store/developer/spu 默认列、未显式选列的 CSV/XLSX 均包含「均值」。显式会话 `columnSelection`（含空集合、手动隐藏均值）原样生效，不迁移已保存选列。
