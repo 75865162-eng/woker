@@ -1,5 +1,29 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+
+## 2026-10-27 — listings 默认显示 fulfillment「发货方式」 · BOX LOCAL ONLY
+
+基线 HEAD `87db3b6`（`87db3b6991e44829c83553dc8820d8fc27d93c03`），分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.listings.fulfillment.defaultVisible` 从 `false` 改为 `true`，保留「发货方式」、requiresField 与 status → dxmPublishState → fulfillment → image 源顺序。默认列表、列选择器初始勾选及无显式选列 CSV/XLSX 增加「发货方式」，紧接「状态」。复用现有 current Listing `switchFulfillmentTo` 类型投影（AFN / MFN / 未知）及已解锁的 fulfillment 筛选；NULL/缺失在导出中保持空白。显式会话选列（含空集合、只选 fulfillment、取消 fulfillment）继续优先，切换数据域保留取消状态，不迁移已有选择。
+
+amazonBrand / dxmPublishState / productTags / firstSaleDate / BSR / 费用 / inventoryCapturedAt 等仍默认隐藏；openDate/库存筛选、配对、父体、业务员、AWD 保持锁定。sales / performance / ads / ads_* 配置逐字节不变，ads.fulfillment 仍默认隐藏。**Fee-mining remains paused**。无新增字段、SQL、schema/migration、API、服务端或新增请求/计算。回滚仅还原本次默认值及配套测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连接真实数据库，不加载 `.env`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+git diff --word-diff=porcelain -- src/components/sellfox/workbench-types.ts
+# 单项模拟浏览器回归；若 Chromium 在 BOX sandbox 中 SIGTRAP，记录结果，不绕过：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand'
+```
+
+验证结果：三个定向测试文件全部通过（零失败），TypeScript 与 touched ESLint 通过；默认 CSV/XLSX 覆盖 AFN/MFN/NULL/缺失，保留既有 fulfillment 筛选与 CSV 断言，补齐单独选列、空选列和显式隐藏。与基线逐字节比对确认整个生产文件仅 listings fulfillment 默认标记变化；word-diff 的变更 token 仅 `-false,` / `+true,`。单项浏览器已尝试，Chromium 启动在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行，未绕过沙箱；默认表头、初始勾选、取消后切页保留及 CSV/Excel 链接移除断言需在允许 Chromium 的本地环境补跑。
+
+仅 BOX 本地：无 push/fetch、deploy、SSH、live Sellfox API、真实数据库读写或 `.env` 操作。跳过完整 check/build、数据库集成与真实 P95：本轮只有一个 UI 默认标记，合码/上线或 SQL/schema/性能专项才补对应验证。仓库外 `/workspace/sellfox-parity-gap.md` 留给父进程更新。下方为历史批次，以本节为当前状态。
+
+
 ## 2026-10-27 — listings 默认显示 totalInventory「总库存」 · BOX LOCAL ONLY
 
 基线 `75409170576a7a825aa6e176054c766df7a454f0`，分支 `codex/operations-p0-catalog-replenishment`。对齐 sales 已交付的 `ad559c8`，仅将 `columns.listings.totalInventory.defaultVisible` 从 `false` 改为 `true`，保留 numeric、requiresField 与 fulfillable → totalInventory → inventoryCapturedAt 源顺序。默认列表、列选择器初始勾选及无显式选列 CSV/XLSX 增加「总库存」，紧接「可售」。复用既有最新完整库存快照补充，非销售日库存；NULL 保持空白，0/180 保持数值。显式会话 `columnSelection`（含空集合、隐藏 totalInventory、只选 title）继续优先，不迁移保存选择。
