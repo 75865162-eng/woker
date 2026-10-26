@@ -73,6 +73,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
   const adOrdersMin = optionalInt("adOrdersMin"), adOrdersMax = optionalInt("adOrdersMax");
   const bsrRankMin = optionalInt("bsrRankMin"), bsrRankMax = optionalInt("bsrRankMax");
   const fulfillableMin = optionalInt("fulfillableMin"), fulfillableMax = optionalInt("fulfillableMax");
+  const sales7Min = optionalInt("sales7Min"), sales7Max = optionalInt("sales7Max");
   const priceMin = optionalNumber("priceMin"), priceMax = optionalNumber("priceMax");
   const listingQuantityMin = optionalNumber("listingQuantityMin"), listingQuantityMax = optionalNumber("listingQuantityMax");
   const reservedQtyMin = optionalNumber("reservedQtyMin"), reservedQtyMax = optionalNumber("reservedQtyMax");
@@ -90,6 +91,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
   if (adOrdersMin != null && adOrdersMax != null && adOrdersMin > adOrdersMax) throw new SellfoxBrowseError("广告订单上限不得小于下限。");
   if (bsrRankMin != null && bsrRankMax != null && bsrRankMin > bsrRankMax) throw new SellfoxBrowseError("BSR上限不得小于下限。");
   if (fulfillableMin != null && fulfillableMax != null && fulfillableMin > fulfillableMax) throw new SellfoxBrowseError("可售上限不得小于下限。");
+  if (sales7Min != null && sales7Max != null && sales7Min > sales7Max) throw new SellfoxBrowseError("7天销量上限不得小于下限。");
   if (priceMin != null && priceMax != null && priceMin > priceMax) throw new SellfoxBrowseError("价格上限不得小于下限。");
   if (listingQuantityMin != null && listingQuantityMax != null && listingQuantityMin > listingQuantityMax) throw new SellfoxBrowseError("Listing库存上限不得小于下限。");
   if (reservedQtyMin != null && reservedQtyMax != null && reservedQtyMin > reservedQtyMax) throw new SellfoxBrowseError("预留上限不得小于下限。");
@@ -102,7 +104,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
-    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax, ratingMin, ratingMax, ratingCountMin, ratingCountMax, costMin, costMax, adSalesMin, adSalesMax, impressionsMin, impressionsMax, clicksMin, clicksMax, adOrdersMin, adOrdersMax, bsrRankMin, bsrRankMax, fulfillableMin, fulfillableMax, priceMin, priceMax, listingQuantityMin, listingQuantityMax, reservedQtyMin, reservedQtyMax, unsellableMin, unsellableMax, warehousingMin, warehousingMax,
+    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax, ratingMin, ratingMax, ratingCountMin, ratingCountMax, costMin, costMax, adSalesMin, adSalesMax, impressionsMin, impressionsMax, clicksMin, clicksMax, adOrdersMin, adOrdersMax, bsrRankMin, bsrRankMax, fulfillableMin, fulfillableMax, sales7Min, sales7Max, priceMin, priceMax, listingQuantityMin, listingQuantityMax, reservedQtyMin, reservedQtyMax, unsellableMin, unsellableMax, warehousingMin, warehousingMax,
     status: p.get("status")?.trim() || undefined,
     searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",

@@ -1,3 +1,4 @@
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `sales7Min`/`sales7Max` 整数过滤；类型列 `s."sales7"`（Int? 窗口）；与 fulfillable 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `fulfillableMin`/`fulfillableMax` 整数过滤；类型列 `s."fulfillable"`（Int?；listings 非库存 enrich）；与 bsrRank 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `priceMin`/`priceMax` 数值过滤；类型列 `s.price`（Float?；无引号）；与 listingQuantity 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads Agent/CSV 窄表新增可选 `adOrdersMin`/`adOrdersMax` 整数过滤；类型列 `"adOrders"`（六 ads_* 日报）；与 clicks/impressions 同形双端，不默认、不跨域。ads daily typed 近墙（acos 仍跳过）。配对/fee 仍锁定。无 push/deploy/真实库写入。
