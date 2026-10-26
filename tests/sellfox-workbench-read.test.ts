@@ -396,7 +396,7 @@ test("listings expose optional numeric ratingCount from the current snapshot wit
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'ratingCount',''\)::float AS "ratingCount"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
   const config = visibleColumns("listings", ["ratingCount"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "评论数");
@@ -423,7 +423,7 @@ test("listings expose optional numeric purchaseCost from the current snapshot wi
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
     assert.match(sql.text, /NULLIF\(p\.payload->>'purchaseCost',''\)::float AS "purchaseCost"/);
-    assert.match(sql.text, /l\."bsrRank",l\."purchaseCost",/);
+    assert.match(sql.text, /l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
   }
   const config = visibleColumns("listings", ["purchaseCost"]);
   assert.equal(config.length, 1);
@@ -442,6 +442,67 @@ test("listings expose optional numeric purchaseCost from the current snapshot wi
   for (const domain of ["sales", "performance", "ads_report"] as const) {
     for (const exporting of [false, true]) assert.doesNotMatch(workbenchReadSql(domain, query, scope, exporting).text, /purchaseCost/);
   }
+});
+
+for (const [key, label] of [["fbaFees", "FBA费用"], ["referralFee", "佣金"], ["totalFee", "总费用"], ["headTripCost", "头程"]]) {
+  test(`listings expose optional numeric ${key} from the current snapshot without losing null or zero`, () => {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+    const scope = { organizationId: "org", workspaceId: "ws" };
+    for (const exporting of [false, true]) {
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      assert.ok(sql.text.includes(`NULLIF(p.payload->>'${key}','')::float AS "${key}",`));
+      assert.ok(sql.text.includes(`l."${key}",`));
+    }
+    const config = visibleColumns("listings", [key]);
+    assert.equal(config.length, 1);
+    assert.equal(config[0].labelZh, label);
+    assert.equal(config[0].unavailable, undefined);
+    assert.equal(config[0].numeric, true);
+    assert.equal(config[0].defaultVisible, false);
+    assert.equal(config[0].requiresField, `Listing 当前快照 payload.${key}`);
+    assert.ok(!defaultVisibleColumnKeys("listings").includes(key));
+    assert.equal(sellfoxColumnValue(config[0], { [key]: null }), null);
+    assert.equal(sellfoxColumnValue(config[0], { [key]: 0 }), 0);
+    assert.equal(sellfoxColumnValue(config[0], { [key]: 9.68 }), 9.68);
+    assert.equal(visibleColumnCsv(config, [{ [key]: null }, { [key]: 0 }, { [key]: 9.68 }]).trim(), `"${label}"\r\n""\r\n0\r\n9.68`);
+    for (const domain of ["ads", "sales", "performance"]) assert.deepEqual(visibleColumns(domain, [key]), []);
+    for (const domain of ["sales", "performance", "ads_report"] as const) {
+      for (const exporting of [false, true]) assert.ok(!workbenchReadSql(domain, query, scope, exporting).text.includes(key));
+    }
+  });
+}
+
+test("listing fee columns follow purchaseCost and precede parentAsin in configured order", () => {
+  assert.deepEqual(visibleColumns("listings", ["parentAsin", "headTripCost", "totalFee", "referralFee", "fbaFees", "purchaseCost"]).map(c => c.key),
+    ["purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "parentAsin"]);
+});
+
+test("selected listing fees export null, zero and decimals in CSV and XLSX", async () => {
+  const keys = ["fbaFees", "referralFee", "totalFee", "headTripCost"];
+  const labels = ["FBA费用", "佣金", "总费用", "头程"];
+  const decimals = [9.68, 4.95, 14.63, 9.24];
+  const rows = [keys.map(() => null), keys.map(() => 0), decimals].map(values => Object.fromEntries(keys.map((key, index) => [key, values[index]])));
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows, total: 3, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?column=headTripCost&column=totalFee&column=referralFee&column=fbaFees&format=csv");
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    const csv = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    assert.equal((await csv.text()).trim(), '"FBA费用","佣金","总费用","头程"\r\n"","","",""\r\n0,0,0,0\r\n9.68,4.95,14.63,9.24');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("listings", sellfoxBrowseQuery(url), scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.equal(sheet.columnCount, 4);
+    for (let index = 0; index < keys.length; index++) {
+      assert.equal(sheet.getRow(1).getCell(index + 1).value, labels[index]);
+      assert.equal(sheet.getRow(2).getCell(index + 1).value, null);
+      assert.equal(sheet.getRow(3).getCell(index + 1).value, 0);
+      assert.equal(sheet.getRow(4).getCell(index + 1).value, decimals[index]);
+    }
+  } finally { globals.prisma = previous; }
 });
 
 test("selected listing purchaseCost exports null, zero and decimals in CSV and XLSX", async () => {
@@ -475,7 +536,7 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.match(sql.text, /string_agg\(DISTINCT btrim\(label\.value->>'labelName'\), '、' ORDER BY btrim\(label\.value->>'labelName'\)\)/);
   assert.doesNotMatch(sql.text, /productTagNames|product_labels|array_to_string/);
   assert.match(sql.text, /AS "productTags"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
   const config = visibleColumns("listings", ["productTags"]);
   assert.equal(config.length, 1);
@@ -498,7 +559,7 @@ test("listings expose optional text openDate from the current snapshot and prese
   const scope = { organizationId: "org", workspaceId: "ws" };
   const sql = workbenchReadSql("listings", query, scope);
   assert.match(sql.text, /NULLIF\(p\.payload->>'openDate',''\) AS "openDate"/);
-  assert.match(sql.text, /l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",/);
+  assert.match(sql.text, /l\."productTags",l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
   const config = visibleColumns("listings", ["openDate"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "上架时间");
@@ -522,7 +583,7 @@ test("listings expose optional text firstSaleDate from the current snapshot and 
   for (const exporting of [false, true]) {
     const sql = workbenchReadSql("listings", query, scope, exporting);
     assert.match(sql.text, /COALESCE\(NULLIF\(p\.payload->>'firstSaleDate',''\),NULLIF\(p\.payload->>'firstOrderDate',''\)\) AS "firstSaleDate"/);
-    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",/);
+    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
   }
   const config = visibleColumns("listings", ["firstSaleDate"]);
   assert.equal(config.length, 1);
@@ -552,7 +613,7 @@ test("listings null exact BSR sentinel 9999999 after numeric cast, preferring bi
     assert.match(sql.text, /jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'bsrRank'\)='array' THEN p\.payload->'bsrRank' ELSE '\[\]'::jsonb END\) WITH ORDINALITY elem\(value,ordinality\)/);
     assert.ok(sql.text.includes("WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'"));
     assert.match(sql.text, /ORDER BY CASE WHEN elem\.value->>'bigCategory' IN \('true','TRUE','1'\) THEN 0 ELSE 1 END,elem\.ordinality\s+LIMIT 1\s+\) AS "bsrRank"/);
-    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",/);
+    assert.match(sql.text, /l\."openDate",l\."firstSaleDate",l\."bsrRank",l\."purchaseCost",l\."fbaFees",l\."referralFee",l\."totalFee",l\."headTripCost",/);
   }
   const config = visibleColumns("listings", ["bsrRank"]);
   assert.equal(config.length, 1);
