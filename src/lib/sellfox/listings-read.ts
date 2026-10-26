@@ -62,6 +62,12 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
     if (query.sales14Min != null) filters.push(Prisma.sql`s."sales14">=${query.sales14Min}`);
     if (query.sales14Max != null) filters.push(Prisma.sql`s."sales14"<=${query.sales14Max}`);
   }
+  // Typed sales30 (Int? window); NULL excluded when either bound is set.
+  if (query.sales30Min != null || query.sales30Max != null) {
+    filters.push(Prisma.sql`s."sales30" IS NOT NULL`);
+    if (query.sales30Min != null) filters.push(Prisma.sql`s."sales30">=${query.sales30Min}`);
+    if (query.sales30Max != null) filters.push(Prisma.sql`s."sales30"<=${query.sales30Max}`);
+  }
   // Typed listingQuantity (payload.quantity); NULL excluded when either bound is set.
   if (query.listingQuantityMin != null || query.listingQuantityMax != null) {
     filters.push(Prisma.sql`s."listingQuantity" IS NOT NULL`);
