@@ -529,14 +529,14 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   assert.equal(brand.defaultVisible, true);
   assert.equal(rating.defaultVisible, true);
   const defaults = defaultVisibleColumnKeys("listings");
-  assert.deepEqual(defaults, ["status", "fulfillment", "image", "asin", "title", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "buyBoxWinner", "parentAsin", "sku", "name", "price", "sales7", "sales14", "sales30", "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "fulfillable", "totalInventory", "sourceUpdatedAt"]);
+  assert.deepEqual(defaults, ["status", "fulfillment", "image", "asin", "title", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "buyBoxWinner", "parentAsin", "sku", "name", "price", "sales7", "sales14", "sales30", "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "fulfillable", "totalInventory", "sourceUpdatedAt"]);
   assert.deepEqual(visibleColumns("listings").map(c => c.key), defaults);
-  for (const key of ["inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "dxmPublishState", "salesperson"]) assert.ok(!defaults.includes(key));
+  for (const key of ["inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "dxmPublishState", "salesperson"]) assert.ok(!defaults.includes(key));
   const sourceKeys = columns.listings.map(c => c.key);
   assert.deepEqual(sourceKeys.slice(0, 4), ["status", "dxmPublishState", "fulfillment", "image"]);
   assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("brand"), sourceKeys.indexOf("ratingCount") + 1), ["brand", "amazonBrand", "rating", "ratingCount"]);
   assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("ratingCount"), sourceKeys.indexOf("openDate") + 1), ["ratingCount", "productTags", "openDate"]);
-  for (const selected of [[], ["title", "asin"], ["rating"], ["brand"], ["amazonBrand"], ["ratingCount"], ["productTags"], ["buyBoxWinner"], ["openDate"], ["firstSaleDate"], ["totalInventory"], ["fulfillment"], defaults.filter(key => key !== "productTags"), defaults.filter(key => key !== "amazonBrand"), defaults.filter(key => key !== "fulfillment"), defaults.filter(key => key !== "totalInventory"), defaults.filter(key => key !== "openDate"), defaults.filter(key => key !== "firstSaleDate"), defaults.filter(key => !["ratingCount", "buyBoxWinner"].includes(key))]) {
+  for (const selected of [[], ["title", "asin"], ["rating"], ["brand"], ["amazonBrand"], ["ratingCount"], ["productTags"], ["buyBoxWinner"], ["openDate"], ["firstSaleDate"], ["bsrRank"], ["bsrCategory"], ["bsrCategory", "bsrRank"], ["totalInventory"], ["fulfillment"], defaults.filter(key => key !== "productTags"), defaults.filter(key => key !== "amazonBrand"), defaults.filter(key => key !== "fulfillment"), defaults.filter(key => key !== "totalInventory"), defaults.filter(key => key !== "openDate"), defaults.filter(key => key !== "firstSaleDate"), defaults.filter(key => key !== "bsrRank"), defaults.filter(key => key !== "bsrCategory"), defaults.filter(key => !["bsrRank", "bsrCategory"].includes(key)), defaults.filter(key => !["ratingCount", "buyBoxWinner"].includes(key))]) {
     const original = [...selected];
     assert.deepEqual(visibleColumns("listings", selected).map(c => c.key), sourceKeys.filter(key => original.includes(key)));
     assert.deepEqual(selected, original);
@@ -546,9 +546,9 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   assert.equal(visibleColumnCsv([brand, rating], [{ brand: "Acme", rating: "4.4" }]).trim(), '"品牌","星级"\r\n"Acme","4.4"');
 });
 
-test("listings default CSV/XLSX include fulfillment, brand, amazonBrand, rating, ratingCount, productTags, openDate, firstSaleDate, Buy Box and totalInventory while explicit selections stay authoritative", async () => {
+test("listings default CSV/XLSX include fulfillment, brand, amazonBrand, rating, ratingCount, productTags, openDate, firstSaleDate, BSR, BSR类目, Buy Box and totalInventory while explicit selections stay authoritative", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
-  const rows = [{ fulfillment: "AFN", brand: "Acme", amazonBrand: "ACME", rating: "4.4", ratingCount: 128, productTags: "新品、重点", openDate: "2024-01-15", firstSaleDate: "2024-01-16", buyBoxWinner: "是", title: "Sample" }, { fulfillment: null, brand: null, amazonBrand: null, rating: null, ratingCount: null, productTags: null, openDate: null, firstSaleDate: null, buyBoxWinner: null, title: "Missing" }, { fulfillment: "MFN", brand: "00123", amazonBrand: "00123", rating: "0", ratingCount: 0, productTags: "00123", buyBoxWinner: "否", title: "Zero" }, { title: "Absent" }];
+  const rows = [{ fulfillment: "AFN", brand: "Acme", amazonBrand: "ACME", rating: "4.4", ratingCount: 128, productTags: "新品、重点", openDate: "2024-01-15", firstSaleDate: "2024-01-16", bsrRank: 1381, bsrCategory: "Musical Instruments", buyBoxWinner: "是", title: "Sample" }, { fulfillment: null, brand: null, amazonBrand: null, rating: null, ratingCount: null, productTags: null, openDate: null, firstSaleDate: null, bsrRank: null, bsrCategory: null, buyBoxWinner: null, title: "Missing" }, { fulfillment: "MFN", brand: "00123", amazonBrand: "00123", rating: "0", ratingCount: 0, productTags: "00123", bsrRank: 0, bsrCategory: "00456", buyBoxWinner: "否", title: "Zero" }, { title: "Absent" }];
   globals.prisma = { $queryRaw: async () => [{ total: rows.length, totals: [], rows }] } as unknown as PrismaClient;
   try {
     const { default: ExcelJS } = await import("exceljs");
@@ -557,21 +557,24 @@ test("listings default CSV/XLSX include fulfillment, brand, amazonBrand, rating,
     const hiddenFulfillment = new URLSearchParams(defaultVisibleColumnKeys("listings").filter(key => key !== "fulfillment").map(key => ["column", key])).toString();
     const hiddenOpenDate = new URLSearchParams(defaultVisibleColumnKeys("listings").filter(key => key !== "openDate").map(key => ["column", key])).toString();
     const hiddenFirstSaleDate = new URLSearchParams(defaultVisibleColumnKeys("listings").filter(key => key !== "firstSaleDate").map(key => ["column", key])).toString();
+    const hiddenBsrRank = new URLSearchParams(defaultVisibleColumnKeys("listings").filter(key => key !== "bsrRank").map(key => ["column", key])).toString();
+    const hiddenBsrCategory = new URLSearchParams(defaultVisibleColumnKeys("listings").filter(key => key !== "bsrCategory").map(key => ["column", key])).toString();
+    const hiddenBsrCluster = new URLSearchParams(defaultVisibleColumnKeys("listings").filter(key => !["bsrRank", "bsrCategory"].includes(key)).map(key => ["column", key])).toString();
     const hiddenTotalInventory = new URLSearchParams(defaultVisibleColumnKeys("listings").filter(key => key !== "totalInventory").map(key => ["column", key])).toString();
-    for (const layout of ["", "layout=workbench&"]) for (const selection of ["", "column=title", "column=fulfillment", "column=brand", "column=amazonBrand", "column=rating", "column=ratingCount", "column=productTags", "column=openDate", "column=firstSaleDate", "column=buyBoxWinner", "columns=custom", hiddenProductTags, hiddenAmazonBrand, hiddenFulfillment, hiddenOpenDate, hiddenFirstSaleDate, hiddenTotalInventory]) {
+    for (const layout of ["", "layout=workbench&"]) for (const selection of ["", "column=title", "column=fulfillment", "column=brand", "column=amazonBrand", "column=rating", "column=ratingCount", "column=productTags", "column=openDate", "column=firstSaleDate", "column=bsrRank", "column=bsrCategory", "column=bsrCategory&column=bsrRank", "column=buyBoxWinner", "columns=custom", hiddenProductTags, hiddenAmazonBrand, hiddenFulfillment, hiddenOpenDate, hiddenFirstSaleDate, hiddenBsrRank, hiddenBsrCategory, hiddenBsrCluster, hiddenTotalInventory]) {
       const url = new URL(`http://localhost/?${layout}${selection}`);
       const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
       const keys = selection ? url.searchParams.getAll("column") : defaultVisibleColumnKeys("listings");
       const config = visibleColumns("listings", keys);
       const csv = await (await sellfoxWorkbenchExport("listings", query, scope, url)).text();
       assert.equal(csv.trim(), visibleColumnCsv(config, rows).trim());
-      if (!selection) assert.match(csv.split("\r\n")[0], /"标题","品牌","亚马逊品牌","星级","评论数","产品标签","上架时间","首次售出","Buy Box","父ASIN"/);
+      if (!selection) assert.match(csv.split("\r\n")[0], /"标题","品牌","亚马逊品牌","星级","评论数","产品标签","上架时间","首次售出","BSR","BSR类目","Buy Box","父ASIN"/);
       url.searchParams.set("format", "xlsx");
       const book = new ExcelJS.Workbook();
       await book.xlsx.load(await (await sellfoxWorkbenchExport("listings", query, scope, url)).arrayBuffer());
       const sheet = book.worksheets[0];
       assert.equal(sheet.columnCount, keys.length);
-      if (!selection) assert.deepEqual([7, 8, 9, 10, 11, 12, 13, 14].map(index => sheet.getRow(1).getCell(index).value), ["亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "Buy Box", "父ASIN"]);
+      if (!selection) assert.deepEqual([7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map(index => sheet.getRow(1).getCell(index).value), ["亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "Buy Box", "父ASIN"]);
       if (!selection) {
         assert.match(csv.split("\r\n")[0], /^"状态","发货方式","图片"/);
         assert.equal(sheet.getRow(1).getCell(2).value, "发货方式");
@@ -597,6 +600,10 @@ test("listings default CSV/XLSX include fulfillment, brand, amazonBrand, rating,
         assert.ok(!csv.split("\r\n")[0].includes('"首次售出"'));
         assert.ok(!config.some(column => column.key === "firstSaleDate"));
       }
+      for (const [key, label] of [["bsrRank", "BSR"], ["bsrCategory", "BSR类目"]]) if (selection && !keys.includes(key)) {
+        assert.ok(!csv.split("\r\n")[0].includes(`"${label}"`));
+        assert.ok(!config.some(column => column.key === key));
+      }
       if (selection && !keys.includes("openDate")) assert.ok(!config.some(column => column.key === "openDate"));
       if (selection === hiddenTotalInventory || selection === "column=title" || selection === "columns=custom") {
         assert.ok(!csv.split("\r\n")[0].includes('"总库存"'));
@@ -610,10 +617,10 @@ test("listings default CSV/XLSX include fulfillment, brand, amazonBrand, rating,
   } finally { globals.prisma = previous; }
 });
 
-test("listings default-show amazonBrand and keep bsrCategory optional as text columns in source order", () => {
+test("listings default-show amazonBrand and bsrCategory as text columns in source order", () => {
   const keys = columns.listings.map(c => c.key);
   assert.equal(keys.indexOf("amazonBrand"), keys.indexOf("brand") + 1);
-  assert.equal(keys.indexOf("bsrCategory"), keys.indexOf("bsrRank") + 1);
+  assert.deepEqual(keys.slice(keys.indexOf("firstSaleDate"), keys.indexOf("purchaseCost") + 1), ["firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost"]);
   const config = visibleColumns("listings", ["bsrCategory", "amazonBrand"]);
   assert.deepEqual(config.map(c => c.key), ["amazonBrand", "bsrCategory"]);
   assert.deepEqual(config.map(c => c.labelZh), ["亚马逊品牌", "BSR类目"]);
@@ -621,8 +628,8 @@ test("listings default-show amazonBrand and keep bsrCategory optional as text co
   for (const column of config) {
     assert.equal(column.unavailable, undefined);
     assert.equal(column.numeric, undefined);
-    assert.equal(column.defaultVisible, column.key === "amazonBrand");
-    assert.equal(defaultVisibleColumnKeys("listings").includes(column.key), column.key === "amazonBrand");
+    assert.equal(column.defaultVisible, true);
+    assert.equal(defaultVisibleColumnKeys("listings").includes(column.key), true);
     assert.equal(sellfoxColumnValue(column, { [column.key]: null }), null);
   }
   assert.equal(sellfoxColumnValue(config[0], { brand: "Goghost-乐器", amazonBrand: "GOGHOST" }), "GOGHOST");
@@ -1053,9 +1060,9 @@ test("listings null exact BSR sentinel 9999999 after numeric cast, preferring bi
   assert.equal(config[0].labelZh, "BSR");
   assert.equal(config[0].unavailable, undefined);
   assert.equal(config[0].numeric, true);
-  assert.equal(config[0].defaultVisible, false);
+  assert.equal(config[0].defaultVisible, true);
   assert.equal(config[0].requiresField, "Listing 当前快照 payload.bsrRank[].rank（优先 bigCategory）");
-  assert.ok(!defaultVisibleColumnKeys("listings").includes("bsrRank"));
+  assert.ok(defaultVisibleColumnKeys("listings").includes("bsrRank"));
   assert.deepEqual(visibleColumns("listings", ["ratingCount", "openDate", "bsrRank"]).map(c => c.key), ["ratingCount", "openDate", "bsrRank"]);
   assert.equal(sellfoxColumnValue(config[0], { bsrRank: null }), null);
   assert.equal(sellfoxColumnValue(config[0], { bsrRank: 0 }), 0);
