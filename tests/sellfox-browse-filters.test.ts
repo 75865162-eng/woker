@@ -266,3 +266,37 @@ test("performance salesperson select uses facets/current value and resets; sales
     assert.equal(sales.some(n => n.props["aria-label"] === "业务员"), false);
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
+
+test("listings DXM publish state select uses only facets plus URL value, changes and resets while pairing stays locked", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const view: SellfoxView = { ...defaultSellfoxView, domain: "listings", dxmPublishState: "URL-only" };
+    const nodes = elements(SellfoxBrowseFilters({ view, stores: [], dxmPublishStates: ["delete", "raw-state", "delete"], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    const selects = nodes.filter(node => node.type === "select");
+    const select = selects.find(node => node.props["aria-label"] === "DXM 发布状态")!;
+    assert.ok(select); assert.ok(!select.props.disabled); assert.equal(select.props.value, "URL-only");
+    assert.equal(selects[selects.indexOf(select) - 1].props["aria-label"], "Listing 状态");
+    const parent = nodes.find(node => node.type === "label" && elements(node.props.children).includes(select))!;
+    assert.match(parent.props.title!, /dxmPublishState.*精确匹配.*非配对状态.*NULL.*全部/);
+    assert.deepEqual(elements(select.props.children).map(node => [node.props.value, node.props.children]), [["", "全部"], ...["URL-only", "delete", "raw-state"].sort().map(value => [value, value])]);
+    for (const [value, expected] of [[" raw-state ", "raw-state"], [" 00123 ", "00123"], ["", ""]]) {
+      select.props.onChange!({ target: { value } });
+      assert.deepEqual(patches.at(-1), { dxmPublishState: expected });
+    }
+    nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+    assert.equal(patches.at(-1)?.dxmPublishState, "");
+    for (const label of ["配对状态", "划线价类型"]) {
+      const locked = selects.find(node => node.props["aria-label"] === `${label}（未同步）`)!;
+      assert.equal(locked.props.disabled, true); assert.equal(locked.props.onChange, undefined);
+    }
+    const emptyNodes = elements(SellfoxBrowseFilters({ view: { ...view, dxmPublishState: "" }, stores: [], onChange: () => {}, onColumns: () => {} }));
+    const emptySelect = emptyNodes.find(node => node.props["aria-label"] === "DXM 发布状态")!;
+    assert.deepEqual(elements(emptySelect.props.children).map(node => [node.props.value, node.props.children]), [["", "全部"]]);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = elements(SellfoxBrowseFilters({ view: { ...view, domain }, stores: [], dxmPublishStates: ["delete"], onChange: () => {}, onColumns: () => {} }));
+      assert.equal(other.some(node => node.props["aria-label"] === "DXM 发布状态"), false);
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});

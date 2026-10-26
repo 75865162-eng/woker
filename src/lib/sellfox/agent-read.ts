@@ -330,6 +330,7 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
         AND candidate."storeId"=s."storeId" AND ${match}
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) @> ARRAY[${query.productTag}]::text[]`);
   }
+  if (domain === "listings" && query.dxmPublishState) clauses.push(Prisma.sql`s."dxmPublishState"=${query.dxmPublishState}`);
   if (domain === "listings" && query.from) clauses.push(Prisma.sql`s."openDate">=${query.from}`);
   if (domain === "listings" && query.to) clauses.push(Prisma.sql`s."openDate"<=${query.to}`);
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);

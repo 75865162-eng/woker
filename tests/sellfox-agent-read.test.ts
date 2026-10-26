@@ -615,3 +615,29 @@ test("Agent appends fee-wrap eval/deal/coupon/SAFE-T/income/promotion fees with 
     }
   } finally { globals.prisma = previous; }
 });
+
+test("agent DXM publish state filters listings rows/count/export exactly; other domains ignore it", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory", "performance", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+      for (const dxmPublishState of ["", "   ", "delete", "future-state", "%' OR TRUE--"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ dxmPublishState: ` ${dxmPublishState} ` })}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        assert.equal(factWhere(calls[0]), factWhere(calls[1]));
+        assert.equal(factWhere(calls[0]), factWhere(calls[2]));
+        for (const sql of calls) {
+          const match = sql.text.match(/s\."dxmPublishState"=\$(\d+)/);
+          if (domain === "listings" && dxmPublishState.trim()) {
+            assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], dxmPublishState);
+            assert.ok(!sql.text.includes(dxmPublishState));
+          } else { assert.equal(match, null); assert.ok(!sql.values.includes(dxmPublishState)); }
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});

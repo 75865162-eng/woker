@@ -255,3 +255,27 @@ test("sales catalog sort keys round trip UI, browse and export; trend sorting st
   }
   for (const key of ["trend", "average7", "salesperson", "sales7"]) assert.throws(() => sellfoxBrowseQuery(new URL(`http://localhost/?sortBy=${key}`), "sales"));
 });
+
+test("DXM publish state trims arbitrary exact values and round trips listings without leaking into other domain requests", () => {
+  for (const dxmPublishState of ["delete", "future-state", "00123", "原值、完整", "S".repeat(512), "%' OR TRUE--"]) {
+    const view = readSellfoxView(new URLSearchParams({ domain: "listings", dxmPublishState: `  ${dxmPublishState}  ` }));
+    assert.equal(view.dxmPublishState, dxmPublishState);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    assert.equal(query(sellfoxViewParams(view, true).toString()).dxmPublishState, dxmPublishState);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("dxmPublishState"), dxmPublishState);
+      assert.equal(sellfoxViewParams(other, true).has("dxmPublishState"), false);
+    }
+  }
+  for (const dxmPublishState of ["", "   ", "\t\n"]) {
+    assert.equal(query(new URLSearchParams({ dxmPublishState }).toString()).dxmPublishState, "");
+    const view = readSellfoxView(new URLSearchParams({ domain: "listings", dxmPublishState }));
+    assert.equal(view.dxmPublishState, "");
+    for (const forRequest of [false, true]) {
+      assert.equal(sellfoxViewParams(view, forRequest).has("dxmPublishState"), false);
+      assert.equal(sellfoxViewParams({ ...view, dxmPublishState }, forRequest).has("dxmPublishState"), false);
+    }
+  }
+  assert.equal(query("").dxmPublishState, "");
+});

@@ -1,5 +1,15 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings DXM 发布状态精确筛选与 facets · BOX LOCAL ONLY
+
+基线 HEAD `83c75ac`，分支 `codex/operations-p0-catalog-replenishment`。仅 listings 新增 `dxmPublishState=<完整原值>`：去首尾空格后，对 `sellfox_listing_current."dxmPublishState"` 类型 TEXT 列参数化 `=` 精确匹配；空参数不加条件，NULL 仅在「全部」中出现。browse、计数、汇总、CSV/XLSX 和 Agent 窄表导出同口径，参数单独出现亦进入 workbench（显式 `agent=1` 导出仍用 Agent 路径）。sales / performance / inventory / ads 均不应用此参数；跨域 URL 可保留选择，但非 listings 请求不序列化它。
+
+`facets.dxmPublishStates` 复用现有 scope-only `facet_source`，选取非 NULL 原值 `DISTINCT` 并排序；仅受组织/工作区/店铺/站点范围限制，不受 DXM、brand、标签、状态、搜索、日期或分页行筛选影响；导出不计算 facets。UI「DXM 发布状态」紧邻 Listing 状态，选项仅来自 facets 加 URL 当前值，去重排序，重置清空；导航/切工作区沿 brand 模式清理旧 facets 并防护迟到响应。**DXM 发布状态 ≠ 配对状态**，配对状态与划线价类型原有 `missingFilter` 继续锁定。不定义状态枚举，不改 `defaultVisible`、schema/migration、同步或 worker；inventory range / firstSaleDate / fee 筛选不解锁，**Fee-mining remains paused**。无 push/deploy/SSH 或真实数据库写入；回滚本片应用提交即可，无数据操作。
+
+验证：`NODE_ENV=test node --import tsx --test tests/sellfox-browse-query.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-listings-read.test.ts tests/sellfox-agent-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-workbench-read.test.ts` 使用隔离 Prisma stub，5 个测试文件通过；browse-filters 9/10 用例通过（含新增 DXM、原 openDate 和配对锁定），唯一失败仍为下节已记录的 HEAD 广告默认列陈旧断言（line 56），本片不修改该断言或默认值。`npx tsc --noEmit`、触及 TS/TSX 的 ESLint、`git diff --check` 通过。浏览器定向运行 `npm run test:sellfox:browser -- --grep 'listing current and advertising product daily'`：fixture 已提供 DXM facet，保留 openDate 断言并新增选择/请求序列化/跨域忽略断言；Chromium 在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行，未绕过沙箱。完整 check/build、真实库执行与 P95 不在此本地 slice 范围，浏览器需在允许 Chromium 的环境补跑；额外 DISTINCT 的真实库性能留待专项验证。
+
+---
+
 ## 2026-10-27 — listings 上架时间范围筛选 · BOX LOCAL ONLY
 
 基线 HEAD `c952c75`，分支 `codex/operations-p0-catalog-replenishment`。仅解锁 listings「上架时间」日期输入和既有快捷项，复用 `from` / `to` 对 `sellfox_listing_current` 的类型 TEXT 列 `openDate`（YYYY-MM-DD）作含首尾的范围比较；不是 `sourceUpdatedAt`「更新时间」。未设日期时保留全部 Listing，不默认昨天；只设一端时仅限制该端，设置任意范围时 NULL openDate 不匹配。「全部历史」和重置可清空范围。列表、计数、汇总、导出及 Agent 窄表共用此口径，facets 仍仅受组织/工作区/店铺/站点范围限制。

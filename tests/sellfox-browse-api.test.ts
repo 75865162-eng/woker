@@ -886,3 +886,64 @@ test("selected profit quantity and ad channel exports reach typed workbench CSV/
     for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
+
+test("listings DXM publish state alone routes browse/facets and CSV/XLSX through workbench; Agent export still filters", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["品牌"], dxmPublishStates: ["delete", "raw-state"] };
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const context = { params: Promise.resolve({ domain: "listings" }) };
+    const request = (dxmPublishState: string, extra = "") => new Request(`http://localhost/api/sellfox/listings?${new URLSearchParams({ dxmPublishState: ` ${dxmPublishState} ` })}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+    for (const dxmPublishState of ["delete", "raw-state", "%' OR TRUE--"]) {
+      for (const extra of ["", "&layout=workbench", "&layout=legacy", "&brand=品牌&buyBox=yes&productTag=新品&fulfillment=AFN&from=2024-01-15"]) {
+        for (const format of ["browse", "csv", "xlsx"] as const) {
+          calls.length = 0;
+          const response = format === "browse" ? await browse(request(dxmPublishState, extra), context) : await csv(request(dxmPublishState, `${extra}&format=${format}`), context);
+          assert.equal(response.status, 200);
+          assert.equal(calls.length, 1);
+          const sql = calls[0]; assert.ok(sql.text.startsWith("WITH"));
+          const match = sql.text.match(/s\."dxmPublishState"=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], dxmPublishState);
+          if (extra.includes("brand")) {
+            assert.match(sql.text, /s\.brand=|s\."buyBoxWinner"=|s\."productTagNames" @>/);
+            assert.match(sql.text, /s\."openDate">=/);
+          }
+          if (format === "browse") {
+            assert.match(sql.text, /'dxmPublishStates',ARRAY\(SELECT DISTINCT "dxmPublishState"/);
+            assert.deepEqual((await response.json()).facets, facets);
+          } else {
+            assert.doesNotMatch(sql.text, /AS facets/);
+            assert.match(response.headers.get("Content-Type")!, format === "csv" ? /text\/csv/ : /spreadsheetml/);
+          }
+        }
+        calls.length = 0;
+        const agent = await csv(request(dxmPublishState, `${extra}&agent=1`), context);
+        assert.equal(agent.status, 200);
+        assert.match(agent.headers.get("Content-Disposition")!, /-agent\.csv/);
+        assert.equal(calls.length, 1);
+        const sql = calls[0]; assert.ok(sql.text.startsWith("SELECT"));
+        const match = sql.text.match(/s\."dxmPublishState"=\$(\d+)/);
+        assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], dxmPublishState);
+        assert.doesNotMatch(sql.text, /AS facets/);
+      }
+    }
+    for (const value of ["", "   "]) {
+      calls.length = 0;
+      const response = await browse(request(value, "&layout=workbench"), context);
+      assert.equal(response.status, 200);
+      assert.doesNotMatch(calls[0].text, /s\."dxmPublishState"=/);
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});

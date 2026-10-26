@@ -21,6 +21,7 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
   if (query.productTag) filters.push(Prisma.sql`s."productTagNames" @> ARRAY[${query.productTag}]::text[]`);
   if (query.from) filters.push(Prisma.sql`s."openDate">=${query.from}`);
   if (query.to) filters.push(Prisma.sql`s."openDate"<=${query.to}`);
+  if (query.dxmPublishState) filters.push(Prisma.sql`s."dxmPublishState"=${query.dxmPublishState}`);
   const searchKeys = ["asin", "msku", "sku", "title", "parentAsin"];
   if (query.searchType && !searchKeys.includes(query.searchType)) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) {
@@ -40,7 +41,7 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
   // an ordered index + LIMIT. A shared wide materialized CTE defeats both.
   // Facets intentionally ignore row filters, but keep organization/workspace/shop/site.
   const facets = exporting ? Prisma.empty : Prisma.sql`,facet_source AS MATERIALIZED (
-    SELECT s.brand,s."productTagNames" FROM sellfox_listing_current s WHERE ${Prisma.join(scopeFilters, " AND ")}
+    SELECT s.brand,s."productTagNames",s."dxmPublishState" FROM sellfox_listing_current s WHERE ${Prisma.join(scopeFilters, " AND ")}
   )`;
   return Prisma.sql`WITH filtered AS NOT MATERIALIZED (
     SELECT ${columns},s."ratingValue",s.name AS "storeName",s.marketplace AS "storeSite",
@@ -53,5 +54,6 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
       LIMIT ${exporting ? sellfoxExportLimit + 1 : query.pageSize} OFFSET ${exporting ? 0 : (query.page - 1) * query.pageSize}) p),'[]'::jsonb) AS rows
     ${exporting ? Prisma.empty : Prisma.sql`,jsonb_build_object('productTags',
       ARRAY(SELECT DISTINCT tag FROM facet_source CROSS JOIN LATERAL unnest("productTagNames") tag ORDER BY tag),
-      'brands',ARRAY(SELECT DISTINCT brand FROM facet_source WHERE brand IS NOT NULL ORDER BY brand)) AS facets`}`;
+      'brands',ARRAY(SELECT DISTINCT brand FROM facet_source WHERE brand IS NOT NULL ORDER BY brand),
+      'dxmPublishStates',ARRAY(SELECT DISTINCT "dxmPublishState" FROM facet_source WHERE "dxmPublishState" IS NOT NULL ORDER BY 1)) AS facets`}`;
 }

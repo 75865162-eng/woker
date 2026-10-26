@@ -361,3 +361,10 @@ browse 保留 `facets.productTags`，并在同一 SQL 响应新增 `facets.brand
 无 schema、migration、同步或 worker 改动；回滚应用代码即可。验证使用 browse-query、browse-filters、workbench-read、agent-read、browse-api 及 Listing 身份测试，另运行 TypeScript、相关 ESLint 与 `git diff --check`；不运行 Chromium、生产构建或真实库查询。品牌 facets 增加一次同 SQL 内 scoped Listing 扫描，真实库 P95 留待明确部署验收时评估。本次仅本地交付，不推送或发布。
 
 `/sellfox` 表格共用表头排序：点击带双向箭头的列按升序/降序切换，活动列显示方向及 `aria-sort`，换列回到升序并重置第 1 页；`sortBy` / `sortOrder=asc|desc` 保存在 URL，筛选、翻页、刷新及导出沿用。API 按域白名单校验，非法列/方向返回 400；SQL/Prisma 在完整筛选结果（工作台先聚合）上排序后再分页，同值按 ID 稳定排序，未指定排序时维持旧顺序。店铺、库存 current/历史、销量、利润、Listing 和六类广告日报均复用此路径；小时报表 API 也支持排序，页面不新增小时数据入口。图片、分析、缺失/未接列、日矩阵列、趋势/均值、进度以及分页后才补充的库存字段不提供排序，避免把当前页排序冒充全量排序。SQL 的空值排末；Prisma 保持数据库默认空值次序。回滚此功能可撤销对应提交，不涉及数据迁移；本地验证用 `npx tsx --test tests/sellfox-*.test.ts`、`npm run typecheck` 和 `npm run test:sellfox:browser`（隔离模拟接口，不访问生产）。Agent 窄列导出链接保留原始长表默认次序，不携带工作台聚合排序。尚未进行真实数据库大数据量排序性能 benchmark。
+
+
+### DXM 发布状态精确筛选（2026-10-27，BOX LOCAL ONLY）
+
+仅 listings 支持 `dxmPublishState=<完整原值>`，沿 brand 的 trim/精确匹配模式，对 current view 类型列 `s."dxmPublishState"` 参数化 `=`；列表行、count、workbench CSV/XLSX 和 `agent=1` 窄表导出同口径。空参数不加谓词，NULL 仅属于「全部」；sales / performance / inventory / ads 忽略该参数。listings browse 的 `facets.dxmPublishStates` 为 scope-only 非 NULL DISTINCT 排序值，不随行筛选缩小；UI 仅用 facets 加 URL 当前值，无固定枚举。**DXM 发布状态 ≠ 配对状态**，配对状态 `missingFilter` 继续锁定。
+
+无 schema/migration、默认列、数据写入、sync/worker 或生产改动；Fee-mining 仍暂停，不 push/deploy/SSH，回滚本片应用代码即可。定向单元/SQL/模拟 API 新增用例、TypeScript、相关 ESLint 和 diff 检查通过；browse-filters 仍有既有广告默认列陈旧断言失败，Chromium 启动 SIGTRAP，未绕过；命令、范围及浏览器补验见 [listings 本地交付记录](sellfox-listings-read-model.md#2026-10-27--listings-dxm-发布状态精确筛选与-facets--box-local-only)。

@@ -78,3 +78,34 @@ test("all allowed listing sorts operate on typed selected columns before paginat
   assert.throws(()=>workbenchReadSql("listings",{...defaults,sortBy:'id";DROP TABLE'},scope),/排序/);
   assert.throws(()=>workbenchReadSql("listings",{...defaults,searchType:"campaignId"},scope),/搜索类型/);
 });
+
+test("listings DXM publish state is a bound exact predicate; DISTINCT facets remain scope-only and exclude NULL", () => {
+  for (const exporting of [false, true]) for (const value of [undefined, "", "   ", "delete", "future-state", "%' OR TRUE--"]) {
+    const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ ...(value === undefined ? {} : { dxmPublishState: value }), brand: "Brand", productTag: "标签", from: "2024-01-15", search: "sku", status: "active", shopExternalId: "shop", site: "US" })}`), "listings");
+    const sql = workbenchReadSql("listings", query, scope, exporting);
+    const predicate = /s\."dxmPublishState"=\$(\d+)/;
+    if (value?.trim()) {
+      const match = sql.text.match(predicate); assert.ok(match);
+      assert.equal(sql.values[Number(match[1]) - 1], value);
+      assert.ok(!sql.text.includes(value));
+    } else assert.doesNotMatch(sql.text, predicate);
+    assert.doesNotMatch(sql.text, /"dxmPublishState" ILIKE|payload|pairing/);
+    if (exporting) assert.doesNotMatch(sql.text, /facet_source|AS facets/);
+    else {
+      const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+      assert.match(facets, /SELECT s\.brand,s\."productTagNames",s\."dxmPublishState"/);
+      for (const field of ["organizationId", "workspaceId", "shopExternalId"]) assert.ok(facets.includes(`s."${field}"`));
+      assert.match(facets, /s\.marketplace=/);
+      assert.doesNotMatch(facets, /s\."dxmPublishState"=|s\.brand=| @>|openDate|ILIKE/);
+      assert.match(sql.text, /'dxmPublishStates',ARRAY\(SELECT DISTINCT "dxmPublishState" FROM facet_source WHERE "dxmPublishState" IS NOT NULL ORDER BY 1\)/);
+    }
+  }
+  const query = sellfoxBrowseQuery(new URL("http://localhost/?dxmPublishState=ignored"));
+  for (const domain of ["sales", "performance", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const exporting of [false, true]) {
+      const sql = workbenchReadSql(domain, query, scope, exporting);
+      assert.doesNotMatch(sql.text, /dxmPublishState/);
+      assert.ok(!sql.values.includes("ignored"));
+    }
+  }
+});
