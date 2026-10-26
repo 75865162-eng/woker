@@ -153,6 +153,47 @@ test("agent Buy Box rows, counts and export match only real booleans on the chos
   } finally { globals.prisma = previous; }
 });
 
+test("agent brand matches the selected scoped current Listing after MSKU-first/ASIN-fallback selection", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["sales", "performance", "listings"] as const) {
+      for (const brand of ["Goghost-乐器", "Nvaav", "%' OR TRUE--"]) {
+        calls.length = 0;
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ brand: ` ${brand} ` })}`));
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        for (const sql of calls) {
+          assert.match(sql.text, /SELECT btrim\(p.payload->>'brand'\)/);
+          assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
+          assert.match(sql.text, /p\."organizationId"=\$\d+ AND p\."workspaceId"=\$\d+/);
+          assert.match(sql.text, /candidate\."organizationId"=\$\d+ AND candidate\."workspaceId"=\$\d+/);
+          assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
+          const parameter = sql.text.match(/ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\)=\$(\d+)/);
+          assert.ok(parameter); assert.equal(sql.values[Number(parameter[1]) - 1], brand);
+          assert.ok(sql.values.includes("org") && sql.values.includes("ws"));
+          assert.match(sql.text, domain === "listings" ? /candidate.id=s.id/ : /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
+          assert.doesNotMatch(sql.text, /amazonBrand|btrim\(p.payload->>'brand'\)\s*=/);
+          assert.ok(!sql.values.includes(`%${brand}%`));
+        }
+        assert.equal(calls[0].text.slice(calls[0].text.indexOf(" WHERE "), calls[0].text.lastIndexOf(" ORDER BY ")), calls[1].text.slice(calls[1].text.indexOf(" WHERE ")));
+      }
+      for (const brand of ["", "   "]) {
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, sellfoxBrowseQuery(new URL(`http://localhost/?brand=${brand}`)), { organizationId: "org", workspaceId: "ws" });
+        for (const sql of calls) assert.doesNotMatch(sql.text, /payload->>'brand'|sellfox_listing_current candidate/);
+      }
+    }
+    for (const domain of ["inventory", "ads_report"] as const) {
+      calls.length = 0;
+      await readSellfoxAgentRows(domain, sellfoxBrowseQuery(new URL("http://localhost/?brand=ignored")), { organizationId: "org", workspaceId: "ws" });
+      for (const sql of calls) { assert.doesNotMatch(sql.text, /payload->>'brand'/); assert.ok(!sql.values.includes("ignored")); }
+    }
+  } finally { globals.prisma = previous; }
+});
+
 test("agent productTag membership uses the selected scoped Listing before matching exact label names", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const calls: Prisma.Sql[] = [];

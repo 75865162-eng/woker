@@ -242,7 +242,7 @@ test("productTag reaches browse facets and CSV/XLSX/Agent export with and withou
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
-  const calls: Prisma.Sql[] = [], facets = { productTags: ["1年以内产品", "新标签、完整"] };
+  const calls: Prisma.Sql[] = [], facets = { productTags: ["1年以内产品", "新标签、完整"], brands: ["Goghost-乐器", "Nvaav"] };
   globals.prisma = {
     workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: Prisma.Sql) => {
@@ -278,6 +278,58 @@ test("productTag reaches browse facets and CSV/XLSX/Agent export with and withou
             assert.match(sql.text, /WHERE tag\."labelName"=\$\d+/);
           }
           assert.ok(sql.values.includes("新标签、完整")); assert.ok(!sql.values.includes("%新标签、完整%"));
+        }
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+test("brand reaches browse facets and CSV/XLSX/Agent export with and without layout", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [], facets = { productTags: ["1年以内产品", "新标签、完整"], brands: ["Goghost-乐器", "Nvaav"] };
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    for (const domain of ["sales", "performance", "listings"]) {
+      const context = { params: Promise.resolve({ domain }) };
+      const request = (extra = "") => new Request(`http://localhost/api/sellfox/${domain}?from=2026-10-25&to=2026-10-25&${new URLSearchParams({ brand: "  Goghost-乐器  " })}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+      const browseHandler = domain === "sales" ? salesBrowse : domain === "performance" ? performanceBrowse : (r: Request) => browse(r, context);
+      for (const extra of ["", "&layout=workbench"]) {
+        calls.length = 0;
+        const response = await browseHandler(request(extra));
+        assert.equal(response.status, 200); assert.deepEqual((await response.json()).facets, facets);
+        assert.ok(calls.some(sql => /AND l.brand=\$\d+/.test(sql.text) && sql.values.includes("Goghost-乐器")));
+      }
+      const handlers = [
+        ...["&format=csv", "&format=xlsx", "&layout=workbench&format=csv", "&layout=workbench&format=xlsx", "&agent=1", "&layout=workbench&agent=1"].map(extra => () => csv(request(extra), context)),
+        ...(domain === "performance" ? ["&format=csv", "&format=xlsx", "&agent=1"].map(extra => () => performanceCsv(request(extra))) : []),
+      ];
+      for (const handler of handlers) {
+        calls.length = 0;
+        assert.equal((await handler()).status, 200);
+        assert.ok(calls.length > 0);
+        for (const sql of calls) {
+          if (sql.text.startsWith("WITH")) {
+            assert.match(sql.text, /AND l.brand=\$\d+/);
+            assert.match(sql.text, /NULLIF\(btrim\(p.payload->>'brand'\),''\) AS brand/);
+            assert.doesNotMatch(sql.text, /AS facets/);
+          } else {
+            assert.match(sql.text, /SELECT btrim\(p.payload->>'brand'\)/);
+            assert.match(sql.text, /LIMIT 1\)=\$\d+/);
+          }
+          assert.doesNotMatch(sql.text, /amazonBrand/);
+          assert.ok(sql.values.includes("Goghost-乐器")); assert.ok(!sql.values.includes("%Goghost-乐器%"));
         }
       }
     }

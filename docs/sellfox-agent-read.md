@@ -330,3 +330,12 @@ Listing 按同组织/工作区/店铺的快照 ID 精确关联。销量/利润�
 browse 同一 SQL 响应附带 `facets.productTags`：独立子查询从 scoped `sellfox_listing_current` 和 `SellfoxListingSnapshot` 提取非空 `btrim(labelName)`，按当前组织/工作区及店铺/站点范围去重并排序，不引用主 Listing CTE、不构建每行标签数组，不受分页、所选标签、搜索或 Listing 状态影响。未选择标签的销量/利润主 Listing CTE 不解析标签列表；在线商品仍保留展示字符串。UI 使用动态选项与「全部」，并保留 URL 当前标签以便显示空结果和重置；切换工作区清空旧选项，迟到响应沿用已有取消/epoch 防护。无新增逐行请求；导出不计算 facets，未选标签的销量/利润导出不解析标签列表。
 
 无 schema、migration、sync、worker 或数据写入；回滚本次应用代码即可。验证选用相关单元/模拟 API/组件元素树测试、TypeScript、相关 ESLint 与 diff 检查；未运行 Chromium、生产构建或真实数据库查询/P95。动态 facets 会在 browse 查询中读取当前范围 Listing 标签，真实库查询耗时及页面交互应在后续明确部署验收时验证。本次仅本地交付，不推送或发布。
+
+
+### 品牌筛选（2026-10-26，本地待部署）
+
+在线商品、销量、销售利润支持 `brand=<品牌完整名称>`，与产品标签并列。参数仅去首尾空格；按当前 Listing `btrim(payload.brand)` 参数化等值匹配，空/null 品牌只计入「全部」，不使用其他品牌字段。销量/利润先按原有 MSKU 优先、ASIN 回退选定当前 Listing，再于成员行汇总前筛选；分页、KPI 与 CSV/XLSX/Agent 导出使用相同口径，带或不带 layout 均生效。在线商品品牌列同步去首尾空格，空字符串仍为 null。
+
+browse 保留 `facets.productTags`，并在同一 SQL 响应新增 `facets.brands`：独立子查询从当前组织/工作区及店铺/站点范围 Listing 提取去空、去重、排序后的品牌，不受已选品牌、标签、搜索或状态影响；导出不计算 facets。UI 动态选项保留 URL 当前品牌，重置清空品牌，切工作区/导航时清空旧选项，复用已有迟到响应防护。广告和其他未接入控件保持原状。
+
+无 schema、migration、同步或 worker 改动；回滚应用代码即可。验证使用 browse-query、browse-filters、workbench-read、agent-read、browse-api 及 Listing 身份测试，另运行 TypeScript、相关 ESLint 与 `git diff --check`；不运行 Chromium、生产构建或真实库查询。品牌 facets 增加一次同 SQL 内 scoped Listing 扫描，真实库 P95 留待明确部署验收时评估。本次仅本地交付，不推送或发布。

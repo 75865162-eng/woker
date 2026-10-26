@@ -169,6 +169,16 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
         AND candidate."storeId"=s."storeId" AND ${match}
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.buyBox}`);
   }
+  if (query.brand && ["sales", "performance", "listings"].includes(domain)) {
+    // Test the chosen current Listing after MSKU-first/ASIN-fallback selection.
+    const match = domain === "listings" ? Prisma.sql`candidate.id=s.id` : Prisma.sql`((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))`;
+    clauses.push(Prisma.sql`(SELECT btrim(p.payload->>'brand')
+      FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id
+        AND p."organizationId"=${scope.organizationId} AND p."workspaceId"=${scope.workspaceId}
+      WHERE candidate."organizationId"=${scope.organizationId} AND candidate."workspaceId"=${scope.workspaceId}
+        AND candidate."storeId"=s."storeId" AND ${match}
+      ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1)=${query.brand}`);
+  }
   if (query.productTag && ["sales", "performance", "listings"].includes(domain)) {
     // Select the same stable candidate BEFORE testing membership (no ASIN sibling substitution).
     const match = domain === "listings" ? Prisma.sql`candidate.id=s.id` : Prisma.sql`((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin))`;

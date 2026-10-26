@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sellfoxBrowseQuery, sellfoxBuyBox, sellfoxSnapshotWhere, sellfoxRunWhere, sellfoxHourlyWhere } from "@/lib/sellfox/browse-query";
+import { sellfoxBrowseQuery, sellfoxBrand, sellfoxBuyBox, sellfoxSnapshotWhere, sellfoxRunWhere, sellfoxHourlyWhere } from "@/lib/sellfox/browse-query";
 import { readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
 import { sellfoxPayloadPreview } from "@/lib/sellfox/payload-preview";
 
@@ -122,4 +122,28 @@ test("productTag trims arbitrary exact names and round trips UI, browse and expo
   }
   const ads = readSellfoxView(new URLSearchParams("domain=ads&productTag=标签"));
   assert.equal(sellfoxViewParams(ads, true).has("productTag"), false);
+});
+
+test("brand trims arbitrary exact names and round trips UI, browse and export parameters", () => {
+  for (const brand of ["Goghost-乐器", "Archerest-weinijia", "Nvaav", "B".repeat(512), "品牌、完整", "%' OR TRUE--"]) {
+    for (const domain of ["listings", "sales", "performance"]) {
+      const view = readSellfoxView(new URLSearchParams({ domain, brand: `  ${brand}  ` }));
+      assert.equal(view.brand, brand);
+      assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+      assert.equal(query(sellfoxViewParams(view, true).toString()).brand, brand);
+    }
+  }
+  for (const brand of ["", "   ", "\t\n"]) {
+    assert.equal(query(new URLSearchParams({ brand }).toString()).brand, "");
+    const view = readSellfoxView(new URLSearchParams({ domain: "listings", brand }));
+    assert.equal(view.brand, ""); assert.equal(sellfoxViewParams(view).has("brand"), false);
+  }
+  const ads = readSellfoxView(new URLSearchParams("domain=ads&brand=Nvaav"));
+  assert.equal(sellfoxViewParams(ads, true).has("brand"), false);
+});
+
+test("sellfoxBrand trims without a length cap or whitelist", () => {
+  for (const value of [null, undefined, "", " ", "\t\n"]) assert.equal(sellfoxBrand(value), "");
+  assert.equal(sellfoxBrand("  Goghost-乐器  "), "Goghost-乐器");
+  assert.equal(sellfoxBrand("B".repeat(512)).length, 512);
 });
