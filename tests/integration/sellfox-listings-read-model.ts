@@ -41,7 +41,8 @@ async function verifyReportListingProjection(query: Query) {
       ADD COLUMN "headTripPrice" float, ADD COLUMN "avgPurchaseCost" float, ADD COLUMN "amazonCommissionPrice" float,
       ADD COLUMN "evaluationSaleNum" float, ADD COLUMN "channelSaleNum" float,
       ADD COLUMN "adSpCost" float, ADD COLUMN "adSdCost" float, ADD COLUMN "adSbCost" float,
-      ADD COLUMN "adSbvCost" float, ADD COLUMN "adSbsCost" float;
+      ADD COLUMN "adSbvCost" float, ADD COLUMN "adSbsCost" float,
+      ADD COLUMN "fbaStorageFeeAmount" float, ADD COLUMN "fbaLongTermStorageFeeAmount" float, ADD COLUMN "fbaRemovalFeeAmount" float, ADD COLUMN "fbaDisposalFeeAmount" float;
     CREATE VIEW sellfox_profit_daily AS SELECT * FROM "SellfoxProductDailySnapshot";`);
   for (const domain of ["sales", "performance"] as const) {
     const read = async (params = "", exporting = false) => {

@@ -7,3 +7,5 @@
 映射：库存 sku → MSKU，commoditySku → 内部 SKU，fnSku → FNSKU，available → 可售库存（并非 totalInventory）；销量按 shopIds + 唯一 mskus + day 合并 productNum/salePrice，缺失指标保留 null，币种不一致拒绝合并。
 
 `performance-ad-channel-costs.json`：2026-10-26 根据任务提供的前期 mining 键（adSpCost/adSdCost/adSbCost/adSbvCost/adSbsCost）构造的共享合约 fixture，非本轮 live API 样本。同步提取和 PGlite 投影共用，覆盖非零、0、null/非法与历史回填；SBV/SBS 使用任务指定中文标签，未另行网页核验。adTotalCost 已映射 adCost，不新增总计字段。
+
+`performance-storage-fees.json`：2026-10-26 根据任务提供的前期 mining 同名 profit 键 fbaStorageFeeAmount/fbaLongTermStorageFeeAmount/fbaRemovalFeeAmount/fbaDisposalFeeAmount 构造的共享合约 fixture，非本轮 live 样本。同步与 PGlite 共用，覆盖非零/0、null/非法、历史回填/INSERT；缺失与逐键非法值另由测试生成。同步 sellfoxNumber 对非法值拒绝整行，历史SQL helper 将非法值投影NULL。四键分别为FBA仓储费/长期仓储费/FBA移除费/FBA弃置费，与Listing fbaFees/referralFee及商品试算「月仓储费」不同，禁止别名补数。

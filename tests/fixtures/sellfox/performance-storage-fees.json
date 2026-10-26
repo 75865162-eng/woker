@@ -1,0 +1,26 @@
+{
+  "backfill": {
+    "fbaStorageFeeAmount": "1.5",
+    "fbaLongTermStorageFeeAmount": 0,
+    "fbaRemovalFeeAmount": 3,
+    "fbaDisposalFeeAmount": "4.25"
+  },
+  "insert": {
+    "fbaStorageFeeAmount": 0,
+    "fbaLongTermStorageFeeAmount": "2.5",
+    "fbaRemovalFeeAmount": 4,
+    "fbaDisposalFeeAmount": 5
+  },
+  "cad": {
+    "fbaStorageFeeAmount": 10,
+    "fbaLongTermStorageFeeAmount": 20,
+    "fbaRemovalFeeAmount": 30,
+    "fbaDisposalFeeAmount": 40
+  },
+  "invalid": {
+    "fbaStorageFeeAmount": "invalid",
+    "fbaLongTermStorageFeeAmount": "Infinity",
+    "fbaRemovalFeeAmount": null,
+    "fbaDisposalFeeAmount": "1e999"
+  }
+}

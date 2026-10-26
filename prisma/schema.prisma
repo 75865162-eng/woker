@@ -1133,6 +1133,10 @@ model SellfoxProductDailySnapshot {
   headTripPrice   Float?
   avgPurchaseCost Float?
   amazonCommissionPrice Float?
+  fbaStorageFeeAmount Float?
+  fbaLongTermStorageFeeAmount Float?
+  fbaRemovalFeeAmount Float?
+  fbaDisposalFeeAmount Float?
   evaluationSaleNum Float?
   channelSaleNum  Float?
   adSpCost        Float?

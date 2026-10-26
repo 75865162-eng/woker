@@ -55,6 +55,10 @@ export function extractPerformanceFields(row: RecordLike) {
     adSbCost: sellfoxNumber(row, "adSbCost"),
     adSbvCost: sellfoxNumber(row, "adSbvCost"),
     adSbsCost: sellfoxNumber(row, "adSbsCost"),
+    fbaStorageFeeAmount: sellfoxNumber(row, "fbaStorageFeeAmount"),
+    fbaLongTermStorageFeeAmount: sellfoxNumber(row, "fbaLongTermStorageFeeAmount"),
+    fbaRemovalFeeAmount: sellfoxNumber(row, "fbaRemovalFeeAmount"),
+    fbaDisposalFeeAmount: sellfoxNumber(row, "fbaDisposalFeeAmount"),
     userNameList: Array.isArray(row.userNameList) ? [...new Set(row.userNameList.filter((name): name is string => typeof name === "string").map(name => name.trim()).filter(Boolean))].sort() : [],
   };
 }

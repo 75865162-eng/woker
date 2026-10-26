@@ -1,5 +1,7 @@
 # 赛狐本地读取约定
 
+2026-10-26 BOX 本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留120000列序，末尾追加 `fbaStorageFeeAmount` / `fbaLongTermStorageFeeAmount` / `fbaRemovalFeeAmount` / `fbaDisposalFeeAmount` nullable 类型列；Agent 英文长表按相同顺序追加并允许排序。分别为FBA仓储费/长期仓储费/FBA移除费/FBA弃置费，performance默认隐藏。明细CSV NULL空、0保留，工作台实体/币种totals为 `COALESCE(sum(...),0)`。只使用同名profit payload键，不映射Listing `fbaFees` / `referralFee`或商品「月仓储费」。sales及未证实业务列继续锁定；123需全部前置迁移+130000，用户说「上」后另行评审。回填成本/回退/离线验证命令见 [P0文档顶部](sellfox-sales-profit-p0.md)。
+
 Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出」CSV，不调用 `openapi.sellfox.com`，也不依赖赛狐网页登录。ProductRecord 仍是商品主档，以下均为可重建的只读报表层，禁止反写主档或广告。
 
 当前 P0 增量与本地验证见 [销量/利润 P0](sellfox-sales-profit-p0.md)。历史验收记录中的“两指标”描述保留当时口径；旧 coverage 不代表订单量已采集，orders 仍为 NULL。直接查询利润 SQL 视图时必须显式过滤 `"onlySettle"=false`（全部）或 `true`（已结算），API 默认 false。

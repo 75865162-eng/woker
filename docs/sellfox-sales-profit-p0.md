@@ -1,5 +1,23 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+> 2026-10-26 · Owner: Chen Jieliang · **仅 BOX 本地**：performance 追加默认隐藏 numeric 列 `fbaStorageFeeAmount`「FBA仓储费」、`fbaLongTermStorageFeeAmount`「长期仓储费」、`fbaRemovalFeeAmount`「FBA移除费」、`fbaDisposalFeeAmount`「FBA弃置费」。同名 profit payload → nullable Float 类型投影 → 实体/币种 `COALESCE(sum(...),0)` → 排序及选列 CSV/XLSX；Agent 英文长表末尾追加四列。明细 NULL 空、0 保留。Listing `fbaFees` / `referralFee`、商品试算「月仓储费」与这些利润键不同，不作别名或补数；sales 列不变。销售小组/业绩归属人/实时统计/运营/分类/AWD/sales业务员继续锁定。
+>
+> 加法迁移 `20261026130000_sellfox_product_daily_storage_fees` 接在120000后，保留全部旧投影与 trigger、视图旧列序后追加四列，无新索引；一次 `payload=payload` 回填保留 payload/adCost。**123 需要全部前置迁移（含50000 helper及80000～120000）+130000，只有用户说「上」后另行评审。** 实际回填前评估行数、锁、WAL/磁盘与维护窗口；代码回退本地提交，保留加法 schema/trigger，不自动回退数据库。本轮未连接真实库、未调用 live API/启用计划、未 push/fetch/SSH/部署/迁移/重启。
+
+本批离线复验（预期七个定向测试文件及 PGlite verifier PASS；普通 PG 入口因未配置独立库而 SKIP）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-sync-recovery.test.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-agent-read.test.ts tests/sellfox-listing-identity.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts src/lib/sellfox/{product-performance,workbench-read,sort-columns,agent-read}.ts tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,browse-api}.test.ts tests/integration/sellfox-{sales-profit-p0,cross-store,listings-read-model}.ts
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js generate
+git diff --check
+```
+
+本批以上验证通过，另通过 Listing 与跨店 PGlite fixture。共享 `performance-storage-fees.json` 覆盖非零/0/null/非法值；实际130000 DDL覆盖回填、INSERT/UPDATE触发器、视图列序、无新索引、既有费用/userNameList/数量/广告投影保留、币种/结算隔离与Agent排序。复用选列导出测试覆盖双路由、有无layout、CSV/XLSX。按本批范围使用定向验证；未跑浏览器、完整check、生产build或真实P95，发布/性能验收时再补CI与受控benchmark。fixture通过不代表真实费用已线上验收。
+
 
 ## 2026-10-26 销售利润广告渠道费用（Owner: Chen Jieliang；仅 BOX 本地）
 
