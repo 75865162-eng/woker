@@ -67,7 +67,7 @@ test("winter backfill is bounded and persistent, while all new daily plans share
   assert.deepEqual(sellfoxBackfillWindow("2026-10-23", "2026-10-24", 90), { backfillFrom: "2026-10-23", backfillTo: "2026-10-24" });
   assert.deepEqual(sellfoxBackfillWindow("2026-10-25", "2026-10-24"), {});
   assert.throws(() => sellfoxBackfillWindow("2025-11-01", "2026-10-24", 91));
-  for (const resource of ["listings", "ads_report", "ads_targeting", "ads_search_term"]) assert.equal(nextSellfoxScheduleAt({ resource, intervalMinutes: 1440, lastEnqueuedAt: null }, new Date("2026-10-24T22:29:00Z")).toISOString(), "2026-10-24T22:30:00.000Z");
+  for (const resource of ["listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) assert.equal(nextSellfoxScheduleAt({ resource, intervalMinutes: 1440, lastEnqueuedAt: null }, new Date("2026-10-24T22:29:00Z")).toISOString(), "2026-10-24T22:30:00.000Z");
 });
 test("listing transaction failure cannot publish current; retry reuses capture and complete empty capture clears current", async () => {
   let head: string | null = null; let count = 0; let fail = true; let empty = false; let checkpoint: ListingCheckpoint | undefined;
@@ -145,7 +145,7 @@ test("agent Buy Box rows, counts and export match only real booleans on the chos
       await readSellfoxAgentRows(domain, sellfoxBrowseQuery(new URL("http://localhost/?buyBox=")), { organizationId: "org", workspaceId: "ws" });
       for (const sql of calls) assert.doesNotMatch(sql.text, /buyBoxWinner|sellfox_listing_current candidate/);
     }
-    for (const domain of ["inventory", "ads_report", "ads_targeting", "ads_search_term"] as const) {
+    for (const domain of ["inventory", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
       calls.length = 0;
       await readSellfoxAgentRows(domain, sellfoxBrowseQuery(new URL("http://localhost/?buyBox=yes")), { organizationId: "org", workspaceId: "ws" });
       for (const sql of calls) { assert.doesNotMatch(sql.text, /buyBoxWinner/); assert.ok(!sql.values.includes("yes")); }
@@ -186,7 +186,7 @@ test("agent brand matches the selected scoped current Listing after MSKU-first/A
         for (const sql of calls) assert.doesNotMatch(sql.text, /payload->>'brand'|sellfox_listing_current candidate/);
       }
     }
-    for (const domain of ["inventory", "ads_report", "ads_targeting", "ads_search_term"] as const) {
+    for (const domain of ["inventory", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
       calls.length = 0;
       await readSellfoxAgentRows(domain, sellfoxBrowseQuery(new URL("http://localhost/?brand=ignored")), { organizationId: "org", workspaceId: "ws" });
       for (const sql of calls) { assert.doesNotMatch(sql.text, /payload->>'brand'/); assert.ok(!sql.values.includes("ignored")); }

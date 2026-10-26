@@ -103,24 +103,31 @@ test("brand selects use dynamic distinct names, preserve URL selections, change 
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
 
-test("ads tabs enable product/targeting/search-term with distinct columns and explain deferred sources", () => {
+test("ads tabs enable all six daily reports with distinct columns and explain deferred sources", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
   try {
-    for (const adsTab of ["product", "targeting", "searchTerm"] as const) {
+    for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"] as const) {
       const patches: Partial<SellfoxView>[] = [];
       const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "ads", adsTab }, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
-      for (const [label, tab] of [["广告产品", "product"], ["投放", "targeting"], ["搜索词", "searchTerm"]] as const) {
+      for (const [label, tab] of [["广告产品", "product"], ["投放", "targeting"], ["搜索词", "searchTerm"], ["广告活动", "campaign"], ["广告组", "adGroup"], ["广告位", "placement"]] as const) {
         const button = nodes.find(node => node.type === "button" && Array.isArray(node.props.children) && node.props.children[0] === label)!;
         assert.ok(button); assert.equal(button.props.disabled, false); button.props.onClick!();
         assert.deepEqual(patches.at(-1), { adsTab: tab, searchType: "", page: 1 });
       }
-      for (const label of ["广告组合", "广告活动", "广告组", "否定", "广告位", "AMC", "日志"]) {
+      for (const label of ["广告组合", "否定", "AMC", "日志"]) {
         const button = nodes.find(node => node.type === "button" && Array.isArray(node.props.children) && node.props.children[0] === label)!;
         assert.ok(button); assert.equal(button.props.disabled, true);
         assert.ok((button.props as { title?: string }).title);
       }
       const labels = nodes.filter(node => node.type === "input").map(node => node.props["aria-label"]);
+      if (adsTab === "campaign") assert.ok(labels.includes("显示活动名称列"));
+      if (adsTab === "adGroup") assert.ok(labels.includes("显示广告组名称列"));
+      if (adsTab === "placement") assert.ok(labels.includes("显示广告位列"));
+      const search = nodes.find(node => node.type === "select" && node.props["aria-label"] === "搜索类型")!;
+      const options = elements(search.props.children).map(node => node.props.value);
+      assert.equal(options.includes("adGroupId"), adsTab !== "campaign");
+      assert.equal(options.includes("placement"), adsTab === "placement");
       if (adsTab === "targeting") assert.ok(labels.includes("显示投放ID列"));
       if (adsTab === "searchTerm") assert.ok(labels.includes("显示用户搜索词列"));
     }

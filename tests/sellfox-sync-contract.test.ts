@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { isSellfoxDate, isSellfoxSyncResource, nextSellfoxPage, normalizeSellfoxDates, sellfoxReportDates } from "@/lib/sellfox/sync-contract";
 
 test("Sellfox sync resource contract accepts the stable domains only", () => {
-  for (const resource of ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report", "ads_targeting", "ads_search_term"]) {
+  for (const resource of ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) {
     assert.equal(isSellfoxSyncResource(resource), true);
   }
   assert.equal(isSellfoxSyncResource("products"), false);
@@ -47,7 +47,7 @@ test("daily sales requests specify MSKU dimension and distinct volume/revenue me
 
 test("verified listing and product report contracts enable the stable read-only resources", async () => {
   const { sellfoxSyncDisabledReason } = await import("@/lib/sellfox/sync-contract");
-  for (const domain of ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report", "ads_targeting", "ads_search_term"]) assert.equal(sellfoxSyncDisabledReason(domain), null);
+  for (const domain of ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) assert.equal(sellfoxSyncDisabledReason(domain), null);
 });
 
 

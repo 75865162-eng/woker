@@ -399,11 +399,11 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 ### Sellfox 只读同步
 
-- 广告 Phase A 新增 `ads_targeting` / `ads_search_term`，报告代码精确为 `adTargeringReport` / `adSearchTermReport`；用户授权按严格暂定 XLSX 契约接入，尚未真实文件核验。两计划默认关闭、06:30，列/身份/回退与灰显范围见 `docs/sellfox-ads-subtabs-gap.md`；`/saihu-search-merge` 人工上传保持独立。
+- 广告 Phase A/B 新增 `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`，报告代码精确为 `adTargeringReport` / `adSearchTermReport` / `adCampaignReport` / `adGroupReport` / `adSpaceReport`；用户授权按严格暂定 XLSX 契约接入，尚未真实文件核验。五计划默认关闭、1440 分钟、Asia/Shanghai 06:30；广告位暂按活动/广告位/日期唯一，广告组仅元数据，重复身份整文件拒绝。列/身份/回退与灰显范围见 `docs/sellfox-ads-subtabs-gap.md`；`/saihu-search-merge` 人工上传保持独立。
 
 - 凭据仅由服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 读取；overview 只返回 configured。所有 Open API 请求必须在 Node Worker 中经 `src/lib/sellfox/client.ts` 发起。
 - 使用专用 `npm run worker:sellfox-sync` 和 `amazon-sellfox-sync-worker.service`；BullMQ concurrency 固定为 1。客户端对 token、重试和资源请求统一串行，间隔不少于 1200ms。
-- 官方 token `expires_in` 单位为毫秒。库存/销量/Listing已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts`、`narrow-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。除上述用户授权的广告 Phase A 暂定契约外，后续未验证资源仍由 `sellfoxSyncDisabledReason` 禁止同步，不得恢复猜字段落库。
+- 官方 token `expires_in` 单位为毫秒。库存/销量/Listing已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts`、`narrow-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。除上述用户授权的广告 Phase A/B 暂定契约外，后续未验证资源仍由 `sellfoxSyncDisabledReason` 禁止同步，不得恢复猜字段落库。
 - 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
 - ProductRecord 保持唯一商品主档事实源。赛狐快照只服务报表、列表和只读分析。
 - 手动与定时任务共用 SellfoxSyncRun 和 sync service；计划需在当前工作区由有 `sellfox:create` 权限的用户显式启用。同步 Worker 与 Redis 不可用时 API 返回服务端错误，不退化为请求内同步。

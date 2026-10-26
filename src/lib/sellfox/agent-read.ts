@@ -114,6 +114,9 @@ export const sellfoxAgentColumns = {
     "marketplace",
     "onlySettle"
   ],
+  "ads_campaign": ["id", "organizationId", "workspaceId", "storeId", "reportDate", "adType", "campaignId", "campaignName", "asin", "msku", "currency", "impressions", "clicks", "cost", "adOrders", "adSales", "syncedAt", "shopExternalId", "name", "marketplace", "acos", "roas"],
+  "ads_ad_group": ["id", "organizationId", "workspaceId", "storeId", "reportDate", "adType", "campaignId", "adGroupId", "adGroupName", "targetingText", "matchType", "asin", "msku", "currency", "impressions", "clicks", "cost", "adOrders", "adSales", "syncedAt", "shopExternalId", "name", "marketplace", "acos", "roas"],
+  "ads_placement": ["id", "organizationId", "workspaceId", "storeId", "reportDate", "adType", "campaignId", "placement", "adGroupId", "asin", "msku", "currency", "impressions", "clicks", "cost", "adOrders", "adSales", "syncedAt", "shopExternalId", "name", "marketplace", "acos", "roas"],
   "ads_report": [
     "id",
     "organizationId",
@@ -196,7 +199,7 @@ export const sellfoxAgentColumns = {
   ]
 } as const;
 export type AgentDomain = keyof typeof sellfoxAgentColumns;
-const views: Record<AgentDomain, string> = { inventory: "sellfox_inventory_current", listings: "sellfox_listing_current", sales: "sellfox_sales_daily", performance: "sellfox_profit_daily", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily" };
+const views: Record<AgentDomain, string> = { inventory: "sellfox_inventory_current", listings: "sellfox_listing_current", sales: "sellfox_sales_daily", performance: "sellfox_profit_daily", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily", ads_campaign: "sellfox_ads_campaign_daily", ads_ad_group: "sellfox_ads_ad_group_daily", ads_placement: "sellfox_ads_placement_daily" };
 export function isSellfoxAgentDomain(domain: string): domain is AgentDomain { return Object.prototype.hasOwnProperty.call(views, domain); }
 export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnType<typeof sellfoxBrowseQuery>, scope: { organizationId: string; workspaceId: string }, exporting = false) {
   const clauses = [Prisma.sql`"organizationId"=${scope.organizationId}`, Prisma.sql`"workspaceId"=${scope.workspaceId}`];
@@ -247,15 +250,18 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
   }
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);
   if (query.site) clauses.push(Prisma.sql`marketplace=${query.site}`);
-  const ads = ["ads_report", "ads_targeting", "ads_search_term"].includes(domain);
+  const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
   if (ads && query.adType) clauses.push(Prisma.sql`"adType"=${query.adType}`);
   if (ads && query.quickFilter === "spend") clauses.push(Prisma.sql`cost>0`);
   if (ads && query.quickFilter === "clicksNoOrders") clauses.push(Prisma.sql`clicks>0 AND "adOrders"=0`);
   if (ads && query.quickFilter === "spendNoClicks") clauses.push(Prisma.sql`cost>0 AND clicks=0`);
   if (ads && query.quickFilter === "noClicks") clauses.push(Prisma.sql`clicks=0`);
   if (query.search) {
-    const fields = ads ? ["asin", "msku", "campaignId", "adGroupId", ...(domain === "ads_report" ? ["productId"] : domain === "ads_targeting" ? ["targetingId", "targetingText"] : ["searchTerm", "targetingId", "targetingText"]), "name"] : ["asin", "msku", "sku", "name"];
-    clauses.push(Prisma.sql`(${Prisma.join(fields.map((key) => Prisma.sql`${Prisma.raw(`"${key}"`)} ILIKE ${`%${query.search}%`}`), " OR ")})`);
+    const fields = ads ? ["asin", "msku", "campaignId", ...(domain === "ads_campaign" ? ["campaignName"] : domain === "ads_ad_group" ? ["adGroupId", "adGroupName", "targetingText"] : domain === "ads_placement" ? ["placement", "adGroupId"] : ["adGroupId", ...(domain === "ads_report" ? ["productId"] : domain === "ads_targeting" ? ["targetingId", "targetingText"] : ["searchTerm", "targetingId", "targetingText"])]), "name"] : ["asin", "msku", "sku", "name"];
+    const typedAds = ["ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
+    if (typedAds && query.searchType && !fields.includes(query.searchType)) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
+    const selected = typedAds && query.searchType ? [query.searchType] : fields;
+    clauses.push(Prisma.sql`(${Prisma.join(selected.map((key) => typedAds && query.exactMatch ? Prisma.sql`lower(${Prisma.raw(`"${key}"`)})=lower(${query.search})` : Prisma.sql`${Prisma.raw(`"${key}"`)} ILIKE ${`%${query.search}%`}`), " OR ")})`);
   }
   if (domain !== "listings" && domain !== "inventory") {
     if (query.from) clauses.push(Prisma.sql`"reportDate">=${query.from}`);

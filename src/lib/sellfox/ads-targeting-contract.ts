@@ -5,13 +5,19 @@ import { createHash } from "node:crypto";
 import { readSellfoxAdReport } from "./ads-report-contract";
 import { sellfoxNumber, type SellfoxRow } from "./narrow-contracts";
 import { SellfoxSyncInputError } from "./sync-contract";
-export const sellfoxCpcRequiredColumns = ["店铺", "日期", "广告活动ID", "广告组ID", "广告曝光量", "广告点击量", "广告花费", "广告订单量", "广告销售额"];
-export function sellfoxCpcRow(raw: SellfoxRow) {
-  const campaignId = String(raw["广告活动ID"] ?? "").trim(), adGroupId = String(raw["广告组ID"] ?? "").trim();
-  if (!campaignId || !adGroupId) throw new SellfoxSyncInputError("广告报告缺少稳定实体 ID。");
-  return { reportDate: String(raw["日期"]), campaignId, adGroupId, targetingText: String(raw["投放"] ?? "").trim() || null, matchType: String(raw["匹配类型"] ?? "").trim() || null,
+export const sellfoxCpcCampaignRequiredColumns = ["店铺", "日期", "广告活动ID", "广告曝光量", "广告点击量", "广告花费", "广告订单量", "广告销售额"];
+export const sellfoxCpcRequiredColumns = [...sellfoxCpcCampaignRequiredColumns, "广告组ID"];
+export function sellfoxCpcCampaignRow(raw: SellfoxRow) {
+  const campaignId = String(raw["广告活动ID"] ?? "").trim();
+  if (!campaignId) throw new SellfoxSyncInputError("广告报告缺少稳定实体 ID。");
+  return { reportDate: String(raw["日期"]), campaignId,
     asin: String(raw.asin ?? raw.ASIN ?? "") || null, msku: String(raw.sku ?? raw.SKU ?? "") || null, currency: null,
     impressions: sellfoxNumber(raw, "广告曝光量", true), clicks: sellfoxNumber(raw, "广告点击量", true), cost: sellfoxNumber(raw, "广告花费"), adOrders: sellfoxNumber(raw, "广告订单量", true), adSales: sellfoxNumber(raw, "广告销售额"), payload: raw };
+}
+export function sellfoxCpcRow(raw: SellfoxRow) {
+  const adGroupId = String(raw["广告组ID"] ?? "").trim();
+  if (!adGroupId) throw new SellfoxSyncInputError("广告报告缺少稳定实体 ID。");
+  return { ...sellfoxCpcCampaignRow(raw), adGroupId, targetingText: String(raw["投放"] ?? "").trim() || null, matchType: String(raw["匹配类型"] ?? "").trim() || null };
 }
 export async function parseSellfoxAdTargetingReport(buffer: Buffer, input: { storeName: string; startDate: string; endDate: string }) {
   const { rows, columns } = await readSellfoxAdReport(buffer, input, sellfoxCpcRequiredColumns);

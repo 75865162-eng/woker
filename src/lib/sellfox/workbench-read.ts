@@ -8,8 +8,8 @@ import { resolveEffectiveReportDate } from "./browse-report-date";
 
 type Scope = { organizationId: string; workspaceId: string };
 type Row = Record<string, unknown>;
-export type WorkbenchDomain = "sales" | "performance" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term";
-const sources = { sales: "sellfox_sales_daily", performance: '"SellfoxProductDailySnapshot"', listings: "sellfox_listing_current", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily" };
+export type WorkbenchDomain = "sales" | "performance" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term" | "ads_campaign" | "ads_ad_group" | "ads_placement";
+const sources = { sales: "sellfox_sales_daily", performance: '"SellfoxProductDailySnapshot"', listings: "sellfox_listing_current", ads_report: "sellfox_ads_product_daily", ads_targeting: "sellfox_ads_targeting_daily", ads_search_term: "sellfox_ads_search_term_daily", ads_campaign: "sellfox_ads_campaign_daily", ads_ad_group: "sellfox_ads_ad_group_daily", ads_placement: "sellfox_ads_placement_daily" };
 function scoped(alias: string, scope: Scope) {
   const a = Prisma.raw(alias);
   return Prisma.sql`${a}."organizationId"=${scope.organizationId} AND ${a}."workspaceId"=${scope.workspaceId}`;
@@ -30,8 +30,8 @@ export function workbenchDateRange(query: SellfoxBrowseQuery) {
 // All joins stay in the authenticated workspace. Current metadata is supplemental,
 // never historical parent identity, price or inventory at the sale date.
 export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
-  const ads = ["ads_report", "ads_targeting", "ads_search_term"].includes(domain);
-  const adIdentity = domain === "ads_targeting" ? Prisma.sql`"adType","campaignId","adGroupId","targetingId"` : domain === "ads_search_term" ? Prisma.sql`"adType","campaignId","adGroupId","searchTerm","targetingId"` : Prisma.sql`"adType","campaignId","adGroupId","productId"`;
+  const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
+  const adIdentity = domain === "ads_campaign" ? Prisma.sql`"adType","campaignId"` : domain === "ads_ad_group" ? Prisma.sql`"adType","campaignId","adGroupId"` : domain === "ads_placement" ? Prisma.sql`"adType","campaignId",placement` : domain === "ads_targeting" ? Prisma.sql`"adType","campaignId","adGroupId","targetingId"` : domain === "ads_search_term" ? Prisma.sql`"adType","campaignId","adGroupId","searchTerm","targetingId"` : Prisma.sql`"adType","campaignId","adGroupId","productId"`;
   const supportsProductTags = ["sales", "performance", "listings"].includes(domain);
   const needDisplayTags = domain === "listings";
   const needTagFilter = supportsProductTags && Boolean(query.productTag);
@@ -75,19 +75,22 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   const identity = domain === "sales" && dimension === "parentAsin" ? Prisma.sql`l."parentAsin"` : dim;
   const baseIdentity = Prisma.sql`COALESCE(NULLIF(${identity},''), NULLIF(s.msku,''), s.id)`;
   const searchFields = [Prisma.sql`s.asin`, Prisma.sql`s.msku`, Prisma.sql`s.sku`, Prisma.sql`l.title`];
-  if (ads) { searchFields.splice(2, 1); searchFields.push(Prisma.sql`s."campaignId"`, Prisma.sql`s."adGroupId"`); }
+  if (ads) { searchFields.splice(2, 1); searchFields.push(Prisma.sql`s."campaignId"`); if (domain !== "ads_campaign") searchFields.push(Prisma.sql`s."adGroupId"`); }
   if (domain === "sales" || domain === "performance") searchFields.push(identity);
   if ((domain === "sales" || domain === "performance") && dimension === "store") searchFields.push(Prisma.sql`st.name`);
   if (domain === "performance" || domain === "listings") searchFields.push(Prisma.sql`s.title`);
   const typedSearch: Record<string, Prisma.Sql> = { asin: Prisma.sql`s.asin`, msku: Prisma.sql`s.msku`, title: domain === "performance" || domain === "listings" ? Prisma.sql`s.title` : Prisma.sql`l.title` };
   if (!ads) typedSearch.sku = Prisma.sql`s.sku`;
   if (domain === "sales" || domain === "performance" || domain === "listings") typedSearch.parentAsin = domain === "sales" ? Prisma.sql`l."parentAsin"` : Prisma.sql`s."parentAsin"`;
-  if (ads) { typedSearch.campaignId = Prisma.sql`s."campaignId"`; typedSearch.adGroupId = Prisma.sql`s."adGroupId"`; }
+  if (ads) { typedSearch.campaignId = Prisma.sql`s."campaignId"`; if (domain !== "ads_campaign") typedSearch.adGroupId = Prisma.sql`s."adGroupId"`; }
   if (domain === "ads_targeting" || domain === "ads_search_term") {
     searchFields.push(Prisma.sql`s."targetingId"`, Prisma.sql`s."targetingText"`);
     typedSearch.targetingId = Prisma.sql`s."targetingId"`;
   }
   if (domain === "ads_search_term") { searchFields.push(Prisma.sql`s."searchTerm"`); typedSearch.searchTerm = Prisma.sql`s."searchTerm"`; }
+  if (domain === "ads_placement") { searchFields.push(Prisma.sql`s.placement`); typedSearch.placement = Prisma.sql`s.placement`; }
+  if (domain === "ads_campaign") searchFields.push(Prisma.sql`s."campaignName"`);
+  if (domain === "ads_ad_group") searchFields.push(Prisma.sql`s."adGroupName"`, Prisma.sql`s."targetingText"`);
   const selectedSearch = query.searchType ? typedSearch[query.searchType] : undefined;
   if (query.searchType && !selectedSearch) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) filters.push(Prisma.sql`(${Prisma.join((selectedSearch ? [selectedSearch] : searchFields).map(field => query.exactMatch ? Prisma.sql`lower(${field})=lower(${query.search})` : Prisma.sql`${field} ILIKE ${`%${query.search}%`}`), " OR ")})`);
@@ -171,7 +174,8 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     FROM days GROUP BY ${storeGrain}identity,currency
   )` : domain === "listings" ? Prisma.sql`grouped AS (SELECT base.* FROM base)` : Prisma.sql`grouped AS (
     SELECT ${storeColumn},currency,${domain === "performance" ? Prisma.sql`identity` : adIdentity},
-      ${domain === "ads_targeting" || domain === "ads_search_term" ? Prisma.sql`CASE WHEN count(DISTINCT "targetingText")=1 THEN min("targetingText") END AS "targetingText",CASE WHEN count(DISTINCT "matchType")=1 THEN min("matchType") END AS "matchType",` : Prisma.empty}min(id) AS id,min(asin) AS asin,min(msku) AS msku,${domain === "performance" ? Prisma.sql`min(NULLIF("mainImageCandidate",'')) AS "mainImage",CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,CASE WHEN count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",CASE WHEN count(*)=1 THEN min("refundRate") END AS "refundRate",` : Prisma.sql`min("listingTitle") AS title,min("listingPrice") AS price,`}
+      ${domain === "ads_campaign" ? Prisma.sql`CASE WHEN count(DISTINCT "campaignName")=1 THEN min("campaignName") END AS "campaignName",` : domain === "ads_ad_group" ? Prisma.sql`CASE WHEN count(DISTINCT "adGroupName")=1 THEN min("adGroupName") END AS "adGroupName",` : domain === "ads_placement" ? Prisma.sql`CASE WHEN count("adGroupId")=count(*) AND count(DISTINCT "adGroupId")=1 THEN min("adGroupId") END AS "adGroupId",` : Prisma.empty}
+      ${domain === "ads_targeting" || domain === "ads_search_term" || domain === "ads_ad_group" ? Prisma.sql`CASE WHEN count(DISTINCT "targetingText")=1 THEN min("targetingText") END AS "targetingText",CASE WHEN count(DISTINCT "matchType")=1 THEN min("matchType") END AS "matchType",` : Prisma.empty}min(id) AS id,min(asin) AS asin,min(msku) AS msku,${domain === "performance" ? Prisma.sql`min(NULLIF("mainImageCandidate",'')) AS "mainImage",CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,CASE WHEN count(DISTINCT title)=1 THEN min(title) END AS title,CASE WHEN count(DISTINCT "parentAsin")=1 THEN min("parentAsin") END AS "parentAsin",CASE WHEN count(*)=1 THEN min("refundRate") END AS "refundRate",` : Prisma.sql`min("listingTitle") AS title,min("listingPrice") AS price,`}
       ${domain === "performance" && ["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},${marketplace} AS marketplace,array_agg(DISTINCT msku) AS members,${crossStore ? Prisma.sql`jsonb_agg(DISTINCT jsonb_build_array("storeId",msku)) AS "stockMembers",` : Prisma.empty}
       ${Prisma.join(aggregateColumns.map(key => Prisma.sql`${safeSum(key)} AS ${Prisma.raw(`"${key}"`)}`))}
     FROM base GROUP BY ${crossStore ? Prisma.sql`identity,currency` : Prisma.sql`"storeId",currency,${domain === "performance" ? Prisma.sql`identity` : adIdentity}`}
@@ -208,7 +212,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
 }
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
-  const ads = ["ads_report", "ads_targeting", "ads_search_term"].includes(domain);
+  const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
   const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
   const { rows, total, totals, facets } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);

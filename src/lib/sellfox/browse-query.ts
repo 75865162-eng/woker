@@ -4,9 +4,9 @@ import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 export class SellfoxBrowseError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
 }
-export type SellfoxBrowseDomain = "stores" | "inventory" | "sales" | "performance" | "hourly" | "runs" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term";
+export type SellfoxBrowseDomain = "stores" | "inventory" | "sales" | "performance" | "hourly" | "runs" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term" | "ads_campaign" | "ads_ad_group" | "ads_placement";
 export type SellfoxBrowseDimension = "asin" | "parentAsin" | "msku" | "sku" | "store" | "developer" | "spu";
-export const sellfoxBrowseDomains: SellfoxBrowseDomain[] = ["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report", "ads_targeting", "ads_search_term"];
+export const sellfoxBrowseDomains: SellfoxBrowseDomain[] = ["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"];
 export const sellfoxExportLimit = 10_000;
 export function sellfoxFulfillment(value: string | null | undefined): "" | "AFN" | "MFN" {
   return value === "AFN" || value === "MFN" ? value : "";
@@ -43,7 +43,7 @@ export function sellfoxBrowseQuery(url: URL) {
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
     page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate,
     status: p.get("status")?.trim() || undefined,
-    searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId", "targetingId", "searchTerm"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
+    searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",
     shopExternalIds: [...new Set(p.getAll("shopExternalId").map((value) => value.trim()).filter(Boolean))],
     storeId: p.get("storeId")?.trim() || undefined,

@@ -4,7 +4,7 @@ export type StoreRow = { id: string; externalId: string; name: string; marketpla
 export type Run = { id: string; resource: string; status: string; summary?: Row | null; error?: string | null; startedAt: string; finishedAt?: string | null };
 export type Overview = { configured: boolean; stores: StoreRow[]; counts: Record<string, number>; coverage?: { inventoryStores: number; inventoryMissingStores: number; salesStores: number; salesMissingStores: number }; latestRuns: Run[]; latestSuccessByResource?: Record<string, Run>; workerOnline?: boolean };
 export type Schedule = { backfillStart?: string | null; backfillNextDate?: string | null; resource: string; enabled: boolean; intervalMinutes: number; lastEnqueuedAt?: string | null; nextRunAt?: string | null };
-export const resourceLabels: Record<string, string> = { stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "销售利润", hourly: "SP 小时样本", listings: "在线商品", ads_report: "广告产品日报", ads_targeting: "广告投放日报", ads_search_term: "广告搜索词日报" };
+export const resourceLabels: Record<string, string> = { stores: "店铺", inventory: "FBA 库存", sales: "销量", performance: "销售利润", hourly: "SP 小时样本", listings: "在线商品", ads_report: "广告产品日报", ads_targeting: "广告投放日报", ads_search_term: "广告搜索词日报", ads_campaign: "广告活动日报", ads_ad_group: "广告组日报", ads_placement: "广告位日报" };
 export function browseEmptyMessage(domain: string, overview: Overview | null) {
   if (domain !== "sales" && domain !== "performance") return null;
   const label = domain === "sales" ? "销量" : "销售利润";
@@ -53,6 +53,9 @@ export const columns: Record<string, SellfoxColumn[]> = {
 // Reuse metric/availability rules; identity belongs to the active CPC report.
 columns.ads_targeting = [column("targetingId", "投放ID"), column("targetingText", "投放"), column("matchType", "匹配类型"), ...columns.ads];
 columns.ads_search_term = [column("searchTerm", "用户搜索词"), column("targetingId", "投放ID"), column("targetingText", "投放"), column("matchType", "匹配类型"), ...columns.ads];
+columns.ads_campaign = [column("campaignName", "活动名称"), ...columns.ads.filter(c => c.key !== "adGroupId")];
+columns.ads_ad_group = [column("adGroupName", "广告组名称"), column("targetingText", "投放"), column("matchType", "匹配类型"), ...columns.ads];
+columns.ads_placement = [column("placement", "广告位"), ...columns.ads];
 export const unavailableReason = "赛狐有、API/本地无";
 export function summableColumnKeys(config: SellfoxColumn[]) {
   return config.filter(c => c.numeric && !c.unavailable && !["grossProfitRate", "netProfitRate", "refundRate", "acos", "roas"].includes(c.key)).map(c => c.key);

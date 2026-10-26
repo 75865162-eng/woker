@@ -6,8 +6,9 @@ import { syncSellfoxAdsReports, type SellfoxCpcReportType } from "@/lib/sellfox/
 import type { sellfoxPost } from "@/lib/sellfox/client";
 type Task = Record<string, unknown>;
 function fixture(reportTypeCode: SellfoxCpcReportType = "adProductReport") {
-  let task: Task | null = null; let sends = 0; let ambiguous = false; let foreign = false; let stored = false; let commits = 0;
+  let task: Task | null = null; let sends = 0; let ambiguous = false; let foreign = false; let stored = false; let commits = 0; let invalidContract = false;
   const rows: Task[] = [];
+  const model = ({ adProductReport: "sellfoxAdsProductDaily", adTargeringReport: "sellfoxAdsTargetingDaily", adSearchTermReport: "sellfoxAdsSearchTermDaily", adCampaignReport: "sellfoxAdsCampaignDaily", adGroupReport: "sellfoxAdsAdGroupDaily", adSpaceReport: "sellfoxAdsPlacementDaily" } as const)[reportTypeCode];
   const tasks = {
     findUnique: async ({ where }: { where: { id: string } }) => task?.id === where.id ? task : null, findUniqueOrThrow: async () => task,
     findFirst: async ({ where }: { where: Task }) => task?.status === "creating" && task.reportTypeCode === where.reportTypeCode ? task : null,
@@ -16,10 +17,10 @@ function fixture(reportTypeCode: SellfoxCpcReportType = "adProductReport") {
   };
   const db = {
     sellfoxStore: { findMany: async () => [{ id: "store", externalId: "shop", name: "Fixture" }] }, sellfoxReportTask: tasks,
-    sellfoxAdsProductDaily: { count: async () => rows.length }, sellfoxAdsTargetingDaily: { count: async () => rows.length }, sellfoxAdsSearchTermDaily: { count: async () => rows.length },
+    [model]: { count: async () => rows.length },
     $transaction: async (fn: (tx: unknown) => Promise<void>) => {
       const daily = { deleteMany: async ({ where }: { where: Task }) => { assert.equal(where.organizationId, "org"); assert.equal(where.workspaceId, "workspace"); rows.length = 0; }, createMany: async ({ data }: { data: Task[] }) => { commits++; rows.push(...data); } };
-      return fn({ sellfoxReportTask: tasks, sellfoxAdsProductDaily: daily, sellfoxAdsTargetingDaily: daily, sellfoxAdsSearchTermDaily: daily });
+      return fn({ sellfoxReportTask: tasks, [model]: daily });
     },
   } as unknown as NonNullable<Parameters<typeof syncSellfoxAdsReports>[1]>["db"];
   const post = (async (path: string, body: Task, options?: Task) => {
@@ -28,12 +29,14 @@ function fixture(reportTypeCode: SellfoxCpcReportType = "adProductReport") {
   }) as typeof sellfoxPost;
   async function buffer() {
     const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet("sheet");
-    sheet.addRow(["店铺", "日期", "asin", "sku", "广告活动ID", "广告组ID", reportTypeCode === "adProductReport" ? "广告产品ID" : reportTypeCode === "adTargeringReport" ? "投放ID" : "用户搜索词", "广告曝光量", "广告点击量", "广告花费", "广告订单量", "广告销售额"]);
-    sheet.addRow(["Fixture", new Date("2026-10-24T00:00:00Z"), "ASIN", "MSKU", "campaign", "group", "product", 10, 1, 1.5, 1, 10]);
+    const raw = { 店铺: "Fixture", 日期: new Date("2026-10-24T00:00:00Z"), asin: "ASIN", sku: "MSKU", 广告活动ID: invalidContract ? "" : "campaign", 广告曝光量: 10, 广告点击量: 1, 广告花费: 1.5, 广告订单量: 1, 广告销售额: 10,
+      ...(reportTypeCode === "adCampaignReport" ? { 广告活动名称: "Campaign" } : reportTypeCode === "adSpaceReport" ? { 广告位: "topOfSearch" } : { 广告组ID: "group" }),
+      ...(reportTypeCode === "adProductReport" ? { 广告产品ID: "product" } : reportTypeCode === "adTargeringReport" ? { 投放ID: "product" } : reportTypeCode === "adSearchTermReport" ? { 用户搜索词: "product" } : {}) };
+    sheet.addRow(Object.keys(raw)); sheet.addRow(Object.values(raw));
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
   const storage = () => ({ putBuffer: async () => { stored = true; }, getBuffer: buffer }) as unknown as ReturnType<NonNullable<Parameters<typeof syncSellfoxAdsReports>[1]>["storage"]>;
-  return { dependencies: { db, post, storage, download: buffer, sleep: async () => undefined }, timeout: () => { ambiguous = true; }, foreign: () => { foreign = true; }, get task() { return task; }, get sends() { return sends; }, get stored() { return stored; }, get commits() { return commits; }, get rows() { return rows; } };
+  return { dependencies: { db, post, storage, download: buffer, sleep: async () => undefined }, contract: (invalid: boolean) => { invalidContract = invalid; }, timeout: () => { ambiguous = true; }, foreign: () => { foreign = true; }, get task() { return task; }, get sends() { return sends; }, get stored() { return stored; }, get commits() { return commits; }, get rows() { return rows; } };
 }
 const input = { runId: "run", organizationId: "org", workspaceId: "workspace", shopExternalIds: ["shop"], startDate: "2026-10-24", endDate: "2026-10-24", onProgress: async () => undefined };
 test("ambiguous task creation survives retries and even a new run without duplicate HTTP", async () => {
@@ -58,13 +61,16 @@ test("foreign report ownership is rejected before download or daily writes", asy
   assert.equal(f.task?.externalTaskId, "remote-task"); assert.equal(f.stored, false); assert.equal(f.commits, 0);
 });
 
-for (const reportTypeCode of ["adTargeringReport", "adSearchTermReport"] as const) {
+for (const reportTypeCode of ["adTargeringReport", "adSearchTermReport", "adCampaignReport", "adGroupReport", "adSpaceReport"] as const) {
   test(`${reportTypeCode} uses exact report code and retries a completed task without duplicate createTask or writes`, async () => {
     const f = fixture(reportTypeCode);
     const request = { ...input, reportTypeCode };
     await syncSellfoxAdsReports(request, f.dependencies);
     assert.equal(f.task?.reportTypeCode, reportTypeCode); assert.equal(f.task?.status, "done"); assert.equal(f.commits, 1);
-    assert.equal(f.rows[0][reportTypeCode === "adTargeringReport" ? "targetingId" : "searchTerm"], "product");
+    const identity = ({ adTargeringReport: ["targetingId", "product"], adSearchTermReport: ["searchTerm", "product"], adCampaignReport: ["campaignId", "campaign"], adGroupReport: ["adGroupId", "group"], adSpaceReport: ["placement", "topOfSearch"] } as const)[reportTypeCode];
+    assert.equal(f.rows[0][identity[0]], identity[1]);
+    if (reportTypeCode === "adCampaignReport") assert.equal("adGroupId" in f.rows[0], false);
+    if (reportTypeCode === "adSpaceReport") assert.equal(f.rows[0].adGroupId, null);
     assert.equal(f.rows[0].currency, null);
     assert.equal(f.task?.id, createHash("sha256").update(JSON.stringify(["run", "store", "sp", reportTypeCode])).digest("hex"));
     await syncSellfoxAdsReports(request, f.dependencies);
@@ -79,6 +85,18 @@ for (const reportTypeCode of ["adTargeringReport", "adSearchTermReport"] as cons
     assert.equal(foreign.stored, false); assert.equal(foreign.commits, 0);
   });
 }
+for (const reportTypeCode of ["adCampaignReport", "adGroupReport", "adSpaceReport"] as const) {
+  test(`${reportTypeCode} contract failure retains existing window; corrected cached parse never creates or downloads again`, async () => {
+    const f = fixture(reportTypeCode), old = { id: "old", cost: 99 };
+    f.rows.push(old); f.contract(true);
+    await assert.rejects(() => syncSellfoxAdsReports({ ...input, reportTypeCode }, f.dependencies));
+    assert.equal(f.task?.status, "downloaded"); assert.equal(f.commits, 0); assert.deepEqual(f.rows, [old]);
+    f.contract(false);
+    const noTransport = async () => { throw new Error("cached recovery cannot call transport"); };
+    await syncSellfoxAdsReports({ ...input, reportTypeCode }, { ...f.dependencies, post: noTransport as typeof sellfoxPost, download: noTransport });
+    assert.equal(f.sends, 1); assert.equal(f.commits, 1); assert.equal(f.rows[0].cost, 1.5);
+  });
+}
 test("legacy product task hash resumes after reportTypeCode backfill without another createTask", async () => {
   const f = fixture();
   await syncSellfoxAdsReports(input, f.dependencies);
@@ -88,7 +106,7 @@ test("legacy product task hash resumes after reportTypeCode backfill without ano
 });
 
 test("new report downloaded checkpoint resumes from storage without any HTTP after a fenced commit failure", async () => {
-  const reportTypeCode = "adTargeringReport" as const, f = fixture(reportTypeCode);
+  const reportTypeCode = "adCampaignReport" as const, f = fixture(reportTypeCode);
   await assert.rejects(() => syncSellfoxAdsReports({ ...input, reportTypeCode, onProgress: async progress => {
     if ((progress.cursor as Task)?.status === "committing") throw new Error("fixture lease lost");
   } }, f.dependencies));

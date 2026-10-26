@@ -4,6 +4,8 @@ Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出�
 
 当前 P0 增量与本地验证见 [销量/利润 P0](sellfox-sales-profit-p0.md)。历史验收记录中的“两指标”描述保留当时口径；旧 coverage 不代表订单量已采集，orders 仍为 NULL。直接查询利润 SQL 视图时必须显式过滤 `"onlySettle"=false`（全部）或 `true`（已结算），API 默认 false。
 
+广告 Phase A/B 新增投放、搜索词、活动、广告组与广告位日报；严格暂定列、独立视图/唯一键、API/CSV 与默认关闭的每日06:30计划见 [广告子页来源与缺口](sellfox-ads-subtabs-gap.md)。尚未真实 XLSX 核验，历史广告产品验收不代表这五类通过。
+
 ## 读取入口
 
 | PostgreSQL 视图 | 底层窄表 | 业务用途 |
