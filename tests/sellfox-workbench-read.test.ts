@@ -649,7 +649,7 @@ test("selected listing amazonBrand and bsrCategory export text and empty CSV/XLS
   } finally { globals.prisma = previous; }
 });
 
-test("ads default to current Listing image before product info and keep other Listing attributes optional across all report tabs", () => {
+test("ads default to current Listing image before product info plus rating, ratingCount and Buy Box across all report tabs", () => {
   const scope = { organizationId: "org", workspaceId: "ws" };
   const keys = ["image", "rating", "productTags"];
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
@@ -659,9 +659,9 @@ test("ads default to current Listing image before product info and keep other Li
     assert.deepEqual(config.map(c => c.labelZh), ["图片", "星级", "标签"]);
     for (const c of config) {
       assert.equal(c.unavailable, undefined);
-      assert.equal(c.defaultVisible, c.key === "image");
+      assert.equal(c.defaultVisible, c.key !== "productTags");
       assert.match(c.requiresField!, /Listing 当前快照/);
-      assert.equal(defaultVisibleColumnKeys(columnDomain).includes(c.key), c.key === "image");
+      assert.equal(defaultVisibleColumnKeys(columnDomain).includes(c.key), c.key !== "productTags");
     }
     assert.deepEqual(config[0].parts, ["mainImage"]);
     assert.match(config[0].requiresField!, /mainImage/);
@@ -669,6 +669,9 @@ test("ads default to current Listing image before product info and keep other Li
     assert.match(config[2].requiresField!, /productTags.*productLabelList/);
     const defaults = defaultVisibleColumnKeys(columnDomain);
     assert.deepEqual(defaults.slice(defaults.indexOf("image"), defaults.indexOf("image") + 4), ["image", "asin", "enabled", "serviceStatus"]);
+    assert.deepEqual(defaults.slice(defaults.indexOf("price"), defaults.indexOf("price") + 3), ["price", "rating", "ratingCount"]);
+    const sourceKeys = columns[columnDomain].map(c => c.key);
+    assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("brand"), sourceKeys.indexOf("buyBoxWinner") + 1), ["brand", "fulfillment", "buyBoxWinner"]);
     assert.deepEqual(columns[columnDomain].slice(-4).map(c => c.key), ["msku", "title", "name", "marketplace"]);
     for (const key of ["msku", "title", "name", "marketplace"]) assert.equal(columns[columnDomain].find(c => c.key === key)!.defaultVisible, false);
     assert.deepEqual(visibleColumns(columnDomain, ["asin", "cost"]).map(c => c.key), ["asin", "cost"]);
@@ -680,9 +683,9 @@ test("ads default to current Listing image before product info and keep other Li
     assert.deepEqual(textConfig.map(c => c.labelZh), ["品牌", "发货方式", "Buy Box"]);
     for (const c of textConfig) {
       assert.equal(c.unavailable, undefined);
-      assert.equal(c.defaultVisible, false);
+      assert.equal(c.defaultVisible, c.key === "buyBoxWinner");
       assert.ok(!c.numeric);
-      assert.ok(!defaultVisibleColumnKeys(columnDomain).includes(c.key));
+      assert.equal(defaults.includes(c.key), c.key === "buyBoxWinner");
       assert.match(c.requiresField!, new RegExp(`Listing 当前快照 ${c.key} 类型投影`));
       for (const value of [null, "", "00123"]) assert.equal(sellfoxColumnValue(c, { [c.key]: value }), value);
     }
@@ -695,10 +698,10 @@ test("ads default to current Listing image before product info and keep other Li
     const [ratingCount] = visibleColumns(columnDomain, ["ratingCount"]);
     assert.equal(ratingCount.labelZh, "评论数");
     assert.equal(ratingCount.numeric, true);
-    assert.equal(ratingCount.defaultVisible, false);
+    assert.equal(ratingCount.defaultVisible, true);
     assert.equal(ratingCount.unavailable, undefined);
     assert.equal(ratingCount.requiresField, "Listing 当前快照 ratingCount 类型投影");
-    assert.ok(!defaultVisibleColumnKeys(columnDomain).includes("ratingCount"));
+    assert.ok(defaults.includes("ratingCount"));
     for (const value of [null, 0, 128]) assert.equal(sellfoxColumnValue(ratingCount, { ratingCount: value }), value);
     assert.equal(visibleColumnCsv([ratingCount], [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
     for (const exporting of [false, true]) for (const sortBy of ["rating", "ratingCount", "productTags", "brand", "fulfillment", "buyBoxWinner"]) {

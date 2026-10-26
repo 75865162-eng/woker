@@ -11,17 +11,19 @@ function elements(node: ReactNode): React.ReactElement<Props>[] {
   return [node, ...elements(node.props.children)];
 }
 
-test("ads column picker defaults to image across six tabs and respects explicit selections", () => {
+test("ads column picker defaults to image, rating, ratingCount and Buy Box across six tabs and respects explicit selections", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
   try {
     for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"] as const) {
       for (const selectedColumns of [undefined, ["asin", "cost"], []]) {
         const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain: "ads", adsTab }, stores: [], selectedColumns, onChange: () => {}, onColumns: () => {} }));
-        const image = nodes.find(node => node.props["aria-label"] === "显示图片列")!;
-        assert.ok(image);
-        assert.equal(image.props.checked, selectedColumns === undefined);
-        for (const name of ["MSKU", "标题", "店铺", "站点", "星级", "评论数", "标签", "品牌", "发货方式", "Buy Box"]) {
+        for (const name of ["图片", "星级", "评论数", "Buy Box"]) {
+          const checkbox = nodes.find(node => node.props["aria-label"] === `显示${name}列`)!;
+          assert.ok(checkbox);
+          assert.equal(checkbox.props.checked, selectedColumns === undefined);
+        }
+        for (const name of ["MSKU", "标题", "店铺", "站点", "标签", "品牌", "发货方式"]) {
           assert.equal(nodes.find(node => node.props["aria-label"] === `显示${name}列`)!.props.checked, false);
         }
       }

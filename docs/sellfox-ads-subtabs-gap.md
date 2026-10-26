@@ -1,5 +1,34 @@
 # Sellfox 广告子页：Phase A / B 已接入与剩余缺口
 
+## 2026-10-27 — ads 默认显示星级 / 评论数 / Buy Box · BOX LOCAL ONLY
+
+> 基线 HEAD `f2ca9792653e2d6f06fa10eed08fac45082a062d`；完成状态见当前 HEAD / gap。生产代码仅将 `columns.ads` 的 `rating`「星级」、`ratingCount`「评论数」、`buyBoxWinner`「Buy Box」三个 `defaultVisible: false` 改为 `true`。六个广告页通过现有共享列继承生效，不重复定义；默认勾选及未显式选列的 CSV/XLSX 均包含三列。
+>
+> 保留源顺序 fulfillable → price → rating → ratingCount → campaignId → … → brand → fulfillment → buyBoxWinner → …，标签、numeric、requiresField 和现有 Listing current 类型投影、join、排序、筛选不变。image → asin → enabled → serviceStatus 邻接不变；productTags / brand / fulfillment 及尾部 MSKU / 标题 / 店铺 / 站点仍默认隐藏。显式选列与空选列保持权威，手动隐藏三列和图片后切换子页仍保留该页选择。sales / performance / listings 配置逐字节不变。
+>
+> enabled / serviceStatus / adStrategy / salesperson、广告组合 / 否定 / AMC 继续锁定。**Fee-mining remains paused**。无 schema / migration / SQL / 服务端改动，无新增字段、join 或 payload 解析；只复用已查询属性，未做真实 P95 benchmark。回滚仅恢复这三个默认隐藏标志，无数据库回退。
+>
+> 仅 BOX 本地；无 push/fetch、SSH、deploy、live Sellfox API、真实数据库写入或计划变更，未加载/修改 `.env`。验证使用 Prisma stub，不连接真实数据库。
+
+验证结果：五个定向测试文件全部通过（Prisma stub）；TypeScript、全部 touched ESLint 和 `git diff --check` 通过。另同步 `tests/sellfox-browse-filters.test.ts` 的旧默认隐藏断言，保留显式选列覆盖。Word-diff 严格为三组 `-false,` / `+true,`，整文件按基线替换这三项后逐字节一致，其他配置未改。
+
+浏览器定向用例已尝试，Chromium 启动时报 `sandbox_host_linux.cc:41` / `Operation not permitted`，以 SIGTRAP 退出，页面断言未执行；未绕过 sandbox，需在允许 Chromium 的本地环境补跑。
+
+验证命令：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-agent-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/browser/sellfox.spec.ts tests/sellfox-browse-filters.test.ts
+git diff --check
+npm run test:sellfox:browser -- --grep 'ads default image'
+git diff --word-diff=porcelain --unified=0 -- src/components/sellfox/workbench-types.ts
+```
+
+定向回归保留六页 SQL join / sort / filter、显式选列、CSV/XLSX 及 null / 0 / 128 / 是 / 否语义；新增默认列及源顺序断言。完整 check/build、PGlite 集成和真实库检查不在本轮范围；后续合码/发布或 SQL/schema 变更时另按相应门槛验证。
+
+---
+
 ## 2026-10-27 02:02:45 Asia/Shanghai — ads 默认显示 image「图片」 · Owner: Chen Jieliang · BOX LOCAL ONLY
 
 > **BOX LOCAL ONLY**：基线 `6cb590b3358fea8059d5565224d7a50bed00542c`；只把 `columns.ads.image` 从可选尾部移到共享广告列首位、紧邻 `asin`「产品信息」之前，恢复 `defaultVisible: true`。六域 `ads` / `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement` 的默认列与未显式选列的工作台 CSV/XLSX 均包含图片；各子页原有身份列前缀不变。
