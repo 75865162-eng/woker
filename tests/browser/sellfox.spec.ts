@@ -218,6 +218,15 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page).toHaveURL(/bsrRankMin=1/);
   await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /bsrRankMin=1/);
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /bsrRankMax=5000/);
+  await expect(page.getByLabel("价格下限", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("价格上限", { exact: true })).toHaveValue("");
+  await page.getByLabel("价格下限", { exact: true }).fill("9.99");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("priceMin")).toBe("9.99");
+  await page.getByLabel("价格上限", { exact: true }).fill("99.5");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("priceMax")).toBe("99.5");
+  await expect(page).toHaveURL(/priceMin=9\.99/);
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /priceMin=9\.99/);
+  await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /priceMax=99\.5/);
   await expect(page.getByLabel("Listing库存下限", { exact: true })).toBeEnabled();
   await expect(page.getByLabel("Listing库存上限", { exact: true })).toHaveValue("");
   await page.getByLabel("Listing库存下限", { exact: true }).fill("1.5");
@@ -274,6 +283,7 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page.getByLabel("BSR下限", { exact: true })).toHaveCount(0);
   expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("bsrRankMin")).toBe(false);
   expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("bsrRankMax")).toBe(false);
+  await expect(page.getByLabel("价格下限", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Listing库存下限", { exact: true })).toHaveCount(0);
   expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("listingQuantityMin")).toBe(false);
   expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("listingQuantityMax")).toBe(false);

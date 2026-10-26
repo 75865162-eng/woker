@@ -227,6 +227,36 @@ test("listingQuantity min/max filter typed column on listing_current; facets sta
   }
 });
 
+test("price min/max filter typed column on listing_current; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "priceMin=0", "priceMax=10000", "priceMin=1.5&priceMax=48"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&shopExternalId=shop&site=US`), "listings");
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      const hasRange = query.priceMin != null || query.priceMax != null;
+      if (hasRange) {
+        assert.match(sql.text, /s\.price IS NOT NULL/);
+        for (const [value, pattern] of [[query.priceMin, /s\.price>=\$(\d+)/], [query.priceMax, /s\.price<=\$(\d+)/]] as const) {
+          const match = sql.text.match(pattern);
+          if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+      } else {
+        assert.doesNotMatch(sql.text, /s\.price IS NOT NULL|s\.price>=|s\.price<=/);
+      }
+      if (!exporting) {
+        const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+        assert.doesNotMatch(facets, /priceMin|priceMax|s\.price>=|s\.price<=/);
+        for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?priceMin=1&priceMax=9"), domain);
+    const sql = workbenchReadSql(domain, query, scope, false);
+    assert.doesNotMatch(sql.text, /s\.price IS NOT NULL|priceMin/);
+  }
+});
+
 test("reservedQty min/max filter typed column on listing_current; facets stay scope-only", () => {
   for (const exporting of [false, true]) {
     for (const range of ["", "reservedQtyMin=0", "reservedQtyMax=10000", "reservedQtyMin=1&reservedQtyMax=5000"]) {

@@ -1,3 +1,9 @@
+## 2026-10-27 — listings price numeric min/max · BOX LOCAL ONLY · FILTER PIVOT
+
+基线 HEAD `20d063a`，分支 `codex/operations-p0-catalog-replenishment`。交付 listings **price**「价格」含首尾数值筛选参数 `priceMin`/`priceMax`（有限数字；0 合法；上下限倒置拒「价格上限不得小于下限」）。对类型列 `sellfox_listing_current.price`（Float?；SQL `s.price` 无引号）做 >= / <=；设置任意一端时排除 NULL。与 listingQuantity / warehousing 同形双端，不默认、不跨域。列表/计数/汇总/CSV/XLSX 与 Agent 窄表同口径。UI listings-only 双数字输入（step=any）；重置清空；forRequest 仅 listings。单独出现亦进 workbench。
+
+不改 `defaultVisible`、schema/migration；配对 / fee / fulfillable 等保持锁定，**Fee-mining remains paused**。无 live Sellfox / 真实库写入，不 push/deploy/SSH。回滚仅还原参数、UI 与测试。
+
 ## 2026-10-27 — listings warehousing numeric min/max · BOX LOCAL ONLY · FILTER PIVOT
 
 基线 HEAD `8059277`，分支 `codex/operations-p0-catalog-replenishment`。交付 listings **warehousing**「入库中」含首尾数值筛选参数 `warehousingMin`/`warehousingMax`（有限数字；0 合法；上下限倒置拒「入库中上限不得小于下限」）。对类型列 `sellfox_listing_current."warehousing"`（Float?）做 >= / <=；设置任意一端时排除 NULL。与 unsellable / reservedQty / listingQuantity 同形。列表/计数/汇总/CSV/XLSX 与 Agent 窄表同口径。UI listings-only 双数字输入（step=any）；重置清空；forRequest 仅 listings。单独出现亦进 workbench。

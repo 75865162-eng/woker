@@ -639,6 +639,37 @@ test("listingQuantity min/max validate as finite numbers, round trip listings-on
   assert.throws(() => query("listingQuantityMin=10&listingQuantityMax=1"), /Listing库存上限不得小于下限/);
 });
 
+test("price min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
+  for (const range of ["", "priceMin=0", "priceMax=100", "priceMin=1.5&priceMax=48", "priceMin=0&priceMax=0"]) {
+    const params = new URLSearchParams(`domain=listings&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.priceMin, params.has("priceMin") ? Number(params.get("priceMin")) : undefined);
+    assert.equal(parsed.priceMax, params.has("priceMax") ? Number(params.get("priceMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("priceMin"), params.get("priceMin"));
+      assert.equal(sellfoxViewParams(other).get("priceMax"), params.get("priceMax"));
+      assert.equal(sellfoxViewParams(other, true).has("priceMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("priceMax"), false);
+    }
+  }
+  for (const key of ["priceMin", "priceMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1e2", "NaN", "abc", "4.5.1", "--1", "Infinity"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是数字/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("priceMin=%201.5%20").priceMin, 1.5);
+  assert.equal(query("priceMax=0").priceMax, 0);
+  assert.equal(query("priceMin=.5").priceMin, 0.5);
+  assert.throws(() => query("priceMin=10&priceMax=1"), /价格上限不得小于下限/);
+});
+
 test("reservedQty min/max validate as finite numbers, round trip listings-only, reject inverted range", () => {
   for (const range of ["", "reservedQtyMin=0", "reservedQtyMax=100", "reservedQtyMin=1.5&reservedQtyMax=48", "reservedQtyMin=0&reservedQtyMax=0"]) {
     const params = new URLSearchParams(`domain=listings&${range}`);
