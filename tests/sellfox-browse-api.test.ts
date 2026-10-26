@@ -1661,6 +1661,82 @@ test("ads impressions min/max routes six-tab browse and CSV/XLSX through workben
   }
 });
 
+test("ads clicks min/max routes six-tab browse and CSV/XLSX through workbench; Agent exports apply typed clicks", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [], facets = { productTags: ["新品"], brands: ["00123", "品牌"] };
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const request = (domain: string, range: string, extra = "") => new Request(`http://localhost/api/sellfox/${domain}?${range}${extra}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+    for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"]) {
+      const context = { params: Promise.resolve({ domain }) };
+      for (const range of ["clicksMin=15", "clicksMax=480", "clicksMin=0&clicksMax=100"]) {
+        const params = new URLSearchParams(range);
+        for (const extra of ["", "&layout=workbench", "&brand=品牌&productTag=新品&fulfillment=AFN"]) {
+          for (const format of ["browse", "csv", "xlsx"]) {
+            const response = format === "browse" ? await browse(request(domain, range, extra), context) : await csv(request(domain, range, `${extra}&format=${format}`), context);
+            assert.equal(response.status, 200);
+            const sql = calls.at(-1)!;
+            assert.match(sql.text, /s\.clicks IS NOT NULL/);
+            if (params.has("clicksMin")) {
+              const match = sql.text.match(/s\.clicks>=\$(\d+)/);
+              assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("clicksMin")));
+            }
+            if (params.has("clicksMax")) {
+              const match = sql.text.match(/s\.clicks<=\$(\d+)/);
+              assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("clicksMax")));
+            }
+            if (extra.includes("productTag")) {
+              assert.match(sql.text, /AND l\."matchesProductTag"/); assert.match(sql.text, /AND l.fulfillment=/); assert.match(sql.text, /AND l.brand=/);
+            }
+            if (format === "browse") assert.deepEqual((await response.json()).facets, facets);
+            else {
+              assert.doesNotMatch(sql.text, /AS facets/);
+              assert.match(response.headers.get("Content-Type")!, format === "csv" ? /text\/csv/ : /spreadsheetml/);
+            }
+          }
+        }
+        for (const extra of ["", "&layout=workbench", "&brand=品牌"]) {
+          const start = calls.length;
+          const agent = await csv(request(domain, range, `&agent=1${extra}`), context);
+          assert.equal(agent.status, 200); assert.match(agent.headers.get("Content-Disposition")!, /-agent\.csv/);
+          assert.ok(calls.length > start);
+          for (const sql of calls.slice(start)) {
+            assert.match(sql.text, /clicks IS NOT NULL/);
+            if (params.has("clicksMin")) {
+              const match = sql.text.match(/clicks>=\$(\d+)/);
+              assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("clicksMin")));
+            }
+            if (params.has("clicksMax")) {
+              const match = sql.text.match(/clicks<=\$(\d+)/);
+              assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("clicksMax")));
+            }
+            assert.doesNotMatch(sql.text, /AS facets/);
+          }
+        }
+      }
+      for (const range of ["clicksMin=abc", "clicksMax=1e2", "clicksMin=1.5", "clicksMin=10&clicksMax=1"]) {
+        for (const handler of [browse, csv]) {
+          calls.length = 0;
+          const response = await handler(request(domain, range), context);
+          assert.equal(response.status, 400); assert.equal(calls.length, 0);
+        }
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
 test("ads ratingCount min/max routes six-tab browse and CSV/XLSX through workbench while Agent exports ignore it", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };

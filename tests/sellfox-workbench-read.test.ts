@@ -2421,6 +2421,32 @@ test("impressions filters ads daily members before rollup; non-ads ignore", () =
   }
 });
 
+test("clicks filters ads daily members before rollup; non-ads ignore", () => {
+  const scope = { organizationId: "org-clicks", workspaceId: "ws-clicks" };
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const range of ["clicksMin=0", "clicksMax=100", "clicksMin=1&clicksMax=48", "clicksMin=5&clicksMax=99"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql(domain, query, scope, exporting);
+        assert.match(sql.text, /s\.clicks IS NOT NULL/);
+        const params = new URLSearchParams(range);
+        if (params.has("clicksMin")) {
+          const match = sql.text.match(/s\.clicks>=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("clicksMin")));
+        } else assert.doesNotMatch(sql.text, /s\.clicks>=/);
+        if (params.has("clicksMax")) {
+          const match = sql.text.match(/s\.clicks<=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("clicksMax")));
+        } else assert.doesNotMatch(sql.text, /s\.clicks<=/);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?clicksMin=1&clicksMax=9")), scope, false).text;
+    assert.doesNotMatch(sql, /s\.clicks IS NOT NULL|s\.clicks>=|s\.clicks<=/);
+  }
+});
+
 test("ratingCount filters ads Listing members before rollup; non-ads ignore", () => {
   const scope = { organizationId: "org-rating-count", workspaceId: "ws-rating-count" };
   for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {

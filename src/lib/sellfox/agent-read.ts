@@ -386,6 +386,11 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
     if (query.impressionsMin != null) clauses.push(Prisma.sql`impressions>=${query.impressionsMin}`);
     if (query.impressionsMax != null) clauses.push(Prisma.sql`impressions<=${query.impressionsMax}`);
   }
+  if (ads && (query.clicksMin != null || query.clicksMax != null)) {
+    clauses.push(Prisma.sql`clicks IS NOT NULL`);
+    if (query.clicksMin != null) clauses.push(Prisma.sql`clicks>=${query.clicksMin}`);
+    if (query.clicksMax != null) clauses.push(Prisma.sql`clicks<=${query.clicksMax}`);
+  }
   if (ads && query.quickFilter === "spend") clauses.push(Prisma.sql`cost>0`);
   if (ads && query.quickFilter === "clicksNoOrders") clauses.push(Prisma.sql`clicks>0 AND "adOrders"=0`);
   if (ads && query.quickFilter === "spendNoClicks") clauses.push(Prisma.sql`cost>0 AND clicks=0`);

@@ -492,6 +492,31 @@ test("ads show impressions min/max inputs, reset clears them, and hide elsewhere
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
 
+test("ads show clicks min/max inputs, reset clears them, and hide elsewhere", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const view: SellfoxView = { ...defaultSellfoxView, domain: "ads", clicksMin: "0", clicksMax: "100" };
+    const nodes = elements(SellfoxBrowseFilters({ view, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    const label = nodes.find(node => node.type === "span" && node.props.children === "点击")!;
+    assert.match(label.props.title!, /clicks/); assert.match(label.props.title!, /汇总前筛选/);
+    for (const [aria, key, next] of [["点击下限", "clicksMin", "10"], ["点击上限", "clicksMax", "50"]] as const) {
+      const inputs = nodes.filter(node => node.type === "input" && node.props["aria-label"] === aria);
+      assert.equal(inputs.length, 1); assert.equal(inputs[0].props.type, "number");
+      assert.equal(inputs[0].props.value, view[key]);
+      inputs[0].props.onChange!({ target: { value: next } });
+      assert.deepEqual(patches.at(-1), { [key]: next });
+    }
+    nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+    for (const key of ["clicksMin", "clicksMax"] as const) assert.equal(patches.at(-1)?.[key], "");
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "listings", "runs"] as const) {
+      const other = elements(SellfoxBrowseFilters({ view: { ...view, domain }, stores: [], onChange: () => {}, onColumns: () => {} }));
+      for (const aria of ["点击下限", "点击上限"]) assert.equal(other.some(node => node.props["aria-label"] === aria), false);
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
+
 test("listings show bsrRank min/max inputs, reset clears them, and hide elsewhere", () => {
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
