@@ -56,9 +56,21 @@ caddy_reload=false
 infra_update=false
 
 read_previous_version() {
-  if [ -f "$VERSION_STATE_FILE" ]; then
-    sed -n 's/.*"appVersion":"\([^"]*\)".*/\1/p' "$VERSION_STATE_FILE" | tail -n 1
-  fi
+  # Both files are pretty-printed JSON; recover from current release if state is unusable.
+  node -e '
+    const fs = require("fs");
+    for (const file of process.argv.slice(1)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (typeof data?.appVersion === "string" && /^v\d+\.\d+\.\d+$/.test(data.appVersion)) {
+          process.stdout.write(data.appVersion);
+          break;
+        }
+      } catch {
+        // Missing, unreadable or malformed metadata: try the next source.
+      }
+    }
+  ' "$VERSION_STATE_FILE" "$CURRENT_LINK/RELEASE.json"
 }
 
 next_version_label() {
