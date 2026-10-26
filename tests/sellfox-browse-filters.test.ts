@@ -441,3 +441,32 @@ test("listings show bsrRank min/max inputs, reset clears them, and hide elsewher
     }
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });
+
+test("listings bsrCategory select uses only facets plus URL value, changes and resets, and hides elsewhere", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const view: SellfoxView = { ...defaultSellfoxView, domain: "listings", bsrCategory: "URL-only" };
+    const nodes = elements(SellfoxBrowseFilters({ view, stores: [], bsrCategories: ["Baby", "Musical Instruments", "Baby"], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    const selects = nodes.filter(node => node.type === "select");
+    const select = selects.find(node => node.props["aria-label"] === "BSR类目")!;
+    assert.ok(select); assert.ok(!select.props.disabled); assert.equal(select.props.value, "URL-only");
+    const parent = nodes.find(node => node.type === "label" && elements(node.props.children).includes(select))!;
+    assert.match(parent.props.title!, /bsrCategory.*精确匹配.*NULL.*全部/);
+    assert.deepEqual(elements(select.props.children).map(node => [node.props.value, node.props.children]), [["", "全部"], ...["Baby", "Musical Instruments", "URL-only"].sort().map(value => [value, value])]);
+    for (const [value, expected] of [[" Baby ", "Baby"], [" 00123 ", "00123"], ["", ""]]) {
+      select.props.onChange!({ target: { value } });
+      assert.deepEqual(patches.at(-1), { bsrCategory: expected });
+    }
+    nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+    assert.equal(patches.at(-1)?.bsrCategory, "");
+    const emptyNodes = elements(SellfoxBrowseFilters({ view: { ...view, bsrCategory: "" }, stores: [], onChange: () => {}, onColumns: () => {} }));
+    const emptySelect = emptyNodes.find(node => node.props["aria-label"] === "BSR类目")!;
+    assert.deepEqual(elements(emptySelect.props.children).map(node => [node.props.value, node.props.children]), [["", "全部"]]);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = elements(SellfoxBrowseFilters({ view: { ...view, domain }, stores: [], bsrCategories: ["Baby"], onChange: () => {}, onColumns: () => {} }));
+      assert.equal(other.some(node => node.props["aria-label"] === "BSR类目"), false);
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});

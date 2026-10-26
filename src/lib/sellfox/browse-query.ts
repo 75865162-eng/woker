@@ -24,6 +24,9 @@ export function sellfoxBrand(value: string | null | undefined): string {
 export function sellfoxDxmPublishState(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
+export function sellfoxBsrCategory(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
 export function sellfoxSalesperson(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
@@ -72,7 +75,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
   if (bsrRankMin != null && bsrRankMax != null && bsrRankMin > bsrRankMax) throw new SellfoxBrowseError("BSR上限不得小于下限。");
   return {
     sortBy, sortOrder: sortOrder as SellfoxSortOrder,
-    layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")), dxmPublishState: sellfoxDxmPublishState(p.get("dxmPublishState")), salesperson: sellfoxSalesperson(p.get("salesperson")),
+    layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")), dxmPublishState: sellfoxDxmPublishState(p.get("dxmPublishState")), bsrCategory: sellfoxBsrCategory(p.get("bsrCategory")), salesperson: sellfoxSalesperson(p.get("salesperson")),
     dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as SellfoxBrowseDimension,
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",

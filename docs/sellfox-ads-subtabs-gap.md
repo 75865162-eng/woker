@@ -1,3 +1,7 @@
+## 2026-10-27 — ads acos filter skipped (derived) · BOX LOCAL ONLY
+
+基线 `95cb0ca`。评估 `acosMin`/`acosMax`：SellfoxAds*Daily **无** typed acos 列；workbench 排序/展示为汇总后 `cost/adSales`。在汇总前筛比值会改口径，汇总后筛需 HAVING 式发明 → **不交付**。本轮改交付 listings bsrCategory facet（见 listings-read-model / parity-gap）。
+
 ## 2026-10-27 Asia/Shanghai — ads ratingCount Int min/max filter · BOX LOCAL ONLY · FILTER PIVOT
 
 基线 HEAD `1eb6f03`，分支 `codex/operations-p0-catalog-replenishment`。六广告子页新增可选参数 `ratingCountMin` / `ratingCountMax`（安全整数，含 0；可只设一端；min>max 拒绝「评论数上限不得小于下限」）。对 Listing current 类型列 `ratingCount` 在 MSKU 优先 / ASIN 回退 LIMIT 1 lateral join **之后**、实体/KPI 汇总 **之前** 做含首尾比较；设置任意一端时 `ratingCount IS NOT NULL`。与 `ratingMin`/`ratingMax`（`ratingValue`）并列，互不覆盖。

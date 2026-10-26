@@ -222,7 +222,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
 export async function readSellfoxWorkbench(domain: WorkbenchDomain, query: SellfoxBrowseQuery, scope: Scope, exporting = false) {
   if (domain === "sales" || domain === "performance") query = await resolveEffectiveReportDate(domain, query, scope);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);
-  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands?: string[]; dxmPublishStates?: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
+  const result = await prisma.$queryRaw<{ total: number; rows: Row[]; totals: Row[]; facets?: { productTags: string[]; brands?: string[]; dxmPublishStates?: string[]; bsrCategories?: string[]; salespersons?: string[] } }[]>(workbenchReadSql(domain, query, scope, exporting));
   const { rows, total, totals, facets } = result[0];
   if (exporting && total > sellfoxExportLimit) throw new SellfoxBrowseError("筛选结果超过10,000条，请缩小范围；未导出部分文件。", 413);
   // Page-bounded supplemental lookup, never one network call per entity or full payload reads.

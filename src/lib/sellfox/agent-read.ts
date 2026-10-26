@@ -331,6 +331,7 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
       ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) @> ARRAY[${query.productTag}]::text[]`);
   }
   if (domain === "listings" && query.dxmPublishState) clauses.push(Prisma.sql`s."dxmPublishState"=${query.dxmPublishState}`);
+  if (domain === "listings" && query.bsrCategory) clauses.push(Prisma.sql`s."bsrCategory"=${query.bsrCategory}`);
   if (domain === "listings" && query.from) clauses.push(Prisma.sql`s."openDate">=${query.from}`);
   if (domain === "listings" && query.to) clauses.push(Prisma.sql`s."openDate"<=${query.to}`);
   if (domain === "listings" && query.firstSaleFrom) clauses.push(Prisma.sql`s."firstSaleDate">=${query.firstSaleFrom}`);

@@ -280,6 +280,30 @@ test("DXM publish state trims arbitrary exact values and round trips listings wi
   assert.equal(query("").dxmPublishState, "");
 });
 
+test("bsrCategory trims arbitrary exact values and round trips listings without leaking into other domain requests", () => {
+  for (const bsrCategory of ["Baby", "Musical Instruments", "00123", "原值、完整", "S".repeat(512), "%' OR TRUE--"]) {
+    const view = readSellfoxView(new URLSearchParams({ domain: "listings", bsrCategory: `  ${bsrCategory}  ` }));
+    assert.equal(view.bsrCategory, bsrCategory);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    assert.equal(query(sellfoxViewParams(view, true).toString()).bsrCategory, bsrCategory);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("bsrCategory"), bsrCategory);
+      assert.equal(sellfoxViewParams(other, true).has("bsrCategory"), false);
+    }
+  }
+  for (const bsrCategory of ["", "   ", "\t\n"]) {
+    assert.equal(query(new URLSearchParams({ bsrCategory }).toString()).bsrCategory, "");
+    const view = readSellfoxView(new URLSearchParams({ domain: "listings", bsrCategory }));
+    assert.equal(view.bsrCategory, "");
+    for (const forRequest of [false, true]) {
+      assert.equal(sellfoxViewParams(view, forRequest).has("bsrCategory"), false);
+      assert.equal(sellfoxViewParams({ ...view, bsrCategory }, forRequest).has("bsrCategory"), false);
+    }
+  }
+  assert.equal(query("").bsrCategory, "");
+});
+
 test("firstSale dates validate and round trip independently of openDate, with listings-only requests", () => {
   for (const range of ["", "firstSaleFrom=2024-02-01", "firstSaleTo=2024-03-01", "firstSaleFrom=2024-02-01&firstSaleTo=2024-03-01", "firstSaleFrom=2024-02-29&firstSaleTo=2024-02-29"]) {
     const params = new URLSearchParams(`domain=listings&from=2023-01-01&to=2023-12-31&${range}`);

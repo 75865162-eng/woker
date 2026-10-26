@@ -737,3 +737,30 @@ test("agent bsrRank min/max affect listings rows/count/export only via typed bsr
     }
   } finally { globals.prisma = previous; }
 });
+
+test("agent bsrCategory filters listings rows/count/export exactly; other domains ignore it", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory", "performance", "ads_report"] as const) {
+      for (const value of ["", "Baby", "Musical Instruments", "%' OR TRUE--"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams(value ? { bsrCategory: value } : {})}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        for (const sql of calls) {
+          const match = sql.text.match(/s\."bsrCategory"=\$(\d+)/);
+          if (domain === "listings" && value) {
+            assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value);
+            assert.ok(!sql.text.includes(value));
+          } else {
+            assert.equal(match, null);
+            assert.ok(!sql.values.includes(value || undefined));
+          }
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});

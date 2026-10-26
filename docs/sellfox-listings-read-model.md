@@ -1,3 +1,13 @@
+## 2026-10-27 — listings bsrCategory exact facet · BOX LOCAL ONLY · FILTER PIVOT
+
+基线 HEAD `95cb0ca`，分支 `codex/operations-p0-catalog-replenishment`。本刀优先评估 ads **acos** min/max：ads 日报仅有 typed `cost`/`adSales`，ACOS 为 workbench/agent 汇总后派生（`cost/adSales`），非类型列 → **不发明** acos 筛选。回退交付 listings **bsrCategory**「BSR类目」精确筛选参数 `bsrCategory`（trim；镜像 brand/dxmPublishState）。对 `sellfox_listing_current."bsrCategory"` 精确匹配；空不加条件；NULL 仅计入「全部」。facets 新增 `bsrCategories`（scope-only DISTINCT，排除 NULL）；facet_source 同步投影 bsrCategory。列表/计数/汇总/CSV/XLSX 与 Agent 窄表同口径。UI listings-only 下拉（facets + URL 值）；重置清空；forRequest 仅 listings。单独出现亦进 workbench。
+
+不改 `defaultVisible`、schema/migration；配对 / ads acos / fee 保持锁定，**Fee-mining remains paused**。无 live Sellfox / 真实库写入，不 push/deploy/SSH。回滚仅还原参数、facet_source/facets、UI 与测试。
+
+验证：browse-query / browse-filters / listings-read / agent-read / browse-api 定向 node:test，TypeScript、触及 ESLint、`git diff --check`；浏览器定向断言（BSR类目序列化），Chromium SIGTRAP 历史记录。完整 check/build、真实库与 P95 留待单独授权。
+
+---
+
 ## 2026-10-27 06:28:48 — listings bsrRank numeric min/max filter · BOX LOCAL ONLY · FILTER PIVOT
 
 基线 HEAD `f07993b`，分支 `codex/operations-p0-catalog-replenishment`。仅 listings 新增参数 `bsrRankMin` / `bsrRankMax`（安全整数，含 0；可只设一端；min>max 拒绝「BSR上限不得小于下限」）。对 `sellfox_listing_current` 类型列 `bsrRank`（Float?，按整数比较）做含首尾筛选；设置任意一端时 `bsrRank IS NOT NULL`。列表、计数、汇总、CSV/XLSX 与 Agent 窄表同口径；facets 仍 scope-only。UI「BSR」双 number 输入（step=1，下限/上限 aria），重置清空；跨域 URL 可保留，forRequest 仅 listings 序列化。单独出现亦进入 workbench（显式 `agent=1` 导出仍走 Agent 并应用同筛选）。不发明 bsrCategory 筛选/AWD。
