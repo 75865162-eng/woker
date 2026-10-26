@@ -75,7 +75,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   if (query.searchType && !selectedSearch) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) filters.push(Prisma.sql`(${Prisma.join((selectedSearch ? [selectedSearch] : searchFields).map(field => query.exactMatch ? Prisma.sql`lower(${field})=lower(${query.search})` : Prisma.sql`${field} ILIKE ${`%${query.search}%`}`), " OR ")})`);
   const fields = domain === "sales" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.quantity,s.revenue,s.orders,s.complete,${baseIdentity} AS identity`
-    : domain === "performance" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.title,s."parentAsin",s."saleQuantity",s."saleRevenue",s."grossProfit",s."adCost",s."promotionDiscount",s."giftWrapFee",s."imageUrl",s."orderNum",s."netRevenue",s."refundRate",s."fbaQuantity",s."fbmQuantity",${baseIdentity} AS identity`
+    : domain === "performance" ? Prisma.sql`s.id,s."storeId",s."reportDate",s.asin,s.msku,s.sku,s.currency,s.title,s."parentAsin",s."saleQuantity",s."saleRevenue",s."grossProfit",s."adCost",s."promotionDiscount",s."giftWrapFee",s."imageUrl",s."orderNum",s."netRevenue",s."refundRate",NULLIF(s.payload->>'refundPrice','')::float AS "refundPrice",NULLIF(s.payload->>'refundNum','')::float AS "refundNum",s."fbaQuantity",s."fbmQuantity",${baseIdentity} AS identity`
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));
   const listing = Prisma.sql`listing AS (
     SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
@@ -97,11 +97,11 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     ${domain === "listings" ? Prisma.sql`LEFT JOIN listing l ON l.id=s.id AND l."storeId"=s."storeId"` : Prisma.sql`LEFT JOIN LATERAL (SELECT candidate.* FROM listing candidate WHERE candidate."storeId"=s."storeId" AND ((s.msku IS NOT NULL AND candidate.msku=s.msku) OR (s.asin IS NOT NULL AND candidate.asin=s.asin)) ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1) l ON TRUE`} WHERE ${Prisma.join(filters, " AND ")})`;
   const safeSum = (key: string) => {
     const col = Prisma.raw(`"${key}"`);
-    // These optional fees use null=0 at both entity and filtered-total levels.
-    if (domain === "performance" && ["promotionDiscount", "giftWrapFee"].includes(key)) return Prisma.sql`COALESCE(sum(${col}),0)::float`;
+    // Optional fees/refunds use null=0 at both entity and filtered-currency-total levels.
+    if (domain === "performance" && ["promotionDiscount", "giftWrapFee", "refundPrice", "refundNum"].includes(key)) return Prisma.sql`COALESCE(sum(${col}),0)::float`;
     return Prisma.sql`CASE WHEN count(${col})=count(*) THEN sum(${col})::float END`;
   };
-  const aggregateColumns = domain === "performance" ? ["saleQuantity", "saleRevenue", "grossProfit", "adCost", "promotionDiscount", "giftWrapFee", "orderNum", "netRevenue", "fbaQuantity", "fbmQuantity"] : ["impressions", "clicks", "cost", "adOrders", "adSales"];
+  const aggregateColumns = domain === "performance" ? ["saleQuantity", "saleRevenue", "grossProfit", "adCost", "promotionDiscount", "giftWrapFee", "refundPrice", "refundNum", "orderNum", "netRevenue", "fbaQuantity", "fbmQuantity"] : ["impressions", "clicks", "cost", "adOrders", "adSales"];
   const groups = domain === "sales" ? Prisma.sql`days AS (
     SELECT ${storeColumn},identity,currency,"reportDate",min(id) AS id,CASE WHEN count(DISTINCT asin)=1 THEN min(asin) END AS asin,CASE WHEN count(DISTINCT msku)=1 THEN min(msku) END AS msku,CASE WHEN count(DISTINCT sku)=1 THEN min(sku) END AS sku,
       ${["developer", "spu"].includes(dimension) ? Prisma.sql`min(identity) AS name` : Prisma.sql`min("storeName") AS name`},${marketplace} AS marketplace,CASE WHEN count("listingTitle")=count(*) AND count(DISTINCT "listingTitle")=1 THEN min("listingTitle") END AS title,CASE WHEN count("listingPrice")=count(*) AND count(DISTINCT "listingPrice")=1 THEN min("listingPrice") END AS price,CASE WHEN count("listingParentAsin")=count(*) AND count(DISTINCT "listingParentAsin")=1 THEN min("listingParentAsin") END AS "parentAsin",

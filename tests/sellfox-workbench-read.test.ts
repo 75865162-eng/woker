@@ -4,7 +4,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 import { readSellfoxWorkbench, workbenchDateRange, workbenchReadSql } from "@/lib/sellfox/workbench-read";
 import { backfillSellfoxViewDates, defaultSellfoxView, readSellfoxView, sellfoxViewParams } from "@/lib/sellfox/workbench-view";
-import { browseEmptyMessage, columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
+import { browseEmptyMessage, captions, columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv, sellfoxColumnValue } from "@/components/sellfox/workbench-types";
 import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
 
 test("workbench matrix URL round trips independent dimensions, metric, zero filter and ad filters", () => {
@@ -401,6 +401,51 @@ test("performance browse selects and sums elevated fee fields and prefers listin
   assert.doesNotMatch(workbenchReadSql("sales", query, { organizationId: "org", workspaceId: "ws" }).text, /s\."imageUrl"/);
 });
 
+test("performance refunds read payload scalars and sum by entity and currency without changing refund rates", () => {
+  const keys = ["refundPrice", "refundNum"];
+  const config = visibleColumns("performance", keys);
+  assert.deepEqual(config.map(c => [c.key, c.labelZh, c.numeric, c.defaultVisible, c.unavailable]), [
+    ["refundPrice", "退款金额", true, false, undefined], ["refundNum", "退款量", true, false, undefined],
+  ]);
+  assert.deepEqual(config.map(c => captions[c.key]), ["退款金额", "退款量"]);
+  for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer"]) {
+    assert.ok(defaultVisibleColumnKeys("performance", dimension).every(key => !keys.includes(key)));
+    for (const onlySettle of [false, true]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&from=2026-10-24&to=2026-10-25&onlySettle=${Number(onlySettle)}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql("performance", query, { organizationId: "org", workspaceId: "ws" }, exporting);
+        for (const key of keys) {
+          assert.ok(sql.text.includes(`NULLIF(s.payload->>'${key}','')::float AS "${key}"`));
+          assert.equal(sql.text.split(`COALESCE(sum("${key}"),0)::float AS "${key}"`).length - 1, 2);
+          assert.ok(!sql.text.includes(`count("${key}")`));
+        }
+        assert.ok(sql.values.includes(onlySettle));
+        assert.match(sql.text, /FROM filtered GROUP BY currency/);
+        assert.match(sql.text, /CASE WHEN count\(\*\)=1 THEN min\("refundRate"\) END AS "refundRate"/);
+      }
+    }
+  }
+});
+
+test("optional refund columns export numeric values in CSV and XLSX", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  globals.prisma = { $queryRaw: async () => [{ rows: [{ refundPrice: 12.5, refundNum: 2 }, { refundPrice: 0, refundNum: 0 }], total: 2, totals: [] }] } as unknown as PrismaClient;
+  const url = new URL("http://localhost/?reportDate=2026-10-25&column=refundPrice&column=refundNum");
+  const query = sellfoxBrowseQuery(url), scope = { organizationId: "org", workspaceId: "ws" };
+  try {
+    assert.equal((await (await sellfoxWorkbenchExport("performance", query, scope, url)).text()).trim(), '"退款金额","退款量"\r\n12.5,2\r\n0,0');
+    url.searchParams.set("format", "xlsx");
+    const response = await sellfoxWorkbenchExport("performance", query, scope, url);
+    const { default: ExcelJS } = await import("exceljs");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await response.arrayBuffer());
+    const sheet = book.worksheets[0];
+    assert.deepEqual([sheet.getRow(1).getCell(1).value, sheet.getRow(1).getCell(2).value], ["退款金额", "退款量"]);
+    assert.deepEqual([sheet.getRow(2).getCell(1).value, sheet.getRow(2).getCell(2).value], [12.5, 2]);
+    assert.deepEqual([sheet.getRow(3).getCell(1).value, sheet.getRow(3).getCell(2).value], [0, 0]);
+  } finally { globals.prisma = previous; }
+});
+
 test("performance dates survive effective-date resolution, client backfill and explicit ranges", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   let lookups = 0;
@@ -461,7 +506,9 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
           } else {
             assert.match(base, /candidate\."storeId"=s\."storeId"/);
             assert.match(base, /ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1/);
-            assert.doesNotMatch(base, /s\.payload/);
+            // Profit reads only the two explicit refund scalars, never the full payload.
+            assert.deepEqual([...base.matchAll(/s\.payload->>'([^']+)'/g)].map(match => match[1]), domain === "performance" ? ["refundPrice", "refundNum"] : []);
+            assert.doesNotMatch(base, /s\.payload(?:\s|,)/);
           }
         }
       }
