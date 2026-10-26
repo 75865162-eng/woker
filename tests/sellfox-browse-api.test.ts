@@ -460,7 +460,7 @@ test("salesperson reaches performance browse and CSV/XLSX/Agent exports; sales i
   }
 });
 
-test("selected profit quantity exports reach typed workbench CSV/XLSX with or without layout", async () => {
+test("selected profit quantity and ad channel exports reach typed workbench CSV/XLSX with or without layout", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
@@ -470,27 +470,31 @@ test("selected profit quantity exports reach typed workbench CSV/XLSX with or wi
     sellfoxStore: { findMany: async () => [] },
     $queryRaw: async (sql: Prisma.Sql) => {
       calls.push(sql);
-      return [{ rows: [{ evaluationSaleNum: 0, channelSaleNum: 1 }], total: 1, totals: [] }];
+      return [{ rows: [{ evaluationSaleNum: 0, channelSaleNum: 1, adSpCost: 0, adSdCost: 2.5, adSbCost: 4, adSbvCost: 5, adSbsCost: 6.75 }], total: 1, totals: [] }];
     },
   } as unknown as PrismaClient;
   try {
     const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
-    for (const layout of ["", "layout=workbench&"]) for (const format of ["csv", "xlsx"]) for (const handler of [performanceCsv, (r: Request) => csv(r, { params: Promise.resolve({ domain: "performance" }) })]) {
-      const request = new Request(`http://localhost/api/sellfox/performance/export?${layout}from=2026-10-25&to=2026-10-25&column=evaluationSaleNum&column=channelSaleNum&format=${format}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+    const selections = [
+      { keys: ["evaluationSaleNum", "channelSaleNum"], labels: ["测评销量", "多渠道销量"], values: [0, 1] },
+      { keys: ["adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost"], labels: ["SP广告费", "SD广告费", "SB广告费", "SBV广告费", "SBS广告费"], values: [0, 2.5, 4, 5, 6.75] },
+    ];
+    for (const { keys, labels, values } of selections) for (const layout of ["", "layout=workbench&"]) for (const format of ["csv", "xlsx"]) for (const handler of [performanceCsv, (r: Request) => csv(r, { params: Promise.resolve({ domain: "performance" }) })]) {
+      const request = new Request(`http://localhost/api/sellfox/performance/export?${layout}from=2026-10-25&to=2026-10-25&${keys.map(key => `column=${key}`).join("&")}&format=${format}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
       const response = await handler(request);
       assert.equal(response.status, 200);
-      if (format === "csv") assert.equal((await response.text()).trim(), '"测评销量","多渠道销量"\r\n0,1');
+      if (format === "csv") assert.equal((await response.text()).trim(), labels.map(label => `"${label}"`).join(",") + "\r\n" + values.join(","));
       else {
         const { default: ExcelJS } = await import("exceljs");
         const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
-        assert.deepEqual([1, 2].map(i => book.worksheets[0].getRow(1).getCell(i).value), ["测评销量", "多渠道销量"]);
-        assert.deepEqual([1, 2].map(i => book.worksheets[0].getRow(2).getCell(i).value), [0, 1]);
+        assert.deepEqual(keys.map((_, i) => book.worksheets[0].getRow(1).getCell(i + 1).value), labels);
+        assert.deepEqual(keys.map((_, i) => book.worksheets[0].getRow(2).getCell(i + 1).value), values);
       }
     }
-    assert.equal(calls.length, 8);
+    assert.equal(calls.length, 16);
     for (const sql of calls) {
       assert.doesNotMatch(sql.text, /payload/);
-      for (const key of ["evaluationSaleNum", "channelSaleNum"]) {
+      for (const key of selections.flatMap(selection => selection.keys)) {
         assert.ok(sql.text.includes(`s."${key}"`));
         assert.ok(sql.text.includes(`COALESCE(sum("${key}"),0)::float`));
       }

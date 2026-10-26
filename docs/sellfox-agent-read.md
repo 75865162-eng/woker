@@ -4,6 +4,9 @@ Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出�
 
 当前 P0 增量与本地验证见 [销量/利润 P0](sellfox-sales-profit-p0.md)。历史验收记录中的“两指标”描述保留当时口径；旧 coverage 不代表订单量已采集，orders 仍为 NULL。直接查询利润 SQL 视图时必须显式过滤 `"onlySettle"=false`（全部）或 `true`（已结算），API 默认 false。
 
+2026-10-26 BOX 本地增量（未部署）：`sellfox_profit_daily` 在110000原列序后追加 `adSpCost` / `adSdCost` / `adSbCost` / `adSbvCost` / `adSbsCost` typed nullable 数值。performance 可选列分别为 SP/SD/SB/SBV/SBS广告费，默认隐藏；Agent 英文长表末尾追加且允许排序。明细 CSV 的 NULL 空、0 保留，工作台实体/币种汇总为 `COALESCE(sum(...),0)`。仅采用同名 profit payload 键，不从 Listing 或广告总额分摊。`adTotalCost → adCost` 已覆盖「广告花费」，不另建总计列、不重投影 adCost。123 需前置迁移 +120000，用户明确说「上」后另行评审；回填成本、验证与回退见上述 P0 文档。sales 及未证实业务字段继续锁定。
+
+
 广告 Phase A/B 新增投放、搜索词、活动、广告组与广告位日报；严格暂定列、独立视图/唯一键、API/CSV 与默认关闭的每日06:30计划见 [广告子页来源与缺口](sellfox-ads-subtabs-gap.md)。尚未真实 XLSX 核验，历史广告产品验收不代表这五类通过。
 
 ## 读取入口

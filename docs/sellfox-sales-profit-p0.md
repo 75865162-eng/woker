@@ -1,5 +1,29 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+
+## 2026-10-26 销售利润广告渠道费用（Owner: Chen Jieliang；仅 BOX 本地）
+
+- performance 新增可选数字列：adSpCost「SP广告费」、adSdCost「SD广告费」、adSbCost「SB广告费」、adSbvCost「SBV广告费」、adSbsCost「SBS广告费」，均 `defaultVisible: false`。沿用 typed product-daily → 聚合/排序 → 可见列 CSV/XLSX；Agent 英文长表末尾追加五列。明细 NULL 导出空、0 保留，工作台实体/币种 totals 沿用费用 `COALESCE(sum(...),0)`；币种、结算分区和组织/工作区隔离不变。
+- **adTotalCost 已映射 adCost「广告花费」，跳过重复总计列**；既有 adCost 的映射与默认可见保持不变，不从 adCost 或 Listing 拆造渠道费用。五键依据任务提供的前期 mining，`tests/fixtures/sellfox/performance-ad-channel-costs.json` 在同步/PGlite 中共用；SBV/SBS 中文标签沿用任务指定，本轮未做 live/网页核验。sales 域不增加这些列；销售小组/业绩归属人/实时统计/运营/分类/AWD 继续锁定。
+- 本地加法迁移 `20261026120000_sellfox_product_daily_ad_channel_costs`：保留110000所有费用、userNameList、测评/多渠道数量投影和 trigger，视图精确保留旧列序后追加五列，无新索引。一次 `UPDATE ... SET payload=payload` 回填只改派生列，保留 payload/adCost；实际应用前须评估全表行数、锁/WAL/磁盘与维护窗口。123 需全部前置迁移（含50000 helper、80000、90000、100000、110000）+120000；只有用户明确说「上」才另行评审发布。代码可回退本地提交，保留加法数据库字段/trigger，不自动 down migration。
+- 本轮无 push/fetch、SSH、部署、重启、真实库连接/写入或 live Sellfox API/sync，不启用 schedules。Prisma validate/generate 仅用假 URL；迁移只在临时 PGlite 执行。
+
+离线复验（预期业务测试、PGlite verifier、类型/lint/Prisma/diff 全通过；普通 PostgreSQL 测试入口因未配置独立测试库而 SKIP）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-sync-recovery.test.ts tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-agent-read.test.ts tests/sellfox-listing-identity.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts src/lib/sellfox/{product-performance,workbench-read,sort-columns,agent-read}.ts tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,browse-api}.test.ts tests/integration/sellfox-{sales-profit-p0,cross-store,listings-read-model}.ts
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js validate
+DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture node node_modules/prisma/build/index.js generate
+git diff --check
+```
+
+本轮验证：7个定向业务文件147/147通过；补充双路由CSV/XLSX选列后API文件9/9复验通过。PGlite利润增量迁移、Listing与跨店SQL fixture均通过；TypeScript、改动TS ESLint、假地址Prisma validate/generate、diff检查通过。
+
+按本轮验收选择定向业务/导出测试 + 实际增量 DDL 的 PGlite + 类型/lint/Prisma；未跑浏览器、完整 check、生产构建或真实 P95。发布或真实性能验收时再补 CI 与受控 benchmark；fixture 通过不代表已部署或真实渠道金额已线上验收。
+
 ## 2026-10-26 销量商品品牌 / 产品标签 / 售价默认显示（Owner: Chen Jieliang；仅 BOX 本地）
 
 - 仅 sales 的 `brand`「商品品牌」、`productTags`「产品标签」、`price`「售价」改为默认显示，保留原 requiresField；售价保留 numeric，位于产品标签之后，身份列顺序不变。商品及店铺/开发员/SPU 汇总维度均生效，继续沿用现有可见列 CSV/XLSX，0 保留、缺值空白。

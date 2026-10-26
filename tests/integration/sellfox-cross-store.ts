@@ -37,7 +37,9 @@ export async function verifySellfoxCrossStoreSql(query: Query) {
         false AS "onlySettle",NULL::text AS title,NULL::text AS "parentAsin",NULL::text AS "imageUrl",1::float AS "grossProfit",1::float AS "adCost",NULL::float AS "promotionDiscount",NULL::float AS "giftWrapFee",1::float AS "netRevenue",NULL::float AS "refundRate",NULL::float AS "refundPrice",NULL::float AS "refundNum",NULL::float AS "commodityCost",NULL::float AS "shippingPrice",NULL::float AS "taxPrice",1::float AS "fbaQuantity",0::float AS "fbmQuantity",ARRAY[]::text[] AS "userNameList",'{}'::jsonb AS payload FROM sellfox_sales_daily;
     ALTER TABLE "SellfoxProductDailySnapshot"
       ADD COLUMN "headTripPrice" float, ADD COLUMN "avgPurchaseCost" float, ADD COLUMN "amazonCommissionPrice" float,
-      ADD COLUMN "evaluationSaleNum" float, ADD COLUMN "channelSaleNum" float;
+      ADD COLUMN "evaluationSaleNum" float, ADD COLUMN "channelSaleNum" float,
+      ADD COLUMN "adSpCost" float, ADD COLUMN "adSdCost" float, ADD COLUMN "adSbCost" float,
+      ADD COLUMN "adSbvCost" float, ADD COLUMN "adSbsCost" float;
       CREATE TABLE sellfox_inventory_current ("organizationId" text,"workspaceId" text,"storeId" text,msku text,quantity float,"totalInventory" float,"capturedAt" text);
       INSERT INTO sellfox_inventory_current VALUES
         ('org','ws','s1','shared',10,12,'2026-10-26'),('org','ws','s2','shared',20,25,'2026-10-26'),

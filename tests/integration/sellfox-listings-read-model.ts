@@ -39,7 +39,9 @@ async function verifyReportListingProjection(query: Query) {
     INSERT INTO "SellfoxProductDailySnapshot" SELECT id||'-settled',"organizationId","workspaceId","storeId",asin,msku,quantity,"sourceKey",sku,currency,"reportDate",revenue,orders,complete,"syncedAt","shopExternalId",name,marketplace,"saleQuantity","saleRevenue",true,title,"parentAsin","imageUrl","grossProfit","grossProfitRate","adCost","promotionDiscount","giftWrapFee","netRevenue","refundRate","orderNum","fbaQuantity","fbmQuantity","refundPrice","refundNum","commodityCost","shippingPrice","taxPrice","userNameList",payload FROM "SellfoxProductDailySnapshot";
     ALTER TABLE "SellfoxProductDailySnapshot"
       ADD COLUMN "headTripPrice" float, ADD COLUMN "avgPurchaseCost" float, ADD COLUMN "amazonCommissionPrice" float,
-      ADD COLUMN "evaluationSaleNum" float, ADD COLUMN "channelSaleNum" float;
+      ADD COLUMN "evaluationSaleNum" float, ADD COLUMN "channelSaleNum" float,
+      ADD COLUMN "adSpCost" float, ADD COLUMN "adSdCost" float, ADD COLUMN "adSbCost" float,
+      ADD COLUMN "adSbvCost" float, ADD COLUMN "adSbsCost" float;
     CREATE VIEW sellfox_profit_daily AS SELECT * FROM "SellfoxProductDailySnapshot";`);
   for (const domain of ["sales", "performance"] as const) {
     const read = async (params = "", exporting = false) => {
