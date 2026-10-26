@@ -1,5 +1,36 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-27 — performance 默认显示四个 FBA storage extras · BOX LOCAL ONLY
+
+基线 HEAD `2282d30`（`2282d30a301c90c64d5759661fc7018f0e4bcaca`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下四个既有 numeric 列移出 performance 默认隐藏 map-tail，依次插在已默认显示的 `fbaStorageFeeAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
+
+| key | 列名 | 原样保留的 requiresField |
+| --- | --- | --- |
+| fbaLongTermStorageFeeAmount | 长期仓储费 | 销售利润 payload.fbaLongTermStorageFeeAmount 类型投影 |
+| fbaRemovalFeeAmount | FBA移除费 | 销售利润 payload.fbaRemovalFeeAmount 类型投影 |
+| fbaDisposalFeeAmount | FBA弃置费 | 销售利润 payload.fbaDisposalFeeAmount 类型投影 |
+| fbaOverageFeeAmount | FBA超量仓储费 | 销售利润 payload.fbaOverageFeeAmount 类型投影 |
+
+生产源码与基线加上述四列结构移动的预期结果逐字节一致：没有新增 key，没有标签、numeric 或 requiresField 变更，其他数据域及其余源码不变。`fbaStorageFeeAmount` 保持原样。七种维度默认列及默认 CSV/XLSX 包含这四列；显式选列（逐列选择、逐列隐藏、整组隐藏及空集合）继续为权威，不迁移已保存选列。custom/service/evaluationFee、退款、身份及其他长尾费用继续隐藏。performance 剩余默认隐藏 **69 列**（3 个身份列、66 个 numeric 列）。**Fee-mining remains paused**。下一批候选为 custom/service/evaluationFee cluster，本轮不实施。
+
+复验命令（Prisma stub，不连真实库；跳过完整 check/build）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'performance core cost defaults'
+```
+
+验证通过：上述两个定向测试文件（Prisma stub，无真实库）、TypeScript、指定三文件及额外 API 测试文件 ESLint、`git diff --check`。覆盖默认顺序、五个 FBA storage 列 default-true、七种维度默认/显式 CSV 与真实 ExcelJS XLSX 回读、非零/零/NULL 和选列权威性。浏览器断言已覆盖四个中文列名、header 顺序及勾选、隐藏后跨域保留和导出选列排除；执行时 Chromium 在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行，未绕过沙箱。需在允许启动 Chromium 的本地环境补跑该用例。
+
+本轮五个仓库文件：指定源码、workbench 单测、浏览器测试及本文档；另按本次结构移动更新 `tests/sellfox-browse-api.test.ts` 一处旧的促销费/超量仓储费导出标签和值的顺序预期，请求选列及 stub 值保持不变。不更新仓库外 parity-gap（由父进程负责）。无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL、同步/计划或真实数据库读写，未加载/修改 `.env`。回滚为将这四列放回原隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+本地提交尝试：`git add` 无法创建 `.git/index.lock`（Read-only file system），因此未暂存、未执行 commit，未 chmod/强制或绕过沙箱。五个文件保留未暂存改动，供父进程通过 `GIT_INDEX_FILE` 提交：`feat(sellfox): default-show performance FBA storage extras columns`；HEAD 仍为上述基线。
+
+---
+
 ## 2026-10-27 — performance 默认显示其余四个广告渠道费用列 · BOX LOCAL ONLY
 
 基线 HEAD `d3d3c4a`（`d3d3c4a9b9a916d312c454ec4e02794531ac498f`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下四个既有 numeric 列移出 performance 默认隐藏 map-tail，依次插在已默认显示的 `adSpCost` 之后、`fbaStorageFeeAmount` 之前，显式设置 `defaultVisible: true`：
