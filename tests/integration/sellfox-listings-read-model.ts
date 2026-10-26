@@ -43,7 +43,8 @@ async function verifyReportListingProjection(query: Query) {
       ADD COLUMN "adSpCost" float, ADD COLUMN "adSdCost" float, ADD COLUMN "adSbCost" float,
       ADD COLUMN "adSbvCost" float, ADD COLUMN "adSbsCost" float,
       ADD COLUMN "fbaStorageFeeAmount" float, ADD COLUMN "fbaLongTermStorageFeeAmount" float, ADD COLUMN "fbaRemovalFeeAmount" float, ADD COLUMN "fbaDisposalFeeAmount" float,
-      ADD COLUMN "customAsinFee" float, ADD COLUMN "customShopFee" float, ADD COLUMN "serviceFeeAmount" float, ADD COLUMN "storageFeeAmount" float, ADD COLUMN "compensationAmount" float, ADD COLUMN "evaluationFee" float;
+      ADD COLUMN "customAsinFee" float, ADD COLUMN "customShopFee" float, ADD COLUMN "serviceFeeAmount" float, ADD COLUMN "storageFeeAmount" float, ADD COLUMN "compensationAmount" float, ADD COLUMN "evaluationFee" float,
+      ADD COLUMN "promotionTotalAmount" float, ADD COLUMN "fbaOverageFeeAmount" float, ADD COLUMN "chargebackAmount" float, ADD COLUMN "guaranteeClaimAmount" float, ADD COLUMN "digitalServicesFeeAmount" float, ADD COLUMN "otherPriceAmount" float, ADD COLUMN "shippingChargeAmount" float, ADD COLUMN "regulatoryFeeAmount" float;
     CREATE VIEW sellfox_profit_daily AS SELECT * FROM "SellfoxProductDailySnapshot";`);
   for (const domain of ["sales", "performance"] as const) {
     const read = async (params = "", exporting = false) => {

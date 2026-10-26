@@ -4,6 +4,7 @@ import { extractPerformanceFields, text, syncSellfoxProductDailySnapshots, type 
 import { SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { sellfoxPost } from "@/lib/sellfox/client";
 
+import optionalFees from "./fixtures/sellfox/performance-optional-fees.json";
 import miscFees from "./fixtures/sellfox/performance-misc-fees.json";
 import storageFees from "./fixtures/sellfox/performance-storage-fees.json";
 import adChannels from "./fixtures/sellfox/performance-ad-channel-costs.json";
@@ -32,13 +33,13 @@ test("performance text extracts scalar identities without stringifying objects",
 test("performance extraction maps confirmed fee and image payload keys to narrow fields", () => {
   assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: "4.25", giftWrapAmount: 1.5, imageUrl: " https://example.test/item.jpg ", refundPrice: "2.5", refundNum: 1, commodityCost: "3", shippingPrice: 4, taxPrice: "-0.5", headTripPrice: "6.5", avgPurchaseCost: 7, amazonCommissionPrice: "-8", evaluationSaleNum: "0", channelSaleNum: "1" }), {
     promotionDiscount: 4.25, giftWrapFee: 1.5, imageUrl: "https://example.test/item.jpg",
-    refundPrice: 2.5, refundNum: 1, commodityCost: 3, shippingPrice: 4, taxPrice: -0.5, headTripPrice: 6.5, avgPurchaseCost: 7, amazonCommissionPrice: -8, evaluationSaleNum: 0, channelSaleNum: 1, adSpCost: null, adSdCost: null, adSbCost: null, adSbvCost: null, adSbsCost: null, fbaStorageFeeAmount: null, fbaLongTermStorageFeeAmount: null, fbaRemovalFeeAmount: null, fbaDisposalFeeAmount: null, customAsinFee: null, customShopFee: null, serviceFeeAmount: null, storageFeeAmount: null, compensationAmount: null, evaluationFee: null, userNameList: [],
+    refundPrice: 2.5, refundNum: 1, commodityCost: 3, shippingPrice: 4, taxPrice: -0.5, headTripPrice: 6.5, avgPurchaseCost: 7, amazonCommissionPrice: -8, evaluationSaleNum: 0, channelSaleNum: 1, adSpCost: null, adSdCost: null, adSbCost: null, adSbvCost: null, adSbsCost: null, fbaStorageFeeAmount: null, fbaLongTermStorageFeeAmount: null, fbaRemovalFeeAmount: null, fbaDisposalFeeAmount: null, customAsinFee: null, customShopFee: null, serviceFeeAmount: null, storageFeeAmount: null, compensationAmount: null, evaluationFee: null, promotionTotalAmount: null, fbaOverageFeeAmount: null, chargebackAmount: null, guaranteeClaimAmount: null, digitalServicesFeeAmount: null, otherPriceAmount: null, shippingChargeAmount: null, regulatoryFeeAmount: null, userNameList: [],
   });
   assert.deepEqual(extractPerformanceFields({ promotionDiscountAmount: null, giftWrapAmount: "", imageUrl: "" }), {
     promotionDiscount: null, giftWrapFee: null, imageUrl: null,
-    refundPrice: null, refundNum: null, commodityCost: null, shippingPrice: null, taxPrice: null, headTripPrice: null, avgPurchaseCost: null, amazonCommissionPrice: null, evaluationSaleNum: null, channelSaleNum: null, adSpCost: null, adSdCost: null, adSbCost: null, adSbvCost: null, adSbsCost: null, fbaStorageFeeAmount: null, fbaLongTermStorageFeeAmount: null, fbaRemovalFeeAmount: null, fbaDisposalFeeAmount: null, customAsinFee: null, customShopFee: null, serviceFeeAmount: null, storageFeeAmount: null, compensationAmount: null, evaluationFee: null, userNameList: [],
+    refundPrice: null, refundNum: null, commodityCost: null, shippingPrice: null, taxPrice: null, headTripPrice: null, avgPurchaseCost: null, amazonCommissionPrice: null, evaluationSaleNum: null, channelSaleNum: null, adSpCost: null, adSdCost: null, adSbCost: null, adSbvCost: null, adSbsCost: null, fbaStorageFeeAmount: null, fbaLongTermStorageFeeAmount: null, fbaRemovalFeeAmount: null, fbaDisposalFeeAmount: null, customAsinFee: null, customShopFee: null, serviceFeeAmount: null, storageFeeAmount: null, compensationAmount: null, evaluationFee: null, promotionTotalAmount: null, fbaOverageFeeAmount: null, chargebackAmount: null, guaranteeClaimAmount: null, digitalServicesFeeAmount: null, otherPriceAmount: null, shippingChargeAmount: null, regulatoryFeeAmount: null, userNameList: [],
   });
-  for (const key of ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "evaluationSaleNum", "channelSaleNum", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount", "customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee"] as const) {
+  for (const key of ["refundPrice", "refundNum", "commodityCost", "shippingPrice", "taxPrice", "headTripPrice", "avgPurchaseCost", "amazonCommissionPrice", "evaluationSaleNum", "channelSaleNum", "adSpCost", "adSdCost", "adSbCost", "adSbvCost", "adSbsCost", "fbaStorageFeeAmount", "fbaLongTermStorageFeeAmount", "fbaRemovalFeeAmount", "fbaDisposalFeeAmount", "customAsinFee", "customShopFee", "serviceFeeAmount", "storageFeeAmount", "compensationAmount", "evaluationFee", "promotionTotalAmount", "fbaOverageFeeAmount", "chargebackAmount", "guaranteeClaimAmount", "digitalServicesFeeAmount", "otherPriceAmount", "shippingChargeAmount", "regulatoryFeeAmount"] as const) {
     for (const value of [null, undefined, "", 0, "0", 2.5, "-3.25"]) {
       assert.equal(extractPerformanceFields({ [key]: value })[key], value == null || value === "" ? null : Number(value), `${key}: ${value}`);
     }
@@ -218,4 +219,29 @@ test("misc profit fee fixture projects same-name numeric keys without Listing al
   }
   assert.equal(extractPerformanceFields({ storageFeeAmount: 7, fbaStorageFeeAmount: 11 }).storageFeeAmount, 7);
   assert.equal(extractPerformanceFields({ storageFeeAmount: 7, fbaStorageFeeAmount: 11 }).fbaStorageFeeAmount, 11);
+});
+
+
+test("optional profit fee fixture preserves zero and distinct promo discount without Listing aliases", async () => {
+  const keys = Object.keys(optionalFees.backfill) as (keyof typeof optionalFees.backfill)[];
+  for (const [payload, expected] of [[optionalFees.backfill, [1.5, 0, 3, 4.25, 5, 6, 7, 8]], [optionalFees.insert, [0, 2.5, 4, 5, 6, 7, 8, 9]], [optionalFees.cad, [10, 20, 30, 40, 50, 60, 70, 80]]] as const) {
+    const actual = extractPerformanceFields(payload);
+    assert.deepEqual(keys.map(key => actual[key]), expected);
+  }
+  for (const key of keys) {
+    for (const value of [null, undefined, "", 0, "0", -2.5, "3.25"]) {
+      assert.equal(extractPerformanceFields({ [key]: value })[key], value == null || value === "" ? null : Number(value));
+    }
+    for (const invalid of ["bad", "Infinity", "NaN", "1e999", {}, [], true]) assert.throws(() => extractPerformanceFields({ [key]: invalid }), /数值无效/);
+    assert.equal(extractPerformanceFields({ promotionDiscountAmount: 99, fbaFees: 999, referralFee: 999, monthlyStorageFee: 999 })[key], null);
+  }
+  const promo = extractPerformanceFields({ promotionTotalAmount: 5, promotionDiscountAmount: 11 });
+  assert.equal(promo.promotionTotalAmount, 5);
+  assert.equal(promo.promotionDiscount, 11);
+  const f = fixture(["a"]);
+  f.setResponse(() => ({ rows: [{ mskuList: ["fees"], ...optionalFees.insert, promotionDiscountAmount: 11 }], totalPage: 1 }));
+  await syncSellfoxProductDailySnapshots(input, f.dependencies);
+  const saved = [...f.rows.values()][0] as Record<string, unknown>;
+  assert.deepEqual(keys.map(key => saved[key]), [0, 2.5, 4, 5, 6, 7, 8, 9]);
+  assert.equal(saved.promotionDiscount, 11);
 });

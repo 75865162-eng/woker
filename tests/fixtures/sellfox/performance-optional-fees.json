@@ -1,0 +1,42 @@
+{
+  "backfill": {
+    "promotionTotalAmount": "1.5",
+    "fbaOverageFeeAmount": 0,
+    "chargebackAmount": 3,
+    "guaranteeClaimAmount": "4.25",
+    "digitalServicesFeeAmount": 5,
+    "otherPriceAmount": 6,
+    "shippingChargeAmount": 7,
+    "regulatoryFeeAmount": 8
+  },
+  "insert": {
+    "promotionTotalAmount": 0,
+    "fbaOverageFeeAmount": "2.5",
+    "chargebackAmount": 4,
+    "guaranteeClaimAmount": 5,
+    "digitalServicesFeeAmount": 6,
+    "otherPriceAmount": 7,
+    "shippingChargeAmount": 8,
+    "regulatoryFeeAmount": 9
+  },
+  "cad": {
+    "promotionTotalAmount": 10,
+    "fbaOverageFeeAmount": 20,
+    "chargebackAmount": 30,
+    "guaranteeClaimAmount": 40,
+    "digitalServicesFeeAmount": 50,
+    "otherPriceAmount": 60,
+    "shippingChargeAmount": 70,
+    "regulatoryFeeAmount": 80
+  },
+  "invalid": {
+    "promotionTotalAmount": "invalid",
+    "fbaOverageFeeAmount": "",
+    "chargebackAmount": null,
+    "guaranteeClaimAmount": "Infinity",
+    "digitalServicesFeeAmount": "1e999",
+    "otherPriceAmount": "NaN",
+    "shippingChargeAmount": {},
+    "regulatoryFeeAmount": []
+  }
+}

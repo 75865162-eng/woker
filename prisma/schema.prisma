@@ -1143,6 +1143,14 @@ model SellfoxProductDailySnapshot {
   storageFeeAmount Float?
   compensationAmount Float?
   evaluationFee Float?
+  promotionTotalAmount Float?
+  fbaOverageFeeAmount Float?
+  chargebackAmount Float?
+  guaranteeClaimAmount Float?
+  digitalServicesFeeAmount Float?
+  otherPriceAmount Float?
+  shippingChargeAmount Float?
+  regulatoryFeeAmount Float?
   evaluationSaleNum Float?
   channelSaleNum  Float?
   adSpCost        Float?
