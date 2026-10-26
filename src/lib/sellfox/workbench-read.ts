@@ -92,7 +92,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
       ${needDisplayTags ? Prisma.sql`${sellfoxProductTagDisplaySql(Prisma.sql`p.payload`)} AS "productTags",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`NULLIF(p.payload->>'openDate','') AS "openDate",` : Prisma.empty}
       ${domain === "listings" ? Prisma.sql`(
-        SELECT NULLIF(elem.value->>'rank','')::float
+        SELECT NULLIF(NULLIF(elem.value->>'rank','')::float,9999999)
         FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.payload->'bsrRank')='array' THEN p.payload->'bsrRank' ELSE '[]'::jsonb END) WITH ORDINALITY elem(value,ordinality)
         WHERE NULLIF(elem.value->>'rank','') ~ '^[0-9]+([.][0-9]+)?$'
         ORDER BY CASE WHEN elem.value->>'bigCategory' IN ('true','TRUE','1') THEN 0 ELSE 1 END,elem.ordinality
