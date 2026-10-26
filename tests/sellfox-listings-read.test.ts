@@ -227,6 +227,36 @@ test("listingQuantity min/max filter typed column on listing_current; facets sta
   }
 });
 
+test("reservedQty min/max filter typed column on listing_current; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "reservedQtyMin=0", "reservedQtyMax=10000", "reservedQtyMin=1&reservedQtyMax=5000"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&shopExternalId=shop&site=US`), "listings");
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      const hasRange = query.reservedQtyMin != null || query.reservedQtyMax != null;
+      if (hasRange) {
+        assert.match(sql.text, /s\."reservedQty" IS NOT NULL/);
+        for (const [value, pattern] of [[query.reservedQtyMin, /s\."reservedQty">=\$(\d+)/], [query.reservedQtyMax, /s\."reservedQty"<=\$(\d+)/]] as const) {
+          const match = sql.text.match(pattern);
+          if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+      } else {
+        assert.doesNotMatch(sql.text, /s\."reservedQty" IS NOT NULL|s\."reservedQty">=|s\."reservedQty"<=/);
+      }
+      if (!exporting) {
+        const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+        assert.doesNotMatch(facets, /reservedQty/);
+        for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?reservedQtyMin=1&reservedQtyMax=9"), domain);
+    const sql = workbenchReadSql(domain, query, scope, false);
+    assert.doesNotMatch(sql.text, /s\."reservedQty" IS NOT NULL|reservedQtyMin/);
+  }
+});
+
 test("listings bsrCategory is a bound exact predicate; DISTINCT facets remain scope-only and exclude NULL", () => {
   for (const exporting of [false, true]) for (const value of [undefined, "", "   ", "Baby", "Musical Instruments", "%' OR TRUE--"]) {
     const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ ...(value === undefined ? {} : { bsrCategory: value }), brand: "Brand", productTag: "标签", from: "2024-01-15", search: "sku", status: "active", shopExternalId: "shop", site: "US" })}`), "listings");

@@ -227,6 +227,15 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page).toHaveURL(/listingQuantityMin=1\.5/);
   await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /listingQuantityMin=1\.5/);
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /listingQuantityMax=48/);
+  await expect(page.getByLabel("预留下限", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("预留上限", { exact: true })).toHaveValue("");
+  await page.getByLabel("预留下限", { exact: true }).fill("0");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("reservedQtyMin")).toBe("0");
+  await page.getByLabel("预留上限", { exact: true }).fill("13");
+  await expect.poll(() => calls.filter(call => call.path.endsWith("/listings")).at(-1)?.query.get("reservedQtyMax")).toBe("13");
+  await expect(page).toHaveURL(/reservedQtyMin=0/);
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toHaveAttribute("href", /reservedQtyMin=0/);
+  await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /reservedQtyMax=13/);
   await page.getByLabel("Listing 状态").selectOption("active");
   await expect.poll(() => calls.filter((call) => call.path.endsWith("/listings")).at(-1)?.query.get("status")).toBe("active");
   await expect(page.getByRole("link", { name: "给 Agent 的导出 CSV（业务窄列）" })).toHaveAttribute("href", /listings\/export.*agent=1/);
@@ -250,6 +259,9 @@ test("listing current and advertising product daily browse locally and expose na
   await expect(page.getByLabel("Listing库存下限", { exact: true })).toHaveCount(0);
   expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("listingQuantityMin")).toBe(false);
   expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("listingQuantityMax")).toBe(false);
+  await expect(page.getByLabel("预留下限", { exact: true })).toHaveCount(0);
+  expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("reservedQtyMin")).toBe(false);
+  expect(calls.filter(call => call.path.endsWith("/ads_report")).at(-1)?.query.has("reservedQtyMax")).toBe(false);
   await expect(page.getByLabel("星级下限", { exact: true })).toBeEnabled();
   await expect(page.getByLabel("星级上限", { exact: true })).toHaveValue("");
   await page.getByLabel("星级下限", { exact: true }).fill("4.5");

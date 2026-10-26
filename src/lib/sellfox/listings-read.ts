@@ -44,6 +44,12 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
     if (query.listingQuantityMin != null) filters.push(Prisma.sql`s."listingQuantity">=${query.listingQuantityMin}`);
     if (query.listingQuantityMax != null) filters.push(Prisma.sql`s."listingQuantity"<=${query.listingQuantityMax}`);
   }
+  // Typed reservedQty; NULL excluded when either bound is set.
+  if (query.reservedQtyMin != null || query.reservedQtyMax != null) {
+    filters.push(Prisma.sql`s."reservedQty" IS NOT NULL`);
+    if (query.reservedQtyMin != null) filters.push(Prisma.sql`s."reservedQty">=${query.reservedQtyMin}`);
+    if (query.reservedQtyMax != null) filters.push(Prisma.sql`s."reservedQty"<=${query.reservedQtyMax}`);
+  }
   const searchKeys = ["asin", "msku", "sku", "title", "parentAsin"];
   if (query.searchType && !searchKeys.includes(query.searchType)) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) {

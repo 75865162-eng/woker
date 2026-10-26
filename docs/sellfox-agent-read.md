@@ -1,3 +1,4 @@
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `reservedQtyMin`/`reservedQtyMax` 数值过滤；类型列 `s."reservedQty"`；与 listingQuantity 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `listingQuantityMin`/`listingQuantityMax` 数值过滤；类型列 `s."listingQuantity"`（payload.quantity）；与 bsrRank/totalInventory 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `bsrCategory` 精确过滤（trim）；类型列 `s."bsrCategory"`；与 brand/dxmPublishState 同形，不默认、不跨域。ads acos 因非类型列跳过。配对/fee 仍锁定。无 push/deploy/真实库写入。
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `bsrRankMin` / `bsrRankMax`（安全整数）过滤；对类型列 `s."bsrRank"` 含首尾比较，设置任意一端排除 NULL；与 openDate/firstSaleDate/totalInventory 独立，不默认、不跨域、不发明 bsrCategory/AWD。配对/fee 仍锁定。无 push/deploy/真实库写入。
