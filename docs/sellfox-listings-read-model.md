@@ -1,5 +1,27 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 默认显示 totalInventory「总库存」 · BOX LOCAL ONLY
+
+基线 `75409170576a7a825aa6e176054c766df7a454f0`，分支 `codex/operations-p0-catalog-replenishment`。对齐 sales 已交付的 `ad559c8`，仅将 `columns.listings.totalInventory.defaultVisible` 从 `false` 改为 `true`，保留 numeric、requiresField 与 fulfillable → totalInventory → inventoryCapturedAt 源顺序。默认列表、列选择器初始勾选及无显式选列 CSV/XLSX 增加「总库存」，紧接「可售」。复用既有最新完整库存快照补充，非销售日库存；NULL 保持空白，0/180 保持数值。显式会话 `columnSelection`（含空集合、隐藏 totalInventory、只选 title）继续优先，不迁移保存选择。
+
+inventoryCapturedAt / listingQuantity / unsellable / warehousing / fulfillment 等仍默认隐藏；库存筛选、openDate 筛选、配对、父体、业务员、AWD 保持锁定。sales / performance / ads / ads_* 配置逐字节不变。**Fee-mining remains paused**。无新增字段、SQL、schema/migration、API、服务端或新请求/计算。回滚仅还原这个默认值及配套测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连接真实数据库，不加载 `.env`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+# 单项模拟浏览器回归；如 Chromium 被 BOX sandbox 拒绝，记录结果，不绕过：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand'
+```
+
+验证结果：上述三个定向测试文件全部通过（零失败），TypeScript、touched ESLint、`git diff --check` 通过。测试覆盖精确默认集合/源顺序、默认及显式 CSV/XLSX、隐藏/空选列，以及库存补充的 NULL/0/180 数值语义。生产源码与基线逐字节比对通过，`git diff --word-diff=porcelain` 唯一变化为 listings totalInventory 的 `false → true`。单项浏览器已尝试，Chromium 启动在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未绕过沙箱。已补默认表头、初始勾选、显式取消、切页保留及导出移除断言，需允许 Chromium 的本地环境补跑。
+
+仅 BOX 本地：无 push/fetch、deploy、SSH、live Sellfox API、真实数据库读写或 `.env` 操作。跳过完整 check/build、数据库集成和真实 P95：本轮只有一个 UI 默认标记，合码/上线或 SQL/schema/性能专项才补对应验证。仓库外 `/workspace/sellfox-parity-gap.md` 留给父进程更新。提交状态及精确 SHA 见当前 HEAD / gap；不在本节嵌入自身最终 SHA。下方为历史批次。
+
+
 ## 2026-10-27 — listings 默认显示 openDate「上架时间」 · BOX LOCAL ONLY
 
 基线 `ad559c8fdb710ddf1b2ba13cf84c3db1cd838d14`，分支 `codex/operations-p0-catalog-replenishment`。仅将 `columns.listings.openDate.defaultVisible` 从 `false` 改为 `true`，保留标签、requiresField 与 productTags → openDate → firstSaleDate 源顺序；默认列表、初始勾选与无显式选列 CSV/XLSX 的表头为「评论数」「上架时间」「Buy Box」。复用已有文本投影，NULL/缺失保持空白。显式会话 `columnSelection`（含空集合、只选 title、手动隐藏 openDate）继续优先，不迁移保存选择。
