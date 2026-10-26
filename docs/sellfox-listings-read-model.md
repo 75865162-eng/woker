@@ -1,3 +1,13 @@
+## 2026-10-27 — listings listingQuantity numeric min/max · BOX LOCAL ONLY · FILTER PIVOT
+
+基线 HEAD `ef9f0e8`，分支 `codex/operations-p0-catalog-replenishment`。交付 listings **listingQuantity**「Listing库存」含首尾数值筛选参数 `listingQuantityMin`/`listingQuantityMax`（有限数字；0 合法；上下限倒置拒「Listing库存上限不得小于下限」）。对类型列 `sellfox_listing_current."listingQuantity"`（payload.quantity；Float?）做 >= / <=；设置任意一端时排除 NULL。不与库存域「可售库存」或 fulfillable 混名。列表/计数/汇总/CSV/XLSX 与 Agent 窄表同口径。UI listings-only 双数字输入（step=any）；重置清空；forRequest 仅 listings。单独出现亦进 workbench。
+
+不改 `defaultVisible`、schema/migration；配对 / fee / reservedQty 等保持锁定，**Fee-mining remains paused**。无 live Sellfox / 真实库写入，不 push/deploy/SSH。回滚仅还原参数、UI 与测试。
+
+验证：browse-query / browse-filters / listings-read / agent-read / browse-api 定向 node:test，TypeScript、触及 ESLint、`git diff --check`；浏览器定向断言。完整 check/build、真实库与 P95 留待单独授权。
+
+---
+
 ## 2026-10-27 — listings bsrCategory exact facet · BOX LOCAL ONLY · FILTER PIVOT
 
 基线 HEAD `95cb0ca`，分支 `codex/operations-p0-catalog-replenishment`。本刀优先评估 ads **acos** min/max：ads 日报仅有 typed `cost`/`adSales`，ACOS 为 workbench/agent 汇总后派生（`cost/adSales`），非类型列 → **不发明** acos 筛选。回退交付 listings **bsrCategory**「BSR类目」精确筛选参数 `bsrCategory`（trim；镜像 brand/dxmPublishState）。对 `sellfox_listing_current."bsrCategory"` 精确匹配；空不加条件；NULL 仅计入「全部」。facets 新增 `bsrCategories`（scope-only DISTINCT，排除 NULL）；facet_source 同步投影 bsrCategory。列表/计数/汇总/CSV/XLSX 与 Agent 窄表同口径。UI listings-only 下拉（facets + URL 值）；重置清空；forRequest 仅 listings。单独出现亦进 workbench。

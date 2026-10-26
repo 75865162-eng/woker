@@ -4,7 +4,7 @@ import React, { type ReactNode } from "react";
 import { SellfoxBrowseFilters } from "@/components/sellfox/browse-filters";
 import { defaultSellfoxView, type SellfoxView } from "@/lib/sellfox/workbench-view";
 
-type Props = { children?: ReactNode; "aria-label"?: string; title?: string; type?: string; value?: string; checked?: boolean; disabled?: boolean; onClick?: () => void; onChange?: (event: { target: { value: string } }) => void };
+type Props = { children?: ReactNode; "aria-label"?: string; title?: string; type?: string; step?: string | number; value?: string; checked?: boolean; disabled?: boolean; onClick?: () => void; onChange?: (event: { target: { value: string } }) => void };
 function elements(node: ReactNode): React.ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!React.isValidElement<Props>(node)) return [];
@@ -438,6 +438,32 @@ test("listings show bsrRank min/max inputs, reset clears them, and hide elsewher
     for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
       const other = elements(SellfoxBrowseFilters({ view: { ...view, domain }, stores: [], onChange: () => {}, onColumns: () => {} }));
       for (const aria of ["BSR下限", "BSR上限"]) assert.equal(other.some(node => node.props["aria-label"] === aria), false);
+    }
+  } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
+});
+
+test("listings show listingQuantity min/max inputs, reset clears them, and hide elsewhere", () => {
+  const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
+  globals.React = React;
+  try {
+    const patches: Partial<SellfoxView>[] = [];
+    const view: SellfoxView = { ...defaultSellfoxView, domain: "listings", listingQuantityMin: "1.5", listingQuantityMax: "48" };
+    const nodes = elements(SellfoxBrowseFilters({ view, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+    const label = nodes.find(node => node.type === "span" && node.props.children === "Listing库存")!;
+    assert.match(label.props.title!, /listingQuantity/); assert.match(label.props.title!, /NULL/);
+    for (const [aria, key, next] of [["Listing库存下限", "listingQuantityMin", "0"], ["Listing库存上限", "listingQuantityMax", "100"]] as const) {
+      const inputs = nodes.filter(node => node.type === "input" && node.props["aria-label"] === aria);
+      assert.equal(inputs.length, 1); assert.equal(inputs[0].props.type, "number");
+      assert.equal(inputs[0].props.step, "any");
+      assert.equal(inputs[0].props.value, view[key]);
+      inputs[0].props.onChange!({ target: { value: next } });
+      assert.deepEqual(patches.at(-1), { [key]: next });
+    }
+    nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
+    for (const key of ["listingQuantityMin", "listingQuantityMax"] as const) assert.equal(patches.at(-1)?.[key], "");
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = elements(SellfoxBrowseFilters({ view: { ...view, domain }, stores: [], onChange: () => {}, onColumns: () => {} }));
+      for (const aria of ["Listing库存下限", "Listing库存上限"]) assert.equal(other.some(node => node.props["aria-label"] === aria), false);
     }
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
 });

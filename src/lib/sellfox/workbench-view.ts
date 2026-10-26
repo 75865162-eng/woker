@@ -8,10 +8,10 @@ export const sellfoxDomains = [
   { id: "ads", label: "广告" }, { id: "runs", label: "同步日志" },
 ] as const;
 export type SellfoxDomain = (typeof sellfoxDomains)[number]["id"];
-export type SellfoxView = { sortBy?: string; sortOrder?: SellfoxSortOrder; adsTab?: "product" | "targeting" | "searchTerm" | "campaign" | "adGroup" | "placement"; domain: SellfoxDomain; firstSaleFrom?: string; firstSaleTo?: string; totalInventoryMin?: string; totalInventoryMax?: string; ratingMin?: string; ratingMax?: string; ratingCountMin?: string; ratingCountMax?: string; bsrRankMin?: string; bsrRankMax?: string; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; productTag?: string; brand?: string; dxmPublishState?: string; bsrCategory?: string; salesperson?: string; fulfillment?: "" | "AFN" | "MFN"; buyBox?: "" | "yes" | "no"; dimension?: SellfoxBrowseDimension; metric?: string; hideZero?: boolean; onlySettle?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
+export type SellfoxView = { sortBy?: string; sortOrder?: SellfoxSortOrder; adsTab?: "product" | "targeting" | "searchTerm" | "campaign" | "adGroup" | "placement"; domain: SellfoxDomain; firstSaleFrom?: string; firstSaleTo?: string; totalInventoryMin?: string; totalInventoryMax?: string; ratingMin?: string; ratingMax?: string; ratingCountMin?: string; ratingCountMax?: string; bsrRankMin?: string; bsrRankMax?: string; listingQuantityMin?: string; listingQuantityMax?: string; from: string; to: string; search: string; site: string; shops: string[]; page: number; allDates: boolean; status?: string; productTag?: string; brand?: string; dxmPublishState?: string; bsrCategory?: string; salesperson?: string; fulfillment?: "" | "AFN" | "MFN"; buyBox?: "" | "yes" | "no"; dimension?: SellfoxBrowseDimension; metric?: string; hideZero?: boolean; onlySettle?: boolean; currency?: string; adType?: string; quickFilter?: string; pageSize?: number; searchType?: string; exactMatch?: boolean; salesView?: "wide" | "matrix" };
 export function sellfoxAdsResource(view: Pick<SellfoxView, "adsTab">) { return view.adsTab === "campaign" ? "ads_campaign" : view.adsTab === "adGroup" ? "ads_ad_group" : view.adsTab === "placement" ? "ads_placement" : view.adsTab === "targeting" ? "ads_targeting" : view.adsTab === "searchTerm" ? "ads_search_term" : "ads_report"; }
 export function sellfoxColumnDomain(view: Pick<SellfoxView, "domain" | "adsTab">) { return view.domain === "ads" && view.adsTab && view.adsTab !== "product" ? sellfoxAdsResource(view) : view.domain; }
-export const defaultSellfoxView: SellfoxView = { adsTab: "product", domain: "overview", firstSaleFrom: "", firstSaleTo: "", totalInventoryMin: "", totalInventoryMax: "", ratingMin: "", ratingMax: "", ratingCountMin: "", ratingCountMax: "", bsrRankMin: "", bsrRankMax: "", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "asin", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "", pageSize: 20, salesView: "wide" };
+export const defaultSellfoxView: SellfoxView = { adsTab: "product", domain: "overview", firstSaleFrom: "", firstSaleTo: "", totalInventoryMin: "", totalInventoryMax: "", ratingMin: "", ratingMax: "", ratingCountMin: "", ratingCountMax: "", bsrRankMin: "", bsrRankMax: "", listingQuantityMin: "", listingQuantityMax: "", from: "", to: "", search: "", site: "", shops: [], page: 1, allDates: false, status: "", dimension: "asin", metric: "quantity", hideZero: false, currency: "", adType: "", quickFilter: "", pageSize: 20, salesView: "wide" };
 function sellfoxSafeNumberText(value: string | null | undefined): string {
   const trimmed = value?.trim() ?? "";
   if (!/^-?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) return "";
@@ -38,6 +38,7 @@ export function readSellfoxView(params: URLSearchParams): SellfoxView {
     ratingMin: sellfoxSafeNumberText(params.get("ratingMin")), ratingMax: sellfoxSafeNumberText(params.get("ratingMax")),
     ratingCountMin: sellfoxSafeIntText(params.get("ratingCountMin")), ratingCountMax: sellfoxSafeIntText(params.get("ratingCountMax")),
     bsrRankMin: sellfoxSafeIntText(params.get("bsrRankMin")), bsrRankMax: sellfoxSafeIntText(params.get("bsrRankMax")),
+    listingQuantityMin: sellfoxSafeNumberText(params.get("listingQuantityMin")), listingQuantityMax: sellfoxSafeNumberText(params.get("listingQuantityMax")),
     fulfillment: sellfoxFulfillment(params.get("fulfillment")), buyBox: sellfoxBuyBox(params.get("buyBox")), productTag: sellfoxProductTag(params.get("productTag")), brand: sellfoxBrand(params.get("brand")), dxmPublishState: sellfoxDxmPublishState(params.get("dxmPublishState")), bsrCategory: sellfoxBsrCategory(params.get("bsrCategory")), salesperson: sellfoxSalesperson(params.get("salesperson")),
     status: ["active", "inActive", "delete", "incomplete"].includes(params.get("status") ?? "") ? params.get("status")! : "",
     dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(params.get("dimension") ?? "") ? params.get("dimension") : "asin") as SellfoxBrowseDimension,
@@ -82,6 +83,8 @@ export function sellfoxViewParams(view: SellfoxView, forRequest = false) {
     if (view.totalInventoryMax) params.set("totalInventoryMax", view.totalInventoryMax);
     if (view.bsrRankMin) params.set("bsrRankMin", view.bsrRankMin);
     if (view.bsrRankMax) params.set("bsrRankMax", view.bsrRankMax);
+    if (view.listingQuantityMin) params.set("listingQuantityMin", view.listingQuantityMin);
+    if (view.listingQuantityMax) params.set("listingQuantityMax", view.listingQuantityMax);
   }
   const dxmPublishState = sellfoxDxmPublishState(view.dxmPublishState);
   if (dxmPublishState && (!forRequest || view.domain === "listings")) params.set("dxmPublishState", dxmPublishState);
