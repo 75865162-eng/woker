@@ -1,5 +1,29 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 默认显示五列费用簇 · BOX LOCAL ONLY
+
+基线 HEAD `88be03e`（`88be03e7d9fb3a37bbc7f9d5be76723d82584a9f`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `purchaseCost`「采购成本」、`fbaFees`「FBA费用」、`referralFee`「佣金」、`totalFee`「总费用」、`headTripCost`「头程」五个 `defaultVisible` 从 `false` 改为 `true`。labels、numeric、requiresField 和 bsrCategory → purchaseCost → fbaFees → referralFee → totalFee → headTripCost → buyBoxWinner 源顺序保持不变。复用既有类型投影，默认表头、初始勾选及无显式选列 CSV/XLSX 增加这五列；显式单选、空选、单独/成组选列与隐藏继续优先，切换数据域保留取消状态，不迁移已有会话选择。NULL/缺失保持空白，零值与原始小数保持数值。
+
+parentSku、fnsku、dxmPublishState 及尾部独立列维持原默认配置；openDate/库存筛选、配对、父体、业务员、AWD 等锁定入口不解锁。ads / sales / performance 及广告子页配置保持基线原样。**Fee-mining remains paused**：仅显示五个既有类型费用列，不新增费用 key、字段、live Sellfox API、SQL、schema/migration、服务端逻辑或请求/计算，不做真实数据库写入。回滚仅还原五个默认值及配套测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连接真实数据库，不加载 `.env`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+git diff --word-diff=porcelain -- src/components/sellfox/workbench-types.ts
+# 单项隔离模拟浏览器；若 Chromium 在 BOX sandbox 中 SIGTRAP，记录结果，不绕过：
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listings default brand, amazonBrand'
+```
+
+验证结果：三个定向测试文件全部通过（零失败），TypeScript、指定 ESLint 与 `git diff --check` 通过。精确默认集合、bsrCategory → 五列费用簇 → buyBoxWinner 源顺序、默认 CSV/XLSX、五列各自单选/隐藏、成组选列/隐藏及空选列均有覆盖，数值、零值、NULL/缺失保持现有行为。word-diff 的变更 token 恰为五组 `-false,` / `+true,`；逐字节比对确认整个生产文件等于基线加这五处 listings 默认值替换，其他配置完全一致。单项浏览器已尝试，Chromium 在 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未绕过沙箱，需在允许 Chromium 的本地环境补跑默认表头、初始勾选、取消后会话保留及 CSV/Excel 导出移除断言。
+
+剩余默认隐藏扫描：listings 为 dxmPublishState / parentSku / fnsku / salesperson（不可用）/ msku / marketplace / capturedAt / currency；ads 尾部为 msku / title / name / marketplace，adStrategy、salesperson 仍不可用。下一候选是 listings parentSku / fnsku 默认显示：已有类型列，且 [既有 Round G 实数记录](sellfox-agent-read.md)记载 TK-US 完整采集 523 行，FNSKU / 父SKU 非空 518 / 399；这是仓库历史实数证据，本轮未访问真实库或重新采集。dxmPublishState 只有既有 delete/空值观察，仍限原文展示；尾部独立 MSKU/站点与现有组合列有重复，ads 的 title/name/marketplace 需另评估单独显示价值。本轮不改这些候选。
+
+仅 BOX 本地，不 push/fetch/deploy/SSH，不读写 `.env`。跳过完整 check/build、数据库集成与真实 P95：本轮仅五个既有列的 UI 默认标记，后续合码/发布或查询/性能专项再补对应验证。仓库外 parity-gap 文档留给父进程更新。下方为历史批次，以本节为当前状态。
+
 ## 2026-10-27 — listings 默认显示预留 / 运费 / 预估利润 / 利润率 · BOX LOCAL ONLY
 
 基线 HEAD `2dd14ff`（`2dd14ff8931615893b62402309021c1211c0cd2a`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `reservedQty`「预留」、`shippingPrice`「运费」、`profitPrice`「预估利润」、`profitRate`「利润率」四个 `defaultVisible` 从 `false` 改为 `true`。labels、numeric、requiresField 与 buyBoxWinner → reservedQty → shippingPrice → profitPrice → profitRate → parentAsin 源顺序保持不变。复用既有类型投影，默认表头、初始勾选及无显式选列 CSV/XLSX 增加这四列；显式单选、空选、单独/成组选列与隐藏继续优先，切换数据域保留取消状态，不迁移已有会话选择。NULL/缺失保持空白，零值、原始小数与负利润保持数值。
