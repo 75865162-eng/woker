@@ -237,7 +237,7 @@ test("visible-column export matches ordered matrix headers, leaves unsupported v
 });
 
 test("rollup defaults omit duplicate names and product clutter while preserving core metrics and picker overrides", () => {
-  const sales = ["image", "identity", "analysis", "fulfillable", "subtotal"];
+  const sales = ["image", "identity", "analysis", "fulfillable", "subtotal", "trend"];
   const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
   for (const dimension of ["store", "developer", "spu"]) {
     for (const [domain, expected] of [["sales", sales], ["performance", performance]] as const) {
@@ -258,7 +258,7 @@ test("rollup defaults omit duplicate names and product clutter while preserving 
 });
 
 test("sales product defaults omit unavailable operations columns while other defaults stay unchanged", () => {
-  const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "fulfillable", "subtotal"];
+  const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "fulfillable", "subtotal", "trend"];
   const performance = ["image", "identity", "name", "analysis", "grossProfit", "grossProfitRate", "saleRevenue", "orderNum", "fulfillable", "saleQuantity", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
   for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
     assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
@@ -334,7 +334,7 @@ test("typed exact search binds literal input, rejects absent fields and keeps qu
 test("reference columns combine only visible identity fields and export identical cell values", () => {
   assert.equal(readSellfoxView(new URLSearchParams("domain=sales")).dimension, "asin");
   const sales = visibleColumns("sales",undefined,["2026-10-24"],"asin");
-  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","parentAsin","msku","sku","title","fulfillable","subtotal"]);
+  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","parentAsin","msku","sku","title","fulfillable","subtotal","trend"]);
   const store = sales.find(c=>c.key === "name")!;
   assert.equal(sellfoxColumnValue(store,{name:"店铺",marketplace:"US"}),"店铺\nUS");
   const profit = visibleColumns("performance",undefined,[],"msku").find(c=>c.key === "identity")!;
@@ -1395,6 +1395,43 @@ test("sales selected catalog columns export identical CSV and numeric XLSX with 
     assert.deepEqual([1, 2, 3].map(i => sheet.getRow(1).getCell(i).value), ["商品品牌", "产品标签", "售价"]);
     assert.deepEqual([1, 2, 3].map(i => sheet.getRow(2).getCell(i).value), ["品牌", "新品、重点", 0]);
     assert.equal(sheet.getCell("C3").value, null);
+  } finally { globals.prisma = previous; }
+});
+
+test("sales trend is default-visible while the selectable average remains optional", () => {
+  assert.deepEqual(visibleColumns("sales", ["trend", "average7"]).map(c => [c.key, c.labelZh, c.sellfoxLabel, c.defaultVisible, c.unavailable]), [
+    ["trend", "销量趋势", "销量趋势", true, undefined],
+    ["average7", "均值", "均值", false, undefined],
+  ]);
+  assert.ok(defaultVisibleColumnKeys("sales").includes("trend"));
+  assert.ok(!defaultVisibleColumnKeys("sales").includes("average7"));
+});
+
+test("sales trend exports text through default and selected CSV/XLSX columns with missing days blank", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const quantities = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`2026-10-${20 + i}`, i]));
+  globals.prisma = { $queryRaw: async () => [{ total: 2, totals: [], rows: [
+    { dailyQuantity: quantities }, { dailyQuantity: { ...quantities, "2026-10-20": null } },
+  ] }] } as unknown as PrismaClient;
+  try {
+    const { default: ExcelJS } = await import("exceljs");
+    for (const selected of [false, true]) {
+      const url = new URL("http://localhost/?from=2026-10-20&to=2026-10-26&metric=orders");
+      if (selected) url.searchParams.append("column", "trend");
+      const query = sellfoxBrowseQuery(url, "sales"), scope = { organizationId: "org", workspaceId: "ws" };
+      const csv = (await (await sellfoxWorkbenchExport("sales", query, scope, url)).text()).trim().split("\r\n");
+      assert.ok(csv[0].endsWith('"销量趋势"')); assert.ok(!csv[0].includes('"均值"'));
+      assert.ok(csv[1].endsWith('"0 | 1 | 2 | 3 | 4 | 5 | 6"')); assert.ok(csv[2].endsWith('""'));
+      if (selected) assert.equal(csv[0], '"销量趋势"');
+      url.searchParams.set("format", "xlsx");
+      const book = new ExcelJS.Workbook();
+      await book.xlsx.load(await (await sellfoxWorkbenchExport("sales", query, scope, url)).arrayBuffer());
+      const sheet = book.worksheets[0], lastColumn = sheet.columnCount;
+      assert.equal(sheet.getRow(1).getCell(lastColumn).value, "销量趋势");
+      assert.equal(sheet.getRow(2).getCell(lastColumn).value, "0 | 1 | 2 | 3 | 4 | 5 | 6");
+      assert.equal(sheet.getRow(3).getCell(lastColumn).value, null);
+      if (selected) assert.equal(lastColumn, 1);
+    }
   } finally { globals.prisma = previous; }
 });
 

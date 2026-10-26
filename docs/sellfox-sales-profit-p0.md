@@ -1,5 +1,22 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-26 销量趋势默认显示（Owner: Chen Jieliang；仅 BOX 本地）
+
+- sales 的 `trend`「销量趋势」移出默认隐藏列组，商品及店铺/开发员/SPU 汇总视图均默认显示，继续使用现有 Sparkline；`average7`「均值」仍为可选隐藏列。显式选列保持用户选择；CSV/XLSX 沿用可见列导出，趋势为文本，缺日为空。
+- 口径不变：只使用所选范围末七日完整的 `dailyQuantity`，与当前 quantity/orders/revenue 指标选择无关；缺任一天不补零、不派生趋势或均值。`trend` / `average7` 排序仍拒绝。不新增 API、SQL、Prisma/schema 或 migration；利润默认列及 AWD/业务员/售价/库存时间/币种/站点/总库存行为不变。销量业务员、实时统计、运营、业绩归属人、销售小组、分类、AWD、销量洞察继续锁定。
+- 仅本地提交，不 push、不部署、不连接或写入真实库、不向123迁移、不调用 live Sellfox API、不启用计划。回滚本地提交即可恢复旧默认列；本轮未改路由/计算/存储，按要求跳过 PGlite、浏览器、生产构建和完整 check。
+
+离线复验（不加载 `.env`，测试使用 Prisma fixture）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts
+git diff --check
+```
+
+本轮结果：四个定向文件共111例通过，覆盖销量默认列含 trend、不含 average7，完整七日派生、拒绝趋势/均值排序、默认及显式可见列 CSV/XLSX 文本与缺日空值；类型、改动文件 lint 和 diff 检查通过。复验预期全部通过。后续若改 SQL、路由或发布范围，再补相应集成/浏览器/CI 验证。
+
 ## 2026-10-26 测评销量 / 多渠道销量（Owner: Chen Jieliang；仅 BOX 本地）
 
 - performance 新增默认隐藏数字列 `evaluationSaleNum`「测评销量」、`channelSaleNum`「多渠道销量」。截图 `/tmp/sellfox-compare/sellfox-sales-profit.png` 确认是**测评销量，不是测评销售额**；交接的只读证据表明两键均存在，0 是有效数量，未发现 `evaluationSalePrice` / `evaluationSaleAmount` / `evaluationSale`，不得发明金额映射。本轮不重新连接真实库。
