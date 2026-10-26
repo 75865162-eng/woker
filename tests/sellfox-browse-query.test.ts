@@ -340,3 +340,35 @@ test("totalInventory min/max validate as safe integers, round trip listings-only
   assert.equal(query("totalInventoryMax=0").totalInventoryMax, 0);
   assert.throws(() => query("totalInventoryMin=10&totalInventoryMax=1"), /总库存上限不得小于下限/);
 });
+
+test("rating min/max validate as finite numbers, round trip ads-only forRequest, reject inverted range", () => {
+  for (const range of ["", "ratingMin=0", "ratingMax=5", "ratingMin=4.5&ratingMax=5", "ratingMin=0&ratingMax=0", "ratingMin=0.5&ratingMax=4.5"]) {
+    const params = new URLSearchParams(`domain=ads&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.ratingMin, params.has("ratingMin") ? Number(params.get("ratingMin")) : undefined);
+    assert.equal(parsed.ratingMax, params.has("ratingMax") ? Number(params.get("ratingMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "listings", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("ratingMin"), params.get("ratingMin"));
+      assert.equal(sellfoxViewParams(other).get("ratingMax"), params.get("ratingMax"));
+      assert.equal(sellfoxViewParams(other, true).has("ratingMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("ratingMax"), false);
+    }
+  }
+  for (const key of ["ratingMin", "ratingMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1e2", "NaN", "abc", "4.5.1", "--1", "Infinity"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是数字/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("ratingMin=%204.5%20").ratingMin, 4.5);
+  assert.equal(query("ratingMax=0").ratingMax, 0);
+  assert.equal(query("ratingMin=.5").ratingMin, 0.5);
+  assert.throws(() => query("ratingMin=5&ratingMax=4"), /星级上限不得小于下限/);
+});
+

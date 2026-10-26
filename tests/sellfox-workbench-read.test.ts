@@ -2310,3 +2310,36 @@ test("selected performance fee-wrap eval/deal/coupon/SAFE-T/income/promotion CSV
     keys.forEach((_, i) => assert.ok([null, ""].includes(sheet.getRow(3).getCell(i + 1).value as null | string)));
   } finally { globals.prisma = previous; }
 });
+
+test("ratingValue filters ads Listing members before rollup; non-ads ignore", () => {
+  const scope = { organizationId: "org-rating", workspaceId: "ws-rating" };
+  for (const domain of ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const range of ["ratingMin=4.5", "ratingMax=5", "ratingMin=0&ratingMax=5", "ratingMin=.5&ratingMax=4.8"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`));
+      for (const exporting of [false, true]) {
+        const sql = workbenchReadSql(domain, query, scope, exporting);
+        const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
+        assert.match(listing, /l\."ratingValue"/);
+        assert.match(sql.text, /l\."ratingValue" IS NOT NULL/);
+        const params = new URLSearchParams(range);
+        if (params.has("ratingMin")) {
+          const match = sql.text.match(/l\."ratingValue">=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("ratingMin")));
+        } else assert.doesNotMatch(sql.text, /l\."ratingValue">=/);
+        if (params.has("ratingMax")) {
+          const match = sql.text.match(/l\."ratingValue"<=\$(\d+)/);
+          assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get("ratingMax")));
+        } else assert.doesNotMatch(sql.text, /l\."ratingValue"</);
+      }
+    }
+    for (const exporting of [false, true]) {
+      const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/")), scope, exporting).text;
+      assert.doesNotMatch(sql, /ratingValue" IS NOT NULL|ratingValue">=|ratingValue"</);
+    }
+  }
+  for (const domain of ["sales", "performance", "listings"] as const) {
+    const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?ratingMin=4&ratingMax=5")), scope, false);
+    assert.doesNotMatch(sql.text, /l\."ratingValue"|ratingValue" IS NOT NULL|ratingValue">=|ratingValue"</);
+  }
+});
+

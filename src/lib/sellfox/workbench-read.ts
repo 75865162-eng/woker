@@ -75,6 +75,12 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   // Test the chosen Listing, never prefilter candidates before the MSKU/ASIN LIMIT 1.
   if (needTagFilter) filters.push(Prisma.sql`l."matchesProductTag"`);
   if (query.brand && (ads || ["sales", "performance", "listings"].includes(domain))) filters.push(Prisma.sql`l.brand=${query.brand}`);
+  // Ads Listing-joined typed rating (ratingValue Float); NULL excluded when either bound is set.
+  if (ads && (query.ratingMin != null || query.ratingMax != null)) {
+    filters.push(Prisma.sql`l."ratingValue" IS NOT NULL`);
+    if (query.ratingMin != null) filters.push(Prisma.sql`l."ratingValue">=${query.ratingMin}`);
+    if (query.ratingMax != null) filters.push(Prisma.sql`l."ratingValue"<=${query.ratingMax}`);
+  }
   const salesMetric = query.metric === "orders" ? "orders" : query.metric === "revenue" ? "revenue" : "quantity";
   const source = Prisma.raw(sources[domain]);
   const crossStore = (domain === "sales" || domain === "performance") && ["developer", "spu"].includes(dimension);
@@ -109,7 +115,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
     : Prisma.join(sellfoxAgentColumns[domain].map(key => Prisma.raw(`s."${key}"`)));
   const listing = Prisma.sql`listing AS (
     SELECT l.id,l."storeId",l.msku,l.asin,l."parentAsin",l.title,l."mainImage",l.price,
-      ${domain === "sales" || ads ? Prisma.sql`l."productTags",` : Prisma.empty}l.brand,l.rating,${ads ? Prisma.sql`l."ratingCount",` : Prisma.empty}l."buyBoxWinner",l.fulfillment,
+      ${domain === "sales" || ads ? Prisma.sql`l."productTags",` : Prisma.empty}l.brand,l.rating,${ads ? Prisma.sql`l."ratingCount",l."ratingValue",` : Prisma.empty}l."buyBoxWinner",l.fulfillment,
       ${needTagFilter ? Prisma.sql`l."productTagNames" @> ARRAY[${query.productTag}]::text[] AS "matchesProductTag",` : Prisma.empty}
       COALESCE(l.developer,'未分配开发员') AS developer,
       COALESCE(l.spu,'未分配SPU') AS spu
