@@ -1175,6 +1175,18 @@ model SellfoxProductDailySnapshot {
   avgHeadTripPrice Float?
   purchaseRefundPrice Float?
   revenueAmount Float?
+  fbaPerUnitFulfillmentFeeRefundAmount Float?
+  fbaWeightBasedFeeRefundAmount Float?
+  deferredAmount Float?
+  withheldTaxAmount Float?
+  otherPriceIncomeAmount Float?
+  paymentMethodFeeAmount Float?
+  fixedClosingFeeAmount Float?
+  variableClosingFeeAmount Float?
+  imagingServicesFeeAmount Float?
+  netCoAmount Float?
+  comminglingVatAmount Float?
+  codFeeAmount Float?
   evaluationSaleNum Float?
   channelSaleNum  Float?
   adSpCost        Float?

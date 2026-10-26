@@ -1,5 +1,27 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+**180000 增量（2026-10-27 00:13:06 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地）**
+
+全部 12 个 service/refund/Tl 列已接入，performance 默认隐藏；完整键/中文标签见 `performance-service-fees.json` 与 workbench captions。两项 FBA 退款不是基础费用；otherPriceIncomeAmount「其他收入」≠ otherPriceAmount「其他费用」≠ orderOtherPriceAmount「订单其他费」，Tl deferred/withheldTax 与 taxPrice 独立。Agent 长表末尾追加 12 列，选列 CSV/XLSX 保留 0/空 NULL；sales、Listing aliases、evaluationCapital/evaluationCommission 与灰显项不变。
+
+180000 必须接在全部前置迁移（含 170000）后；精确保留旧投影/视图列序，无新索引，一次 payload=payload 回填。未来执行先评估全历史锁/WAL/磁盘，回退应用保留加法 schema；123 仅用户说「上」后另行评审。本轮无 push/deploy/SSH/真实库写入/线上 API/计划启用。
+
+验证：173 项定向测试全绿；180000 / Listing / cross-store 独立 PGlite 均 PASS（专用 PG 子测未配置而 SKIP）；TypeScript、touched ESLint、fake-URL Prisma validate/generate、git diff --check 均通过。
+
+本地提交受阻：git add 无法创建 `.git/index.lock`（Read-only file system），`chmod -R u+w .git` 同样失败；未暂存/提交，完整改动保留工作区供父进程完成本地提交，基线 HEAD `ab1595b`。离线复验：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-{sync-recovery,workbench-read,browse-query,agent-read,listing-identity,browse-api,browse-filters}.test.ts
+SELLFOX_P0_TEST_DATABASE_URL= SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js node --import tsx tests/integration/sellfox-sales-profit-p0.ts
+npm run typecheck
+# touched ESLint / fake-URL Prisma / Listing 与 cross-store 命令沿用下方验证块。
+git diff --check
+```
+
+预期 173 passed、180000 + PASS、类型与 diff 检查零错误。共享 service fixture 覆盖非零/0/null/非法，SQL 验证 INSERT、170000 后回填、payload=payload、UPDATE 清空、COALESCE、旧字段/列序/索引、结算/币种隔离及 Agent 排序。采用定向测试及隔离 SQL 专项验证；完整 check/build/浏览器/真实 P95 留待明确合码、发布或真实性能验收。
+
+---
+
 
 **状态更新（2026-10-26 23:58:23 Asia/Shanghai · Owner: Chen Jieliang · 仅 BOX 本地，未部署）**
 
