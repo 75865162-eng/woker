@@ -10,7 +10,7 @@ import { parseSellfoxAdCampaignReport } from "./ads-campaign-contract";
 import { parseSellfoxAdGroupReport } from "./ads-ad-group-contract";
 import { parseSellfoxAdPlacementReport } from "./ads-placement-contract";
 import { sellfoxReportDates, SellfoxSyncInputError } from "./sync-contract";
-import { sellfoxStoreFailure, SellfoxStoreSyncError } from "./sync-errors";
+import { sellfoxCreateTaskAmbiguous, sellfoxStoreFailure, SellfoxStoreSyncError } from "./sync-errors";
 async function download(url: URL) {
   const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(60000), cache: "no-store" });
   if (!response.ok || !response.body || Number(response.headers.get("content-length")) > 25 * 1024 * 1024) throw new SellfoxSyncInputError("广告报告下载失败或文件超限。");
@@ -103,12 +103,15 @@ export async function syncSellfoxAdsReports(input: {
         const rows = reportTypeCode === "adCampaignReport" ? await dependencies.db.sellfoxAdsCampaignDaily.count({ where }) : reportTypeCode === "adGroupReport" ? await dependencies.db.sellfoxAdsAdGroupDaily.count({ where }) : reportTypeCode === "adSpaceReport" ? await dependencies.db.sellfoxAdsPlacementDaily.count({ where }) : reportTypeCode === "adTargeringReport" ? await dependencies.db.sellfoxAdsTargetingDaily.count({ where }) : reportTypeCode === "adSearchTermReport" ? await dependencies.db.sellfoxAdsSearchTermDaily.count({ where }) : await dependencies.db.sellfoxAdsProductDaily.count({ where });
         units[id] = { store: store.externalId, adType, reportTypeCode, status: "done", rows }; continue;
       }
-      if (!task) {
+      // Definite prior create failures (failed + no external id) are safe to resubmit; ambiguous creating is not.
+      const needsCreate = !task || (task.status === "failed" && !task.externalTaskId);
+      if (needsCreate) {
         const ambiguous = await dependencies.db.sellfoxReportTask.findFirst({ where: { organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, adType, reportTypeCode, startDate: input.startDate, endDate: input.endDate, status: "creating", externalTaskId: null } });
         if (ambiguous) throw new SellfoxSyncInputError("同范围存在创建结果不明的广告任务，请先核对并关联原任务。");
         await dependencies.db.$transaction(async (tx) => {
           await input.onProgress({ units, cursor: { shopExternalId: store.externalId, adType, reportTypeCode, status: "creating" } }, tx);
-          await tx.sellfoxReportTask.create({ data: { id, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, runId: input.runId, adType, reportTypeCode, startDate: input.startDate, endDate: input.endDate, status: "creating" } });
+          if (!task) await tx.sellfoxReportTask.create({ data: { id, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, runId: input.runId, adType, reportTypeCode, startDate: input.startDate, endDate: input.endDate, status: "creating" } });
+          else await tx.sellfoxReportTask.update({ where: { id }, data: { status: "creating" } });
         });
         // Once sent, a timeout is ambiguous. Persisted creating is never automatically resubmitted.
         const result = await dependencies.post<{ id?: unknown }>("/api/cpc/download/createTask.json", { shopIds: [store.externalId], adTypeCode: adType, reportTypeCode, timeUnit: "daily", reportStartDate: input.startDate, reportEndDate: input.endDate }, { retry: false });
@@ -119,6 +122,7 @@ export async function syncSellfoxAdsReports(input: {
         });
         task = await dependencies.db.sellfoxReportTask.findUniqueOrThrow({ where: { id } });
       }
+      if (!task) throw new SellfoxSyncInputError("广告任务缺失。");
       if (!task.externalTaskId) throw new SellfoxSyncInputError("广告任务创建结果不明，需人工关联上游 taskId；未重复创建。");
       let buffer: Buffer | undefined;
       if (task.fileKey) buffer = await dependencies.storage().getBuffer(task.fileKey);
@@ -155,9 +159,21 @@ export async function syncSellfoxAdsReports(input: {
     } catch (error) {
       const failure = sellfoxStoreFailure(error); failures.push(failure.retryable);
       units[id] = { store: store.externalId, adType, reportTypeCode, status: "failed", error: failure.error };
+      // Definite createTask failures must not leave permanent creating blockers for the same shop/type/window.
+      const current = await dependencies.db.sellfoxReportTask.findUnique({ where: { id } });
+      if (current?.status === "creating" && !current.externalTaskId && !sellfoxCreateTaskAmbiguous(error)) {
+        await dependencies.db.sellfoxReportTask.update({ where: { id }, data: { status: "failed" } });
+      }
       await input.onProgress({ units });
     }
   }
-  if (failures.length) throw new SellfoxStoreSyncError(`${failures.length} 个店铺/广告类型报告失败，已继续其余店铺；任务 ID 已保留。`, failures.some(Boolean));
+  if (failures.length) {
+    const samples = [...new Set(Object.values(units).flatMap((unit) => {
+      const row = unit as { status?: string; adType?: string; error?: string };
+      return row.status === "failed" && row.error ? [`${row.adType ?? "?"}:${row.error}`] : [];
+    }))].slice(0, 3);
+    const detail = samples.length ? ` 原因示例：${samples.join("；")}` : "";
+    throw new SellfoxStoreSyncError(`${failures.length} 个店铺/广告类型报告失败，已继续其余店铺；任务 ID 已保留。${detail}`, failures.some(Boolean));
+  }
   return { units, count: Object.values(units).reduce<number>((n, unit) => n + Number((unit as { rows?: number }).rows ?? 0), 0) };
 }

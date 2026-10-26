@@ -2,6 +2,33 @@
 
 2026-10-26。Phase A/B 已对照本机真实 Sellfox XLSX 确认列映射并修复投放 ID；本轮仅 box 本机修改和离线解析，未部署、未迁移、未启用计划，未调用 createTask。
 
+## 123 只读盘点：SD 投放 createTask 永久 `creating`（2026-10-26 续）
+
+只读 SSH/SQL（未写库、未 createTask）。广告 `SellfoxReportTask` 按 reportTypeCode×adType×status：
+
+| reportTypeCode | adType | status | n | 无 externalTaskId | 无 fileKey |
+| --- | --- | --- | ---: | ---: | ---: |
+| adProductReport | sp/sb/sd | done | 117/39/39 | 0 | 0 |
+| adTargeringReport | sp/sb | done | 78/39 | 0 | 0 |
+| **adTargeringReport** | **sd** | **creating** | **39** | **39** | **39** |
+| adSearchTermReport | sp | done/downloaded | 53/25 | 0 | 0 |
+| adCampaign/Group/Space | sp | done | 78 each | 0 | 0 |
+
+唯一卡住组合是 **adTargeringReport × sd**：同属失败 run `sellfox-sync-8ed6f0e3-…`（manual，`adTypes=[sp,sb,sd]`，`executionAttempts=2`，窗口 2026-10-24～25）。summary 里 39 个 sd unit 最终 error 均为「广告任务创建结果不明…未重复创建。」（代码在已有 `creating`+空 externalTaskId 时的守卫）；**原始 createTask 失败原因已被第二次 attempt 覆盖**。创建时间约 06:52–06:58（Asia/Shanghai 墙钟对应库内 `updatedAt`），约 9s/店，**不像 30s 请求超时**，更像明确业务/响应失败后落入永久 `creating`。后续成功 run 仅同步了 sp。SB 投放与 SD 产品报告均有 done+fileKey，故不是「全广告类型都挂」。
+
+**根因（代码）**：`createTask` 前先落库 `status=creating`；若请求得到明确失败（HTTP 业务码、响应缺 ID 等），catch 只写 run progress、**不改任务行**，行永久 `creating`+空 externalTaskId。同 run 重试与新 run 的同范围 ambiguous 检查都会 fail-closed，且**不再调用 createTask**，UI 顶栏只见「N 个店铺/广告类型报告失败」。
+
+**本机修复（未部署）**：
+
+1. `sellfoxCreateTaskAmbiguous`：超时/发送后传输不明 → 保持 `creating`；明确失败（含缺 ID、HTTP 业务响应、未发送）→ 标 `failed`。
+2. `failed` + 空 externalTaskId 允许同 run 安全重提 createTask；`creating` 锁与「创建结果不明」守卫不变。
+3. 聚合 `SellfoxStoreSyncError` 附带最多 3 条 unit 原因示例，便于 runs 错误列直接看见。
+
+**已有 39 行不会被本修复自动改写**（禁止本任务写 123）。部署后若需给 SD 投放重新建任务，需运维先把这些 `creating`+空 externalTaskId 标为 `failed`（或删行）再同步；真超时遗留仍须人工关联，禁止盲目重提。是否上游拒绝 SD×adTargeringReport 需部署后看新的明确错误码确认；本轮未调用 live createTask。
+
+`text:` targetingId 纠正仍依赖部署 `e791d14`+重解析 CLI，与本修复独立。
+
+
 ## 报告来源与同步
 
 reportTypeCode 依据用户提供的 [sellfox-mcp `src/cli.ts` enum](https://github.com/shuolol/sellfox-mcp/blob/main/src/cli.ts)（同仓库 `src/mcp-server.ts`）。本轮未请求上游发现接口。

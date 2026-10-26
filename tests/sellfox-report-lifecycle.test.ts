@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import { createHash } from "node:crypto";
 import { syncSellfoxAdsReports, type SellfoxCpcReportType } from "@/lib/sellfox/ads-report-sync";
-import type { sellfoxPost } from "@/lib/sellfox/client";
+import { SellfoxRequestError, type sellfoxPost } from "@/lib/sellfox/client";
 type Task = Record<string, unknown>;
 function fixture(reportTypeCode: SellfoxCpcReportType = "adProductReport") {
-  let task: Task | null = null; let sends = 0; let ambiguous = false; let foreign = false; let stored = false; let commits = 0; let invalidContract = false;
+  let task: Task | null = null; let sends = 0; let ambiguous = false; let definiteReject = false; let missingId = false; let foreign = false; let stored = false; let commits = 0; let invalidContract = false;
   const rows: Task[] = [];
   const model = ({ adProductReport: "sellfoxAdsProductDaily", adTargeringReport: "sellfoxAdsTargetingDaily", adSearchTermReport: "sellfoxAdsSearchTermDaily", adCampaignReport: "sellfoxAdsCampaignDaily", adGroupReport: "sellfoxAdsAdGroupDaily", adSpaceReport: "sellfoxAdsPlacementDaily" } as const)[reportTypeCode];
   const tasks = {
@@ -24,7 +24,14 @@ function fixture(reportTypeCode: SellfoxCpcReportType = "adProductReport") {
     },
   } as unknown as NonNullable<Parameters<typeof syncSellfoxAdsReports>[1]>["db"];
   const post = (async (path: string, body: Task, options?: Task) => {
-    if (path.includes("createTask")) { assert.equal(body.reportTypeCode, reportTypeCode); assert.equal(body.timeUnit, "daily"); assert.deepEqual(body.shopIds, ["shop"]); assert.equal(options?.retry, false); sends++; if (ambiguous) throw Error("private timeout with secret URL"); return { id: "remote-task" }; }
+    if (path.includes("createTask")) {
+      assert.equal(body.reportTypeCode, reportTypeCode); assert.equal(body.timeUnit, "daily"); assert.deepEqual(body.shopIds, ["shop"]); assert.equal(options?.retry, false);
+      sends++;
+      if (ambiguous) throw new SellfoxRequestError("赛狐接口请求超时（30 秒）。", true);
+      if (definiteReject) throw new SellfoxRequestError("赛狐接口调用失败（HTTP 400 / 10001）。", false, 10001);
+      if (missingId) return { id: 12345 };
+      return { id: "remote-task" };
+    }
     return { rows: [{ id: "remote-task", shopId: [foreign ? "other" : "shop"], adTypeCode: "sp", reportTypeCode, timeUnit: "daily", reportState: "已生成", downloadUrl: ["https://s1.sellfox.com/report.xlsx"] }] };
   }) as typeof sellfoxPost;
   async function buffer() {
@@ -36,7 +43,15 @@ function fixture(reportTypeCode: SellfoxCpcReportType = "adProductReport") {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
   const storage = () => ({ putBuffer: async () => { stored = true; }, getBuffer: buffer }) as unknown as ReturnType<NonNullable<Parameters<typeof syncSellfoxAdsReports>[1]>["storage"]>;
-  return { dependencies: { db, post, storage, download: buffer, sleep: async () => undefined }, contract: (invalid: boolean) => { invalidContract = invalid; }, timeout: () => { ambiguous = true; }, foreign: () => { foreign = true; }, get task() { return task; }, get sends() { return sends; }, get stored() { return stored; }, get commits() { return commits; }, get rows() { return rows; } };
+  return {
+    dependencies: { db, post, storage, download: buffer, sleep: async () => undefined },
+    contract: (invalid: boolean) => { invalidContract = invalid; },
+    timeout: () => { ambiguous = true; },
+    reject: (enabled = true) => { definiteReject = enabled; },
+    missingId: (enabled = true) => { missingId = enabled; },
+    foreign: () => { foreign = true; },
+    get task() { return task; }, get sends() { return sends; }, get stored() { return stored; }, get commits() { return commits; }, get rows() { return rows; },
+  };
 }
 const input = { runId: "run", organizationId: "org", workspaceId: "workspace", shopExternalIds: ["shop"], startDate: "2026-10-24", endDate: "2026-10-24", onProgress: async () => undefined };
 test("ambiguous task creation survives retries and even a new run without duplicate HTTP", async () => {
@@ -123,4 +138,32 @@ test("report type returned by pageList must match the requested type before down
   }) as typeof sellfoxPost;
   await assert.rejects(() => syncSellfoxAdsReports({ ...input, reportTypeCode: "adSearchTermReport" }, { ...f.dependencies, post }));
   assert.equal(f.stored, false); assert.equal(f.commits, 0);
+});
+
+test("definite createTask reject marks failed and same-run retry may resubmit without leaving creating", async () => {
+  const f = fixture("adTargeringReport"); f.reject();
+  const request = { ...input, reportTypeCode: "adTargeringReport" as const };
+  await assert.rejects(() => syncSellfoxAdsReports(request, f.dependencies), /HTTP 400 \/ 10001|原因示例/);
+  assert.equal(f.task?.status, "failed"); assert.equal(f.task?.externalTaskId, undefined); assert.equal(f.sends, 1);
+  f.reject(false);
+  await syncSellfoxAdsReports(request, f.dependencies);
+  assert.equal(f.sends, 2); assert.equal(f.task?.status, "done"); assert.equal(f.commits, 1);
+});
+test("missing createTask id is definite failure and unblocks a later create", async () => {
+  const f = fixture("adTargeringReport"); f.missingId();
+  const request = { ...input, reportTypeCode: "adTargeringReport" as const };
+  await assert.rejects(() => syncSellfoxAdsReports(request, f.dependencies), /缺少 ID|原因示例/);
+  assert.equal(f.task?.status, "failed"); assert.equal(f.sends, 1);
+  f.missingId(false);
+  await syncSellfoxAdsReports(request, f.dependencies);
+  assert.equal(f.sends, 2); assert.equal(f.task?.status, "done");
+});
+test("createTask timeout stays creating and still blocks same or new runs", async () => {
+  const f = fixture("adTargeringReport"); f.timeout();
+  const request = { ...input, reportTypeCode: "adTargeringReport" as const };
+  await assert.rejects(() => syncSellfoxAdsReports(request, f.dependencies), /请求超时|原因示例/);
+  assert.equal(f.task?.status, "creating"); assert.equal(f.sends, 1);
+  await assert.rejects(() => syncSellfoxAdsReports(request, f.dependencies));
+  await assert.rejects(() => syncSellfoxAdsReports({ ...request, runId: "new-run" }, f.dependencies));
+  assert.equal(f.sends, 1); assert.equal(f.commits, 0);
 });
