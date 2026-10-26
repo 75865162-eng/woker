@@ -1,5 +1,43 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-27 — performance 默认显示 promotion/chargeback/guarantee/digital/other/shipping/regulatory 七列 · BOX LOCAL ONLY
+
+基线 HEAD `49fe05d`（`49fe05da6bcf236b98ca6ed48d64fbb460cd235e`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下七个既有且默认隐藏的 numeric 列移出 performance trailing `.map(c => ({ ...c, defaultVisible: false }))`，按表中顺序插在 `evaluationFee` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
+
+| key | 列名 | 原样保留的 requiresField |
+| --- | --- | --- |
+| promotionTotalAmount | 促销费 | 销售利润 payload.promotionTotalAmount 类型投影 |
+| chargebackAmount | 拒付退款 | 销售利润 payload.chargebackAmount 类型投影 |
+| guaranteeClaimAmount | A-Z索赔退款 | 销售利润 payload.guaranteeClaimAmount 类型投影 |
+| digitalServicesFeeAmount | 数字服务费 | 销售利润 payload.digitalServicesFeeAmount 类型投影 |
+| otherPriceAmount | 其他费用 | 销售利润 payload.otherPriceAmount 类型投影 |
+| shippingChargeAmount | 买家运费 | 销售利润 payload.shippingChargeAmount 类型投影 |
+| regulatoryFeeAmount | 监管费 | 销售利润 payload.regulatoryFeeAmount 类型投影 |
+
+生产变更仅七列结构移动：逆向移回这七列并移除新增的显式 `defaultVisible: true` 后，源码与基线逐字节一致；column key 多重集合不变，无新增 key，无 label、numeric 或 requiresField 修改。coupon/deal/vine/star/subscription、FBA 入库/退货长尾、退款、身份 map-tail 及 sales/listings/ads 保持原样；FBA 超量仓储费保持既有默认显示。performance 共 106 列，默认显示 50 列，剩余默认隐藏 **56 列**（3 个身份列、53 个 numeric 列）。**Fee-mining remains paused**。下一批候选为既有类型列 coupon/deal/vine/star/subscription + FBA return/inbound cluster，本轮不实施。
+
+复验命令（Prisma stub，不连接真实数据库；跳过完整 check/build）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'performance core cost defaults'
+```
+
+验证通过：两个定向测试文件、TypeScript、指定三文件 ESLint 和 `git diff --check`。测试扩展七种维度默认顺序、七列 default-true、默认/显式 CSV 与真实 ExcelJS XLSX 回读、正负数/零/NULL；逐列选择、逐列隐藏、整组隐藏和空集合仍以显式选列为准。既有显式导出测试保留 FBA 超量仓储费在首位的自定义顺序。API 测试通过，无需修改。
+
+浏览器断言扩展七个中文列名，覆盖默认表头顺序、默认勾选、取消后跨域保留及 CSV/Excel 显式选列排除。定向执行时 Chromium 在启动阶段于 `sandbox_host_linux.cc:41` 报 `Operation not permitted` / SIGTRAP，页面断言未执行；未修改启动参数或绕过沙箱，需在允许启动 Chromium 的本地环境补跑该用例。此次仅列配置变更，以定向测试、类型及 lint 验证；按约定跳过完整 check/build，后续合码/发布或查询/存储变化时另行安排高成本检查。
+
+仅 BOX 本地，四个仓库文件；仓库外 parity-gap 由父进程更新。无 push/fetch/deploy/SSH、live Sellfox API、schema/migration/SQL 或真实数据库写入，未加载/修改 `.env`。回滚为将七列放回原隐藏组并撤销本轮测试/文档增量，不涉及数据操作。
+
+本地提交待父进程处理：`git add` 无法创建 `.git/index.lock`（Read-only file system），因此未暂存、未执行 commit；四个文件保留未暂存改动，HEAD 仍为基线。未 chmod/强制或绕过沙箱；父进程可使用其 `GIT_INDEX_FILE` 流程提交：`feat(sellfox): default-show performance promo chargeback regulatory fee columns`。
+
+下方为历史批次。
+
+---
+
 ## 2026-10-27 — performance 默认显示 custom/service/evaluationFee 六列 · BOX LOCAL ONLY
 
 基线 HEAD `e568db4`（`e568db4c381a9cc64acdd264cedfa1fc5c028d40`），分支 `codex/operations-p0-catalog-replenishment`。仅将以下六个既有 numeric 列移出 performance 默认隐藏 map-tail，按表中顺序插在 `fbaOverageFeeAmount` 之后、`currency` 之前，显式设置 `defaultVisible: true`：
