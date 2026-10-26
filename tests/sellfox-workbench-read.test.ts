@@ -531,9 +531,10 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   assert.equal(brand.defaultVisible, true);
   assert.equal(rating.defaultVisible, true);
   const defaults = defaultVisibleColumnKeys("listings");
-  assert.deepEqual(defaults, ["status", "fulfillment", "image", "asin", "title", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "parentAsin", "parentSku", "fnsku", "sku", "name", "price", "sales7", "sales14", "sales30", "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "fulfillable", "totalInventory", "inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing", "sourceUpdatedAt"]);
+  assert.deepEqual(defaults, ["status", "dxmPublishState", "fulfillment", "image", "asin", "title", "brand", "amazonBrand", "rating", "ratingCount", "productTags", "openDate", "firstSaleDate", "bsrRank", "bsrCategory", "purchaseCost", "fbaFees", "referralFee", "totalFee", "headTripCost", "buyBoxWinner", "reservedQty", "shippingPrice", "profitPrice", "profitRate", "parentAsin", "parentSku", "fnsku", "sku", "name", "price", "sales7", "sales14", "sales30", "revenue7", "revenue14", "revenue30", "adSpend7", "adSpend14", "adSpend30", "fulfillable", "totalInventory", "inventoryCapturedAt", "listingQuantity", "unsellable", "warehousing", "sourceUpdatedAt"]);
   assert.deepEqual(visibleColumns("listings").map(c => c.key), defaults);
-  for (const key of ["dxmPublishState", "salesperson"]) assert.ok(!defaults.includes(key));
+  assert.ok(defaults.includes("dxmPublishState"));
+  for (const key of ["salesperson"]) assert.ok(!defaults.includes(key));
   const sourceKeys = columns.listings.map(c => c.key);
   assert.deepEqual(sourceKeys.slice(0, 4), ["status", "dxmPublishState", "fulfillment", "image"]);
   assert.deepEqual(sourceKeys.slice(sourceKeys.indexOf("brand"), sourceKeys.indexOf("ratingCount") + 1), ["brand", "amazonBrand", "rating", "ratingCount"]);
@@ -600,11 +601,12 @@ test("listings default CSV/XLSX include fulfillment, brand, amazonBrand, rating,
       await book.xlsx.load(await (await sellfoxWorkbenchExport("listings", query, scope, url)).arrayBuffer());
       const sheet = book.worksheets[0];
       assert.equal(sheet.columnCount, keys.length);
-      if (!selection) assert.deepEqual([7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28].map(index => sheet.getRow(1).getCell(index).value), ["亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "采购成本", "FBA费用", "佣金", "总费用", "头程", "Buy Box", "预留", "运费", "预估利润", "利润率", "父ASIN", "父SKU", "FNSKU", "品名SKU"]);
+      if (!selection) assert.deepEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29].map(index => sheet.getRow(1).getCell(index).value), ["亚马逊品牌", "星级", "评论数", "产品标签", "上架时间", "首次售出", "BSR", "BSR类目", "采购成本", "FBA费用", "佣金", "总费用", "头程", "Buy Box", "预留", "运费", "预估利润", "利润率", "父ASIN", "父SKU", "FNSKU", "品名SKU"]);
       if (!selection) {
-        assert.match(csv.split("\r\n")[0], /^"状态","发货方式","图片"/);
-        assert.equal(sheet.getRow(1).getCell(2).value, "发货方式");
-        assert.deepEqual([2, 3, 4, 5].map(row => sheet.getRow(row).getCell(2).value), ["AFN", null, "MFN", null]);
+        assert.match(csv.split("\r\n")[0], /^"状态","DXM 发布状态","发货方式","图片"/);
+        assert.equal(sheet.getRow(1).getCell(2).value, "DXM 发布状态");
+        assert.equal(sheet.getRow(1).getCell(3).value, "发货方式");
+        assert.deepEqual([2, 3, 4, 5].map(row => sheet.getRow(row).getCell(3).value), ["AFN", null, "MFN", null]);
         assert.match(csv.split("\r\n")[0], /"可售","总库存","库存快照时间","Listing库存","不可售","入库中","更新时间"/);
         const inventoryIndex = keys.indexOf("totalInventory");
         assert.equal(sheet.getRow(1).getCell(inventoryIndex).value, "可售");

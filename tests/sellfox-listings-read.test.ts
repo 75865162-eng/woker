@@ -6,13 +6,13 @@ import { sellfoxSortColumns } from "@/lib/sellfox/sort-columns";
 import { columns, defaultVisibleColumnKeys, visibleColumns, visibleColumnCsv } from "@/components/sellfox/workbench-types";
 
 const scope = { organizationId: "org-listing", workspaceId: "ws-listing" };
-test("DXM publish state is an optional listing-only raw text column, distinct from price and pairing", () => {
+test("DXM publish state is a default-visible listing-only raw text column, distinct from price and pairing", () => {
   const config = visibleColumns("listings", ["dxmPublishState"]);
   assert.equal(config.length, 1);
   assert.equal(config[0].labelZh, "DXM 发布状态");
-  assert.equal(config[0].defaultVisible, false);
+  assert.equal(config[0].defaultVisible, true);
   assert.ok(!config[0].unavailable);
-  assert.equal(defaultVisibleColumnKeys("listings").includes("dxmPublishState"), false);
+  assert.equal(defaultVisibleColumnKeys("listings").includes("dxmPublishState"), true);
   assert.equal(visibleColumnCsv(config, [{ dxmPublishState: "delete" }, { dxmPublishState: "future-state" }, { dxmPublishState: null }]).trim(), '"DXM 发布状态"\r\n"delete"\r\n"future-state"\r\n""');
   assert.equal(columns.listings.filter(column => column.key === "price").length, 1);
   assert.equal(columns.listings.some(column => ["listingPrice", "listingPricing", "pairingStatus"].includes(column.key)), false);

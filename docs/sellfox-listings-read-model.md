@@ -1,5 +1,30 @@
 # Sellfox listings 列表延迟整改（2026-10-26）
 
+## 2026-10-27 — listings 默认显示 DXM 发布状态 · BOX LOCAL ONLY
+
+基线 HEAD `e24796d`（`e24796d49ff66d22faa123c695968f3c18b516f1`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `dxmPublishState`「DXM 发布状态」`defaultVisible` 从 `false` 改为 `true`；**label 与 requiresField 不变**（`Listing 当前快照 dxmPublishState 类型投影；原值展示，非配对状态`）。status → dxmPublishState → fulfillment → image 源顺序保持不变。默认表头、初始勾选和无显式选列 CSV/XLSX 增加「DXM 发布状态」，紧接「状态」。仍只展示去首尾空格的字符串原值（如 `delete`），**不等于配对状态**；配对状态 / 划线价类型筛选继续灰显。显式单选、空选、取消 DXM 后会话保留继续优先，不迁移已有选择。
+
+ads / sales / performance、尾部独立 msku / marketplace / capturedAt / currency、业务员 missing 本轮不改。**Fee-mining remains paused**。不新增字段、live Sellfox API、schema/migration、SQL、服务端请求或真实数据库写入。回滚仅还原该默认值及对应测试/文档，无数据操作。
+
+验证命令（Prisma stub，不连接真实数据库，不加载 `.env`）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-listings-read.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts tests/sellfox-listings-read.test.ts tests/browser/sellfox.spec.ts
+git diff --check
+git diff --word-diff=porcelain --unified=0 -- src/components/sellfox/workbench-types.ts
+NODE_ENV=test npm run test:sellfox:browser -- --grep 'listing DXM publish state|listings default brand'
+```
+
+验证结果：指定测试文件、TypeScript、ESLint 与 `git diff --check` 通过。word-diff 生产变更恰为 listings `dxmPublishState` 一处 `-false` / `+true`。默认集合含 dxmPublishState；配对/划线价锁定入口仍禁用。浏览器定向：默认表头可见、勾选、原文 `delete`、取消后会话/导出移除；若 Chromium SIGTRAP 则记录不绕过。
+
+全 workbench 域剩余默认隐藏（typed vs locked）见本轮 gap 扫描：performance 仅 identity；listings 余 map-false msku/marketplace/capturedAt/currency；sales 下一候选 `inventoryCapturedAt`；ads 余 identity + missing。本 slice 不做 sales。
+
+仅 BOX 本地，不 push/fetch/deploy/SSH，不读写 `.env`。仓库外 parity-gap 由父进程更新。下方为历史批次。
+
+---
+
 ## 2026-10-27 — listings 默认显示父SKU / FNSKU · BOX LOCAL ONLY
 
 基线 HEAD `9ac197b`（`9ac197bd18f9935e4f17ffa7ae31529eb862a262`），分支 `codex/operations-p0-catalog-replenishment`。生产源码仅将 listings 的 `parentSku`「父SKU」、`fnsku`「FNSKU」两个 `defaultVisible` 从 `false` 改为 `true`；labels、requiresField 及 parentAsin → parentSku → fnsku → sku 源顺序保持不变。默认表头、初始勾选和无显式选列 CSV/XLSX 增加这两列；显式单选、空选、各自/成组选列与隐藏继续优先，切换数据域保留取消状态，不迁移已有会话选择。文本前导零保留，NULL/缺失为空白。
