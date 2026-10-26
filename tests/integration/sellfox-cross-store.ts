@@ -16,14 +16,12 @@ export async function verifySellfoxCrossStoreSql(query: Query) {
     await query(`CREATE SCHEMA "${schema}"; SET LOCAL search_path TO "${schema}"`);
     await query(`CREATE TABLE "SellfoxStore" (id text,"organizationId" text,"workspaceId" text,"externalId" text,name text,marketplace text);
       INSERT INTO "SellfoxStore" VALUES ('s1','org','ws','shop1','店一','US'),('s2','org','ws','shop2','店二','US'),('s3','org','ws','shop3','无关店','US'),('foreign','other','ws','foreign','其他组织','US');
-      CREATE TABLE "SellfoxListingSnapshot" (id text,"organizationId" text,"workspaceId" text,payload jsonb);
-      INSERT INTO "SellfoxListingSnapshot" VALUES
-        ('l1','org','ws','{"devList":[{"devName":"开发员甲"}],"commodityName":"SPU甲"}'),
-        ('l2','org','ws','{"devList":[{"devName":"开发员甲"}],"commodityName":"SPU甲"}'),
-        ('l3','org','ws','{"devList":[{"devName":"开发员乙"}],"commodityName":"SPU乙"}');
-      CREATE TABLE sellfox_listing_current (id text,"organizationId" text,"workspaceId" text,"storeId" text,msku text,asin text,"parentAsin" text,title text,"mainImage" text,price float);
+      CREATE TABLE sellfox_listing_current (id text,"organizationId" text,"workspaceId" text,"storeId" text,msku text,asin text,"parentAsin" text,title text,"mainImage" text,price float,
+        developer text,spu text,brand text,rating text,"buyBoxWinner" text,fulfillment text,"productTagNames" text[]);
       INSERT INTO sellfox_listing_current VALUES
-        ('l1','org','ws','s1','shared','A','P','商品',NULL,10),('l2','org','ws','s2','shared','A','P','商品',NULL,10),('l3','org','ws','s1','solo','B','Q','单品',NULL,20);
+        ('l1','org','ws','s1','shared','A','P','商品',NULL,10,'开发员甲','SPU甲',NULL,NULL,NULL,NULL,'{}'),
+        ('l2','org','ws','s2','shared','A','P','商品',NULL,10,'开发员甲','SPU甲',NULL,NULL,NULL,NULL,'{}'),
+        ('l3','org','ws','s1','solo','B','Q','单品',NULL,20,'开发员乙','SPU乙',NULL,NULL,NULL,NULL,'{}');
       CREATE TABLE sellfox_sales_daily (id text,"organizationId" text,"workspaceId" text,"storeId" text,"reportDate" text,asin text,msku text,sku text,currency text,quantity float,revenue float,orders float,complete boolean);
       INSERT INTO sellfox_sales_daily VALUES
         ('a','org','ws','s1','2026-10-24','A','shared','sku','USD',2,20,1,true),
@@ -35,7 +33,7 @@ export async function verifySellfoxCrossStoreSql(query: Query) {
         ('g','org','ws','s2','2026-10-24','U','unknown','unknown','USD',17,170,7,true),
         ('h','other','ws','foreign','2026-10-24','A','shared','sku','USD',1000,1000,1000,true);
       CREATE TABLE "SellfoxProductDailySnapshot" AS SELECT id,"organizationId","workspaceId","storeId","reportDate",asin,msku,sku,currency,quantity AS "saleQuantity",revenue AS "saleRevenue",orders AS "orderNum",
-        false AS "onlySettle",NULL::text AS title,NULL::text AS "parentAsin",NULL::text AS "imageUrl",1::float AS "grossProfit",1::float AS "adCost",NULL::float AS "promotionDiscount",NULL::float AS "giftWrapFee",1::float AS "netRevenue",NULL::float AS "refundRate",1::float AS "fbaQuantity",0::float AS "fbmQuantity" FROM sellfox_sales_daily;
+        false AS "onlySettle",NULL::text AS title,NULL::text AS "parentAsin",NULL::text AS "imageUrl",1::float AS "grossProfit",1::float AS "adCost",NULL::float AS "promotionDiscount",NULL::float AS "giftWrapFee",1::float AS "netRevenue",NULL::float AS "refundRate",1::float AS "fbaQuantity",0::float AS "fbmQuantity",'{}'::jsonb AS payload FROM sellfox_sales_daily;
       CREATE TABLE sellfox_inventory_current ("organizationId" text,"workspaceId" text,"storeId" text,msku text,quantity float,"totalInventory" float,"capturedAt" text);
       INSERT INTO sellfox_inventory_current VALUES
         ('org','ws','s1','shared',10,12,'2026-10-26'),('org','ws','s2','shared',20,25,'2026-10-26'),

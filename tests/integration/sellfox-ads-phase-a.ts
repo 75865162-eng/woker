@@ -10,7 +10,8 @@ export async function verifySellfoxAdsPhaseASql(query: Query) {
   await query(`CREATE TABLE "SellfoxStore" (id text PRIMARY KEY,"organizationId" text,"workspaceId" text,"externalId" text,name text,marketplace text);
     INSERT INTO "SellfoxStore" VALUES ('s','org','ws','shop','店铺','US'),('f','foreign','ws','foreign-shop','其他组织','US');
     CREATE TABLE "SellfoxListingSnapshot" (id text,payload jsonb,"organizationId" text,"workspaceId" text);
-    CREATE TABLE sellfox_listing_current (id text,"storeId" text,msku text,asin text,"parentAsin" text,title text,price float,"mainImage" text,"organizationId" text,"workspaceId" text);`);
+    CREATE TABLE sellfox_listing_current (id text,"storeId" text,msku text,asin text,"parentAsin" text,title text,price float,"mainImage" text,"organizationId" text,"workspaceId" text,
+      brand text,rating text,"buyBoxWinner" text,fulfillment text,developer text,spu text);`);
   const prior = await readFile("prisma/migrations/20261025020000_sellfox_agent_read_models/migration.sql", "utf8");
   await query(prior.slice(prior.indexOf('CREATE TABLE "SellfoxReportTask"'), prior.indexOf('CREATE TABLE "SellfoxAdsProductDaily"')));
   await query('CREATE UNIQUE INDEX "SellfoxReportTask_runId_storeId_adType_key" ON "SellfoxReportTask" ("runId","storeId","adType")');

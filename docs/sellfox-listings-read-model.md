@@ -2,6 +2,26 @@
 
 范围：只改本地 ERP listings 读路径；未连接生产、未发布、未推送、未启用计划，也没有新增 Sellfox API 调用。ProductRecord、销量/利润报表聚合不变。
 
+## 销量/表现复用类型投影（2026-10-26）
+
+- `workbench-read.ts` 的共享 Listing CTE 直接读 current view 的 brand/rating/Buy Box/fulfillment，标签过滤用 `productTagNames @> ARRAY[...]::text[]`，不再连接快照解析 payload。品牌 facets 用 DISTINCT brand，标签 facets 展开类型数组；范围仍由 organization/workspace/shop/store/site 限制，并独立于品牌/标签/搜索等行筛选。
+- Agent sales/performance 的四种共享筛选同样读取所选 current 候选的类型列。仍先按 MSKU 优先、ASIN 回退及原稳定排序选一行，再判断字段，不能预筛候选而换成同 ASIN 的其他商品。列表响应、灰显入口、报表聚合和币种/结算分区口径保持原样。
+- 新迁移 `20261026070000_sellfox_listing_developer_spu` 在 `20261026060000` 后添加两个 nullable TEXT，扩展原 trigger，在 current view 末尾追加列。developer 保留旧 SQL 的精确规则：第一个 devId 匹配的 devName 非空则用它，否则第一个非空 devName；重复匹配不跳到第二个匹配项，空字符串与空格不同，不额外 trim。SPU 优先非空 commodityName，再 commoditySku。缺失存 NULL，读 CTE 用 COALESCE 显示「未分配开发员」/「未分配SPU」。performance 的 SPU 仍按原行为回退 ASIN。
+- 一次性 `UPDATE payload=payload` 触发全历史/半成品回填，不改变 payload 内容、Head 或 ProductRecord；其余已投影字段按原函数重算。真实库应用前须审核保留行数、WAL/磁盘及 DDL/行锁窗口，先迁移并 generate，再启动新代码。本轮仅在内存 PGlite 执行。回滚应用保留新增列/函数/view，不做数据库回滚；旧应用写 payload 仍会维护投影。
+- 剩余 payload 读取仅为 performance fact 的 refundPrice/refundNum/commodityCost/shippingPrice/taxPrice；它们来自 `SellfoxProductDailySnapshot`，不是 Listing。写入 trigger 仍负责解析 Listing 原始 payload，读取路径不解析。
+- 定向验证：下列 94 项测试、TypeScript、改动 TS 文件 ESLint、Prisma validate、`git diff --check`；隔离 PGlite 另覆盖新增迁移/backfill/view 旧列顺序、插入/更新与 NULL/重复 devId/空格、报表 MSKU/ASIN 选择、筛选/空页 facets/导出/分页/totals/结算分区，以及跨店 developer/SPU 与共享广告查询。未运行生产构建、浏览器 E2E 或真实并发/P95 benchmark；合码/上线或性能验收时再执行，不能把隔离 fixture 当作生产性能承诺。
+
+```bash
+npx tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-listings-read.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-listing-identity.test.ts tests/sellfox-agent-read.test.ts
+npm run typecheck
+npx eslint src/lib/sellfox/{workbench-read,agent-read}.ts tests/sellfox-{workbench-read,agent-read}.test.ts tests/integration/sellfox-{listings-read-model,cross-store,ads-phase-a}.ts
+DATABASE_URL=postgresql://unused:unused@127.0.0.1:1/unused npx prisma validate
+SELLFOX_TEST_PGLITE_MODULE=/tmp/sellfox-p0-tools/node_modules/@electric-sql/pglite/dist/index.js npx tsx tests/integration/sellfox-listings-read-model.ts
+git diff --check
+```
+
+PGlite 沿用本机已有工具，不修改应用依赖。跨店和广告额外验证分别调用 `verifySellfoxCrossStoreSql` 与 `verifySellfoxAdsPhaseBSql`（后者包含 Phase A），调用方传入独立 PGlite 的 query/exec，完成后 close；不设置任何数据库 URL，不访问真实数据库。
+
 ## 可选发布状态补充（2026-10-26）
 
 - 本地字段盘点：`narrow-contracts.ts`、Agent 字段表及 `listing-page.json` 一致将 `standardPrice` 映射为既有 `price`（价格）；fixture 没有 `dxmPublishState` / `listingPrice` / `listingPricing` 的枚举或中文业务定义。用户提供的现存 payload 观察是 `dxmPublishState` 有 `delete`/空值，不能据此认定为配对状态。`listingPrice` / `listingPricing` 仅有非空数量，无独立用途证据，不新增重复或猜义的价格列。

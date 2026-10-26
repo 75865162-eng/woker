@@ -13,7 +13,82 @@ type Statement = { text: string; values: unknown[] };
 type Result = { rows: Row[]; total: number; totals: Row[]; facets: { productTags: string[]; brands: string[] } };
 const migrationPath = "prisma/migrations/20261026050000_sellfox_listing_typed_read_model/migration.sql";
 const publishStateMigrationPath = "prisma/migrations/20261026060000_sellfox_listing_publish_state/migration.sql";
+const dimensionMigrationPath = "prisma/migrations/20261026070000_sellfox_listing_developer_spu/migration.sql";
 const scope = { organizationId: "org", workspaceId: "ws" };
+
+async function verifyReportListingProjection(query: Query) {
+  await query(`CREATE TABLE sellfox_sales_daily AS
+    SELECT f.*,f.id AS "sourceKey",'SKU'::text AS sku,'USD'::text AS currency,
+      '2026-10-26'::text AS "reportDate",quantity*10 AS revenue,quantity AS orders,true AS complete,
+      '2026-10-26'::text AS "syncedAt",'shop'::text AS "shopExternalId",'店铺'::text AS name,'US'::text AS marketplace
+    FROM (VALUES
+      ('exact','org','ws','s','ASIN','a',2::float),
+      ('unknown-value','org','ws','s','ASIN','c',3::float),
+      ('fallback','org','ws','s','ASIN','missing',5::float),
+      ('unmatched','org','ws','s','NO-ASIN','none',7::float),
+      ('foreign-fact','other','ws','foreign','ASIN','a',1000::float)
+    ) f(id,"organizationId","workspaceId","storeId",asin,msku,quantity);
+    CREATE TABLE "SellfoxProductDailySnapshot" AS SELECT *,quantity AS "saleQuantity",revenue AS "saleRevenue",
+      false AS "onlySettle",NULL::text AS title,NULL::text AS "parentAsin",NULL::text AS "imageUrl",
+      1::float AS "grossProfit",NULL::float AS "grossProfitRate",1::float AS "adCost",
+      NULL::float AS "promotionDiscount",NULL::float AS "giftWrapFee",revenue AS "netRevenue",
+      NULL::float AS "refundRate",orders AS "orderNum",quantity AS "fbaQuantity",0::float AS "fbmQuantity",
+      '{"refundPrice":2,"refundNum":1,"commodityCost":3,"shippingPrice":4,"taxPrice":5}'::jsonb AS payload
+    FROM sellfox_sales_daily;
+    INSERT INTO "SellfoxProductDailySnapshot" SELECT id||'-settled',"organizationId","workspaceId","storeId",asin,msku,quantity,"sourceKey",sku,currency,"reportDate",revenue,orders,complete,"syncedAt","shopExternalId",name,marketplace,"saleQuantity","saleRevenue",true,title,"parentAsin","imageUrl","grossProfit","grossProfitRate","adCost","promotionDiscount","giftWrapFee","netRevenue","refundRate","orderNum","fbaQuantity","fbmQuantity",payload FROM "SellfoxProductDailySnapshot";
+    CREATE VIEW sellfox_profit_daily AS SELECT * FROM "SellfoxProductDailySnapshot";`);
+  for (const domain of ["sales", "performance"] as const) {
+    const read = async (params = "", exporting = false) => {
+      const url = new URL("http://localhost/?reportDate=2026-10-26&dimension=msku");
+      for (const [key,value] of new URLSearchParams(params)) url.searchParams.set(key,value);
+      const browse = sellfoxBrowseQuery(url);
+      const sql = workbenchReadSql(domain, browse, scope, exporting);
+      assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"/);
+      const result = (await query(sql.text, sql.values)).rows[0] as Result;
+      return { browse, result };
+    };
+    const all = (await read()).result;
+    assert.equal(all.total, 4);
+    const metric = domain === "sales" ? "subtotal" : "saleQuantity";
+    assert.equal(all.totals[0][metric], 17);
+    assert.deepEqual(all.facets, { brands: ["Brand", "Other"], productTags: ["标签、完整"] });
+    for (const [params, ids, quantity] of [
+      ["fulfillment=AFN&buyBox=no&brand=Brand&productTag="+encodeURIComponent("标签、完整"), ["exact", "fallback"], 7],
+      ["buyBox=yes", [], 0], // ASIN sibling b must not override the exact MSKU or stable ASIN fallback.
+      ["brand=Other", [], 0],
+      ["fulfillment=MFN", [], 0],
+      ["productTag=标签", [], 0],
+      ["brand=absent&search=absent", [], 0],
+      ["shopExternalId=foreign", [], 0],
+      ["site=CA", [], 0],
+    ] as const) {
+      for (const exporting of [false, true]) {
+        const { browse, result } = await read(params, exporting);
+        assert.deepEqual(result.rows.map(row=>row.id), ids);
+        assert.equal(result.total, ids.length);
+        assert.equal(result.totals[0]?.[metric] ?? 0, quantity);
+        if (!exporting && !params.startsWith("shopExternalId=") && params!=="site=CA") assert.deepEqual(result.facets, all.facets);
+        const agent = await readSellfoxAgentRows(domain, browse, scope, exporting);
+        assert.deepEqual(agent.rows.map(row=>row.id), ids);
+        assert.equal(agent.pagination.total, ids.length);
+      }
+    }
+    for (const dimension of domain === "sales" ? ["developer", "spu"] : ["developer"]) {
+      const result = (await read(`dimension=${dimension}`)).result;
+      const expected = dimension === "developer" ? " Primary " : "SPU-SKU";
+      assert.equal(result.rows.find(row=>row.identity===expected)?.[domain === "sales" ? "quantity" : "saleQuantity"], 7);
+      assert.equal(result.rows.find(row=>row.identity===(dimension === "developer" ? "未分配开发员" : "未分配SPU"))?.[domain === "sales" ? "quantity" : "saleQuantity"], 10);
+    }
+    const paged = (await read("pageSize=1&page=2")).result;
+    assert.equal(paged.rows.length, 1); assert.equal(paged.total, all.total); assert.deepEqual(paged.totals, all.totals);
+    if (domain === "performance") {
+      assert.equal(all.totals[0].shippingPrice, 16); // Performance fact fees still come from its own payload.
+      const settled = (await read("onlySettle=1")).result;
+      assert.equal(settled.total, all.total); assert.deepEqual(settled.totals, all.totals);
+      assert.deepEqual((await read("dimension=spu")).result, (await read("dimension=asin")).result);
+    }
+  }
+}
 
 export async function verifySellfoxListingReadModel(query: Query, before?: Statement) {
   const schema = `listing_read_${randomUUID().replaceAll("-", "")}`;
@@ -30,6 +105,8 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     await query(await readFile("prisma/migrations/20261025040000_sellfox_listing_identity_image/migration.sql", "utf8"));
     const oldColumns = (await query(`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='sellfox_listing_current' ORDER BY ordinal_position`, [schema])).rows.map(r => r.column_name);
     const payload = {
+      devId: "primary", devList: [{ devId: "other", devName: "First" }, { devId: "primary", devName: " Primary " }],
+      commodityName: "", commoditySku: "SPU-SKU",
       dxmPublishState: " delete ",
       brand: " Brand ", amazonBrand: " Amazon ", rating: "4.5", ratingCount: 0,
       buyBoxWinner: false, switchFulfillmentTo: "AFN", firstSaleDate: "", firstOrderDate: "2024-01-15",
@@ -60,6 +137,30 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     assert.equal(dxmPublishState, "delete");
     assert.deepEqual(unchangedProjection, priorProjection);
     assert.deepEqual((await query('SELECT "dxmPublishState" FROM "SellfoxListingSnapshot" ORDER BY id')).rows.map(row => row.dxmPublishState), ["delete", "delete", "delete", "delete"]);
+    await query(await readFile(dimensionMigrationPath, "utf8"));
+    const dimensionColumns = (await query(`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='sellfox_listing_current' ORDER BY ordinal_position`, [schema])).rows.map(r=>r.column_name);
+    assert.deepEqual(dimensionColumns, [...columns, "developer", "spu"]);
+    const { developer, spu, ...previousProjection } = (await query("SELECT * FROM sellfox_listing_current WHERE id='a'")).rows[0];
+    assert.equal(developer, " Primary "); assert.equal(spu, "SPU-SKU");
+    assert.deepEqual(previousProjection, projected);
+    assert.deepEqual((await query('SELECT developer,spu FROM "SellfoxListingSnapshot" ORDER BY id')).rows,
+      Array.from({ length: 4 }, () => ({ developer: " Primary ", spu: "SPU-SKU" })));
+    // Updates by old application code still project both dimensions in the same transaction.
+    // Exact legacy behavior: empty != whitespace; duplicate devIds use the first match,
+    // then first nonempty name (never the second matching devId just because it has a name).
+    for (const [data, expectedDeveloper, expectedSpu] of [
+      [{}, null, null],
+      [{ devList: {}, commodityName: "", commoditySku: "" }, null, null],
+      [{ devList: [null, {}, { devName: "" }, { devName: "First" }] }, "First", null],
+      [{ devId: "x", devList: [{ devId: "y", devName: "Fallback" }, { devId: "x", devName: "" }, { devId: "x", devName: "Later" }] }, "Fallback", null],
+      [{ devId: "missing", devList: [{ devName: "" }, { devName: "First" }, { devName: "Second" }], commodityName: "Name", commoditySku: "SKU" }, "First", "Name"],
+      [{ devId: "", devList: [{ devId: "x", devName: "First" }, { devId: "", devName: "Ignored" }], commoditySku: "SKU" }, "First", "SKU"],
+      [{ devList: [{ devName: " " }], commodityName: " " }, " ", " "],
+      [{ devList: null, commodityName: null, commoditySku: null }, null, null],
+    ] as const) {
+      await query('UPDATE "SellfoxListingSnapshot" SET payload=$1::jsonb WHERE id=\'history\'', [JSON.stringify(data)]);
+      assert.deepEqual((await query('SELECT developer,spu FROM "SellfoxListingSnapshot" WHERE id=\'history\'')).rows[0], { developer: expectedDeveloper, spu: expectedSpu });
+    }
     for (const [key,value] of Object.entries({ brand:"Brand",amazonBrand:"Amazon",rating:"4.5",ratingCount:0,firstSaleDate:"2024-01-15",bsrRank:null,bsrCategory:"Big",listingQuantity:48,unsellable:0,warehousing:null,purchaseCost:12.5,fbaFees:0,referralFee:2,totalFee:3,headTripCost:1.5,reservedQty:0,shippingPrice:2.5,profitPrice:-1.5,profitRate:-0.1,buyBoxWinner:"否",fulfillment:"AFN",productTags:"标签、完整" })) assert.equal(projected[key],value,key);
     assert.deepEqual(projected.productTagNames,["标签、完整"]);
     // Partial/history rows also backfilled, so publishing a resumed Head cannot expose holes.
@@ -99,6 +200,7 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     await insert("b","org","s","2026-10-26",{...payload,dxmPublishState:"future-state",brand:"Other",rating:"10",buyBoxWinner:true,bsrRank:[{rank:"2",categoryName:"First"},{rank:"3",bigCategory:true,categoryName:"Big"}]},null);
     await insert("c","org","s","2026-10-26",{dxmPublishState:{state:"delete"},rating:"bad",ratingCount:"1e9999",buyBoxWinner:"true",switchFulfillmentTo:"unknown",productLabelList:{},bsrRank:"bad",quantity:"NaN",profitPrice:"Infinity"});
     await query(`UPDATE "SellfoxListingSnapshot" SET status='delete' WHERE id='b'`);
+    await verifyReportListingProjection(query);
     const three = await read("sortBy=rating&sortOrder=asc");
     assert.deepEqual(three.rows.map(r=>r.id),["a","b","c"]);
     assert.equal(three.rows[1].dxmPublishState, "future-state");
@@ -119,6 +221,7 @@ export async function verifySellfoxListingReadModel(query: Query, before?: State
     await query('UPDATE "SellfoxListingSnapshot" SET payload=$1::jsonb WHERE id=\'a\'',[JSON.stringify({brand:"Changed",rating:0})]);
     const updated = (await read("brand=Changed")).rows[0];
     assert.equal(updated.dxmPublishState, null);
+    assert.deepEqual((await query("SELECT developer,spu FROM sellfox_listing_current WHERE id='a'")).rows[0], { developer: null, spu: null });
     assert.equal(updated.rating,"0"); assert.equal(updated.productTags,null); assert.equal(updated.bsrRank,null);
     // Complete Head remains the publication boundary; old/history/partial never leak.
     await query(`UPDATE "SellfoxSnapshotHead" SET "capturedAt"='2026-10-27' WHERE "storeId"='s'`);

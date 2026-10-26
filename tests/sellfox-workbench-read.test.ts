@@ -89,11 +89,11 @@ test("date backfill never invents dates, changes explicit/open-ended ranges or r
     { ...implicit, allDates: true }, { ...implicit, domain: "listings" as const },
   ]) assert.equal(backfillSellfoxViewDates(view, ["2026-10-16"]), view);
 });
-test("UI browse SQL binds scope and search text, filters after entity aggregation, and scopes listing payload reads", () => {
+test("UI browse SQL binds scope and search text, filters after entity aggregation, and scopes typed listing reads", () => {
   const query = sellfoxBrowseQuery(new URL('http://localhost/?from=2026-10-01&to=2026-10-07&search=%27%3BDROP%20TABLE&hideZero=1&dimension=asin'));
   const sql = workbenchReadSql("sales", query, { organizationId: "org-unique", workspaceId: "workspace-unique" });
   assert.ok(sql.values.includes("org-unique")); assert.ok(sql.values.includes("workspace-unique")); assert.ok(sql.values.includes("%';DROP TABLE%"));
-  assert.ok(!sql.text.includes("DROP TABLE")); assert.match(sql.text, /p\.payload->'devList'/); assert.match(sql.text, /p\.payload->>'commodityName'/);
+  assert.ok(!sql.text.includes("DROP TABLE")); assert.doesNotMatch(sql.text, /payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"/);
   assert.ok(sql.values.includes("org-unique"));
   assert.match(sql.text, /bool_and\(complete AND quantity IS NOT NULL\)/);
   assert.match(sql.text, /filtered AS \(SELECT \* FROM grouped WHERE true AND quantity IS DISTINCT FROM 0\)/);
@@ -150,9 +150,9 @@ test("developer and SPU use one primary-resolved Listing row per fact without ar
     assert.match(sql.text, /LEFT JOIN LATERAL \(SELECT candidate\.\*/);
     assert.match(sql.text, /s\.msku IS NOT NULL AND candidate\.msku=s\.msku/);
     assert.match(sql.text, /s\.asin IS NOT NULL AND candidate\.asin=s\.asin/);
-    assert.match(sql.text, /item\.value->>'devId'=p\.payload->>'devId'/);
-    assert.match(sql.text, /ORDER BY item\.ordinality LIMIT 1/);
-    assert.match(sql.text, /COALESCE\(NULLIF\(p\.payload->>'commodityName',''\),NULLIF\(p\.payload->>'commoditySku',''\),'未分配SPU'\)/);
+    assert.match(sql.text, /COALESCE\(l\.developer,'未分配开发员'\) AS developer/);
+    assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements|JOIN "SellfoxListingSnapshot"/);
+    assert.match(sql.text, /COALESCE\(l\.spu,'未分配SPU'\) AS spu/);
     assert.match(sql.text, /FROM base GROUP BY identity,currency/);
     assert.doesNotMatch(sql.text, /GROUP BY "storeId",(?:identity|currency,identity)/);
     assert.match(sql.text, /CASE WHEN count\("storeId"\)=count\(\*\) AND count\(DISTINCT "storeId"\)=1 THEN min\("storeId"\) END AS "storeId"/);
@@ -1071,10 +1071,10 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
           const sql = workbenchReadSql(domain, query, scope, exporting);
           if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s.fulfillment=/); continue; }
           assert.ok(sql.values.includes(fulfillment));
-          assert.match(sql.text, /CASE WHEN p.payload->>'switchFulfillmentTo' IN \('AFN','MFN'\) THEN p.payload->>'switchFulfillmentTo' END AS fulfillment/);
+          assert.match(sql.text, /l.fulfillment/); assert.doesNotMatch(sql.text, /p\.payload|switchFulfillmentTo/);
           const base = sql.text.slice(sql.text.indexOf("base AS"), sql.text.indexOf(domain === "sales" ? "days AS" : "grouped AS"));
           assert.match(base, /WHERE [\s\S]* AND l.fulfillment=\$\d+\)/);
-          assert.match(sql.text, /p.id=l.id AND p\."organizationId"=[\s\S]*p\."workspaceId"=/);
+          assert.doesNotMatch(sql.text, /JOIN "SellfoxListingSnapshot"|p\.payload/);
           assert.ok(sql.values.includes(scope.organizationId) && sql.values.includes(scope.workspaceId));
           {
             assert.match(base, /candidate\."storeId"=s\."storeId"/);
@@ -1106,14 +1106,14 @@ test("Buy Box filters scoped current Listing boolean members before rollups, tot
         for (const exporting of [false, true]) {
           const sql = workbenchReadSql(domain, query, scope, exporting);
           if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s\."buyBoxWinner"=/); assert.ok(sql.values.includes(buyBox === "yes" ? "是" : "否")); continue; }
-          assert.match(sql.text, /CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN '是' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN '否' END AS "buyBoxWinner"/);
+          assert.match(sql.text, /l\."buyBoxWinner"/); assert.doesNotMatch(sql.text, /p\.payload/);
           assert.doesNotMatch(sql.text, /p.payload->>'buyBoxWinner'|buyBoxWinner[^,;]*::float/);
           const base = sql.text.slice(sql.text.indexOf("base AS"), sql.text.indexOf(domain === "sales" ? "days AS" : "grouped AS"));
           const parameter = base.match(/WHERE [\s\S]* AND l\."buyBoxWinner"=\$(\d+)/);
           assert.ok(parameter);
           assert.equal(sql.values[Number(parameter[1]) - 1], buyBox === "yes" ? "是" : "否");
           assert.match(base, /AND l.fulfillment=/); assert.match(base, /AND l\."matchesProductTag"/);
-          assert.match(sql.text, /p.id=l.id AND p\."organizationId"=[\s\S]*p\."workspaceId"=/);
+          assert.doesNotMatch(sql.text, /JOIN "SellfoxListingSnapshot"|p\.payload/);
           assert.match(sql.text, /WHERE l\."organizationId"=[\s\S]*l\."workspaceId"=/);
           assert.ok(sql.values.includes(scope.organizationId) && sql.values.includes(scope.workspaceId));
           {
@@ -1141,7 +1141,7 @@ test("untagged sales and performance browse keep label expansion out of the main
     const sql = workbenchReadSql(domain, query, scope);
     const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
     assert.doesNotMatch(listing, /productLabelList|labelDetailList|productTag|product_labels/);
-    assert.doesNotMatch(sql.text, /productTagNames|product_labels|unnest|array_to_string/);
+    assert.match(sql.text, /unnest\(l\."productTagNames"\)/); assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements/);
     assert.match(sql.text, /jsonb_build_object\('productTags',[\s\S]*SELECT DISTINCT tag\."labelName" FROM sellfox_listing_current l/);
     assert.doesNotMatch(workbenchReadSql(domain, query, scope, true).text, /productLabelList|AS facets/);
   }
@@ -1158,11 +1158,9 @@ test("productTag exact membership filters current Listing members before aggrega
           if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s\."productTagNames" @> ARRAY\[/); assert.ok(sql.values.includes(tag)); continue; }
           const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
           const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf(domain === "sales" ? "days AS (" : "grouped AS ("));
-          assert.match(listing, /EXISTS \(SELECT 1 FROM jsonb_array_elements\(CASE WHEN jsonb_typeof\(p\.payload->'productLabelList'\)='array'/);
-          assert.match(listing, /AND btrim\(label\.value->>'labelName'\)=\$\d+\) AS "matchesProductTag"/);
-          assert.match(listing, /WHERE NULLIF\(btrim\(label\.value->>'labelName'\),''\) IS NOT NULL/);
+          assert.match(listing, /l\."productTagNames" @> ARRAY\[\$\d+\]::text\[\] AS "matchesProductTag"/);
           assert.match(base, /AND l\."matchesProductTag"\)/);
-          assert.doesNotMatch(sql.text, /productTagNames|unnest|product_labels/);
+          assert.doesNotMatch(sql.text, /p\.payload|jsonb_array_elements|product_labels/);
           assert.ok(sql.values.includes(tag));
           assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
           assert.ok(!sql.values.includes(`%${tag}%`));
@@ -1178,11 +1176,10 @@ test("productTag exact membership filters current Listing members before aggrega
           else {
             const facets = sql.text.slice(sql.text.indexOf("jsonb_build_object('productTags'"));
             assert.match(facets, /SELECT DISTINCT tag\."labelName" FROM sellfox_listing_current l/);
-            assert.match(facets, /JOIN "SellfoxListingSnapshot" p ON p.id=l.id AND p\."organizationId"=\$\d+ AND p\."workspaceId"=\$\d+/);
+            assert.doesNotMatch(facets, /payload|JOIN "SellfoxListingSnapshot"/);
             assert.match(facets, /st\."organizationId"=\$\d+ AND st\."workspaceId"=\$\d+/);
             assert.match(facets, /WHERE l\."organizationId"=\$\d+ AND l\."workspaceId"=\$\d+/);
-            assert.match(facets, /CROSS JOIN LATERAL \(SELECT btrim\(label\.value->>'labelName'\) AS "labelName"/);
-            assert.match(facets, /NULLIF\(btrim\(label\.value->>'labelName'\),''\) IS NOT NULL/);
+            assert.match(facets, /CROSS JOIN LATERAL unnest\(l\."productTagNames"\) tag\("labelName"\)/);
             assert.match(facets, /ORDER BY tag\."labelName"/);
             assert.match(facets, /st\."externalId" IN/); assert.match(facets, /st.marketplace=/);
             assert.doesNotMatch(facets, /tag\."labelName"=|ILIKE|FROM listing l|matchesProductTag|status|fulfillment/);
@@ -1207,7 +1204,7 @@ test("brand exact match filters selected Listing members before rollup with inde
           if (domain === "listings") { assertListingProjection(sql.text); assert.match(sql.text, /s.brand=/); assert.ok(sql.values.includes(brand)); continue; }
           const listing = sql.text.slice(0, sql.text.indexOf("base AS ("));
           const base = sql.text.slice(sql.text.indexOf("base AS ("), sql.text.indexOf(domain === "sales" ? "days AS (" : "grouped AS ("));
-          assert.match(listing, /NULLIF\(btrim\(p.payload->>'brand'\),''\) AS brand/);
+          assert.match(listing, /l.brand/); assert.doesNotMatch(listing, /payload|JOIN "SellfoxListingSnapshot"/);
           const parameter = base.match(/AND l.brand=\$(\d+)/);
           assert.ok(parameter); assert.equal(sql.values[Number(parameter[1]) - 1], brand);
           if (["sales", "performance"].includes(domain)) assert.doesNotMatch(sql.text, /amazonBrand/);
@@ -1225,13 +1222,13 @@ test("brand exact match filters selected Listing members before rollup with inde
           else {
             const facets = sql.text.slice(sql.text.indexOf("jsonb_build_object('productTags'"));
             assert.match(facets, /SELECT DISTINCT tag\."labelName"/);
-            assert.match(facets, /'brands', ARRAY\(SELECT DISTINCT btrim\(p.payload->>'brand'\) AS brand FROM sellfox_listing_current l/);
+            assert.match(facets, /'brands', ARRAY\(SELECT DISTINCT l.brand FROM sellfox_listing_current l/);
             const brands = facets.slice(facets.indexOf("'brands'"));
-            assert.match(brands, /JOIN "SellfoxListingSnapshot" p ON p.id=l.id AND p\."organizationId"=\$\d+ AND p\."workspaceId"=\$\d+/);
+            assert.doesNotMatch(brands, /payload|JOIN "SellfoxListingSnapshot"/);
             assert.match(brands, /JOIN "SellfoxStore" st ON st.id=l\."storeId" AND st\."organizationId"=\$\d+ AND st\."workspaceId"=\$\d+/);
             assert.match(brands, /WHERE l\."organizationId"=\$\d+ AND l\."workspaceId"=\$\d+/);
             assert.match(brands, /st\."externalId" IN/); assert.match(brands, /st.marketplace=/); assert.match(brands, /l\."storeId"=/);
-            assert.match(brands, /NULLIF\(btrim\(p.payload->>'brand'\),''\) IS NOT NULL ORDER BY 1/);
+            assert.match(brands, /l.brand IS NOT NULL ORDER BY 1/);
             assert.doesNotMatch(facets, /l.brand=|matchesProductTag|ILIKE|status|fulfillment|buyBoxWinner|FROM listing l/);
           }
         }

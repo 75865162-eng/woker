@@ -108,8 +108,7 @@ test("agent rows, pagination counts and long-table export honor current Listing 
             assert.ok(sql.values.includes(fulfillment));
             continue;
           }
-          assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
-          assert.match(sql.text, /p\."organizationId"=[\s\S]*p\."workspaceId"=/);
+          assert.match(sql.text, /FROM sellfox_listing_current candidate/); assert.doesNotMatch(sql.text, /payload|JOIN "SellfoxListingSnapshot"/);
           assert.match(sql.text, /candidate\."organizationId"=[\s\S]*candidate\."workspaceId"=/);
           assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
           assert.match(sql.text, /LIMIT 1\)=\$\d+/);
@@ -140,14 +139,13 @@ test("agent Buy Box rows, counts and export match only real booleans on the chos
             assert.ok(sql.values.includes(buyBox === "yes" ? "是" : "否"));
             continue;
           }
-          assert.match(sql.text, /SELECT CASE WHEN p.payload->'buyBoxWinner' = 'true'::jsonb THEN 'yes' WHEN p.payload->'buyBoxWinner' = 'false'::jsonb THEN 'no' END/);
+          assert.match(sql.text, /SELECT candidate\."buyBoxWinner"/);
           assert.doesNotMatch(sql.text, /p.payload->>'buyBoxWinner'/);
-          assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
-          assert.match(sql.text, /p\."organizationId"=[\s\S]*p\."workspaceId"=/);
+          assert.match(sql.text, /FROM sellfox_listing_current candidate/); assert.doesNotMatch(sql.text, /payload|JOIN "SellfoxListingSnapshot"/);
           assert.match(sql.text, /candidate\."organizationId"=[\s\S]*candidate\."workspaceId"=/);
           assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
           const parameter = sql.text.match(/ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\)=\$(\d+)/);
-          assert.ok(parameter); assert.equal(sql.values[Number(parameter[1]) - 1], buyBox);
+          assert.ok(parameter); assert.equal(sql.values[Number(parameter[1]) - 1], buyBox === "yes" ? "是" : "否");
           assert.ok(sql.values.includes("org") && sql.values.includes("ws"));
           assert.match(sql.text, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);
         }
@@ -184,9 +182,8 @@ test("agent brand matches the selected scoped current Listing after MSKU-first/A
             assert.ok(sql.values.includes(brand));
             continue;
           }
-          assert.match(sql.text, /SELECT btrim\(p.payload->>'brand'\)/);
-          assert.match(sql.text, /FROM sellfox_listing_current candidate JOIN "SellfoxListingSnapshot" p ON p.id=candidate.id/);
-          assert.match(sql.text, /p\."organizationId"=\$\d+ AND p\."workspaceId"=\$\d+/);
+          assert.match(sql.text, /SELECT candidate.brand/);
+          assert.match(sql.text, /FROM sellfox_listing_current candidate/); assert.doesNotMatch(sql.text, /payload|JOIN "SellfoxListingSnapshot"/);
           assert.match(sql.text, /candidate\."organizationId"=\$\d+ AND candidate\."workspaceId"=\$\d+/);
           assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
           const parameter = sql.text.match(/ORDER BY CASE WHEN s.msku IS NOT NULL AND candidate.msku=s.msku THEN 0 ELSE 1 END,candidate.msku NULLS LAST,candidate.asin,candidate.id LIMIT 1\)=\$(\d+)/);
@@ -230,8 +227,8 @@ test("agent productTag membership uses the selected scoped Listing before matchi
             assert.ok(sql.values.includes(query.productTag));
             continue;
           }
-        assert.match(sql.text, /EXISTS \(SELECT 1 FROM unnest\(\(SELECT ARRAY\(SELECT DISTINCT btrim\(label.value->>'labelName'\)/);
-        assert.match(sql.text, /LIMIT 1\)\) tag\("labelName"\)\s+WHERE tag\."labelName"=\$\d+/);
+        assert.match(sql.text, /SELECT candidate\."productTagNames"/); assert.doesNotMatch(sql.text, /payload|JOIN "SellfoxListingSnapshot"/);
+        assert.match(sql.text, /LIMIT 1\) @> ARRAY\[\$\d+\]::text\[\]/);
         assert.match(sql.text, /candidate\."storeId"=s\."storeId"/);
         assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
         assert.ok(sql.values.includes(query.productTag)); assert.ok(!sql.values.includes(`%${query.productTag}%`));
