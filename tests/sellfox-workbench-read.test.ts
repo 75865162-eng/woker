@@ -388,6 +388,32 @@ test("listings expose brand and rating from the scoped current Listing snapshot"
   assert.equal(visibleColumnCsv([brand, rating], [{ brand: "Acme", rating: "4.4" }]).trim(), '"品牌","星级"\r\n"Acme","4.4"');
 });
 
+test("listings expose optional numeric ratingCount from the current snapshot without losing null or zero", () => {
+  const query = sellfoxBrowseQuery(new URL("http://localhost/"));
+  const scope = { organizationId: "org", workspaceId: "ws" };
+  const sql = workbenchReadSql("listings", query, scope);
+  assert.match(sql.text, /NULLIF\(p\.payload->>'ratingCount',''\)::float AS "ratingCount"/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",/);
+  const config = visibleColumns("listings", ["ratingCount"]);
+  assert.equal(config.length, 1);
+  assert.equal(config[0].labelZh, "评论数");
+  assert.equal(config[0].unavailable, undefined);
+  assert.equal(config[0].numeric, true);
+  assert.equal(config[0].defaultVisible, false);
+  assert.equal(config[0].requiresField, "Listing 当前快照 payload.ratingCount");
+  assert.ok(!defaultVisibleColumnKeys("listings").includes("ratingCount"));
+  assert.deepEqual(visibleColumns("listings", ["rating", "ratingCount", "productTags"]).map(c => c.key), ["rating", "ratingCount", "productTags"]);
+  assert.equal(sellfoxColumnValue(config[0], { ratingCount: null }), null);
+  assert.equal(sellfoxColumnValue(config[0], { ratingCount: 0 }), 0);
+  assert.equal(sellfoxColumnValue(config[0], { ratingCount: 128 }), 128);
+  assert.equal(visibleColumnCsv(config, [{ ratingCount: null }, { ratingCount: 0 }, { ratingCount: 128 }]).trim(), '"评论数"\r\n""\r\n0\r\n128');
+  assert.ok(visibleColumns("ads", ["rating"])[0].unavailable);
+  assert.deepEqual(visibleColumns("ads", ["ratingCount"]), []);
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    assert.doesNotMatch(workbenchReadSql(domain, query, scope).text, /ratingCount/);
+  }
+});
+
 test("listings flatten current productLabelList into an optional productTags column and CSV", () => {
   const query = sellfoxBrowseQuery(new URL("http://localhost/"));
   const scope = { organizationId: "org", workspaceId: "ws" };
@@ -397,7 +423,7 @@ test("listings flatten current productLabelList into an optional productTags col
   assert.match(sql.text, /string_agg\(DISTINCT NULLIF\(btrim\(label\.value->>'labelName'\),''\),/);
   assert.match(sql.text, /'、' ORDER BY NULLIF\(btrim\(label\.value->>'labelName'\),''\)\)/);
   assert.match(sql.text, /AS "productTags"/);
-  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."productTags",/);
+  assert.match(sql.text, /l\.fulfillment,l\.brand,l\.rating,l\."ratingCount",l\."productTags",/);
   assert.match(sql.text, /p\.id=l\.id AND p\."organizationId"=/);
   const config = visibleColumns("listings", ["productTags"]);
   assert.equal(config.length, 1);
