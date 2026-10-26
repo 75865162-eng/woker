@@ -1265,6 +1265,56 @@ test("listings reservedQty min/max browse and export use typed reservedQty SQL a
   }
 });
 
+test("listings unsellable min/max browse and export use typed unsellable SQL and reject bad bounds", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
+  delete process.env.DATABASE_URL; process.env.AUTH_DRIVER = "local";
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = {
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
+    $queryRaw: async (sql: Prisma.Sql) => {
+      calls.push(sql);
+      return sql.text.startsWith("WITH") ? [{ rows: [], total: 0, totals: [], facets: {} }] : sql.text.startsWith("SELECT count") ? [{ total: 0 }] : [];
+    },
+  } as unknown as PrismaClient;
+  try {
+    const session = await createLocalSession({ id: "actor", organizationId: "org", organizationName: "Fixture", role: "owner", email: "actor@example.test", name: "Actor" });
+    const context = { params: Promise.resolve({ domain: "listings" }) };
+    for (const range of ["unsellableMin=0", "unsellableMax=100", "unsellableMin=1.5&unsellableMax=48"]) {
+      for (const layout of ["", "&layout=workbench"]) {
+        for (const format of ["browse", "csv", "agent"] as const) {
+          calls.length = 0;
+          const params = new URLSearchParams(`${range}${layout}${format === "agent" ? "&agent=1" : format === "csv" ? "&format=csv" : ""}`);
+          const request = new Request(`http://localhost/api/sellfox/listings?${params}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } });
+          const response = await (format === "browse" ? browse : csv)(request, context);
+          assert.equal(response.status, 200);
+          assert.ok(calls.length >= 1);
+          const listingSql = calls.filter(sql => /sellfox_listing_current/.test(sql.text) && !sql.text.startsWith('SELECT "storeId",msku'));
+          assert.ok(listingSql.length >= 1);
+          for (const sql of listingSql) {
+            assert.match(sql.text, /s\."unsellable" IS NOT NULL/);
+            for (const [key, pattern] of [["unsellableMin", /s\."unsellable">=\$(\d+)/], ["unsellableMax", /s\."unsellable"<=\$(\d+)/]] as const) {
+              const match = sql.text.match(pattern);
+              if (params.has(key)) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], Number(params.get(key))); }
+              else assert.equal(match, null);
+            }
+          }
+        }
+      }
+    }
+    for (const range of ["unsellableMin=1e2", "unsellableMax=abc", "unsellableMin=10&unsellableMax=1"]) {
+      for (const handler of [browse, csv]) {
+        calls.length = 0;
+        const response = await handler(new Request(`http://localhost/api/sellfox/listings?${range}`, { headers: { "x-workspace-id": "ws", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` } }), context);
+        assert.equal(response.status, 400); assert.equal(calls.length, 0);
+      }
+    }
+  } finally {
+    globals.prisma = previous;
+    for (const [key, value] of Object.entries(env)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
 test("ads rating min/max routes six-tab browse and CSV/XLSX through workbench while Agent exports ignore it", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };

@@ -357,6 +357,11 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
     if (query.reservedQtyMin != null) clauses.push(Prisma.sql`s."reservedQty">=${query.reservedQtyMin}`);
     if (query.reservedQtyMax != null) clauses.push(Prisma.sql`s."reservedQty"<=${query.reservedQtyMax}`);
   }
+  if (domain === "listings" && (query.unsellableMin != null || query.unsellableMax != null)) {
+    clauses.push(Prisma.sql`s."unsellable" IS NOT NULL`);
+    if (query.unsellableMin != null) clauses.push(Prisma.sql`s."unsellable">=${query.unsellableMin}`);
+    if (query.unsellableMax != null) clauses.push(Prisma.sql`s."unsellable"<=${query.unsellableMax}`);
+  }
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);
   if (query.site) clauses.push(Prisma.sql`marketplace=${query.site}`);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);

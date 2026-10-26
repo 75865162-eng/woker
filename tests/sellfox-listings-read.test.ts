@@ -257,6 +257,36 @@ test("reservedQty min/max filter typed column on listing_current; facets stay sc
   }
 });
 
+test("unsellable min/max filter typed column on listing_current; facets stay scope-only", () => {
+  for (const exporting of [false, true]) {
+    for (const range of ["", "unsellableMin=0", "unsellableMax=10000", "unsellableMin=1&unsellableMax=5000"]) {
+      const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}&shopExternalId=shop&site=US`), "listings");
+      const sql = workbenchReadSql("listings", query, scope, exporting);
+      const hasRange = query.unsellableMin != null || query.unsellableMax != null;
+      if (hasRange) {
+        assert.match(sql.text, /s\."unsellable" IS NOT NULL/);
+        for (const [value, pattern] of [[query.unsellableMin, /s\."unsellable">=\$(\d+)/], [query.unsellableMax, /s\."unsellable"<=\$(\d+)/]] as const) {
+          const match = sql.text.match(pattern);
+          if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+          else assert.equal(match, null);
+        }
+      } else {
+        assert.doesNotMatch(sql.text, /s\."unsellable" IS NOT NULL|s\."unsellable">=|s\."unsellable"<=/);
+      }
+      if (!exporting) {
+        const facets = sql.text.slice(sql.text.indexOf("facet_source AS MATERIALIZED"), sql.text.indexOf("SELECT (SELECT COALESCE"));
+        assert.doesNotMatch(facets, /unsellable/);
+        for (const pattern of [/s\."organizationId"=/, /s\."workspaceId"=/, /s\."shopExternalId" IN/, /s\.marketplace=/]) assert.match(facets, pattern);
+      }
+    }
+  }
+  for (const domain of ["sales", "performance", "ads_report"] as const) {
+    const query = sellfoxBrowseQuery(new URL("http://localhost/?unsellableMin=1&unsellableMax=9"), domain);
+    const sql = workbenchReadSql(domain, query, scope, false);
+    assert.doesNotMatch(sql.text, /s\."unsellable" IS NOT NULL|unsellableMin/);
+  }
+});
+
 test("listings bsrCategory is a bound exact predicate; DISTINCT facets remain scope-only and exclude NULL", () => {
   for (const exporting of [false, true]) for (const value of [undefined, "", "   ", "Baby", "Musical Instruments", "%' OR TRUE--"]) {
     const query = sellfoxBrowseQuery(new URL(`http://localhost/?${new URLSearchParams({ ...(value === undefined ? {} : { bsrCategory: value }), brand: "Brand", productTag: "标签", from: "2024-01-15", search: "sku", status: "active", shopExternalId: "shop", site: "US" })}`), "listings");
