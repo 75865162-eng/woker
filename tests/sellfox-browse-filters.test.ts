@@ -29,7 +29,7 @@ test("ads fulfillment selects all/AFN/MFN across six tabs and resets without unl
         nodes.find(node => node.type === "button" && node.props.children === "重置")!.props.onClick!();
         assert.equal(patches.at(-1)?.fulfillment, "");
         for (const label of ["运营状态", "服务状态", "广告策略"]) assert.ok(nodes.find(node => node.props["aria-label"] === `${label}（未同步）`)?.props.disabled);
-        for (const label of ["Buy Box", "业务员"]) assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === label), false);
+        assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === "业务员"), false);
       }
     }
   } finally { if (previous === undefined) delete globals.React; else globals.React = previous; }
@@ -39,10 +39,14 @@ test("Buy Box selects yes/no or all beside fulfillment and reset clears it only 
   const globals = globalThis as unknown as { React?: typeof React }, previous = globals.React;
   globals.React = React;
   try {
-    for (const domain of ["sales", "performance", "listings"] as const) {
+    const views: SellfoxView[] = [
+      ...(["sales", "performance", "listings"] as const).map(domain => ({ ...defaultSellfoxView, domain })),
+      ...(["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"] as const).map(adsTab => ({ ...defaultSellfoxView, domain: "ads" as const, adsTab })),
+    ];
+    for (const view of views) {
       for (const buyBox of ["", "yes", "no"] as const) {
         const patches: Partial<SellfoxView>[] = [];
-        const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain, buyBox }, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
+        const nodes = elements(SellfoxBrowseFilters({ view: { ...view, buyBox }, stores: [], onChange: patch => patches.push(patch), onColumns: () => {} }));
         const selects = nodes.filter(node => node.type === "select");
         const select = selects.find(node => node.props["aria-label"] === "Buy Box")!;
         assert.ok(select); assert.ok(!select.props.disabled); assert.equal(select.props.value, buyBox);
@@ -58,7 +62,7 @@ test("Buy Box selects yes/no or all beside fulfillment and reset clears it only 
         assert.equal(patches.at(-1)?.fulfillment, "");
       }
     }
-    for (const domain of ["overview", "stores", "inventory", "ads", "runs"] as const) {
+    for (const domain of ["overview", "stores", "inventory", "runs"] as const) {
       const nodes = elements(SellfoxBrowseFilters({ view: { ...defaultSellfoxView, domain, buyBox: "yes" }, stores: [], onChange: () => {}, onColumns: () => {} }));
       assert.equal(nodes.some(node => node.props["aria-label"] === "Buy Box"), false);
     }
@@ -162,7 +166,7 @@ test("ads tabs enable all six daily reports with distinct columns and explain de
       if (adsTab === "placement") assert.ok(labels.includes("显示广告位列"));
       assert.ok(nodes.some(node => node.type === "select" && node.props["aria-label"] === "产品标签" && !node.props.disabled));
       assert.ok(nodes.some(node => node.type === "select" && node.props["aria-label"] === "品牌" && !node.props.disabled));
-      assert.equal(nodes.some(node => node.type === "select" && node.props["aria-label"] === "Buy Box"), false);
+      assert.ok(nodes.some(node => node.type === "select" && node.props["aria-label"] === "Buy Box" && !node.props.disabled));
       const search = nodes.find(node => node.type === "select" && node.props["aria-label"] === "搜索类型")!;
       const options = elements(search.props.children).map(node => node.props.value);
       assert.equal(options.includes("adGroupId"), adsTab !== "campaign");

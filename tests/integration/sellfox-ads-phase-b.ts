@@ -105,6 +105,22 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
       // The same facts always remain in 全部, including NULL/unknown/unmatched members.
       assert.equal((await readResult()).totals[0].cost, 5);
     };
+    const buyBoxCosts = async (yes: number | null, no: number | null, extra = "") => {
+      for (const exporting of [false, true]) {
+        for (const [buyBox, cost] of [["yes", yes], ["no", no]] as const) {
+          const result = await readResult(`buyBox=${buyBox}&${extra}`, exporting);
+          assert.equal(result.total, cost === null ? 0 : 1, `${domain}/buyBox=${buyBox}/${exporting}/${extra}`);
+          assert.equal(result.rows.length, cost === null ? 0 : 1);
+          if (cost !== null) {
+            assert.equal(result.rows[0].cost, cost); assert.equal(result.totals[0].cost, cost);
+            assert.equal(result.rows[0].buyBoxWinner, buyBox === "yes" ? "是" : "否");
+          } else assert.deepEqual(result.totals, []);
+          if (exporting) assert.equal(result.facets, undefined);
+          else assert.deepEqual(Object.keys(result.facets!).sort(), ["brands", "productTags"]);
+        }
+      }
+      assert.equal((await readResult("buyBox=")).totals[0].cost, 5);
+    };
     const brandCost = async (brand: string, cost: number | null, extra = "") => {
       for (const exporting of [false, true]) {
         const result = await readResult(`${new URLSearchParams({ brand: ` ${brand} ` })}&${extra}`, exporting);
@@ -121,9 +137,13 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     // Missing product identity on campaign/placement stays NULL-safe.
     assert.deepEqual(fields(await read()), [null, null, null, null, null, null, null]);
     await fulfillmentCosts(null, null);
+    await buyBoxCosts(null, null);
     await brandCost("品牌", null); // No identity/Listing does not match a selected brand.
     assert.equal((await readResult("productTag=新品")).total, 0);
     await query(`UPDATE "${model}" SET msku='exact',asin='ASIN' WHERE id IN ('a','b')`);
+    await buyBoxCosts(5, null);
+    await buyBoxCosts(5, null, "brand=品牌&productTag=新品&fulfillment=AFN");
+    await buyBoxCosts(null, null, "brand=其他品牌&productTag=新品&fulfillment=AFN");
     await fulfillmentCosts(5, null); // MSKU wins over the MFN ASIN sibling; no join fan-out.
     await brandCost("品牌", 5);
     await brandCost("品牌", 5, "productTag=新品&fulfillment=AFN");
@@ -135,10 +155,12 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     for (const scope of [{ organizationId: "foreign", workspaceId: "ws" }, { organizationId: "org", workspaceId: "foreign" }]) {
       assert.equal((await readResult("fulfillment=AFN", false, scope)).total, 0);
       assert.equal((await readResult("brand=foreign", false, scope)).total, 0);
+      for (const buyBox of ["yes", "no"]) assert.equal((await readResult(`buyBox=${buyBox}`, false, scope)).total, 0);
     }
     for (const params of ["storeId=other", "shopExternalId=other-shop", "site=CA", "storeId=f"]) {
       assert.equal((await readResult(`fulfillment=AFN&${params}`)).total, 0);
       assert.equal((await readResult(`brand=品牌&${params}`)).total, 0);
+      for (const buyBox of ["yes", "no"]) assert.equal((await readResult(`buyBox=${buyBox}&${params}`)).total, 0);
     }
     for (const exporting of [false, true]) assert.deepEqual(fields(await read(exporting, "buyBoxWinner")), ["https://example.test/exact.jpg", "4.4", "新品、重点", 128, "品牌", "AFN", "是"]);
     for (const exporting of [false, true]) {
@@ -152,7 +174,7 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
       }
     }
     // Facets follow current Listing org/workspace/store/site scope, independent of selections/search/date/adType.
-    const scopedFacets = await readResult("brand=missing&productTag=新品&fulfillment=MFN&search=impossible&shopExternalId=shop&site=US&adType=sb&from=2020-01-01&to=2020-01-01");
+    const scopedFacets = await readResult("buyBox=no&brand=missing&productTag=新品&fulfillment=MFN&search=impossible&shopExternalId=shop&site=US&adType=sb&from=2020-01-01&to=2020-01-01");
     assert.equal(scopedFacets.total, 0);
     assert.deepEqual(Object.keys(scopedFacets.facets!).sort(), ["brands", "productTags"]);
     assert.deepEqual(scopedFacets.facets!.brands, ["00123", "品牌", "其他品牌"].sort());
@@ -169,6 +191,12 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     // ASIN fallback chooses aaa; conflicting Listing metadata must not pick an arbitrary min.
     await query(`UPDATE "${model}" SET msku='absent' WHERE id='b'`);
     assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null, null, null, null]);
+    // All shows a conflict as NULL; yes/no select the matching member before rollup.
+    await buyBoxCosts(2, 3);
+    await buyBoxCosts(2, null, "brand=品牌&productTag=新品&fulfillment=AFN");
+    await buyBoxCosts(null, 3, "brand=其他品牌&productTag=其他&fulfillment=MFN");
+    assert.equal((await readResult("buyBox=no&pageSize=1&page=2")).rows.length, 0);
+    assert.equal((await readResult("buyBox=no&pageSize=1&page=2")).totals[0].cost, 3);
     await fulfillmentCosts(2, 3); // ASIN fallback is MFN; filter members before entity/totals rollup.
     await brandCost("品牌", 2);
     await brandCost("其他品牌", 3);
@@ -181,17 +209,20 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     assert.equal(fallback.rows[0].cost, 3); assert.equal(fallback.totals[0].cost, 3);
     await query(`UPDATE "${model}" SET asin=NULL WHERE id='b'`);
     assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null, null, null, null]);
+    await buyBoxCosts(2, null);
     await fulfillmentCosts(2, null);
     await brandCost("品牌", 2); await brandCost("其他品牌", null);
     await query(`UPDATE "${model}" SET msku=NULL,asin=NULL WHERE id='a'`);
     assert.deepEqual(fields(await read()), [null, null, null, null, null, null, null]);
     await fulfillmentCosts(null, null);
     await brandCost("品牌", null);
-    // Identities present only in another org/workspace/store must not supply fulfillment.
+    await buyBoxCosts(null, null);
+    // Identities present only in another org/workspace/store must not supply metadata.
     await query(`UPDATE sellfox_listing_current SET msku='isolated',asin='ISOLATED',fulfillment='AFN'
       WHERE id IN ('foreign-org','foreign-ws','foreign-store','other-store')`);
     await query(`UPDATE "${model}" SET msku='isolated',asin='ISOLATED' WHERE id IN ('a','b')`);
     await fulfillmentCosts(null, null);
+    await buyBoxCosts(null, null);
     await brandCost("foreign", null); await brandCost("其他店品牌", null);
     await query(`UPDATE sellfox_listing_current SET msku='exact',asin='ASIN',fulfillment='未知'
       WHERE id IN ('foreign-org','foreign-ws','foreign-store','other-store')`);
@@ -205,6 +236,7 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     await query(`UPDATE "${model}" SET msku='absent' WHERE id='b'`);
     const missing = await read();
     assert.deepEqual([missing.ratingCount, missing.brand, missing.fulfillment, missing.buyBoxWinner], [null, null, null, null]);
+    await buyBoxCosts(2, null);
     await fulfillmentCosts(2, null);
     await brandCost("品牌", 2); await brandCost("其他品牌", null); // NULL brand cannot join a selected subset.
     await query(`UPDATE "${model}" SET msku='exact' WHERE id='b'`);
@@ -214,6 +246,7 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     await query(`UPDATE sellfox_listing_current SET brand='00123',fulfillment='未知',"buyBoxWinner"='否' WHERE id='exact'`);
     const text = await read(true);
     assert.deepEqual([text.brand, text.fulfillment, text.buyBoxWinner], ["00123", "未知", "否"]);
+    await buyBoxCosts(null, 5);
     await brandCost("00123", 5); await brandCost("123", null);
     await query(`UPDATE sellfox_listing_current SET brand='',fulfillment='' WHERE id='exact'`);
     const empty = await read();
@@ -225,6 +258,12 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
     for (const value of [null, "", "未知", "afn", "AFN "]) {
       await query(`UPDATE sellfox_listing_current SET fulfillment=$1 WHERE id='exact'`, [value]);
       await fulfillmentCosts(null, null); // Exact typed comparison; no coercion to AFN/MFN.
+    }
+    // Chosen MSKU with NULL/conflict-as-NULL/unknown must not borrow the ASIN sibling's answer.
+    await query(`UPDATE sellfox_listing_current SET "buyBoxWinner"='是' WHERE id='sibling'`);
+    for (const value of [null, "", "未知", "true", "false", "yes", "no", "是 "]) {
+      await query(`UPDATE sellfox_listing_current SET "buyBoxWinner"=$1 WHERE id='exact'`, [value]);
+      await buyBoxCosts(null, null);
     }
     await query(`UPDATE sellfox_listing_current SET "buyBoxWinner"=CASE WHEN id='exact' THEN '是' ELSE '否' END,brand=CASE WHEN id='exact' THEN '品牌' ELSE '其他品牌' END,fulfillment=CASE WHEN id='exact' THEN 'AFN' ELSE 'MFN' END WHERE id IN ('exact','sibling')`);
     await query(`UPDATE sellfox_listing_current SET "ratingCount"=CASE WHEN id='exact' THEN 128 ELSE 7 END WHERE id IN ('exact','sibling')`);
@@ -241,7 +280,7 @@ if (process.argv[1]?.endsWith("sellfox-ads-phase-b.ts")) {
     const db = new PGlite();
     try {
       await verifySellfoxAdsPhaseBSql(async (sql, values) => values?.length ? db.query(sql, values) : (await db.exec(sql)).at(-1)!);
-      console.log("PASS: ads Phase A/B and six-tab Listing metadata + exact brand/fulfillment/productTag filters/scoped facets (disposable PGlite)");
+      console.log("PASS: ads Phase A/B and six-tab Listing metadata + exact buyBox/brand/fulfillment/productTag filters/scoped facets (disposable PGlite)");
     } finally { await db.close(); }
   })().catch(error => { console.error(error); process.exitCode = 1; });
 }

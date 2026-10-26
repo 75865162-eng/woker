@@ -97,7 +97,12 @@ test("Buy Box accepts only yes/no and round trips URLs, requests and domain swit
       assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
       assert.equal(query(sellfoxViewParams(view, true).toString()).buyBox, buyBox);
       const switched = { ...view, domain: "ads" as const };
-      assert.equal(sellfoxViewParams(switched, true).has("buyBox"), false);
+      assert.equal(query(sellfoxViewParams(switched, true).toString()).buyBox, buyBox);
+      for (const adsTab of ["product", "targeting", "searchTerm", "campaign", "adGroup", "placement"] as const) {
+        const adsView = { ...switched, adsTab };
+        assert.deepEqual(readSellfoxView(sellfoxViewParams(adsView)), adsView);
+        assert.equal(query(sellfoxViewParams(adsView, true).toString()).buyBox, buyBox);
+      }
       const restored = { ...readSellfoxView(sellfoxViewParams(switched)), domain: view.domain };
       assert.equal(query(sellfoxViewParams(restored, true).toString()).buyBox, buyBox);
       assert.equal(sellfoxViewParams({ ...view, buyBox: "" }).has("buyBox"), false);
@@ -136,7 +141,8 @@ test("productTag trims arbitrary exact names and round trips UI, browse and expo
       assert.equal(sellfoxBrowseQuery(new URL(`http://localhost/?${params}`), sellfoxAdsResource(ads)).productTag, tag);
       assert.equal(params.get("fulfillment"), "AFN");
       assert.equal(params.get("brand"), "ignored");
-      for (const key of ["buyBox", "salesperson"]) assert.equal(params.has(key), false);
+      assert.equal(params.get("buyBox"), "yes");
+      assert.equal(params.has("salesperson"), false);
     }
   }
 });

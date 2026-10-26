@@ -71,7 +71,7 @@ export function workbenchReadSql(domain: WorkbenchDomain, query: SellfoxBrowseQu
   // Blank/unknown values remain in all, never in the AFN/MFN subsets.
   if (query.fulfillment && (ads || ["sales", "performance", "listings"].includes(domain))) filters.push(Prisma.sql`l.fulfillment=${query.fulfillment}`);
   // Current Listing Buy Box: blank/non-boolean values stay in all, never in yes/no subsets.
-  if (query.buyBox && ["sales", "performance", "listings"].includes(domain)) filters.push(Prisma.sql`l."buyBoxWinner"=${query.buyBox === "yes" ? "是" : "否"}`);
+  if (query.buyBox && (ads || ["sales", "performance", "listings"].includes(domain))) filters.push(Prisma.sql`l."buyBoxWinner"=${query.buyBox === "yes" ? "是" : "否"}`);
   // Test the chosen Listing, never prefilter candidates before the MSKU/ASIN LIMIT 1.
   if (needTagFilter) filters.push(Prisma.sql`l."matchesProductTag"`);
   if (query.brand && (ads || ["sales", "performance", "listings"].includes(domain))) filters.push(Prisma.sql`l.brand=${query.brand}`);

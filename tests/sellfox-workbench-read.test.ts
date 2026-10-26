@@ -636,7 +636,8 @@ test("ads expose optional current Listing image, rating, review count, tags, bra
       assert.match(sql.text, /l\."buyBoxWinner" AS "listingBuyBoxWinner"/);
       assert.match(sql.text, /CASE WHEN count\("listingBuyBoxWinner"\)=count\(\*\) AND count\(DISTINCT "listingBuyBoxWinner"\)=1 THEN min\("listingBuyBoxWinner"\) END AS "buyBoxWinner"/);
       assert.ok(sql.text.includes(`ORDER BY "${sortBy}" DESC NULLS LAST, id ASC`));
-      assert.doesNotMatch(sql.text, /payload|AND l\."buyBoxWinner"=/);
+      assert.doesNotMatch(sql.text, /payload/);
+      assert.match(sql.text, /AND l\."buyBoxWinner"=/); assert.ok(sql.values.includes("是"));
       assert.match(sql.text, /AND l.brand=/); assert.ok(sql.values.includes("00123"));
       assert.match(sql.text, /AND l.fulfillment=/); assert.ok(sql.values.includes("AFN"));
       assert.ok(sql.values.includes(scope.organizationId)); assert.ok(sql.values.includes(scope.workspaceId));
@@ -1179,8 +1180,8 @@ test("fulfillment uses scoped current Listing and filters members before sales/p
 
 test("Buy Box filters scoped current Listing boolean members before rollups, totals, pagination and export", () => {
   const scope = { organizationId: "org-buybox", workspaceId: "ws-buybox" };
-  for (const domain of ["sales", "performance", "listings"] as const) {
-    for (const dimension of ["asin", "parentAsin", "msku", "sku", "store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
+  for (const domain of ["sales", "performance", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    for (const dimension of domain.startsWith("ads_") ? ["asin"] : ["asin", "parentAsin", "msku", "sku", "store", "developer", ...(domain === "sales" ? ["spu"] : [])]) {
       for (const buyBox of ["yes", "no"] as const) {
         const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&buyBox=${buyBox}&from=2026-10-25&to=2026-10-25&onlySettle=1&fulfillment=AFN&productTag=tag`));
         for (const exporting of [false, true]) {
@@ -1209,9 +1210,6 @@ test("Buy Box filters scoped current Listing boolean members before rollups, tot
       assert.doesNotMatch(all.text, /AND l\."buyBoxWinner"=/);
     }
   }
-  const ads = workbenchReadSql("ads_report", sellfoxBrowseQuery(new URL("http://localhost/?buyBox=yes")), scope);
-  assert.doesNotMatch(ads.text, /AND l\."buyBoxWinner"=/);
-  assert.ok(!ads.values.includes("是"));
 });
 
 test("untagged sales and performance browse keep label expansion out of the main Listing CTE", () => {
@@ -1309,8 +1307,7 @@ test("brand exact match filters selected Listing members before rollup with inde
           assert.doesNotMatch(base.slice(base.indexOf(" WHERE ")), /amazonBrand/);
           assert.ok(!sql.values.includes(`%${brand}%`));
           assert.match(base, /l.fulfillment=/); assert.match(base, /l\."matchesProductTag"/);
-          if (domain.startsWith("ads_")) assert.doesNotMatch(base, /AND l\."buyBoxWinner"=/);
-          else assert.match(base, /l\."buyBoxWinner"=/);
+          assert.match(base, /l\."buyBoxWinner"=/);
           {
             const candidate = base.slice(base.indexOf("LEFT JOIN LATERAL"), base.indexOf("LIMIT 1) l ON TRUE"));
             assert.match(candidate, /candidate.msku=s.msku[\s\S]*candidate.asin=s.asin/);

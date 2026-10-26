@@ -1,20 +1,16 @@
 # Sellfox 广告子页：Phase A / B 已接入与剩余缺口
 
-> 2026-10-27 01:43:48 Asia/Shanghai · Owner: Chen Jieliang · **BOX LOCAL ONLY**：六个广告工作台页（`ads_report` / `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`）已解锁 `brand`「品牌」单选筛选（全部 + 动态品牌）及 `facets.brands`。基线 `48c259807ffeec1a3c41b3cb6cbe7e2eda826712` 的 productTag / fulfillment 筛选及 `facets.productTags` 保留；无 schema / 新 migration。
+> 2026-10-27 01:52:01 Asia/Shanghai · Owner: Chen Jieliang · **BOX LOCAL ONLY**：六个广告工作台页（`ads_report` / `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`）已解锁 `buyBox`「Buy Box」静态筛选，UI「全部 / 是 / 否」，参数 `"" / "yes" / "no"`。基线 `b6d3250e657bf03a4da22a6b3355d4fc161394ae` 的 productTag / fulfillment / brand 筛选及 productTags / brands facets 保留；无新 facets、schema 或 Prisma migration。
 >
-> 品牌与 sales/performance/listings 同口径：读取 Listing current typed `brand`，请求只 trim，保留 `00123` 等数字外观文本；SQL 用 `l.brand = query.brand` 精确等值，不做标签 containment、LIKE 或数值转换。沿既有 MSKU 优先 / ASIN 回退 / LIMIT 1 lateral join **先选 Listing，再筛选成员行，最后汇总广告实体与 KPI**；不预筛候选、不借其他 ASIN 子体品牌、不放大花费。空字符串、NULL、无商品身份或无匹配 Listing 不进入选定品牌子集；当前品牌不是报告日历史属性。
+> 与 sales/performance/listings 同口径：SQL 对 Listing current typed `buyBoxWinner` 文本精确匹配「是」/「否」，复用既有 MSKU 优先 / ASIN 回退 / LIMIT 1 lateral join；**先选 Listing，再筛成员，最后汇总实体/KPI**。NULL、空值、非布尔/未知文本、缺身份、无匹配和来源已归 NULL 的冲突只计入「全部」，不借其他 ASIN 子体答案、不放大花费。广告实体的未筛选成员答案冲突时列仍为 NULL；选择是/否后仅汇总匹配成员（fixture 的 cost 5 → 是 2 / 否 3），不拿汇总列做事后筛选。
 >
-> ads 同时返回 `facets.productTags` 与 `facets.brands`，仍无 salespersons。品牌沿用 sales 的 Listing facetFilters：当前组织/工作区/店铺/站点范围内 `DISTINCT l.brand`、排除 NULL、排序；忽略当前 brand/productTag/search/fulfillment 及广告日期/adType/quickFilter，空结果仍保留选项。不新增 facets endpoint；在原单次 SQL 中加入 brands 子查询，无新增网络往返。真实规模/P95 尚未 benchmark，不宣称性能收益。
+> UI/URL/请求、六子页切换、重置及 CSV/XLSX 贯通；仅带 `buyBox=`、无 layout/排序/选列也进入 workbench。支持 Buy Box + brand + productTag + fulfillment 联合筛选。显式 `agent=1` 导出保持原英文长表 SELECT/契约，不应用 ads Buy Box/品牌/标签/发货方式，Listing 属性排序守卫不变。sales/performance/listings 行为未改；enabled / serviceStatus / adStrategy / salesperson、广告组合 / 否定 / AMC 继续锁定。**Fee-mining remains paused**。
 >
-> UI/URL/请求、六子页切换和重置贯通；只带 `brand=`、无 layout/排序/选列的普通浏览及 CSV/XLSX 导出同样进入 workbench。支持 brand + productTag + fulfillment 联合筛选。productTag 继续用 typed `productTagNames` 精确成员匹配，发货方式继续「全部 / AFN / MFN」精确匹配，无发货方式 facets。显式 `agent=1` **导出**保持既有英文长表 SELECT/契约及排序守卫，不应用 ads brand/productTag/fulfillment；Listing 属性排序仍报错提示 workbench。
->
-> sales/performance/listings 行为、此前可选列保留。`enabled` / `serviceStatus` / `adStrategy` / `salesperson`、广告组合、否定、AMC 继续锁定；**ads Buy Box 筛选仍锁定**。**Fee-mining remains paused**。
->
-> 仅 BOX 本地：无 push/fetch、SSH、deploy/restart、migrate-on-123、真实数据库写入、live Sellfox API 或 schedules 变更；未加载/修改 `.env`。回滚本次应用改动至上述基线即可关闭品牌筛选/facets，并保留 productTag / fulfillment，无数据库回退。
+> 没有新增 join/网络请求或 payload 解析；真实规模/P95 未 benchmark。仅 BOX 本地：无 push/fetch、SSH、deploy/restart、migrate-on-123、真实库写入、live Sellfox API 或 schedules 变更；未加载/修改 `.env`。回滚本轮应用改动至上述基线即可关闭 ads Buy Box 筛选，保留已有品牌/标签/发货方式，无数据库回退。
 
-> 本地提交受阻：`git add` 无法创建 `.git/index.lock`（Read-only file system），因此未执行 commit，未绕过沙箱。11 个仓库文件保留为未暂存改动；父进程需提交：`feat(sellfox): unlock ads brand filter/facets`。HEAD 仍为 `48c259807ffeec1a3c41b3cb6cbe7e2eda826712`；仓库外状态文件已同步更新。
+> 本地提交受阻：`git add` 无法创建 `.git/index.lock`（Read-only file system），因此未执行 commit，未强制或绕过沙箱。11 个仓库文件保留为未暂存改动；父进程需提交：`feat(sellfox): unlock ads buyBoxWinner filter`。HEAD 仍为 `b6d3250e657bf03a4da22a6b3355d4fc161394ae`；仓库外状态文件已更新。
 
-本轮离线验证已通过（五个定向测试文件通过；Prisma 均 stub，PGlite 为一次性内存库，不连接真实数据库）：
+本轮离线验证全部通过（五个定向测试文件、六页内存 PGlite、TypeScript、touched ESLint、`git diff --check`）：
 
 ```bash
 NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-api.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-agent-read.test.ts
@@ -24,7 +20,7 @@ node node_modules/eslint/bin/eslint.js 'src/app/api/sellfox/[domain]/route.ts' '
 git diff --check
 ```
 
-覆盖六页品牌 exact match/no-match、trim、`00123` 文本保留、空/NULL/无身份/无匹配排除、组织/工作区/店铺/站点隔离、MSKU 优先/ASIN 回退、join 不重复计算花费、筛选先于实体/KPI 汇总、brand + productTag + fulfillment 联合筛选、品牌/标签 scoped facets（去重排序、NULL 排除、空结果和选项稳定）、UI 选择/重置、URL/API 参数往返、无 layout 的普通浏览/CSV/XLSX 路由及显式 Agent 导出/排序守卫。既有 productTags / fulfillment / Buy Box 锁定路径及 ExcelJS 生成/回读回归通过。按最小范围路线运行定向测试、内存 PGlite、类型检查与 touched ESLint、diff 检查；未跑完整 check/build、浏览器或真实 P95，合码/发布前补完整检查，性能验收另做 benchmark。
+覆盖六页是/否 match/no-match、NULL/缺失/未知/非布尔仅全部、组织/工作区/店铺/站点隔离、MSKU 优先/ASIN 回退、join 花费不放大、筛选先于实体/KPI/分页与导出、四筛选组合、productTags/brands facets 保留、UI 选择/重置/切页与参数往返、无 layout 普通浏览/CSV/XLSX、Agent 英文长表及排序守卫，既有 ExcelJS 生成/回读回归保留。按最小范围路线运行定向单测、一次性内存 PGlite、类型检查、touched ESLint 和 diff 检查；Prisma stub，不连真实数据库。未跑完整 check/build、浏览器或真实 P95；合码/发布前补完整检查，性能验收另做 benchmark。
 
 2026-10-26。Phase A/B 已对照本机真实 Sellfox XLSX 确认列映射并修复投放 ID；本轮仅 box 本机修改和离线解析，未部署、未迁移、未启用计划，未调用 createTask。
 
