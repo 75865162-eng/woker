@@ -27,13 +27,54 @@ async function download(url: URL) {
   return Buffer.concat(chunks);
 }
 export type SellfoxCpcReportType = "adProductReport" | "adTargeringReport" | "adSearchTermReport" | "adCampaignReport" | "adGroupReport" | "adSpaceReport";
-async function parseReport(code: SellfoxCpcReportType, buffer: Buffer, scope: { storeName: string; startDate: string; endDate: string }) {
+export async function parseSellfoxCpcReport(code: SellfoxCpcReportType, buffer: Buffer, scope: { storeName: string; startDate: string; endDate: string }) {
   if (code === "adTargeringReport") return { kind: "targeting" as const, rows: await parseSellfoxAdTargetingReport(buffer, scope) };
   if (code === "adSearchTermReport") return { kind: "searchTerm" as const, rows: await parseSellfoxAdSearchTermReport(buffer, scope) };
   if (code === "adCampaignReport") return { kind: "campaign" as const, rows: await parseSellfoxAdCampaignReport(buffer, scope) };
   if (code === "adGroupReport") return { kind: "adGroup" as const, rows: await parseSellfoxAdGroupReport(buffer, scope) };
   if (code === "adSpaceReport") return { kind: "placement" as const, rows: await parseSellfoxAdPlacementReport(buffer, scope) };
   return { kind: "product" as const, rows: await parseSellfoxAdProductReport(buffer, scope) };
+}
+
+export type SellfoxAdsReportWindow = {
+  organizationId: string; workspaceId: string; storeId: string; adType: string; startDate: string; endDate: string;
+};
+export function sellfoxAdsReportWindow(input: SellfoxAdsReportWindow) {
+  return { organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: input.storeId, adType: input.adType, reportDate: { gte: input.startDate, lte: input.endDate } };
+}
+
+// 两个入口共用事务、批次和身份哈希；progress 回调仍在同一事务内执行。
+export async function commitSellfoxAdsReportWindow(
+  db: Pick<typeof prisma, "$transaction">,
+  input: SellfoxAdsReportWindow & { taskId: string },
+  report: Awaited<ReturnType<typeof parseSellfoxCpcReport>>,
+  hooks: { before?: (tx: Prisma.TransactionClient) => Promise<void>; after?: (tx: Prisma.TransactionClient) => Promise<void> } = {},
+) {
+  await db.$transaction(async (tx) => {
+    await hooks.before?.(tx);
+    const window = sellfoxAdsReportWindow(input);
+    if (report.kind === "targeting") await tx.sellfoxAdsTargetingDaily.deleteMany({ where: window });
+    else if (report.kind === "searchTerm") await tx.sellfoxAdsSearchTermDaily.deleteMany({ where: window });
+    else if (report.kind === "campaign") await tx.sellfoxAdsCampaignDaily.deleteMany({ where: window });
+    else if (report.kind === "adGroup") await tx.sellfoxAdsAdGroupDaily.deleteMany({ where: window });
+    else if (report.kind === "placement") await tx.sellfoxAdsPlacementDaily.deleteMany({ where: window });
+    else await tx.sellfoxAdsProductDaily.deleteMany({ where: window });
+    const base = <T extends (typeof report.rows)[number]>(row: T) => {
+      // Preserve Phase A hashes; campaign/placement identities never depend on group metadata.
+      const identity = "placement" in row ? [row.placement] : "adGroupId" in row ? [row.adGroupId, ...("productId" in row ? [row.productId] : "searchTerm" in row ? [row.searchTerm, row.targetingId] : "targetingId" in row ? [row.targetingId] : [])] : [];
+      return { ...row, id: createHash("sha256").update(JSON.stringify([input.storeId, input.adType, row.reportDate, row.campaignId, ...identity])).digest("hex"), organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: input.storeId, adType: input.adType, payload: row.payload as Prisma.InputJsonValue };
+    };
+    for (let offset = 0; offset < report.rows.length; offset += 500) {
+      if (report.kind === "product") await tx.sellfoxAdsProductDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => ({ ...base(row), productId: row.productId })) });
+      else if (report.kind === "targeting") await tx.sellfoxAdsTargetingDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => ({ ...base(row), targetingId: row.targetingId })) });
+      else if (report.kind === "campaign") await tx.sellfoxAdsCampaignDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => base(row)) });
+      else if (report.kind === "adGroup") await tx.sellfoxAdsAdGroupDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => base(row)) });
+      else if (report.kind === "placement") await tx.sellfoxAdsPlacementDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => base(row)) });
+      else await tx.sellfoxAdsSearchTermDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => ({ ...base(row), searchTerm: row.searchTerm, targetingId: row.targetingId })) });
+    }
+    await tx.sellfoxReportTask.update({ where: { id: input.taskId, organizationId: input.organizationId, workspaceId: input.workspaceId }, data: { status: "done" } });
+    await hooks.after?.(tx);
+  });
 }
 export async function syncSellfoxAdsReports(input: {
   runId: string; organizationId: string; workspaceId: string; shopExternalIds: string[]; startDate: string; endDate: string;
@@ -102,33 +143,14 @@ export async function syncSellfoxAdsReports(input: {
         }
       }
       if (!buffer) throw new SellfoxStoreSyncError("广告报告仍在生成，已保存 taskId，重试只查询进度。", true);
-      const report = await parseReport(reportTypeCode, buffer, { storeName: store.name, startDate: input.startDate, endDate: input.endDate });
+      const report = await parseSellfoxCpcReport(reportTypeCode, buffer, { storeName: store.name, startDate: input.startDate, endDate: input.endDate });
       // Validate whole file before replacing the requested store/type/date window atomically.
-      await dependencies.db.$transaction(async (tx) => {
-        await input.onProgress({ units, cursor: { shopExternalId: store.externalId, adType, reportTypeCode, status: "committing" } }, tx);
-        const window = { organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, adType, reportDate: { gte: input.startDate, lte: input.endDate } };
-        if (report.kind === "targeting") await tx.sellfoxAdsTargetingDaily.deleteMany({ where: window });
-        else if (report.kind === "searchTerm") await tx.sellfoxAdsSearchTermDaily.deleteMany({ where: window });
-        else if (report.kind === "campaign") await tx.sellfoxAdsCampaignDaily.deleteMany({ where: window });
-        else if (report.kind === "adGroup") await tx.sellfoxAdsAdGroupDaily.deleteMany({ where: window });
-        else if (report.kind === "placement") await tx.sellfoxAdsPlacementDaily.deleteMany({ where: window });
-        else await tx.sellfoxAdsProductDaily.deleteMany({ where: window });
-        const base = <T extends (typeof report.rows)[number]>(row: T) => {
-          // Preserve Phase A hashes; campaign/placement identities never depend on group metadata.
-          const identity = "placement" in row ? [row.placement] : "adGroupId" in row ? [row.adGroupId, ...("productId" in row ? [row.productId] : "searchTerm" in row ? [row.searchTerm, row.targetingId] : "targetingId" in row ? [row.targetingId] : [])] : [];
-          return { ...row, id: createHash("sha256").update(JSON.stringify([store.id, adType, row.reportDate, row.campaignId, ...identity])).digest("hex"), organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, adType, payload: row.payload as Prisma.InputJsonValue };
-        };
-        for (let offset = 0; offset < report.rows.length; offset += 500) {
-          if (report.kind === "product") await tx.sellfoxAdsProductDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => ({ ...base(row), productId: row.productId })) });
-          else if (report.kind === "targeting") await tx.sellfoxAdsTargetingDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => ({ ...base(row), targetingId: row.targetingId })) });
-          else if (report.kind === "campaign") await tx.sellfoxAdsCampaignDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => base(row)) });
-          else if (report.kind === "adGroup") await tx.sellfoxAdsAdGroupDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => base(row)) });
-          else if (report.kind === "placement") await tx.sellfoxAdsPlacementDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => base(row)) });
-          else await tx.sellfoxAdsSearchTermDaily.createMany({ data: report.rows.slice(offset, offset + 500).map(row => ({ ...base(row), searchTerm: row.searchTerm, targetingId: row.targetingId })) });
-        }
-        await tx.sellfoxReportTask.update({ where: { id }, data: { status: "done" } });
-        units[id] = { store: store.externalId, adType, reportTypeCode, status: "done", rows: report.rows.length };
-        await input.onProgress({ units, count: Object.values(units).reduce<number>((n, unit) => n + Number((unit as { rows?: number }).rows ?? 0), 0) }, tx);
+      await commitSellfoxAdsReportWindow(dependencies.db, { ...input, storeId: store.id, adType, taskId: id }, report, {
+        before: async (tx) => { await input.onProgress({ units, cursor: { shopExternalId: store.externalId, adType, reportTypeCode, status: "committing" } }, tx); },
+        after: async (tx) => {
+          units[id] = { store: store.externalId, adType, reportTypeCode, status: "done", rows: report.rows.length };
+          await input.onProgress({ units, count: Object.values(units).reduce<number>((n, unit) => n + Number((unit as { rows?: number }).rows ?? 0), 0) }, tx);
+        },
       });
     } catch (error) {
       const failure = sellfoxStoreFailure(error); failures.push(failure.retryable);

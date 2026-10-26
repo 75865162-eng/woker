@@ -52,6 +52,43 @@ reportTypeCode 依据用户提供的 [sellfox-mcp `src/cli.ts` enum](https://git
 
 后续部署修复后，应从现有 storage 缓存 **`sellfox-reports/...`** 文件重新解析，并沿既有组织/工作区/店铺/广告类型/日期窗口的原子替换边界纠正身份；不能仅按新 ID upsert 而留下旧 hash/空串行。先盘点受影响窗口、保留原文件和可恢复快照、验证新 ID/行数/重复身份及租户边界，再执行受控替换；**不创建新 createTask、不重复下载**。缓存文件缺失时先报告缺口，不自动重建上游任务。本轮没有执行重解析入库或数据库写入。
 
+已新增 `scripts/sellfox-ads-reparse-from-cache.ts`（npm 命令 `sellfox:ads-reparse-cache`）。它与同步入口共用 `parseSellfoxCpcReport` 和 `commitSellfoxAdsReportWindow`，沿用同一解析契约、身份哈希、500 行批次及 deleteMany → createMany → task done 事务；定时同步对 done 的跳过行为保持不变。重解析不要求 runId，不修改 run/计划，不写 ProductRecord，也不调用 Sellfox createTask / pageList / download / sellfoxPost。storage driver 只使用 getBuffer；R2/S3 场景仍需读取对象存储，但不访问赛狐报告下载 URL。
+
+**123 部署后另行授权操作（本次只交付命令，没有执行）**：先部署含 `e791d14` 的真实 `广告投放ID` 映射以及本重解析入口，确认 Phase A/B 表已经存在、Prisma Client 匹配、数据库与 storage 环境指向同一目标，且原 XLSX 可读。不需要赛狐 API 凭据或 Redis。使用有目标库维护权限的服务器账号，明确替换下面的真实组织/工作区 ID；建议增加 `--task-id=<本地 SellfoxReportTask.id>` 先核验一个任务。执行前保留受影响窗口的可恢复数据库快照及缓存文件，并在无重叠同步/其他重解析的维护窗口执行；脚本不会自动备份或停止 worker。
+
+在 123 已部署的 current release 目录执行（`.env` 为发布脚本链接的运行配置；保留原 STORAGE_DRIVER/UPLOAD_DIR，local storage 相对路径与 systemd worker 同样以 current release 为基准）：
+
+```bash
+cd /opt/amazon-ad-bulk-current
+ORG_ID='替换为实际组织ID'
+WORKSPACE_ID='替换为实际工作区ID'
+
+# 只读 dry-run：默认 adTargeringReport + adSearchTermReport，所有已有店铺/广告类型。
+npm run sellfox:ads-reparse-cache -- --organization-id="$ORG_ID" --workspace-id="$WORKSPACE_ID"
+
+# 审核相同范围的逐任务 JSON 后，另行授权应用。
+npm run sellfox:ads-reparse-cache -- --organization-id="$ORG_ID" --workspace-id="$WORKSPACE_ID" --write
+
+# 单任务缩小范围示例（默认只读；需要写入时在同一命令末尾加 --write）。
+npm run sellfox:ads-reparse-cache -- --organization-id="$ORG_ID" --workspace-id="$WORKSPACE_ID" --report-type=adTargeringReport --task-id='替换为本地任务ID' --ad-type=sp
+```
+
+R2/S3 按原 storage 配置读取对象，UPLOAD_DIR 不参与对象读取。所有命令均需本次及映射修复的部署完成；不要在旧 release 上重解析。上面的 ID 占位值须替换为真实值后再运行。
+
+筛选支持 `--report-type`（一个精确代码，另可选 adProductReport/adCampaignReport/adGroupReport/adSpaceReport）、`--store-id`、`--shop-external-id`、`--ad-type=sp|sb|sd`、`--task-id`、`--start-date`、`--end-date`。组织和工作区必填；同时提供的筛选取交集。日期只选择 startDate ≥ 起日、endDate ≤ 止日的**完整任务**，绝不截断原始替换窗口。只选 `status=done|downloaded` 且 fileKey 非 NULL 的任务；显式 task-id 不满足筛选时拒绝；没有 fileKey、pending/creating 或已失败但未保留 downloaded 状态的任务不在自动修复范围。fileKey 必须精确对应该任务的 `sellfox-reports/{org}/{workspace}/{taskId}.xlsx`，任务和店铺租户不符整批拒绝。脚本不会跨租户查找目标。
+
+每任务 JSON 包含 taskId/fileKey/reportType/storeId/shopExternalId/adType/日期、beforeCount/afterCount、`legacyIdentityCount`（`text:` 或空串 ID 的合计）及 before/legacy/after 各最多三条身份样本，不读取旧行 payload。status 为 `would_write` / `written` / `skipped_missing` / `parse_failed` / `write_failed`；缺失、空字节或不可读文件记 skipped_missing，整份解析或事务失败保留原窗口，继续其余任务。最终摘要含 selectedTasks/failedTasks；全部成功退出 0，部分失败退出 2，参数/任务范围或查询失败退出 1。before/after 是当前数据库与该缓存解析结果的对照，不代表全量店铺完成覆盖。未知异常不回显数据库连接串、上游响应或原始行。
+
+残余风险与回退：
+
+- 只纠正选中的已有完整缓存窗口；部分店铺、缺 fileKey、SD targeting 缺文件仍需单独盘点，不会自动 createTask/补下载。旧文件没有真实 ID 列时，现有 text hash/空串兼容规则仍会保留；本次不改变列映射或币种 NULL 规则。
+- **合法的仅表头空报告会解析为 0 行，`--write` 会清空整个原窗口**；零字节文件则拒绝。必须审核 dry-run 的行数与身份，空报告通过不能当作非空 SB/SD 验收。
+- 多个任务可能覆盖同一窗口；按固定 startDate/endDate/id 升序处理，后处理缓存覆盖之前结果，不保证其内容更新。建议用 task-id 选择已核验缓存，避免旧缓存覆盖较新数据；不要与同步 worker 或另一重解析并发。前置计数不是写事务内的快照。单任务事务原子，不是整批事务；已成功任务不会因后续失败回滚。
+- 串行逐文件完整解析与窗口删除/重写会消耗内存、SQL/WAL/锁时间；按店铺、广告类型、任务或日期缩小范围，现有事务超时与 XLSX 大小/行数限制不变，本次未做生产容量/P95 测试。
+- 重复运行相同缓存与映射的身份和行数幂等，但 syncedAt/任务 updatedAt 会刷新。执行后再次 dry-run 核验 beforeCount/身份；需要恢复旧数据时使用事先保留的窗口快照，回退代码不会恢复已替换身份，不做数据库 down/drop。
+
+本入口本机验证：指定生命周期、缓存重解析、Phase A/B 四份测试，TypeScript、变更 TS ESLint 和 `git diff --check`；测试使用生成的 ExcelJS 内存夹具与 mock DB/storage，覆盖零写入、旧身份清除、租户边界、缺文件无 HTTP、幂等、事务回滚、500 行批次与空报告。未运行全量 check/生产构建/浏览器 E2E/真实库 apply；生产实际覆盖与性能需受控执行后验收。
+
 仍待证据：非空 SB/SD 投放与搜索词、非空 SD 产品，以及活动/组/位的 SB/SD 文件、全量 ID/匹配类型语义、下载分片与币种业务口径；不得将表头/空报告通过写成非空数据验收。
 
 `/saihu-search-merge` 继续作为独立的人工上传合并工具，本轮没有修改、调用或替换该路径。
