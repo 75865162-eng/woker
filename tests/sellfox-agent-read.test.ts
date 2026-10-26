@@ -675,3 +675,35 @@ test("agent firstSaleDate ranges affect listings rows/count/export only and pres
     }
   } finally { globals.prisma = previous; }
 });
+
+test("agent totalInventory min/max affect listings rows/count/export only via inventory_current sum", async () => {
+  const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
+  const calls: Prisma.Sql[] = [];
+  globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => { calls.push(sql); return sql.text.startsWith("SELECT count") ? [{ total: 0 }] : []; } } as unknown as PrismaClient;
+  try {
+    for (const domain of ["listings", "sales", "inventory", "performance", "ads_report"] as const) {
+      for (const range of ["", "totalInventoryMin=0", "totalInventoryMax=100", "totalInventoryMin=0&totalInventoryMax=100"]) {
+        const query = sellfoxBrowseQuery(new URL(`http://localhost/?${range}`), domain);
+        calls.length = 0;
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" });
+        await readSellfoxAgentRows(domain, query, { organizationId: "org", workspaceId: "ws" }, true);
+        assert.equal(calls.length, 3);
+        for (const sql of calls) {
+          const hasRange = domain === "listings" && (query.totalInventoryMin != null || query.totalInventoryMax != null);
+          if (hasRange) {
+            assert.match(sql.text, /EXISTS \(SELECT 1 FROM \(SELECT CASE WHEN count\(i\."totalInventory"\)=count\(\*\) THEN sum\(i\."totalInventory"\) END AS inv FROM sellfox_inventory_current i/);
+            assert.match(sql.text, /stock\.inv IS NOT NULL/);
+            for (const [value, pattern] of [[query.totalInventoryMin, /stock\.inv>=\$(\d+)/], [query.totalInventoryMax, /stock\.inv<=\$(\d+)/]] as const) {
+              const match = sql.text.match(pattern);
+              if (value != null) { assert.ok(match); assert.equal(sql.values[Number(match[1]) - 1], value); }
+              else assert.equal(match, null);
+            }
+          } else {
+            assert.doesNotMatch(sql.text, /stock\.inv|EXISTS \(SELECT 1 FROM \(SELECT CASE WHEN count\(i\."totalInventory"\)/);
+          }
+          assert.doesNotMatch(sql.text, /awd|AWD/);
+        }
+      }
+    }
+  } finally { globals.prisma = previous; }
+});

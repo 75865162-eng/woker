@@ -44,10 +44,19 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
     if (!isSellfoxDate(value)) throw new SellfoxBrowseError("日期必须使用有效 YYYY-MM-DD 格式。");
     return value;
   }
+  function optionalInt(key: string) {
+    const value = p.get(key)?.trim(); if (!value) return undefined;
+    if (!/^-?\d+$/.test(value)) throw new SellfoxBrowseError(`${key} 必须是整数。`);
+    const number = Number(value);
+    if (!Number.isSafeInteger(number)) throw new SellfoxBrowseError(`${key} 必须是整数。`);
+    return number;
+  }
   const from = date("from"), to = date("to"), reportDate = date("reportDate");
   const firstSaleFrom = date("firstSaleFrom"), firstSaleTo = date("firstSaleTo");
+  const totalInventoryMin = optionalInt("totalInventoryMin"), totalInventoryMax = optionalInt("totalInventoryMax");
   if (firstSaleFrom && firstSaleTo && firstSaleFrom > firstSaleTo) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
+  if (totalInventoryMin != null && totalInventoryMax != null && totalInventoryMin > totalInventoryMax) throw new SellfoxBrowseError("总库存上限不得小于下限。");
   return {
     sortBy, sortOrder: sortOrder as SellfoxSortOrder,
     layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")), dxmPublishState: sellfoxDxmPublishState(p.get("dxmPublishState")), salesperson: sellfoxSalesperson(p.get("salesperson")),
@@ -55,7 +64,7 @@ export function sellfoxBrowseQuery(url: URL, domain?: string) {
     metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
-    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo,
+    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax,
     status: p.get("status")?.trim() || undefined,
     searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",

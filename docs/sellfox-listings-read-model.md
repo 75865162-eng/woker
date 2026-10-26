@@ -1,3 +1,13 @@
+## 2026-10-27 — listings totalInventory numeric min/max filter · BOX LOCAL ONLY · FILTER PIVOT
+
+基线 HEAD `97dc1af`，分支 `codex/operations-p0-catalog-replenishment`。仅 listings 新增参数 `totalInventoryMin` / `totalInventoryMax`（安全整数，含 0；可只设一端；min>max 拒绝）。**不**读 `sellfox_listing_current` 上不存在的列，而是对 `sellfox_inventory_current` 按 storeId+msku 做与 workbench 列 enrichment 同口径的汇总：`CASE WHEN count("totalInventory")=count(*) THEN sum("totalInventory") END`；汇总为 NULL（无库存行 / 任一仓 NULL）在设置任意一端时不匹配。列表、计数、汇总、CSV/XLSX 与 Agent 窄表同口径；facets 仍 scope-only。UI「总库存」双 number 输入（下限/上限 aria），重置清空；跨域 URL 可保留，forRequest 仅 listings 序列化。单独出现亦进入 workbench（显式 `agent=1` 导出仍走 Agent）。不发明 AWD 字段。
+
+不改 `defaultVisible`、schema/migration；配对 / 划线价 / ads rating / fee 筛选保持锁定，**Fee-mining remains paused**。无 live Sellfox API 或真实数据库写入，不 push/deploy/SSH/Mac。回滚仅还原本次参数、两条查询路径 EXISTS 子查询与配套测试，无数据操作。
+
+验证：browse-query / browse-filters / listings-read / agent-read / browse-api 定向 node:test，TypeScript、触及 ESLint、`git diff --check`；浏览器定向断言已更新（总库存下限/上限序列化），Chromium SIGTRAP 历史问题记录、不绕过沙箱。完整 check/build、真实库与 P95 留待单独授权。
+
+---
+
 # Sellfox listings 列表延迟整改（2026-10-26）
 
 ## 2026-10-27 — listings 首次售出日期范围筛选 · BOX LOCAL ONLY

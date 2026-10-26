@@ -335,6 +335,12 @@ export async function readSellfoxAgentRows(domain: AgentDomain, query: ReturnTyp
   if (domain === "listings" && query.to) clauses.push(Prisma.sql`s."openDate"<=${query.to}`);
   if (domain === "listings" && query.firstSaleFrom) clauses.push(Prisma.sql`s."firstSaleDate">=${query.firstSaleFrom}`);
   if (domain === "listings" && query.firstSaleTo) clauses.push(Prisma.sql`s."firstSaleDate"<=${query.firstSaleTo}`);
+  if (domain === "listings" && (query.totalInventoryMin != null || query.totalInventoryMax != null)) {
+    const bounds = [Prisma.sql`stock.inv IS NOT NULL`];
+    if (query.totalInventoryMin != null) bounds.push(Prisma.sql`stock.inv>=${query.totalInventoryMin}`);
+    if (query.totalInventoryMax != null) bounds.push(Prisma.sql`stock.inv<=${query.totalInventoryMax}`);
+    clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM (SELECT CASE WHEN count(i."totalInventory")=count(*) THEN sum(i."totalInventory") END AS inv FROM sellfox_inventory_current i WHERE i."organizationId"=s."organizationId" AND i."workspaceId"=s."workspaceId" AND i."storeId"=s."storeId" AND i.msku=s.msku GROUP BY i."storeId", i.msku) stock WHERE ${Prisma.join(bounds, " AND ")})`);
+  }
   if (query.storeId) clauses.push(Prisma.sql`"storeId"=${query.storeId}`);
   if (query.site) clauses.push(Prisma.sql`marketplace=${query.site}`);
   const ads = ["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(domain);

@@ -310,3 +310,33 @@ test("firstSale dates validate and round trip independently of openDate, with li
   assert.throws(() => query("firstSaleFrom=2024-03-01&firstSaleTo=2024-02-01"), /结束日期不得早于开始日期/);
   assert.throws(() => query("from=2024-03-01&to=2024-02-01&firstSaleFrom=2024-01-01"), /结束日期不得早于开始日期/);
 });
+
+test("totalInventory min/max validate as safe integers, round trip listings-only, reject inverted range", () => {
+  for (const range of ["", "totalInventoryMin=0", "totalInventoryMax=100", "totalInventoryMin=0&totalInventoryMax=100", "totalInventoryMin=-1&totalInventoryMax=0"]) {
+    const params = new URLSearchParams(`domain=listings&${range}`);
+    const view = readSellfoxView(params);
+    assert.deepEqual(readSellfoxView(sellfoxViewParams(view)), view);
+    const parsed = query(sellfoxViewParams(view, true).toString());
+    assert.equal(parsed.totalInventoryMin, params.has("totalInventoryMin") ? Number(params.get("totalInventoryMin")) : undefined);
+    assert.equal(parsed.totalInventoryMax, params.has("totalInventoryMax") ? Number(params.get("totalInventoryMax")) : undefined);
+    for (const domain of ["overview", "stores", "inventory", "sales", "performance", "ads", "runs"] as const) {
+      const other = { ...view, domain };
+      assert.equal(sellfoxViewParams(other).get("totalInventoryMin"), params.get("totalInventoryMin"));
+      assert.equal(sellfoxViewParams(other).get("totalInventoryMax"), params.get("totalInventoryMax"));
+      assert.equal(sellfoxViewParams(other, true).has("totalInventoryMin"), false);
+      assert.equal(sellfoxViewParams(other, true).has("totalInventoryMax"), false);
+    }
+  }
+  for (const key of ["totalInventoryMin", "totalInventoryMax"] as const) {
+    for (const value of ["", " ", "\t\n"]) assert.equal(query(new URLSearchParams({ [key]: value }).toString())[key], undefined);
+    for (const value of ["1.5", "1e2", "NaN", "abc", "01.0", "9007199254740992"]) {
+      const params = new URLSearchParams({ [key]: value });
+      assert.throws(() => query(params.toString()), /必须是整数/);
+      const view = readSellfoxView(params);
+      assert.equal(view[key], ""); assert.equal(sellfoxViewParams(view).has(key), false);
+    }
+  }
+  assert.equal(query("totalInventoryMin=%200%20").totalInventoryMin, 0);
+  assert.equal(query("totalInventoryMax=0").totalInventoryMax, 0);
+  assert.throws(() => query("totalInventoryMin=10&totalInventoryMax=1"), /总库存上限不得小于下限/);
+});

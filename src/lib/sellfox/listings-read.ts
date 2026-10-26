@@ -24,6 +24,13 @@ export function listingsReadSql(query: SellfoxBrowseQuery, scope: Scope, exporti
   if (query.firstSaleFrom) filters.push(Prisma.sql`s."firstSaleDate">=${query.firstSaleFrom}`);
   if (query.firstSaleTo) filters.push(Prisma.sql`s."firstSaleDate"<=${query.firstSaleTo}`);
   if (query.dxmPublishState) filters.push(Prisma.sql`s."dxmPublishState"=${query.dxmPublishState}`);
+  if (query.totalInventoryMin != null || query.totalInventoryMax != null) {
+    const bounds = [Prisma.sql`stock.inv IS NOT NULL`];
+    if (query.totalInventoryMin != null) bounds.push(Prisma.sql`stock.inv>=${query.totalInventoryMin}`);
+    if (query.totalInventoryMax != null) bounds.push(Prisma.sql`stock.inv<=${query.totalInventoryMax}`);
+    // Match workbench enrichment: storeId+msku sum only when every warehouse row has non-NULL totalInventory.
+    filters.push(Prisma.sql`EXISTS (SELECT 1 FROM (SELECT CASE WHEN count(i."totalInventory")=count(*) THEN sum(i."totalInventory") END AS inv FROM sellfox_inventory_current i WHERE i."organizationId"=s."organizationId" AND i."workspaceId"=s."workspaceId" AND i."storeId"=s."storeId" AND i.msku=s.msku GROUP BY i."storeId", i.msku) stock WHERE ${Prisma.join(bounds, " AND ")})`);
+  }
   const searchKeys = ["asin", "msku", "sku", "title", "parentAsin"];
   if (query.searchType && !searchKeys.includes(query.searchType)) throw new SellfoxBrowseError("当前域不支持该搜索类型。");
   if (query.search) {

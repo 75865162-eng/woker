@@ -1,4 +1,5 @@
 # 赛狐本地读取约定
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `totalInventoryMin` / `totalInventoryMax`（安全整数）过滤；EXISTS 子查询对 `sellfox_inventory_current` 按 storeId+msku 汇总 totalInventory（与列「总库存」同口径）；与 openDate/firstSaleDate 独立，不默认、不跨域、不发明 AWD。配对/fee 仍锁定。无 push/deploy/真实库写入。
 
 2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `firstSaleFrom` / `firstSaleTo`（YYYY-MM-DD）含首尾过滤类型列 `firstSaleDate`；与 `from`/`to`→`openDate` 独立，不默认日期、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
 
