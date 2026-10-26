@@ -57,46 +57,55 @@ export async function verifySellfoxAdsPhaseBSql(query: Query) {
   await query(prior.split("\n").find(line => line.startsWith("CREATE VIEW sellfox_ads_product_daily AS"))!);
   await query(`INSERT INTO "SellfoxAdsProductDaily" (id,"organizationId","workspaceId","storeId","reportDate","adType","campaignId","adGroupId","productId",cost,payload) VALUES
     ('a','org','ws','s','2026-10-23','sp','c','g','p',2,'{}'),('b','org','ws','s','2026-10-24','sp','c','g','p',3,'{}')`);
-  await query(`INSERT INTO sellfox_listing_current (id,"organizationId","workspaceId","storeId",msku,asin,"mainImage",rating,"productTags","ratingCount") VALUES
-    ('exact','org','ws','s','exact','ASIN','https://example.test/exact.jpg','4.4','新品、重点',128),
-    ('sibling','org','ws','s','aaa','ASIN','https://example.test/sibling.jpg','1.0','其他',7),
-    ('foreign-org','foreign','ws','s','exact','ASIN','foreign','0','foreign',999),
-    ('foreign-ws','org','foreign','s','exact','ASIN','foreign','0','foreign',999),
-    ('foreign-store','org','ws','f','exact','ASIN','foreign','0','foreign',999)`);
+  await query(`INSERT INTO sellfox_listing_current (id,"organizationId","workspaceId","storeId",msku,asin,"mainImage",rating,"productTags","ratingCount",brand,fulfillment) VALUES
+    ('exact','org','ws','s','exact','ASIN','https://example.test/exact.jpg','4.4','新品、重点',128,'品牌','AFN'),
+    ('sibling','org','ws','s','aaa','ASIN','https://example.test/sibling.jpg','1.0','其他',7,'其他品牌','MFN'),
+    ('foreign-org','foreign','ws','s','exact','ASIN','foreign','0','foreign',999,'foreign','未知'),
+    ('foreign-ws','org','foreign','s','exact','ASIN','foreign','0','foreign',999,'foreign','未知'),
+    ('foreign-store','org','ws','f','exact','ASIN','foreign','0','foreign',999,'foreign','未知')`);
   for (const [model, domain] of [
     ["SellfoxAdsProductDaily", "ads_report"], ["SellfoxAdsTargetingDaily", "ads_targeting"], ["SellfoxAdsSearchTermDaily", "ads_search_term"],
     ["SellfoxAdsCampaignDaily", "ads_campaign"], ["SellfoxAdsAdGroupDaily", "ads_ad_group"], ["SellfoxAdsPlacementDaily", "ads_placement"],
   ] as const) {
-    const read = async (exporting = false) => {
-      const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL("http://localhost/?from=2026-10-23&to=2026-10-24&quickFilter=spend&sortBy=ratingCount&sortOrder=desc"), domain), { organizationId: "org", workspaceId: "ws" }, exporting);
+    const read = async (exporting = false, sortBy = "ratingCount") => {
+      const sql = workbenchReadSql(domain, sellfoxBrowseQuery(new URL(`http://localhost/?from=2026-10-23&to=2026-10-24&quickFilter=spend&sortBy=${sortBy}&sortOrder=desc`), domain), { organizationId: "org", workspaceId: "ws" }, exporting);
       const result = (await query(sql.text, sql.values)).rows[0] as { rows: Record<string, unknown>[] };
       assert.equal(result.rows.length, 1);
       assert.equal(result.rows[0].cost, 5); // LIMIT 1 must never multiply facts.
       return result.rows[0];
     };
-    const fields = (row: Record<string, unknown>) => [row.mainImage, row.rating, row.productTags, row.ratingCount];
+    const fields = (row: Record<string, unknown>) => [row.mainImage, row.rating, row.productTags, row.ratingCount, row.brand, row.fulfillment];
     // Missing product identity on campaign/placement stays NULL-safe.
-    assert.deepEqual(fields(await read()), [null, null, null, null]);
+    assert.deepEqual(fields(await read()), [null, null, null, null, null, null]);
     await query(`UPDATE "${model}" SET msku='exact',asin='ASIN' WHERE id IN ('a','b')`);
-    for (const exporting of [false, true]) assert.deepEqual(fields(await read(exporting)), ["https://example.test/exact.jpg", "4.4", "新品、重点", 128]);
-    // ASIN fallback chooses aaa; mixed ratings/counts/tags must not pick an arbitrary min.
+    for (const exporting of [false, true]) assert.deepEqual(fields(await read(exporting, exporting ? "fulfillment" : "brand")), ["https://example.test/exact.jpg", "4.4", "新品、重点", 128, "品牌", "AFN"]);
+    // ASIN fallback chooses aaa; conflicting Listing metadata must not pick an arbitrary min.
     await query(`UPDATE "${model}" SET msku='absent' WHERE id='b'`);
-    assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null]);
+    assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null, null, null]);
     await query(`UPDATE "${model}" SET asin=NULL WHERE id='b'`);
-    assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null]);
+    assert.deepEqual(fields(await read()), ["https://example.test/exact.jpg", null, null, null, null, null]);
     await query(`UPDATE "${model}" SET msku=NULL,asin=NULL WHERE id='a'`);
-    assert.deepEqual(fields(await read()), [null, null, null, null]);
+    assert.deepEqual(fields(await read()), [null, null, null, null, null, null]);
     await query(`UPDATE sellfox_listing_current SET "mainImage"='' WHERE id='exact'`);
     await query(`UPDATE "${model}" SET msku='exact',asin='ASIN' WHERE id IN ('a','b')`);
-    assert.deepEqual(fields(await read()), [null, "4.4", "新品、重点", 128]);
+    assert.deepEqual(fields(await read()), [null, "4.4", "新品、重点", 128, "品牌", "AFN"]);
     await query(`UPDATE sellfox_listing_current SET "mainImage"='https://example.test/exact.jpg' WHERE id='exact'`);
-    // Matched Listing with a missing typed count also invalidates unanimity.
-    await query(`UPDATE sellfox_listing_current SET "ratingCount"=NULL WHERE id='sibling'`);
+    // Matched Listing with missing typed metadata also invalidates unanimity.
+    await query(`UPDATE sellfox_listing_current SET "ratingCount"=NULL,brand=NULL,fulfillment=NULL WHERE id='sibling'`);
     await query(`UPDATE "${model}" SET msku='absent' WHERE id='b'`);
-    assert.equal((await read()).ratingCount, null);
+    const missing = await read();
+    assert.deepEqual([missing.ratingCount, missing.brand, missing.fulfillment], [null, null, null]);
     await query(`UPDATE "${model}" SET msku='exact' WHERE id='b'`);
     await query(`UPDATE sellfox_listing_current SET "ratingCount"=0 WHERE id='exact'`);
     for (const exporting of [false, true]) assert.equal((await read(exporting)).ratingCount, 0);
+    // Preserve typed strings, including numeric-looking brands, explicit unknown and empty strings.
+    await query(`UPDATE sellfox_listing_current SET brand='00123',fulfillment='未知' WHERE id='exact'`);
+    const text = await read(true);
+    assert.deepEqual([text.brand, text.fulfillment], ["00123", "未知"]);
+    await query(`UPDATE sellfox_listing_current SET brand='',fulfillment='' WHERE id='exact'`);
+    const empty = await read();
+    assert.deepEqual([empty.brand, empty.fulfillment], ["", ""]);
+    await query(`UPDATE sellfox_listing_current SET brand=CASE WHEN id='exact' THEN '品牌' ELSE '其他品牌' END,fulfillment=CASE WHEN id='exact' THEN 'AFN' ELSE 'MFN' END WHERE id IN ('exact','sibling')`);
     await query(`UPDATE sellfox_listing_current SET "ratingCount"=CASE WHEN id='exact' THEN 128 ELSE 7 END WHERE id IN ('exact','sibling')`);
   }
 }
@@ -111,7 +120,7 @@ if (process.argv[1]?.endsWith("sellfox-ads-phase-b.ts")) {
     const db = new PGlite();
     try {
       await verifySellfoxAdsPhaseBSql(async (sql, values) => values?.length ? db.query(sql, values) : (await db.exec(sql)).at(-1)!);
-      console.log("PASS: ads Phase A/B and six-tab Listing image/rating/ratingCount/productTags parity (disposable PGlite)");
+      console.log("PASS: ads Phase A/B and six-tab Listing image/rating/ratingCount/productTags/brand/fulfillment parity (disposable PGlite)");
     } finally { await db.close(); }
   })().catch(error => { console.error(error); process.exitCode = 1; });
 }
