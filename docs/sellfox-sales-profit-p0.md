@@ -1,5 +1,22 @@
 # 赛狐销量统计 / 销售利润 P0（本地交付）
 
+## 2026-10-26 销量商品品牌 / 产品标签 / 售价默认显示（Owner: Chen Jieliang；仅 BOX 本地）
+
+- 仅 sales 的 `brand`「商品品牌」、`productTags`「产品标签」、`price`「售价」改为默认显示，保留原 requiresField；售价保留 numeric，位于产品标签之后，身份列顺序不变。商品及店铺/开发员/SPU 汇总维度均生效，继续沿用现有可见列 CSV/XLSX，0 保留、缺值空白。
+- `trend` 仍默认显示；average7/总库存/库存时间/币种/站点仍默认隐藏。销量业务员、实时统计、运营、业绩归属人、分类、AWD、销量洞察继续锁定。performance/listings/ads 默认列不变，无 API/SQL/schema/migration 或导出逻辑变更。
+- 仅 BOX 本地；不 push/fetch、不 SSH/部署/重启、不连接或写入真实数据库、不向123迁移、不调用 live Sellfox API、不启用计划。回滚本地提交即可恢复旧默认列。
+
+离线复验（不加载 `.env`，测试使用 Prisma fixture；预期全部通过）：
+
+```bash
+NODE_ENV=test node --import tsx --test tests/sellfox-workbench-read.test.ts tests/sellfox-browse-query.test.ts tests/sellfox-browse-filters.test.ts tests/sellfox-browse-api.test.ts
+npm run typecheck
+node node_modules/eslint/bin/eslint.js src/components/sellfox/workbench-types.ts tests/sellfox-workbench-read.test.ts
+git diff --check
+```
+
+本轮结果：四个定向文件111/111通过，TypeScript、改动文件 ESLint 和 diff 检查通过。覆盖各维度默认三列与趋势、隐藏/不可用列边界、默认及显式 CSV/XLSX 表头与数值/空值。配置改动按要求不跑 PGlite、浏览器、生产构建或完整 check；后续涉及 SQL/路由/存储或发布时补相应专项验证与 CI。
+
 ## 2026-10-26 销售利润默认列对齐赛狐截图（Owner: Chen Jieliang；仅 BOX 本地）
 
 - performance 默认可见列打开：`parentAsin`「父ASIN」、`sku`「品名/SKU」、`netProfitRate`「净销售额毛利率」、`netRevenue`「净销售额」、`evaluationSaleNum`「测评销量」、`channelSaleNum`「多渠道销量」。列序贴近赛狐：图片/标题ASIN → 父ASIN → 品名SKU → 毛利/毛利率/净销售额毛利率 → 销售额/净销售额 → 订单/FBA可售/销量 → 测评/多渠道 → 促销折扣/礼品包装费 → 广告花费/币种。

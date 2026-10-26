@@ -237,7 +237,7 @@ test("visible-column export matches ordered matrix headers, leaves unsupported v
 });
 
 test("rollup defaults omit duplicate names and product clutter while preserving core metrics and picker overrides", () => {
-  const sales = ["image", "identity", "analysis", "fulfillable", "subtotal", "trend"];
+  const sales = ["image", "identity", "analysis", "brand", "productTags", "price", "fulfillable", "subtotal", "trend"];
   const performance = ["image", "identity", "analysis", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
   for (const dimension of ["store", "developer", "spu"]) {
     for (const [domain, expected] of [["sales", sales], ["performance", performance]] as const) {
@@ -258,7 +258,7 @@ test("rollup defaults omit duplicate names and product clutter while preserving 
 });
 
 test("sales product defaults omit unavailable operations columns while other defaults stay unchanged", () => {
-  const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "fulfillable", "subtotal", "trend"];
+  const sales = ["image", "identity", "name", "analysis", "parentAsin", "msku", "sku", "title", "brand", "productTags", "price", "fulfillable", "subtotal", "trend"];
   const performance = ["image", "identity", "name", "analysis", "parentAsin", "sku", "grossProfit", "grossProfitRate", "netProfitRate", "saleRevenue", "netRevenue", "orderNum", "fulfillable", "saleQuantity", "evaluationSaleNum", "channelSaleNum", "promotionDiscount", "giftWrapFee", "adCost", "currency"];
   for (const dimension of ["asin", "msku", "sku", "parentAsin"]) {
     assert.deepEqual(defaultVisibleColumnKeys("sales", dimension), sales);
@@ -334,7 +334,7 @@ test("typed exact search binds literal input, rejects absent fields and keeps qu
 test("reference columns combine only visible identity fields and export identical cell values", () => {
   assert.equal(readSellfoxView(new URLSearchParams("domain=sales")).dimension, "asin");
   const sales = visibleColumns("sales",undefined,["2026-10-24"],"asin");
-  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","parentAsin","msku","sku","title","fulfillable","subtotal","trend"]);
+  assert.deepEqual(sales.map(c=>c.key),["image","identity","name","analysis","parentAsin","msku","sku","title","brand","productTags","price","fulfillable","subtotal","trend"]);
   const store = sales.find(c=>c.key === "name")!;
   assert.equal(sellfoxColumnValue(store,{name:"店铺",marketplace:"US"}),"店铺\nUS");
   const profit = visibleColumns("performance",undefined,[],"msku").find(c=>c.key === "identity")!;
@@ -1357,12 +1357,17 @@ test("performance selected salesperson exports typed names in CSV and Excel with
   } finally { globals.prisma = previous; }
 });
 
-test("sales catalog columns are optional current metadata and require unanimity across members and days", () => {
+test("sales catalog columns are default-visible current metadata and require unanimity across members and days", () => {
   const config = visibleColumns("sales", ["brand", "productTags", "price"]);
   assert.deepEqual(config.map(c => c.labelZh), ["商品品牌", "产品标签", "售价"]);
-  assert.ok(config.every(c => !c.defaultVisible && !c.unavailable && /Listing 当前快照.*类型投影/.test(c.requiresField)));
+  assert.ok(config.every(c => c.defaultVisible && !c.unavailable && /Listing 当前快照.*类型投影/.test(c.requiresField)));
+  assert.equal(config.find(c => c.key === "price")!.numeric, true);
   assert.deepEqual(visibleColumns("performance", ["brand", "productTags"]), []);
   for (const dimension of ["msku", "asin", "parentAsin", "sku", "store", "developer", "spu"]) {
+    const defaults = defaultVisibleColumnKeys("sales", dimension);
+    for (const key of ["average7", "totalInventory", "inventoryCapturedAt", "currency", "marketplace", "salesperson", "awdAvailable", "awdInbound", "operations", "salesInsight"]) assert.ok(!defaults.includes(key));
+    for (const key of ["salesperson", "awdAvailable", "awdInbound", "operations", "salesInsight"]) assert.equal(columns.sales.find(c => c.key === key)!.unavailable, true);
+    for (const key of ["trend", "brand", "productTags", "price"]) assert.ok(defaults.includes(key));
     for (const key of ["brand", "productTags", "price"]) {
       const query = sellfoxBrowseQuery(new URL(`http://localhost/?dimension=${dimension}&sortBy=${key}&sortOrder=desc`), "sales");
       for (const exporting of [false, true]) {
@@ -1378,23 +1383,33 @@ test("sales catalog columns are optional current metadata and require unanimity 
   }
 });
 
-test("sales selected catalog columns export identical CSV and numeric XLSX with missing values blank", async () => {
+test("sales default and selected catalog columns export identical CSV and numeric XLSX with missing values blank", async () => {
   const globals = globalThis as unknown as { prisma?: PrismaClient }, previous = globals.prisma;
   const rows = [{ brand: "品牌", productTags: "新品、重点", price: 0 }, { brand: null, productTags: null, price: null }];
   globals.prisma = { $queryRaw: async (sql: Prisma.Sql) => sql.text.startsWith("WITH") ? [{ rows: rows.map(row => ({ ...row })), total: 2, totals: [{ currency: "USD", subtotal: 3 }] }] : [] } as unknown as PrismaClient;
   try {
-    const url = new URL("http://localhost/?from=2026-10-24&to=2026-10-24&column=brand&column=productTags&column=price");
-    const query = sellfoxBrowseQuery(url, "sales"), scope = { organizationId: "org", workspaceId: "ws" };
-    const csv = await (await sellfoxWorkbenchExport("sales", query, scope, url)).text();
-    assert.equal(csv.trim(), '"商品品牌","产品标签","售价"\r\n"品牌","新品、重点",0\r\n"","",""');
-    url.searchParams.set("format", "xlsx");
-    const response = await sellfoxWorkbenchExport("sales", query, scope, url);
     const { default: ExcelJS } = await import("exceljs");
-    const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
-    const sheet = book.worksheets[0];
-    assert.deepEqual([1, 2, 3].map(i => sheet.getRow(1).getCell(i).value), ["商品品牌", "产品标签", "售价"]);
-    assert.deepEqual([1, 2, 3].map(i => sheet.getRow(2).getCell(i).value), ["品牌", "新品、重点", 0]);
-    assert.equal(sheet.getCell("C3").value, null);
+    const keys = ["brand", "productTags", "price"], labels = ["商品品牌", "产品标签", "售价"];
+    for (const selected of [false, true]) {
+      const url = new URL("http://localhost/?from=2026-10-24&to=2026-10-24");
+      if (selected) for (const key of keys) url.searchParams.append("column", key);
+      const query = sellfoxBrowseQuery(url, "sales"), scope = { organizationId: "org", workspaceId: "ws" };
+      const csv = (await (await sellfoxWorkbenchExport("sales", query, scope, url)).text()).trim().split("\r\n");
+      const headers = csv[0].split(",");
+      const indices = labels.map(label => headers.indexOf(`"${label}"`));
+      assert.ok(indices.every(i => i >= 0));
+      assert.deepEqual(indices.map(i => csv[1].split(",")[i]), ['"品牌"', '"新品、重点"', '0']);
+      assert.deepEqual(indices.map(i => csv[2].split(",")[i]), ['""', '""', '""']);
+      if (selected) assert.equal(csv[0], '"商品品牌","产品标签","售价"');
+      url.searchParams.set("format", "xlsx");
+      const response = await sellfoxWorkbenchExport("sales", query, scope, url);
+      const book = new ExcelJS.Workbook(); await book.xlsx.load(await response.arrayBuffer());
+      const sheet = book.worksheets[0];
+      assert.deepEqual(indices.map(i => sheet.getRow(1).getCell(i + 1).value), labels);
+      assert.deepEqual(indices.map(i => sheet.getRow(2).getCell(i + 1).value), ["品牌", "新品、重点", 0]);
+      assert.deepEqual(indices.map(i => sheet.getRow(3).getCell(i + 1).value), [null, null, null]);
+      if (selected) assert.equal(sheet.columnCount, 3);
+    }
   } finally { globals.prisma = previous; }
 });
 
