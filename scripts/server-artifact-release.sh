@@ -357,6 +357,9 @@ fi
 
 ln -sfn "$APP_DIR/node_modules" "$extract_dir/node_modules"
 ln -sfn "$APP_DIR/.env" "$extract_dir/.env"
+# Local report/upload cache must survive release switches (STORAGE_DRIVER=local).
+mkdir -p "$APP_DIR/uploads"
+ln -sfn "$APP_DIR/uploads" "$extract_dir/uploads"
 
 escaped_release_id="$(json_escape "$release_id")"
 escaped_source_branch="$(json_escape "$SOURCE_BRANCH")"
