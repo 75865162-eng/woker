@@ -33,3 +33,15 @@ test("execution rechecks active membership, current create permission and worksp
   assert.equal(await canExecuteSellfoxSync(scope, { ...deps, workspace: async () => false }), false);
   assert.equal(await canExecuteSellfoxSync(scope, { ...deps, member: async () => ({ role: "viewer", user: { status: "active" } }) }), false);
 });
+
+test("targeting/search-term plans use daily 1440 and Shanghai 06:30 without an enabled resource gate", async () => {
+  const { sellfoxScheduleIntervals } = await import("@/lib/sellfox/schedule-time");
+  const { sellfoxSyncDisabledReason, normalizeSellfoxDates } = await import("@/lib/sellfox/sync-contract");
+  for (const resource of ["ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const) {
+    assert.equal(sellfoxScheduleIntervals[resource], 1440); assert.equal(sellfoxSyncDisabledReason(resource), null);
+    const schedule = { resource, intervalMinutes: 1440, lastEnqueuedAt: null };
+    assert.equal(nextSellfoxScheduleAt(schedule, new Date("2026-10-24T22:29:00Z")).toISOString(), "2026-10-24T22:30:00.000Z");
+    assert.equal(nextSellfoxScheduleAt({ ...schedule, lastEnqueuedAt: new Date("2026-10-24T22:30:00Z") }, new Date("2026-10-25T01:00:00Z")).toISOString(), "2026-10-25T22:30:00.000Z");
+    assert.deepEqual(normalizeSellfoxDates(resource, {}, new Date("2026-10-25T01:00:00Z")), { startDate: "2026-10-24", endDate: "2026-10-24" });
+  }
+});

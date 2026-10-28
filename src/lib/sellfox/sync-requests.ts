@@ -13,7 +13,7 @@ export function sellfoxInventoryRequest(shopExternalId: string, pageNo: number) 
   };
 }
 
-export function sellfoxSalesRequest(shopExternalId: string, reportDate: string, pageNo: number, metric: "productNum" | "salePrice") {
+export function sellfoxSalesRequest(shopExternalId: string, reportDate: string, pageNo: number, metric: "productNum" | "salePrice" | "orderNum") {
   if (!isSellfoxDate(reportDate)) throw new Error("赛狐销量日期无效。");
   return {
     ...singleShopPage(shopExternalId, pageNo), type: metric, groupType: "msku", statTimeType: 1,

@@ -1,21 +1,71 @@
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `adSpend30Min`/`adSpend30Max` 数值过滤；类型列 `s."adSpend30"`（Float? 窗口）；与 adSpend7/14 同形双端，不默认、不跨域。Window adSpend 系列齐套。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `adSpend14Min`/`adSpend14Max` 数值过滤；类型列 `s."adSpend14"`（Float? 窗口）；与 adSpend7 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `adSpend7Min`/`adSpend7Max` 数值过滤；类型列 `s."adSpend7"`（Float? 窗口）；与 revenue 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `revenue30Min`/`revenue30Max` 数值过滤；类型列 `s."revenue30"`（Float? 窗口）；与 revenue7/14 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `revenue14Min`/`revenue14Max` 数值过滤；类型列 `s."revenue14"`（Float? 窗口）；与 revenue7 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `revenue7Min`/`revenue7Max` 数值过滤；类型列 `s."revenue7"`（Float? 窗口）；与 price 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `sales30Min`/`sales30Max` 整数过滤；类型列 `s."sales30"`（Int? 窗口）；与 sales7/14 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `sales14Min`/`sales14Max` 整数过滤；类型列 `s."sales14"`（Int? 窗口）；与 sales7 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `sales7Min`/`sales7Max` 整数过滤；类型列 `s."sales7"`（Int? 窗口）；与 fulfillable 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `fulfillableMin`/`fulfillableMax` 整数过滤；类型列 `s."fulfillable"`（Int?；listings 非库存 enrich）；与 bsrRank 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `priceMin`/`priceMax` 数值过滤；类型列 `s.price`（Float?；无引号）；与 listingQuantity 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads Agent/CSV 窄表新增可选 `adOrdersMin`/`adOrdersMax` 整数过滤；类型列 `"adOrders"`（六 ads_* 日报）；与 clicks/impressions 同形双端，不默认、不跨域。ads daily typed 近墙（acos 仍跳过）。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads Agent/CSV 窄表新增可选 `clicksMin`/`clicksMax` 整数过滤；类型列 `clicks`（六 ads_* 日报）；与 impressions 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads Agent/CSV 窄表新增可选 `impressionsMin`/`impressionsMax` 整数过滤；类型列 `impressions`（六 ads_* 日报）；与 cost/adSales 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads Agent/CSV 窄表新增可选 `adSalesMin`/`adSalesMax` 数值过滤；类型列 `"adSales"`（六 ads_* 日报）；与 cost 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads Agent/CSV 窄表新增可选 `costMin`/`costMax` 数值过滤；类型列 `cost`（六 ads_* 日报）；与 workbench 同形双端，汇总前成员行筛选口径在 Agent 为行级；不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `warehousingMin`/`warehousingMax` 数值过滤；类型列 `s."warehousing"`；与 unsellable 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `unsellableMin`/`unsellableMax` 数值过滤；类型列 `s."unsellable"`；与 reservedQty 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `reservedQtyMin`/`reservedQtyMax` 数值过滤；类型列 `s."reservedQty"`；与 listingQuantity 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `listingQuantityMin`/`listingQuantityMax` 数值过滤；类型列 `s."listingQuantity"`（payload.quantity）；与 bsrRank/totalInventory 同形双端，不默认、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `bsrCategory` 精确过滤（trim）；类型列 `s."bsrCategory"`；与 brand/dxmPublishState 同形，不默认、不跨域。ads acos 因非类型列跳过。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `bsrRankMin` / `bsrRankMax`（安全整数）过滤；对类型列 `s."bsrRank"` 含首尾比较，设置任意一端排除 NULL；与 openDate/firstSaleDate/totalInventory 独立，不默认、不跨域、不发明 bsrCategory/AWD。配对/fee 仍锁定。无 push/deploy/真实库写入。
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads `ratingCountMin`/`ratingCountMax` 仅 workbench 六子页对 Listing `ratingCount` 生效；显式 `agent=1` 广告英文长表导出与 brand/rating 一样 **不** 应用评论数筛选。listings/sales/performance Agent 忽略该参数。配对/fee 仍锁定。无 push/deploy/真实库写入。
+
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：ads `ratingMin`/`ratingMax` 仅 workbench 六子页对 Listing `ratingValue` 生效；显式 `agent=1` 广告英文长表导出与 brand/fulfillment/Buy Box 一样 **不** 应用星级筛选（无 listing join）。listings/sales/performance Agent 忽略该参数。配对/fee 仍锁定。无 push/deploy/真实库写入。
+
 # 赛狐本地读取约定
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `totalInventoryMin` / `totalInventoryMax`（安全整数）过滤；EXISTS 子查询对 `sellfox_inventory_current` 按 storeId+msku 汇总 totalInventory（与列「总库存」同口径）；与 openDate/firstSaleDate 独立，不默认、不跨域、不发明 AWD。配对/fee 仍锁定。无 push/deploy/真实库写入。
+
+2026-10-27 Asia/Shanghai BOX 本地（Owner: Chen Jieliang；未部署）：listings Agent/CSV 窄表新增可选 `firstSaleFrom` / `firstSaleTo`（YYYY-MM-DD）含首尾过滤类型列 `firstSaleDate`；与 `from`/`to`→`openDate` 独立，不默认日期、不跨域。配对/fee 仍锁定。无 push/deploy/真实库写入。
+
+2026-10-27 00:27:11 Asia/Shanghai BOX 本地 190000（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留 180000 列序后追加 `evaluationCapital`「测评本金」、`evaluationCommission`「测评佣金」、`dealPerformanceFeeAmount`「Deal表现费」、`couponParticipationFeeAmount`「优惠券参与费」、`safetReimbursedAmount`「SAFE-T赔偿」、`affordabilityExpenseAmount`「可负担性费用」、`withheldFeeAmount`「预扣费用」、`chargebackIncomeAmount`「拒付收入」、`guaranteeClaimIncomeAmount`「A-Z索赔收入」、`promotionSalesAmount`「促销销售额」、`promotionShippingAmount`「促销运费」、`promotionTaxAmount`「促销税费」 的 nullable 类型列；Agent 英文长表同序末尾追加、可排序；performance 默认隐藏、sales 不变，明细 NULL 空/0 保留，聚合 COALESCE(sum)。evaluationCapital「测评本金」/evaluationCommission「测评佣金」分别独立于 evaluationFee「测评费」和 evaluationSaleNum（数量）；chargebackIncomeAmount「拒付收入」≠ chargebackAmount「拒付退款」，guaranteeClaimIncomeAmount「A-Z索赔收入」≠ guaranteeClaimAmount「A-Z索赔退款」；promotionSalesAmount「促销销售额」≠ promotionDiscount「促销折扣」≠ promotionTotalAmount「促销费」，亦独立于 promotionShippingAmount/promotionTaxAmount；withheldFeeAmount「预扣费用」≠ withheldTaxAmount「商城代扣税」。不映射 Listing fees。 **Fee mining wraps / pauses here**：本批为费用挖掘收尾；mfregulatory*、purchaseCost* splits 及无明确标签的 long-tail 继续锁定，等待 Sellfox web label verify 后另行授权。销售小组 / 业绩归属人 / 实时统计 / 运营 / 分类 / AWD / sales业务员 / 广告组合 / 否定 / AMC 仍锁定；sales 域不增加这些列。 仅 BOX 本地，Owner: Chen Jieliang；无 push/fetch、SSH/deploy/restart、123 迁移/真实库写入、live Sellfox API/sync 或计划启用。123 需全部前置迁移（含 180000）+ 190000，只有用户说「上」后另行评审。 离线验证与回填/回退见 [P0 文档顶部](sellfox-sales-profit-p0.md)。
+
+2026-10-27 00:13:06 Asia/Shanghai BOX 本地 180000（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留 170000 列序后追加 `fbaPerUnitFulfillmentFeeRefundAmount`「FBA按件履约费退款」、`fbaWeightBasedFeeRefundAmount`「FBA重量费退款」、`deferredAmount`「延期金额」、`withheldTaxAmount`「商城代扣税」、`otherPriceIncomeAmount`「其他收入」、`paymentMethodFeeAmount`「支付方式费」、`fixedClosingFeeAmount`「固定成交费」、`variableClosingFeeAmount`「可变成交费」、`imagingServicesFeeAmount`「影像服务费」、`netCoAmount`「净Co金额」、`comminglingVatAmount`「混卖VAT」、`codFeeAmount`「COD费用」 的 nullable 类型列；Agent 英文长表同序追加、可排序，performance 默认隐藏，sales 不变。明细 NULL 空、0 保留；聚合 COALESCE(sum)。FBA refund companions 不混作基础费用；Tl deferred/withheldTax 与 taxPrice 独立，otherPriceIncomeAmount ≠ otherPriceAmount ≠ orderOtherPriceAmount；Listing fees 不作别名，evaluationCapital/evaluationCommission 及灰显项仍锁定。123 需全部前置迁移 + 180000，仅用户说「上」后评审；无 push/deploy/真实库写入。离线复验及回填/回退见 [P0 文档顶部](sellfox-sales-profit-p0.md)。
+
+2026-10-26 23:58:23 Asia/Shanghai BOX 本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留 160000 列序后追加 `fbaInboundTransportationProgramFee`「FBA入库运输计划费」、`aglFeeAmount`「AGL费用」、`paidServicesFeeAmount`「付费服务费」、`customerReturnHrrUnitFeeAmount`「HRR退货单位费」、`amazonUpstreamStorageTransportationFeeAmount`「上游仓储运输费」、`amazonUpstreamProcessingFeeAmount`「上游处理费」、`mfnPostageFeeAmount`「MFN邮资」、`adjustmentFeeAmount`「调整费」、`otherServiceFeeAmount`「其他服务费」、`avgHeadTripPrice`「平均头程」、`purchaseRefundPrice`「订单内退款」、`revenueAmount`「清算费」 的 nullable 类型列；Agent 英文长表同序追加、可排序，performance 默认隐藏。明细 NULL 空、0 保留；实体/币种 COALESCE(sum)。avgHeadTripPrice ≠ headTripPrice，purchaseRefundPrice ≠ refundPrice，revenueAmount=清算费 ≠ saleRevenue/netRevenue；Listing fees 不作别名，sales 与锁定项不变。123 需全部前置迁移 + 170000，仅用户说「上」后评审；无 push/deploy/真实库写入。离线命令和回填/回退见 [P0 文档顶部](sellfox-sales-profit-p0.md)。
+
+2026-10-26 23:41:49 Asia/Shanghai BOX 本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留 150000 列序后追加 `couponPaymentAmount`「优惠券支付」、`sellerDealPaymentAmount`「Deal费用」、`vineFeeAmount`「Vine费用」、`starStorageFeeAmount`「星级仓储费」、`subscriptionAmount`「订阅费」、`fbaCustomerReturnAmount`「FBA买家退货费」、`fbaInboundConvenienceFeeAmount`「FBA入库配置费」、`inboundTransportationFeeAmount`「入库运输费」、`shippingChargebackAmount`「买家运费扣除」、`giftwrapChargebackAmount`「礼品包装费扣除」、`costOfPointsGrantedAmount`「积分费用」、`orderOtherPriceAmount`「订单其他费」 的 nullable 类型列；Agent 英文长表同序追加、可排序；performance 默认隐藏。明细 NULL 空、0 保留；实体/币种汇总 COALESCE(sum)。四组相近费用独立，不用 Listing fees 补值，sales 与锁定项不变。123 需全部前置迁移 + 160000，仅用户说「上」后评审；无 push/deploy/真实库写入。离线命令与回填/回退见 [P0 文档顶部](sellfox-sales-profit-p0.md)。
+
+2026-10-26 23:29:44 Asia/Shanghai BOX 本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留 140000 列序后追加 `promotionTotalAmount` / `fbaOverageFeeAmount` / `chargebackAmount` / `guaranteeClaimAmount` / `digitalServicesFeeAmount` / `otherPriceAmount` / `shippingChargeAmount` / `regulatoryFeeAmount` nullable 类型列；Agent 英文长表同序追加、可排序。对应促销费/FBA超量仓储费/拒付退款/A-Z索赔退款/数字服务费/其他费用/买家运费/监管费，performance 默认隐藏；明细 NULL 空、0 保留，工作台实体/币种 totals 用 `COALESCE(sum(...),0)`。promotionTotalAmount 与 promotionDiscount 独立，Listing fees 不作别名，sales 与原锁定项不变。123 需全部前置迁移 + 150000，仅用户说「上」后评审。回填成本、回退与离线复验见 [P0 文档顶部](sellfox-sales-profit-p0.md)。
+
+2026-10-26 23:15:55 Asia/Shanghai BOX本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留130000列序，末尾依次追加 `customAsinFee` / `customShopFee` / `serviceFeeAmount` / `storageFeeAmount` / `compensationAmount` / `evaluationFee` nullable类型列；Agent英文长表同序追加并支持排序。分别为产品自定义费用/店铺自定义费用/服务费/仓储费/赔偿金/测评费，performance默认隐藏，明细CSV NULL空、0保留，工作台实体/币种totals沿用 `COALESCE(sum(...),0)`。storageFeeAmount不同于fbaStorageFeeAmount；evaluationFee不同于evaluationSaleNum；不映射Listing费用，evaluationCapital/evaluationCommission及原锁定业务列保持锁定，sales不变。123需全部前置迁移+140000，仅用户说「上」后评审；回填成本/回退/离线验证见 [P0文档顶部](sellfox-sales-profit-p0.md)。
+
+2026-10-26 BOX 本地增量（Owner: Chen Jieliang；未部署）：`sellfox_profit_daily` 精确保留120000列序，末尾追加 `fbaStorageFeeAmount` / `fbaLongTermStorageFeeAmount` / `fbaRemovalFeeAmount` / `fbaDisposalFeeAmount` nullable 类型列；Agent 英文长表按相同顺序追加并允许排序。分别为FBA仓储费/长期仓储费/FBA移除费/FBA弃置费，performance默认隐藏。明细CSV NULL空、0保留，工作台实体/币种totals为 `COALESCE(sum(...),0)`。只使用同名profit payload键，不映射Listing `fbaFees` / `referralFee`或商品「月仓储费」。sales及未证实业务列继续锁定；123需全部前置迁移+130000，用户说「上」后另行评审。回填成本/回退/离线验证命令见 [P0文档顶部](sellfox-sales-profit-p0.md)。
 
 Agent/CLI 的例行任务只读 PostgreSQL 或 `/sellfox`「给 Agent 的导出」CSV，不调用 `openapi.sellfox.com`，也不依赖赛狐网页登录。ProductRecord 仍是商品主档，以下均为可重建的只读报表层，禁止反写主档或广告。
+
+当前 P0 增量与本地验证见 [销量/利润 P0](sellfox-sales-profit-p0.md)。历史验收记录中的“两指标”描述保留当时口径；旧 coverage 不代表订单量已采集，orders 仍为 NULL。直接查询利润 SQL 视图时必须显式过滤 `"onlySettle"=false`（全部）或 `true`（已结算），API 默认 false。
+
+2026-10-26 BOX 本地增量（未部署）：`sellfox_profit_daily` 在110000原列序后追加 `adSpCost` / `adSdCost` / `adSbCost` / `adSbvCost` / `adSbsCost` typed nullable 数值。performance 可选列分别为 SP/SD/SB/SBV/SBS广告费，默认隐藏；Agent 英文长表末尾追加且允许排序。明细 CSV 的 NULL 空、0 保留，工作台实体/币种汇总为 `COALESCE(sum(...),0)`。仅采用同名 profit payload 键，不从 Listing 或广告总额分摊。`adTotalCost → adCost` 已覆盖「广告花费」，不另建总计列、不重投影 adCost。123 需前置迁移 +120000，用户明确说「上」后另行评审；回填成本、验证与回退见上述 P0 文档。sales 及未证实业务字段继续锁定。
+
+
+广告 Phase A/B 新增投放、搜索词、活动、广告组与广告位日报；严格暂定列、独立视图/唯一键、API/CSV 与默认关闭的每日06:30计划见 [广告子页来源与缺口](sellfox-ads-subtabs-gap.md)。尚未真实 XLSX 核验，历史广告产品验收不代表这五类通过。
 
 ## 读取入口
 
 | PostgreSQL 视图 | 底层窄表 | 业务用途 |
 | --- | --- | --- |
 | `sellfox_inventory_current` | SellfoxFbaInventorySnapshot + SellfoxSnapshotHead | 每店最新完整库存采集；保留旧历史 |
-| `sellfox_sales_daily` | SellfoxSalesDailySnapshot + 日覆盖标记 | MSKU 主维度，ASIN/SKU 冗余；quantity、revenue、currency、complete |
-| `sellfox_sales_day_coverage` | SellfoxSalesDayCoverage | 每店每自然日两指标已完整采集，包括合法空结果；rowWrites 是两指标写入次数，不是独立 SKU 数 |
+| `sellfox_sales_daily` | SellfoxSalesDailySnapshot + 日覆盖标记 | MSKU 主维度，ASIN/SKU 冗余；quantity、revenue、currency、complete、orders（缺失NULL） |
+| `sellfox_sales_day_coverage` | SellfoxSalesDayCoverage | 每店每自然日三指标已完整采集，包括合法空结果；rowWrites 是三指标写入次数，不是独立 SKU 数 |
 | `sellfox_listing_current` | SellfoxListingSnapshot + SellfoxSnapshotHead | 每店最新完整 Listing，lower(status)=active 为在售（真实返回 Active/Inactive/Incomplete/delete，保留原值，筛选忽略大小写） |
-| `sellfox_profit_daily` | SellfoxProductDailySnapshot | 单日 MSKU 利润、广告花费、退款率、订单和净销售额 |
+| `sellfox_profit_daily` | SellfoxProductDailySnapshot | 单日 MSKU 利润、广告花费、退款率、订单和净销售额；必须筛选 onlySettle=false/true，禁止跨口径相加 |
 | `sellfox_ads_product_daily` | SellfoxAdsProductDaily | 单店/日/广告类型/活动/组/产品的花费及转化；派生 acos、roas |
 
 视图采用窄列投影；底层业务列、店铺和日期索引负责查询，不在常规查询时解码 payload。current 只在单店全部页提交后切换，合法空快照也切换；失败采集不会发布半批 current。快照 Head 的 storeId 关联店铺的 organization/workspace，跨工作区不得关联。
 
-库存 sourceKey 使用响应 `id`，保留 ASIN/MSKU/FNSKU；不能只按 ASIN 去重后丢弃不同 MSKU/库位。Listing 使用响应 `id`，保留 MSKU/ASIN。日销使用店铺+MSKU+reportDate；同一任务两指标只在身份、币种与采集批次一致时合并。
+库存 sourceKey 使用响应 `id`，保留 ASIN/MSKU/FNSKU；不能只按 ASIN 去重后丢弃不同 MSKU/库位。Listing 使用响应 `id`，保留 MSKU/ASIN。日销使用店铺+MSKU+reportDate；同一任务三指标只在身份、币种与采集批次一致时合并。
 
 历史MSKU日销真实响应允许 `skus:null`（未配对内部SKU），此时窄列sku保留空串、payload保留null，不从MSKU/ASIN推导SKU；shopIds、mskus仍必须是有效唯一身份，其他非法SKU数组仍拒绝。补货按精确MSKU关联，不按内部SKU缺失丢弃真实销量。
 
@@ -161,9 +211,10 @@ COMMIT;
 | FBA可售/总库存/在途 | available / totalInventory / inTransit | quantity / totalInventory / inTransit |
 | 入仓/预留/不可售 | inboundWorking/Shipped/Receiving、reservedTransfer/Processing/Customerorders、unfulfillable | 同名；Customerorders 的实际 key 为 reservedCustomerorders |
 | 仓库/品名/成本 | warehouseName / commodityName / avgInventoryCost / avgTransportCost | 同名，缺失NULL |
-| 销量/销售额 | productSaleDayOpenVo[].day + productNum/salePrice | reportDate + quantity/revenue |
+| 销量/销售额/订单量 | productSaleDayOpenVo[].day + productNum/salePrice/orderNum | reportDate + quantity/revenue/orders |
 | Listing MSKU/内部SKU/状态 | sku / commoditySku / onlineStatus | msku / sku / status |
 | Listing售价/可售 | standardPrice / inventoryManage.available | price / fulfillable（不使用quantity冒充FBA库存） |
+| Listing DXM 发布状态（默认显示） | dxmPublishState | 类型投影 dxmPublishState，默认显示；仅展示去首尾空格的字符串原值，缺失/空串/非字符串为 NULL。用户提供的现存 payload 观察为 delete/空值，不解释为配对状态，不据此建立配对枚举 |
 | 7/14/30天销量、销额、广告费 | day7/14/30SaleNum、day7/14/30SalePrice、day7/14/30AdTotalCost | sales7/14/30、revenue7/14/30、adSpend7/14/30 |
 | 利润/毛利率/订单/净销售额 | profit / profitRate / orderNum / salesPriceNet | grossProfit / grossProfitRate / orderNum / netRevenue |
 | 利润销量、销售额、广告费、退款率 | saleNum / salePrice / adTotalCost / refundPercent | saleQuantity / saleRevenue / adCost / refundRate |
@@ -239,7 +290,7 @@ COMMIT;
 | 利润：退款率 / 父ASIN | refundRate / parentAsin | 单条已同步记录保留退款率；跨日/多条聚合无可靠分母时留空。只统计已结算、自定义费用/加权灰显 |
 | Listing：状态 / ASIN / MSKU / 父ASIN / 品名SKU / 价格 | status / asin / msku / parentAsin / sku / price | 只读最新完整current；Active/Inactive/delete/incomplete忽略大小写。父体资源未验证而灰显 |
 | Listing：7/14/30销量 / 销售额 / 广告花费 | sales7/14/30、revenue7/14/30、adSpend7/14/30 | API滚动快照原值，缺失不填零，不跨日相加 |
-| Listing：可售 / 更新时间 | fulfillable / sourceUpdatedAt，另列capturedAt | 可售保留Listing自身已验证inventoryManage.available，不被补充库存覆盖。发货方式、调价、打印、标签、配对均灰显 |
+| Listing：可售 / 更新时间 | fulfillable / sourceUpdatedAt，另列capturedAt | 可售保留Listing自身已验证inventoryManage.available，不被补充库存覆盖。发货方式见下方 AFN/MFN 口径；调价、打印、标签、配对仍灰显 |
 | 广告产品：曝光 / 点击 / 花费 / 订单 / 销售额 | impressions / clicks / cost / adOrders / adSales | 按店铺+币种+SP/SB/SD+campaign/adGroup/product聚合日期窗；活动/组只有ID，不伪造名称 |
 | 广告：ACoS / ROAS | sum(cost)÷sum(adSales) / sum(adSales)÷sum(cost) | 行及底栏均重算；无有效分母留空。报告没有币种时仍标未知，禁止推断USD |
 | 广告：有效 / 服务状态 / 投放中 / 已暂停 | 无广告结构状态 | 未知灰态，不能把未知当关闭；仅广告产品Tab有数据，其他Tab标待接；有花费/有点击无订单按本地汇总筛选 |
@@ -298,3 +349,51 @@ COMMIT;
 已确认并本地应用增量迁移 `20261025040000_sellfox_listing_identity_image`：Listing V2 `fnsku`、`parentSku`、`mainImage` 提升至同名可空窄列及 `sellfox_listing_current`，沿用原worker分页/完整current发布契约。只取消Listing对应灰列；主图仅提供已验证HTTPS域名的按需链接，不预加载图片；其余域图片及未接字段仍为「赛狐有、API/本地无」。空值为NULL，不推导身份或补0。
 
 TK-US单次run `sellfox-sync-round-g-listing-tk-us-20261025` 已done；UTC捕获 `2026-10-25T15:38:57.848Z`，523行，FNSKU/父SKU/有效主图非空518/399/503。原468条销量回填run的ID集合未变，其他店current未变，计划未开启/修改。Listing是current字段覆盖，不能代替日销complete或自然日覆盖。完整域×字段×接口状态矩阵、只读SQL、验证限制和回滚说明见 [Round G记录](sellfox-round-g.md)。本轮仅本地修改，无提交/推送/服务器发布；生产需先迁移再加载新worker代码，旧常驻worker不会自动获得新字段映射。
+
+
+### 发货方式筛选（2026-10-26，本地待部署）
+
+销量、销售利润及在线商品支持 `fulfillment=AFN|MFN`，省略表示全部；UI 选项为「全部 / AFN / MFN」，重置会清空。来源仅为最新完整 `sellfox_listing_current` 所指向的 `SellfoxListingSnapshot.payload.switchFulfillmentTo`，不读取或推测日销 payload 的发货字段。空值、未知值和未匹配 Listing 的事实行仅留在全部，不计入 AFN/MFN 子集；在线商品可选「发货方式」列默认隐藏，未知显示空值。
+
+Listing 按同组织/工作区/店铺的快照 ID 精确关联。销量/利润沿用主图的同组织/工作区/店铺 Listing 匹配：优先精确 MSKU，再回退 ASIN；按 MSKU、ASIN、快照 ID 稳定选一条，再判断发货方式，禁止先筛候选造成兄弟 Listing 替代。筛选在成员行进入日/实体/店铺/开发员/SPU 汇总前应用，分页总数、KPI 和导出使用相同子集；销售利润未新增 SPU。此属性是当前状态，不代表历史销售日的配送方式。
+
+普通 CSV/XLSX 使用 workbench 导出路径；显式传 fulfillment 而未传 layout 的请求也使用此路径。`agent=1` 保留原英文窄列长表与 10,000 行上限，按相同 Listing 匹配筛选，分页 count 与读取复用谓词；不新增 fulfillment 窄表字段或修改 SQL view。未选筛选时不新增 Agent 关联；workbench 复用已有 Listing 关联。真实库 P95 尚未测量，部署后需在 123 验证筛选/汇总/空结果/导出一致性及查询耗时。本地验证为查询参数、SQL 结构和模拟 API 回归，不替代真实数据库执行或 UI 验收。
+
+本次不修改 schema、migration、sync 或 worker；回滚撤销本次应用代码即可，无数据回滚。业务员及其他未验证能力继续灰显；产品标签筛选见下节。
+
+
+### Buy Box 筛选（2026-10-26，本地待部署）
+
+销量、销售利润和在线商品支持 `buyBox=yes|no`，省略或空值表示全部，其他参数值按全部处理；UI 与发货方式并列，选项「全部 / 是 / 否」，重置会清空。只匹配 current Listing 快照 `payload.buyBoxWinner` 的 JSONB boolean true/false；字符串、null、缺失字段和未匹配 Listing 仅保留在全部。现有 Buy Box 列及 CSV 的「是/否」显示保持不变。
+
+匹配边界与发货方式一致：同组织/工作区/店铺，在线商品按快照 ID；销量/利润先按 MSKU 优先、ASIN 回退稳定选定一条 Listing，再判断 Buy Box。成员筛选在日/实体/KPI 汇总前应用，分页和 CSV/XLSX/Agent 导出保持同一子集，未带 layout 的显式筛选同样生效。Workbench 复用已有 Listing 关联和 boolean→是/否 CASE，Agent 用同一候选的 boolean→yes/no 标量子查询；不先过滤候选，不改销售利润 shippingPrice 等费用口径。
+
+无需 schema、migration 或 worker 变更；回滚撤销应用代码即可，不涉及数据回滚。验证按 `tests/sellfox-{browse-query,browse-filters,workbench-read,agent-read,browse-api}.test.ts` 展开文件，逐个运行 `node --import tsx <测试文件>`（避免 tsx CLI 在沙箱创建 IPC），共 85 项通过；`npm run typecheck`、改动文件 ESLint 和 `git diff --check` 通过。未运行 Chromium、生产构建或真实数据库/P95 验证。业务员、AWD、运营及销量洞察继续保持原有不可用状态。
+
+### 产品标签筛选（2026-10-26，本地待部署）
+
+在线商品、销量、销售利润支持 `productTag=<标签完整名称>`；参数去首尾空格，空值表示全部，无固定标签白名单，重置会清空。来源仅为同组织/工作区/店铺的 current Listing payload `productLabelList[].labelDetailList[].labelName`，不是历史报表日标签；缺失或非数组按空列表处理。Workbench 仅在选择标签时用嵌套 JSON 数组上的 `EXISTS` 对 `btrim(labelName)` 做参数化等值匹配，不构建标签数组、不拆分展示用「、」、不做子串 LIKE；Agent 窄表导出保留原精确数组成员匹配。原在线商品 productTags 列直接用 `string_agg(DISTINCT ... ORDER BY ...)` 按「、」连接非空名称，空列表仍显示空值。
+
+销量/利润沿用发货方式和主图的 Listing 稳定匹配：先选精确 MSKU、再回退 ASIN 的一条候选，之后匹配标签，禁止先过滤候选而改选兄弟 Listing。成员行在日/实体/KPI 汇总前筛选，分页、总数和 CSV/XLSX/Agent 导出使用同一口径；未带 layout 的显式 productTag 请求也应用筛选。广告、业务员、AWD、运营等能力不在本次范围。
+
+browse 同一 SQL 响应附带 `facets.productTags`：独立子查询从 scoped `sellfox_listing_current` 和 `SellfoxListingSnapshot` 提取非空 `btrim(labelName)`，按当前组织/工作区及店铺/站点范围去重并排序，不引用主 Listing CTE、不构建每行标签数组，不受分页、所选标签、搜索或 Listing 状态影响。未选择标签的销量/利润主 Listing CTE 不解析标签列表；在线商品仍保留展示字符串。UI 使用动态选项与「全部」，并保留 URL 当前标签以便显示空结果和重置；切换工作区清空旧选项，迟到响应沿用已有取消/epoch 防护。无新增逐行请求；导出不计算 facets，未选标签的销量/利润导出不解析标签列表。
+
+无 schema、migration、sync、worker 或数据写入；回滚本次应用代码即可。验证选用相关单元/模拟 API/组件元素树测试、TypeScript、相关 ESLint 与 diff 检查；未运行 Chromium、生产构建或真实数据库查询/P95。动态 facets 会在 browse 查询中读取当前范围 Listing 标签，真实库查询耗时及页面交互应在后续明确部署验收时验证。本次仅本地交付，不推送或发布。
+
+
+### 品牌筛选（2026-10-26，本地待部署）
+
+在线商品、销量、销售利润支持 `brand=<品牌完整名称>`，与产品标签并列。参数仅去首尾空格；按当前 Listing `btrim(payload.brand)` 参数化等值匹配，空/null 品牌只计入「全部」，不使用其他品牌字段。销量/利润先按原有 MSKU 优先、ASIN 回退选定当前 Listing，再于成员行汇总前筛选；分页、KPI 与 CSV/XLSX/Agent 导出使用相同口径，带或不带 layout 均生效。在线商品品牌列同步去首尾空格，空字符串仍为 null。
+
+browse 保留 `facets.productTags`，并在同一 SQL 响应新增 `facets.brands`：独立子查询从当前组织/工作区及店铺/站点范围 Listing 提取去空、去重、排序后的品牌，不受已选品牌、标签、搜索或状态影响；导出不计算 facets。UI 动态选项保留 URL 当前品牌，重置清空品牌，切工作区/导航时清空旧选项，复用已有迟到响应防护。广告和其他未接入控件保持原状。
+
+无 schema、migration、同步或 worker 改动；回滚应用代码即可。验证使用 browse-query、browse-filters、workbench-read、agent-read、browse-api 及 Listing 身份测试，另运行 TypeScript、相关 ESLint 与 `git diff --check`；不运行 Chromium、生产构建或真实库查询。品牌 facets 增加一次同 SQL 内 scoped Listing 扫描，真实库 P95 留待明确部署验收时评估。本次仅本地交付，不推送或发布。
+
+`/sellfox` 表格共用表头排序：点击带双向箭头的列按升序/降序切换，活动列显示方向及 `aria-sort`，换列回到升序并重置第 1 页；`sortBy` / `sortOrder=asc|desc` 保存在 URL，筛选、翻页、刷新及导出沿用。API 按域白名单校验，非法列/方向返回 400；SQL/Prisma 在完整筛选结果（工作台先聚合）上排序后再分页，同值按 ID 稳定排序，未指定排序时维持旧顺序。店铺、库存 current/历史、销量、利润、Listing 和六类广告日报均复用此路径；小时报表 API 也支持排序，页面不新增小时数据入口。图片、分析、缺失/未接列、日矩阵列、趋势/均值、进度以及分页后才补充的库存字段不提供排序，避免把当前页排序冒充全量排序。SQL 的空值排末；Prisma 保持数据库默认空值次序。回滚此功能可撤销对应提交，不涉及数据迁移；本地验证用 `npx tsx --test tests/sellfox-*.test.ts`、`npm run typecheck` 和 `npm run test:sellfox:browser`（隔离模拟接口，不访问生产）。Agent 窄列导出链接保留原始长表默认次序，不携带工作台聚合排序。尚未进行真实数据库大数据量排序性能 benchmark。
+
+
+### DXM 发布状态精确筛选（2026-10-27，BOX LOCAL ONLY）
+
+仅 listings 支持 `dxmPublishState=<完整原值>`，沿 brand 的 trim/精确匹配模式，对 current view 类型列 `s."dxmPublishState"` 参数化 `=`；列表行、count、workbench CSV/XLSX 和 `agent=1` 窄表导出同口径。空参数不加谓词，NULL 仅属于「全部」；sales / performance / inventory / ads 忽略该参数。listings browse 的 `facets.dxmPublishStates` 为 scope-only 非 NULL DISTINCT 排序值，不随行筛选缩小；UI 仅用 facets 加 URL 当前值，无固定枚举。**DXM 发布状态 ≠ 配对状态**，配对状态 `missingFilter` 继续锁定。
+
+无 schema/migration、默认列、数据写入、sync/worker 或生产改动；Fee-mining 仍暂停，不 push/deploy/SSH，回滚本片应用代码即可。定向单元/SQL/模拟 API 新增用例、TypeScript、相关 ESLint 和 diff 检查通过；browse-filters 仍有既有广告默认列陈旧断言失败，Chromium 启动 SIGTRAP，未绕过；命令、范围及浏览器补验见 [listings 本地交付记录](sellfox-listings-read-model.md#2026-10-27--listings-dxm-发布状态精确筛选与-facets--box-local-only)。

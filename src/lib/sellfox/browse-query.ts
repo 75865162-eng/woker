@@ -1,14 +1,41 @@
+import { isSellfoxSortable, sellfoxSortColumns, type SellfoxSortOrder } from "./sort-columns";
 import type { Prisma } from "@prisma/client";
 import { isSellfoxDate, sellfoxDateAt } from "@/lib/sellfox/sync-contract";
 
 export class SellfoxBrowseError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
 }
-export type SellfoxBrowseDomain = "stores" | "inventory" | "sales" | "performance" | "hourly" | "runs" | "listings" | "ads_report";
-export const sellfoxBrowseDomains: SellfoxBrowseDomain[] = ["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report"];
+export type SellfoxBrowseDomain = "stores" | "inventory" | "sales" | "performance" | "hourly" | "runs" | "listings" | "ads_report" | "ads_targeting" | "ads_search_term" | "ads_campaign" | "ads_ad_group" | "ads_placement";
+export type SellfoxBrowseDimension = "asin" | "parentAsin" | "msku" | "sku" | "store" | "developer" | "spu";
+export const sellfoxBrowseDomains: SellfoxBrowseDomain[] = ["stores", "inventory", "sales", "performance", "hourly", "runs", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"];
 export const sellfoxExportLimit = 10_000;
-export function sellfoxBrowseQuery(url: URL) {
+export function sellfoxFulfillment(value: string | null | undefined): "" | "AFN" | "MFN" {
+  return value === "AFN" || value === "MFN" ? value : "";
+}
+export function sellfoxBuyBox(value: string | null | undefined): "" | "yes" | "no" {
+  return value === "yes" || value === "no" ? value : "";
+}
+export function sellfoxProductTag(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+export function sellfoxBrand(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+export function sellfoxDxmPublishState(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+export function sellfoxBsrCategory(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+export function sellfoxSalesperson(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+export function sellfoxBrowseQuery(url: URL, domain?: string) {
   const p = url.searchParams;
+  const sortBy = p.get("sortBy") ?? "";
+  const sortOrder = p.get("sortOrder") ?? "asc";
+  if ((sortOrder !== "asc" && sortOrder !== "desc") || (p.has("sortOrder") && !sortBy)) throw new SellfoxBrowseError("排序方向必须为 asc/desc，且必须指定排序列。");
+  if (p.has("sortBy") && (!sortBy || !(domain ? isSellfoxSortable(domain, sortBy) : Object.values(sellfoxSortColumns).some(keys => keys.includes(sortBy))))) throw new SellfoxBrowseError("当前域不支持该排序列。");
   function integer(key: string, fallback: number, max: number) {
     const value = p.get(key); if (!value) return fallback;
     const number = Number(value);
@@ -20,17 +47,82 @@ export function sellfoxBrowseQuery(url: URL) {
     if (!isSellfoxDate(value)) throw new SellfoxBrowseError("日期必须使用有效 YYYY-MM-DD 格式。");
     return value;
   }
+  function optionalInt(key: string) {
+    const value = p.get(key)?.trim(); if (!value) return undefined;
+    if (!/^-?\d+$/.test(value)) throw new SellfoxBrowseError(`${key} 必须是整数。`);
+    const number = Number(value);
+    if (!Number.isSafeInteger(number)) throw new SellfoxBrowseError(`${key} 必须是整数。`);
+    return number;
+  }
+  function optionalNumber(key: string) {
+    const value = p.get(key)?.trim(); if (!value) return undefined;
+    if (!/^-?(?:\d+\.?\d*|\.\d+)$/.test(value)) throw new SellfoxBrowseError(`${key} 必须是数字。`);
+    const number = Number(value);
+    if (!Number.isFinite(number)) throw new SellfoxBrowseError(`${key} 必须是数字。`);
+    return number;
+  }
   const from = date("from"), to = date("to"), reportDate = date("reportDate");
+  const firstSaleFrom = date("firstSaleFrom"), firstSaleTo = date("firstSaleTo");
+  const totalInventoryMin = optionalInt("totalInventoryMin"), totalInventoryMax = optionalInt("totalInventoryMax");
+  const ratingMin = optionalNumber("ratingMin"), ratingMax = optionalNumber("ratingMax");
+  const costMin = optionalNumber("costMin"), costMax = optionalNumber("costMax");
+  const adSalesMin = optionalNumber("adSalesMin"), adSalesMax = optionalNumber("adSalesMax");
+  const ratingCountMin = optionalInt("ratingCountMin"), ratingCountMax = optionalInt("ratingCountMax");
+  const impressionsMin = optionalInt("impressionsMin"), impressionsMax = optionalInt("impressionsMax");
+  const clicksMin = optionalInt("clicksMin"), clicksMax = optionalInt("clicksMax");
+  const adOrdersMin = optionalInt("adOrdersMin"), adOrdersMax = optionalInt("adOrdersMax");
+  const bsrRankMin = optionalInt("bsrRankMin"), bsrRankMax = optionalInt("bsrRankMax");
+  const fulfillableMin = optionalInt("fulfillableMin"), fulfillableMax = optionalInt("fulfillableMax");
+  const sales7Min = optionalInt("sales7Min"), sales7Max = optionalInt("sales7Max");
+  const sales14Min = optionalInt("sales14Min"), sales14Max = optionalInt("sales14Max");
+  const sales30Min = optionalInt("sales30Min"), sales30Max = optionalInt("sales30Max");
+  const priceMin = optionalNumber("priceMin"), priceMax = optionalNumber("priceMax");
+  const revenue7Min = optionalNumber("revenue7Min"), revenue7Max = optionalNumber("revenue7Max");
+  const revenue14Min = optionalNumber("revenue14Min"), revenue14Max = optionalNumber("revenue14Max");
+  const revenue30Min = optionalNumber("revenue30Min"), revenue30Max = optionalNumber("revenue30Max");
+  const adSpend7Min = optionalNumber("adSpend7Min"), adSpend7Max = optionalNumber("adSpend7Max");
+  const adSpend14Min = optionalNumber("adSpend14Min"), adSpend14Max = optionalNumber("adSpend14Max");
+  const adSpend30Min = optionalNumber("adSpend30Min"), adSpend30Max = optionalNumber("adSpend30Max");
+  const listingQuantityMin = optionalNumber("listingQuantityMin"), listingQuantityMax = optionalNumber("listingQuantityMax");
+  const reservedQtyMin = optionalNumber("reservedQtyMin"), reservedQtyMax = optionalNumber("reservedQtyMax");
+  const unsellableMin = optionalNumber("unsellableMin"), unsellableMax = optionalNumber("unsellableMax");
+  const warehousingMin = optionalNumber("warehousingMin"), warehousingMax = optionalNumber("warehousingMax");
+  if (firstSaleFrom && firstSaleTo && firstSaleFrom > firstSaleTo) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
   if (from && to && from > to) throw new SellfoxBrowseError("结束日期不得早于开始日期。");
+  if (totalInventoryMin != null && totalInventoryMax != null && totalInventoryMin > totalInventoryMax) throw new SellfoxBrowseError("总库存上限不得小于下限。");
+  if (ratingMin != null && ratingMax != null && ratingMin > ratingMax) throw new SellfoxBrowseError("星级上限不得小于下限。");
+  if (costMin != null && costMax != null && costMin > costMax) throw new SellfoxBrowseError("花费上限不得小于下限。");
+  if (adSalesMin != null && adSalesMax != null && adSalesMin > adSalesMax) throw new SellfoxBrowseError("广告销售额上限不得小于下限。");
+  if (ratingCountMin != null && ratingCountMax != null && ratingCountMin > ratingCountMax) throw new SellfoxBrowseError("评论数上限不得小于下限。");
+  if (impressionsMin != null && impressionsMax != null && impressionsMin > impressionsMax) throw new SellfoxBrowseError("曝光上限不得小于下限。");
+  if (clicksMin != null && clicksMax != null && clicksMin > clicksMax) throw new SellfoxBrowseError("点击上限不得小于下限。");
+  if (adOrdersMin != null && adOrdersMax != null && adOrdersMin > adOrdersMax) throw new SellfoxBrowseError("广告订单上限不得小于下限。");
+  if (bsrRankMin != null && bsrRankMax != null && bsrRankMin > bsrRankMax) throw new SellfoxBrowseError("BSR上限不得小于下限。");
+  if (fulfillableMin != null && fulfillableMax != null && fulfillableMin > fulfillableMax) throw new SellfoxBrowseError("可售上限不得小于下限。");
+  if (sales7Min != null && sales7Max != null && sales7Min > sales7Max) throw new SellfoxBrowseError("7天销量上限不得小于下限。");
+  if (sales14Min != null && sales14Max != null && sales14Min > sales14Max) throw new SellfoxBrowseError("14天销量上限不得小于下限。");
+  if (sales30Min != null && sales30Max != null && sales30Min > sales30Max) throw new SellfoxBrowseError("30天销量上限不得小于下限。");
+  if (priceMin != null && priceMax != null && priceMin > priceMax) throw new SellfoxBrowseError("价格上限不得小于下限。");
+  if (revenue7Min != null && revenue7Max != null && revenue7Min > revenue7Max) throw new SellfoxBrowseError("7天销售额上限不得小于下限。");
+  if (revenue14Min != null && revenue14Max != null && revenue14Min > revenue14Max) throw new SellfoxBrowseError("14天销售额上限不得小于下限。");
+  if (revenue30Min != null && revenue30Max != null && revenue30Min > revenue30Max) throw new SellfoxBrowseError("30天销售额上限不得小于下限。");
+  if (adSpend7Min != null && adSpend7Max != null && adSpend7Min > adSpend7Max) throw new SellfoxBrowseError("7天广告花费上限不得小于下限。");
+  if (adSpend14Min != null && adSpend14Max != null && adSpend14Min > adSpend14Max) throw new SellfoxBrowseError("14天广告花费上限不得小于下限。");
+  if (adSpend30Min != null && adSpend30Max != null && adSpend30Min > adSpend30Max) throw new SellfoxBrowseError("30天广告花费上限不得小于下限。");
+  if (listingQuantityMin != null && listingQuantityMax != null && listingQuantityMin > listingQuantityMax) throw new SellfoxBrowseError("Listing库存上限不得小于下限。");
+  if (reservedQtyMin != null && reservedQtyMax != null && reservedQtyMin > reservedQtyMax) throw new SellfoxBrowseError("预留上限不得小于下限。");
+  if (unsellableMin != null && unsellableMax != null && unsellableMin > unsellableMax) throw new SellfoxBrowseError("不可售上限不得小于下限。");
+  if (warehousingMin != null && warehousingMax != null && warehousingMin > warehousingMax) throw new SellfoxBrowseError("入库中上限不得小于下限。");
   return {
-    layout: p.get("layout") === "workbench",
-    dimension: (["asin", "parentAsin", "msku", "sku"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as "asin" | "parentAsin" | "msku" | "sku",
-    metric: p.get("metric") === "revenue" ? "revenue" : "quantity", hideZero: p.get("hideZero") === "1",
+    sortBy, sortOrder: sortOrder as SellfoxSortOrder,
+    layout: p.get("layout") === "workbench", fulfillment: sellfoxFulfillment(p.get("fulfillment")), buyBox: sellfoxBuyBox(p.get("buyBox")), productTag: sellfoxProductTag(p.get("productTag")), brand: sellfoxBrand(p.get("brand")), dxmPublishState: sellfoxDxmPublishState(p.get("dxmPublishState")), bsrCategory: sellfoxBsrCategory(p.get("bsrCategory")), salesperson: sellfoxSalesperson(p.get("salesperson")),
+    dimension: (["asin", "parentAsin", "msku", "sku", "store", "developer", "spu"].includes(p.get("dimension") ?? "") ? p.get("dimension") : "msku") as SellfoxBrowseDimension,
+    metric: p.get("metric") === "revenue" ? "revenue" : p.get("metric") === "orders" ? "orders" : "quantity", onlySettle: p.get("onlySettle") === "1", hideZero: p.get("hideZero") === "1",
     currency: p.get("currency")?.trim() ?? "", adType: ["sp", "sb", "sd"].includes(p.get("adType") ?? "") ? p.get("adType")! : "",
     quickFilter: ["spend", "clicksNoOrders", "spendNoClicks", "noClicks"].includes(p.get("quickFilter") ?? "") ? p.get("quickFilter")! : "",
-    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate,
+    page: integer("page", 1, 1_000_000), pageSize: integer("pageSize", 50, 200), from, to, reportDate, firstSaleFrom, firstSaleTo, totalInventoryMin, totalInventoryMax, ratingMin, ratingMax, ratingCountMin, ratingCountMax, costMin, costMax, adSalesMin, adSalesMax, impressionsMin, impressionsMax, clicksMin, clicksMax, adOrdersMin, adOrdersMax, bsrRankMin, bsrRankMax, fulfillableMin, fulfillableMax, sales7Min, sales7Max, sales14Min, sales14Max, sales30Min, sales30Max, priceMin, priceMax, revenue7Min, revenue7Max, revenue14Min, revenue14Max, revenue30Min, revenue30Max, adSpend7Min, adSpend7Max, adSpend14Min, adSpend14Max, adSpend30Min, adSpend30Max, listingQuantityMin, listingQuantityMax, reservedQtyMin, reservedQtyMax, unsellableMin, unsellableMax, warehousingMin, warehousingMax,
     status: p.get("status")?.trim() || undefined,
-    searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
+    searchType: ["asin", "msku", "sku", "parentAsin", "title", "campaignId", "adGroupId", "targetingId", "searchTerm", "placement"].includes(p.get("searchType") ?? "") ? p.get("searchType")! : "", exactMatch: p.get("exactMatch") === "1",
     search: p.get("search")?.trim() ?? "", site: p.get("site")?.trim() ?? "", allDates: p.get("allDates") === "1",
     shopExternalIds: [...new Set(p.getAll("shopExternalId").map((value) => value.trim()).filter(Boolean))],
     storeId: p.get("storeId")?.trim() || undefined,
@@ -50,7 +142,7 @@ export function sellfoxStoreWhere(query: SellfoxBrowseQuery, organizationId: str
 }
 export function sellfoxSnapshotWhere(query: SellfoxBrowseQuery, organizationId: string, workspaceId: string, storeIds?: string[], performance = false) {
   return {
-    organizationId, workspaceId, ...(storeIds ? { storeId: { in: storeIds } } : {}), ...sellfoxDateFilter(query, performance),
+    organizationId, workspaceId, ...(storeIds ? { storeId: { in: storeIds } } : {}), ...sellfoxDateFilter(query, performance), ...(performance ? { onlySettle: query.onlySettle } : {}),
     ...(query.site ? { SellfoxStore: { marketplace: query.site } } : {}),
     ...(query.search ? { OR: (performance ? ["sku", "msku", "asin", "title"] : ["sku", "msku", "asin"]).map((field) => ({ [field]: { contains: query.search, mode: "insensitive" as const } })) } : {}),
   };

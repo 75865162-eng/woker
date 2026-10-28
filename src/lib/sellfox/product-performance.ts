@@ -11,13 +11,118 @@ export type PerformanceCheckpoint = { stores: Record<string, PerformanceStorePro
 type PerformanceProgress = { reportDate: string; synced: number; checkpoint: PerformanceCheckpoint };
 type Dependencies = { db: Pick<PrismaClient, "sellfoxStore" | "$transaction">; post: typeof sellfoxPost };
 
-function text(row: RecordLike, key: string) {
+export function text(row: RecordLike, key: string) {
+  const preferred: Record<string, string[]> = { asinList: ["asin"], skuList: ["sku"], mskuList: ["sku", "msku"], parentAsinList: ["parentAsin", "asin"] };
+  const fields = [...(preferred[key] ?? []), "asin", "sku", "msku", "parentAsin", "value", "id", "name"];
+  const scalar = (value: unknown) => {
+    if (!["string", "number", "boolean"].includes(typeof value)) return "";
+    const result = String(value).trim();
+    return result === "[object Object]" ? "" : result;
+  };
+  const extract = (value: unknown) => {
+    if (!value || typeof value !== "object") return scalar(value);
+    if (Array.isArray(value)) return "";
+    const record = value as RecordLike;
+    for (const field of fields) {
+      const identity = scalar(record[field]);
+      if (identity) return identity;
+    }
+    return "";
+  };
   const value = row[key];
-  if (Array.isArray(value)) return value.map((item) => typeof item === "string" ? item : item && typeof item === "object" ? String(item[key === "asinList" ? "asin" : "sku"] ?? "") : "").filter(Boolean).join(",");
-  return value === undefined || value === null ? "" : String(value).trim();
+  return (Array.isArray(value) ? value : [value]).map(extract).filter(Boolean).join(",");
 }
 function number(row: RecordLike, key: string) {
   return sellfoxNumber(row, key, ["saleNum", "saleNumFba", "saleNumFbm"].includes(key));
+}
+export function extractPerformanceFields(row: RecordLike) {
+  return {
+    promotionDiscount: sellfoxNumber(row, "promotionDiscountAmount"),
+    giftWrapFee: sellfoxNumber(row, "giftWrapAmount"),
+    imageUrl: text(row, "imageUrl") || null,
+    refundPrice: sellfoxNumber(row, "refundPrice"),
+    refundNum: sellfoxNumber(row, "refundNum"),
+    commodityCost: sellfoxNumber(row, "commodityCost"),
+    shippingPrice: sellfoxNumber(row, "shippingPrice"),
+    taxPrice: sellfoxNumber(row, "taxPrice"),
+    headTripPrice: sellfoxNumber(row, "headTripPrice"),
+    avgPurchaseCost: sellfoxNumber(row, "avgPurchaseCost"),
+    amazonCommissionPrice: sellfoxNumber(row, "amazonCommissionPrice"),
+    evaluationSaleNum: sellfoxNumber(row, "evaluationSaleNum"),
+    channelSaleNum: sellfoxNumber(row, "channelSaleNum"),
+    adSpCost: sellfoxNumber(row, "adSpCost"),
+    adSdCost: sellfoxNumber(row, "adSdCost"),
+    adSbCost: sellfoxNumber(row, "adSbCost"),
+    adSbvCost: sellfoxNumber(row, "adSbvCost"),
+    adSbsCost: sellfoxNumber(row, "adSbsCost"),
+    fbaStorageFeeAmount: sellfoxNumber(row, "fbaStorageFeeAmount"),
+    fbaLongTermStorageFeeAmount: sellfoxNumber(row, "fbaLongTermStorageFeeAmount"),
+    fbaRemovalFeeAmount: sellfoxNumber(row, "fbaRemovalFeeAmount"),
+    fbaDisposalFeeAmount: sellfoxNumber(row, "fbaDisposalFeeAmount"),
+    customAsinFee: sellfoxNumber(row, "customAsinFee"),
+    customShopFee: sellfoxNumber(row, "customShopFee"),
+    serviceFeeAmount: sellfoxNumber(row, "serviceFeeAmount"),
+    storageFeeAmount: sellfoxNumber(row, "storageFeeAmount"),
+    compensationAmount: sellfoxNumber(row, "compensationAmount"),
+    evaluationFee: sellfoxNumber(row, "evaluationFee"),
+    promotionTotalAmount: sellfoxNumber(row, "promotionTotalAmount"),
+    fbaOverageFeeAmount: sellfoxNumber(row, "fbaOverageFeeAmount"),
+    chargebackAmount: sellfoxNumber(row, "chargebackAmount"),
+    guaranteeClaimAmount: sellfoxNumber(row, "guaranteeClaimAmount"),
+    digitalServicesFeeAmount: sellfoxNumber(row, "digitalServicesFeeAmount"),
+    otherPriceAmount: sellfoxNumber(row, "otherPriceAmount"),
+    shippingChargeAmount: sellfoxNumber(row, "shippingChargeAmount"),
+    regulatoryFeeAmount: sellfoxNumber(row, "regulatoryFeeAmount"),
+    couponPaymentAmount: sellfoxNumber(row, "couponPaymentAmount"),
+    sellerDealPaymentAmount: sellfoxNumber(row, "sellerDealPaymentAmount"),
+    vineFeeAmount: sellfoxNumber(row, "vineFeeAmount"),
+    starStorageFeeAmount: sellfoxNumber(row, "starStorageFeeAmount"),
+    subscriptionAmount: sellfoxNumber(row, "subscriptionAmount"),
+    fbaCustomerReturnAmount: sellfoxNumber(row, "fbaCustomerReturnAmount"),
+    fbaInboundConvenienceFeeAmount: sellfoxNumber(row, "fbaInboundConvenienceFeeAmount"),
+    inboundTransportationFeeAmount: sellfoxNumber(row, "inboundTransportationFeeAmount"),
+    shippingChargebackAmount: sellfoxNumber(row, "shippingChargebackAmount"),
+    giftwrapChargebackAmount: sellfoxNumber(row, "giftwrapChargebackAmount"),
+    costOfPointsGrantedAmount: sellfoxNumber(row, "costOfPointsGrantedAmount"),
+    orderOtherPriceAmount: sellfoxNumber(row, "orderOtherPriceAmount"),
+    fbaInboundTransportationProgramFee: sellfoxNumber(row, "fbaInboundTransportationProgramFee"),
+    aglFeeAmount: sellfoxNumber(row, "aglFeeAmount"),
+    paidServicesFeeAmount: sellfoxNumber(row, "paidServicesFeeAmount"),
+    customerReturnHrrUnitFeeAmount: sellfoxNumber(row, "customerReturnHrrUnitFeeAmount"),
+    amazonUpstreamStorageTransportationFeeAmount: sellfoxNumber(row, "amazonUpstreamStorageTransportationFeeAmount"),
+    amazonUpstreamProcessingFeeAmount: sellfoxNumber(row, "amazonUpstreamProcessingFeeAmount"),
+    mfnPostageFeeAmount: sellfoxNumber(row, "mfnPostageFeeAmount"),
+    adjustmentFeeAmount: sellfoxNumber(row, "adjustmentFeeAmount"),
+    otherServiceFeeAmount: sellfoxNumber(row, "otherServiceFeeAmount"),
+    avgHeadTripPrice: sellfoxNumber(row, "avgHeadTripPrice"),
+    purchaseRefundPrice: sellfoxNumber(row, "purchaseRefundPrice"),
+    revenueAmount: sellfoxNumber(row, "revenueAmount"),
+    fbaPerUnitFulfillmentFeeRefundAmount: sellfoxNumber(row, "fbaPerUnitFulfillmentFeeRefundAmount"),
+    fbaWeightBasedFeeRefundAmount: sellfoxNumber(row, "fbaWeightBasedFeeRefundAmount"),
+    deferredAmount: sellfoxNumber(row, "deferredAmount"),
+    withheldTaxAmount: sellfoxNumber(row, "withheldTaxAmount"),
+    otherPriceIncomeAmount: sellfoxNumber(row, "otherPriceIncomeAmount"),
+    paymentMethodFeeAmount: sellfoxNumber(row, "paymentMethodFeeAmount"),
+    fixedClosingFeeAmount: sellfoxNumber(row, "fixedClosingFeeAmount"),
+    variableClosingFeeAmount: sellfoxNumber(row, "variableClosingFeeAmount"),
+    imagingServicesFeeAmount: sellfoxNumber(row, "imagingServicesFeeAmount"),
+    netCoAmount: sellfoxNumber(row, "netCoAmount"),
+    comminglingVatAmount: sellfoxNumber(row, "comminglingVatAmount"),
+    codFeeAmount: sellfoxNumber(row, "codFeeAmount"),
+    evaluationCapital: sellfoxNumber(row, "evaluationCapital"),
+    evaluationCommission: sellfoxNumber(row, "evaluationCommission"),
+    dealPerformanceFeeAmount: sellfoxNumber(row, "dealPerformanceFeeAmount"),
+    couponParticipationFeeAmount: sellfoxNumber(row, "couponParticipationFeeAmount"),
+    safetReimbursedAmount: sellfoxNumber(row, "safetReimbursedAmount"),
+    affordabilityExpenseAmount: sellfoxNumber(row, "affordabilityExpenseAmount"),
+    withheldFeeAmount: sellfoxNumber(row, "withheldFeeAmount"),
+    chargebackIncomeAmount: sellfoxNumber(row, "chargebackIncomeAmount"),
+    guaranteeClaimIncomeAmount: sellfoxNumber(row, "guaranteeClaimIncomeAmount"),
+    promotionSalesAmount: sellfoxNumber(row, "promotionSalesAmount"),
+    promotionShippingAmount: sellfoxNumber(row, "promotionShippingAmount"),
+    promotionTaxAmount: sellfoxNumber(row, "promotionTaxAmount"),
+    userNameList: Array.isArray(row.userNameList) ? [...new Set(row.userNameList.filter((name): name is string => typeof name === "string").map(name => name.trim()).filter(Boolean))].sort() : [],
+  };
 }
 function pageFrom(payload: unknown) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new SellfoxSyncInputError("产品表现响应结构无法识别。");
@@ -40,12 +145,17 @@ export async function syncSellfoxProductDailySnapshots(input: {
   organizationId: string;
   workspaceId: string;
   reportDate?: string;
+  onlySettle?: boolean;
+  capturedAt?: string;
   storeExternalId?: string;
   storeExternalIds?: string[];
   cursor?: { storeIndex?: number; pageNo?: number };
   checkpoint?: PerformanceCheckpoint;
   onProgress?: (progress: PerformanceProgress, tx?: Prisma.TransactionClient) => Promise<void>;
 }, dependencies: Dependencies = { db: prisma, post: sellfoxPost }) {
+  const onlySettle = input.onlySettle ?? false;
+  const capturedAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
+  if (!Number.isFinite(capturedAt.getTime())) throw new SellfoxSyncInputError("利润采集时间无效。");
   const reportDate = input.reportDate ?? defaultSellfoxReportDate();
   const storeExternalIds = input.storeExternalIds?.length ? input.storeExternalIds : input.storeExternalId ? [input.storeExternalId] : undefined;
   const stores = await dependencies.db.sellfoxStore.findMany({
@@ -74,7 +184,7 @@ export async function syncSellfoxProductDailySnapshots(input: {
       if (previous?.done) continue;
       while (pageNo <= 10_000) {
         const payload = await dependencies.post<unknown>("/api/sale/profit/product/pageList.json", {
-          pageNo, pageSize: 100, shopIdList: [store.externalId], startDate: reportDate, endDate: reportDate, type: "msku", currency: "",
+          pageNo, pageSize: 100, shopIdList: [store.externalId], startDate: reportDate, endDate: reportDate, type: "msku", currency: "", onlySettle,
         });
         const { rows, totalPages } = pageFrom(payload);
         // Validate pagination and identities before committing any part of this page.
@@ -88,18 +198,24 @@ export async function syncSellfoxProductDailySnapshots(input: {
           for (let index = 0; index < rows.length; index += 1) {
             const row = rows[index]; const sourceKey = identities[index]; const now = new Date();
             const data = {
-              sku: text(row, "skuList"), msku: text(row, "mskuList"), asin: text(row, "asinList"), parentAsin: text(row, "parentAsinList"),
+              onlySettle, sku: text(row, "skuList"), msku: text(row, "mskuList"), asin: text(row, "asinList"), parentAsin: text(row, "parentAsinList"),
               orderNum: sellfoxNumber(row, "orderNum", true), netRevenue: sellfoxNumber(row, "salesPriceNet"), title: text(row, "title"), currency: text(row, "currency"), saleQuantity: number(row, "saleNum"),
               fbaQuantity: number(row, "saleNumFba"), fbmQuantity: number(row, "saleNumFbm"),
               saleRevenue: number(row, "salePrice"), grossProfit: number(row, "profit"), grossProfitRate: number(row, "profitRate"),
-              adCost: number(row, "adTotalCost"), refundRate: number(row, "refundPercent"), payload: row as Prisma.InputJsonValue, syncedAt: now, updatedAt: now,
+              adCost: number(row, "adTotalCost"), refundRate: number(row, "refundPercent"), ...extractPerformanceFields(row), payload: row as Prisma.InputJsonValue, syncedAt: capturedAt, updatedAt: now,
             };
             await tx.sellfoxProductDailySnapshot.upsert({
-              where: { storeId_reportDate_sourceKey: { storeId: store.id, reportDate, sourceKey } },
-              create: { id: `sellfox-product-daily-${store.id}-${reportDate}-${sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, sourceKey, ...data },
+              where: { storeId_reportDate_sourceKey_onlySettle: { storeId: store.id, reportDate, sourceKey, onlySettle } },
+              create: { id: onlySettle ? `sellfox-product-settled-${JSON.stringify([store.id, reportDate, sourceKey])}` : `sellfox-product-daily-${store.id}-${reportDate}-${sourceKey}`, organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, sourceKey, ...data },
               update: data,
             });
           }
+          // Only a fully collected settled partition may remove stale settled rows.
+          // A valid empty response clears that scope; failure never clears it.
+          if (onlySettle && nextPage === null) await tx.sellfoxProductDailySnapshot.deleteMany({ where: {
+            organizationId: input.organizationId, workspaceId: input.workspaceId, storeId: store.id, reportDate, onlySettle,
+            syncedAt: { not: capturedAt },
+          } });
           await input.onProgress?.({ reportDate, synced: syncedCount(nextCheckpoint), checkpoint: nextCheckpoint }, tx);
         });
         checkpoint = nextCheckpoint;
@@ -117,5 +233,5 @@ export async function syncSellfoxProductDailySnapshots(input: {
   if (failedStores.length) {
     throw new SellfoxStoreSyncError(`${failedStores.length} 个店铺产品表现同步失败，已继续处理其他店铺。`, failedStores.some((id) => checkpoint.stores[id].retryable));
   }
-  return { reportDate, storeCount: stores.length, synced: syncedCount(checkpoint), failedStores };
+  return { reportDate, onlySettle, storeCount: stores.length, synced: syncedCount(checkpoint), failedStores };
 }

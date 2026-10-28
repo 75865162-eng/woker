@@ -30,7 +30,7 @@ function strings(value: unknown) {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) throw new SellfoxSyncInputError("销量响应商品身份列表无效。");
   return value.map((item) => (item as string).trim());
 }
-export function sellfoxSalesRow(value: unknown, shopExternalId: string, reportDate: string, metric: "productNum" | "salePrice") {
+export function sellfoxSalesRow(value: unknown, shopExternalId: string, reportDate: string, metric: "productNum" | "salePrice" | "orderNum") {
   // Real historical MSKU reports can have skus:null (no internal SKU pairing).
   // shopIds/mskus remain required; do not manufacture an internal SKU from MSKU.
   const row = record(value); const shops = strings(row.shopIds); const mskus = strings(row.mskus); const asins = strings(row.asins); const skus = row.skus === null ? [] : strings(row.skus);
@@ -38,6 +38,6 @@ export function sellfoxSalesRow(value: unknown, shopExternalId: string, reportDa
   if (mskus.length !== 1 || asins.length > 1 || skus.length > 1) throw new SellfoxSyncInputError("销量响应不是唯一 MSKU 维度。");
   if (!Array.isArray(row.productSaleDayOpenVo) || row.productSaleDayOpenVo.length !== 1) throw new SellfoxSyncInputError("销量单日报表缺少唯一业务日。");
   const day = record(row.productSaleDayOpenVo[0]);
-  if (day.day !== reportDate || !(metric in day) || !text(day.currency)) throw new SellfoxSyncInputError("销量日期、币种或指标与请求不匹配。");
-  return { sourceKey: mskus[0], msku: mskus[0], asin: asins[0] ?? "", sku: skus[0] ?? "", currency: text(day.currency), value: numeric(day[metric], metric === "productNum"), payload: row };
+  if (day.day !== reportDate || (!(metric in day) && metric !== "orderNum") || !text(day.currency)) throw new SellfoxSyncInputError("销量日期、币种或指标与请求不匹配。");
+  return { sourceKey: mskus[0], msku: mskus[0], asin: asins[0] ?? "", sku: skus[0] ?? "", currency: text(day.currency), value: numeric(day[metric] ?? null, metric !== "salePrice"), payload: row };
 }

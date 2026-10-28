@@ -1,0 +1,34 @@
+{
+  "backfill": {
+    "customAsinFee": "1.5",
+    "customShopFee": 0,
+    "serviceFeeAmount": 3,
+    "storageFeeAmount": "4.25",
+    "compensationAmount": 5,
+    "evaluationFee": 6
+  },
+  "insert": {
+    "customAsinFee": 0,
+    "customShopFee": "2.5",
+    "serviceFeeAmount": 4,
+    "storageFeeAmount": 5,
+    "compensationAmount": 6,
+    "evaluationFee": 7
+  },
+  "cad": {
+    "customAsinFee": 10,
+    "customShopFee": 20,
+    "serviceFeeAmount": 30,
+    "storageFeeAmount": 40,
+    "compensationAmount": 50,
+    "evaluationFee": 60
+  },
+  "invalid": {
+    "customAsinFee": "invalid",
+    "customShopFee": "Infinity",
+    "serviceFeeAmount": null,
+    "storageFeeAmount": "1e999",
+    "compensationAmount": "",
+    "evaluationFee": "NaN"
+  }
+}

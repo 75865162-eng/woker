@@ -1,0 +1,58 @@
+{
+  "backfill": {
+    "fbaInboundTransportationProgramFee": "1.5",
+    "aglFeeAmount": 0,
+    "paidServicesFeeAmount": 3,
+    "customerReturnHrrUnitFeeAmount": "14.25",
+    "amazonUpstreamStorageTransportationFeeAmount": 5,
+    "amazonUpstreamProcessingFeeAmount": 6,
+    "mfnPostageFeeAmount": 7,
+    "adjustmentFeeAmount": 8,
+    "otherServiceFeeAmount": 9,
+    "avgHeadTripPrice": 10,
+    "purchaseRefundPrice": 11,
+    "revenueAmount": 12
+  },
+  "insert": {
+    "fbaInboundTransportationProgramFee": 0,
+    "aglFeeAmount": "2.5",
+    "paidServicesFeeAmount": 4,
+    "customerReturnHrrUnitFeeAmount": 5,
+    "amazonUpstreamStorageTransportationFeeAmount": 6,
+    "amazonUpstreamProcessingFeeAmount": 7,
+    "mfnPostageFeeAmount": 8,
+    "adjustmentFeeAmount": 9,
+    "otherServiceFeeAmount": 10,
+    "avgHeadTripPrice": 11,
+    "purchaseRefundPrice": 12,
+    "revenueAmount": 13
+  },
+  "cad": {
+    "fbaInboundTransportationProgramFee": 10,
+    "aglFeeAmount": 20,
+    "paidServicesFeeAmount": 30,
+    "customerReturnHrrUnitFeeAmount": 40,
+    "amazonUpstreamStorageTransportationFeeAmount": 50,
+    "amazonUpstreamProcessingFeeAmount": 60,
+    "mfnPostageFeeAmount": 70,
+    "adjustmentFeeAmount": 80,
+    "otherServiceFeeAmount": 90,
+    "avgHeadTripPrice": 100,
+    "purchaseRefundPrice": 110,
+    "revenueAmount": 120
+  },
+  "invalid": {
+    "fbaInboundTransportationProgramFee": "invalid",
+    "aglFeeAmount": "",
+    "paidServicesFeeAmount": null,
+    "customerReturnHrrUnitFeeAmount": "Infinity",
+    "amazonUpstreamStorageTransportationFeeAmount": "1e999",
+    "amazonUpstreamProcessingFeeAmount": "NaN",
+    "mfnPostageFeeAmount": {},
+    "adjustmentFeeAmount": [],
+    "otherServiceFeeAmount": true,
+    "avgHeadTripPrice": "-Infinity",
+    "purchaseRefundPrice": " ",
+    "revenueAmount": null
+  }
+}

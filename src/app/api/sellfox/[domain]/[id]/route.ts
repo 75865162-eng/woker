@@ -18,6 +18,11 @@ export async function GET(request: Request, context: { params: Promise<{ domain:
     else if (domain === "performance") record = await prisma.sellfoxProductDailySnapshot.findFirst({ where, select: { payload: true } });
     else if (domain === "listings") record = await prisma.sellfoxListingSnapshot.findFirst({ where, select: { payload: true } });
     else if (domain === "ads_report") record = await prisma.sellfoxAdsProductDaily.findFirst({ where, select: { payload: true } });
+    else if (domain === "ads_campaign") record = await prisma.sellfoxAdsCampaignDaily.findFirst({ where, select: { payload: true } });
+    else if (domain === "ads_ad_group") record = await prisma.sellfoxAdsAdGroupDaily.findFirst({ where, select: { payload: true } });
+    else if (domain === "ads_placement") record = await prisma.sellfoxAdsPlacementDaily.findFirst({ where, select: { payload: true } });
+    else if (domain === "ads_targeting") record = await prisma.sellfoxAdsTargetingDaily.findFirst({ where, select: { payload: true } });
+    else if (domain === "ads_search_term") record = await prisma.sellfoxAdsSearchTermDaily.findFirst({ where, select: { payload: true } });
     else if (domain === "hourly") record = await prisma.sellfoxHourlyMetric.findFirst({ where, select: { payload: true } });
     else if (domain === "runs") record = await prisma.sellfoxSyncRun.findFirst({ where, select: { summary: true } });
     else return Response.json({ error: "数据域不存在。" }, { status: 404 });

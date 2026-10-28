@@ -1,9 +1,9 @@
-export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report"] as const;
+export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
 export type SellfoxSyncResource = (typeof sellfoxSyncResources)[number];
 
 export function sellfoxSyncDisabledReason(resource: string): string | null {
   if (!isSellfoxSyncResource(resource)) return "此赛狐数据域尚未接入。";
-  // V2 page + SP product report verified against real responses on 2026-10-25.
+  // Listing/product verified live; additional CPC reports enabled with strict provisional XLSX contracts.
 
   return null;
 }

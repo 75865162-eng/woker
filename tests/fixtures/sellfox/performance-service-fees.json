@@ -1,0 +1,58 @@
+{
+  "backfill": {
+    "fbaPerUnitFulfillmentFeeRefundAmount": "1.5",
+    "fbaWeightBasedFeeRefundAmount": 0,
+    "deferredAmount": 3,
+    "withheldTaxAmount": "14.25",
+    "otherPriceIncomeAmount": 5,
+    "paymentMethodFeeAmount": 6,
+    "fixedClosingFeeAmount": 7,
+    "variableClosingFeeAmount": 8,
+    "imagingServicesFeeAmount": 9,
+    "netCoAmount": 10,
+    "comminglingVatAmount": 11,
+    "codFeeAmount": 12
+  },
+  "insert": {
+    "fbaPerUnitFulfillmentFeeRefundAmount": 0,
+    "fbaWeightBasedFeeRefundAmount": "2.5",
+    "deferredAmount": 4,
+    "withheldTaxAmount": 5,
+    "otherPriceIncomeAmount": 6,
+    "paymentMethodFeeAmount": 7,
+    "fixedClosingFeeAmount": 8,
+    "variableClosingFeeAmount": 9,
+    "imagingServicesFeeAmount": 10,
+    "netCoAmount": 11,
+    "comminglingVatAmount": 12,
+    "codFeeAmount": 13
+  },
+  "cad": {
+    "fbaPerUnitFulfillmentFeeRefundAmount": 10,
+    "fbaWeightBasedFeeRefundAmount": 20,
+    "deferredAmount": 30,
+    "withheldTaxAmount": 40,
+    "otherPriceIncomeAmount": 50,
+    "paymentMethodFeeAmount": 60,
+    "fixedClosingFeeAmount": 70,
+    "variableClosingFeeAmount": 80,
+    "imagingServicesFeeAmount": 90,
+    "netCoAmount": 100,
+    "comminglingVatAmount": 110,
+    "codFeeAmount": 120
+  },
+  "invalid": {
+    "fbaPerUnitFulfillmentFeeRefundAmount": "invalid",
+    "fbaWeightBasedFeeRefundAmount": "",
+    "deferredAmount": null,
+    "withheldTaxAmount": "Infinity",
+    "otherPriceIncomeAmount": "1e999",
+    "paymentMethodFeeAmount": "NaN",
+    "fixedClosingFeeAmount": {},
+    "variableClosingFeeAmount": [],
+    "imagingServicesFeeAmount": true,
+    "netCoAmount": "-Infinity",
+    "comminglingVatAmount": " ",
+    "codFeeAmount": null
+  }
+}
