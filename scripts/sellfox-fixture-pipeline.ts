@@ -71,22 +71,9 @@ async function fixturePost(requestPath: string, body: unknown) {
   throw new Error(`fixture pipeline 未覆盖 ${requestPath}`);
 }
 
-async function probeOpenApi() {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
-    const response = await fetch("https://openapi.sellfox.com/", { signal: controller.signal });
-    return { reachable: true, status: response.status };
-  } catch (error) {
-    return { reachable: false, error: error instanceof Error ? error.name : "error" };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function main() {
   const credentialsConfigured = Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET);
-  const probe = await probeOpenApi();
+  const probe = { skipped: true, reason: "live OpenAPI paused until the Grok Bot whitelist pull" };
   const organization = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
   const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
   if (!organization || !user) throw new Error("需要先运行 npm run db:seed-admin。");
@@ -137,6 +124,46 @@ async function main() {
     ...scope,
     onProgress: async () => undefined,
   }, { db: prisma, post: fixturePost });
+  const secondPost = async (requestPath: string, body: unknown) => {
+    const page = await fixturePost(requestPath, body) as { rows?: Array<Record<string, unknown>> };
+    const rows = (page.rows ?? []).map((row) => {
+      const next = { ...row };
+      if (Array.isArray(next.mskus)) next.mskus = ["MSKU-FIXTURE-2"];
+      if (Array.isArray(next.asins)) next.asins = ["ASIN-FIXTURE-2"];
+      if (Array.isArray(next.skus)) next.skus = ["SKU-FIXTURE-2"];
+      if (Array.isArray(next.mskuList)) next.mskuList = ["MSKU-FIXTURE-2"];
+      if (Array.isArray(next.skuList)) next.skuList = ["SKU-FIXTURE-2"];
+      if (Array.isArray(next.asinList)) next.asinList = ["ASIN-FIXTURE-2"];
+      if (next.id === "listing-fixture" || next.id === "inventory-fixture") next.id = `${next.id}-2`;
+      if (typeof next.asin === "string") next.asin = "ASIN-FIXTURE-2";
+      if (typeof next.sku === "string" && next.sku === "MSKU-FIXTURE") next.sku = "MSKU-FIXTURE-2";
+      if (typeof next.commoditySku === "string") next.commoditySku = "SKU-FIXTURE-2";
+      if (typeof next.title === "string") next.title = "Fixture title 2";
+      return next;
+    });
+    return { ...page, rows };
+  };
+  await syncSellfoxSnapshotStores({
+    ...scope, resource: "sales", reportDate, onProgress: async () => undefined,
+  }, { db: prisma, post: secondPost });
+  await syncSellfoxSnapshotStores({
+    ...scope, resource: "inventory", reportDate, onProgress: async () => undefined,
+  }, { db: prisma, post: secondPost });
+  await syncSellfoxListings({ ...scope, onProgress: async () => undefined }, { db: prisma, post: secondPost });
+  await syncSellfoxProductDailySnapshots({
+    organizationId: organization.id, workspaceId, storeExternalIds: [shopExternalId], reportDate, onlySettle: false, capturedAt, onProgress: async () => undefined,
+  }, { db: prisma, post: secondPost });
+  for (const item of [
+    { productId: "fixture-product", asin: "ASIN-FIXTURE", msku: "MSKU-FIXTURE", impressions: 120, clicks: 6, cost: 1.5, adOrders: 1, adSales: 19.99 },
+    { productId: "fixture-product-2", asin: "ASIN-FIXTURE-2", msku: "MSKU-FIXTURE-2", impressions: 40, clicks: 1, cost: 0.4, adOrders: 0, adSales: 0 },
+  ]) {
+    await prisma.sellfoxAdsProductDaily.upsert({
+      where: { storeId_reportDate_adType_campaignId_adGroupId_productId: { storeId: store.id, reportDate, adType: "sp", campaignId: "fixture-campaign", adGroupId: "fixture-group", productId: item.productId } },
+      create: { id: `sellfox-fixture-ads-${item.productId}`, organizationId: organization.id, workspaceId, storeId: store.id, reportDate, adType: "sp", campaignId: "fixture-campaign", adGroupId: "fixture-group", currency: "USD", payload: { source: "fixture", live: false }, syncedAt: new Date(capturedAt), ...item },
+      update: { asin: item.asin, msku: item.msku, impressions: item.impressions, clicks: item.clicks, cost: item.cost, adOrders: item.adOrders, adSales: item.adSales, currency: "USD", payload: { source: "fixture", live: false } },
+    });
+  }
+
   const performance = await syncSellfoxProductDailySnapshots({
     organizationId: organization.id,
     workspaceId,
@@ -163,6 +190,7 @@ async function main() {
     },
     update: { enabled: false, userId: user.id },
   });
+  await prisma.sellfoxSyncSchedule.updateMany({ where: { organizationId: organization.id, workspaceId }, data: { enabled: false } });
   await prisma.sellfoxSyncRun.upsert({
     where: { id: "sellfox-fixture-schedule-replay" },
     create: {
@@ -182,7 +210,7 @@ async function main() {
         nextRunAt,
         reportDate,
         shopExternalIds: [shopExternalId],
-        note: "凭据为空，未调用 OpenAPI。此记录只证明窄表写入与计划 due 判断。",
+        note: "未调用 OpenAPI。演示行只用于 /sellfox 界面验收，计划保持关闭。",
       },
       finishedAt: new Date(),
     },
@@ -199,17 +227,19 @@ async function main() {
         nextRunAt,
         reportDate,
         shopExternalIds: [shopExternalId],
-        note: "凭据为空，未调用 OpenAPI。此记录只证明窄表写入与计划 due 判断。",
+        note: "未调用 OpenAPI。演示行只用于 /sellfox 界面验收，计划保持关闭。",
       },
       finishedAt: new Date(),
     },
   });
 
-  const [salesRows, inventoryRows, listingRows, performanceRows] = await Promise.all([
+  const [salesRows, inventoryRows, listingRows, performanceRows, adsRows, enabledSchedules] = await Promise.all([
     prisma.sellfoxSalesDailySnapshot.count({ where: { storeId: store.id } }),
     prisma.sellfoxFbaInventorySnapshot.count({ where: { storeId: store.id } }),
     prisma.sellfoxListingSnapshot.count({ where: { storeId: store.id } }),
     prisma.sellfoxProductDailySnapshot.count({ where: { storeId: store.id } }),
+    prisma.sellfoxAdsProductDaily.count({ where: { storeId: store.id } }),
+    prisma.sellfoxSyncSchedule.count({ where: { organizationId: organization.id, workspaceId, enabled: true } }),
   ]);
   console.log(JSON.stringify({
     credentialsConfigured,
@@ -218,7 +248,8 @@ async function main() {
     nextRunAt,
     scheduleEnabled: false,
     writes: { sales, inventory, listings, performance },
-    rows: { salesRows, inventoryRows, listingRows, performanceRows },
+    enabledSchedules,
+    rows: { salesRows, inventoryRows, listingRows, performanceRows, adsRows },
   }, null, 2));
 }
 
