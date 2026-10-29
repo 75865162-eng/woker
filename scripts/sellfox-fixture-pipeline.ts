@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
+import { sellfoxPost } from "@/lib/sellfox/client";
 import { syncSellfoxListings } from "@/lib/sellfox/listing-sync";
 import { syncSellfoxProductDailySnapshots } from "@/lib/sellfox/product-performance";
 import { isSellfoxScheduleDue, nextSellfoxScheduleAt } from "@/lib/sellfox/schedule-time";
@@ -58,18 +59,18 @@ function performancePage() {
   };
 }
 
-async function fixturePost(requestPath: string, body: unknown) {
+const fixturePost: typeof sellfoxPost = async <T>(requestPath: string, body: unknown) => {
   const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
-  if (requestPath === "/api/inventoryManage/fba/pageList.json") return loadJson("inventory-page.json");
+  if (requestPath === "/api/inventoryManage/fba/pageList.json") return loadJson("inventory-page.json") as T;
   if (requestPath === "/api/productSale/page.json") {
-    if (record.type === "productNum") return loadJson("sales-volume-page.json");
-    if (record.type === "salePrice") return loadJson("sales-revenue-page.json");
-    if (record.type === "orderNum") return ordersPage();
+    if (record.type === "productNum") return loadJson("sales-volume-page.json") as T;
+    if (record.type === "salePrice") return loadJson("sales-revenue-page.json") as T;
+    if (record.type === "orderNum") return ordersPage() as T;
   }
-  if (requestPath === "/api/order/api/product/v2/pageList.json") return loadJson("listing-page.json");
-  if (requestPath === "/api/sale/profit/product/pageList.json") return performancePage();
+  if (requestPath === "/api/order/api/product/v2/pageList.json") return loadJson("listing-page.json") as T;
+  if (requestPath === "/api/sale/profit/product/pageList.json") return performancePage() as T;
   throw new Error(`fixture pipeline 未覆盖 ${requestPath}`);
-}
+};
 
 async function main() {
   const credentialsConfigured = Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET);
@@ -124,8 +125,8 @@ async function main() {
     ...scope,
     onProgress: async () => undefined,
   }, { db: prisma, post: fixturePost });
-  const secondPost = async (requestPath: string, body: unknown) => {
-    const page = await fixturePost(requestPath, body) as { rows?: Array<Record<string, unknown>> };
+  const secondPost: typeof sellfoxPost = async <T>(requestPath: string, body: unknown) => {
+    const page = await fixturePost<{ rows?: Array<Record<string, unknown>> }>(requestPath, body);
     const rows = (page.rows ?? []).map((row) => {
       const next = { ...row };
       if (Array.isArray(next.mskus)) next.mskus = ["MSKU-FIXTURE-2"];
@@ -141,7 +142,7 @@ async function main() {
       if (typeof next.title === "string") next.title = "Fixture title 2";
       return next;
     });
-    return { ...page, rows };
+    return { ...page, rows } as T;
   };
   await syncSellfoxSnapshotStores({
     ...scope, resource: "sales", reportDate, onProgress: async () => undefined,
