@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PPC Pilot | Amazon PPC 广告优化",
+  title: "条条tiaotiao",
   description: "基于规则引擎并预留 AI Bid Optimization Engine 的 Amazon PPC 广告优化 SaaS。",
 };
 

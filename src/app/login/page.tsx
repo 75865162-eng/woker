@@ -78,7 +78,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground">{isRegister ? "注册 ERP 工作台" : "登录 ERP 工作台"}</h1>
-            <p className="text-xs font-semibold text-muted">Amazon Bulk AD 内部系统</p>
+            <p className="text-xs font-semibold text-muted">条条tiaotiao</p>
           </div>
         </div>
 
