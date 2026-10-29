@@ -281,3 +281,16 @@
 验证：新增每日时区/边界/错过时刻、间隔、防锁键碰撞、权限撤销、缺凭据计划、手动防重测试；5 项隔离浏览器烟测通过。check:fast 的测试阶段通过，lint 仍被既有 `tmp/create-kayak-sku.ts:75` 的 no-explicit-any 阻断；另独立执行 TypeScript 与本轮文件 ESLint。无 schema 变化，不重复 generate/migrate；不做生产构建和服务器操作。
 
 尚未闭环：running 任务的数据库原子 claim/lease、多副本接管与 Redis 丢失恢复、缺日回补、Listing 契约核验及完整批次覆盖模型。当前创建防重不能替代执行租约；定时生产启用前需继续专项验证。
+
+## 11. 本机验收：无密钥时的管道与定时开关
+
+真实拉取只认服务端环境变量，页面不收集密钥：
+
+- `SELLFOX_CLIENT_ID`
+- `SELLFOX_CLIENT_SECRET`
+- 可选 `SELLFOX_REQUEST_TIMEOUT_MS`（默认 30000，范围 5000–120000）
+- `DATABASE_URL`、`REDIS_URL`、`QUEUE_DRIVER=redis`
+
+启用步骤：把上述变量写入服务器 `.env`（不要提交），重启 `npm run worker:sellfox-sync`（生产 unit 为 `amazon-sellfox-sync-worker`）。在 `/sellfox` 或 `/settings?tab=operations` 由具备 `sellfox:create` 的用户打开对应资源计划。计划默认关闭；缺凭据时开启接口返回 503，Worker 在凭据为空时不入队。每日销量/利润/Listing/广告在 Asia/Shanghai 06:30 入队，库存默认 180 分钟。Worker 不由页面启动。
+
+没有密钥时，`npm run sellfox:fixture-pipeline` 用 `tests/fixtures/sellfox/` 的脱敏页，走与线上相同的 `syncSellfoxSnapshotStores`、`syncSellfoxListings`、`syncSellfoxProductDailySnapshots` 写入当前库。店铺名带「演示」，不是 TK店-US 金样，也不能代替 OpenAPI 定时拉取。广告报告仍要真实 XLSX，fixture 管道不编造广告行。

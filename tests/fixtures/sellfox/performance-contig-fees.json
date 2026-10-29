@@ -1,0 +1,58 @@
+{
+  "backfill": {
+    "couponPaymentAmount": "1.5",
+    "sellerDealPaymentAmount": 0,
+    "vineFeeAmount": 3,
+    "starStorageFeeAmount": "14.25",
+    "subscriptionAmount": 5,
+    "fbaCustomerReturnAmount": 6,
+    "fbaInboundConvenienceFeeAmount": 7,
+    "inboundTransportationFeeAmount": 8,
+    "shippingChargebackAmount": 9,
+    "giftwrapChargebackAmount": 10,
+    "costOfPointsGrantedAmount": 11,
+    "orderOtherPriceAmount": 12
+  },
+  "insert": {
+    "couponPaymentAmount": 0,
+    "sellerDealPaymentAmount": "2.5",
+    "vineFeeAmount": 4,
+    "starStorageFeeAmount": 5,
+    "subscriptionAmount": 6,
+    "fbaCustomerReturnAmount": 7,
+    "fbaInboundConvenienceFeeAmount": 8,
+    "inboundTransportationFeeAmount": 9,
+    "shippingChargebackAmount": 10,
+    "giftwrapChargebackAmount": 11,
+    "costOfPointsGrantedAmount": 12,
+    "orderOtherPriceAmount": 13
+  },
+  "cad": {
+    "couponPaymentAmount": 10,
+    "sellerDealPaymentAmount": 20,
+    "vineFeeAmount": 30,
+    "starStorageFeeAmount": 40,
+    "subscriptionAmount": 50,
+    "fbaCustomerReturnAmount": 60,
+    "fbaInboundConvenienceFeeAmount": 70,
+    "inboundTransportationFeeAmount": 80,
+    "shippingChargebackAmount": 90,
+    "giftwrapChargebackAmount": 100,
+    "costOfPointsGrantedAmount": 110,
+    "orderOtherPriceAmount": 120
+  },
+  "invalid": {
+    "couponPaymentAmount": "invalid",
+    "sellerDealPaymentAmount": "",
+    "vineFeeAmount": null,
+    "starStorageFeeAmount": "Infinity",
+    "subscriptionAmount": "1e999",
+    "fbaCustomerReturnAmount": "NaN",
+    "fbaInboundConvenienceFeeAmount": {},
+    "inboundTransportationFeeAmount": [],
+    "shippingChargebackAmount": true,
+    "giftwrapChargebackAmount": "-Infinity",
+    "costOfPointsGrantedAmount": " ",
+    "orderOtherPriceAmount": null
+  }
+}

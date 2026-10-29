@@ -12,7 +12,7 @@ import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { SellfoxRequestError } from "@/lib/sellfox/client";
-import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError } from "@/lib/sellfox/sync-contract";
+import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
 const workerId = process.env.SELLFOX_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -66,7 +66,7 @@ async function recoverAndSchedule() {
         if (active.length) return;
         const history = await sellfoxScheduledBackfill(tx, schedule, now, Math.min(90, Math.max(1, Math.floor(Number(process.env.SELLFOX_BACKFILL_DAYS_PER_RUN) || 7))));
         const runId = `sellfox-sync-${randomUUID()}`;
-        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", scheduleId: schedule.id, ...history, ...normalizeSellfoxDates(schedule.resource as "stores" | "inventory" | "sales" | "performance" | "listings" | "ads_report", {}, now), datesFrozen: true, requestVersion: 2 } } });
+        await tx.sellfoxSyncRun.create({ data: { id: runId, organizationId: schedule.organizationId, workspaceId: schedule.workspaceId, userId: schedule.userId, resource: schedule.resource, status: "queued", summary: { trigger: "schedule", scheduleId: schedule.id, ...history, ...normalizeSellfoxDates(schedule.resource as SellfoxSyncResource, {}, now), datesFrozen: true, requestVersion: 2 } } });
         await tx.sellfoxSyncSchedule.update({ where: { id: schedule.id }, data: { lastEnqueuedAt: now } });
       });
     }

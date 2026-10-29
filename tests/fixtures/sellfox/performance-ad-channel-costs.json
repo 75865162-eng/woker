@@ -1,0 +1,30 @@
+{
+  "backfill": {
+    "adSpCost": "1.5",
+    "adSdCost": 0,
+    "adSbCost": 3,
+    "adSbvCost": "4.25",
+    "adSbsCost": "5"
+  },
+  "insert": {
+    "adSpCost": 0,
+    "adSdCost": "2.5",
+    "adSbCost": 4,
+    "adSbvCost": 5,
+    "adSbsCost": "6.75"
+  },
+  "cad": {
+    "adSpCost": 10,
+    "adSdCost": 20,
+    "adSbCost": 30,
+    "adSbvCost": 40,
+    "adSbsCost": 50
+  },
+  "invalid": {
+    "adSpCost": "invalid",
+    "adSdCost": "",
+    "adSbCost": "Infinity",
+    "adSbvCost": null,
+    "adSbsCost": "1e999"
+  }
+}

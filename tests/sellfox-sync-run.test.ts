@@ -62,7 +62,7 @@ test("legacy performance runs freeze dates from creation and keep completed chec
   let run: Record<string, unknown> = {
     id: "legacy", organizationId: "org", workspaceId: "workspace", userId: "user", resource: "performance", executionAttempts: 0, status: "queued",
     startedAt: new Date("2026-10-23T16:00:00Z"),
-    summary: { shopExternalIds: ["shop-a"], progress: { performance: { "2026-10-23": { stores: { "shop-a": { pageNo: 1, synced: 12, done: true } } } } } },
+    summary: { shopExternalIds: ["shop-a"], progress: { performance: { "2026-10-23": { stores: { "shop-a": { pageNo: 1, synced: 12, done: true } } } }, performanceSettled: { "2026-10-23": { stores: { "shop-a": { pageNo: 1, synced: 3, done: true } } } } } },
   };
   globals.prisma = {
     organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
@@ -76,7 +76,7 @@ test("legacy performance runs freeze dates from creation and keep completed chec
     assert.equal(run.status, "done");
     const summary = run.summary as Record<string, unknown>;
     assert.equal(summary.startDate, "2026-10-23"); assert.equal(summary.datesFrozen, true);
-    assert.deepEqual(summary.result, { startDate: "2026-10-23", endDate: "2026-10-23", storeCount: 1, synced: 12 });
+    assert.deepEqual(summary.result, { startDate: "2026-10-23", endDate: "2026-10-23", storeCount: 1, synced: 15, onlySettleModes: [false, true] });
     assert.ok(summary.progress);
   } finally {
     globals.prisma = previous;

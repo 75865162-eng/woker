@@ -1,3 +1,4 @@
+import { resolveEffectiveReportDate } from "@/lib/sellfox/browse-report-date";
 import { sellfoxWorkbenchExport } from "@/lib/sellfox/workbench-export";
 import { readSellfoxAgentRows, sellfoxAgentCsv } from "@/lib/sellfox/agent-read";
 import ExcelJS from "exceljs";
@@ -23,13 +24,14 @@ export async function GET(request: Request) {
   try {
     const scope = workspaceScopeFromRequest(request);
     const url = new URL(request.url);
-    const query = sellfoxBrowseQuery(url);
+    let query = sellfoxBrowseQuery(url, "performance");
     if (url.searchParams.get("agent") === "1") {
       const { rows } = await readSellfoxAgentRows("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, true);
       return new Response(sellfoxAgentCsv("performance", rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="sellfox-profit-agent.csv"', "Cache-Control": "no-store" } });
     }
     const storeIds = await sellfoxBrowseStoreIds(query, permission.user.organizationId, scope.workspaceId);
-    if (query.layout) return await sellfoxWorkbenchExport("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, url);
+    if (query.layout || query.sortBy || url.searchParams.has("column") || url.searchParams.get("columns") === "custom" || query.fulfillment || query.buyBox || query.productTag || query.brand || query.salesperson) return await sellfoxWorkbenchExport("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId }, url);
+    query = await resolveEffectiveReportDate("performance", query, { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId });
     const where = sellfoxSnapshotWhere(query, permission.user.organizationId, scope.workspaceId, storeIds, true);
     const dateLabel = url.searchParams.get("from") || url.searchParams.get("to") || (typeof where.reportDate === "string" ? where.reportDate : "history");
     const rows = await prisma.sellfoxProductDailySnapshot.findMany({
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
     }
 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("赛狐产品表现");
+    const sheet = workbook.addWorksheet("赛狐销售利润");
     sheet.columns = [
       { header: "Shop ID", key: "shopExternalId", width: 22 },
       { header: "币种", key: "currency", width: 12 },
@@ -85,6 +87,6 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof SellfoxBrowseError ? error.message : "导出赛狐产品表现失败，请稍后重试。" }, { status: error instanceof SellfoxBrowseError ? error.status : 500 });
+    return Response.json({ error: error instanceof SellfoxBrowseError ? error.message : "导出赛狐销售利润失败，请稍后重试。" }, { status: error instanceof SellfoxBrowseError ? error.status : 500 });
   }
 }

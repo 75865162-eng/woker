@@ -1105,6 +1105,7 @@ model SellfoxProductDailySnapshot {
   storeId         String
   reportDate      String
   sourceKey       String
+  onlySettle      Boolean      @default(false)
   sku             String       @default("")
   msku            String       @default("")
   asin            String       @default("")
@@ -1120,14 +1121,99 @@ model SellfoxProductDailySnapshot {
   grossProfit     Float?
   grossProfitRate Float?
   adCost          Float?
+  promotionDiscount Float?
+  giftWrapFee     Float?
+  imageUrl        String?
   refundRate      Float?
+  refundPrice     Float?
+  refundNum       Float?
+  commodityCost   Float?
+  shippingPrice   Float?
+  taxPrice        Float?
+  headTripPrice   Float?
+  avgPurchaseCost Float?
+  amazonCommissionPrice Float?
+  fbaStorageFeeAmount Float?
+  fbaLongTermStorageFeeAmount Float?
+  fbaRemovalFeeAmount Float?
+  fbaDisposalFeeAmount Float?
+  customAsinFee Float?
+  customShopFee Float?
+  serviceFeeAmount Float?
+  storageFeeAmount Float?
+  compensationAmount Float?
+  evaluationFee Float?
+  promotionTotalAmount Float?
+  fbaOverageFeeAmount Float?
+  chargebackAmount Float?
+  guaranteeClaimAmount Float?
+  digitalServicesFeeAmount Float?
+  otherPriceAmount Float?
+  shippingChargeAmount Float?
+  regulatoryFeeAmount Float?
+  couponPaymentAmount Float?
+  sellerDealPaymentAmount Float?
+  vineFeeAmount Float?
+  starStorageFeeAmount Float?
+  subscriptionAmount Float?
+  fbaCustomerReturnAmount Float?
+  fbaInboundConvenienceFeeAmount Float?
+  inboundTransportationFeeAmount Float?
+  shippingChargebackAmount Float?
+  giftwrapChargebackAmount Float?
+  costOfPointsGrantedAmount Float?
+  orderOtherPriceAmount Float?
+  fbaInboundTransportationProgramFee Float?
+  aglFeeAmount Float?
+  paidServicesFeeAmount Float?
+  customerReturnHrrUnitFeeAmount Float?
+  amazonUpstreamStorageTransportationFeeAmount Float?
+  amazonUpstreamProcessingFeeAmount Float?
+  mfnPostageFeeAmount Float?
+  adjustmentFeeAmount Float?
+  otherServiceFeeAmount Float?
+  avgHeadTripPrice Float?
+  purchaseRefundPrice Float?
+  revenueAmount Float?
+  fbaPerUnitFulfillmentFeeRefundAmount Float?
+  fbaWeightBasedFeeRefundAmount Float?
+  deferredAmount Float?
+  withheldTaxAmount Float?
+  otherPriceIncomeAmount Float?
+  paymentMethodFeeAmount Float?
+  fixedClosingFeeAmount Float?
+  variableClosingFeeAmount Float?
+  imagingServicesFeeAmount Float?
+  netCoAmount Float?
+  comminglingVatAmount Float?
+  codFeeAmount Float?
+  evaluationCapital Float?
+  evaluationCommission Float?
+  dealPerformanceFeeAmount Float?
+  couponParticipationFeeAmount Float?
+  safetReimbursedAmount Float?
+  affordabilityExpenseAmount Float?
+  withheldFeeAmount Float?
+  chargebackIncomeAmount Float?
+  guaranteeClaimIncomeAmount Float?
+  promotionSalesAmount Float?
+  promotionShippingAmount Float?
+  promotionTaxAmount Float?
+  evaluationSaleNum Float?
+  channelSaleNum  Float?
+  adSpCost        Float?
+  adSdCost        Float?
+  adSbCost        Float?
+  adSbvCost       Float?
+  adSbsCost       Float?
+  userNameList    String[] @default([])
   payload         Json
   syncedAt        DateTime     @default(now())
   createdAt       DateTime     @default(now())
   updatedAt       DateTime
   SellfoxStore    SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
-  @@unique([storeId, reportDate, sourceKey])
+  @@unique([storeId, reportDate, sourceKey, onlySettle], map: "sellfox_profit_scope_key")
   @@index([organizationId, workspaceId, asin])
   @@index([organizationId, workspaceId, msku])
   @@index([organizationId, workspaceId, reportDate], map: "SellfoxProductDailySnapshot_organizationId_workspaceId_reportDa")
@@ -1154,6 +1240,11 @@ model SellfoxStore {
   SellfoxSnapshotHead SellfoxSnapshotHead[]
   SellfoxListingSnapshot SellfoxListingSnapshot[]
   SellfoxAdsProductDaily SellfoxAdsProductDaily[]
+  SellfoxAdsCampaignDaily SellfoxAdsCampaignDaily[]
+  SellfoxAdsAdGroupDaily SellfoxAdsAdGroupDaily[]
+  SellfoxAdsPlacementDaily SellfoxAdsPlacementDaily[]
+  SellfoxAdsTargetingDaily SellfoxAdsTargetingDaily[]
+  SellfoxAdsSearchTermDaily SellfoxAdsSearchTermDaily[]
   SellfoxReportTask SellfoxReportTask[]
   SellfoxSalesDayCoverage SellfoxSalesDayCoverage[]
 
@@ -1230,6 +1321,7 @@ model SellfoxSalesDailySnapshot {
   sku            String       @default("")
   msku           String       @default("")
   asin           String       @default("")
+  orders         Int?
   quantity       Int?
   revenue        Float?
   currency       String       @default("")
@@ -1864,11 +1956,47 @@ model SellfoxListingSnapshot {
   adSpend14 Float?
   adSpend30 Float?
   sourceUpdatedAt String?
+  // Write-time derived list columns, maintained by sellfox_listing_project_write.
+  dxmPublishState String?
+  developer String?
+  spu String?
+  brand String?
+  amazonBrand String?
+  productTags String?
+  openDate String?
+  firstSaleDate String?
+  bsrCategory String?
+  buyBoxWinner String?
+  fulfillment String?
+  rating String?
+  ratingValue Float?
+  ratingCount Float?
+  bsrRank Float?
+  purchaseCost Float?
+  fbaFees Float?
+  referralFee Float?
+  totalFee Float?
+  headTripCost Float?
+  reservedQty Float?
+  shippingPrice Float?
+  profitPrice Float?
+  profitRate Float?
+  listingQuantity Float?
+  unsellable Float?
+  warehousing Float?
+  productTagNames String[] @default([])
   payload Json
   SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
   @@unique([storeId, capturedAt, sourceKey])
   @@index([organizationId, workspaceId, storeId, msku, capturedAt])
   @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, storeId, capturedAt, id], map: "sellfox_listing_current_page")
+  @@index([organizationId, workspaceId, id], map: "sellfox_listing_scope_id")
+  @@index([organizationId, workspaceId, brand, storeId, capturedAt], map: "sellfox_listing_brand")
+  @@index([organizationId, workspaceId, fulfillment, buyBoxWinner, storeId, capturedAt], map: "sellfox_listing_fulfillment")
+  @@index([organizationId, workspaceId, sales7, id], map: "sellfox_listing_sales7")
+  @@index([organizationId, workspaceId, price, id], map: "sellfox_listing_price")
+  @@index([productTagNames], type: Gin, map: "sellfox_listing_tags")
 }
 
 model SellfoxReportTask {
@@ -1877,6 +2005,7 @@ model SellfoxReportTask {
   workspaceId String
   storeId String
   runId String
+  reportTypeCode String @default("adProductReport")
   adType String
   startDate String
   endDate String
@@ -1885,7 +2014,7 @@ model SellfoxReportTask {
   fileKey String?
   updatedAt DateTime @updatedAt
   SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  @@unique([runId, storeId, adType])
+  @@unique([runId, storeId, adType, reportTypeCode])
   @@index([organizationId, workspaceId, status])
 }
 
@@ -1922,4 +2051,141 @@ model SellfoxSalesDayCoverage {
   rowWrites Int
   SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
   @@id([storeId, reportDate])
+}
+
+model SellfoxAdsTargetingDaily {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  reportDate String
+  adType String
+  campaignId String
+  adGroupId String
+  targetingId String
+  targetingText String?
+  matchType String?
+  asin String?
+  msku String?
+  currency String?
+  impressions Int?
+  clicks Int?
+  cost Float?
+  adOrders Int?
+  adSales Float?
+  payload Json
+  syncedAt DateTime @default(now())
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([storeId, reportDate, adType, campaignId, adGroupId, targetingId], map: "sellfox_ads_targeting_daily_identity")
+  @@index([organizationId, workspaceId, storeId, reportDate])
+  @@index([organizationId, workspaceId, asin, reportDate])
+}
+
+
+model SellfoxAdsSearchTermDaily {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  reportDate String
+  adType String
+  campaignId String
+  adGroupId String
+  searchTerm String
+  targetingId String @default("")
+  targetingText String?
+  matchType String?
+  asin String?
+  msku String?
+  currency String?
+  impressions Int?
+  clicks Int?
+  cost Float?
+  adOrders Int?
+  adSales Float?
+  payload Json
+  syncedAt DateTime @default(now())
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([storeId, reportDate, adType, campaignId, adGroupId, searchTerm, targetingId], map: "sellfox_ads_search_term_daily_identity")
+  @@index([organizationId, workspaceId, storeId, reportDate])
+  @@index([organizationId, workspaceId, asin, reportDate])
+}
+
+model SellfoxAdsCampaignDaily {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  reportDate String
+  adType String
+  campaignId String
+  campaignName String?
+  asin String?
+  msku String?
+  currency String?
+  impressions Int?
+  clicks Int?
+  cost Float?
+  adOrders Int?
+  adSales Float?
+  payload Json
+  syncedAt DateTime @default(now())
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([storeId, reportDate, adType, campaignId], map: "sellfox_ads_campaign_daily_identity")
+  @@index([organizationId, workspaceId, storeId, reportDate])
+  @@index([organizationId, workspaceId, asin, reportDate])
+}
+
+model SellfoxAdsAdGroupDaily {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  reportDate String
+  adType String
+  campaignId String
+  adGroupId String
+  adGroupName String?
+  targetingText String?
+  matchType String?
+  asin String?
+  msku String?
+  currency String?
+  impressions Int?
+  clicks Int?
+  cost Float?
+  adOrders Int?
+  adSales Float?
+  payload Json
+  syncedAt DateTime @default(now())
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([storeId, reportDate, adType, campaignId, adGroupId], map: "sellfox_ads_ad_group_daily_identity")
+  @@index([organizationId, workspaceId, storeId, reportDate])
+  @@index([organizationId, workspaceId, asin, reportDate])
+}
+
+model SellfoxAdsPlacementDaily {
+  id String @id
+  organizationId String
+  workspaceId String
+  storeId String
+  reportDate String
+  adType String
+  campaignId String
+  placement String
+  adGroupId String?
+  asin String?
+  msku String?
+  currency String?
+  impressions Int?
+  clicks Int?
+  cost Float?
+  adOrders Int?
+  adSales Float?
+  payload Json
+  syncedAt DateTime @default(now())
+  SellfoxStore SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  @@unique([storeId, reportDate, adType, campaignId, placement], map: "sellfox_ads_placement_daily_identity")
+  @@index([organizationId, workspaceId, storeId, reportDate])
+  @@index([organizationId, workspaceId, asin, reportDate])
 }

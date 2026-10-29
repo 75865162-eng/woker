@@ -23,7 +23,9 @@ test("Listing identity fields preserve source casing and missing values, never i
 
 test("image URL only permits observed HTTPS CDN, never loads images or accepts credentials/alternate hosts", () => {
   assert.equal(sellfoxListingImageUrl(image), image);
-  for (const value of [null, {}, "", "javascript:alert(1)", "http://m.media-amazon.com/x", "https://m.media-amazon.com.evil.test/x", "https://evil.test/x", "https://user:pass@m.media-amazon.com/x", "https://m.media-amazon.com:8443/x", "https://127.0.0.1/x"]) assert.equal(sellfoxListingImageUrl(value), null);
+  const queryImage = "https://m.media-amazon.com/images/I/71Test._AC_SL1500_.jpg?width=80&format=jpg";
+  assert.equal(sellfoxListingImageUrl(` ${queryImage} `), queryImage);
+  for (const value of [null, {}, [], [image], { url: image }, "", "javascript:alert(1)", "http://m.media-amazon.com/x", "https://m.media-amazon.com.evil.test/x", "https://evil.test/x", "https://m.media-amazon.com@evil.test/x", "https://user:pass@m.media-amazon.com/x", "https://m.media-amazon.com:8443/x", "https://127.0.0.1/x"]) assert.equal(sellfoxListingImageUrl(value), null);
   assert.equal(listingIdentityFields({ mainImage: "https://unknown.test/x" }).mainImage, null);
 });
 
@@ -61,10 +63,22 @@ test("narrow SQL and both CSV paths expose only promoted columns; remaining unsu
   assert.match(csv, /FNSKU-VERIFIED/); assert.match(csv, /PARENT-SKU/); assert.match(csv, /m.media-amazon.com/); assert.doesNotMatch(csv, /payload|never-export/);
   const columns = visibleColumns("listings", ["fnsku", "parentSku", "image", "productTags"]);
   assert.ok(columns.filter(c => ["fnsku", "parentSku", "image"].includes(c.key)).every(c => !c.unavailable));
-  assert.ok(columns.find(c => c.key === "productTags")?.unavailable);
+  assert.equal(columns.find(c => c.key === "productTags")?.unavailable, undefined);
+  assert.ok(visibleColumns("listings", ["salesperson"])[0].unavailable);
   assert.match(visibleColumnCsv(columns, [mapped]), /m.media-amazon.com/);
   const sql = workbenchReadSql("listings", sellfoxBrowseQuery(new URL("http://local/?shopExternalId=124687")), { organizationId: "org", workspaceId: "ws" });
-  assert.match(sql.text, /s\."mainImage"/); assert.doesNotMatch(sql.text, /payload/);
+  assert.match(sql.text, /s\."mainImage"/); assert.doesNotMatch(sql.text, /s\."?payload"?|SELECT p\.payload(?:\s|,)/);
   assert.ok(sql.values.includes("124687")); assert.ok(sql.values.includes("org")); assert.ok(sql.values.includes("ws"));
-  assert.ok(visibleColumns("sales").find(c => c.key === "image")?.unavailable);
+  assert.equal(visibleColumns("sales").find(c => c.key === "image")?.unavailable, undefined);
+});
+
+
+test("salesperson column is available only for profit and exports typed array joined with Chinese separator", () => {
+  const config = visibleColumns("performance", ["salesperson"]);
+  assert.equal(config.length, 1); assert.equal(config[0].unavailable, undefined); assert.equal(config[0].defaultVisible, true);
+  assert.match(config[0].requiresField, /payload.userNameList 类型投影.*非 Listing developer/);
+  assert.match(visibleColumnCsv(config, [{ userNameList: ["温见清", "陈馨"] }]), /温见清、陈馨/);
+  assert.ok(visibleColumns("sales", ["salesperson"])[0].unavailable);
+  assert.match(visibleColumns("sales", ["salesperson"])[0].requiresField, /销量日快照无 userNameList/);
+  for (const domain of ["listings", "ads"]) assert.ok(visibleColumns(domain, ["salesperson"])[0].unavailable);
 });
