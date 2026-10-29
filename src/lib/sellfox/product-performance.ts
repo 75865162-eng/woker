@@ -184,7 +184,7 @@ export async function syncSellfoxProductDailySnapshots(input: {
       if (previous?.done) continue;
       while (pageNo <= 10_000) {
         const payload = await dependencies.post<unknown>("/api/sale/profit/product/pageList.json", {
-          pageNo, pageSize: 100, shopIdList: [store.externalId], startDate: reportDate, endDate: reportDate, type: "msku", currency: "", onlySettle,
+          pageNo: String(pageNo), pageSize: "100", shopIdList: [store.externalId], startDate: reportDate, endDate: reportDate, type: "msku", currency: "", onlySettle: onlySettle ? "true" : "false",
         });
         const { rows, totalPages } = pageFrom(payload);
         // Validate pagination and identities before committing any part of this page.

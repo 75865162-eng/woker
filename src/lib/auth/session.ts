@@ -311,3 +311,9 @@ export async function getCurrentUserFromSignedCookie(): Promise<CurrentUser | un
 
   return getCurrentUserFromPayload(payload);
 }
+
+// Opaque display-only scope. It never exposes the authentication token and grants no access.
+export function getNotificationSessionKey(request: Request) {
+  const payload = parseSessionCookie(getRequestCookie(request, sessionCookieName));
+  return payload ? hashToken(`notification-display:${payload.sessionId}:${payload.token}`) : null;
+}

@@ -22,6 +22,7 @@
     "worker:amazon-sync": "tsx scripts/amazon-sync-worker.ts",
     "worker:sellfox-sync": "tsx scripts/sellfox-sync-worker.ts",
     "sellfox:backfill-sales": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-sales-backfill.ts",
+    "sellfox:fixture-pipeline": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-fixture-pipeline.ts",
     "sellfox:ads-reparse-cache": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reparse-from-cache.ts",
     "sellfox:ads-reset-stuck-creating": "node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reset-stuck-creating.ts",
     "ops:cli": "tsx scripts/ops-cli.ts",

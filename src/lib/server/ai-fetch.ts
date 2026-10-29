@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import type { BodyInit, HeadersInit, ProxyAgent } from "undici";
+import { fetch as undiciFetch, ProxyAgent, type BodyInit, type HeadersInit } from "undici";
 
 let cachedProxyUrl: string | null | undefined;
 let cachedDispatcher: ProxyAgent | undefined;
@@ -45,21 +45,19 @@ function getSystemProxyUrl() {
   return cachedProxyUrl;
 }
 
-function getDispatcher(ProxyAgentConstructor: typeof ProxyAgent) {
+function getDispatcher() {
   const proxyUrl = getSystemProxyUrl();
   if (!proxyUrl) return undefined;
 
-  cachedDispatcher ??= new ProxyAgentConstructor(proxyUrl);
+  cachedDispatcher ??= new ProxyAgent(proxyUrl);
   return cachedDispatcher;
 }
 
 export async function fetchAiApi(url: string, init: AiFetchInit): Promise<AiFetchResponse> {
   try {
-    // Keep Node 22-only undici initialization out of Node 20 build-time route loading.
-    const { fetch: undiciFetch, ProxyAgent } = await import("undici");
     return await undiciFetch(url, {
       ...init,
-      dispatcher: getDispatcher(ProxyAgent),
+      dispatcher: getDispatcher(),
     });
   } catch (error) {
     if (error instanceof Error && error.message === "fetch failed") {

@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getCurrentUserFromRequest } from "@/lib/auth/session";
+import { getCurrentUserFromRequest, getNotificationSessionKey } from "@/lib/auth/session";
 import { isDatabaseUnavailableError } from "@/lib/db/is-database-unavailable-error";
 import { prisma } from "@/lib/db/prisma";
+import { loadPendingWorkflowNotifications } from "@/lib/notifications/pending-workflow-notifications";
+import { roleCanAccessModule } from "@/lib/accounts/permissions";
+import { getOrganizationRolePermissionsSnapshot } from "@/lib/accounts/role-permissions-server";
 
 export const runtime = "nodejs";
 
@@ -32,7 +35,7 @@ export async function GET(request: Request) {
     };
 
     try {
-      const [notifications, unreadCount] = await Promise.all([
+      const [notifications, unreadCount, pendingWorkflowNotifications] = await Promise.all([
         prisma.userNotification.findMany({
           where,
           orderBy: {
@@ -46,9 +49,15 @@ export async function GET(request: Request) {
             readAt: null,
           },
         }),
+        (async () => {
+          const snapshot = await getOrganizationRolePermissionsSnapshot(user.organizationId);
+          return roleCanAccessModule(user.role, "products", snapshot.permissions)
+            ? loadPendingWorkflowNotifications(user.organizationId, user.id)
+            : [];
+        })(),
       ]);
 
-      return NextResponse.json({ notifications, unreadCount });
+      return NextResponse.json({ notifications, unreadCount, pendingWorkflowNotifications, notificationSessionKey: getNotificationSessionKey(request) });
     } catch (error) {
       if (isDatabaseUnavailableError(error)) {
         return NextResponse.json({ notifications: [], unreadCount: 0, error: "数据库暂时不可用，站内通知已切换为空数据。" }, { status: 503 });

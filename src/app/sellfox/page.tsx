@@ -5,7 +5,7 @@ export const metadata = { title: "销量统计 / 销售利润" };
 
 export default function SellfoxPage() {
   return (
-    <AppShell title="销量统计 / 销售利润" subtitle="按店铺、商品和业务日期查看销量、利润与广告表现">
+    <AppShell title="销量统计 / 销售利润" subtitle="销量统计、销售利润、在线产品与广告产品；灰色控件表示赛狐网页有、本地尚无对应数据">
       <SellfoxWorkbench />
     </AppShell>
   );

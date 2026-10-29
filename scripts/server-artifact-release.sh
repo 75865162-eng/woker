@@ -56,21 +56,9 @@ caddy_reload=false
 infra_update=false
 
 read_previous_version() {
-  # Both files are pretty-printed JSON; recover from current release if state is unusable.
-  node -e '
-    const fs = require("fs");
-    for (const file of process.argv.slice(1)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(file, "utf8"));
-        if (typeof data?.appVersion === "string" && /^v\d+\.\d+\.\d+$/.test(data.appVersion)) {
-          process.stdout.write(data.appVersion);
-          break;
-        }
-      } catch {
-        // Missing, unreadable or malformed metadata: try the next source.
-      }
-    }
-  ' "$VERSION_STATE_FILE" "$CURRENT_LINK/RELEASE.json"
+  if [ -f "$VERSION_STATE_FILE" ]; then
+    sed -n 's/.*"appVersion":"\([^"]*\)".*/\1/p' "$VERSION_STATE_FILE" | tail -n 1
+  fi
 }
 
 next_version_label() {
@@ -269,7 +257,8 @@ if [ -e "$CURRENT_LINK" ] || [ -L "$CURRENT_LINK" ]; then
 else
   previous_release_dir=""
 fi
-health_url="${HEALTH_URL:-http://127.0.0.1:3000/}"
+# Render a public page: the root auth redirect can succeed while login SSR fails.
+health_url="${HEALTH_URL:-http://127.0.0.1:3000/login}"
 
 if [ ! -d "$extract_dir/.next-build/standalone" ] || [ ! -f "$extract_dir/package-lock.json" ] || [ ! -f "$extract_dir/RELEASE-METADATA.json" ]; then
   echo "Artifact is not a complete release package." >&2

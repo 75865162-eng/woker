@@ -26,10 +26,25 @@ function credentials() {
   return { clientId, clientSecret };
 }
 
+const officialErrorText: Record<number, string> = {
+  [-1]: "服务异常，请稍后重试",
+  40001: "access_token 失效",
+  40004: "未查询到开发者信息",
+  40005: "访问的客户端 IP 不在白名单",
+  40011: "签名错误",
+  40012: "重复提交",
+  40013: "时间戳失效",
+  40014: "参数异常",
+  40019: "调用超过限制，请稍后重试",
+  40021: "访问的接口暂无权限",
+};
+
 function responseError(response: Response, code?: number) {
   // An explicit business error takes precedence over a transient HTTP status.
-  const retryable = code ? code === 40019 || code === -1 : response.status === 429 || response.status >= 500;
-  return new SellfoxRequestError(`赛狐接口调用失败（HTTP ${response.status}${code ? ` / ${code}` : ""}）。`, retryable, code);
+  // 40012 asks for a new nonce; each attempt already generates one. Never echo upstream msg.
+  const retryable = code ? code === 40019 || code === 40012 || code === -1 : response.status === 429 || response.status >= 500;
+  const official = code === undefined ? undefined : officialErrorText[code];
+  return new SellfoxRequestError(`赛狐接口调用失败（HTTP ${response.status}${code ? ` / ${code}` : ""}${official ? `，${official}` : ""}）。`, retryable, code);
 }
 
 async function getAccessToken() {
