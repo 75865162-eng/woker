@@ -1201,7 +1201,7 @@ Workspace 页的筛选主要靠四类条件：
 - `src/components/products/product-workbench-data.ts`：负责从 Excel workbook 解析产品草稿、把列表项压成可编辑壳、创建空试算稿，并在导入时补齐 workflow 初始状态。
 - `src/components/products/product-workbench-utils.ts`：负责 SKU 序列、利润试算、Trial pricing 和外链拼装，是产品页里的纯计算工具层。
 - `src/components/products/product-workbench-shell.tsx`：承载筛选条、表格和活动日志弹层，负责把产品列表渲染成可浏览的工具台。
-- `src/components/products/product-workbook-detail-sections.tsx`：负责详情页里的利润试算、竞品分析、供应商报价、改进方案、关键词和备注区，是产品 workbook 的编辑区。
+- `src/components/products/product-workbook-detail-sections.tsx`：负责详情页里的利润试算、竞品分析、供应商报价、改进方案、关键词和备注区，是产品 workbook 的编辑区。区域 2 竞品分析固定列宽：评分 40px、ASIN 60px，变体数量/变体类型/热销变体规格/热销变体价格/FBA 费用/近 3 个月价格变动备注各 110px，差评点各 120px；普通文本框默认两行且仅可纵向调整高度。
 - `src/components/products/product-workbench-fields.tsx`：封装产品页常用输入控件、只读指标、文本框、链接按钮，保证整页表单风格一致。
 - `src/components/products/product-operations-progress.tsx`：展示产品运营流程进度、阶段完成情况和过期状态，给产品状态一个可扫描的 SLA 视图。
 - `src/components/products/product-video-plan-modal.tsx`：用于创建和编辑商品视频方案，是独立的创意计划弹窗。

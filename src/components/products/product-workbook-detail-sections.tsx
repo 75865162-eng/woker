@@ -12,7 +12,6 @@ import {
 import { refreshProductImageUrls, useProductImageUrls } from "@/lib/products/signed-image-urls";
 import type { ProductImageAsset } from "@/lib/products/types";
 import {
-  compactCompetitorFields,
   competitorTextFields,
   competitorTypeOptions,
   createDefaultPeakSeasonWeights,
@@ -252,11 +251,16 @@ export function ProductWorkbookDetailSections({
           </div>
         </CardHeader>
         <CardContent className="thin-scrollbar overflow-auto">
-          <table className="min-w-[2000px] text-left text-xs">
+          <table className="w-[1960px] table-fixed text-left text-xs">
+            <colgroup>
+              {[146, 60, 76, 110, 110, 110, 110, 110, 110, 76, 40, 120, 120, 120, 120, 120, 136, 166].map((width, index) => (
+                <col key={index} style={{ width }} />
+              ))}
+            </colgroup>
             <thead className="bg-surface-muted text-muted">
               <tr>
                 {["热销变体图片", "ASIN", "近30天销量", "变体数量", "变体类型", "热销变体规格", "热销变体价格($)", "FBA费用($)", "近3个月价格变动备注", "评论数", "评分", "差评点1", "差评点2", "差评点3", "差评点4", "差评点5", "竞品包装尺寸", "备注"].map((label) => (
-                  <th key={label} className="px-2 py-2 font-bold">{label}</th>
+                  <th key={label} className="break-words px-1 py-2 font-bold">{label}</th>
                 ))}
               </tr>
             </thead>
@@ -283,14 +287,19 @@ export function ProductWorkbookDetailSections({
                       </select>
                     </div>
                   </td>
-                  <td className="px-2 py-2">
-                    <div className="w-[110px] space-y-2">
-                      <SmallInput value={row.asin} onChange={(value) => onCompetitorChange(index, "asin", value)} />
+                  <td className="px-1 py-2">
+                    <div className="space-y-2">
+                      <textarea
+                        rows={2}
+                        className="block w-full min-w-0 resize-y rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        value={row.asin}
+                        onChange={(event) => onCompetitorChange(index, "asin", event.target.value)}
+                      />
                       <AmazonLinkButton asin={row.asin} />
                     </div>
                   </td>
                   {competitorTextFields.map((field) => (
-                    <td key={field} className="px-2 py-2">
+                    <td key={field} className="px-1 py-2">
                       {negativeCompetitorFields.has(field) ? (
                         <NegativePointEditor
                           value={String(row[field] ?? "")}
@@ -298,17 +307,23 @@ export function ProductWorkbookDetailSections({
                           onChange={(value) => onCompetitorChange(index, field, value)}
                         />
                       ) : (
-                        <SmallTextarea
+                        <textarea
+                          rows={2}
+                          className="block w-full min-w-0 resize-y rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                           value={String(row[field] ?? "")}
-                          size={compactCompetitorFields.has(field) ? "compact" : "default"}
-                          onChange={(value) => onCompetitorChange(index, field, value)}
+                          onChange={(event) => onCompetitorChange(index, field, event.target.value)}
                         />
                       )}
                     </td>
                   ))}
                   <td className="px-2 py-2">
                     <div className="w-[150px] space-y-2">
-                      <SmallTextarea value={row.note} onChange={(value) => onCompetitorChange(index, "note", value)} />
+                      <textarea
+                        rows={2}
+                        className="block w-full min-w-0 resize-y rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        value={row.note}
+                        onChange={(event) => onCompetitorChange(index, "note", event.target.value)}
+                      />
                       <ImageUploadSquare
                         image={row.noteImage}
                         asset={row.noteImageAsset}
@@ -816,7 +831,7 @@ function NegativePointEditor({
 
   return (
     <>
-      <div className={`h-[180px] w-[150px] rounded-md border border-border p-1 ${disabled ? "bg-surface-muted" : "bg-white"}`}>
+      <div className={`h-[180px] w-full min-w-0 rounded-md border border-border p-1 ${disabled ? "bg-surface-muted" : "bg-white"}`}>
         <div className="grid grid-cols-[minmax(0,1fr)_42px] gap-1">
           <input
             className="h-8 min-w-0 rounded border border-border px-1 text-xs outline-none focus:border-brand disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted"
