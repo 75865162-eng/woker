@@ -9,7 +9,7 @@ import {
   uploadProductAttachmentAsset,
   uploadProductImageAsset,
 } from "@/lib/products/image-assets";
-import { refreshProductImageUrls, useProductImageUrls } from "@/lib/products/signed-image-urls";
+import { getProductImageUrls, useProductImageUrls } from "@/lib/products/signed-image-urls";
 import type { ProductImageAsset } from "@/lib/products/types";
 import {
   competitorTextFields,
@@ -536,7 +536,7 @@ function ImageUploadSquare({
     let source = "";
     if (fileId) {
       try {
-        source = (await refreshProductImageUrls([fileId])).get(fileId) || "";
+        source = (await getProductImageUrls([fileId])).get(fileId) || "";
       } catch {
         // Legacy references continue through the compatibility route below.
       }
