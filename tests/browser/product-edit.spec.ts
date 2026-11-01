@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { expect, test, type Page } from "@playwright/test";
 import { productToDraft } from "@/components/products/product-workbench-data";
+import type { TrialProductDraft } from "@/components/products/product-workbench-model";
 import type { Product } from "@/lib/products/types";
 import type * as DraftRepository from "@/lib/products/product-edit-draft-repository";
 
@@ -44,7 +45,7 @@ async function setup(page: Page, mode = "") {
     }
     if (url.pathname.startsWith("/api/")) throw new Error(`Unexpected API call: ${request.method()} ${url.pathname}`);
     if (url.pathname === "/") return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
-    if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: mode === "production" ? productionBundle : bundle });
+    if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript; charset=utf-8", body: mode === "production" ? productionBundle : bundle });
     return route.fulfill({ status: 404, body: "" });
   });
   await page.goto(`http://127.0.0.1:43219/${mode ? `?mode=${mode}` : ""}`);
@@ -260,6 +261,50 @@ test("workbook attachment uploads block save/close until the uploaded reference 
   await expect(page.getByRole("heading", { name: /商品详情/ })).toHaveCount(0);
   const saved = state.product as Product & { workbookDetail: { remarkImageAssets: Array<{ id: string }> } };
   expect(saved.workbookDetail.remarkImageAssets[0].id).toBe("workbook-file");
+});
+
+test("negative review originals survive count edits and append inputs with automatic counts", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const state = await setup(page);
+  const section = page.getByRole("heading", { name: "区域 2：竞品分析", exact: true }).locator("../..");
+  await section.locator("select").first().selectOption("直接竞品");
+  const point = section.locator("tbody tr").first().locator("td").nth(11);
+  await point.getByRole("button").click();
+  const modal = page.getByRole("heading", { name: "差评原文", exact: true }).locator("../../..");
+  const original = (index: number) => modal.getByRole("textbox", { name: `差评原文 ${index}`, exact: true });
+  await modal.getByLabel("差评总结", { exact: true }).fill("容易损坏");
+  await expect(original(1)).toBeVisible();
+  await expect(original(2)).toHaveCount(0);
+  await original(1).fill("第一次使用就坏了");
+  await expect(original(2)).toBeVisible();
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("1");
+  await original(2).fill("支架断裂");
+  await expect(original(3)).toBeVisible();
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("2");
+  await original(3).fill("   ");
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("2");
+  for (const count of ["1", "", "4", "0"]) {
+    await modal.getByLabel("数量", { exact: true }).fill(count);
+    await expect(original(1)).toHaveValue("第一次使用就坏了");
+    await expect(original(2)).toHaveValue("支架断裂");
+  }
+  await original(2).fill("");
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("1");
+  await original(2).fill("支架断裂");
+  await modal.getByRole("button", { name: "保存", exact: true }).click();
+  expect(errors).toEqual([]);
+  await expect(point.getByPlaceholder("数", { exact: true })).toHaveValue("2");
+  await point.getByPlaceholder("数", { exact: true }).fill("1");
+  await point.getByRole("button").click();
+  await expect(original(1)).toHaveValue("第一次使用就坏了");
+  await expect(original(2)).toHaveValue("支架断裂");
+  await expect(original(3)).toHaveValue("");
+  await modal.getByRole("button", { name: "保存", exact: true }).click();
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /商品详情/ })).toHaveCount(0);
+  const saved = state.product as Product & { workbookDetail: TrialProductDraft };
+  expect(saved.workbookDetail.competitors[0].negativePoint1).toBe("容易损坏（2）\n第一次使用就坏了\n支架断裂");
 });
 
 

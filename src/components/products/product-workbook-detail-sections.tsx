@@ -148,7 +148,7 @@ export function ProductWorkbookDetailSections({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 [&_textarea]:resize-none">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>区域 1：利润试算</CardTitle>
@@ -291,7 +291,7 @@ export function ProductWorkbookDetailSections({
                     <div className="space-y-2">
                       <textarea
                         rows={2}
-                        className="block w-full min-w-0 resize-y rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        className="block h-[105px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                         value={row.asin}
                         onChange={(event) => onCompetitorChange(index, "asin", event.target.value)}
                       />
@@ -309,7 +309,7 @@ export function ProductWorkbookDetailSections({
                       ) : (
                         <textarea
                           rows={2}
-                          className="block w-full min-w-0 resize-y rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                          className="block h-[180px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                           value={String(row[field] ?? "")}
                           onChange={(event) => onCompetitorChange(index, field, event.target.value)}
                         />
@@ -320,7 +320,7 @@ export function ProductWorkbookDetailSections({
                     <div className="w-[150px] space-y-2">
                       <textarea
                         rows={2}
-                        className="block w-full min-w-0 resize-y rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        className="block h-[50px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                         value={row.note}
                         onChange={(event) => onCompetitorChange(index, "note", event.target.value)}
                       />
@@ -822,12 +822,18 @@ function NegativePointEditor({
   }
 
   function saveOriginals() {
-    onChange(buildNegativePointValue(draft));
+    onChange(buildNegativePointValue({
+      ...draft,
+      count: String(draft.originals.filter((original) => original.trim()).length),
+    }));
     setOpen(false);
   }
 
   const originalCount = parseOriginalCount(parsed.count);
   const draftOriginals = normalizeOriginalsLength(draft.originals, parseOriginalCount(draft.count));
+  if (draftOriginals.at(-1)?.trim()) {
+    draftOriginals.push("");
+  }
 
   return (
     <>
@@ -871,7 +877,7 @@ function NegativePointEditor({
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-bold text-foreground">差评原文</h3>
-                <p className="mt-1 text-xs font-semibold text-muted">填写当前差评点对应的 {draftOriginals.length} 条原文。</p>
+                <p className="mt-1 text-xs font-semibold text-muted">已填写 {draft.originals.filter((original) => original.trim()).length} 条原文，填写后自动追加下一行，数量按非空原文自动统计。</p>
               </div>
               <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
                 <X className="h-4 w-4" />
@@ -889,12 +895,18 @@ function NegativePointEditor({
                   <textarea
                     className="mt-1 min-h-20 w-full rounded-md border border-border px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
                     value={original}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        originals: normalizeOriginalsLength(current.originals, parseOriginalCount(current.count)).map((item, itemIndex) => (itemIndex === index ? event.target.value : item)),
-                      }))
-                    }
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setDraft((current) => {
+                        const originals = normalizeOriginalsLength(current.originals, index + 1);
+                        originals[index] = value;
+                        return {
+                          ...current,
+                          originals,
+                          count: String(originals.filter((original) => original.trim()).length),
+                        };
+                      });
+                    }}
                   />
                 </label>
               ))}
@@ -1495,5 +1507,5 @@ function parseOriginalCount(count: string) {
 }
 
 function normalizeOriginalsLength(originals: string[], count: number) {
-  return Array.from({ length: count }, (_, index) => originals[index] ?? "");
+  return Array.from({ length: Math.max(count, originals.length) }, (_, index) => originals[index] ?? "");
 }
