@@ -1,6 +1,50 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { refreshProductImageUrls } from "@/lib/products/signed-image-urls";
+import { getProductImageUrls, refreshProductImageUrls } from "@/lib/products/signed-image-urls";
+
+test("preview URLs reuse valid links, renew near expiry, and isolate workspace scope", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const originalNow = Date.now;
+  let now = originalNow();
+  let workspaceId = "preview-workspace-a";
+  let requests = 0;
+  let forbidden = false;
+  Object.assign(globalThis, { window: { localStorage: { getItem: () => JSON.stringify({ workspaceId }) } } });
+  Date.now = () => now;
+  globalThis.fetch = (async (_input, init) => {
+    requests++;
+    if (forbidden) return new Response(JSON.stringify({ error: "无权读取" }), { status: 403 });
+    const { fileIds } = JSON.parse(init?.body as string) as { fileIds: string[] };
+    return new Response(JSON.stringify({
+      urls: fileIds.map((fileId) => ({ fileId, url: `https://storage.example/${fileId}?signature=${requests}` })),
+      expiresAt: new Date(now + 600_000).toISOString(),
+    }));
+  }) as typeof fetch;
+  try {
+    const first = await getProductImageUrls([" preview-1 ", "preview-1", ""]);
+    assert.deepEqual(await getProductImageUrls(["preview-1"]), first);
+    assert.equal(requests, 1);
+    const mixed = await getProductImageUrls(["preview-1", "preview-2"]);
+    assert.equal(mixed.get("preview-1"), first.get("preview-1"));
+    assert.equal(requests, 2);
+    now += 570_001;
+    const renewed = await getProductImageUrls(["preview-1"]);
+    assert.notEqual(renewed.get("preview-1"), first.get("preview-1"));
+    assert.equal(requests, 3);
+    workspaceId = "preview-workspace-b";
+    assert.notEqual((await getProductImageUrls(["preview-1"])).get("preview-1"), renewed.get("preview-1"));
+    assert.equal(requests, 4);
+    forbidden = true;
+    now += 600_000;
+    await assert.rejects(getProductImageUrls(["preview-1"]), /无权读取/);
+    assert.equal(requests, 5);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Date.now = originalNow;
+    Object.assign(globalThis, { window: originalWindow });
+  }
+});
 
 test("product image URLs are requested in one scoped batch and replaced on renewal", async () => {
   const originalFetch = globalThis.fetch;

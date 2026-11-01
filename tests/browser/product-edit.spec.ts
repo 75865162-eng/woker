@@ -14,9 +14,9 @@ test.beforeAll(async () => {
   productionBundle = production.outputFiles[0].text;
 });
 
-async function setup(page: Page, mode = "") {
+async function setup(page: Page, mode = "", imageAssets?: Product["imageAssets"]) {
   const state = {
-    product: { ...productToDraft(null, [], "SKU-1"), id: "product-1", revision: 1, chineseName: "原商品", englishName: "Original product", status: "listing_confirming" } as Product,
+    product: { ...productToDraft(null, [], "SKU-1"), id: "product-1", revision: 1, chineseName: "原商品", englishName: "Original product", status: "listing_confirming", imageAssets } as Product,
     saves: 0, uploads: 0, fail: false, detailFail: false, detailGate: null as Promise<void> | null,
   };
   await page.route("http://127.0.0.1:43219/**", async (route) => {
@@ -46,6 +46,7 @@ async function setup(page: Page, mode = "") {
     if (url.pathname.startsWith("/api/")) throw new Error(`Unexpected API call: ${request.method()} ${url.pathname}`);
     if (url.pathname === "/") return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript; charset=utf-8", body: mode === "production" ? productionBundle : bundle });
+    if (url.pathname === "/test.png") return route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5wAAAABJRU5ErkJggg==", "base64") });
     return route.fulfill({ status: 404, body: "" });
   });
   await page.goto(`http://127.0.0.1:43219/${mode ? `?mode=${mode}` : ""}`);
@@ -55,6 +56,28 @@ async function setup(page: Page, mode = "") {
 
 function nameInput(page: Page) { return page.locator("label").filter({ hasText: "中文名（必填）" }).locator("input"); }
 async function savedLocally(page: Page) { await expect(page.getByRole("status")).toContainText("草稿已暂存"); }
+
+test("reopening a product image preview reuses its signed URL without another signing request", async ({ page }) => {
+  let previewRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/products/image-urls") && (request.postDataJSON() as { fileIds: string[] }).fileIds.includes("preview-repeat")) previewRequests++;
+  });
+  await setup(page, "", [{ id: "image-repeat", name: "test.png", mimeType: "image/png", size: 1, storageType: "local", uploadedAt: "2026-11-02", thumbFileId: "thumb-repeat", previewFileId: "preview-repeat", thumbUrl: "/test.png", originalUrl: "/test.png" }]);
+  const open = page.getByTitle("点击查看大图").first();
+  const heading = page.getByRole("heading", { name: "图片预览", exact: true });
+  const preview = page.getByAltText("商品图片大图", { exact: true });
+  await open.click();
+  await expect(heading).toBeVisible();
+  await expect(preview).toBeVisible();
+  const source = await preview.getAttribute("src");
+  expect(previewRequests).toBe(1);
+  await heading.locator("../..").getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(heading).toHaveCount(0);
+  await open.click();
+  await expect(preview).toBeVisible();
+  await expect(preview).toHaveAttribute("src", source!);
+  expect(previewRequests).toBe(1);
+});
 
 test("without randomUUID the editor loads and preserves drafts across refresh", async ({ page }) => {
   const errors: string[] = [];

@@ -34,7 +34,7 @@ import {
 } from "@/lib/products/workflow";
 import { isOperationsProgressComplete } from "@/lib/products/operations-progress";
 import { getProductAssetDownloadUrl, isPlaceholderProductImageAssetId } from "@/lib/products/image-assets";
-import { refreshProductImageUrls } from "@/lib/products/signed-image-urls";
+import { getProductImageUrls } from "@/lib/products/signed-image-urls";
 import { toLightweightProduct } from "@/lib/products/lightweight-product";
 import { PRODUCT_ATTACHMENT_MAX_BYTES, productAttachmentSizeError } from "@/lib/products/file-assets";
 import { appendCurrentWorkspaceScope } from "@/lib/products/image-assets";
@@ -1508,7 +1508,7 @@ export function ProductEditor({
     let source = "";
     if (fileId && !isPlaceholderProductImageAssetId(fileId)) {
       try {
-        source = (await refreshProductImageUrls([fileId])).get(fileId) || "";
+        source = (await getProductImageUrls([fileId])).get(fileId) || "";
       } catch {
         // Legacy assets without a FileObject remain available through the existing route.
       }

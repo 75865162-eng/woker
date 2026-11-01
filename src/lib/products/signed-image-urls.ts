@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type SignedUrlEntry = { url: string; expiresAt: number };
+type SignedUrlEntry = { url: string; expiresAt: number; scopeKey: string };
 type SignedUrlResponse = { urls?: Array<{ fileId: string; url: string }>; expiresAt?: string; error?: string };
 
 const urlCache = new Map<string, SignedUrlEntry>();
@@ -30,9 +30,11 @@ export async function refreshProductImageUrls(fileIds: string[]) {
   const uniqueIds = [...new Set(fileIds.map((id) => id.trim()).filter(Boolean))];
   if (!uniqueIds.length) return new Map<string, string>();
 
+  const headers = getScopeHeaders();
+  const scopeKey = JSON.stringify(headers);
   const response = await fetch("/api/products/image-urls", {
     method: "POST",
-    headers: getScopeHeaders(),
+    headers,
     body: JSON.stringify({ fileIds: uniqueIds }),
   });
   const data = await response.json().catch(() => ({})) as SignedUrlResponse;
@@ -43,8 +45,30 @@ export async function refreshProductImageUrls(fileIds: string[]) {
   const expiresAt = new Date(data.expiresAt).getTime();
   const result = new Map<string, string>();
   for (const item of data.urls) {
-    urlCache.set(item.fileId, { url: item.url, expiresAt });
+    urlCache.set(item.fileId, { url: item.url, expiresAt, scopeKey });
     result.set(item.fileId, item.url);
+  }
+  return result;
+}
+
+// Reuse valid URLs so reopening a preview can use the browser image cache.
+// Explicit refresh remains available for failed or expired links.
+export async function getProductImageUrls(fileIds: string[]) {
+  const ids = [...new Set(fileIds.map((id) => id.trim()).filter(Boolean))];
+  const scopeKey = JSON.stringify(getScopeHeaders());
+  const result = new Map<string, string>();
+  const missing: string[] = [];
+  for (const id of ids) {
+    const entry = urlCache.get(id);
+    if (entry && entry.scopeKey === scopeKey && entry.expiresAt > Date.now() + refreshSkewMs) {
+      result.set(id, entry.url);
+    } else {
+      missing.push(id);
+    }
+  }
+  if (missing.length) {
+    const fresh = await refreshProductImageUrls(missing);
+    fresh.forEach((url, id) => result.set(id, url));
   }
   return result;
 }
