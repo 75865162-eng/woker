@@ -289,7 +289,7 @@ if (plan.headSha !== commit || !plan.requiresDeploy) throw new Error('Invalid de
 if (previousPath && fs.existsSync(previousPath)) {
   if (initialDeployment === 'true') throw new Error('INITIAL_DEPLOYMENT cannot be used when a release already exists');
   const previous = JSON.parse(fs.readFileSync(previousPath, 'utf8'));
-  if (previous.commit !== plan.baseSha) throw new Error('Deployment base differs from running release; regenerate CI plan');
+  if (previous.commit !== plan.baseSha) throw new Error(`Deployment base differs from running release; regenerate CI plan (running=${previous.commit}, planBase=${plan.baseSha})`);
 } else if (initialDeployment !== 'true') {
   throw new Error('No previous release; explicit INITIAL_DEPLOYMENT=true is required');
 }

@@ -108,7 +108,7 @@ test("Sellfox HTTP client uses official token, signature, retry and queue contra
     await t.test("permanent parameter, permission, whitelist and signature errors are not retried", async () => {
       for (const code of [40005, 40011, 40014, 40021]) {
         reset(); respond = () => ({ code, msg: "private upstream credentials" });
-        await assert.rejects(drive(sellfoxPost("/api/test.json", {})), (error: Error) => error.message.includes(String(code)) && !error.message.includes("private"));
+        await assert.rejects(drive(sellfoxPost("/api/test.json", {})), (error: Error) => error.message.includes(String(code)) && !error.message.includes("private") && (code !== 40005 || error.message.includes("白名单")));
         assert.equal(calls.length, 2);
       }
       reset(); tokenCode = 40005;

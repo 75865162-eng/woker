@@ -81,10 +81,15 @@ function fixture(storeIds = ["a", "b"]) {
       if (pendingCheckpoint) checkpoint = pendingCheckpoint;
     },
   } as unknown as Dependencies["db"];
-  const post = (async (_path: string, args: { shopIdList: string[]; pageNo: number; onlySettle: boolean }) => {
-    modes.push(args.onlySettle);
-    calls.push({ shop: args.shopIdList[0], page: args.pageNo });
-    return response(args.shopIdList[0], args.pageNo);
+  // Official OpenAPI sends pageNo/pageSize/onlySettle as strings; normalize for fixture assertions.
+  const post = (async (_path: string, args: { shopIdList: string[]; pageNo: number | string; onlySettle: boolean | string }) => {
+    const pageNo = Number(args.pageNo);
+    assert.ok(Number.isInteger(pageNo) && pageNo >= 1, `pageNo must coerce to integer, got ${String(args.pageNo)}`);
+    const onlySettle = args.onlySettle === true || args.onlySettle === "true";
+    assert.equal(String(args.onlySettle), onlySettle ? "true" : "false");
+    modes.push(onlySettle);
+    calls.push({ shop: args.shopIdList[0], page: pageNo });
+    return response(args.shopIdList[0], pageNo);
   }) as typeof sellfoxPost;
   return {
     dependencies: { db, post }, calls, modes,

@@ -52,7 +52,10 @@ test("ads column picker defaults to image, rating, ratingCount and Buy Box acros
           assert.ok(checkbox);
           assert.equal(checkbox.props.checked, selectedColumns === undefined);
         }
-        for (const name of ["MSKU", "标题", "店铺", "站点", "标签", "品牌", "发货方式"]) {
+        for (const name of ["标签", "品牌", "发货方式"]) {
+          assert.equal(nodes.find(node => node.props["aria-label"] === `显示${name}列`)!.props.checked, selectedColumns === undefined);
+        }
+        for (const name of ["MSKU", "标题", "店铺", "站点"]) {
           assert.equal(nodes.find(node => node.props["aria-label"] === `显示${name}列`)!.props.checked, false);
         }
       }

@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
+import { sellfoxPost } from "@/lib/sellfox/client";
 import { syncSellfoxListings } from "@/lib/sellfox/listing-sync";
 import { syncSellfoxProductDailySnapshots } from "@/lib/sellfox/product-performance";
 import { isSellfoxScheduleDue, nextSellfoxScheduleAt } from "@/lib/sellfox/schedule-time";
@@ -58,7 +59,7 @@ function performancePage() {
   };
 }
 
-async function fixturePost<T>(requestPath: string, body: unknown, _options?: { retry?: boolean }): Promise<T> {
+const fixturePost: typeof sellfoxPost = async <T>(requestPath: string, body: unknown) => {
   const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
   if (requestPath === "/api/inventoryManage/fba/pageList.json") return loadJson("inventory-page.json") as T;
   if (requestPath === "/api/productSale/page.json") {
@@ -69,7 +70,7 @@ async function fixturePost<T>(requestPath: string, body: unknown, _options?: { r
   if (requestPath === "/api/order/api/product/v2/pageList.json") return loadJson("listing-page.json") as T;
   if (requestPath === "/api/sale/profit/product/pageList.json") return performancePage() as T;
   throw new Error(`fixture pipeline 未覆盖 ${requestPath}`);
-}
+};
 
 async function main() {
   const credentialsConfigured = Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET);
@@ -124,7 +125,7 @@ async function main() {
     ...scope,
     onProgress: async () => undefined,
   }, { db: prisma, post: fixturePost });
-  const secondPost = async <T>(requestPath: string, body: unknown, _options?: { retry?: boolean }): Promise<T> => {
+  const secondPost: typeof sellfoxPost = async <T>(requestPath: string, body: unknown) => {
     const page = await fixturePost<{ rows?: Array<Record<string, unknown>> }>(requestPath, body);
     const rows = (page.rows ?? []).map((row) => {
       const next = { ...row };

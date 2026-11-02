@@ -285,6 +285,11 @@ GitHub CI 负责测试、lint、build、打包和 release-check；本机不重�
 不再引用已不存在的源码发布脚本。CI 失败不得改成本机或服务器构建；应急旁路必须单独说明并获得授权。迁移结果读取发布摘要确认，不为验证重复执行迁移。
 
 
+## 业务流转登录提醒
+
+- 未完成任务按 ProductRecord 当前阶段和负责人判断，不以通知 readAt 判断完成；关闭弹窗只收起，同一次登录去重，下次登录仍有任务才弹。详细边界与回滚见 `docs/product-domain-simple-architecture-plan.md` 的业务流转通知段落。
+- `npx playwright test --config tests/browser/notifications.config.ts`：模拟通知 API、真实 Tailwind 样式的隔离登录提醒回归，不访问生产。
+
 ## UI 与交互约定
 
 - 整体是工具型 SaaS，不是营销落地页。优先信息密度、可扫描性、稳定布局和明确操作。

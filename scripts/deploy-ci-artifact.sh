@@ -45,6 +45,9 @@ quoted_initial_deployment="$(printf "%q" "${INITIAL_DEPLOYMENT:-false}")"
 scp ${SSH_OPTS} scripts/server-artifact-release.sh "${SERVER_USER}@${SERVER_HOST}:${REMOTE_RELEASE_SCRIPT}"
 scp ${SSH_OPTS} "$ARTIFACT_PATH" "${SERVER_USER}@${SERVER_HOST}:${REMOTE_ARTIFACT}"
 
+# Print the running release before switching so operators can recover base_sha from CI logs.
+ssh ${SSH_OPTS} "${SERVER_USER}@${SERVER_HOST}" "sudo -n cat /opt/amazon-ad-bulk-current/RELEASE.json 2>/dev/null || cat /opt/amazon-ad-bulk-current/RELEASE.json 2>/dev/null || echo '{\"commit\":null,\"note\":\"no current RELEASE.json\"}'"
+
 remote_release_command="cd ${SERVER_DIR} && SOURCE_BRANCH=${quoted_source_branch} SOURCE_COMMIT=${quoted_source_commit} EXPECTED_ARTIFACT_SHA256=${quoted_artifact_sha256} INSTALL_DEPS_ON_SERVER=${quoted_install_deps} RUN_BOOTSTRAP_SEED=${quoted_run_bootstrap_seed} INITIAL_DEPLOYMENT=${quoted_initial_deployment} bash ${quoted_remote_release_script} ${quoted_remote_artifact}"
 
 if [ "$SERVER_USER" != "root" ]; then
