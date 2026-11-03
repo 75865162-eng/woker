@@ -1,3 +1,4 @@
+import { syncCenterEnabled } from "@/lib/amazon-sync/policy";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -31,6 +32,7 @@ export async function PUT(request: Request) {
     const auth = await authorize(request);
     if (auth.response) return json({ error: "Forbidden." }, auth.response.status);
     const scope = { organizationId: auth.user.organizationId, workspaceId: auth.scope.workspaceId };
+    if (syncCenterEnabled(scope)) return json({ error: "该范围已切换同步中心，请在经营中台的店铺与授权页面配置。" }, 409);
     const body = await request.json() as Record<string, unknown>;
     const fieldNames = ["lwaClientId", "lwaClientSecret", "refreshToken", "awsAccessKeyId", "awsSecretAccessKey", "awsSessionToken", "region", "endpoint"] as const;
     const submitted: Partial<AmazonSpApiSettings> = {};

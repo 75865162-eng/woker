@@ -145,11 +145,11 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      ok: true,
-      status: "configured",
+      ok: false,
+      status: "transport_unavailable",
       settings: publicSettings,
-      message: "SellerSprite MCP 配置格式已符合官方要求，可以继续保存并在后续真实接入时直接使用。",
-    });
+      message: "连接测试失败：当前版本尚未接入真实 SellerSprite MCP 协议，配置格式通过不代表服务已连接。市场研究已禁用模拟回退。",
+    }, { status: 501 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "SellerSprite MCP 连接测试失败。";
     return NextResponse.json({ error: message }, { status: 500 });

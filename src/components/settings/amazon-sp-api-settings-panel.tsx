@@ -27,8 +27,7 @@ export function AmazonSpApiSettingsPanel() {
   const [validating, setValidating] = useState(false);
   const [savingCredentials, setSavingCredentials] = useState(false);
   const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
-  const [credentialForm, setCredentialForm] = useState({ lwaClientId: "", lwaClientSecret: "", refreshToken: "", awsAccessKeyId: "", awsSecretAccessKey: "", awsSessionToken: "", region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com" });
-  const [json, setJson] = useState("");
+  const [credentialForm, setCredentialForm] = useState({ lwaClientId: "", lwaClientSecret: "", refreshToken: "", region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com" });
   const [message, setMessage] = useState("");
 
   const load = useCallback(async () => {
@@ -57,26 +56,6 @@ export function AmazonSpApiSettingsPanel() {
     setRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   }
 
-  function importJson() {
-    try {
-      const parsed: unknown = JSON.parse(json);
-      if (!Array.isArray(parsed)) throw new Error("JSON 顶层必须是数组。");
-      const imported = parsed.filter((item) => {
-        if (!item || typeof item !== "object" || Array.isArray(item)) return true;
-        const row = item as Record<string, unknown>;
-        return (row.organizationId === undefined || row.organizationId === data?.scope.organizationId)
-          && (row.workspaceId === undefined || row.workspaceId === data?.scope.workspaceId);
-      }).map((item) => {
-        if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("绑定行格式无效。");
-        const row = item as Record<string, unknown>;
-        if (typeof row.sellerAccountId !== "string" || typeof row.marketplaceId !== "string" || typeof row.amazonSellerId !== "string" || !Array.isArray(row.authorizedResources)) throw new Error("JSON 缺少 sellerAccountId、marketplaceId、amazonSellerId 或 authorizedResources。");
-        return { sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, amazonSellerId: row.amazonSellerId, authorizedResources: row.authorizedResources.filter((value): value is "inventory" | "catalog" => value === "inventory" || value === "catalog") };
-      });
-      setRows(imported);
-      setMessage(`已导入 ${imported.length} 条绑定；请核对后保存。旧环境变量格式可直接导入。`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "JSON 导入失败。"); }
-  }
-
   async function save() {
     setSaving(true);
     setMessage("");
@@ -98,7 +77,7 @@ export function AmazonSpApiSettingsPanel() {
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Amazon API 配置保存失败。");
       setMessage("Amazon API 凭证已加密保存。可继续验证连接。");
-      setCredentialForm((current) => ({ ...current, lwaClientId: "", lwaClientSecret: "", refreshToken: "", awsAccessKeyId: "", awsSecretAccessKey: "", awsSessionToken: "" }));
+      setCredentialForm((current) => ({ ...current, lwaClientId: "", lwaClientSecret: "", refreshToken: "" }));
       await load();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Amazon API 配置保存失败。"); }
     finally { setSavingCredentials(false); }
@@ -140,11 +119,6 @@ export function AmazonSpApiSettingsPanel() {
           <label className="grid gap-1 text-xs font-semibold text-muted">API 区域<select className={inputClass} value={credentialForm.region} onChange={(event) => { const region = event.target.value; const endpoint = region === "eu-west-1" ? "https://sellingpartnerapi-eu.amazon.com" : region === "us-west-2" ? "https://sellingpartnerapi-fe.amazon.com" : "https://sellingpartnerapi-na.amazon.com"; setCredentialForm((current) => ({ ...current, region, endpoint })); }}><option value="us-east-1">us-east-1（北美）</option><option value="eu-west-1">eu-west-1（欧洲）</option><option value="us-west-2">us-west-2（远东）</option></select></label>
           <label className="grid gap-1 text-xs font-semibold text-muted">SP-API Endpoint<input className={inputClass} value={credentialForm.endpoint} onChange={(event) => setCredentialForm((current) => ({ ...current, endpoint: event.target.value }))} placeholder="https://sellingpartnerapi-na.amazon.com" autoComplete="url" /></label>
         </div>
-        <details className="border-t border-border pt-3"><summary className="cursor-pointer text-xs font-semibold">旧版 AWS 凭证（可选）</summary><div className="mt-3 grid gap-3 md:grid-cols-2">
-          <label className="grid gap-1 text-xs font-semibold text-muted">AWS Access Key ID<input className={inputClass} value={credentialForm.awsAccessKeyId} onChange={(event) => setCredentialForm((current) => ({ ...current, awsAccessKeyId: event.target.value }))} placeholder={hasSavedCredentials ? "已保存，留空保留" : "输入 Access Key ID"} autoComplete="off" /></label>
-          <label className="grid gap-1 text-xs font-semibold text-muted">AWS Secret Access Key<input className={inputClass} type="password" value={credentialForm.awsSecretAccessKey} onChange={(event) => setCredentialForm((current) => ({ ...current, awsSecretAccessKey: event.target.value }))} placeholder={hasSavedCredentials ? "已保存，留空保留" : "输入 Secret Access Key"} autoComplete="new-password" /></label>
-          <label className="grid gap-1 text-xs font-semibold text-muted">AWS Session Token（可选）<input className={inputClass} type="password" value={credentialForm.awsSessionToken} onChange={(event) => setCredentialForm((current) => ({ ...current, awsSessionToken: event.target.value }))} placeholder="仅临时凭证需要" autoComplete="new-password" /></label>
-        </div></details>
         {!data?.runtimeConfiguration.hasEncryptionKey && !hasSavedCredentials ? <p className="text-xs text-amber-800">首次保存前需由管理员在服务器设置 `AMAZON_SP_API_ENCRYPTION_KEY`（32 字节 Base64 主密钥）。Amazon API 密钥本身无需放进服务器 `.env`。</p> : null}
         <Button size="sm" onClick={() => void saveCredentials()} disabled={savingCredentials || loading || !data?.runtimeConfiguration.hasEncryptionKey}><Save className="h-4 w-4" />{savingCredentials ? "加密保存中..." : "保存 API 凭证"}</Button>
       </div>
@@ -164,7 +138,6 @@ export function AmazonSpApiSettingsPanel() {
           </table>
         </div>
         <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setRows((current) => [...current, blankBinding()])} disabled={rows.length >= 10}><Plus className="h-4 w-4" />添加绑定</Button><Button size="sm" onClick={() => void save()} disabled={saving || loading}><Save className="h-4 w-4" />{saving ? "保存中..." : "保存绑定"}</Button></div>
-        <details className="border-t border-border pt-3"><summary className="cursor-pointer text-sm font-semibold">从 JSON 导入</summary><div className="mt-2 space-y-2"><textarea className="min-h-28 w-full border border-border bg-white p-2 font-mono text-xs" value={json} onChange={(event) => setJson(event.target.value)} placeholder='[{"organizationId":"...","workspaceId":"...","sellerAccountId":"...","marketplaceId":"...","amazonSellerId":"...","authorizedResources":["inventory","catalog"]}]' /><Button variant="secondary" size="sm" onClick={importJson}>导入到表格</Button></div></details>
       </div>
       {message ? <p className="border border-border bg-surface-muted px-3 py-2 text-sm" role="status">{message}</p> : null}
     </section>

@@ -438,3 +438,12 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 - `scripts/selection-pipeline/README.md` 和 `docs/selection-round-d.md` 定义人工 `tag --reviews-file`、`suppliers --suppliers-file`、`workbook --upload-images` 续作。create/run --write 前重算原始低星评论、标签引用、≥3 条去重供应线索与实际图片；fixture/缺证据/上传未齐时硬失败，不信任旧 quality.json。
 - draft/Market 的 sales30Days 必须标 heuristic=true；空标签为 NEEDS_DATA，不是无差评。真人上传/建 SKU/页面验收与 fixture、临时库、浏览器 harness 验证分别记录，不能代签；market.selection.run 继续只读上传 fileId，不启动 CLI。
+
+
+## Amazon 同步中心 Phase 1 试点
+
+- 复用现有 AmazonSyncSchedule / AmazonSyncRun / BullMQ / amazon-sync-worker；仅 FBA inventory 与 Listings Items catalog 已接入。ProductRecord 不被外部同步覆盖，赛狐指标独立。
+- `AMAZON_SYNC_CENTER_SCOPES` 为组织＋工作区精确二元数组 JSON，缺省关闭；web 与 worker 必须一致。启用前停止旧计划并排空旧任务，显式导入／验证授权，不自动推断 Seller ID。
+- `npm run test:amazon-sync:integration` 使用预装官方 Docker 镜像建立独立 PostgreSQL／Redis，一次性验证真实迁移、队列和恢复；Amazon 响应模拟，不调用生产。脚本不拉取镜像，不接触既有容器。
+- `npm run test:amazon-sync:browser` 为真实 Tailwind 样式、模拟 API 的隔离浏览器回归。
+- 本轮包含 schema 扩展；关闭试点需保留兼容新唯一键的应用，禁止任意回滚到迁移前应用或自动删表。部署／回滚、验证限制见 `docs/amazon-sync-center-phase1/`，未明确要求不得执行生产迁移或发布。

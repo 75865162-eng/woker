@@ -1,3 +1,4 @@
+import { syncCenterEnabled } from "@/lib/amazon-sync/policy";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -28,9 +29,10 @@ export async function PATCH(request: Request) {
   if (!process.env.DATABASE_URL) return NextResponse.json({ error: "数据库未配置。" }, { status: 503 });
   try {
     const scope = workspaceScopeFromRequest(request);
+    if (syncCenterEnabled({ organizationId: permission.user.organizationId, workspaceId: scope.workspaceId })) return NextResponse.json({ error: "该范围请使用同步中心计划接口。" }, { status: 409 });
     const key = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId, resource: patch.resource };
     await prisma.amazonSyncSchedule.upsert({
-      where: { organizationId_workspaceId_resource: key },
+      where: { organizationId_workspaceId_resource_planKey: { ...key, planKey: "legacy" } },
       create: { id: randomUUID(), ...key, ...patch, updatedByUserId: permission.user.id },
       update: { ...patch, lastEnqueuedAt: null, updatedByUserId: permission.user.id },
     });

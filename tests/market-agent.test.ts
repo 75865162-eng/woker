@@ -12,7 +12,7 @@ test("market agent has a full tool surface and 20 evaluation cases", () => {
   assert.ok(canAgentUseTool(marketAgentDefinition, marketToolDefinitions[0]));
 });
 
-test("market agent runtime produces an evidence-backed research report", async () => {
+test("market agent stops without configured real market data and creates no report", async () => {
   const clock = () => new Date("2026-09-02T00:00:00.000Z");
   const runtime = createAgentRuntime({
     definitions: [marketAgentDefinition],
@@ -59,9 +59,11 @@ test("market agent runtime produces an evidence-backed research report", async (
     }),
   });
 
-  assert.equal(result.execution.status, "COMPLETED");
-  assert.ok(result.toolCalls.length >= 8);
-  assert.ok(result.traces.some((trace) => trace.type === "recommendation"));
-  assert.ok(result.memoryItems.length >= 1);
-  assert.ok(result.execution.output && typeof result.execution.output === "object");
+  assert.equal(result.execution.status, "FAILED");
+  assert.equal(result.execution.error?.code, "SELLERSPRITE_MCP_NOT_CONFIGURED");
+  assert.ok(result.toolCalls.length >= 1);
+  assert.ok(result.toolCalls.some(call => call.status === "FAILED"));
+  assert.equal(result.traces.some(trace => trace.type === "recommendation"), false);
+  assert.equal(result.memoryItems.length, 0);
+  assert.equal(result.execution.output ?? null, null);
 });

@@ -885,7 +885,7 @@ export function SettingsWorkbench() {
                   <CardTitle className="text-sm">外部工具 / MCP 配置</CardTitle>
                 </div>
               </div>
-              <Badge tone={sellerSpriteReady ? "green" : "gray"}>{sellerSpriteReady ? "可调用" : "待配置"}</Badge>
+              <Badge tone={sellerSpriteReady ? "amber" : "gray"}>{sellerSpriteReady ? "配置已填写，连接未验证" : "待配置"}</Badge>
             </CardHeader>
             <CardContent className="space-y-3 p-3">
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-[0.7fr_1.4fr_0.9fr]">

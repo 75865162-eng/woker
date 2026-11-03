@@ -1,0 +1,1461 @@
+{
+  "reviewDate": "2026-11-04",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/sellers-api-model/sellers.json",
+      "sha256": "497862ea32de8040453649986e2cd7c6fcc15b55e8022becc783e4a6d6ffcffd",
+      "version": "v1",
+      "operations": [
+        {
+          "path": "/sellers/v1/marketplaceParticipations",
+          "method": "get",
+          "operationId": "getMarketplaceParticipations",
+          "parameters": []
+        },
+        {
+          "path": "/sellers/v1/account",
+          "method": "get",
+          "operationId": "getAccount",
+          "parameters": []
+        }
+      ],
+      "selectedDefinitions": {}
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/fba-inventory-api-model/fbaInventory.json",
+      "sha256": "7c14bcdb22de8ca2df45e5a40f2a422cff344d45985a68b9515b2e800edcc5ab",
+      "version": "v1",
+      "operations": [
+        {
+          "path": "/fba/inventory/v1/summaries",
+          "method": "get",
+          "operationId": "getInventorySummaries",
+          "parameters": [
+            "details",
+            "granularityType",
+            "granularityId",
+            "startDateTime",
+            "sellerSkus",
+            "sellerSku",
+            "nextToken",
+            "marketplaceIds"
+          ]
+        },
+        {
+          "path": "/fba/inventory/v1/items",
+          "method": "post",
+          "operationId": "createInventoryItem",
+          "parameters": [
+            "createInventoryItemRequestBody"
+          ]
+        },
+        {
+          "path": "/fba/inventory/v1/items/{sellerSku}",
+          "method": "delete",
+          "operationId": "deleteInventoryItem",
+          "parameters": [
+            "sellerSku",
+            "marketplaceId"
+          ]
+        },
+        {
+          "path": "/fba/inventory/v1/items/inventory",
+          "method": "post",
+          "operationId": "addInventory",
+          "parameters": [
+            "x-amzn-idempotency-token",
+            "addInventoryRequestBody"
+          ]
+        }
+      ],
+      "selectedDefinitions": {
+        "InventorySummary": {
+          "asin": {
+            "type": "string",
+            "description": "The Amazon Standard Identification Number (ASIN) of an item."
+          },
+          "fnSku": {
+            "type": "string",
+            "description": "Amazon's fulfillment network SKU identifier."
+          },
+          "sellerSku": {
+            "type": "string",
+            "description": "The seller SKU of the item."
+          },
+          "condition": {
+            "type": "string",
+            "description": "The condition of the item as described by the seller (for example, New Item)."
+          },
+          "inventoryDetails": {
+            "$ref": "#/definitions/InventoryDetails"
+          },
+          "lastUpdatedTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The date and time that any quantity was last updated."
+          },
+          "productName": {
+            "type": "string",
+            "description": "The localized language product title of the item within the specific marketplace."
+          },
+          "totalQuantity": {
+            "type": "integer",
+            "description": "The total number of units in an inbound shipment or in Amazon fulfillment centers."
+          },
+          "stores": {
+            "type": "array",
+            "description": "A list of seller-enrolled stores that apply to this seller SKU.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/listings-items-api-model/listingsItems_2021-08-01.json",
+      "sha256": "d60eed7106d5cdd5bb455c916230ad04eb9c4e2cad7d1139b1ab986ea588a3a9",
+      "version": "2021-08-01",
+      "operations": [
+        {
+          "path": "/listings/2021-08-01/items/{sellerId}/{sku}",
+          "method": "delete",
+          "operationId": "deleteListingsItem",
+          "parameters": [
+            "sellerId",
+            "sku",
+            "marketplaceIds",
+            "issueLocale"
+          ]
+        },
+        {
+          "path": "/listings/2021-08-01/items/{sellerId}/{sku}",
+          "method": "get",
+          "operationId": "getListingsItem",
+          "parameters": [
+            "sellerId",
+            "sku",
+            "marketplaceIds",
+            "issueLocale",
+            "includedData"
+          ]
+        },
+        {
+          "path": "/listings/2021-08-01/items/{sellerId}/{sku}",
+          "method": "patch",
+          "operationId": "patchListingsItem",
+          "parameters": [
+            "sellerId",
+            "sku",
+            "marketplaceIds",
+            "includedData",
+            "mode",
+            "issueLocale",
+            "body"
+          ]
+        },
+        {
+          "path": "/listings/2021-08-01/items/{sellerId}/{sku}",
+          "method": "put",
+          "operationId": "putListingsItem",
+          "parameters": [
+            "sellerId",
+            "sku",
+            "marketplaceIds",
+            "includedData",
+            "mode",
+            "issueLocale",
+            "body"
+          ]
+        },
+        {
+          "path": "/listings/2021-08-01/items/{sellerId}",
+          "method": "get",
+          "operationId": "searchListingsItems",
+          "parameters": [
+            "sellerId",
+            "marketplaceIds",
+            "issueLocale",
+            "includedData",
+            "identifiers",
+            "identifiersType",
+            "variationParentSku",
+            "packageHierarchySku",
+            "createdAfter",
+            "createdBefore",
+            "lastUpdatedAfter",
+            "lastUpdatedBefore",
+            "withIssueSeverity",
+            "withStatus",
+            "withoutStatus",
+            "sortBy",
+            "sortOrder",
+            "pageSize",
+            "pageToken"
+          ]
+        }
+      ],
+      "selectedDefinitions": {
+        "ItemSummaryByMarketplace": {
+          "marketplaceId": {
+            "description": "An Amazon store identifier. Identifies the listings item's Amazon store.",
+            "type": "string"
+          },
+          "asin": {
+            "description": "The ASIN of the listings item.",
+            "type": "string"
+          },
+          "productType": {
+            "description": "The listings item's Amazon product type.",
+            "type": "string"
+          },
+          "conditionType": {
+            "description": "Identifies the condition of the listings item.",
+            "enum": [
+              "new_new",
+              "new_open_box",
+              "new_oem",
+              "refurbished_refurbished",
+              "used_like_new",
+              "used_very_good",
+              "used_good",
+              "used_acceptable",
+              "collectible_like_new",
+              "collectible_very_good",
+              "collectible_good",
+              "collectible_acceptable",
+              "club_club"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "new_new",
+                "description": "New"
+              },
+              {
+                "value": "new_open_box",
+                "description": "New - Open Box."
+              },
+              {
+                "value": "new_oem",
+                "description": "New - OEM."
+              },
+              {
+                "value": "refurbished_refurbished",
+                "description": "Refurbished"
+              },
+              {
+                "value": "used_like_new",
+                "description": "Used - Like New."
+              },
+              {
+                "value": "used_very_good",
+                "description": "Used - Very Good."
+              },
+              {
+                "value": "used_good",
+                "description": "Used - Good."
+              },
+              {
+                "value": "used_acceptable",
+                "description": "Used - Acceptable."
+              },
+              {
+                "value": "collectible_like_new",
+                "description": "Collectible - Like New."
+              },
+              {
+                "value": "collectible_very_good",
+                "description": "Collectible - Very Good."
+              },
+              {
+                "value": "collectible_good",
+                "description": "Collectible - Good."
+              },
+              {
+                "value": "collectible_acceptable",
+                "description": "Collectible - Acceptable."
+              },
+              {
+                "value": "club_club",
+                "description": "Club"
+              }
+            ],
+            "type": "string"
+          },
+          "status": {
+            "description": "Statuses that apply to the listings item.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "BUYABLE",
+                "DISCOVERABLE"
+              ],
+              "x-docgen-enum-table-extension": [
+                {
+                  "value": "BUYABLE",
+                  "description": "The listings item can be purchased by shoppers. This status does not apply to vendor listings."
+                },
+                {
+                  "value": "DISCOVERABLE",
+                  "description": "The listings item is visible to shoppers."
+                }
+              ]
+            }
+          },
+          "fnSku": {
+            "description": "Fulfillment network stock keeping unit is an identifier used by Amazon fulfillment centers to identify each unique item.",
+            "type": "string"
+          },
+          "itemName": {
+            "description": "Name, or title, associated with an Amazon catalog item.",
+            "type": "string"
+          },
+          "createdDate": {
+            "description": "Date the listings item was created, in ISO 8601 format.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUpdatedDate": {
+            "description": "Date the listings item was last updated, in ISO 8601 format.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "mainImage": {
+            "description": "The listings item's main image.",
+            "$ref": "#/definitions/ItemImage"
+          }
+        }
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/orders-api-model/ordersV0.json",
+      "sha256": "027ac6f5c97126647c6925db9be09f78c7c741cd1d8727a5367374a1846bedc5",
+      "version": "v0",
+      "operations": [
+        {
+          "path": "/orders/v0/orders",
+          "method": "get",
+          "operationId": "getOrders",
+          "parameters": [
+            "CreatedAfter",
+            "CreatedBefore",
+            "LastUpdatedAfter",
+            "LastUpdatedBefore",
+            "OrderStatuses",
+            "MarketplaceIds",
+            "FulfillmentChannels",
+            "PaymentMethods",
+            "BuyerEmail",
+            "SellerOrderId",
+            "MaxResultsPerPage",
+            "EasyShipShipmentStatuses",
+            "ElectronicInvoiceStatuses",
+            "NextToken",
+            "AmazonOrderIds",
+            "ActualFulfillmentSupplySourceId",
+            "IsISPU",
+            "StoreChainStoreId",
+            "EarliestDeliveryDateBefore",
+            "EarliestDeliveryDateAfter",
+            "LatestDeliveryDateBefore",
+            "LatestDeliveryDateAfter"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}",
+          "method": "get",
+          "operationId": "getOrder",
+          "parameters": [
+            "orderId"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/buyerInfo",
+          "method": "get",
+          "operationId": "getOrderBuyerInfo",
+          "parameters": [
+            "orderId"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/address",
+          "method": "get",
+          "operationId": "getOrderAddress",
+          "parameters": [
+            "orderId"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/orderItems",
+          "method": "get",
+          "operationId": "getOrderItems",
+          "parameters": [
+            "orderId",
+            "NextToken"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/orderItems/buyerInfo",
+          "method": "get",
+          "operationId": "getOrderItemsBuyerInfo",
+          "parameters": [
+            "orderId",
+            "NextToken"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/shipment",
+          "method": "post",
+          "operationId": "updateShipmentStatus",
+          "parameters": [
+            "orderId",
+            "payload"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/regulatedInfo",
+          "method": "get",
+          "operationId": "getOrderRegulatedInfo",
+          "parameters": [
+            "orderId"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/regulatedInfo",
+          "method": "patch",
+          "operationId": "updateVerificationStatus",
+          "parameters": [
+            "orderId",
+            "payload"
+          ]
+        },
+        {
+          "path": "/orders/v0/orders/{orderId}/shipmentConfirmation",
+          "method": "post",
+          "operationId": "confirmShipment",
+          "parameters": [
+            "orderId",
+            "payload"
+          ]
+        }
+      ],
+      "selectedDefinitions": {
+        "Order": {
+          "AmazonOrderId": {
+            "type": "string",
+            "description": "An Amazon-defined order identifier, in 3-7-7 format."
+          },
+          "SellerOrderId": {
+            "type": "string",
+            "description": "A seller-defined order identifier."
+          },
+          "PurchaseDate": {
+            "type": "string",
+            "description": "The date when the order was created."
+          },
+          "LastUpdateDate": {
+            "type": "string",
+            "description": "The date when the order was last updated.\n\n__Note__: `LastUpdateDate` is returned with an incorrect date for orders that were last updated before 2009-04-01."
+          },
+          "OrderStatus": {
+            "type": "string",
+            "description": "The current order status.",
+            "enum": [
+              "Pending",
+              "Unshipped",
+              "PartiallyShipped",
+              "Shipped",
+              "Canceled",
+              "Unfulfillable",
+              "InvoiceUnconfirmed",
+              "PendingAvailability"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "Pending",
+                "description": "The order has been placed but payment has not been authorized. The order is not ready for shipment. Note that for orders with `OrderType = Standard`, the initial order status is Pending. For orders with `OrderType = Preorder`, the initial order status is `PendingAvailability`, and the order passes into the Pending status when the payment authorization process begins."
+              },
+              {
+                "value": "Unshipped",
+                "description": "Payment has been authorized and order is ready for shipment, but no items in the order have been shipped."
+              },
+              {
+                "value": "PartiallyShipped",
+                "description": "One or more (but not all) items in the order have been shipped."
+              },
+              {
+                "value": "Shipped",
+                "description": "All items in the order have been shipped."
+              },
+              {
+                "value": "Canceled",
+                "description": "The order was canceled."
+              },
+              {
+                "value": "Unfulfillable",
+                "description": "The order cannot be fulfilled. This state applies only to Amazon-fulfilled orders that were not placed on Amazon's retail web site."
+              },
+              {
+                "value": "InvoiceUnconfirmed",
+                "description": "All items in the order have been shipped. The seller has not yet given confirmation to Amazon that the invoice has been shipped to the buyer."
+              },
+              {
+                "value": "PendingAvailability",
+                "description": "This status is available for pre-orders only. The order has been placed, payment has not been authorized, and the release date for the item is in the future. The order is not ready for shipment."
+              }
+            ]
+          },
+          "FulfillmentChannel": {
+            "type": "string",
+            "description": "Whether the order was fulfilled by Amazon (`AFN`) or by the seller (`MFN`).",
+            "enum": [
+              "MFN",
+              "AFN"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "MFN",
+                "description": "Fulfilled by the seller."
+              },
+              {
+                "value": "AFN",
+                "description": "Fulfilled by Amazon."
+              }
+            ]
+          },
+          "SalesChannel": {
+            "type": "string",
+            "description": "The sales channel for the first item in the order."
+          },
+          "OrderChannel": {
+            "type": "string",
+            "description": "The order channel for the first item in the order."
+          },
+          "ShipServiceLevel": {
+            "type": "string",
+            "description": "The order's shipment service level."
+          },
+          "OrderTotal": {
+            "description": "The total charge for this order.",
+            "$ref": "#/definitions/Money"
+          },
+          "NumberOfItemsShipped": {
+            "type": "integer",
+            "description": "The number of items shipped."
+          },
+          "NumberOfItemsUnshipped": {
+            "type": "integer",
+            "description": "The number of items unshipped."
+          },
+          "PaymentExecutionDetail": {
+            "description": "Information about the sub-payment methods for an order.",
+            "$ref": "#/definitions/PaymentExecutionDetailItemList"
+          },
+          "PaymentMethod": {
+            "type": "string",
+            "description": "The payment method for the order. This property is limited to COD and CVS payment methods. Unless you need the specific COD payment information provided by the `PaymentExecutionDetailItem` object, we recommend using the `PaymentMethodDetails` property to get payment method information.",
+            "enum": [
+              "COD",
+              "CVS",
+              "Other"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "COD",
+                "description": "Cash on delivery."
+              },
+              {
+                "value": "CVS",
+                "description": "Convenience store."
+              },
+              {
+                "value": "Other",
+                "description": "A payment method other than COD and CVS."
+              }
+            ]
+          },
+          "PaymentMethodDetails": {
+            "description": "A list of payment methods for the order.",
+            "$ref": "#/definitions/PaymentMethodDetailItemList"
+          },
+          "MarketplaceId": {
+            "type": "string",
+            "description": "The identifier for the marketplace where the order was placed."
+          },
+          "ShipmentServiceLevelCategory": {
+            "type": "string",
+            "description": "The shipment service level category for the order.\n\n**Possible values**: `Expedited`, `FreeEconomy`, `NextDay`, `Priority`, `SameDay`, `SecondDay`, `Scheduled`, and `Standard`."
+          },
+          "EasyShipShipmentStatus": {
+            "description": "The status of the Amazon Easy Ship order. This property is only included for Amazon Easy Ship orders.",
+            "$ref": "#/definitions/EasyShipShipmentStatus"
+          },
+          "CbaDisplayableShippingLabel": {
+            "type": "string",
+            "description": "Custom ship label for Checkout by Amazon (CBA)."
+          },
+          "OrderType": {
+            "type": "string",
+            "description": "The order's type.",
+            "enum": [
+              "StandardOrder",
+              "LongLeadTimeOrder",
+              "Preorder",
+              "BackOrder",
+              "SourcingOnDemandOrder"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "StandardOrder",
+                "description": "An order that contains items for which the selling partner currently has inventory in stock."
+              },
+              {
+                "value": "LongLeadTimeOrder",
+                "description": "An order that contains items that have a long lead time to ship."
+              },
+              {
+                "value": "Preorder",
+                "description": "An order that contains items with a release date that is in the future."
+              },
+              {
+                "value": "BackOrder",
+                "description": "An order that contains items that already have been released in the market but are currently out of stock and will be available in the future."
+              },
+              {
+                "value": "SourcingOnDemandOrder",
+                "description": "A Sourcing On Demand order."
+              }
+            ]
+          },
+          "EarliestShipDate": {
+            "type": "string",
+            "description": "The start of the time period within which you have committed to ship the order. In [ISO 8601](https://developer-docs.amazon.com/sp-api/docs/iso-8601) date time format. Only returned for seller-fulfilled orders.\n\n__Note__: `EarliestShipDate` might not be returned for orders placed before February 1, 2013."
+          },
+          "LatestShipDate": {
+            "type": "string",
+            "description": "The end of the time period within which you have committed to ship the order. In [ISO 8601](https://developer-docs.amazon.com/sp-api/docs/iso-8601) date time format. Only returned for seller-fulfilled orders.\n\n__Note__: `LatestShipDate` might not be returned for orders placed before February 1, 2013."
+          },
+          "EarliestDeliveryDate": {
+            "type": "string",
+            "description": "The start of the time period within which you have committed to fulfill the order. In [ISO 8601](https://developer-docs.amazon.com/sp-api/docs/iso-8601) date time format. Only returned for seller-fulfilled orders."
+          },
+          "LatestDeliveryDate": {
+            "type": "string",
+            "description": "The end of the time period within which you have committed to fulfill the order. In [ISO 8601](https://developer-docs.amazon.com/sp-api/docs/iso-8601) date time format. Only returned for seller-fulfilled orders that do not have a `PendingAvailability`, `Pending`, or `Canceled` status."
+          },
+          "IsBusinessOrder": {
+            "type": "boolean",
+            "description": "When true, the order is an Amazon Business order. An Amazon Business order is an order where the buyer is a Verified Business Buyer."
+          },
+          "IsPrime": {
+            "type": "boolean",
+            "description": "When true, the order is a seller-fulfilled Amazon Prime order."
+          },
+          "IsPremiumOrder": {
+            "type": "boolean",
+            "description": "When true, the order has a Premium Shipping Service Level Agreement. For more information about Premium Shipping orders, refer to \"Premium Shipping Options\" in the Seller Central Help for your marketplace."
+          },
+          "IsGlobalExpressEnabled": {
+            "type": "boolean",
+            "description": "When true, the order is a `GlobalExpress` order."
+          },
+          "ReplacedOrderId": {
+            "type": "string",
+            "description": "The order ID value for the order that is being replaced. Returned only if IsReplacementOrder = true."
+          },
+          "IsReplacementOrder": {
+            "type": "boolean",
+            "description": "When true, this is a replacement order."
+          },
+          "PromiseResponseDueDate": {
+            "type": "string",
+            "description": "Indicates the date by which the seller must respond to the buyer with an estimated ship date. Only returned for Sourcing on Demand orders."
+          },
+          "IsEstimatedShipDateSet": {
+            "type": "boolean",
+            "description": "When true, the estimated ship date is set for the order. Only returned for Sourcing on Demand orders."
+          },
+          "IsSoldByAB": {
+            "type": "boolean",
+            "description": "When true, the item within this order was bought and re-sold by Amazon Business EU SARL (ABEU). By buying and instantly re-selling your items, ABEU becomes the seller of record, making your inventory available for sale to customers who would not otherwise purchase from a third-party seller."
+          },
+          "IsIBA": {
+            "type": "boolean",
+            "description": "When true, the item within this order was bought and re-sold by Amazon Business EU SARL (ABEU). By buying and instantly re-selling your items, ABEU becomes the seller of record, making your inventory available for sale to customers who would not otherwise purchase from a third-party seller."
+          },
+          "DefaultShipFromLocationAddress": {
+            "description": "The recommended location for the seller to ship the items from. It is calculated at checkout. The seller may or may not choose to ship from this location.",
+            "$ref": "#/definitions/Address"
+          },
+          "BuyerInvoicePreference": {
+            "type": "string",
+            "enum": [
+              "INDIVIDUAL",
+              "BUSINESS"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "INDIVIDUAL",
+                "description": "Issues an individual invoice to the buyer."
+              },
+              {
+                "value": "BUSINESS",
+                "description": "Issues a business invoice to the buyer. Tax information is available in `BuyerTaxInformation`."
+              }
+            ],
+            "description": "The buyer's invoicing preference. Sellers can use this data to issue electronic invoices for orders in Turkey.\n\n**Note**: This attribute is only available in the Turkey marketplace."
+          },
+          "BuyerTaxInformation": {
+            "description": "Contains the business invoice tax information. Sellers could use this data to issue electronic invoices for business orders in Turkey.\n\n**Note**:\n1. This attribute is only available in the Turkey marketplace for the orders that `BuyerInvoicePreference` is BUSINESS.\n2. The `BuyerTaxInformation` is a restricted data. Use the Restricted Data Token (RDT) and restricted SPDS roles to access this restricted data.",
+            "$ref": "#/definitions/BuyerTaxInformation"
+          },
+          "FulfillmentInstruction": {
+            "description": "Contains the instructions about the fulfillment, such as the location from where you want the order filled.",
+            "$ref": "#/definitions/FulfillmentInstruction"
+          },
+          "IsISPU": {
+            "type": "boolean",
+            "description": "When true, this order is marked to be picked up from a store rather than delivered."
+          },
+          "IsAccessPointOrder": {
+            "type": "boolean",
+            "description": "When true, this order is marked to be delivered to an Access Point. The access location is chosen by the customer. Access Points include Amazon Hub Lockers, Amazon Hub Counters, and pickup points operated by carriers."
+          },
+          "MarketplaceTaxInfo": {
+            "description": "Tax information about the marketplace where the sale took place. Sellers can use this data to issue electronic invoices for orders in Brazil.\n\n**Note**: This attribute is only available in the Brazil marketplace for the orders with `Pending` or `Unshipped` status.",
+            "$ref": "#/definitions/MarketplaceTaxInfo"
+          },
+          "SellerDisplayName": {
+            "type": "string",
+            "description": "The seller’s friendly name registered in the marketplace where the sale took place. Sellers can use this data to issue electronic invoices for orders in Brazil.\n\n**Note**: This attribute is only available in the Brazil marketplace for the orders with `Pending` or `Unshipped` status."
+          },
+          "ShippingAddress": {
+            "description": "The shipping address for the order.\n\n**Note**:\n1. `ShippingAddress` is only available for orders with the following status values: Unshipped, `PartiallyShipped`, Shipped and `InvoiceUnconfirmed`.\n2. The `ShippingAddress` contains restricted data. Use the Restricted Data Token (RDT) and restricted SPDS roles to access the restricted data in `ShippingAddress`. For example, `Name`, `AddressLine1`, `AddressLine2`, `AddressLine3`, `Phone`, `AddressType`, and `ExtendedFields`.",
+            "$ref": "#/definitions/Address"
+          },
+          "BuyerInfo": {
+            "description": "Buyer information.\n\n**Note**: The `BuyerInfo` contains restricted data. Use the Restricted Data Token (RDT) and restricted SPDS roles to access the restricted data in `BuyerInfo`. For example, `BuyerName`, `BuyerTaxInfo`, and `PurchaseOrderNumber`.",
+            "$ref": "#/definitions/BuyerInfo"
+          },
+          "AutomatedShippingSettings": {
+            "description": "Contains information regarding the Shipping Settings Automaton program, such as whether the order's shipping settings were generated automatically, and what those settings are.",
+            "$ref": "#/definitions/AutomatedShippingSettings"
+          },
+          "HasRegulatedItems": {
+            "type": "boolean",
+            "description": "Whether the order contains regulated items which may require additional approval steps before being fulfilled."
+          },
+          "ElectronicInvoiceStatus": {
+            "$ref": "#/definitions/ElectronicInvoiceStatus",
+            "description": "The status of the electronic invoice."
+          }
+        }
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/orders-api-model/orders_2026-01-01.json",
+      "sha256": "cd5d1fda9b9b301970e3349868e19703f65af83213e24385b850bb46a2667588",
+      "version": "2026-01-01",
+      "operations": [
+        {
+          "path": "/orders/2026-01-01/orders",
+          "method": "get",
+          "operationId": "searchOrders",
+          "parameters": [
+            "createdAfter",
+            "createdBefore",
+            "lastUpdatedAfter",
+            "lastUpdatedBefore",
+            "fulfillmentStatuses",
+            "marketplaceIds",
+            "fulfilledBy",
+            "maxResultsPerPage",
+            "paginationToken",
+            "includedData"
+          ]
+        },
+        {
+          "path": "/orders/2026-01-01/orders/{orderId}",
+          "method": "get",
+          "operationId": "getOrder",
+          "parameters": [
+            "orderId",
+            "includedData"
+          ]
+        }
+      ],
+      "selectedDefinitions": {
+        "Order": {
+          "orderId": {
+            "description": "An Amazon-defined order identifier.",
+            "type": "string"
+          },
+          "orderAliases": {
+            "description": "Alternative identifiers that can be used to reference this order, such as seller-defined order numbers.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Alias"
+            }
+          },
+          "createdTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The time when the customer placed the order. In [ISO 8601](https://developer-docs.amazon.com/sp-api/docs/iso-8601) format."
+          },
+          "lastUpdatedTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The most recent time when any aspect of this order was modified by Amazon or the seller. In [ISO 8601](https://developer-docs.amazon.com/sp-api/docs/iso-8601) format."
+          },
+          "programs": {
+            "type": "array",
+            "description": "Special programs associated with this order that may affect fulfillment or customer experience. \n\n**Possible values**: `AMAZON_BAZAAR`, `AMAZON_BUSINESS`, `AMAZON_EASY_SHIP`, `AMAZON_HAUL`, `DELIVERY_BY_AMAZON`, `FBM_SHIP_PLUS`, `INVOICE_BY_AMAZON`, `IN_STORE_PICK_UP`, `PREMIUM`, `PREORDER`, `PRIME`",
+            "items": {
+              "type": "string"
+            }
+          },
+          "associatedOrders": {
+            "description": "Other orders that have a direct relationship to this order, such as replacement or exchange orders.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AssociatedOrder"
+            }
+          },
+          "salesChannel": {
+            "description": "Information about where this order was placed.",
+            "$ref": "#/definitions/SalesChannel"
+          },
+          "buyer": {
+            "description": "Information about the customer who purchased this order.",
+            "$ref": "#/definitions/Buyer"
+          },
+          "recipient": {
+            "description": "Information about the person or location where this order should be delivered.",
+            "$ref": "#/definitions/Recipient"
+          },
+          "proceeds": {
+            "description": "Financial information about this order.",
+            "$ref": "#/definitions/OrderProceeds"
+          },
+          "payment": {
+            "description": "Payment information for the order.",
+            "$ref": "#/definitions/OrderPayment"
+          },
+          "tax": {
+            "description": "Tax-related information for the order.",
+            "$ref": "#/definitions/OrderTax"
+          },
+          "fulfillment": {
+            "description": "Information about how this order is being processed and shipped.",
+            "$ref": "#/definitions/OrderFulfillment"
+          },
+          "orderItems": {
+            "description": "The list of all order items included in this order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/OrderItem"
+            }
+          },
+          "packages": {
+            "description": "Shipping packages created for this order, including tracking information. **Note:** Only available for merchant-fulfilled (FBM) orders.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/OrderPackage"
+            }
+          },
+          "fulfillmentOrders": {
+            "description": "The list of fulfillment orders associated with this customer order. Each entry corresponds to one fulfillment unit created by Amazon for this order. **Note:** Only available for Easy Ship and Seller Flex.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/FulfillmentOrder"
+            }
+          }
+        }
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/reports-api-model/reports_2021-06-30.json",
+      "sha256": "d72db9e5280262a92933a0e45e2207c150272f1d66177b2517c20671d69c732c",
+      "version": "2021-06-30",
+      "operations": [
+        {
+          "path": "/reports/2021-06-30/reports",
+          "method": "get",
+          "operationId": "getReports",
+          "parameters": [
+            "reportTypes",
+            "processingStatuses",
+            "marketplaceIds",
+            "pageSize",
+            "createdSince",
+            "createdUntil",
+            "nextToken"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/reports",
+          "method": "post",
+          "operationId": "createReport",
+          "parameters": [
+            "body"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/reports/{reportId}",
+          "method": "delete",
+          "operationId": "cancelReport",
+          "parameters": [
+            "reportId"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/reports/{reportId}",
+          "method": "get",
+          "operationId": "getReport",
+          "parameters": [
+            "reportId"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/schedules",
+          "method": "get",
+          "operationId": "getReportSchedules",
+          "parameters": [
+            "reportTypes"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/schedules",
+          "method": "post",
+          "operationId": "createReportSchedule",
+          "parameters": [
+            "body"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/schedules/{reportScheduleId}",
+          "method": "delete",
+          "operationId": "cancelReportSchedule",
+          "parameters": [
+            "reportScheduleId"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/schedules/{reportScheduleId}",
+          "method": "get",
+          "operationId": "getReportSchedule",
+          "parameters": [
+            "reportScheduleId"
+          ]
+        },
+        {
+          "path": "/reports/2021-06-30/documents/{reportDocumentId}",
+          "method": "get",
+          "operationId": "getReportDocument",
+          "parameters": [
+            "reportDocumentId",
+            "enableContentEncodingUrlHeader"
+          ]
+        }
+      ],
+      "selectedDefinitions": {
+        "Report": {
+          "marketplaceIds": {
+            "description": "A list of marketplace identifiers for the report.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reportId": {
+            "description": "The identifier for the report. This identifier is unique only in combination with a seller ID.",
+            "type": "string"
+          },
+          "reportType": {
+            "description": "The report type. Refer to [Report Type Values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) for more information.",
+            "type": "string"
+          },
+          "dataStartTime": {
+            "description": "The start of a date and time range used for selecting the data to report.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "dataEndTime": {
+            "description": "The end of a date and time range used for selecting the data to report.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "reportScheduleId": {
+            "description": "The identifier of the report schedule that created this report (if any). This identifier is unique only in combination with a seller ID.",
+            "type": "string"
+          },
+          "createdTime": {
+            "description": "The date and time when the report was created.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "processingStatus": {
+            "description": "The processing status of the report.",
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "DONE",
+              "FATAL",
+              "IN_PROGRESS",
+              "IN_QUEUE"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "CANCELLED",
+                "description": "The report was cancelled. There are two ways a report can be cancelled: an explicit cancellation request before the report starts processing, or an automatic cancellation if there is no data to return."
+              },
+              {
+                "value": "DONE",
+                "description": "The report has completed processing."
+              },
+              {
+                "value": "FATAL",
+                "description": "The report was aborted due to a fatal error."
+              },
+              {
+                "value": "IN_PROGRESS",
+                "description": "The report is being processed."
+              },
+              {
+                "value": "IN_QUEUE",
+                "description": "The report has not yet started processing. It may be waiting for another `IN_PROGRESS` report."
+              }
+            ]
+          },
+          "processingStartTime": {
+            "description": "The date and time when the report processing started, in <a href='https://developer-docs.amazon.com/sp-api/docs/iso-8601'>ISO 8601</a> date time format.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "processingEndTime": {
+            "description": "The date and time when the report processing completed, in <a href='https://developer-docs.amazon.com/sp-api/docs/iso-8601'>ISO 8601</a> date time format.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "reportDocumentId": {
+            "description": "The identifier for the report document. Pass this into the `getReportDocument` operation to get the information you will need to retrieve the report document's contents.",
+            "type": "string"
+          }
+        },
+        "GetReportsResponse": {
+          "reports": {
+            "description": "The reports.",
+            "$ref": "#/definitions/ReportList"
+          },
+          "nextToken": {
+            "description": "Returned when the number of results exceeds `pageSize`. To get the next page of results, call `getReports` with this token as the only parameter.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/finances-api-model/finances_2024-06-19.json",
+      "sha256": "667c8a9b4e8377677aea0dfddeb1eb68e64115abbd833a5347350d9d9c650bc3",
+      "version": "2024-06-19",
+      "operations": [
+        {
+          "path": "/finances/2024-06-19/transactions",
+          "method": "get",
+          "operationId": "listTransactions",
+          "parameters": [
+            "postedAfter",
+            "postedBefore",
+            "marketplaceId",
+            "transactionStatus",
+            "relatedIdentifierName",
+            "relatedIdentifierValue",
+            "nextToken"
+          ]
+        },
+        {
+          "path": "/finances/2024-06-19/balances",
+          "method": "get",
+          "operationId": "listBalances",
+          "parameters": [
+            "marketplaceIds",
+            "balanceType",
+            "accountType",
+            "asOfDate",
+            "nextToken"
+          ]
+        },
+        {
+          "path": "/finances/2024-06-19/summary",
+          "method": "get",
+          "operationId": "listSummary",
+          "parameters": [
+            "marketplaceIds",
+            "accountType",
+            "relatedIdentifierName",
+            "relatedIdentifierValue",
+            "periodStart",
+            "periodEnd",
+            "nextToken"
+          ]
+        }
+      ],
+      "selectedDefinitions": {
+        "Transaction": {
+          "sellingPartnerMetadata": {
+            "description": "Metadata that describes the seller.",
+            "$ref": "#/definitions/SellingPartnerMetadata"
+          },
+          "relatedIdentifiers": {
+            "description": "Identifiers related to the transaction, such as order and shipment IDs.",
+            "$ref": "#/definitions/RelatedIdentifiers"
+          },
+          "transactionType": {
+            "type": "string",
+            "description": "The type of transaction.\n\n**Possible value:** `Shipment`"
+          },
+          "transactionId": {
+            "type": "string",
+            "description": "The unique identifier of the transaction."
+          },
+          "transactionStatus": {
+            "type": "string",
+            "description": "The status of the transaction.\n\n**Possible values:**\n\n* `DEFERRED`: the transaction is currently deferred.\n* `RELEASED`: the transaction is currently released.\n* `DEFERRED_RELEASED`: the transaction was deferred in the past, but is now released. The status of a deferred transaction is updated to `DEFERRED_RELEASED` when the transaction is released."
+          },
+          "description": {
+            "type": "string",
+            "description": "Describes the reasons for the transaction.\n\n**Example:** `Order Payment`, `Refund Order`"
+          },
+          "postedDate": {
+            "description": "The date and time when the transaction was posted.",
+            "$ref": "#/definitions/Date"
+          },
+          "totalAmount": {
+            "description": "The total amount of money in the transaction.",
+            "$ref": "#/definitions/Currency"
+          },
+          "marketplaceDetails": {
+            "description": "Information about the marketplace where the transaction occurred.",
+            "$ref": "#/definitions/MarketplaceDetails"
+          },
+          "items": {
+            "description": "Additional information about the items in the transaction.",
+            "$ref": "#/definitions/Items"
+          },
+          "contexts": {
+            "description": "Additional Information about the transaction.",
+            "$ref": "#/definitions/Contexts"
+          },
+          "breakdowns": {
+            "type": "array",
+            "description": "A list of breakdowns that detail how the total amount is calculated for the transaction.",
+            "items": {
+              "$ref": "#/definitions/Breakdown"
+            }
+          }
+        }
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/fulfillment-inbound-api-model/fulfillmentInboundV0.json",
+      "sha256": "85fedd86117737c1b8e673f6b65543c6e5057c03ef34c29d80196b89f2543628",
+      "version": "v0",
+      "operations": [
+        {
+          "path": "/fba/inbound/v0/prepInstructions",
+          "method": "get",
+          "operationId": "getPrepInstructions",
+          "parameters": [
+            "ShipToCountryCode",
+            "SellerSKUList",
+            "ASINList"
+          ]
+        },
+        {
+          "path": "/fba/inbound/v0/shipments/{shipmentId}/labels",
+          "method": "get",
+          "operationId": "getLabels",
+          "parameters": [
+            "shipmentId",
+            "PageType",
+            "LabelType",
+            "NumberOfPackages",
+            "PackageLabelsToPrint",
+            "NumberOfPallets",
+            "PageSize",
+            "PageStartIndex"
+          ]
+        },
+        {
+          "path": "/fba/inbound/v0/shipments/{shipmentId}/billOfLading",
+          "method": "get",
+          "operationId": "getBillOfLading",
+          "parameters": [
+            "shipmentId"
+          ]
+        },
+        {
+          "path": "/fba/inbound/v0/shipments",
+          "method": "get",
+          "operationId": "getShipments",
+          "parameters": [
+            "ShipmentStatusList",
+            "ShipmentIdList",
+            "LastUpdatedAfter",
+            "LastUpdatedBefore",
+            "QueryType",
+            "NextToken",
+            "MarketplaceId"
+          ]
+        },
+        {
+          "path": "/fba/inbound/v0/shipments/{shipmentId}/items",
+          "method": "get",
+          "operationId": "getShipmentItemsByShipmentId",
+          "parameters": [
+            "shipmentId",
+            "MarketplaceId"
+          ]
+        },
+        {
+          "path": "/fba/inbound/v0/shipmentItems",
+          "method": "get",
+          "operationId": "getShipmentItems",
+          "parameters": [
+            "LastUpdatedAfter",
+            "LastUpdatedBefore",
+            "QueryType",
+            "NextToken",
+            "MarketplaceId"
+          ]
+        }
+      ],
+      "selectedDefinitions": {}
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/product-pricing-api-model/productPricingV0.json",
+      "sha256": "86d65f691a5611f951a4e61df206e518ec663064ecfa8733105f2ca259d4ded6",
+      "version": "v0",
+      "operations": [
+        {
+          "path": "/products/pricing/v0/price",
+          "method": "get",
+          "operationId": "getPricing",
+          "parameters": [
+            "MarketplaceId",
+            "Asins",
+            "Skus",
+            "ItemType",
+            "ItemCondition",
+            "OfferType"
+          ]
+        },
+        {
+          "path": "/products/pricing/v0/competitivePrice",
+          "method": "get",
+          "operationId": "getCompetitivePricing",
+          "parameters": [
+            "MarketplaceId",
+            "Asins",
+            "Skus",
+            "ItemType",
+            "CustomerType"
+          ]
+        },
+        {
+          "path": "/products/pricing/v0/listings/{SellerSKU}/offers",
+          "method": "get",
+          "operationId": "getListingOffers",
+          "parameters": [
+            "MarketplaceId",
+            "ItemCondition",
+            "SellerSKU",
+            "CustomerType"
+          ]
+        },
+        {
+          "path": "/products/pricing/v0/items/{Asin}/offers",
+          "method": "get",
+          "operationId": "getItemOffers",
+          "parameters": [
+            "MarketplaceId",
+            "ItemCondition",
+            "Asin",
+            "CustomerType"
+          ]
+        },
+        {
+          "path": "/batches/products/pricing/v0/itemOffers",
+          "method": "post",
+          "operationId": "getItemOffersBatch",
+          "parameters": [
+            "getItemOffersBatchRequestBody"
+          ]
+        },
+        {
+          "path": "/batches/products/pricing/v0/listingOffers",
+          "method": "post",
+          "operationId": "getListingOffersBatch",
+          "parameters": [
+            "getListingOffersBatchRequestBody"
+          ]
+        }
+      ],
+      "selectedDefinitions": {}
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/notifications-api-model/notifications.json",
+      "sha256": "365079bafdc2faf4b6bef296d3c4ac4202f1242a2eba6b4c033c732508f4f4d7",
+      "version": "v1",
+      "operations": [
+        {
+          "path": "/notifications/v1/subscriptions",
+          "method": "get",
+          "operationId": "getSubscriptions",
+          "parameters": [
+            "notificationTypes",
+            "payloadVersion",
+            "pageSize",
+            "nextToken"
+          ]
+        },
+        {
+          "path": "/notifications/v1/subscriptions/{notificationType}",
+          "method": "get",
+          "operationId": "getSubscription",
+          "parameters": [
+            "notificationType",
+            "payloadVersion"
+          ]
+        },
+        {
+          "path": "/notifications/v1/subscriptions/{notificationType}",
+          "method": "post",
+          "operationId": "createSubscription",
+          "parameters": [
+            "body",
+            "notificationType"
+          ]
+        },
+        {
+          "path": "/notifications/v1/subscriptions/{notificationType}/{subscriptionId}",
+          "method": "get",
+          "operationId": "getSubscriptionById",
+          "parameters": [
+            "subscriptionId",
+            "notificationType"
+          ]
+        },
+        {
+          "path": "/notifications/v1/subscriptions/{notificationType}/{subscriptionId}",
+          "method": "delete",
+          "operationId": "deleteSubscriptionById",
+          "parameters": [
+            "subscriptionId",
+            "notificationType"
+          ]
+        },
+        {
+          "path": "/notifications/v1/subscriptions/{notificationType}/testNotification",
+          "method": "post",
+          "operationId": "sendTestNotification",
+          "parameters": [
+            "body",
+            "notificationType"
+          ]
+        },
+        {
+          "path": "/notifications/v1/destinations",
+          "method": "get",
+          "operationId": "getDestinations",
+          "parameters": []
+        },
+        {
+          "path": "/notifications/v1/destinations",
+          "method": "post",
+          "operationId": "createDestination",
+          "parameters": [
+            "body"
+          ]
+        },
+        {
+          "path": "/notifications/v1/destinations/{destinationId}",
+          "method": "get",
+          "operationId": "getDestination",
+          "parameters": [
+            "destinationId"
+          ]
+        },
+        {
+          "path": "/notifications/v1/destinations/{destinationId}",
+          "method": "delete",
+          "operationId": "deleteDestination",
+          "parameters": [
+            "destinationId"
+          ]
+        }
+      ],
+      "selectedDefinitions": {}
+    }
+  ],
+  "archivedReportTypes": {
+    "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-docs/83b77eefccf6909c4638ea3456a652e44b68e409/references/reports-api/reporttype-values.md",
+    "sha256": "a5533074a1af7af5e6e91df44207af5b99c706e2a0db07dba1f6c91fbd20e07c",
+    "sourceCommitDate": "2022-01-04T17:14:56Z",
+    "warning": "Historical official document, not current eligibility or SLA. Live report docs blocked by HTTP 403 on review date.",
+    "values": {
+      "GET_SALES_AND_TRAFFIC_REPORT": false,
+      "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2": true,
+      "GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA": true,
+      "GET_FBA_REIMBURSEMENTS_DATA": true,
+      "GET_FBA_INVENTORY_AGED_DATA": true,
+      "GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT": true,
+      "GET_MERCHANT_LISTINGS_ALL_DATA": true
+    }
+  },
+  "officialSchemaDiscovery": {
+    "url": "https://api.github.com/repos/amzn/selling-partner-api-models/git/trees/main?recursive=1",
+    "repositoryTreeSha": "db2936aa19f4b48185173c385c51ab115166f221",
+    "paths": [
+      "schemas/data-kiosk/analytics_salesAndTraffic_2024_04_24.graphql",
+      "schemas/reports/sellerSalesAndTrafficReport.json",
+      "schemas/reports/sellingPartnerSearchTermsReport.json"
+    ]
+  },
+  "reportSchemas": [
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellerSalesAndTrafficReport.json",
+      "sha256": "912c0d01073c4770f8bbd1e24f5553afa197920ac12b37d2b59726118c21105d",
+      "description": "This report shares data on the sales performance and page traffic of the seller's items aggregated by date (across the seller's entire catalog of items) and aggregated by ASIN. Aggregated data is available at different date range aggregation levels: DAY, WEEK, MONTH. Per-ASIN data is available at different ASIN aggregation levels: PARENT, CHILD, SKU. Requests can span multiple date range periods.",
+      "reportSpecification": {
+        "reportType": "GET_SALES_AND_TRAFFIC_REPORT",
+        "reportOptions": {
+          "dateGranularity": "DAY",
+          "asinGranularity": "SKU"
+        },
+        "dataStartTime": "2021-06-11",
+        "dataEndTime": "2021-06-14",
+        "marketplaceIds": [
+          "ATVPDKIKX0DER"
+        ]
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellingPartnerSearchTermsReport.json",
+      "sha256": "6ca8ee05a011b8c277302b1e0d91b5cbe1f6650f40a841605009722d50dbd225",
+      "description": "The Search Terms report shares data on the top-3 clicked ASINs by search keyword and department for a marketplace. Data is available at different date range aggregation levels: DAY, WEEK, MONTH, QUARTER. Requests cannot span multiple periods. For example, a request at WEEK level could not start on 2021-06-06 and end on 2021-06-19 as this would span two weeks.",
+      "reportSpecification": {
+        "reportType": "GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT",
+        "reportOptions": {
+          "reportPeriod": "WEEK"
+        },
+        "dataStartTime": "2021-06-06",
+        "dataEndTime": "2021-06-12",
+        "marketplaceIds": [
+          "ATVPDKIKX0DER"
+        ]
+      }
+    }
+  ]
+}

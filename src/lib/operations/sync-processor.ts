@@ -17,7 +17,7 @@ const snapshotInsertChunkSize = 1_000;
 
 export async function processAmazonSyncRun(runId: string, options: { isFinalAttempt: boolean }) {
   const candidate = await prisma.amazonSyncRun.findUnique({ where: { id: runId } });
-  if (!candidate || candidate.status !== "QUEUED") return;
+  if (!candidate || candidate.executionVersion !== 1 || candidate.status !== "QUEUED") return;
   await withAmazonSyncLock(candidate, () => processLockedAmazonSyncRun(runId, options));
 }
 
@@ -150,7 +150,7 @@ async function processLockedAmazonSyncRun(runId: string, options: { isFinalAttem
 
 export async function enqueuePendingAmazonSyncRuns(limit = 50): Promise<string[]> {
   const runs = await prisma.amazonSyncRun.findMany({
-    where: { status: "QUEUED", resource: { in: ["inventory", "catalog"] } },
+    where: { executionVersion: 1, status: "QUEUED", resource: { in: ["inventory", "catalog"] } },
     select: { id: true },
     orderBy: { startedAt: "asc" },
     take: limit,
@@ -161,7 +161,7 @@ export async function enqueuePendingAmazonSyncRuns(limit = 50): Promise<string[]
 export async function recoverStaleAmazonSyncRuns(staleAfterMs = 15 * 60_000): Promise<number> {
   const cutoff = new Date(Date.now() - staleAfterMs);
   const stale = await prisma.amazonSyncRun.findMany({
-    where: { status: "RUNNING", resource: { in: ["inventory", "catalog"] }, updatedAt: { lt: cutoff } },
+    where: { executionVersion: 1, status: "RUNNING", resource: { in: ["inventory", "catalog"] }, updatedAt: { lt: cutoff } },
     take: 50,
   });
   let count = 0;

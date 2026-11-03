@@ -1,3 +1,4 @@
+import { syncCenterEnabled } from "@/lib/amazon-sync/policy";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -50,6 +51,7 @@ export async function PUT(request: Request) {
     const auth = await authorized(request);
     if (auth.response) return json({ error: "Forbidden." }, auth.response.status);
     const { user, scope } = auth;
+    if (syncCenterEnabled({ organizationId: user.organizationId, workspaceId: scope.workspaceId })) return json({ error: "该范围已切换同步中心，请在经营中台的店铺与授权页面配置。" }, 409);
     const body = await request.json() as { bindings?: unknown };
     if (!Array.isArray(body.bindings)) return json({ error: "请提交 bindings 数组。" }, 400);
     const rows: AmazonSellerBinding[] = body.bindings.map((value) => {

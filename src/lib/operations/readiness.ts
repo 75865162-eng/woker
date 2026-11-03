@@ -1,3 +1,5 @@
+import { syncCenterEnabled } from "@/lib/amazon-sync/policy";
+import { centerCompatibilityReadiness } from "@/lib/amazon-sync/compatibility";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
@@ -95,6 +97,7 @@ export async function getOperationsReadiness(input: {
   organizationId: string;
   scope: WorkspaceScopeInput;
 }): Promise<OperationsReadiness> {
+  if (process.env.DATABASE_URL && syncCenterEnabled({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId })) return centerCompatibilityReadiness({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId }, input.scope);
   const generatedAt = new Date();
   const base = {
     scope: input.scope,
@@ -290,6 +293,7 @@ export async function requestAmazonSync(input: {
 }): Promise<OperationsSyncRun> {
   const now = new Date();
   const id = `amazon-sync-${randomUUID()}`;
+  if (syncCenterEnabled({ organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId })) throw new Error("该范围请在同步中心显式选择店铺／站点数据源。");
   const idempotencyKey = normalizeSyncIdempotencyKey(input.idempotencyKey);
   const blocked = buildBlockedAmazonSyncRun({ id, resource: input.resource, now, idempotencyKey });
 
