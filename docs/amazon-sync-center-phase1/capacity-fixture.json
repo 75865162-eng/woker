@@ -1,0 +1,46 @@
+{
+  "environment": "disposable localhost PostgreSQL 16 (1 CPU/512 MiB) + Redis 7; mocked Amazon; no browser/network production SLA",
+  "capturedAt": "2026-11-03T19:18:31.412Z",
+  "evidence": [
+    {
+      "rows": 1000,
+      "taskDurationMs": 293.1425419999996,
+      "slices": 1,
+      "sliceMs": [
+        244.0395410000001
+      ],
+      "readSamples": 40,
+      "readP50Ms": 1.1580840000005992,
+      "readP95Ms": 1.4995420000013837,
+      "readP99Ms": 1.5564590000012686,
+      "rssBytes": 495583232
+    },
+    {
+      "rows": 5000,
+      "taskDurationMs": 4403.824417,
+      "slices": 1,
+      "sliceMs": [
+        4318.914417
+      ],
+      "readSamples": 40,
+      "readP50Ms": 2.0739580000008573,
+      "readP95Ms": 2.3685420000001614,
+      "readP99Ms": 2.407666999999492,
+      "rssBytes": 589266944
+    },
+    {
+      "rows": 10000,
+      "taskDurationMs": 9536.980916999999,
+      "slices": 2,
+      "sliceMs": [
+        4304.612916000002,
+        5093.808125
+      ],
+      "readSamples": 40,
+      "readP50Ms": 3.3728750000009313,
+      "readP95Ms": 3.9393330000020796,
+      "readP99Ms": 4.086583000000246,
+      "rssBytes": 689192960
+    }
+  ]
+}

@@ -9,10 +9,9 @@ import {
   uploadProductAttachmentAsset,
   uploadProductImageAsset,
 } from "@/lib/products/image-assets";
-import { refreshProductImageUrls, useProductImageUrls } from "@/lib/products/signed-image-urls";
+import { getProductImageUrls, useProductImageUrls } from "@/lib/products/signed-image-urls";
 import type { ProductImageAsset } from "@/lib/products/types";
 import {
-  compactCompetitorFields,
   competitorTextFields,
   competitorTypeOptions,
   createDefaultPeakSeasonWeights,
@@ -149,7 +148,7 @@ export function ProductWorkbookDetailSections({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 [&_textarea]:resize-none">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>区域 1：利润试算</CardTitle>
@@ -252,11 +251,16 @@ export function ProductWorkbookDetailSections({
           </div>
         </CardHeader>
         <CardContent className="thin-scrollbar overflow-auto">
-          <table className="min-w-[2000px] text-left text-xs">
+          <table className="w-[1960px] table-fixed text-left text-xs">
+            <colgroup>
+              {[146, 60, 76, 110, 110, 110, 110, 110, 110, 76, 40, 120, 120, 120, 120, 120, 136, 166].map((width, index) => (
+                <col key={index} style={{ width }} />
+              ))}
+            </colgroup>
             <thead className="bg-surface-muted text-muted">
               <tr>
                 {["热销变体图片", "ASIN", "近30天销量", "变体数量", "变体类型", "热销变体规格", "热销变体价格($)", "FBA费用($)", "近3个月价格变动备注", "评论数", "评分", "差评点1", "差评点2", "差评点3", "差评点4", "差评点5", "竞品包装尺寸", "备注"].map((label) => (
-                  <th key={label} className="px-2 py-2 font-bold">{label}</th>
+                  <th key={label} className="break-words px-1 py-2 font-bold">{label}</th>
                 ))}
               </tr>
             </thead>
@@ -283,14 +287,19 @@ export function ProductWorkbookDetailSections({
                       </select>
                     </div>
                   </td>
-                  <td className="px-2 py-2">
-                    <div className="w-[110px] space-y-2">
-                      <SmallInput value={row.asin} onChange={(value) => onCompetitorChange(index, "asin", value)} />
+                  <td className="px-1 py-2">
+                    <div className="space-y-2">
+                      <textarea
+                        rows={2}
+                        className="block h-[105px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        value={row.asin}
+                        onChange={(event) => onCompetitorChange(index, "asin", event.target.value)}
+                      />
                       <AmazonLinkButton asin={row.asin} />
                     </div>
                   </td>
                   {competitorTextFields.map((field) => (
-                    <td key={field} className="px-2 py-2">
+                    <td key={field} className="px-1 py-2">
                       {negativeCompetitorFields.has(field) ? (
                         <NegativePointEditor
                           value={String(row[field] ?? "")}
@@ -298,17 +307,23 @@ export function ProductWorkbookDetailSections({
                           onChange={(value) => onCompetitorChange(index, field, value)}
                         />
                       ) : (
-                        <SmallTextarea
+                        <textarea
+                          rows={2}
+                          className="block h-[180px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
                           value={String(row[field] ?? "")}
-                          size={compactCompetitorFields.has(field) ? "compact" : "default"}
-                          onChange={(value) => onCompetitorChange(index, field, value)}
+                          onChange={(event) => onCompetitorChange(index, field, event.target.value)}
                         />
                       )}
                     </td>
                   ))}
                   <td className="px-2 py-2">
                     <div className="w-[150px] space-y-2">
-                      <SmallTextarea value={row.note} onChange={(value) => onCompetitorChange(index, "note", value)} />
+                      <textarea
+                        rows={2}
+                        className="block h-[50px] w-full min-w-0 resize-none rounded-md border border-border bg-white px-1 py-2 text-xs leading-4 text-foreground outline-none focus:border-brand"
+                        value={row.note}
+                        onChange={(event) => onCompetitorChange(index, "note", event.target.value)}
+                      />
                       <ImageUploadSquare
                         image={row.noteImage}
                         asset={row.noteImageAsset}
@@ -521,7 +536,7 @@ function ImageUploadSquare({
     let source = "";
     if (fileId) {
       try {
-        source = (await refreshProductImageUrls([fileId])).get(fileId) || "";
+        source = (await getProductImageUrls([fileId])).get(fileId) || "";
       } catch {
         // Legacy references continue through the compatibility route below.
       }
@@ -807,16 +822,22 @@ function NegativePointEditor({
   }
 
   function saveOriginals() {
-    onChange(buildNegativePointValue(draft));
+    onChange(buildNegativePointValue({
+      ...draft,
+      count: String(draft.originals.filter((original) => original.trim()).length),
+    }));
     setOpen(false);
   }
 
   const originalCount = parseOriginalCount(parsed.count);
   const draftOriginals = normalizeOriginalsLength(draft.originals, parseOriginalCount(draft.count));
+  if (draftOriginals.at(-1)?.trim()) {
+    draftOriginals.push("");
+  }
 
   return (
     <>
-      <div className={`h-[180px] w-[150px] rounded-md border border-border p-1 ${disabled ? "bg-surface-muted" : "bg-white"}`}>
+      <div className={`h-[180px] w-full min-w-0 rounded-md border border-border p-1 ${disabled ? "bg-surface-muted" : "bg-white"}`}>
         <div className="grid grid-cols-[minmax(0,1fr)_42px] gap-1">
           <input
             className="h-8 min-w-0 rounded border border-border px-1 text-xs outline-none focus:border-brand disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted"
@@ -856,7 +877,7 @@ function NegativePointEditor({
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-bold text-foreground">差评原文</h3>
-                <p className="mt-1 text-xs font-semibold text-muted">填写当前差评点对应的 {draftOriginals.length} 条原文。</p>
+                <p className="mt-1 text-xs font-semibold text-muted">已填写 {draft.originals.filter((original) => original.trim()).length} 条原文，填写后自动追加下一行，数量按非空原文自动统计。</p>
               </div>
               <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
                 <X className="h-4 w-4" />
@@ -874,12 +895,18 @@ function NegativePointEditor({
                   <textarea
                     className="mt-1 min-h-20 w-full rounded-md border border-border px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
                     value={original}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        originals: normalizeOriginalsLength(current.originals, parseOriginalCount(current.count)).map((item, itemIndex) => (itemIndex === index ? event.target.value : item)),
-                      }))
-                    }
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setDraft((current) => {
+                        const originals = normalizeOriginalsLength(current.originals, index + 1);
+                        originals[index] = value;
+                        return {
+                          ...current,
+                          originals,
+                          count: String(originals.filter((original) => original.trim()).length),
+                        };
+                      });
+                    }}
                   />
                 </label>
               ))}
@@ -1480,5 +1507,5 @@ function parseOriginalCount(count: string) {
 }
 
 function normalizeOriginalsLength(originals: string[], count: number) {
-  return Array.from({ length: count }, (_, index) => originals[index] ?? "");
+  return Array.from({ length: Math.max(count, originals.length) }, (_, index) => originals[index] ?? "");
 }

@@ -1,4 +1,7 @@
 import "dotenv/config";
+import { maintainSyncCenter } from "@/lib/amazon-sync/maintenance";
+import { tickSyncCenter } from "@/lib/amazon-sync/scheduler";
+import { processSyncCenterTask } from "@/lib/amazon-sync/processor";
 import { Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { enqueueAmazonSyncRun } from "@/lib/queue";
@@ -12,9 +15,10 @@ const configuredConcurrency = Number(process.env.AMAZON_SYNC_WORKER_CONCURRENCY 
 const concurrency = Number.isFinite(configuredConcurrency) ? Math.max(1, Math.min(Math.floor(configuredConcurrency), 2)) : 1;
 const workerName = process.env.AMAZON_SYNC_WORKER_NAME?.trim() || `${amazonSyncQueueName}-${process.pid}`;
 const workerId = process.env.AMAZON_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
-const worker = new Worker<{ runId: string }>(
+const worker = new Worker<{ runId: string; dispatchVersion?: number }>(
   amazonSyncQueueName,
   async (job) => {
+    if (job.data.dispatchVersion !== undefined) { await processSyncCenterTask(job.data.runId, job.data.dispatchVersion); return; }
     await processAmazonSyncRun(job.data.runId, { isFinalAttempt: job.attemptsMade >= (job.opts.attempts ?? 1) - 1 });
   },
   { connection: createRedisConnectionOptions(), concurrency },
@@ -25,6 +29,8 @@ async function recoverQueuedRuns() {
   if (recovering) return;
   recovering = true;
   try {
+    await tickSyncCenter();
+    await maintainSyncCenter();
     await enqueueDueAmazonSchedules();
     await recoverStaleAmazonSyncRuns();
     const runIds = await enqueuePendingAmazonSyncRuns();
@@ -55,17 +61,17 @@ async function writeHeartbeat(status: "online" | "stopping" = "online") {
   });
 }
 
-void recoverQueuedRuns().catch((error) => console.error("[amazon-sync-worker] recovery failed:", error));
+void recoverQueuedRuns().catch(() => console.error("[amazon-sync-worker] recovery failed; retrying next tick"));
 const recoveryTimer = setInterval(() => {
-  void recoverQueuedRuns().catch((error) => console.error("[amazon-sync-worker] recovery failed:", error));
+  void recoverQueuedRuns().catch(() => console.error("[amazon-sync-worker] recovery failed; retrying next tick"));
 }, 30_000);
-void writeHeartbeat().catch((error) => console.error("[amazon-sync-worker] heartbeat failed:", error));
+void writeHeartbeat().catch(() => console.error("[amazon-sync-worker] heartbeat failed"));
 const heartbeatTimer = setInterval(() => {
-  void writeHeartbeat().catch((error) => console.error("[amazon-sync-worker] heartbeat failed:", error));
+  void writeHeartbeat().catch(() => console.error("[amazon-sync-worker] heartbeat failed"));
 }, 30_000);
 
 worker.on("completed", (job) => console.log(`[amazon-sync-worker] completed ${job.data.runId}`));
-worker.on("failed", (job, error) => console.error(`[amazon-sync-worker] failed ${job?.data.runId ?? "unknown"}:`, error));
+worker.on("failed", (job) => console.error(`[amazon-sync-worker] failed ${job?.data.runId ?? "unknown"}; inspect persisted task state`));
 
 async function shutdown() {
   clearInterval(recoveryTimer);

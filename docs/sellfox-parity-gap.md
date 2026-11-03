@@ -86,7 +86,7 @@ Listings import collapses multi-MSKU rows → understates fulfillable. Separate 
 3. Optional: fix listings import to sum fulfillable across sibling MSKUs instead of primary-key collapse (raw CSV already ~12,026 ≈ gold 11,891).
 
 ## How to open (local)
-- App: http://127.0.0.1:3000  
+- App: http://127.0.0.1:3000
 - Login: email `1` / password = `BOOTSTRAP_ADMIN_PASSWORD` in repo `.env`
 - 销量统计 (gold window): http://127.0.0.1:3000/sellfox?domain=sales&from=2026-09-29&to=2026-10-28&shopExternalId=124687&sortBy=subtotal&sortOrder=desc
 - 销售利润 (window export spot-check ONLY): http://127.0.0.1:3000/sellfox?domain=performance&from=2026-10-21&to=2026-10-21&shopExternalId=124687&sortBy=saleRevenue&sortOrder=desc

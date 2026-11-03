@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { expect, test, type Page } from "@playwright/test";
 import { productToDraft } from "@/components/products/product-workbench-data";
+import type { TrialProductDraft } from "@/components/products/product-workbench-model";
 import type { Product } from "@/lib/products/types";
 import type * as DraftRepository from "@/lib/products/product-edit-draft-repository";
 
@@ -13,9 +14,9 @@ test.beforeAll(async () => {
   productionBundle = production.outputFiles[0].text;
 });
 
-async function setup(page: Page, mode = "") {
+async function setup(page: Page, mode = "", imageAssets?: Product["imageAssets"]) {
   const state = {
-    product: { ...productToDraft(null, [], "SKU-1"), id: "product-1", revision: 1, chineseName: "原商品", englishName: "Original product", status: "listing_confirming" } as Product,
+    product: { ...productToDraft(null, [], "SKU-1"), id: "product-1", revision: 1, chineseName: "原商品", englishName: "Original product", status: "listing_confirming", imageAssets } as Product,
     saves: 0, uploads: 0, fail: false, detailFail: false, detailGate: null as Promise<void> | null,
   };
   await page.route("http://127.0.0.1:43219/**", async (route) => {
@@ -44,7 +45,8 @@ async function setup(page: Page, mode = "") {
     }
     if (url.pathname.startsWith("/api/")) throw new Error(`Unexpected API call: ${request.method()} ${url.pathname}`);
     if (url.pathname === "/") return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
-    if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: mode === "production" ? productionBundle : bundle });
+    if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript; charset=utf-8", body: mode === "production" ? productionBundle : bundle });
+    if (url.pathname === "/test.png") return route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5wAAAABJRU5ErkJggg==", "base64") });
     return route.fulfill({ status: 404, body: "" });
   });
   await page.goto(`http://127.0.0.1:43219/${mode ? `?mode=${mode}` : ""}`);
@@ -54,6 +56,28 @@ async function setup(page: Page, mode = "") {
 
 function nameInput(page: Page) { return page.locator("label").filter({ hasText: "中文名（必填）" }).locator("input"); }
 async function savedLocally(page: Page) { await expect(page.getByRole("status")).toContainText("草稿已暂存"); }
+
+test("reopening a product image preview reuses its signed URL without another signing request", async ({ page }) => {
+  let previewRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/products/image-urls") && (request.postDataJSON() as { fileIds: string[] }).fileIds.includes("preview-repeat")) previewRequests++;
+  });
+  await setup(page, "", [{ id: "image-repeat", name: "test.png", mimeType: "image/png", size: 1, storageType: "local", uploadedAt: "2026-11-02", thumbFileId: "thumb-repeat", previewFileId: "preview-repeat", thumbUrl: "/test.png", originalUrl: "/test.png" }]);
+  const open = page.getByTitle("点击查看大图").first();
+  const heading = page.getByRole("heading", { name: "图片预览", exact: true });
+  const preview = page.getByAltText("商品图片大图", { exact: true });
+  await open.click();
+  await expect(heading).toBeVisible();
+  await expect(preview).toBeVisible();
+  const source = await preview.getAttribute("src");
+  expect(previewRequests).toBe(1);
+  await heading.locator("../..").getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(heading).toHaveCount(0);
+  await open.click();
+  await expect(preview).toBeVisible();
+  await expect(preview).toHaveAttribute("src", source!);
+  expect(previewRequests).toBe(1);
+});
 
 test("without randomUUID the editor loads and preserves drafts across refresh", async ({ page }) => {
   const errors: string[] = [];
@@ -260,6 +284,50 @@ test("workbook attachment uploads block save/close until the uploaded reference 
   await expect(page.getByRole("heading", { name: /商品详情/ })).toHaveCount(0);
   const saved = state.product as Product & { workbookDetail: { remarkImageAssets: Array<{ id: string }> } };
   expect(saved.workbookDetail.remarkImageAssets[0].id).toBe("workbook-file");
+});
+
+test("negative review originals survive count edits and append inputs with automatic counts", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const state = await setup(page);
+  const section = page.getByRole("heading", { name: "区域 2：竞品分析", exact: true }).locator("../..");
+  await section.locator("select").first().selectOption("直接竞品");
+  const point = section.locator("tbody tr").first().locator("td").nth(11);
+  await point.getByRole("button").click();
+  const modal = page.getByRole("heading", { name: "差评原文", exact: true }).locator("../../..");
+  const original = (index: number) => modal.getByRole("textbox", { name: `差评原文 ${index}`, exact: true });
+  await modal.getByLabel("差评总结", { exact: true }).fill("容易损坏");
+  await expect(original(1)).toBeVisible();
+  await expect(original(2)).toHaveCount(0);
+  await original(1).fill("第一次使用就坏了");
+  await expect(original(2)).toBeVisible();
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("1");
+  await original(2).fill("支架断裂");
+  await expect(original(3)).toBeVisible();
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("2");
+  await original(3).fill("   ");
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("2");
+  for (const count of ["1", "", "4", "0"]) {
+    await modal.getByLabel("数量", { exact: true }).fill(count);
+    await expect(original(1)).toHaveValue("第一次使用就坏了");
+    await expect(original(2)).toHaveValue("支架断裂");
+  }
+  await original(2).fill("");
+  await expect(modal.getByLabel("数量", { exact: true })).toHaveValue("1");
+  await original(2).fill("支架断裂");
+  await modal.getByRole("button", { name: "保存", exact: true }).click();
+  expect(errors).toEqual([]);
+  await expect(point.getByPlaceholder("数", { exact: true })).toHaveValue("2");
+  await point.getByPlaceholder("数", { exact: true }).fill("1");
+  await point.getByRole("button").click();
+  await expect(original(1)).toHaveValue("第一次使用就坏了");
+  await expect(original(2)).toHaveValue("支架断裂");
+  await expect(original(3)).toHaveValue("");
+  await modal.getByRole("button", { name: "保存", exact: true }).click();
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /商品详情/ })).toHaveCount(0);
+  const saved = state.product as Product & { workbookDetail: TrialProductDraft };
+  expect(saved.workbookDetail.competitors[0].negativePoint1).toBe("容易损坏（2）\n第一次使用就坏了\n支架断裂");
 });
 
 

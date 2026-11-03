@@ -1,0 +1,43 @@
+{
+  "recordedAt": "2026-11-03T19:26:08.157944+00:00",
+  "scope": "Phase 1 local verification only; no production access or release",
+  "coreTests": {
+    "command": "npm run check:fast",
+    "passed": 669,
+    "failed": 0
+  },
+  "lint": {
+    "command": "npm run lint",
+    "errors": 0,
+    "warnings": 4,
+    "newSyncCenterWarnings": 0
+  },
+  "typecheck": {
+    "command": "npm run typecheck",
+    "passed": true,
+    "excludedTests": []
+  },
+  "integration": {
+    "command": "npm run test:amazon-sync:integration",
+    "passed": 14,
+    "failed": 0,
+    "amazonTransport": "mocked",
+    "databaseAndQueue": "disposable real PostgreSQL 16 / Redis 7; includes real BullMQ Worker"
+  },
+  "browsers": [
+    {
+      "command": "npm run test:amazon-sync:browser",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:operations:browser",
+      "passed": 17,
+      "failed": 0
+    }
+  ],
+  "prismaValidate": true,
+  "diffCheck": true,
+  "productionBuild": "See latest commit checks on https://github.com/75865162-eng/woker/pull/3; local tests alone do not prove production build",
+  "productionAcceptance": "pending real Amazon qualification, process failure drills, production capacity and release verification"
+}

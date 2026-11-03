@@ -56,13 +56,13 @@ function statusTone(agent: AgentCenterItem): "green" | "amber" | "red" | "blue" 
 }
 
 function sellerSpriteStatusLabel(status?: string) {
-  if (status === "configured") return "SellerSprite 已就绪";
+  if (status === "configured") return "配置已填写，未连接";
   if (status === "missing_credentials") return "SellerSprite 缺少密钥";
   return "SellerSprite 已停用";
 }
 
 function sellerSpriteStatusTone(status?: string): "green" | "amber" | "red" | "blue" | "gray" {
-  if (status === "configured") return "green";
+  if (status === "configured") return "amber";
   if (status === "missing_credentials") return "red";
   return "gray";
 }

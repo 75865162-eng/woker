@@ -371,6 +371,10 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 ## 赛狐 Agent 本地读取
 
+- Listing 列表读取现有 current view 的类型投影；`sellfox_listing_project_write` 在快照写入事务内维护，禁止把默认列表恢复为逐行 payload 解析。增量迁移/全历史回填成本、隔离 benchmark 与回滚见 `docs/sellfox-listings-read-model.md`。
+
+- 销量订单量落 `SellfoxSalesDailySnapshot.orders`，旧值/缺日保持 NULL，浏览 `metric=orders`；利润按 `onlySettle=false/true` 分区同步与唯一键保存，查询/导出必须显式选口径，禁止跨分区求和。两页主图来自 Listing current，顶部 KPI 复用筛选 totals 按币种显示。增量迁移、验证和旧版回退约束见 `docs/sellfox-sales-profit-p0.md`。
+
 - `/sellfox` 四域UI列由 `workbench-types.ts` 的columns配置；`layout=workbench` 只读浏览分支按本地实体聚合/分页、销量最多90天日矩阵。CSV/利润Excel跟随可见列，Agent导出保留原英文长表。父ASIN/价格/库存补充来自current，不冒充历史；金额按币种分开，缺失不补0，无结构状态的广告控件灰显。浏览器验收使用真实Tailwind样式，运行 `npm run test:sellfox:browser`。
 - `docs/sellfox-agent-read.md` 定义库存 current、MSKU 日销、Listing current、利润及广告产品日报窄表/SQL 视图、CSV、字段映射与缺失值口径。Agent/CLI 例行读本地，不调用赛狐 API 或依赖网页登录；ProductRecord 不被赛狐覆盖。
 - 库存/Listing current 只发布完整店铺采集；日销需校验 coverage/complete，缺日不得补零。广告日报缺预算时禁止给暂停/降预算建议；SP/SB真数据已核验，SD仅验证真实空报告，非空数据仍待验收。
@@ -402,9 +406,14 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 ### Sellfox 只读同步
 
+- `npm run sellfox:ads-reparse-cache -- --organization-id=<id> --workspace-id=<id>`：仅从现有 task.fileKey 缓存重解析完成/已下载广告报告，默认 dry-run，只有 `--write` 才按原窗口事务替换；默认投放与搜索词，不创建/轮询/下载上游任务。上线后另行授权执行，范围、空报告及回滚注意事项见 `docs/sellfox-ads-subtabs-gap.md`「既有数据纠正」。
+- `npm run sellfox:ads-reset-stuck-creating -- --organization-id=<id> --workspace-id=<id>`：将卡住的广告报告任务（`creating` 且无 externalTaskId/fileKey）标为 `failed` 以便重提；默认 dry-run，只有 `--write` 才更新 status；不删行、不调赛狐。123 上 SD×adTargeringReport 等用法见 `docs/sellfox-ads-subtabs-gap.md`「部署后重置卡住 creating」。
+
+- 广告 Phase A/B 新增 `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`，报告代码精确为 `adTargeringReport` / `adSearchTermReport` / `adCampaignReport` / `adGroupReport` / `adSpaceReport`；2026-10-26 已对照真实 XLSX 确认列映射（覆盖范围见缺口文档）；投放/搜索词真实 ID 列为 `广告投放ID`，兼容 `投放ID`，双列歧义或显式空 ID 拒绝。五计划默认关闭、1440 分钟、Asia/Shanghai 06:30；广告位已确认活动/广告位/日期唯一，真实文件无广告组ID，兼容广告组仅元数据，重复身份整文件拒绝。列/身份/回退与灰显范围见 `docs/sellfox-ads-subtabs-gap.md`；`/saihu-search-merge` 人工上传保持独立。
+
 - 凭据仅由服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 读取；overview 只返回 configured。所有 Open API 请求必须在 Node Worker 中经 `src/lib/sellfox/client.ts` 发起。
 - 使用专用 `npm run worker:sellfox-sync` 和 `amazon-sellfox-sync-worker.service`；BullMQ concurrency 固定为 1。客户端对 token、重试和资源请求统一串行，间隔不少于 1200ms。
-- 官方 token `expires_in` 单位为毫秒。库存/销量/Listing已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts`、`narrow-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。后续未验证资源仍由 `sellfoxSyncDisabledReason` 禁止同步，不得恢复猜字段落库。
+- 官方 token `expires_in` 单位为毫秒。库存/销量/Listing已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts`、`narrow-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。上述广告 Phase A/B 的真实样本覆盖与剩余验证缺口见 `docs/sellfox-ads-subtabs-gap.md`；后续未验证资源仍由 `sellfoxSyncDisabledReason` 禁止同步，不得恢复猜字段落库。
 - 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
 - ProductRecord 保持唯一商品主档事实源。赛狐快照只服务报表、列表和只读分析。
 - 手动与定时任务共用 SellfoxSyncRun 和 sync service；计划需在当前工作区由有 `sellfox:create` 权限的用户显式启用。同步 Worker 与 Redis 不可用时 API 返回服务端错误，不退化为请求内同步。
@@ -429,3 +438,12 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 - `scripts/selection-pipeline/README.md` 和 `docs/selection-round-d.md` 定义人工 `tag --reviews-file`、`suppliers --suppliers-file`、`workbook --upload-images` 续作。create/run --write 前重算原始低星评论、标签引用、≥3 条去重供应线索与实际图片；fixture/缺证据/上传未齐时硬失败，不信任旧 quality.json。
 - draft/Market 的 sales30Days 必须标 heuristic=true；空标签为 NEEDS_DATA，不是无差评。真人上传/建 SKU/页面验收与 fixture、临时库、浏览器 harness 验证分别记录，不能代签；market.selection.run 继续只读上传 fileId，不启动 CLI。
+
+
+## Amazon 同步中心 Phase 1 试点
+
+- 复用现有 AmazonSyncSchedule / AmazonSyncRun / BullMQ / amazon-sync-worker；仅 FBA inventory 与 Listings Items catalog 已接入。ProductRecord 不被外部同步覆盖，赛狐指标独立。
+- `AMAZON_SYNC_CENTER_SCOPES` 为组织＋工作区精确二元数组 JSON，缺省关闭；web 与 worker 必须一致。启用前停止旧计划并排空旧任务，显式导入／验证授权，不自动推断 Seller ID。
+- `npm run test:amazon-sync:integration` 使用预装官方 Docker 镜像建立独立 PostgreSQL／Redis，一次性验证真实迁移、队列和恢复；Amazon 响应模拟，不调用生产。脚本不拉取镜像，不接触既有容器。
+- `npm run test:amazon-sync:browser` 为真实 Tailwind 样式、模拟 API 的隔离浏览器回归。
+- 本轮包含 schema 扩展；关闭试点需保留兼容新唯一键的应用，禁止任意回滚到迁移前应用或自动删表。部署／回滚、验证限制见 `docs/amazon-sync-center-phase1/`，未明确要求不得执行生产迁移或发布。

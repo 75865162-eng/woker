@@ -19,7 +19,7 @@ test("LWA-only setup saves credentials, binds a store and validates without star
     if (url.pathname.endsWith("/credentials")) {
       if (request.method() === "PUT") {
         const body = request.postDataJSON();
-        expect(body).toMatchObject({ lwaClientId: "test-client", lwaClientSecret: "test-secret", refreshToken: "test-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" });
+        expect(body).toMatchObject({ lwaClientId: "test-client", lwaClientSecret: "test-secret", refreshToken: "test-refresh" });
         saved = true;
         return route.fulfill({ json: { saved: true } });
       }
@@ -42,7 +42,9 @@ test("LWA-only setup saves credentials, binds a store and validates without star
   });
   await page.goto("http://127.0.0.1:43220/");
   await expect(page.getByText(/保存配置不会自动同步/)).toBeVisible();
-  await expect(page.getByLabel("AWS Access Key ID", { exact: true })).toBeHidden();
+  await expect(page.getByText("旧版 AWS 凭证（可选）", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel(/^AWS /)).toHaveCount(0);
+  await expect(page.getByText("从 JSON 导入", { exact: true })).toHaveCount(0);
   await page.getByLabel("LWA Client ID", { exact: true }).fill("test-client");
   await page.getByLabel("LWA Client Secret", { exact: true }).fill("test-secret");
   await page.getByLabel("Refresh Token", { exact: true }).fill("test-refresh");

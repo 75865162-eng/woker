@@ -1,3 +1,4 @@
+import { syncCenterEnabled } from "@/lib/amazon-sync/policy";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { amazonReadDomains } from "./types";
@@ -5,7 +6,7 @@ import { defaultSyncIntervals, nextScheduledAt } from "./schedule-policy";
 
 export async function getSyncSchedules(organizationId: string, workspaceId: string) {
   const rows = process.env.DATABASE_URL
-    ? await prisma.amazonSyncSchedule.findMany({ where: { organizationId, workspaceId } }) : [];
+    ? await prisma.amazonSyncSchedule.findMany({ where: { organizationId, workspaceId, executionVersion: 1 } }) : [];
   return amazonReadDomains.map((resource) => {
     const row = rows.find((item) => item.resource === resource);
     return {
@@ -23,10 +24,11 @@ export async function getSyncSchedules(organizationId: string, workspaceId: stri
 export async function enqueueDueAmazonSchedules(now = new Date()) {
   if (!process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis") return 0;
   const due = await prisma.amazonSyncSchedule.findMany({
-    where: { enabled: true, resource: { in: ["inventory", "catalog"] } }, orderBy: { lastEnqueuedAt: "asc" }, take: 100,
+    where: { executionVersion: 1, enabled: true, resource: { in: ["inventory", "catalog"] } }, orderBy: { lastEnqueuedAt: "asc" }, take: 100,
   });
   let enqueued = 0;
   for (const candidate of due) {
+    if (syncCenterEnabled(candidate)) continue;
     if ((nextScheduledAt(candidate)?.getTime() ?? Infinity) > now.getTime()) continue;
     enqueued += await prisma.$transaction(async (tx) => {
       // Serializes concurrent scheduler instances; re-read after acquiring the lock.

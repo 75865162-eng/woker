@@ -59,6 +59,10 @@ async function hasValidSessionCookie(request: NextRequest) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // Lili verifies its own session. Production routing remains owned by Caddy.
+  if (process.env.NODE_ENV === "development" && (pathname === "/lili" || pathname.startsWith("/lili/"))) {
+    return NextResponse.next();
+  }
   const publicOrigin = getPublicOrigin(request);
   const isPublicRoute = publicRoutes.includes(pathname);
   const isPublicApi = publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));

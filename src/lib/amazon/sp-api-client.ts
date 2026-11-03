@@ -11,17 +11,22 @@ export type AmazonSpApiClientOptions = {
   fetch?: FetchLike;
   now?: () => Date;
   requestTimeoutMs?: number;
+  onResponse?: (event: AmazonRequestEvent) => void;
 };
+
+export type AmazonRequestEvent = { operation: string; status: number | null; requestId: string | null; rateLimit: string | null };
 
 export class AmazonSpApiError extends Error {
   readonly status: number | null;
   readonly retryable: boolean;
+  readonly retryAfterMs: number;
 
-  constructor(message: string, options: { status?: number | null; retryable?: boolean } = {}) {
+  constructor(message: string, options: { status?: number | null; retryable?: boolean; retryAfterMs?: number } = {}) {
     super(message);
     this.name = "AmazonSpApiError";
     this.status = options.status ?? null;
     this.retryable = options.retryable ?? false;
+    this.retryAfterMs = options.retryAfterMs ?? 0;
   }
 }
 
@@ -29,6 +34,7 @@ export class AmazonSpApiClient {
   private readonly fetcher: FetchLike;
   private readonly now: () => Date;
   private readonly requestTimeoutMs: number;
+  private readonly onResponse?: (event: AmazonRequestEvent) => void;
   private token: { value: string; expiresAt: number } | null = null;
 
   constructor(
@@ -36,6 +42,7 @@ export class AmazonSpApiClient {
     options: AmazonSpApiClientOptions = {},
   ) {
     this.fetcher = options.fetch ?? fetch;
+    this.onResponse = options.onResponse;
     this.now = options.now ?? (() => new Date());
     this.requestTimeoutMs = Math.min(Math.max(options.requestTimeoutMs ?? 30_000, 5_000), 120_000);
   }
@@ -100,6 +107,7 @@ export class AmazonSpApiClient {
       throw new AmazonSpApiError(safeAmazonErrorMessage(response.status, payload, this.secretValues(accessToken)), {
         status: response.status,
         retryable: response.status === 429 || response.status >= 500,
+        retryAfterMs: readRetryAfter(response.headers.get("retry-after"), this.now()),
       });
     }
     return payload;
@@ -126,6 +134,7 @@ export class AmazonSpApiClient {
       throw new AmazonSpApiError(safeAmazonErrorMessage(response.status, payload, this.secretValues()), {
         status: response.status,
         retryable: response.status === 429 || response.status >= 500,
+        retryAfterMs: readRetryAfter(response.headers.get("retry-after"), this.now()),
       });
     }
     this.token = {
@@ -139,7 +148,10 @@ export class AmazonSpApiClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     try {
-      return await this.fetcher(input, { ...init, signal: controller.signal });
+      const response = await this.fetcher(input, { ...init, signal: controller.signal });
+      this.onResponse?.({ operation: input === lwaTokenUrl ? "LWA" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/listings/") ? "searchListingsItems" : "getMarketplaceParticipations", status: response.status,
+        requestId: safeRequestId(response.headers.get("x-amzn-requestid")), rateLimit: safeRateLimit(response.headers.get("x-amzn-ratelimit-limit")) });
+      return response;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         throw new AmazonSpApiError(`Amazon SP-API 请求超时（${Math.round(this.requestTimeoutMs / 1000)} 秒）。`, { retryable: true });
@@ -260,3 +272,11 @@ function redactAmazonErrorMessage(message: string, secretValues: string[]): stri
     .replace(/(authorization|access_token|refresh_token|client_secret)\s*[=:]\s*[^\s,;]+/gi, "$1=[REDACTED]")
     .slice(0, 300);
 }
+
+export function readRetryAfter(value: string | null, now: Date): number {
+  if (!value) return 0;
+  const milliseconds = /^\d+(?:\.\d+)?$/.test(value) ? Number(value) * 1000 : Date.parse(value) - now.getTime();
+  return Number.isFinite(milliseconds) ? Math.max(0, Math.min(milliseconds, 3600000)) : 0;
+}
+function safeRequestId(value: string | null) { return value && /^[a-zA-Z0-9_-]{1,100}$/.test(value) ? value : null; }
+function safeRateLimit(value: string | null) { return value && /^\d+(?:\.\d+)?$/.test(value) && value.length < 20 ? value : null; }

@@ -17,6 +17,12 @@ const localOnlyTraceExcludes = [
 const nextConfig: NextConfig = {
   distDir,
   output: "standalone",
+  async rewrites() {
+    // Production Caddy owns this prefix; local development uses the same boundary.
+    return process.env.NODE_ENV === "development"
+      ? [{ source: "/lili/:path*", destination: "http://127.0.0.1:43123/lili/:path*" }]
+      : [];
+  },
   outputFileTracingRoot: path.join(__dirname),
   outputFileTracingExcludes: {
     "next-server": localOnlyTraceExcludes,

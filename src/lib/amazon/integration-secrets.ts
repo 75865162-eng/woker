@@ -24,26 +24,28 @@ export function hasAmazonSpApiEncryptionKey(environment?: Record<string, string 
   return encryptionKey(environment) !== null;
 }
 
-function aad(scope: AmazonSpApiAllowedScope) {
-  return Buffer.from(JSON.stringify([scope.organizationId, scope.workspaceId]));
+type CredentialScope = AmazonSpApiAllowedScope & { authorizationId?: string };
+
+function aad(scope: CredentialScope) {
+  return Buffer.from(JSON.stringify(scope.authorizationId ? [scope.organizationId, scope.workspaceId, scope.authorizationId] : [scope.organizationId, scope.workspaceId]));
 }
 
-export function encryptAmazonSpApiCredentials(credentials: AmazonSpApiCredentials, scope: AmazonSpApiAllowedScope, environment?: Record<string, string | undefined>) {
+export function encryptAmazonSpApiCredentials(credentials: AmazonSpApiCredentials, scope: CredentialScope, environment?: Record<string, string | undefined>) {
   const key = encryptionKey(environment);
   if (!key) throw new Error(`服务器缺少有效的 ${encryptionKeyName}（32 字节 Base64 密钥）。`);
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   cipher.setAAD(aad(scope));
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify(credentials), "utf8"), cipher.final()]);
-  return `v1.${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}`;
+  return `${scope.authorizationId ? "v2" : "v1"}.${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}`;
 }
 
-export function decryptAmazonSpApiCredentials(value: string, scope: AmazonSpApiAllowedScope, environment?: Record<string, string | undefined>): AmazonSpApiCredentials {
+export function decryptAmazonSpApiCredentials(value: string, scope: CredentialScope, environment?: Record<string, string | undefined>): AmazonSpApiCredentials {
   const key = encryptionKey(environment);
   if (!key) throw new Error(`服务器缺少有效的 ${encryptionKeyName}（32 字节 Base64 密钥）。`);
   try {
     const [version, encodedIv, encodedCiphertext, encodedTag, extra] = value.split(".");
-    if (version !== "v1" || !encodedIv || !encodedCiphertext || !encodedTag || extra) throw new Error("invalid ciphertext");
+    if (version !== (scope.authorizationId ? "v2" : "v1") || !encodedIv || !encodedCiphertext || !encodedTag || extra) throw new Error("invalid ciphertext");
     const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(encodedIv, "base64url"));
     decipher.setAAD(aad(scope));
     decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));

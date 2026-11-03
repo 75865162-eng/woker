@@ -427,6 +427,9 @@ model SellerAccount {
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   marketplace     Marketplace?     @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
   listings        ProductListing[]
+  amazonSyncSources AmazonSyncDataSource[]
+
+  @@unique([organizationId, workspaceId, id], map: "SellerAccount_sync_scope_id_key")
 
   @@unique([organizationId, workspaceId, accountKey, marketplaceCode])
   @@index([organizationId, workspaceId, status, updatedAt])
@@ -1413,6 +1416,39 @@ model AmazonSyncRun {
   requestedByUserId String
   resource          String    @default("readiness")
   idempotencyKey    String?
+  executionVersion  Int       @default(1)
+  sourceId          String?
+  source            AmazonSyncDataSource? @relation("SourceTasks", fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  scheduleId        String?
+  scheduleRevision  Int?
+  trigger           String    @default("manual")
+  mode              String    @default("snapshot")
+  priority          Int       @default(1)
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(3)
+  dispatchVersion   Int       @default(0)
+  nextAttemptAt     DateTime  @default(now())
+  leaseOwner        String?
+  leaseExpiresAt    DateTime?
+  fenceVersion      Int       @default(0)
+  control           String?
+  stage             String    @default("WAITING")
+  executionStartedAt DateTime?
+  pagesCompleted    Int       @default(0)
+  paginationComplete Boolean @default(false)
+  checkpointCiphertext String? @db.Text
+  authorizationRevision Int?
+  apiRequests       Int       @default(0)
+  throttles         Int       @default(0)
+  processedCount    Int       @default(0)
+  insertedCount     Int       @default(0)
+  updatedCount      Int       @default(0)
+  skippedCount      Int       @default(0)
+  logs              AmazonSyncTaskLog[]
+  pages             AmazonSyncPage[]
+  publishedSources  AmazonSyncDataSource[] @relation("PublishedHead")
+
+  @@unique([id, organizationId, workspaceId, sourceId], map: "AmazonRun_source_scope_id_key")
   status            String    @default("QUEUED")
   summary           Json?
   error             String?
@@ -1423,6 +1459,9 @@ model AmazonSyncRun {
   @@index([organizationId, workspaceId, startedAt])
   @@index([organizationId, workspaceId, status, updatedAt])
   @@unique([organizationId, workspaceId, idempotencyKey])
+  @@unique([organizationId, workspaceId, id], map: "AmazonSyncRun_scope_id_key")
+  @@index([executionVersion, status, nextAttemptAt], map: "AmazonSyncRun_dispatch_idx")
+  @@index([sourceId, startedAt], map: "AmazonSyncRun_source_started_idx")
 }
 
 model AmazonInventorySnapshot {
@@ -1443,6 +1482,8 @@ model AmazonInventorySnapshot {
   reservedQuantity         Int      @default(0)
   unfulfillableQuantity    Int      @default(0)
   researchingQuantity      Int      @default(0)
+  sourceUpdatedAt          DateTime?
+  dataVersion              Int @default(1)
   capturedAt               DateTime
   createdAt                DateTime @default(now())
 
@@ -1465,6 +1506,8 @@ model AmazonCatalogSnapshot {
   fulfillmentType  String?
   sourceRunId      String
   fieldSources     Json
+  sourceUpdatedAt  DateTime?
+  dataVersion      Int @default(1)
   capturedAt       DateTime
   createdAt        DateTime @default(now())
 
@@ -1871,6 +1914,16 @@ model AmazonSyncSchedule {
   organizationId    String
   workspaceId       String   @default("default")
   resource          String
+  executionVersion  Int      @default(1)
+  planKey           String   @default("legacy")
+  name              String   @default("")
+  revision          Int      @default(1)
+  mode              String   @default("snapshot")
+  priority          Int      @default(1)
+  maxAttempts       Int      @default(3)
+  retentionDays     Int      @default(30)
+  nextRunAt         DateTime?
+  targets           AmazonSyncPlanTarget[]
   intervalMinutes   Int      @default(60)
   enabled           Boolean  @default(false)
   lastEnqueuedAt    DateTime?
@@ -1878,7 +1931,9 @@ model AmazonSyncSchedule {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  @@unique([organizationId, workspaceId, resource], map: "AmazonSchedule_scope_resource_key")
+  @@unique([organizationId, workspaceId, resource, planKey], map: "AmazonSchedule_scope_resource_plan_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonSchedule_scope_id_key")
+  @@index([executionVersion, enabled, nextRunAt], map: "AmazonSchedule_v2_due_idx")
   @@index([enabled, lastEnqueuedAt], map: "AmazonSchedule_due_idx")
 }
 
@@ -2188,4 +2243,112 @@ model SellfoxAdsPlacementDaily {
   @@unique([storeId, reportDate, adType, campaignId, placement], map: "sellfox_ads_placement_daily_identity")
   @@index([organizationId, workspaceId, storeId, reportDate])
   @@index([organizationId, workspaceId, asin, reportDate])
+}
+
+
+// Phase 1 authorizations are the only credential source for opted-in sync scopes.
+// Legacy AmazonIntegrationSecret remains read-compatible for scopes not migrated.
+model AmazonSpApiAuthorization {
+  id                    String @id
+  organizationId        String
+  workspaceId           String @default("default")
+  name                  String
+  amazonSellerId        String
+  awsRegion             String
+  endpoint              String
+  credentialsCiphertext String @db.Text
+  revision              Int @default(1)
+  status                String @default("NOT_CONFIGURED")
+  marketplaceParticipations Json @default("[]")
+  lastValidatedAt       DateTime?
+  updatedByUserId        String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  sources               AmazonSyncDataSource[]
+
+  @@unique([organizationId, workspaceId, id], map: "AmazonAuth_scope_id_key")
+  @@unique([organizationId, workspaceId, amazonSellerId, awsRegion], map: "AmazonAuth_seller_region_key")
+}
+
+model AmazonSyncDataSource {
+  id                    String @id
+  organizationId        String
+  workspaceId           String @default("default")
+  authorizationId       String
+  authorization         AmazonSpApiAuthorization @relation(fields: [organizationId, workspaceId, authorizationId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  sellerAccountId       String
+  seller                SellerAccount @relation(fields: [organizationId, workspaceId, sellerAccountId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  marketplaceId         String
+  resource              String
+  source                String @default("amazon_sp_api")
+  enabled               Boolean @default(true)
+  freshnessMinutes      Int
+  activeRunId           String?
+  publishedRun          AmazonSyncRun? @relation("PublishedHead", fields: [activeRunId, organizationId, workspaceId, id], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict)
+  lastSuccessAt         DateTime?
+  rowCount              Int @default(0)
+  coverage              Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  runs                  AmazonSyncRun[] @relation("SourceTasks")
+  targets               AmazonSyncPlanTarget[]
+
+  @@unique([organizationId, workspaceId, id], map: "AmazonSource_scope_id_key")
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, resource], map: "AmazonSource_store_site_domain_key")
+}
+
+model AmazonSyncPlanTarget {
+  organizationId String
+  workspaceId    String
+  scheduleId     String
+  sourceId       String
+  schedule       AmazonSyncSchedule @relation(fields: [organizationId, workspaceId, scheduleId], references: [organizationId, workspaceId, id], onDelete: Cascade)
+  source         AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+
+  @@id([scheduleId, sourceId])
+}
+
+model AmazonSyncTaskLog {
+  id              String @id
+  organizationId  String
+  workspaceId     String
+  taskId          String
+  task            AmazonSyncRun @relation(fields: [organizationId, workspaceId, taskId], references: [organizationId, workspaceId, id], onDelete: Cascade)
+  attempt         Int
+  event           String
+  stage           String
+  page            Int?
+  code            String?
+  requestId       String?
+  statusCode      Int?
+  rateLimit       String?
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, workspaceId, taskId, createdAt], map: "AmazonTaskLog_task_time_idx")
+}
+
+model AmazonSyncPage {
+  organizationId String
+  workspaceId    String
+  taskId         String
+  task           AmazonSyncRun @relation(fields: [organizationId, workspaceId, taskId], references: [organizationId, workspaceId, id], onDelete: Cascade)
+  page           Int
+  tokenHash      String
+  rowCount       Int
+  createdAt      DateTime @default(now())
+
+  @@id([taskId, page])
+  @@unique([taskId, tokenHash], map: "AmazonSyncPage_token_key")
+}
+
+model AmazonSyncApiBudget {
+  organizationId String
+  workspaceId    String
+  authorizationId String
+  operation      String
+  nextRequestAt  DateTime @default(now())
+  observedLimit  Float?
+  updatedAt      DateTime @updatedAt
+
+  @@id([organizationId, workspaceId, authorizationId, operation])
 }

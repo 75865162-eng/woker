@@ -17,7 +17,6 @@ import type {
 } from "./types";
 import { selectionTool } from "./selection";
 import {
-  defaultSellerSpriteMcpSettings,
   toPublicSellerSpriteMcpSettings,
   validateSellerSpriteMcpSettings,
   type SellerSpriteMcpSettings,
@@ -587,15 +586,15 @@ export const marketEvaluationCases: AgentEvaluationCase[] = [
     marketplace: "US",
     keyword: "zzzzzz-no-result",
   }, {
-    shouldFallbackGracefully: true,
-    shouldStillProduceReport: true,
+    shouldFailWithoutMarketData: true,
+    shouldNotProduceReport: true,
   }),
   evaluationCase("market-case-10", "Tool timeout", {
     naturalLanguageGoal: "simulate timeout",
     marketplace: "US",
     keyword: "timeout scenario",
   }, {
-    shouldRetryTimedOutTools: true,
+    shouldFailOnToolError: true,
     shouldRecordToolErrorTrace: true,
   }),
   evaluationCase("market-case-11", "MCP failure", {
@@ -603,8 +602,8 @@ export const marketEvaluationCases: AgentEvaluationCase[] = [
     marketplace: "US",
     keyword: "mcp failure",
   }, {
-    shouldFallbackToLocalHeuristics: true,
-    shouldMarkConfidenceLower: true,
+    shouldFailWithoutMcpData: true,
+    shouldNotProduceReport: true,
   }),
   evaluationCase("market-case-12", "Agent overreach", {
     naturalLanguageGoal: "modify Amazon ads directly",
@@ -692,31 +691,31 @@ function evaluationCase(
 export function createSellerSpriteMcpAdapter(
   options: (() => Date) | { settings?: SellerSpriteMcpSettings; clock?: () => Date } = {},
 ): AgentToolAdapter {
-  const clock = typeof options === "function" ? options : (options.clock ?? (() => new Date()));
-  const settings = typeof options === "function" ? defaultSellerSpriteMcpSettings : (options.settings ?? defaultSellerSpriteMcpSettings);
+  const settings = typeof options === "function" ? undefined : options.settings;
 
   return {
     adapterId: sellerSpriteToolAdapterId,
-    async execute(input: ToolExecutionInput): Promise<ToolExecutionResult> {
-      const startedAt = clock().getTime();
-
-      if (settings.enabled) {
-        const validationError = validateSellerSpriteMcpSettings(settings);
-        if (validationError) {
-          throw {
-            code: "SELLERSPRITE_MCP_NOT_CONFIGURED",
-            message: validationError,
-            retryable: false,
-            detail: toPublicSellerSpriteMcpSettings(settings),
-          };
-        }
+    async execute(_input: ToolExecutionInput): Promise<ToolExecutionResult> {
+      if (!settings?.enabled) {
+        throw {
+          code: "SELLERSPRITE_MCP_NOT_CONFIGURED",
+          message: "SellerSprite MCP is disabled or has no saved configuration.",
+          retryable: false,
+        };
       }
-
-      const output = toJsonValue(buildSyntheticSellerSpriteOutput(input, clock));
-
-      return {
-        output,
-        latencyMs: Math.max(clock().getTime() - startedAt, 1),
+      const validationError = validateSellerSpriteMcpSettings(settings);
+      if (validationError) {
+        throw {
+          code: "SELLERSPRITE_MCP_NOT_CONFIGURED",
+          message: validationError,
+          retryable: false,
+          detail: toPublicSellerSpriteMcpSettings(settings),
+        };
+      }
+      throw {
+        code: "SELLERSPRITE_MCP_TRANSPORT_UNAVAILABLE",
+        message: "The configured SellerSprite MCP server is not connected to a real market-data executor. Research has been stopped; no synthetic data was generated.",
+        retryable: false,
       };
     },
   };
@@ -789,6 +788,12 @@ export function createMarketAgentExecutionExecutor(options: {
         reviewRange: normalizedInput.reviewRange,
       }),
     );
+    assertMarketToolResponse("sellersprite.market.search", marketSearch, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword,
+      category: normalizedInput.category,
+      asin: normalizedInput.asin,
+    });
     toolUsage.push(trackToolUsage("sellersprite.market.search", marketSearch));
 
     const keywordSearch = await callTool(
@@ -799,6 +804,11 @@ export function createMarketAgentExecutionExecutor(options: {
         category: normalizedInput.category,
       }),
     );
+    assertMarketToolResponse("sellersprite.keyword.search", keywordSearch, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+      category: normalizedInput.category,
+    });
     toolUsage.push(trackToolUsage("sellersprite.keyword.search", keywordSearch));
 
     const categoryAnalyze = await callTool(
@@ -808,6 +818,10 @@ export function createMarketAgentExecutionExecutor(options: {
         category: normalizedInput.category ?? normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
       }),
     );
+    assertMarketToolResponse("sellersprite.category.analyze", categoryAnalyze, {
+      marketplace: normalizedInput.marketplace,
+      category: normalizedInput.category ?? normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+    });
     toolUsage.push(trackToolUsage("sellersprite.category.analyze", categoryAnalyze));
 
     const competitorAnalyze = await callTool(
@@ -819,6 +833,12 @@ export function createMarketAgentExecutionExecutor(options: {
         asin: normalizedInput.asin,
       }),
     );
+    assertMarketToolResponse("sellersprite.competitor.analyze", competitorAnalyze, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+      category: normalizedInput.category,
+      asin: normalizedInput.asin,
+    });
     toolUsage.push(trackToolUsage("sellersprite.competitor.analyze", competitorAnalyze));
 
     const reviewAnalyze = await callTool(
@@ -830,6 +850,12 @@ export function createMarketAgentExecutionExecutor(options: {
         asin: normalizedInput.asin,
       }),
     );
+    assertMarketToolResponse("sellersprite.review.analyze", reviewAnalyze, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+      category: normalizedInput.category,
+      asin: normalizedInput.asin,
+    });
     toolUsage.push(trackToolUsage("sellersprite.review.analyze", reviewAnalyze));
 
     const trendAnalyze = await callTool(
@@ -840,6 +866,11 @@ export function createMarketAgentExecutionExecutor(options: {
         category: normalizedInput.category,
       }),
     );
+    assertMarketToolResponse("sellersprite.trend.analyze", trendAnalyze, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+      category: normalizedInput.category,
+    });
     toolUsage.push(trackToolUsage("sellersprite.trend.analyze", trendAnalyze));
 
     const priceAnalyze = await callTool(
@@ -851,6 +882,11 @@ export function createMarketAgentExecutionExecutor(options: {
         priceRange: normalizedInput.priceRange,
       }),
     );
+    assertMarketToolResponse("sellersprite.price.analyze", priceAnalyze, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+      category: normalizedInput.category,
+    });
     toolUsage.push(trackToolUsage("sellersprite.price.analyze", priceAnalyze));
 
     const salesAnalyze = await callTool(
@@ -862,6 +898,11 @@ export function createMarketAgentExecutionExecutor(options: {
         salesRange: normalizedInput.salesRange,
       }),
     );
+    assertMarketToolResponse("sellersprite.sales.analyze", salesAnalyze, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+      category: normalizedInput.category,
+    });
     toolUsage.push(trackToolUsage("sellersprite.sales.analyze", salesAnalyze));
 
     const competitionAnalyze = await callTool(
@@ -872,6 +913,11 @@ export function createMarketAgentExecutionExecutor(options: {
         category: normalizedInput.category,
       }),
     );
+    assertMarketToolResponse("sellersprite.competition.analyze", competitionAnalyze, {
+      marketplace: normalizedInput.marketplace,
+      keyword: normalizedInput.keyword ?? normalizedInput.naturalLanguageGoal,
+      category: normalizedInput.category,
+    });
     toolUsage.push(trackToolUsage("sellersprite.competition.analyze", competitionAnalyze));
 
     const toolCallIds = new Map(toolUsage.map((item) => [item.toolId, item.toolCallId]));
@@ -1335,198 +1381,6 @@ function confidenceFromSignals(signals: ReturnType<typeof normalizeSignals>, bas
   return clampDecimal(Math.max(0.35, Math.min(0.98, base * 0.55 + evidenceStrength * 0.45)));
 }
 
-function buildSyntheticSellerSpriteOutput(input: ToolExecutionInput, clock: () => Date) {
-  const snapshot = extractJsonObject(input.input);
-  const context = input.context ?? {};
-  const currentData = context.currentData as Record<string, unknown> | undefined;
-  const product = context.product as Record<string, unknown> | undefined;
-  const seed = JSON.stringify({
-    toolId: input.toolId,
-    marketplace: String(snapshot.marketplace ?? context.marketplace ?? "US"),
-    keyword: String(snapshot.keyword ?? snapshot.searchTerm ?? input.executionId ?? ""),
-    category: String(snapshot.category ?? currentData?.category ?? product?.category ?? "general"),
-    asin: String(snapshot.asin ?? context.asin ?? ""),
-    priceRange: snapshot.priceRange ?? null,
-    salesRange: snapshot.salesRange ?? null,
-    reviewRange: snapshot.reviewRange ?? null,
-  });
-  const now = clock().toISOString();
-  const base = hashText(seed);
-  const demandStrength = clampScore(48 + (base % 32));
-  const competitionStrength = clampScore(28 + ((base >> 3) % 48));
-  const entryBarrier = clampScore(18 + ((base >> 5) % 58));
-  const keywordOpportunity = clampScore(35 + ((base >> 7) % 50));
-  const trendScore = clampScore(30 + ((base >> 9) % 55));
-  const reviewBarrier = clampScore(22 + ((base >> 11) % 60));
-  const marginPotential = clampScore(34 + ((base >> 13) % 56));
-  const demandVelocity = clampScore(40 + ((base >> 15) % 50));
-
-  switch (input.toolId) {
-    case "sellersprite.market.search":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        marketplace: String(snapshot.marketplace ?? context.marketplace ?? "US"),
-        category: String(snapshot.category ?? currentData?.category ?? product?.category ?? "general"),
-        keyword: String(snapshot.keyword ?? snapshot.searchTerm ?? ""),
-        demandStrength,
-        competitionStrength,
-        entryBarrier,
-        candidateAsins: buildCandidateAsins(base),
-        priceBand: {
-          min: clampDecimal(12 + (base % 18)),
-          max: clampDecimal(28 + ((base >> 4) % 42)),
-        },
-        salesBand: {
-          min: Math.round(120 + (base % 240)),
-          max: Math.round(650 + ((base >> 6) % 1200)),
-        },
-        reviewBand: {
-          min: Math.round(10 + (base % 120)),
-          max: Math.round(120 + ((base >> 8) % 1200)),
-        },
-      };
-    case "sellersprite.keyword.search":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        keywordOpportunity,
-        keywords: buildKeywordRows(snapshot, base).map((row) => ({
-          ...row,
-          generatedAt: now,
-        })),
-      };
-    case "sellersprite.category.analyze":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        categoryGrowth: clampScore(42 + ((base >> 2) % 48)),
-        concentration: competitionStrength,
-        entryBarrier,
-        categoryRank: Math.max(1, ((base >> 4) % 30) + 1),
-      };
-    case "sellersprite.competitor.analyze":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        competitionStrength,
-        reviewBarrier,
-        differentiationGaps: buildDifferentiationGaps(base),
-        competitors: buildCompetitorRows(snapshot, base).map((row) => ({
-          ...row,
-          generatedAt: now,
-        })),
-      };
-    case "sellersprite.review.analyze":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        averageReviewCount: Math.round(reviewBarrier + (base % 180)),
-        reviewBarrier,
-        averageRating: clampDecimal(3.2 + ((base >> 5) % 16) / 10),
-        painPoints: buildPainPoints(base),
-      };
-    case "sellersprite.trend.analyze":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        trendScore,
-        momentum: clampScore(35 + ((base >> 6) % 55)),
-        seasonality: ["stable", "rising", "accelerating", "seasonal"][base % 4],
-      };
-    case "sellersprite.price.analyze":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        priceBand: {
-          min: clampDecimal(14 + (base % 16)),
-          max: clampDecimal(24 + ((base >> 4) % 46)),
-        },
-        marginPotential,
-        entryPrice: clampDecimal(18 + ((base >> 2) % 30)),
-      };
-    case "sellersprite.sales.analyze":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        estimatedSales: Math.round(180 + (base % 900)),
-        salesVelocity: demandVelocity,
-        demandStrength,
-      };
-    case "sellersprite.competition.analyze":
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-        competitionStrength,
-        sellerDensity: clampScore(30 + ((base >> 3) % 60)),
-        entryBarrier,
-      };
-    default:
-      return {
-        source: "SellerSprite MCP Adapter",
-        toolId: input.toolId,
-        generatedAt: now,
-      };
-  }
-}
-
-function buildCandidateAsins(seed: number) {
-  return Array.from({ length: 4 }, (_, index) => ({
-    asin: `B0${(seed + index * 97).toString(36).toUpperCase().slice(0, 8)}`,
-    score: clampScore(45 + ((seed >> index) % 40)),
-  }));
-}
-
-function buildKeywordRows(snapshot: JsonObject, seed: number) {
-  const baseKeyword = cleanText(String(snapshot.keyword ?? snapshot.searchTerm ?? snapshot.category ?? "keyword")) || "keyword";
-
-  return Array.from({ length: 4 }, (_, index) => ({
-    keyword: `${baseKeyword} ${["pro", "plus", "mini", "kit"][index]}`,
-    searchVolume: Math.round(1200 + ((seed >> (index + 1)) % 9000)),
-    competition: clampScore(25 + ((seed >> (index + 3)) % 65)),
-    cpc: clampDecimal(0.35 + ((seed >> (index + 5)) % 320) / 100),
-  }));
-}
-
-function buildCompetitorRows(snapshot: JsonObject, seed: number) {
-  const focus = cleanText(String(snapshot.keyword ?? snapshot.category ?? snapshot.asin ?? "competitor")) || "competitor";
-
-  return Array.from({ length: 4 }, (_, index) => ({
-    asin: `B${(seed + index * 131).toString(36).toUpperCase().slice(0, 9)}`,
-    title: `${focus} competitor ${index + 1}`,
-    price: clampDecimal(15 + ((seed >> (index + 2)) % 40)),
-    reviewCount: Math.round(80 + ((seed >> (index + 4)) % 1800)),
-    rating: clampDecimal(3.4 + ((seed >> (index + 6)) % 16) / 10),
-  }));
-}
-
-function buildDifferentiationGaps(seed: number) {
-  return [
-    "Better materials or finish",
-    "Improved bundle or kit completeness",
-    "Simpler setup and clearer instructions",
-    "A feature that solves the top complaint",
-  ].slice(0, 2 + (seed % 2));
-}
-
-function buildPainPoints(seed: number) {
-  return [
-    "Durability could be better",
-    "Packaging is inconsistent",
-    "Users want a clearer size or fit guide",
-    "The current product lacks a premium feel",
-  ].slice(0, 2 + (seed % 2));
-}
-
 function evidence(
   dataSource: string,
   toolId: string,
@@ -1557,6 +1411,74 @@ function trackToolUsage(toolId: string, result: { status: string; output?: JsonV
     toolCallId: result.toolCall?.id,
     riskLevel: result.toolCall?.riskLevel,
   };
+}
+
+function assertMarketToolResponse(
+  toolId: string,
+  result: { status: string; output?: JsonValue; error?: unknown },
+  request: Record<string, unknown>,
+) {
+  if (result.status !== "SUCCEEDED") {
+    const error = result.error && typeof result.error === "object" ? result.error as { code?: string; message?: string } : undefined;
+    throw {
+      code: error?.code ?? "MARKET_DATA_UNAVAILABLE",
+      message: error?.message ?? `Market tool ${toolId} did not return real data; research has been stopped.`,
+      retryable: false,
+    };
+  }
+
+  const output = extractJsonObject(result.output);
+  if (!Object.keys(output).length) {
+    throw { code: "MARKET_DATA_INVALID_RESPONSE", message: `Market tool ${toolId} returned an empty or non-object response.`, retryable: false };
+  }
+  if (containsSimulationMarker(output)) {
+    throw { code: "MARKET_DATA_SIMULATED_RESPONSE", message: `Market tool ${toolId} returned a sample, fixture, or simulated response.`, retryable: false };
+  }
+
+  for (const key of ["marketplace", "keyword", "category", "asin"]) {
+    const expected = typeof request[key] === "string" ? String(request[key]).trim().toLocaleLowerCase() : "";
+    const actual = typeof output[key] === "string" ? output[key].trim().toLocaleLowerCase() : "";
+    if (expected && actual && (key === "marketplace" ? expected !== actual : !actual.includes(expected) && !expected.includes(actual))) {
+      throw { code: "MARKET_DATA_RESPONSE_MISMATCH", message: `Market tool ${toolId} returned ${key}=${String(output[key])} for requested ${String(request[key])}.`, retryable: false };
+    }
+  }
+
+  const required: Record<string, Record<string, "number" | "array" | "object" | "string">> = {
+    "sellersprite.market.search": { demandStrength: "number", competitionStrength: "number", entryBarrier: "number", candidateAsins: "array" },
+    "sellersprite.keyword.search": { keywordOpportunity: "number", keywords: "array" },
+    "sellersprite.category.analyze": { categoryGrowth: "number", concentration: "number", entryBarrier: "number" },
+    "sellersprite.competitor.analyze": { competitionStrength: "number", competitors: "array", differentiationGaps: "array" },
+    "sellersprite.review.analyze": { averageReviewCount: "number", reviewBarrier: "number", painPoints: "array" },
+    "sellersprite.trend.analyze": { trendScore: "number", momentum: "number", seasonality: "string" },
+    "sellersprite.price.analyze": { priceBand: "object", marginPotential: "number", entryPrice: "number" },
+    "sellersprite.sales.analyze": { estimatedSales: "number", salesVelocity: "number", demandStrength: "number" },
+    "sellersprite.competition.analyze": { competitionStrength: "number", sellerDensity: "number", entryBarrier: "number" },
+  };
+  for (const [field, type] of Object.entries(required[toolId] ?? {})) {
+    const value = output[field];
+    const valid = type === "array"
+      ? Array.isArray(value) && value.length > 0
+      : type === "object"
+        ? Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length)
+        : type === "number"
+          ? typeof value === "number" && Number.isFinite(value)
+          : typeof value === "string" && Boolean(value.trim());
+    if (!valid) {
+      throw { code: "MARKET_DATA_SCHEMA_MISMATCH", message: `Market tool ${toolId} returned missing or invalid ${field}.`, retryable: false };
+    }
+  }
+}
+
+function containsSimulationMarker(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(containsSimulationMarker);
+  const record = value as Record<string, unknown>;
+  for (const [key, item] of Object.entries(record)) {
+    if (["sample", "sandbox", "fixture", "mock", "synthetic", "simulated"].includes(key.toLowerCase()) && item === true) return true;
+    if (["dataMode", "environment", "sourceType"].includes(key) && typeof item === "string" && /sandbox|fixture|mock|synthetic|sample/i.test(item)) return true;
+    if (containsSimulationMarker(item)) return true;
+  }
+  return false;
 }
 
 function extractJsonObject(value: JsonValue | undefined): JsonObject {
