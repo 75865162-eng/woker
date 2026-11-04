@@ -71,3 +71,25 @@
 拟将上列 8 个文件作为一个后续修补提交，推送到现有 `origin`（`github.com/75865162-eng/woker`）的 `codex/amazon-multistore-mcp`，更新草稿 PR #5 的补丁/验证说明；保留 PR 基线 `cursor/rebrand-tiaotiao-aa9a`，不合并 main。
 
 批准后先重新完整检查 `git status --short` 及 diff；若出现上列范围外的新增业务改动则停止并说明。逐路径暂存上列文件，不使用全量 add、stash、reset，不上传 `.next-amazon-live/`、私有配置或运行态数据。推送后等待 PR CI；如未触发，再运行既有 CI workflow，明确 `deploy_production=false`，构建基线仍使用 PR 原始基线 `42f8c1f785b06812ce1c369e8748a290ddf317a0`。失败则修复/报告，不旁路构建、不部署、不执行真实迁移。
+
+## 后续复核：Ops CLI / PPC 的共享读取边界
+
+以上 8 文件方案已经用户批准，已提交并推送为 `a2ca86180b8ea311cce9ffcdf115ddebd85a00c1`；[CI 41885135570](https://github.com/75865162-eng/woker/actions/runs/41885135570) 的测试、Prisma、lint、生产构建、打包及产物校验全部通过，生产部署明确 skipped。前文的“待同步”和“未运行新 CI”记录描述的是该次审批前状态。
+
+继续审计发现另一处独立消费者：`operations/amazon-read-scope.ts::amazonPublishedReadScope` 为 Ops CLI 明细、汇总、新鲜度和 PPC 建议提供来源集合，仍只检查成功状态和执行版本，遗漏完成时间、PURGED 和 run/source 数据域相等条件。前轮同步中心/MCP 的修补不会自动覆盖它。
+
+本轮在原数据库查询内补齐这些条件，并明确只解析已实现的 inventory/catalog 来源。Seller/Marketplace 授权 OR 与来源数据域 OR 分别组合为 AND，避免覆盖授权范围。无新增数据库往返、表、缓存、worker、迁移或配置；不更改 CLI 参数或正常返回格式。无效来源使相关明细/汇总返回 NOT_SYNCED/空结果，新鲜度不再依赖该来源；不会把异常记录改为有效。应用回滚仅撤回本轮代码，但会重新开放弱校验，真实环境回滚仍需单独批准。
+
+新增真实 PostgreSQL 回归分别对库存和刊登施加：无完成时间、PURGED、任务数据域错配。验证普通运营的异常来源既不进入列表，也不进入库存汇总；同库另一位运营的有效店铺仍可见；恢复有效任务后原结果可见。继续复用既有相同 SKU、撤权、跨组织及下载回归。PPC 使用同一来源解析器，既有 PPC 分析测试保留。
+
+本轮验证路线：`npm test`（715 项）、`--security` 隔离集成（12 项）、TypeScript、lint（排除既有生成目录，5 条既有 warning）及 diff check。没有修改 UI、schema 或 MCP Route，不重复浏览器全套、迁移及无关 MCP/OAuth 回归；新提交的完整构建留给同步后 CI。所有数据库测试仅运行一次性合成夹具，没有实际业务库、Amazon 或服务器操作。本轮仍不补齐真实环境验收证据，生产质量结论不变。
+
+本轮同步方案的范围仅以下 3 文件：
+
+1. `src/lib/operations/amazon-read-scope.ts`
+2. `tests/integration/amazon-multistore-security.integration.ts`
+3. `docs/amazon-multistore-production-review-2026-11-05.md`
+
+这些新增补丁尚未提交或推送，需按 AGENTS.md 的范围变更规则批准。拟作为后续提交推送到同一 origin 的 `codex/amazon-multistore-mcp`，更新既有草稿 PR #5 并等待 PR CI；不合并、不改变 PR 基线、不部署、不迁移。不纳入 `.next-amazon-live/` 或私有运行配置。批准后重新盘点完整工作区；范围外的新业务改动先停止说明，不静默跳过；不使用 stash/reset 或全量暂存。
+
+用户随后明确授权“全量更新 推github 和ci”。执行前完整工作区盘点确认仅有以上 3 个业务/文档文件和既有 `.next-amazon-live/` 生成目录；因此本次提交完整纳入 3 文件，生成目录按仓库规则排除。715 项核心、12 项隔离安全回归、TypeScript、lint（0 error / 5 条既有 warning）及 diff check 已通过。同步至现有分支与草稿 PR #5，不合并 main、不进行生产部署。最终提交 SHA 与新 CI 结果在 PR 中记录，以避免为记录结果重复生成构建提交。

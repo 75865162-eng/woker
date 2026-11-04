@@ -109,6 +109,29 @@ test("real read-only CLI SQL isolates identical SKUs and aggregate from ungrante
   const peerRows = await cli(peer, ["inventory", "list"]) as typeof inventory;
   assert.equal(peerRows.rows[0].fulfillableQuantity, 999, "no cross-user permissions cache");
 });
+test("CLI excludes incomplete, purged and wrong-domain published heads without hiding valid peer data", async () => {
+  for (const resource of ["inventory", "catalog"]) {
+    const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, sellerAccountId: sellerA, resource } });
+    const original = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: source.activeRunId! } });
+    try {
+      for (const patch of [{ finishedAt: null }, { stage: "PURGED", finishedAt: original.finishedAt }, { resource: resource === "inventory" ? "catalog" : "inventory", stage: original.stage }]) {
+        await prisma.amazonSyncRun.update({ where: { id: original.id }, data: patch });
+        const list = await cli(actor, [resource, "list"]) as { rows: unknown[]; status: string };
+        assert.deepEqual(list.rows, []); assert.equal(list.status, "NOT_SYNCED");
+        if (resource === "inventory") {
+          const summary = await cli(actor, ["inventory", "summary"]) as { summary: unknown };
+          assert.equal(summary.summary, null);
+        }
+        const peerRows = await cli(peer, [resource, "list"]) as { rows: Array<{ sellerAccountId: string }> };
+        assert.deepEqual(peerRows.rows.map(row => row.sellerAccountId), [sellerB]);
+      }
+    } finally {
+      await prisma.amazonSyncRun.update({ where: { id: original.id }, data: { resource: original.resource, stage: original.stage, finishedAt: original.finishedAt } });
+    }
+    const restored = await cli(actor, [resource, "list"]) as { rows: Array<{ sellerAccountId: string }> };
+    assert.deepEqual(restored.rows.map(row => row.sellerAccountId), [sellerA]);
+  }
+});
 test("CLI excludes null-seller and source-less legacy evidence and hides internal task fields", async () => {
   const id = randomUUID();
   await prisma.amazonSyncRun.create({ data: { ...scope, id, requestedByUserId: actor, resource: "inventory", status: "SUCCEEDED", finishedAt: new Date(Date.now() + 1000) } });
