@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import { amazonReadDomains } from "@/lib/operations/types";
 import { expect, test, type Page } from "@playwright/test";
 import type { SyncSourceView, SyncTaskView, SyncPlanView } from "@/lib/amazon-sync/contracts";
 let bundle = "", styles = "";
@@ -12,16 +13,41 @@ test.beforeAll(async () => {
 const task: SyncTaskView = { id: "fixture-task", sourceId: "source-a", resource: "inventory", status: "FAILED", stage: "FETCHING", trigger: "manual", mode: "snapshot", scheduleId: null, scheduleRevision: null, queuedAt: "2026-11-04T01:00:00Z", startedAt: "2026-11-04T01:00:01Z", finishedAt: "2026-11-04T01:00:05Z", elapsedMs: 4000, pagesCompleted: 2, processedCount: 25, insertedCount: 25, updatedCount: 0, skippedCount: 0, apiRequests: 3, throttles: 1, attempts: 1, maxAttempts: 3, error: "Amazon 请求限流，未发布新快照。", control: null, nextAttemptAt: "2026-11-04T01:01:00Z", summary: null };
 const sources: SyncSourceView[] = ["a", "b"].map((v, i) => ({ id: `source-${v}`, resource: "inventory", enabled: true, marketplaceId: i ? "CA" : "US", sellerAccountId: `store-${v}`, authorizationId: `auth-${v}`, activeRunId: i ? "prior-b" : null, freshnessMinutes: 360, lastSuccessAt: i ? "2026-11-04T01:00:00Z" : null, rowCount: i ? 10 : 0, coverage: null, health: i ? "FRESH" : "FAILED", latestTask: i ? null : task, seller: { id: `store-${v}`, displayName: `店铺 ${v.toUpperCase()}`, accountKey: v, status: "active" }, authorization: { id: `auth-${v}`, name: `授权 ${v}`, status: "CONFIGURED", amazonSellerId: `SELLER-${v}`, awsRegion: "us-east-1" } }));
 async function setup(page: Page, readOnly = false, entry = false) {
+  const businessCalls: string[] = [];
   const calls: Array<{ section: string; params: URLSearchParams; body?: Record<string, unknown> }> = [];
-  const state = { plans: [] as SyncPlanView[], denied: false, delayed: false, release: () => {} };
+  const state = { grants: [] as Array<{ id: string; userId: string; sellerAccountId: string; enabled: boolean; revision: number }>, salesSources: [] as SyncSourceView[], exportStatus: "QUEUED", plans: [] as SyncPlanView[], approvalStatus: "REQUESTED", denied: false, succeeded: false, invalidAuth: false, workerOnline: false, delayed: false, release: () => {} };
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url()); expect(url.origin).toBe("http://127.0.0.1:43224");
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
     if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
+    if (url.pathname.startsWith("/api/") && url.pathname !== "/api/operations/sync-center") {
+      if (url.pathname === "/api/operations/amazon-stores") return route.fulfill({ json: { stores: [] } });
+      if (url.pathname === "/api/operations/amazon-mcp") return route.fulfill({ json: { credentials: [], scopes: [], tools: [] } });
+      if (url.pathname === "/api/operations/sync-center/exports") {
+        const body = request.method() === "POST" ? request.postDataJSON() : undefined;
+        calls.push({ section: "sales-export", params: url.searchParams, body });
+        if (url.searchParams.get("download") === "1") return route.fulfill({ contentType: "application/x-ndjson", body: '{"type":"manifest","fixture":true}\n' });
+        return route.fulfill({ status: body ? 202 : 200, json: { id: "export-fixture", status: state.exportStatus, rowCount: 1 } });
+      }
+      if (url.pathname === "/api/operations/sync-center/approvals") {
+        const body = request.postDataJSON() as { decision?: string };
+        calls.push({ section: "approval-action", params: url.searchParams, body });
+        if (body.decision) state.approvalStatus = body.decision === "APPROVED" ? "APPROVED" : body.decision;
+        return route.fulfill({ json: { request: { id: "approval-1", status: state.approvalStatus } } });
+      }
+      businessCalls.push(url.pathname);
+      expect(request.method()).toBe("GET");
+      if (url.pathname.endsWith("/freshness")) return route.fulfill({ json: { scope: { workspaceId: "default", accountId: "", marketplace: "" }, connection: { status: "NOT_CONFIGURED", runtimeConfiguration: { configured: false, missingEnvironmentVariables: [] }, marketplaceParticipations: [], enabledDomains: [] }, inventory: { status: "NOT_SYNCED", snapshotCount: 0 }, domains: Object.fromEntries(amazonReadDomains.map(resource => [resource, { resource, status: "NOT_SYNCED", source: "fixture", reason: null }])), runs: [] } });
+      if (url.pathname.endsWith("/inventory/snapshots")) return route.fulfill({ json: { rows: [], pagination: { page: 1, pageSize: 20, total: 0, pageCount: 0 }, snapshot: { status: "NOT_SYNCED", syncRunId: null, capturedAt: null } } });
+      if (url.pathname.endsWith("/products")) return route.fulfill({ json: { rows: [], hasNextPage: false } });
+      if (url.pathname.endsWith("/replenishment")) return route.fulfill({ json: { rows: [], sellerAccounts: [], canEdit: false, canReadSellfox: false } });
+      if (url.pathname.endsWith("/metrics/daily")) return route.fulfill({ json: { rows: [], pagination: { hasNextPage: false }, sourceNote: "PPC fixture", emptyReason: "暂无指标" } });
+      throw new Error(`Unexpected business request ${url.pathname}`);
+    }
     if (url.pathname !== "/api/operations/sync-center") return route.fulfill({ contentType: "text/html", body: '<html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
     const section = url.searchParams.get("section") ?? ""; const body = request.method() === "POST" ? request.postDataJSON() : undefined;
     calls.push({ section, params: url.searchParams, body });
-    const access = { canEdit: !readOnly, canCreate: !readOnly, canConfigure: !readOnly };
+    const access = { canEdit: !readOnly, canCreate: !readOnly, canConfigure: !readOnly, canApprove: !readOnly, canExport: !readOnly };
     if (state.denied) return route.fulfill({ status: 403, json: { error: "当前工作区禁止读取。" } });
     if (body) {
       if (body.action === "save-plan") { const p = { ...body, id: body.id ?? "fixture-plan", revision: Number(body.revision ?? 0) + 1, nextRunAt: "2026-11-04T02:00:00Z", targets: (body.sourceIds as string[]).map(sourceId => ({ sourceId })) } as unknown as SyncPlanView; state.plans = [p]; }
@@ -31,21 +57,25 @@ async function setup(page: Page, readOnly = false, entry = false) {
     const visible = sources.filter(s => (!url.searchParams.get("sellerAccountId") || s.sellerAccountId === url.searchParams.get("sellerAccountId")) && (!url.searchParams.get("marketplaceId") || s.marketplaceId === url.searchParams.get("marketplaceId")));
     const common = { access, sources: visible };
     if (section === "overview") return route.fulfill({ json: { ...common, metrics: { connectedStores: visible.length, enabledDomains: 1, running: 0, issues: 1, expired: 0, lastSuccessAt: "2026-11-04T01:00:00Z" }, trend: [], legacyActive: 0 } });
-    if (section === "sources") return route.fulfill({ json: { ...common, sources } });
+    if (section === "approvals") return route.fulfill({ json: { ...common, requests: [{ id: "approval-1", targetEnvironment: "local", changeType: "CredentialChange", operation: "save-authorization", targetId: "auth-a", beforeSummary: { credentials: "已配置" }, afterSummary: { refreshToken: "将替换／新增" }, sellerIds: ["SELLER-a"], marketplaceIds: ["US"], domains: ["inventory"], sourceIds: [], baseRevision: 1, changeDigest: "fixture-digest", requestedByUserId: "requester", approvedByUserId: state.approvalStatus === "APPROVED" ? "approver" : null, status: state.approvalStatus, expiresAt: "2026-11-04T02:00:00Z", appliedAt: null, createdAt: "2026-11-04T01:00:00Z" }] } });
+    if (section === "sources") return route.fulfill({ json: { ...common, sources: state.salesSources.length ? state.salesSources : sources } });
     if (section === "plans") return route.fulfill({ json: { ...common, sources, plans: state.plans } });
     if (section === "tasks") return route.fulfill({ json: { ...common, rows: [{ ...task, scope: { sellerAccountId: "store-a", marketplaceId: "US", seller: sources[0].seller } }], pagination: { total: 31, page: Number(url.searchParams.get("page")), pageSize: 30, pageCount: 2 } } });
-    if (section === "task") return route.fulfill({ json: { ...common, task, source: sources[0], logs: [{ id: "log", attempt: 1, event: "FAILED", stage: "FETCHING", page: 2, code: "THROTTLE", statusCode: 429, rateLimit: "1", requestId: "fixture-request", createdAt: "2026-11-04T01:00:05Z" }], nextAfter: null } });
-    if (section === "connections") return route.fulfill({ json: { ...common, sources, authorizations: [{ id: "auth-a", name: "授权 a", amazonSellerId: "SELLER-a", awsRegion: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", revision: 1, status: "CONFIGURED", lastValidatedAt: null, marketplaceParticipations: [{ marketplaceId: "US", countryCode: "US", name: "US" }] }], sellers: [{ id: "store-a", displayName: "店铺 A", accountKey: "a" }] } });
-    if (section === "settings") return route.fulfill({ json: { ...common, heartbeats: [], queueConfigured: true } });
+    if (section === "task") return route.fulfill({ json: { ...common, task: state.succeeded ? { ...task, status: "SUCCEEDED", stage: "COMPLETED", error: null } : task, source: sources[0], logs: [{ id: "log", attempt: 1, event: "FAILED", stage: "FETCHING", page: 2, code: "THROTTLE", statusCode: 429, rateLimit: "1", requestId: "fixture-request", createdAt: "2026-11-04T01:00:05Z" }], nextAfter: null } });
+    if (section === "snapshots") return route.fulfill({ json: { snapshot: { taskId: task.id, sourceId: "source-a", sellerAccountId: "store-a", amazonSellerId: "SELLER-a", marketplaceId: "US", resource: "inventory", publishedAt: task.finishedAt, isCurrent: true }, snapshotRows: [{ sellerSku: "FIXTURE-SNAPSHOT-SKU", asin: "B-FIXTURE", condition: "NewItem", fulfillableQuantity: 5, reservedQuantity: 1, capturedAt: task.finishedAt, sourceUpdatedAt: null, dataVersion: 1 }], pagination: { page: Number(url.searchParams.get("page")), pageSize: 50, total: 51, pageCount: 2 } } });
+    if (section === "sales-traffic") return route.fulfill({ json: { ...common, rows: [{ id: "sale-row", businessDate: "2026-11-01", sellerName: "报告店铺", amazonSellerId: "REAL_TRANSPORT_FIXTURE", marketplaceId: "ATVPDKIKX0DER", metrics: { unitsOrdered: 2, totalOrderItems: 1, sessions: 10, pageViews: 15, orderedProductSales: { amount: 20, currencyCode: "USD" } }, quality: "VALID", reportId: "report-fixture", documentId: "doc-fixture", syncRunId: "sale-task", capturedAt: "2026-11-04T01:00:00Z", publishedAt: "2026-11-04T01:01:00Z" }], pagination: { total: 60, pageCount: 2 }, asOf: "2026-11-04T02:00:00.000Z" } });
+    if (section === "connections") return route.fulfill({ json: { ...common, sources, grants: state.grants, grantMembers: [{ userId: "member-a", user: { name: "运营成员" } }], authorizations: [{ id: "auth-a", name: "授权 a", amazonSellerId: "SELLER-a", awsRegion: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", revision: 1, status: state.invalidAuth ? "ERROR" : "CONFIGURED", lastValidatedAt: null, validationErrorCode: state.invalidAuth ? "AUTH_REJECTED" : null, validationAttemptedAt: "2026-11-04T01:00:00Z", marketplaceParticipations: [{ marketplaceId: "US", countryCode: "US", name: "US" }] }], sellers: [{ id: "store-a", displayName: "店铺 A", accountKey: "a" }] } });
+    if (section === "settings") return route.fulfill({ json: { ...common, heartbeats: state.workerOnline ? [{ workerName: "fixture-worker", concurrency: 1, online: true, lastSeenAt: "2026-11-04T01:00:00Z" }] : [], queueConfigured: true } });
     throw new Error(`unexpected section ${section}`);
   });
   await page.goto(`http://127.0.0.1:43224/${entry ? "?entry=1" : ""}`); await expect(page.getByRole("heading", { name: "数据同步健康状态" })).toBeVisible();
-  return { calls, state };
+  return { calls, state, businessCalls };
 }
-test("all seven views remain reachable with real styles, explicit planned domains and legacy entries", async ({ page }) => {
+test("sync views and merged business navigation remain reachable with real styles and explicit planned domains", async ({ page }) => {
   await setup(page);
   for (const label of ["同步计划", "同步任务", "数据域管理", "数据质量", "店铺与授权", "同步设置", "数据总览"]) { await page.getByRole("button", { name: label, exact: true }).click(); await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible(); }
-  await expect(page.getByRole("link", { name: "补货计划", exact: true })).toHaveAttribute("href", "?legacy=1&tab=replenishment");
+  await expect(page.getByRole("navigation", { name: "业务数据导航" }).getByRole("button", { name: "补货计划", exact: true })).toBeVisible();
+  await expect(page.getByText("原有业务入口 · 保留", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "数据域管理", exact: true }).click(); await page.getByRole("button", { name: "订单 规划中", exact: true }).click(); await expect(page.getByText("尚未接入；实施前核验官方版本、角色和店铺资格。", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -60,7 +90,7 @@ test("plan creation, custom frequency, pause, copy and history use persisted con
 test("server filters/pagination and failure retry never claim success before worker publication", async ({ page }) => {
   const { calls } = await setup(page); await page.getByRole("button", { name: "同步任务", exact: true }).click(); await page.getByLabel("任务状态", { exact: true }).selectOption("FAILED");
   await page.getByRole("button", { name: "下一页", exact: true }).click(); await expect.poll(() => calls.some(c => c.section === "tasks" && c.params.get("status") === "FAILED" && c.params.get("page") === "2")).toBe(true);
-  await page.getByRole("button", { name: "详情", exact: true }).click(); await expect(page.getByText("THROTTLE", { exact: false })).toBeVisible(); await page.getByRole("button", { name: "重试完整快照", exact: true }).click(); await expect(page.getByRole("status")).toContainText("不代表同步成功");
+  await page.getByRole("button", { name: "详情", exact: true }).click(); await expect(page.getByText("THROTTLE", { exact: false })).toBeVisible(); await page.getByRole("button", { name: "重试完整快照", exact: true }).click(); await expect(page.getByRole("status")).toContainText("尚未应用配置或启动任务");
   expect(calls.find(c => c.body?.action === "control-task")?.body).toMatchObject({ control: "retry", id: "fixture-task" });
 });
 test("read-only access disables writes and permission failure clears stale task content", async ({ page }) => {
@@ -81,4 +111,224 @@ test("switching workspace clears a delayed old task response and rechecks permis
   await expect(page.getByRole("alert")).toContainText("禁止读取");
   state.release();
   await expect(page.getByRole("heading", { name: "任务 fixture-task", exact: true })).toHaveCount(0);
+});
+
+test("successful task opens seller-bound snapshot pages and failed authorization remains visible", async ({ page }) => {
+  const { state, calls } = await setup(page);
+  state.succeeded = true;
+  await page.getByRole("button", { name: "同步任务", exact: true }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
+  await page.getByRole("button", { name: "查看本次快照", exact: true }).click();
+  await expect(page.getByRole("cell", { name: "FIXTURE-SNAPSHOT-SKU B-FIXTURE", exact: true })).toBeVisible();
+  await expect(page.getByText(/Seller SELLER-a/)).toBeVisible();
+  await page.getByRole("button", { name: "快照下一页", exact: true }).click();
+  await expect.poll(() => calls.some(c => c.section === "snapshots" && c.params.get("id") === task.id && c.params.get("page") === "2")).toBe(true);
+  state.invalidAuth = true;
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("AUTH_REJECTED");
+  await page.getByRole("button", { name: "更新授权／凭证", exact: true }).click();
+  await expect(page.getByLabel("refreshToken（留空保留）")).toHaveAttribute("type", "password");
+});
+
+test("overview follows the reviewed desktop layout and remains usable on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1355 });
+  await setup(page);
+  const now = new Date(), recent = new Date(now.getTime() - 25 * 60000).toISOString();
+  const next = new Date(now.getTime() + 35 * 60000).toISOString();
+  const demoSources: SyncSourceView[] = [
+    { ...sources[0], health: "SYNCING", nextScheduledAt: next, latestTask: { ...task, status: "RUNNING", error: null } },
+    { ...sources[0], id: "catalog-a", resource: "catalog", health: "FRESH", activeRunId: "catalog-published", lastSuccessAt: recent, rowCount: 1234, nextScheduledAt: next, latestTask: null },
+    { ...sources[0], id: "inventory-ca", marketplaceId: "CA", health: "FRESH", activeRunId: "ca-published", lastSuccessAt: recent, rowCount: 622, nextScheduledAt: next, latestTask: null },
+    { ...sources[0], id: "catalog-ca", marketplaceId: "CA", resource: "catalog", health: "NOT_SYNCED", nextScheduledAt: next, latestTask: null },
+    { ...sources[1], marketplaceId: "US", health: "STALE", lastSuccessAt: new Date(now.getTime() - 8 * 3600000).toISOString(), rowCount: 312, nextScheduledAt: next },
+    { ...sources[1], id: "catalog-b", marketplaceId: "US", resource: "catalog", health: "FAILED", activeRunId: null, lastSuccessAt: null, rowCount: 0, nextScheduledAt: next, latestTask: { ...task, error: "在线商品分页校验失败，未发布新快照。" } },
+  ];
+  const bucketMs = 7200000, end = Math.floor(now.getTime() / bucketMs) * bucketMs;
+  const trend = Array.from({ length: 12 }, (_, i) => ({ bucket: new Date(end - (11 - i) * bucketMs).toISOString(), succeeded: [8, 11, 7, 10, 9, 12, 8, 10, 11, 9, 12, 8][i], failed: i === 6 || i === 11 ? 2 : 0, averageDurationMs: 42000, throttles: i === 6 ? 1 : 0, apiRequests: 24 }));
+  await page.route("**/api/operations/sync-center?*", async route => {
+    if (new URL(route.request().url()).searchParams.get("section") !== "overview") return route.fallback();
+    return route.fulfill({ json: { access: { canCreate: true, canEdit: true, canConfigure: true }, sources: demoSources, metrics: { connectedStores: 2, enabledDomains: 2, running: 1, issues: 2, expired: 1, lastSuccessAt: recent }, trend, legacyActive: 0 } });
+  });
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(page.getByRole("img", { name: "最近 24 小时成功与失败任务柱形图" })).toBeVisible();
+  const metrics = page.getByTestId("sync-center-metrics");
+  expect(await metrics.locator(":scope > div").count()).toBe(6);
+  const boxes = await metrics.locator(":scope > div").evaluateAll(items => items.map(el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y }; }));
+  expect(boxes[0].y).toBe(boxes[2].y); expect(boxes[3].y).toBeGreaterThan(boxes[0].y);
+  const panels = page.getByTestId("sync-center-lower-panels").locator(":scope > section");
+  const first = await panels.nth(0).boundingBox(), second = await panels.nth(1).boundingBox();
+  expect(first!.y).toBe(second!.y); expect(second!.x).toBeGreaterThan(first!.x);
+  await page.screenshot({ path: "tmp/amazon-sync-ui-overview.png", fullPage: true });
+  await page.getByRole("button", { name: "配置计划", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "同步计划", exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("plan domain navigation selects real defaults, blocks planned domains and preserves draft actions", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await setup(page);
+  await page.getByRole("button", { name: "同步计划", exact: true }).click();
+  const picker = page.getByRole("navigation", { name: "同步计划数据域", exact: true });
+  await picker.getByRole("button", { name: "在线商品 已接入", exact: true }).click();
+  await page.getByRole("button", { name: "新建计划", exact: true }).click();
+  await expect(page.getByLabel("数据域", { exact: true })).toHaveValue("catalog");
+  await expect(page.getByLabel("周期分钟（15–10080）", { exact: true })).toHaveValue("1440");
+  await picker.getByRole("button", { name: "订单 规划中", exact: true }).click();
+  await expect(page.getByRole("button", { name: "新建计划", exact: true })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "规划中", exact: true })).toBeVisible();
+  await expect(page.getByLabel("计划名称", { exact: true })).toHaveCount(0);
+  await picker.getByRole("button", { name: "FBA 库存 已接入", exact: true }).click();
+  await page.getByRole("button", { name: "新建计划", exact: true }).click();
+  await page.getByLabel("计划名称", { exact: true }).fill("FBA 库存每小时校准");
+  await expect(page.getByLabel("周期分钟（15–10080）", { exact: true })).toHaveValue("60");
+  await page.getByRole("checkbox", { name: "店铺 A / US", exact: true }).check();
+  const planLayout = page.getByTestId("sync-center-plan-layout");
+  const columns = await planLayout.locator(":scope > *").evaluateAll(elements => elements.map(el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y }; }));
+  expect(columns[0].y).toBe(columns[1].y); expect(columns[1].x).toBeGreaterThan(columns[0].x);
+  await page.screenshot({ path: "tmp/amazon-sync-ui-plans.png", fullPage: true });
+  await page.getByRole("button", { name: "保存计划", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "FBA 库存每小时校准", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "同步任务", exact: true }).click();
+  await page.screenshot({ path: "tmp/amazon-sync-ui-tasks.png", fullPage: true });
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.screenshot({ path: "tmp/amazon-sync-ui-connections.png", fullPage: true });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.getByRole("button", { name: "同步计划", exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("quality issues link to the correct task and secondary pages remain usable on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  const { state } = await setup(page);
+  await page.getByRole("button", { name: "数据质量", exact: true }).click();
+  await expect(page.getByRole("columnheader", { name: "建议操作", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "店铺 A US", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "店铺 B CA", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "tmp/amazon-sync-ui-quality.png", fullPage: true });
+  await page.getByRole("button", { name: "查看任务", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "任务 fixture-task", exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("未发布新快照");
+  await expect(page.getByText("FBA 库存 / 手动同步", { exact: true })).toBeVisible();
+  await page.screenshot({ path: "tmp/amazon-sync-ui-task-detail.png", fullPage: true });
+  for (const label of ["数据质量", "同步设置", "店铺与授权"]) {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.getByRole("button", { name: "同步设置", exact: true }).click();
+  await expect(page.getByText("尚无 Worker 心跳，不能据此认定后台在线。", { exact: true })).toBeVisible();
+  state.workerOnline = true;
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(page.getByRole("cell", { name: "fixture-worker", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "心跳在线", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("business pages use one navigation, load only their own data and inventory creates new center tasks", async ({ page }) => {
+  const { calls, businessCalls } = await setup(page);
+  const entries = [["库存浏览", "/api/operations/inventory/snapshots"], ["在线商品", "/api/operations/products"], ["补货计划", "/api/operations/replenishment"], ["PPC 经营指标", "/api/operations/metrics/daily"]];
+  for (const [label, endpoint] of entries) {
+    businessCalls.length = 0;
+    await page.getByRole("navigation", { name: "业务数据导航" }).getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("heading", { name: label, level: 1, exact: true })).toBeVisible();
+    await expect.poll(() => businessCalls.includes(endpoint)).toBe(true);
+    expect(businessCalls.filter(path => path !== endpoint && !(label === "库存浏览" && path.endsWith("/freshness"))), label).toEqual([]);
+    await expect(page.getByRole("navigation", { name: "经营中台分区" })).toHaveCount(0);
+    await expect(page.getByLabel("店铺", { exact: true })).toHaveCount(0);
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.getByRole("button", { name: "库存浏览", exact: true }).click();
+  await page.getByRole("button", { name: "立即同步库存", exact: true }).click();
+  await expect.poll(() => calls.some(c => c.body?.action === "run")).toBe(true);
+  expect(calls.find(c => c.body?.action === "run")?.body?.sourceIds).toEqual(["source-a", "source-b"]);
+  expect(businessCalls).not.toContain("/api/operations/sync-runs");
+});
+
+test("new page URLs restore navigation and disabled center never falls back to the old UI", async ({ page }) => {
+  await setup(page, false, true);
+  await page.getByRole("button", { name: "在线商品", exact: true }).click();
+  await expect(page).toHaveURL(/view=catalog/);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "在线商品", exact: true, level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "同步计划", exact: true }).click();
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "在线商品", exact: true, level: 1 })).toBeVisible();
+  await page.route("**/api/operations/sync-center?*", route => route.fulfill({ status: 409, json: { code: "SYNC_CENTER_DISABLED", error: "当前工作区未启用同步中心。" } }));
+  await page.goto("http://127.0.0.1:43224/?entry=1&legacy=1&tab=inventory");
+  await expect(page.getByRole("alert")).toContainText("当前工作区未启用同步中心");
+  await expect(page.getByRole("navigation", { name: "经营中台分区" })).toHaveCount(0);
+});
+
+test("approval page lists only masked summaries and separates approval from application", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.getByRole("button", { name: "变更审批", exact: true }).click();
+  await expect(page.getByTestId("amazon-change-request")).toContainText("local");
+  await expect(page.getByTestId("amazon-change-request")).toContainText("已配置");
+  await expect(page.getByText("fixture-secret", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "批准", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "应用已批准变更", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "批准", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "已批准；尚未应用。" })).toBeVisible();
+  expect(calls.some(c => c.body?.decision === "APPROVED")).toBe(true);
+  await expect(page.getByRole("button", { name: "应用已批准变更", exact: true })).toBeVisible();
+});
+
+
+test("sales report custom dates are submitted for approval and business filters reach the backend", async ({ page }) => {
+  const { calls, state } = await setup(page);
+  state.salesSources = [{ ...sources[0], id: "sales-source", resource: "sales_traffic", marketplaceId: "ATVPDKIKX0DER" }];
+  await page.getByRole("button", { name: "销售流量日报", exact: true }).click();
+  await expect(page.getByTestId("sales-traffic-workbench")).toBeVisible();
+  await page.getByLabel("报告同步来源").selectOption("sales-source");
+  await page.getByLabel("同步日期", { exact: true }).selectOption("custom");
+  await page.getByLabel("同步开始日期", { exact: true }).fill("2026-11-01");
+  await page.getByLabel("同步结束日期", { exact: true }).fill("2026-11-02");
+  await page.getByRole("button", { name: "申请报告同步", exact: true }).click();
+  await expect.poll(() => calls.some(c => c.body?.action === "run" && c.body.dateFrom === "2026-11-01" && c.body.dateTo === "2026-11-02")).toBe(true);
+  await expect(page.getByText("日期与站点范围已冻结", { exact: false })).toBeVisible();
+  await page.getByLabel("业务开始日期", { exact: true }).fill("2026-11-01");
+  await page.getByLabel("业务结束日期", { exact: true }).fill("2026-11-02");
+  await page.getByLabel("业务日期排序", { exact: true }).selectOption("asc");
+  await page.getByRole("button", { name: "日报下一页", exact: true }).click();
+  await expect.poll(() => calls.some(c => c.section === "sales-traffic" && c.params.get("page") === "2" && c.params.get("from") === "2026-11-01" && c.params.get("to") === "2026-11-02" && c.params.get("direction") === "asc")).toBe(true);
+  await page.getByText("来源与版本", { exact: true }).click();
+  await expect(page.getByText("报告 report-fixture", { exact: false })).toBeVisible();
+});
+test("sales asynchronous export freezes displayed filters/version and downloads through scoped API", async ({ page }) => {
+  const { calls, state } = await setup(page);
+  state.salesSources = [{ ...sources[0], id: "sales-source", resource: "sales_traffic", marketplaceId: "ATVPDKIKX0DER" }];
+  await page.getByRole("button", { name: "销售流量日报", exact: true }).click();
+  await page.getByLabel("业务开始日期", { exact: true }).fill("2026-11-01");
+  await page.getByRole("button", { name: "按当前条件异步导出", exact: true }).click();
+  await expect.poll(() => calls.find(c => c.section === "sales-export" && c.body)?.body).toMatchObject({ asOf: "2026-11-04T02:00:00.000Z", filters: { from: "2026-11-01" } });
+  state.exportStatus = "SUCCEEDED";
+  await page.getByRole("button", { name: "下载 JSONL（含来源与版本）", exact: true }).click();
+  await expect.poll(() => calls.some(c => c.section === "sales-export" && c.params.get("download") === "1")).toBe(true);
+});
+test("sales read-only users can inspect facts while sync and export controls remain disabled", async ({ page }) => {
+  const { state } = await setup(page, true);
+  state.salesSources = [{ ...sources[0], id: "sales-source", resource: "sales_traffic", marketplaceId: "ATVPDKIKX0DER" }];
+  await page.getByRole("button", { name: "销售流量日报", exact: true }).click();
+  await expect(page.getByRole("button", { name: "申请报告同步", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "按当前条件异步导出", exact: true })).toBeDisabled();
+  await expect(page.getByText("20 USD", { exact: true })).toBeVisible();
+});
+
+test("scope grants and revocations submit explicit revisions for approval", async ({ page }) => {
+  const { calls, state } = await setup(page);
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByLabel("成员／角色", { exact: true }).selectOption("member-a");
+  await page.getByLabel("授权 Seller", { exact: true }).selectOption("store-a");
+  await page.getByRole("button", { name: "申请保存授权", exact: true }).click();
+  await expect.poll(() => calls.find(c => c.body?.action === "save-access-grant")?.body).toMatchObject({ userId: "member-a", sellerAccountId: "store-a", revision: 0, enabled: true });
+  state.grants = [{ id: "grant-a", userId: "member-a", sellerAccountId: "store-a", enabled: true, revision: 3 }];
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await page.getByLabel("成员／角色", { exact: true }).selectOption("member-a");
+  await page.getByLabel("授权 Seller", { exact: true }).selectOption("store-a");
+  await expect(page.getByRole("button", { name: "申请保存授权", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "申请撤销范围", exact: true }).click();
+  await expect.poll(() => calls.find(c => c.body?.action === "save-access-grant" && c.body.enabled === false)?.body).toMatchObject({ userId: "member-a", sellerAccountId: "store-a", revision: 3, enabled: false });
 });

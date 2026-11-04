@@ -4,6 +4,8 @@ import { normalizeRolePermissions, normalizeRolePermissionMap } from "@/lib/acco
 import { parseDailyMetricsFilters } from "./read-models";
 import { inventorySnapshotStatus } from "./readiness";
 import { readPpcDataset, suggestPpc, summarizePpc } from "./ppc-read";
+import { amazonPublishedReadScope } from "./amazon-read-scope";
+import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
 
 export class OpsError extends Error {
   constructor(readonly code: string, message: string, readonly exitCode = 2) { super(message); }
@@ -65,16 +67,21 @@ export function unavailableDailyMetrics() {
   return { rows: [], source: "PPC WorkspaceDataset", sourceStatus: "NOT_SYNCED", sourceNote: "PPC 导入缺少可信的日粒度 SKU/ASIN 映射；上传日期不是报表日期。", missingFields: { sales: null, adSpend: null, tacos: null } };
 }
 export async function runOpsCommand(db: Prisma.TransactionClient, identity: OpsIdentity, input: OpsCommand, now = new Date()) {
+  await authorizeOps(db, identity, input);
   const { organizationId, workspaceId } = identity; const scope = { organizationId, workspaceId };
   const { command, options } = input; const page = Number(options.page ?? 1); const take = 50;
   const sku = options.sku ? { sellerSku: { contains: options.sku, mode: "insensitive" as const } } : {};
-  const latest = (resource: string) => db.amazonSyncRun.findFirst({ where: { ...scope, resource, status: "SUCCEEDED" }, orderBy: [{ finishedAt: "desc" }, { id: "desc" }] });
   if (command === "metrics daily") return { ...unavailableDailyMetrics(), filters: parseDailyMetricsFilters(new URLSearchParams(options), now) };
-  if (command === "sync runs") return { page, rows: await db.amazonSyncRun.findMany({ where: { ...scope, ...(options.resource ? { resource: options.resource } : {}), ...(options.status ? { status: options.status } : {}) }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take, skip: (page - 1) * take }) };
+  if (command === "sync runs") {
+    const allowed = sellerAccessWhere(await amazonDataAccess(scope, identity.actorUserId, db));
+    return { page, rows: await db.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, source: { ...scope, ...allowed, seller: { status: "active" } }, ...(options.resource ? { resource: options.resource } : {}), ...(options.status ? { status: options.status } : {}) }, select: { id: true, sourceId: true, resource: true, status: true, startedAt: true, finishedAt: true, processedCount: true }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take, skip: (page - 1) * take }) };
+  }
   if (command.startsWith("ppc ")) {
     const dataset = await readPpcDataset(db, identity);
     return command === "ppc suggest" ? suggestPpc(db, identity, dataset, now) : summarizePpc(dataset, now);
   }
+  const heads = await amazonPublishedReadScope(db, scope, identity.actorUserId);
+  const latest = (resource: string) => db.amazonSyncRun.findFirst({ where: { ...scope, resource, status: "SUCCEEDED", executionVersion: 2, OR: heads.filter(h => h.resource === resource).map(h => ({ id: h.activeRunId!, sourceId: h.id })) }, orderBy: [{ finishedAt: "asc" }, { id: "asc" }] });
   if (command === "freshness") {
     const rows = await Promise.all(["inventory", "catalog", "ads", "orders", "finance", "fulfillment"].map(async (resource) => {
       if (!["inventory", "catalog"].includes(resource)) return { resource, status: "BLOCKED", lastSuccessAt: null, note: resource === "ads" ? "Use ppc report-summary; daily mapping unavailable." : "Executor not implemented." };
@@ -87,10 +94,11 @@ export async function runOpsCommand(db: Prisma.TransactionClient, identity: OpsI
   const resource = command === "catalog list" ? "catalog" : "inventory";
   const run = await latest(resource);
   if (!run) return { rows: [], summary: null, status: "NOT_SYNCED", page };
-  if (resource === "catalog") return { runId: run.id, page, rows: await db.amazonCatalogSnapshot.findMany({ where: { ...scope, sourceRunId: run.id, ...sku }, orderBy: [{ sellerSku: "asc" }, { id: "asc" }], take, skip: (page - 1) * take }) };
-  const where = { ...scope, syncRunId: run.id, ...sku };
-  if (command === "inventory summary") return { runId: run.id, status: inventorySnapshotStatus(run.finishedAt, now), summary: await db.amazonInventorySnapshot.aggregate({ where, _count: { _all: true }, _sum: { fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true, reservedQuantity: true, unfulfillableQuantity: true, researchingQuantity: true } }) };
-  return { runId: run.id, status: inventorySnapshotStatus(run.finishedAt, now), page, rows: await db.amazonInventorySnapshot.findMany({ where, orderBy: [{ sellerSku: "asc" }, { id: "asc" }], take, skip: (page - 1) * take }) };
+  const pairs = heads.filter(h => h.resource === resource);
+  if (resource === "catalog") return { runId: pairs.length === 1 ? run.id : null, page, rows: await db.amazonCatalogSnapshot.findMany({ where: { ...scope, OR: pairs.map(h => ({ sourceRunId: h.activeRunId!, sellerAccountId: h.sellerAccountId, marketplaceId: h.marketplaceId })), ...sku }, orderBy: [{ sellerSku: "asc" }, { id: "asc" }], take, skip: (page - 1) * take }) };
+  const where = { ...scope, OR: pairs.map(h => ({ syncRunId: h.activeRunId!, sellerAccountId: h.sellerAccountId, marketplaceId: h.marketplaceId })), ...sku };
+  if (command === "inventory summary") return { runId: pairs.length === 1 ? run.id : null, status: inventorySnapshotStatus(run.finishedAt, now), summary: await db.amazonInventorySnapshot.aggregate({ where, _count: { _all: true }, _sum: { fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true, reservedQuantity: true, unfulfillableQuantity: true, researchingQuantity: true } }) };
+  return { runId: pairs.length === 1 ? run.id : null, status: inventorySnapshotStatus(run.finishedAt, now), page, rows: await db.amazonInventorySnapshot.findMany({ where, orderBy: [{ sellerSku: "asc" }, { id: "asc" }], take, skip: (page - 1) * take }) };
 }
 export function formatOpsOutput(value: unknown, json: boolean) {
   if (json) return JSON.stringify(value);

@@ -9,6 +9,10 @@ const calls: Array<{ table: string; args: Record<string, unknown> }> = [];
 const readOnlyDb = new Proxy({}, { get: (_, table: string) => new Proxy({}, { get: (_, method: string) => async (args: Record<string, unknown>) => {
   assert.ok(["findFirst", "findMany", "findUnique", "aggregate"].includes(method), `unexpected database mutation: ${method}`);
   calls.push({ table, args });
+  if (table === "organizationMember") return { role: "owner", user: { status: "active" } };
+  if (table === "workspaceScope") return { id: "ws" };
+  if (table === "organizationRosterRole") return [{ id: "owner", permissions: {} }];
+  if (table === "amazonSyncDataSource") return [{ id: "source", activeRunId: "run-1", sellerAccountId: "seller", marketplaceId: "site", resource: "inventory" }, { id: "catalog-source", activeRunId: "catalog-run", sellerAccountId: "seller", marketplaceId: "site", resource: "catalog" }];
   if (table === "workspaceDataset") return null;
   if (table === "amazonSyncRun" && method === "findFirst") return { id: "run-1", finishedAt: new Date("2026-10-24T00:00:00Z") };
   if (method === "aggregate") return { _sum: { fulfillableQuantity: 4 }, _count: { _all: 1 } };
@@ -25,6 +29,7 @@ test("all CLI commands smoke with scoped, read-only local DB calls", async () =>
       assert.ok(output);
       for (const call of calls) {
         const where = call.args.where as Record<string, unknown>;
+        if (call.table === "organizationMember" || call.table === "workspaceScope" || call.table === "organizationRosterRole") continue;
         assert.equal(where.organizationId, "org"); assert.equal(where.workspaceId, "ws");
       }
       assert.doesNotThrow(() => JSON.parse(formatOpsOutput(output, true)));

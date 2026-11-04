@@ -1,16 +1,7 @@
-import { syncCenterEnabled } from "@/lib/amazon-sync/policy";
 import { centerCompatibilityReadiness } from "@/lib/amazon-sync/compatibility";
-import { Prisma } from "@prisma/client";
-import { randomUUID } from "node:crypto";
-import { prisma } from "@/lib/db/prisma";
-import type { CurrentUser } from "@/lib/auth/session";
 import type { WorkspaceScopeInput } from "@/lib/workspace/scope";
-import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
 import { getAmazonSpApiConfigurationStatus } from "@/lib/amazon/sp-api-config";
-import { assertAmazonSpApiScopeCanUse, getAmazonSpApiServerConfigurationForScope, getAmazonSpApiSettings } from "@/lib/amazon/integration-secrets";
-import { enqueueAmazonSyncRun } from "@/lib/queue";
 import { amazonReadDomains, type AmazonMarketplaceParticipation, type AmazonReadDomain, type AmazonSyncResource, type DomainFreshnessSummary, type OperationsConnection, type OperationsInventorySnapshotSummary, type OperationsReadiness, type OperationsSyncRun } from "./types";
-import { getSyncSchedules } from "./schedules";
 
 const amazonProvider = "amazon_sp_api";
 
@@ -46,28 +37,6 @@ function toConnection(row?: {
   };
 }
 
-function toSyncRun(row: {
-  id: string;
-  resource: string;
-  idempotencyKey: string | null;
-  status: string;
-  summary: unknown;
-  error: string | null;
-  startedAt: Date;
-  finishedAt: Date | null;
-}): OperationsSyncRun {
-  return {
-    id: row.id,
-    resource: row.resource === "readiness" || isAmazonReadDomain(row.resource) ? row.resource : "readiness",
-    idempotencyKey: row.idempotencyKey,
-    status: row.status === "QUEUED" || row.status === "RUNNING" || row.status === "SUCCEEDED" || row.status === "FAILED" ? row.status : "BLOCKED",
-    summary: isRecord(row.summary) ? row.summary : null,
-    error: row.error,
-    startedAt: row.startedAt.toISOString(),
-    finishedAt: row.finishedAt?.toISOString() ?? null,
-  };
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -94,56 +63,13 @@ export function buildBlockedAmazonSyncRun(input: {
 }
 
 export async function getOperationsReadiness(input: {
+  actorUserId?: string;
   organizationId: string;
   scope: WorkspaceScopeInput;
 }): Promise<OperationsReadiness> {
-  if (process.env.DATABASE_URL && syncCenterEnabled({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId })) return centerCompatibilityReadiness({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId }, input.scope);
-  const generatedAt = new Date();
-  const base = {
-    scope: input.scope,
-    generatedAt: generatedAt.toISOString(),
-  };
-  const runtimeConfiguration = await getAmazonSpApiSettings({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId });
-
-  if (!process.env.DATABASE_URL) {
-    const inventory = emptyInventorySummary();
-    return { ...base, connection: toConnection(null, runtimeConfiguration), runs: [], inventory, domains: emptyDomainFreshnessSummaries(inventory) };
-  }
-
-  const where = { organizationId: input.organizationId, workspaceId: input.scope.workspaceId };
-  const [connection, runs, latestInventoryRun, domainRuns, schedules] = await Promise.all([
-    prisma.amazonIntegrationConnection.findUnique({
-      where: { organizationId_workspaceId_provider: { ...where, provider: amazonProvider } },
-    }),
-    prisma.amazonSyncRun.findMany({ where, orderBy: { startedAt: "desc" }, take: 20 }),
-    prisma.amazonSyncRun.findFirst({ where: { ...where, resource: "inventory", status: "SUCCEEDED" }, orderBy: { finishedAt: "desc" } }),
-    Promise.all(amazonReadDomains.filter((resource) => resource !== "ads").map(async (resource) => {
-      const latestAttempt = await prisma.amazonSyncRun.findFirst({ where: { ...where, resource }, orderBy: { startedAt: "desc" } });
-      const latestSuccess = resource === "catalog" ? await prisma.amazonSyncRun.findFirst({ where: { ...where, resource, status: "SUCCEEDED" }, orderBy: { finishedAt: "desc" } }) : null;
-      return [resource, { latestAttempt, latestSuccess }] as const;
-    })),
-    getSyncSchedules(input.organizationId, input.scope.workspaceId),
-  ]);
-  const inventory = latestInventoryRun
-    ? await getInventorySummary(latestInventoryRun.id, input.organizationId, input.scope.workspaceId, generatedAt)
-    : emptyInventorySummary();
-  const latestByDomain = new Map(domainRuns);
-  const domains = buildDomainFreshnessSummaries({ inventory, latestByDomain });
-  for (const schedule of schedules) domains[schedule.resource].nextScheduledAt = schedule.nextScheduledAt;
-  const latest = latestByDomain.get("inventory")?.latestAttempt;
-  if (latest?.status === "RUNNING" || latest?.status === "QUEUED") domains.inventory.status = "SYNCING";
-  else if (latest?.status === "FAILED" || latest?.status === "BLOCKED") domains.inventory.status = latest.status;
-  const catalogAttempt = latestByDomain.get("catalog")?.latestAttempt;
-  if (catalogAttempt?.status === "RUNNING" || catalogAttempt?.status === "QUEUED") domains.catalog.status = "SYNCING";
-  if (connection?.status === "DISABLED") { domains.inventory.status = "DISABLED"; domains.catalog.status = "DISABLED"; }
-
-  return {
-    ...base,
-    connection: toConnection(connection, runtimeConfiguration),
-    runs: runs.map(toSyncRun),
-    inventory,
-    domains,
-  };
+  if (process.env.DATABASE_URL) return centerCompatibilityReadiness({ organizationId: input.organizationId, workspaceId: input.scope.workspaceId }, input.scope, input.actorUserId);
+  const inventory = emptyInventorySummary();
+  return { scope: input.scope, generatedAt: new Date().toISOString(), connection: toConnection(null, { configured: false, missingEnvironmentVariables: [], region: "按授权路由" }), runs: [], inventory, domains: emptyDomainFreshnessSummaries(inventory) };
 }
 
 function emptyInventorySummary(): OperationsInventorySnapshotSummary {
@@ -158,44 +84,6 @@ function emptyInventorySummary(): OperationsInventorySnapshotSummary {
     unfulfillableQuantity: 0,
   };
 }
-
-async function getInventorySummary(syncRunId: string, organizationId: string, workspaceId: string, now: Date): Promise<OperationsInventorySnapshotSummary> {
-  const result = await prisma.amazonInventorySnapshot.aggregate({
-    where: { syncRunId, organizationId, workspaceId },
-    _count: { _all: true },
-    _max: { capturedAt: true },
-    _sum: {
-      fulfillableQuantity: true,
-      inboundWorkingQuantity: true,
-      inboundShippedQuantity: true,
-      inboundReceivingQuantity: true,
-      reservedQuantity: true,
-      unfulfillableQuantity: true,
-    },
-  });
-  const sum = result._sum;
-  return {
-    status: inventorySnapshotStatus(result._max.capturedAt, now),
-    syncRunId,
-    capturedAt: result._max.capturedAt?.toISOString() ?? null,
-    snapshotCount: result._count._all,
-    fulfillableQuantity: sum.fulfillableQuantity ?? 0,
-    inboundQuantity: (sum.inboundWorkingQuantity ?? 0) + (sum.inboundShippedQuantity ?? 0) + (sum.inboundReceivingQuantity ?? 0),
-    reservedQuantity: sum.reservedQuantity ?? 0,
-    unfulfillableQuantity: sum.unfulfillableQuantity ?? 0,
-  };
-}
-
-type DomainRunState = {
-  latestAttempt: {
-    id: string;
-    status: string;
-    error: string | null;
-    startedAt: Date;
-    finishedAt: Date | null;
-  } | null;
-  latestSuccess?: { id: string; finishedAt: Date | null } | null;
-};
 
 export function emptyDomainFreshnessSummaries(inventory: OperationsInventorySnapshotSummary): Record<AmazonReadDomain, DomainFreshnessSummary> {
   return Object.fromEntries(amazonReadDomains.map((resource) => [resource, {
@@ -271,6 +159,11 @@ export function buildDomainFreshnessSummaries(input: {
   return summaries;
 }
 
+type DomainRunState = {
+  latestAttempt: { id: string; status: string; error: string | null; startedAt: Date; finishedAt: Date | null } | null;
+  latestSuccess: { id: string; status: string; error: string | null; startedAt: Date; finishedAt: Date | null } | null;
+};
+
 function syncRunStatus(value: string): OperationsSyncRun["status"] {
   return value === "QUEUED" || value === "RUNNING" || value === "SUCCEEDED" || value === "FAILED" ? value : "BLOCKED";
 }
@@ -285,221 +178,8 @@ function configuredInventoryFreshnessMinutes() {
   return Number.isFinite(value) ? Math.min(Math.max(Math.floor(value), 15), 24 * 60) : 360;
 }
 
-export async function requestAmazonSync(input: {
-  user: CurrentUser;
-  scope: WorkspaceScopeInput;
-  resource: AmazonSyncResource;
-  idempotencyKey?: string;
-}): Promise<OperationsSyncRun> {
-  const now = new Date();
-  const id = `amazon-sync-${randomUUID()}`;
-  if (syncCenterEnabled({ organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId })) throw new Error("该范围请在同步中心显式选择店铺／站点数据源。");
-  const idempotencyKey = normalizeSyncIdempotencyKey(input.idempotencyKey);
-  const blocked = buildBlockedAmazonSyncRun({ id, resource: input.resource, now, idempotencyKey });
-
-  if (!process.env.DATABASE_URL) {
-    return blocked;
-  }
-
-  if (idempotencyKey) {
-    const existing = await prisma.amazonSyncRun.findUnique({
-      where: {
-        organizationId_workspaceId_idempotencyKey: {
-          organizationId: input.user.organizationId,
-          workspaceId: input.scope.workspaceId,
-          idempotencyKey,
-        },
-      },
-    });
-    if (existing) {
-      if (existing.resource !== input.resource) {
-        throw new Error("该幂等键已用于其他同步数据域。");
-      }
-      return toSyncRun(existing);
-    }
-  }
-
-  const connection = await prisma.amazonIntegrationConnection.findUnique({
-    where: {
-      organizationId_workspaceId_provider: {
-        organizationId: input.user.organizationId,
-        workspaceId: input.scope.workspaceId,
-        provider: amazonProvider,
-      },
-    },
-  });
-
-  if (connection?.status === "CONFIGURED" && (input.resource === "inventory" || input.resource === "catalog") && process.env.QUEUE_DRIVER === "redis") {
-    try {
-      await assertAmazonSpApiScopeCanUse({ organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId });
-    } catch (error) {
-      return await createBlockedRun({
-        ...input,
-        id,
-        now,
-        idempotencyKey,
-        reason: error instanceof Error ? error.message : "当前作用域未获准使用 Amazon 连接。",
-      });
-    }
-    return createQueuedRun({ ...input, resource: input.resource, id, now, idempotencyKey });
-  }
-  if (connection?.status === "CONFIGURED" && (input.resource === "inventory" || input.resource === "catalog")) {
-    return await createBlockedRun({ ...input, id, now, idempotencyKey, reason: "Amazon 商品/库存同步需要 Redis Worker。当前未启用 QUEUE_DRIVER=redis，未向 Amazon 发起同步请求。" });
-  }
-  if (connection?.status === "CONFIGURED") {
-    return await createBlockedRun({ ...input, id, now, idempotencyKey, reason: "所选 Amazon 同步执行器尚未启用，未向 Amazon 发起同步请求。" });
-  }
-
-  return await createBlockedRun({ ...input, id, now, idempotencyKey, reason: blocked.error ?? undefined });
-}
-
-async function createQueuedRun(input: {
-  user: CurrentUser;
-  scope: WorkspaceScopeInput;
-  resource: "inventory" | "catalog";
-  id: string;
-  now: Date;
-  idempotencyKey?: string;
-}): Promise<OperationsSyncRun> {
-  const row = await prisma.$transaction(async (tx) => {
-    const key = JSON.stringify(["enqueue", input.user.organizationId, input.scope.workspaceId, input.resource]);
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
-    if (input.idempotencyKey) {
-      const prior = await tx.amazonSyncRun.findUnique({ where: { organizationId_workspaceId_idempotencyKey: {
-        organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId, idempotencyKey: input.idempotencyKey,
-      } } });
-      if (prior) {
-        if (prior.resource !== input.resource) throw new Error("该幂等键已用于其他同步数据域。");
-        return prior;
-      }
-    }
-    const active = await tx.amazonSyncRun.findFirst({ where: {
-      organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId,
-      resource: input.resource, status: { in: ["QUEUED", "RUNNING"] },
-    } });
-    if (active) return active;
-    return tx.amazonSyncRun.create({
-    data: {
-      id: input.id,
-      organizationId: input.user.organizationId,
-      workspaceId: input.scope.workspaceId,
-      requestedByUserId: input.user.id,
-      resource: input.resource,
-      idempotencyKey: input.idempotencyKey,
-      status: "QUEUED",
-      summary: { provider: amazonProvider, externalRequestAttempted: false, queue: "amazon-sync-jobs" },
-      startedAt: input.now,
-    },
-    });
-  });
-  if (row.status !== "QUEUED") return toSyncRun(row);
-  try {
-    await enqueueAmazonSyncRun(row.id);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Amazon 同步任务入队失败。";
-    const blocked = await prisma.amazonSyncRun.update({ where: { id: row.id }, data: { status: "BLOCKED", error: message, finishedAt: new Date() } });
-    return toSyncRun(blocked);
-  }
-  return toSyncRun(row);
-}
-
-export async function validateAmazonConnection(input: {
-  user: CurrentUser;
-  scope: WorkspaceScopeInput;
-}): Promise<{ connection: OperationsConnection; run: OperationsSyncRun }> {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("数据库未配置，无法记录服务端配置验证结果。");
-  }
-
-  const scopeIdentity = { organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId };
-  const configuration = await getAmazonSpApiSettings(scopeIdentity);
-  if (!configuration.configured) throw new Error(configuration.configurationError || `Amazon SP-API 尚未配置：${configuration.missingEnvironmentVariables.join("、")}`);
-  await assertAmazonSpApiScopeCanUse(scopeIdentity);
-  const serverConfiguration = await getAmazonSpApiServerConfigurationForScope(scopeIdentity);
-
-  const now = new Date();
-  const connectionId = `amazon-connection-${input.user.organizationId}-${input.scope.workspaceId}-${amazonProvider}`;
-  const runId = `amazon-sync-${randomUUID()}`;
-  const scope = { organizationId: input.user.organizationId, workspaceId: input.scope.workspaceId, provider: amazonProvider };
-  try {
-    const response = await new AmazonSpApiClient(serverConfiguration).getMarketplaceParticipations();
-    const marketplaceParticipations = extractMarketplaceParticipations(response);
-    const marketplaceCount = marketplaceParticipations.length;
-    const [connection, run] = await prisma.$transaction([
-      prisma.amazonIntegrationConnection.upsert({
-        where: { organizationId_workspaceId_provider: scope },
-        create: {
-          id: connectionId,
-          ...scope,
-          status: "CONFIGURED",
-          enabledDomains: [],
-          marketplaceParticipations,
-          statusMessage: `Amazon 连接已验证；发现 ${marketplaceCount} 个可访问站点。数据同步尚未启用。`,
-          lastValidatedAt: now,
-        },
-        update: {
-          status: "CONFIGURED",
-          marketplaceParticipations,
-          statusMessage: `Amazon 连接已验证；发现 ${marketplaceCount} 个可访问站点。数据同步尚未启用。`,
-          lastValidatedAt: now,
-        },
-      }),
-      prisma.amazonSyncRun.create({
-        data: {
-          id: runId,
-          organizationId: input.user.organizationId,
-          workspaceId: input.scope.workspaceId,
-          requestedByUserId: input.user.id,
-          resource: "readiness",
-          status: "SUCCEEDED",
-          summary: {
-            kind: "connection_validation",
-            externalRequestAttempted: true,
-            provider: amazonProvider,
-            region: configuration.region,
-            endpointHost: new URL(serverConfiguration.endpoint).host,
-            marketplaceCount,
-          },
-          startedAt: now,
-          finishedAt: new Date(),
-        },
-      }),
-    ]);
-    return { connection: toConnection(connection, configuration), run: toSyncRun(run) };
-  } catch (error) {
-    const message = error instanceof AmazonSpApiError ? error.message : "Amazon SP-API 连接校验失败。";
-    const [connection, run] = await prisma.$transaction([
-      prisma.amazonIntegrationConnection.upsert({
-        where: { organizationId_workspaceId_provider: scope },
-        create: {
-          id: connectionId,
-          ...scope,
-          status: "ERROR",
-          enabledDomains: [],
-          marketplaceParticipations: [],
-          statusMessage: message,
-          lastValidatedAt: now,
-        },
-        update: { status: "ERROR", statusMessage: message, lastValidatedAt: now },
-      }),
-      prisma.amazonSyncRun.create({
-        data: {
-          id: runId,
-          organizationId: input.user.organizationId,
-          workspaceId: input.scope.workspaceId,
-          requestedByUserId: input.user.id,
-          resource: "readiness",
-          status: "FAILED",
-          summary: { kind: "connection_validation", externalRequestAttempted: true, provider: amazonProvider },
-          error: message,
-          startedAt: now,
-          finishedAt: new Date(),
-        },
-      }),
-    ]);
-    return { connection: toConnection(connection, configuration), run: toSyncRun(run) };
-  }
-}
+export async function requestAmazonSync(...args: unknown[]): Promise<never> { void args; throw new Error("旧同步入口已退役，请创建执行审批。"); }
+export async function validateAmazonConnection(...args: unknown[]): Promise<never> { void args; throw new Error("旧验证入口已退役，请创建执行审批。"); }
 
 export function extractMarketplaceParticipations(value: unknown): AmazonMarketplaceParticipation[] {
   if (!isRecord(value) || !Array.isArray(value.payload)) return [];
@@ -527,35 +207,6 @@ function parseMarketplaceParticipations(value: unknown): AmazonMarketplacePartic
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 200) : "";
-}
-
-async function createBlockedRun(input: {
-  user: CurrentUser;
-  scope: WorkspaceScopeInput;
-  resource: AmazonSyncResource;
-  id: string;
-  now: Date;
-  idempotencyKey?: string;
-  reason?: string;
-}): Promise<OperationsSyncRun> {
-  const run = buildBlockedAmazonSyncRun({ id: input.id, resource: input.resource, now: input.now, reason: input.reason, idempotencyKey: input.idempotencyKey });
-  await prisma.amazonSyncRun.create({
-    data: {
-      id: run.id,
-      organizationId: input.user.organizationId,
-      workspaceId: input.scope.workspaceId,
-      requestedByUserId: input.user.id,
-      resource: run.resource,
-      idempotencyKey: run.idempotencyKey,
-      status: run.status,
-      summary: run.summary as Prisma.InputJsonValue,
-      error: run.error,
-      startedAt: input.now,
-      finishedAt: input.now,
-    },
-  });
-
-  return run;
 }
 
 export function normalizeSyncIdempotencyKey(value: unknown): string | undefined {

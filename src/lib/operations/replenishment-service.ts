@@ -5,6 +5,8 @@ import { readAmazonProductsForSkus } from "./amazon-products";
 import { calculateReplenishment, parseReplenishmentInputs } from "./replenishment";
 import { extractHistoricalSales } from "./historical-sales";
 import { inventorySnapshotStatus } from "./readiness";
+import { assertReplenishmentAccess } from "./replenishment-access";
+import { SyncInputError } from "@/lib/amazon-sync/policy";
 
 /** Daily/changed-policy calculations run in the dedicated worker, never on page reads. */
 export async function refreshDueReplenishmentPlans(now = new Date()) {
@@ -21,6 +23,7 @@ export async function refreshDueReplenishmentPlans(now = new Date()) {
     try {
       if (!policy.sellerSku.trim()) throw new Error("缺少精确 MSKU。");
       const inputs = parseReplenishmentInputs(policy.inputs);
+      await assertReplenishmentAccess(prisma, policy, policy.updatedByUserId, policy.sellerAccountId, policy.marketplaceId, inputs.historicalSource?.storeId);
       let inventorySource: "sellfox_inventory_current" | "AmazonInventorySnapshot" = "AmazonInventorySnapshot";
       let inventory: { available: number | null; inbound: number | null; freshness: string; inventoryRunId: string | null;
         storeId?: string; shopExternalId?: string; msku?: string; capturedAt?: string | null } | undefined;
@@ -51,7 +54,7 @@ export async function refreshDueReplenishmentPlans(now = new Date()) {
           freshness: inventorySnapshotStatus(stock[0]?.capturedAt ?? null, now), inventoryRunId: null,
           storeId: store.id, shopExternalId: store.externalId, msku: policy.sellerSku, capturedAt: stock[0]?.capturedAt?.toISOString() ?? null };
       } else {
-        const rows = await readAmazonProductsForSkus(policy.organizationId, policy.workspaceId, [policy.sellerSku]);
+        const rows = await readAmazonProductsForSkus(policy.organizationId, policy.workspaceId, [policy.sellerSku], policy.updatedByUserId, { sellerAccountId: policy.sellerAccountId, marketplaceId: policy.marketplaceId });
         inventory = rows.find((row) => row.sellerAccountId === policy.sellerAccountId && row.marketplaceId === policy.marketplaceId);
       }
       const result = calculateReplenishment(inputs, { available: inventory?.available ?? null, inbound: inventory?.inbound ?? null, fresh: inventory?.freshness === "FRESH" }, today);
@@ -63,17 +66,27 @@ export async function refreshDueReplenishmentPlans(now = new Date()) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${policy.id}, 1))`;
         const current = await tx.amazonReplenishmentPolicy.findUnique({ where: { id: policy.id } });
         if (!current?.enabled || current.updatedAt.getTime() !== policy.updatedAt.getTime()) return;
+        await assertReplenishmentAccess(tx, current, current.updatedByUserId, current.sellerAccountId, current.marketplaceId, inputs.historicalSource?.storeId);
         const existing = await tx.amazonReplenishmentPlan.findUnique({ where: { policyId: policy.id }, select: { generatedAt: true, policyUpdatedAt: true } });
         if (existing?.policyUpdatedAt.getTime() === policy.updatedAt.getTime() && existing.generatedAt.getTime() >= now.getTime()) return;
         await tx.amazonReplenishmentPlan.upsert({ where: { policyId: policy.id }, create: { id: randomUUID(), policyId: policy.id, ...data }, update: data });
       });
-    } catch {
+    } catch (error) {
+      // Revocation must not publish a new result, even a failure containing old inputs.
+      if (error instanceof SyncInputError && error.status === 403) continue;
+      try {
+        const inputs = parseReplenishmentInputs(policy.inputs);
+        await assertReplenishmentAccess(prisma, policy, policy.updatedByUserId, policy.sellerAccountId, policy.marketplaceId, inputs.historicalSource?.storeId);
+      } catch { continue; }
       const failure = { version: "1", inventorySource: null, status: "NEEDS_DATA", lifecycle: typeof policy.inputs === "object" && policy.inputs !== null && !Array.isArray(policy.inputs) && policy.inputs.lifecycle === "NEW" ? "NEW" : "MATURE", dailyDemand: null, daysOfCover: null, estimatedStockoutDate: null, suggestedQuantity: null, suggestedOrderDate: null, urgency: "UNKNOWN", reasons: ["补货计算失败，请检查参数、数据库及库存快照。"], missingInputs: ["可用计算输入"] };
       const failureData = { organizationId: policy.organizationId, workspaceId: policy.workspaceId, sellerAccountId: policy.sellerAccountId, marketplaceId: policy.marketplaceId, sellerSku: policy.sellerSku, policyUpdatedAt: policy.updatedAt, inventoryRunId: null, inputSnapshot: { inputs: policy.inputs, inventory: null, inventorySource: null } as Prisma.InputJsonValue, lastError: "补货计算失败，请检查参数、数据库及库存快照。", result: failure, generatedAt: now, nextCalculationAt: new Date(now.getTime() + 30 * 60_000) };
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${policy.id}, 1))`;
         const current = await tx.amazonReplenishmentPolicy.findUnique({ where: { id: policy.id } });
         if (!current?.enabled || current.updatedAt.getTime() !== policy.updatedAt.getTime()) return;
+        try {
+          await assertReplenishmentAccess(tx, current, current.updatedByUserId, current.sellerAccountId, current.marketplaceId, parseReplenishmentInputs(current.inputs).historicalSource?.storeId);
+        } catch { return; }
         const existing = await tx.amazonReplenishmentPlan.findUnique({ where: { policyId: policy.id }, select: { generatedAt: true, policyUpdatedAt: true } });
         if (existing?.policyUpdatedAt.getTime() === policy.updatedAt.getTime() && existing.generatedAt.getTime() >= now.getTime()) return;
         await tx.amazonReplenishmentPlan.upsert({ where: { policyId: policy.id }, create: { id: randomUUID(), policyId: policy.id, ...failureData }, update: failureData });

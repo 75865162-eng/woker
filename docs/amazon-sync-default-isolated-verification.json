@@ -1,0 +1,96 @@
+{
+  "date": "2026-11-05",
+  "timeZone": "Asia/Shanghai",
+  "authorization": "Explicit user approval for default isolated integration and same-scope fixes/reruns",
+  "command": "node scripts/test-amazon-sync-integration.mjs",
+  "exitCode": 0,
+  "environment": "Disposable localhost PostgreSQL 16 (1 CPU/512 MiB), Redis 7 (0.5 CPU/128 MiB), fixture users/credentials, local Chromium and HTTP server",
+  "migrationsApplied": [
+    "20261104000000_amazon_sync_center_phase1",
+    "20261104010000_amazon_authorization_validation_state",
+    "20261104020000_amazon_data_center_change_requests",
+    "20261104030000_amazon_sales_traffic_snapshots"
+  ],
+  "testsPassed": 16,
+  "testsFailed": 0,
+  "testProcessDurationMs": 23716.70875,
+  "coverage": [
+    "DB constraints enforce tenant authorization/store isolation and one active task",
+    "complete empty scope publishes a fresh zero-row manifest and preserves the other marketplace",
+    "pagination failure retains old head, safe checkpoint, retry and deduplication",
+    "cancel/pause controls persist and a queued stale generation cannot execute",
+    "per-scope checkpoints survive worker interruption and stale publisher is fenced",
+    "invalid page/loop and revoked domain prevent publication; manual retry restarts snapshot",
+    "approved policies cannot auto-run; explicit execution and Redis loss retain dispatch intent",
+    "approval cannot be replayed or bypassed and task ownership is checked",
+    "listing adapter rejects malformed pagination and publishes only a validated catalog",
+    "looping pagination and authorization revision changes cannot advance a published head",
+    "bounded 1k/5k/10k fixture snapshots and page reads record capacity evidence",
+    "a real BullMQ worker consumes persisted dispatch and publishes only after processing",
+    "authenticated API to real queue/worker to seller-bound snapshot completes with credential rotation",
+    "real browser creates authorization, runs a queued task, retries failure and reads its snapshot",
+    "sources and plans can be stopped after authorization becomes unavailable",
+    "retention remains approval-only and cannot silently delete historical or published data"
+  ],
+  "capacity": {
+    "environment": "disposable localhost PostgreSQL 16 (1 CPU/512 MiB) + Redis 7; mocked Amazon; no browser/network production SLA",
+    "capturedAt": "2026-11-04T16:26:53.316Z",
+    "evidence": [
+      {
+        "rows": 1000,
+        "taskDurationMs": 294.5638340000005,
+        "slices": 1,
+        "sliceMs": [
+          252.9503340000001
+        ],
+        "readSamples": 40,
+        "readP50Ms": 0.9957500000000437,
+        "readP95Ms": 1.200207999999293,
+        "readP99Ms": 1.3293750000002547,
+        "rssBytes": 472449024
+      },
+      {
+        "rows": 5000,
+        "taskDurationMs": 4456.470041,
+        "slices": 1,
+        "sliceMs": [
+          4371.425125
+        ],
+        "readSamples": 40,
+        "readP50Ms": 2.1063340000000608,
+        "readP95Ms": 2.353291999999783,
+        "readP99Ms": 2.414415999999619,
+        "rssBytes": 502185984
+      },
+      {
+        "rows": 10000,
+        "taskDurationMs": 8993.998292,
+        "slices": 2,
+        "sliceMs": [
+          4420.787791999999,
+          4434.940875
+        ],
+        "readSamples": 40,
+        "readP50Ms": 3.385374999998021,
+        "readP95Ms": 3.9989170000008016,
+        "readP99Ms": 4.128791999999521,
+        "rssBytes": 532135936
+      }
+    ]
+  },
+  "cleanup": {
+    "fixtureContainersRemaining": 0,
+    "temporaryDirectoryRemoved": true
+  },
+  "realAmazonRequests": 0,
+  "existingDatabasesModified": false,
+  "productionWorkerStarted": false,
+  "pushedOrDeployed": false,
+  "limitations": [
+    "Mock Amazon transport only",
+    "Fixture SQL page-read samples are not production Product Center or end-user P95/P99",
+    "No real Seller authorization or report acceptance",
+    "No production systemd/R2/S3 validation",
+    "No production build or deployment"
+  ]
+}

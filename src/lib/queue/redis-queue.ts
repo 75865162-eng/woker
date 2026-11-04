@@ -1,9 +1,17 @@
 import { Queue } from "bullmq";
+import { createHash } from "node:crypto";
+import { amazonWorkerPolicy } from "@/lib/amazon-sync/worker-policy";
 
 export const importJobQueueName = "import-jobs";
 export const imageUpscaleJobQueueName = "image-upscale-jobs";
 export const productOutboxQueueName = "product-outbox-jobs";
-export const amazonSyncQueueName = "amazon-sync-jobs";
+export const amazonSyncQueueName = "amazon-data-center-jobs";
+export function getAmazonSyncQueueName() {
+  const policy = amazonWorkerPolicy();
+  if (policy.mode === "standard") return amazonSyncQueueName;
+  const suffix = createHash("sha256").update(JSON.stringify([[...policy.taskIds!].sort(), [...policy.exportIds!].sort()])).digest("hex").slice(0, 16);
+  return `${amazonSyncQueueName}-controlled-${suffix}`;
+}
 export const sellfoxSyncQueueName = "sellfox-sync-jobs";
 
 export function createRedisConnectionOptions() {
@@ -18,7 +26,7 @@ export function createRedisConnectionOptions() {
 let importJobQueue: Queue<{ jobId: string }> | undefined;
 let imageUpscaleJobQueue: Queue<{ jobId: string }> | undefined;
 let productOutboxQueue: Queue<{ eventId: string }> | undefined;
-let amazonSyncQueue: Queue<{ runId: string; dispatchVersion?: number }> | undefined;
+let amazonSyncQueue: Queue<{ runId: string; dispatchVersion?: number; exportId?: string; fence?: number }> | undefined;
 let sellfoxSyncQueue: Queue<{ runId: string }> | undefined;
 
 export function getImportJobQueue() {
@@ -46,7 +54,7 @@ export function getProductOutboxQueue() {
 }
 
 export function getAmazonSyncQueue() {
-  amazonSyncQueue ??= new Queue<{ runId: string; dispatchVersion?: number }>(amazonSyncQueueName, {
+  amazonSyncQueue ??= new Queue<{ runId: string; dispatchVersion?: number; exportId?: string; fence?: number }>(getAmazonSyncQueueName(), {
     connection: createRedisConnectionOptions(),
   });
   return amazonSyncQueue;

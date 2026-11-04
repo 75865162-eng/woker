@@ -4,7 +4,7 @@ import { syncCenterEnabled, parseSyncPlan, officialEndpoint, retryDelay, SyncInp
 import { encryptCheckpoint, decryptCheckpoint } from "@/lib/amazon-sync/checkpoint";
 import { encryptAmazonSpApiCredentials, decryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
 import { inventoryPublishedWhere, catalogPublishedWhere, taskSummary, taskFilters, sourceHealth } from "@/lib/amazon-sync/read";
-import { validateInventoryPage, classifySyncFailure, sourceTimestamp } from "@/lib/amazon-sync/processor";
+import { validateInventoryPage, validateCatalogCompletion, classifySyncFailure, sourceTimestamp } from "@/lib/amazon-sync/processor";
 import { AmazonSpApiError, readRetryAfter } from "@/lib/amazon/sp-api-client";
 const scope = { organizationId: "org", workspaceId: "ws" };
 test("sync center defaults off and requires an exact organization/workspace pair", () => {
@@ -68,4 +68,42 @@ test("official source update timestamps remain distinct from synchronization tim
   assert.equal(sourceTimestamp("2026-11-01T00:00:00Z")?.toISOString(), "2026-11-01T00:00:00.000Z");
   assert.equal(sourceTimestamp(undefined), null);
   assert.throws(() => sourceTimestamp("not-a-date"));
+});
+
+test("LWA invalid grant classification blocks automatic retries", () => {
+  const failure = classifySyncFailure(new AmazonSpApiError("sensitive upstream", { status: 400, authorizationRejected: true }));
+  assert.equal(failure.code, "AUTH"); assert.equal(failure.retryable, false); assert.ok(!failure.message.includes("sensitive upstream"));
+});
+
+test("Listings reported totals cannot be published as a truncated complete snapshot", () => {
+  assert.throws(() => validateCatalogCompletion({ numberOfResults: 1500 }, 1000, false), /未覆盖/);
+  assert.doesNotThrow(() => validateCatalogCompletion({ numberOfResults: 25 }, 20, true));
+  assert.doesNotThrow(() => validateCatalogCompletion({ numberOfResults: 25 }, 25, false));
+  assert.doesNotThrow(() => validateCatalogCompletion({ numberOfResults: 0 }, 0, false));
+  assert.throws(() => validateCatalogCompletion({ numberOfResults: "25" }, 25, false), /总数无效/);
+});
+
+test("conflicting duplicates and malformed duplicate quantities cannot publish as a complete snapshot", async () => {
+  const { assertConsistentSnapshotRows, validateCatalogPage } = await import("@/lib/amazon-sync/processor");
+  const details = { fulfillableQuantity: 1, inboundWorkingQuantity: 0, inboundShippedQuantity: 0, inboundReceivingQuantity: 0, reservedQuantity: 0, unfulfillableQuantity: 0, researchingQuantity: 0 };
+  const item = { sellerSku: "SKU", condition: "NewItem", inventoryDetails: details };
+  assert.equal(validateInventoryPage({ inventorySummaries: [item, item] }).rows.length, 1);
+  assert.throws(() => validateInventoryPage({ inventorySummaries: [item, { ...item, inventoryDetails: { ...details, fulfillableQuantity: 99 } }] }), /冲突/);
+  assert.throws(() => validateInventoryPage({ inventorySummaries: [item, { ...item, inventoryDetails: {} }] }), /不能补零/);
+  assert.throws(() => validateInventoryPage({ inventorySummaries: [{ ...item, sellerSku: "x".repeat(501) }] }), /截断/);
+  const staged = { sellerSku: "SKU", condition: "NewItem", ...details, sourceUpdatedAt: new Date("2026-11-01T00:00:00Z") };
+  assert.doesNotThrow(() => assertConsistentSnapshotRows([staged, { ...staged, capturedAt: new Date() }], "inventory"));
+  assert.throws(() => assertConsistentSnapshotRows([staged, { ...staged, fulfillableQuantity: 2 }], "inventory"), /冲突/);
+  assert.throws(() => validateCatalogPage({ items: [{ sku: "SKU", summaries: [{ marketplaceId: "OTHER" }] }] }, "US"), /站点摘要/);
+  assert.throws(() => validateCatalogPage({ items: [{ sku: "SKU", summaries: [{ marketplaceId: "US", status: [1] }] }] }, "US"), /状态/);
+});
+
+test("snapshot SKU/ASIN and explicit observation date filters are database predicates", async () => {
+  const { snapshotRowFilters } = await import("@/lib/amazon-sync/snapshot-query");
+  const filters = snapshotRowFilters(new URLSearchParams({ sku: "SKU", asin: "B0", from: "2026-11-01", to: "2026-11-02", dateField: "sourceUpdatedAt" }));
+  assert.deepEqual(filters.sellerSku, { contains: "SKU", mode: "insensitive" });
+  assert.equal((filters.sourceUpdatedAt as { lt: Date }).lt.toISOString(), "2026-11-03T00:00:00.000Z");
+  assert.throws(() => snapshotRowFilters(new URLSearchParams({ dateField: "orderDate" })));
+  assert.throws(() => snapshotRowFilters(new URLSearchParams({ from: "2026-02-30" })));
+  for (const pagination of [null, false, [], ""]) assert.throws(() => validateInventoryPage({ inventorySummaries: [], pagination }));
 });

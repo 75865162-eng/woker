@@ -1,25 +1,26 @@
+import { amazonWorkerPolicy, workerAllows } from "@/lib/amazon-sync/worker-policy";
 import "dotenv/config";
-import { maintainSyncCenter } from "@/lib/amazon-sync/maintenance";
+import { processSalesExport } from "@/lib/amazon-sync/exports";
 import { tickSyncCenter } from "@/lib/amazon-sync/scheduler";
 import { processSyncCenterTask } from "@/lib/amazon-sync/processor";
 import { Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
-import { enqueueAmazonSyncRun } from "@/lib/queue";
-import { createRedisConnectionOptions, amazonSyncQueueName } from "@/lib/queue/redis-queue";
+import { createRedisConnectionOptions, getAmazonSyncQueueName } from "@/lib/queue/redis-queue";
 import { prisma } from "@/lib/db/prisma";
 import { refreshDueReplenishmentPlans } from "@/lib/operations/replenishment-service";
-import { enqueueDueAmazonSchedules } from "@/lib/operations/schedules";
-import { enqueuePendingAmazonSyncRuns, processAmazonSyncRun, recoverStaleAmazonSyncRuns } from "@/lib/operations/sync-processor";
 
+const policy = amazonWorkerPolicy();
+const amazonSyncQueueName = getAmazonSyncQueueName();
 const configuredConcurrency = Number(process.env.AMAZON_SYNC_WORKER_CONCURRENCY ?? 1);
 const concurrency = Number.isFinite(configuredConcurrency) ? Math.max(1, Math.min(Math.floor(configuredConcurrency), 2)) : 1;
 const workerName = process.env.AMAZON_SYNC_WORKER_NAME?.trim() || `${amazonSyncQueueName}-${process.pid}`;
 const workerId = process.env.AMAZON_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
-const worker = new Worker<{ runId: string; dispatchVersion?: number }>(
+const worker = new Worker<{ runId: string; dispatchVersion?: number; exportId?: string; fence?: number }>(
   amazonSyncQueueName,
   async (job) => {
-    if (job.data.dispatchVersion !== undefined) { await processSyncCenterTask(job.data.runId, job.data.dispatchVersion); return; }
-    await processAmazonSyncRun(job.data.runId, { isFinalAttempt: job.attemptsMade >= (job.opts.attempts ?? 1) - 1 });
+    if (job.name === "export-amazon-sales" && job.data.exportId && Number.isInteger(job.data.fence)) { if (workerAllows(policy, "export", job.data.exportId)) await processSalesExport(job.data.exportId, job.data.fence!); return; }
+    if (!Number.isInteger(job.data.dispatchVersion)) throw new Error("Legacy/unversioned jobs are rejected.");
+    if (workerAllows(policy, "task", job.data.runId)) await processSyncCenterTask(job.data.runId, job.data.dispatchVersion!);
   },
   { connection: createRedisConnectionOptions(), concurrency },
 );
@@ -29,13 +30,8 @@ async function recoverQueuedRuns() {
   if (recovering) return;
   recovering = true;
   try {
-    await tickSyncCenter();
-    await maintainSyncCenter();
-    await enqueueDueAmazonSchedules();
-    await recoverStaleAmazonSyncRuns();
-    const runIds = await enqueuePendingAmazonSyncRuns();
-    await Promise.all(runIds.map((runId) => enqueueAmazonSyncRun(runId)));
-    await refreshDueReplenishmentPlans();
+    await tickSyncCenter(new Date(), policy.mode === "approved-only" ? { taskIds: policy.taskIds!, exportIds: policy.exportIds! } : undefined);
+    if (policy.runReplenishment) await refreshDueReplenishmentPlans();
   } finally { recovering = false; }
 }
 
@@ -50,13 +46,13 @@ async function writeHeartbeat(status: "online" | "stopping" = "online") {
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue,
+      metadata: { pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
     },
     update: {
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue,
+      metadata: { pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
     },
   });
 }

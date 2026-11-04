@@ -1,7 +1,8 @@
+import { auditAmazonDataRead } from "../src/lib/amazon-sync/read-audit";
 import { loadEnvConfig } from "@next/env";
 import { prisma } from "../src/lib/db/prisma";
 import { PpcReadError } from "../src/lib/operations/ppc-read";
-import { OpsError, opsHelp, parseOpsArgs, opsIdentity, authorizeOps, runOpsCommand, formatOpsOutput } from "../src/lib/operations/cli";
+import { OpsError, opsHelp, parseOpsArgs, opsIdentity, runOpsCommand, formatOpsOutput } from "../src/lib/operations/cli";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -13,9 +14,9 @@ async function main() {
   if (!process.env.DATABASE_URL) throw new OpsError("DATABASE_REQUIRED", "DATABASE_URL is required.", 4);
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-    await authorizeOps(tx, identity, input);
     return runOpsCommand(tx, identity, input);
   }, { timeout: 30000, isolationLevel: "RepeatableRead" });
+  await auditAmazonDataRead(identity, identity.actorUserId, `cli:${input.command}`);
   console.log(formatOpsOutput(result, input.json));
 }
 main().catch((error: unknown) => {

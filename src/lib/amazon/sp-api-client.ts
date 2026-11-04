@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { gunzipSync } from "node:zlib";
 import type { AmazonSpApiServerConfiguration } from "./sp-api-config";
 
 const lwaTokenUrl = "https://api.amazon.com/auth/o2/token";
@@ -20,13 +21,15 @@ export class AmazonSpApiError extends Error {
   readonly status: number | null;
   readonly retryable: boolean;
   readonly retryAfterMs: number;
+  readonly authorizationRejected: boolean;
 
-  constructor(message: string, options: { status?: number | null; retryable?: boolean; retryAfterMs?: number } = {}) {
+  constructor(message: string, options: { status?: number | null; retryable?: boolean; retryAfterMs?: number; authorizationRejected?: boolean } = {}) {
     super(message);
     this.name = "AmazonSpApiError";
     this.status = options.status ?? null;
     this.retryable = options.retryable ?? false;
     this.retryAfterMs = options.retryAfterMs ?? 0;
+    this.authorizationRejected = options.authorizationRejected ?? (this.status === 401 || this.status === 403);
   }
 }
 
@@ -68,6 +71,46 @@ export class AmazonSpApiClient {
     return this.request("GET", `/fba/inventory/v1/summaries?${query.toString()}`);
   }
 
+  async createSalesTrafficReport(input: { marketplaceId: string; startAt: string; endExclusive: string; reportEndAt?: string }): Promise<unknown> {
+    return this.request("POST", "/reports/2021-06-30/reports", {
+      reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [input.marketplaceId],
+      dataStartTime: input.startAt, dataEndTime: input.reportEndAt ?? new Date(Date.parse(input.endExclusive) - 1000).toISOString(),
+      reportOptions: { dateGranularity: "DAY", asinGranularity: "CHILD" },
+    });
+  }
+  async getReport(reportId: string): Promise<unknown> {
+    return this.request("GET", `/reports/2021-06-30/reports/${encodeURIComponent(reportId)}`);
+  }
+  async getReportDocument(documentId: string): Promise<unknown> {
+    return this.request("GET", `/reports/2021-06-30/documents/${encodeURIComponent(documentId)}`);
+  }
+  /** Presigned S3 downloads never receive LWA/AWS headers and never follow redirects. */
+  async downloadReportDocument(value: unknown): Promise<unknown> {
+    const document = value as { url?: unknown; compressionAlgorithm?: unknown } | null;
+    if (!document || typeof document.url !== "string") throw new AmazonSpApiError("报告下载地址缺失。");
+    const url = new URL(document.url);
+    if (url.protocol !== "https:" || url.port || url.username || url.password || url.hash || !/^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(url.hostname)) throw new AmazonSpApiError("报告下载地址不在允许的 S3 HTTPS 范围。");
+    if (document.compressionAlgorithm !== undefined && document.compressionAlgorithm !== "GZIP") throw new AmazonSpApiError("报告压缩格式不支持。");
+    const limit = 16 * 1024 * 1024;
+    try {
+      const response = await this.fetcher(url.toString(), { method: "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(this.requestTimeoutMs) });
+      this.onResponse?.({ operation: "downloadReportDocument", status: response.status, requestId: null, rateLimit: null });
+      if (!response.ok) { await response.body?.cancel(); throw new AmazonSpApiError("报告下载失败。", { status: response.status, retryable: response.status === 429 || response.status >= 500 }); }
+      if (!response.body || Number(response.headers.get("content-length") ?? 0) > limit) { await response.body?.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); }
+      const reader = response.body.getReader(), chunks: Uint8Array[] = []; let length = 0;
+      try {
+        while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > limit) { await reader.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); } chunks.push(part.value); }
+      } finally { reader.releaseLock(); }
+      const data = Buffer.concat(chunks);
+      const decoded = document.compressionAlgorithm === "GZIP" ? gunzipSync(data, { maxOutputLength: limit }) : data;
+      try { return JSON.parse(decoded.toString("utf8")); } catch { throw new AmazonSpApiError("报告不是有效 JSON。"); }
+    } catch (error) {
+      if (error instanceof AmazonSpApiError) throw error;
+      // Signed URLs and upstream exception text must never reach logs or responses.
+      throw new AmazonSpApiError("报告下载或解压失败。", { retryable: true });
+    }
+  }
+
   async request(method: "GET" | "POST", path: string, body?: unknown): Promise<unknown> {
     const accessToken = await this.getAccessToken();
     const url = new URL(path, this.config.endpoint);
@@ -100,6 +143,7 @@ export class AmazonSpApiClient {
       headers,
       body: requestBody,
       cache: "no-store",
+      redirect: "error",
     });
     const text = await response.text();
     const payload = parseResponseBody(text);
@@ -131,15 +175,17 @@ export class AmazonSpApiClient {
     });
     const payload = parseResponseBody(await response.text());
     if (!response.ok || !isAccessTokenPayload(payload)) {
+      const oauthError = payload && typeof payload === "object" ? (payload as Record<string, unknown>).error : undefined;
       throw new AmazonSpApiError(safeAmazonErrorMessage(response.status, payload, this.secretValues()), {
         status: response.status,
+        authorizationRejected: response.status === 401 || response.status === 403 || (response.status === 400 && ["invalid_grant", "invalid_client", "unauthorized_client"].includes(String(oauthError))),
         retryable: response.status === 429 || response.status >= 500,
         retryAfterMs: readRetryAfter(response.headers.get("retry-after"), this.now()),
       });
     }
     this.token = {
       value: payload.access_token,
-      expiresAt: nowMs + Math.max(payload.expires_in * 1000, tokenRefreshSkewMs * 2),
+      expiresAt: nowMs + payload.expires_in * 1000,
     };
     return this.token.value;
   }
@@ -149,7 +195,7 @@ export class AmazonSpApiClient {
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     try {
       const response = await this.fetcher(input, { ...init, signal: controller.signal });
-      this.onResponse?.({ operation: input === lwaTokenUrl ? "LWA" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/listings/") ? "searchListingsItems" : "getMarketplaceParticipations", status: response.status,
+      this.onResponse?.({ operation: input === lwaTokenUrl ? "LWA" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/listings/") ? "searchListingsItems" : input.includes("/reports/2021-06-30/documents/") ? "getReportDocument" : input.includes("/reports/2021-06-30/reports/") ? "getReport" : input.includes("/reports/2021-06-30/reports") ? "createReport" : "getMarketplaceParticipations", status: response.status,
         requestId: safeRequestId(response.headers.get("x-amzn-requestid")), rateLimit: safeRateLimit(response.headers.get("x-amzn-ratelimit-limit")) });
       return response;
     } catch (error) {
@@ -250,7 +296,10 @@ function isAccessTokenPayload(value: unknown): value is { access_token: string; 
   return Boolean(value)
     && typeof value === "object"
     && typeof (value as Record<string, unknown>).access_token === "string"
-    && typeof (value as Record<string, unknown>).expires_in === "number";
+    && Boolean(((value as Record<string, unknown>).access_token as string).trim())
+    && typeof (value as Record<string, unknown>).expires_in === "number"
+    && Number.isFinite((value as Record<string, unknown>).expires_in)
+    && ((value as Record<string, unknown>).expires_in as number) > 0;
 }
 
 function safeAmazonErrorMessage(status: number, payload: unknown, secretValues: string[]): string {

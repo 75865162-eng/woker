@@ -97,3 +97,47 @@ test("LWA-only configuration validates and sends requests without AWS signing", 
   assert.equal(headers.has("authorization"), false);
   assert.equal(headers.has("x-amz-security-token"), false);
 });
+
+test("LWA HTTP 400 invalid grants are terminal authorization failures without leaking credentials", async () => {
+  for (const code of ["invalid_grant", "invalid_client", "unauthorized_client", "invalid_request"]) {
+    let requests = 0;
+    const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => {
+      requests++;
+      return Response.json({ error: code, error_description: "refresh-token lwa-secret" }, { status: 400 });
+    } });
+    await assert.rejects(() => client.getMarketplaceParticipations(), (error: unknown) => {
+      assert.ok(error instanceof AmazonSpApiError);
+      assert.equal(error.authorizationRejected, code !== "invalid_request");
+      assert.equal(error.retryable, false);
+      assert.ok(!error.message.includes("refresh-token") && !error.message.includes("lwa-secret"));
+      return true;
+    });
+    assert.equal(requests, 1);
+  }
+});
+
+test("LWA token is reused within expiry and refreshed after expiry without changing refresh token", async () => {
+  let now = new Date("2026-11-04T01:00:00Z"), refreshes = 0;
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { now: () => now, fetch: async (url, init) => {
+    if (String(url).includes("api.amazon.com")) {
+      assert.equal(new URLSearchParams(String(init?.body)).get("refresh_token"), environment.AMAZON_SP_API_REFRESH_TOKEN);
+      return Response.json({ access_token: `access-${++refreshes}`, expires_in: 3600 });
+    }
+    assert.equal(new Headers(init?.headers).get("x-amz-access-token"), `access-${refreshes}`);
+    return Response.json({ payload: [] });
+  } });
+  await client.getMarketplaceParticipations();
+  await client.getMarketplaceParticipations();
+  assert.equal(refreshes, 1);
+  now = new Date("2026-11-04T02:00:01Z");
+  await client.getMarketplaceParticipations();
+  assert.equal(refreshes, 2);
+});
+
+test("short-lived LWA tokens are never cached beyond Amazon expiry", async () => {
+  let refreshes = 0;
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async url => String(url).includes("api.amazon.com")
+    ? Response.json({ access_token: `short-${++refreshes}`, expires_in: 30 }) : Response.json({ payload: [] }) });
+  await client.getMarketplaceParticipations(); await client.getMarketplaceParticipations();
+  assert.equal(refreshes, 2);
+});

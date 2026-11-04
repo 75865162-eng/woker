@@ -6,6 +6,7 @@ import type { CampaignGroup, PerformanceRow } from "@/lib/types";
 import { aggregateMetricsForCampaignGroups } from "@/lib/metrics";
 import { inventorySnapshotStatus } from "./readiness";
 import type { OpsIdentity } from "./cli";
+import { amazonPublishedReadScope } from "./amazon-read-scope";
 
 export class PpcReadError extends Error {
   readonly code = "PPC_DATA_INVALID";
@@ -50,7 +51,9 @@ export function summarizePpc(dataset: PpcLocalDataset | null, now = new Date()) 
 export async function suggestPpc(db: Prisma.TransactionClient, identity: OpsIdentity, dataset: PpcLocalDataset | null, now = new Date()) {
   const source = summarizePpc(dataset, now);
   if (!dataset || !dataset.performanceRows.length) return { source, report: null, adjustmentDrafts: [], freshnessWarnings: ["缺少 PPC 数据，不能生成建议。"], mode: "draft_only", externalWriteAttempted: false };
-  const inventory = await db.amazonSyncRun.findFirst({ where: { organizationId: identity.organizationId, workspaceId: identity.workspaceId, resource: "inventory", status: "SUCCEEDED" }, orderBy: { finishedAt: "desc" } });
+  const scope = { organizationId: identity.organizationId, workspaceId: identity.workspaceId };
+  const heads = await amazonPublishedReadScope(db, scope, identity.actorUserId);
+  const inventory = await db.amazonSyncRun.findFirst({ where: { ...scope, resource: "inventory", status: "SUCCEEDED", executionVersion: 2, OR: heads.filter(h => h.resource === "inventory").map(h => ({ id: h.activeRunId!, sourceId: h.id })) }, orderBy: { finishedAt: "asc" } });
   const inventoryStatus = inventorySnapshotStatus(inventory?.finishedAt ?? null, now);
   validateLocalPpcRows(dataset.performanceRows);
   const clock = () => now;

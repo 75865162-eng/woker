@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-04",
+  "authorization": "User explicitly approved only the described isolated database verification",
+  "command": "node scripts/test-amazon-sync-integration.mjs --sales-only",
+  "exitCode": 0,
+  "environment": "Disposable localhost PostgreSQL and Redis containers with fixture credentials",
+  "baselineSchemaCommit": "cd2be5e5fbad8e67f1e565abe1248927ee135515",
+  "migrationsApplied": [
+    "20261104000000_amazon_sync_center_phase1",
+    "20261104010000_amazon_authorization_validation_state",
+    "20261104020000_amazon_data_center_change_requests",
+    "20261104030000_amazon_sales_traffic_snapshots"
+  ],
+  "legacyScheduleRetainedAndDisabled": true,
+  "testsPassed": 3,
+  "testsFailed": 0,
+  "coverage": [
+    "Latest successful version independently selected for each source and business day",
+    "Partial versions excluded from published queries",
+    "Organization and workspace query isolation",
+    "Cutoff and historical task lineage",
+    "Backend filters and pagination",
+    "Duplicate day unique constraint",
+    "Cross-workspace source and task foreign keys"
+  ],
+  "cleanup": {
+    "fixtureContainersRemaining": 0,
+    "temporaryDirectoryRemoved": true
+  },
+  "realAmazonRequests": 0,
+  "existingDatabasesModified": false,
+  "productionTasksStarted": false,
+  "pushedOrDeployed": false,
+  "limitations": [
+    "No real Seller authorization or Amazon acceptance",
+    "No full Worker or Redis execution-chain verification",
+    "No Storage export integration verification",
+    "No production build or production migration",
+    "Legacy default integration suite still requires approval-flow adaptation"
+  ]
+}

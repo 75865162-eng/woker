@@ -1,3 +1,4 @@
+import { stripAmazonProductObservations } from "./amazon-field-policy";
 import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { Product } from "@/lib/products/types";
@@ -45,7 +46,7 @@ export function createProductRecordData(
     userId: user.id,
     accountId: scope.accountId,
     marketplace: scope.marketplace,
-    payload: product as unknown as Prisma.InputJsonValue,
+    payload: stripAmazonProductObservations(product) as unknown as Prisma.InputJsonValue,
     chineseName: product.chineseName,
     englishName: product.englishName,
     asin: product.asin,
@@ -116,7 +117,7 @@ export async function saveProductRecord(
   }
   const nextRevision = existingRecord ? existingRecord.revision + 1 : 1;
   const productToSave: Product = {
-    ...input.product,
+    ...stripAmazonProductObservations(input.product),
     id: existingRecord?.id ?? randomUUID(),
     revision: nextRevision,
     videoPlan: input.product.videoPlan ?? existingProduct?.videoPlan,

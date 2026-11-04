@@ -39,5 +39,154 @@
   "prismaValidate": true,
   "diffCheck": true,
   "productionBuild": "See latest commit checks on https://github.com/75865162-eng/woker/pull/3; local tests alone do not prove production build",
-  "productionAcceptance": "pending real Amazon qualification, process failure drills, production capacity and release verification"
+  "productionAcceptance": "pending real Amazon qualification, process failure drills, production capacity and release verification",
+  "latestLocalIncrement": {
+    "recordedAt": "2026-11-04T04:17:48.945956+00:00",
+    "git": "uncommitted; do not push per latest user reply",
+    "tests": 669,
+    "lintErrors": 0,
+    "existingLintWarnings": 4,
+    "typecheck": "full passed",
+    "integrationPassed": 16,
+    "syncCenterBrowserPassed": 9,
+    "migrations": "both applied only to disposable localhost database",
+    "amazon": "mocked; actual Seller qualification pending",
+    "build": "npm run build passed locally; production compiled and static pages generated; no deployment",
+    "productionActions": "none",
+    "buildWarnings": [
+      "existing BullMQ optional @valkey/valkey-glide module resolution warning; Redis path integration passed",
+      "existing notification/product/market lint warnings"
+    ],
+    "browserBackendEndToEnd": "passed: real Chromium + production React component + actual Route Handlers over localhost HTTP + database session + real PostgreSQL/Redis/BullMQ Worker; authorization, binding, failed task, UI retry, seller-bound snapshot",
+    "endToEndLimit": "Dedicated HTTP fixture, not full Next middleware/login proxy; Amazon mocked",
+    "uiReference": "User reference layout implemented; grouped domain picker and plan editor; ui-overview/plans/tasks/connections.png are actual component screenshots with test fixtures",
+    "latestUiVerification": "9 browser tests, full TypeScript and scoped ESLint passed; quality issue links, task error, heartbeat populated/empty and narrow layouts covered; prior integration and build reused for UI-only increment"
+  },
+  "livePreparation": {
+    "recordedAt": "2026-11-04T04:28:50.770900+00:00",
+    "checkFast": {
+      "tests": 674,
+      "failed": 0,
+      "lintErrors": 0,
+      "existingWarnings": 4,
+      "typecheck": "passed"
+    },
+    "preflightTests": {
+      "passed": 2,
+      "failed": 0,
+      "command": "node --test tests/amazon-sync-preflight.test.mjs"
+    },
+    "integration": {
+      "passed": 16,
+      "failed": 0,
+      "amazon": "mocked",
+      "postgresRedisWorker": "real disposable localhost resources; cleaned",
+      "note": "16 tests passed after LWA error classification and Listings guard; subsequent short token cache fix covered by unit tests and full check:fast"
+    },
+    "realAmazonAcceptance": "NOT_RUN",
+    "realAmazonRequests": 0,
+    "localPreflight": "not ready: singleExplicitScope false; dedicated service identity and real Seller binding require operator confirmation",
+    "officialOnlineRecheck": "network connection reset; previous official model evidence reused, live role mapping still pending",
+    "changes": [
+      "LWA 400 invalid_grant/invalid_client/unauthorized_client classified as terminal authorization rejection",
+      "LWA short token expiry respected; invalid/empty token payload rejected",
+      "Listings final page reported total exceeding processed count fails without publishing head",
+      "nonconnecting configuration preflight emits only booleans; local checklist and unfilled real acceptance record"
+    ],
+    "schemaApiChanges": "none this stage",
+    "build": "not repeated; no build/dependency/schema change, check:fast and integration cover runtime changes",
+    "gitProduction": "no commit, push, production migration or deployment"
+  },
+  "dedicatedLocalEnvironment": {
+    "checkedAt": "2026-11-04T04:43:19.625Z",
+    "base": "http://127.0.0.1:3017",
+    "checks": {
+      "databaseLogin": true,
+      "workerOnlineInUi": true,
+      "authorizationFields": true,
+      "regionSelection": true,
+      "noFakeAuthorizationOrSources": true,
+      "foreignWorkspaceBlocked": true,
+      "anonymousBlocked": true,
+      "fullNextApplication": true
+    },
+    "amazonRequests": 0,
+    "database": {
+      "organizationId": "amazon-live-local",
+      "workspaceId": "default",
+      "authorizations": 0,
+      "tasks": 0,
+      "sources": 0,
+      "inventorySnapshots": 0,
+      "listingSnapshots": 0,
+      "enabledSchedules": 0
+    },
+    "status": "ENVIRONMENT_READY_WAITING_REAL_AUTHORIZATION",
+    "postgres": {
+      "address": "127.0.0.1:55439",
+      "database": "amazon_sync_live_local",
+      "container": "amazon-sync-live-postgres",
+      "appliedMigrations": 77,
+      "status": "up to date",
+      "generate": "passed"
+    },
+    "redis": {
+      "address": "127.0.0.1:6399/0",
+      "container": "amazon-sync-live-redis",
+      "ping": "PONG"
+    },
+    "authorization": "WAITING_REAL_AUTHORIZATION",
+    "sellerId": null,
+    "marketplaceId": null,
+    "region": null,
+    "worker": "amazon-live-local-worker",
+    "realAmazonAcceptance": "NOT_RUN",
+    "remaining": [
+      "Legal Amazon credentials through local UI",
+      "Verified real Seller and Marketplace",
+      "ERP SellerAccount provisioning in this dedicated database",
+      "Real Listings and Inventory read-only sync and reconciliation"
+    ]
+  },
+  "mergedBusinessUi": {
+    "recordedAt": "2026-11-04T05:20:34.407714+00:00",
+    "database": "amazon_sync_live_local: fresh dedicated local database, no old data imported",
+    "scope": "new page only; no legacy fallback or old credential import",
+    "browserPassed": 11,
+    "operationsBrowserPassed": 17,
+    "typecheck": "passed",
+    "scopedLint": "0 errors",
+    "actualNextBrowser": {
+      "checkedAt": "2026-11-04T05:18:13.518Z",
+      "checks": [
+        {
+          "page": "库存浏览",
+          "url": "http://127.0.0.1:3017/operations?view=inventory",
+          "apiStatus": 200
+        },
+        {
+          "page": "在线商品",
+          "url": "http://127.0.0.1:3017/operations?view=catalog",
+          "apiStatus": 200
+        },
+        {
+          "page": "补货计划",
+          "url": "http://127.0.0.1:3017/operations?view=replenishment",
+          "apiStatus": 200
+        },
+        {
+          "page": "PPC 经营指标",
+          "url": "http://127.0.0.1:3017/operations?view=ads",
+          "apiStatus": 200
+        }
+      ],
+      "externalAmazonRequests": 0,
+      "unexpectedWrites": 0,
+      "status": "passed"
+    },
+    "schemaApiChanges": "none",
+    "realAmazonAcceptance": "still NOT_RUN",
+    "productionGitActions": "none",
+    "build": "not repeated: UI-only changes; relevant browser regression + full TypeScript"
+  }
 }

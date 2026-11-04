@@ -4,6 +4,12 @@
 系统要做“可迁移设计”。
 也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。PPC Workspace 的 IndexedDB 用于本地恢复与浏览器缓存，服务端快照、草稿记录等已由数据库承载；Product Center 商品主数据以 PostgreSQL 为事实源。新增多人数据应沿现有服务端存储边界扩展，不把 IndexedDB 描述为未来才迁移的唯一存储层。
 
+## 长期安全审批规则
+
+任何涉及真实数据、外部 API、凭证、配置写入、配置上传、生产环境或不可逆操作的行为，默认禁止执行。必须先提供具体、可审阅的变更方案，并等待用户针对该方案明确批准。用户批准某一项操作，不代表批准后续相关操作；如果目标环境、文件、范围、配置内容或影响发生变化，必须重新提交方案并等待批准。
+
+未经批准，只允许只读检查、风险分析、生成变更方案、生成脱敏 diff、编写但不执行的脚本，以及在隔离环境使用 mock 数据进行验证。不得修改、覆盖、删除或上传真实配置，不得调用真实外部 API，不得启动真实任务、生产任务、迁移、部署、重启、回滚或清理真实数据。
+
 ## 最高优先级操作原则：两端对齐、同步闭环、生产级交付
 
 每接到一个任务，都要默认按“本地 + GitHub 两端对齐、同步闭环、生产级”的标准执行；服务器备份、发布和恢复只在你明确要求时纳入任务范围：
@@ -447,3 +453,32 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - `npm run test:amazon-sync:integration` 使用预装官方 Docker 镜像建立独立 PostgreSQL／Redis，一次性验证真实迁移、队列和恢复；Amazon 响应模拟，不调用生产。脚本不拉取镜像，不接触既有容器。
 - `npm run test:amazon-sync:browser` 为真实 Tailwind 样式、模拟 API 的隔离浏览器回归。
 - 本轮包含 schema 扩展；关闭试点需保留兼容新唯一键的应用，禁止任意回滚到迁移前应用或自动删表。部署／回滚、验证限制见 `docs/amazon-sync-center-phase1/`，未明确要求不得执行生产迁移或发布。
+
+## Amazon SP-API 本地真实联调
+
+- 2026-11-05 默认库存/Listing 隔离集成已获单独批准并通过 16 项（真实 fixture PostgreSQL/Redis、审批 Route Handler、测试 Worker、Chromium，Amazon transport 模拟），临时资源已清理。记录：`docs/amazon-sync-default-isolated-verification.json`。不代表真实 Amazon 或生产性能验收。
+
+- 日期/Reports 销售流量、版本查询/导出、商品观察字段写入保护的本地增量边界见 `docs/amazon-sync-center-phase2-development.md`。销售数据为店铺逐日汇总，缺失/未闭合报告不发布为完整；单独获批的临时空库迁移/SQL 及销售审批→测试 BullMQ consumer→发布→查询→本地导出下载集成已通过（Amazon HTTP 模拟）。现有环境迁移和真实联调仍须逐项审批，旧集成通过记录不代表当前代码已验收。
+
+- `node scripts/amazon-sync-live-preflight.mjs`：只检查环境配置并输出布尔结果，不连接数据库／Redis、不解密、不请求 Amazon；退出 2 表示未就绪，退出 0 不能代表真实验收。可通过 DOTENV_CONFIG_PATH 指定本地私有环境文件。
+- `node --test tests/amazon-sync-preflight.test.mjs`：预检脱敏与拒绝非本地配置的专项测试。
+- 操作与未填真实结果记录见 `docs/amazon-sync-center-phase1/live-validation.md`。共用 Amazon Worker 会扫描旧计划及补货到期任务；真实联调仅用人工确认的独立本地数据库与 Redis／DB，不使用测试 fixture 或生产隧道，不制造真实限流。
+
+- 专用本地 Amazon 联调环境实测记录：`docs/amazon-sync-center-phase1/local-environment.md`。私有 `.env.amazon-live.local` 与 `tmp/amazon-live-private/` 不纳入 Git；只监听本机的 3017／55439／6399，用独立数据库与 Redis。不得把空授权环境就绪表述为真实 Amazon 验收通过。
+
+## Amazon ERP 生产准入补充
+
+- `node scripts/test-amazon-sync-integration.mjs --security`：一次性 PostgreSQL/Redis 和本地临时存储的多店铺安全回归，验证补货、只读 CLI、撤权及导入结果下载；不访问真实 Amazon，不替代 MCP/OAuth 验收。S0 范围、兼容性和验证结果见 `docs/amazon-multistore-s0-delivery.md`。
+
+- 成员 Workspace/Seller 数据授权、24 小时人工任务执行窗口、受控 Worker 的本地代码边界及生产门槛见 `docs/erp-production-readiness-plan.md`。普通成员无显式授权拒绝；旧无执行期限任务/旧无范围导出须重新批准/申请，不自动回填权限。
+- `AMAZON_SYNC_WORKER_MODE=approved-only` 配合 JSON `AMAZON_SYNC_WORKER_TASK_IDS` / `AMAZON_SYNC_WORKER_EXPORT_IDS` 只处理明确 ID、使用独立队列且不刷新补货；默认 standard 保留原行为。真实配置和启动仍需单独审批。设置页标准队列心跳不代表受控队列在线。
+- 隔离 runner 当前包含第五迁移 `20261105000000_amazon_data_access_grants`；2026-11-05 单独获批后，销售 SQL 4 项、销售链路 1 项、默认库存/Listing 16 项均通过，临时资源已清理。记录见 `docs/amazon-sync-access-grants-isolated-verification.json`；不代表现有库迁移或真实 Amazon 验收通过。
+
+## Amazon 多店铺身份与个人 MCP
+
+- 本地交付与生产门槛见 `docs/amazon-multistore-delivery-2026-11-05.md`；验证清单见 `docs/amazon-multistore-verification-2026-11-05.json`。隔离 runner 增加第六迁移 `20261105010000_amazon_multistore_mcp`；新增 SQL 不能据此视为已应用到现有库。
+- `node scripts/test-amazon-sync-integration.mjs --mcp`：真实临时 PostgreSQL / Redis 的个人凭证、当前 ERP 用户/角色/站点/操作交集、OAuth、审批及并发撤权回归；所有 Amazon HTTP 模拟。
+- MCP 入口为 `/api/mcp/amazon`，凭证绑定个人且只在创建/轮换时展示一次。ERP 管理员身份不隐式授权 MCP，旧 grants 的 `mcpEnabled` 默认 false。凭证页面在同步中心“同步设置”；店铺及角色范围在“店铺与授权”。
+- OAuth 使用固定登记 callback、单次 state 及卖家范围验证；参与站点不能单独证明 Seller ID。OAuth 配置变量名及历史数据核查/回滚规则见交付文档，不在仓库保存真实值。
+- `npx tsx scripts/audit-amazon-lineage.ts --report-only --organization-id=<id> --workspace-id=<id>` 是有界只读归属报告，不加载 `.env`，不按 SKU/ASIN 推测或自动回填。连接真实目标前仍须具体审批；截断/异常退出 2，不能当作全库核查完成。
+- 主要 ERP 读取入口与 MCP 有 append-only 审计；CLI 业务查询仍在 READ ONLY 事务中，输出前在事务外追加读取审计。不得为写审计放宽业务查询范围。

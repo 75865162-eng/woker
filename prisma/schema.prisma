@@ -42,6 +42,7 @@ model Organization {
   productSuppliers   ProductSupplier[]
   productCosts       ProductCost[]
   productMedia       ProductMedia[]
+  amazonDataCenterChangeRequests AmazonDataCenterChangeRequest[]
 }
 
 model User {
@@ -70,6 +71,8 @@ model User {
   workspaceSnapshots      WorkspaceSnapshot[]
   imageUpscaleJobs        ImageUpscaleJob[]
   productOutboxEvents     ProductOutboxEvent[]
+  amazonDataCenterChangeRequestsRequested AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterChangeRequestedBy")
+  amazonDataCenterChangeRequestsApproved AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterChangeApprovedBy")
 }
 
 model WorkspaceScope {
@@ -82,6 +85,9 @@ model WorkspaceScope {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  amazonDataExports AmazonDataExport[]
+  amazonDataCenterChanges AmazonDataCenterChangeRequest[]
+  amazonDataAccessGrants AmazonDataAccessGrant[]
 
   @@id([organizationId, id])
 }
@@ -95,6 +101,10 @@ model OrganizationMember {
   updatedAt      DateTime         @updatedAt
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amazonDataExports AmazonDataExport[]
+  amazonChangesRequested AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterMemberRequestedBy")
+  amazonChangesApproved AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterMemberApprovedBy")
+  amazonDataAccessGrants AmazonDataAccessGrant[]
 
   @@unique([organizationId, userId])
   @@index([userId])
@@ -219,6 +229,7 @@ model FileObject {
   contentHash      String?
   productBindingStatus ProductAttachmentStatus?
   DraftRun         DraftRun[]
+  amazonDataExports AmazonDataExport[]
   exportRecords    ExportRecord[]
   jobs             ImportJob[]
   WorkspaceDataset WorkspaceDataset[]
@@ -428,6 +439,7 @@ model SellerAccount {
   marketplace     Marketplace?     @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
   listings        ProductListing[]
   amazonSyncSources AmazonSyncDataSource[]
+  amazonDataAccessGrants AmazonDataAccessGrant[]
 
   @@unique([organizationId, workspaceId, id], map: "SellerAccount_sync_scope_id_key")
 
@@ -1409,6 +1421,75 @@ model AmazonSellerBinding {
   @@index([organizationId, workspaceId, updatedAt])
 }
 
+// Approval evidence contains only allowlisted summaries. Commands (including secrets)
+// live in a separate encrypted envelope and never enter list/detail DTOs.
+model AmazonDataCenterChangeRequest {
+  id String @id
+  organizationId String
+  workspaceId String
+  targetEnvironment String
+  changeType String
+  operation String
+  targetId String
+  beforeSummary Json
+  afterSummary Json
+  sellerIds String[] @default([])
+  marketplaceIds String[] @default([])
+  domains String[] @default([])
+  sourceIds String[] @default([])
+  baseRevision Int
+  changeDigest String
+  payloadDigest String
+  requestedByUserId String
+  approvedByUserId String?
+  decidedAt DateTime?
+  status String @default("REQUESTED")
+  expiresAt DateTime
+  appliedAt DateTime?
+  decisionReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  requestedBy User @relation("AmazonDataCenterChangeRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  approvedBy User? @relation("AmazonDataCenterChangeApprovedBy", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  requesterMembership OrganizationMember @relation("AmazonDataCenterMemberRequestedBy", fields: [organizationId, requestedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  approverMembership OrganizationMember? @relation("AmazonDataCenterMemberApprovedBy", fields: [organizationId, approvedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  sealedCommand AmazonDataCenterSealedCommand?
+  versions AmazonDataCenterConfigVersion[]
+  tasks AmazonSyncRun[] @relation("AmazonTaskApproval")
+  @@unique([organizationId, workspaceId, id], map: "AmazonDataCenterChange_scope_id_key")
+  @@index([organizationId, workspaceId, status, createdAt])
+}
+
+model AmazonDataCenterSealedCommand {
+  id String @id
+  organizationId String
+  workspaceId String
+  ciphertext String @db.Text
+  request AmazonDataCenterChangeRequest @relation(fields: [organizationId, workspaceId, id], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, id])
+}
+
+// Append-only configuration revisions; the existing authorization/source/policy
+// rows are current pointers. Revision history is not changed by publication.
+model AmazonDataCenterConfigVersion {
+  id String @id
+  organizationId String
+  workspaceId String
+  targetEnvironment String
+  entityType String
+  entityId String
+  revision Int
+  summary Json
+  approvalId String
+  changeDigest String
+  createdAt DateTime @default(now())
+  approval AmazonDataCenterChangeRequest @relation(fields: [organizationId, workspaceId, approvalId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, entityType, entityId, revision])
+  @@index([organizationId, workspaceId, entityId, createdAt])
+}
+
 model AmazonSyncRun {
   id                String    @id
   organizationId    String
@@ -1444,6 +1525,7 @@ model AmazonSyncRun {
   insertedCount     Int       @default(0)
   updatedCount      Int       @default(0)
   skippedCount      Int       @default(0)
+  salesTrafficRows  AmazonSalesTrafficSnapshot[]
   logs              AmazonSyncTaskLog[]
   pages             AmazonSyncPage[]
   publishedSources  AmazonSyncDataSource[] @relation("PublishedHead")
@@ -1462,6 +1544,11 @@ model AmazonSyncRun {
   @@unique([organizationId, workspaceId, id], map: "AmazonSyncRun_scope_id_key")
   @@index([executionVersion, status, nextAttemptAt], map: "AmazonSyncRun_dispatch_idx")
   @@index([sourceId, startedAt], map: "AmazonSyncRun_source_started_idx")
+  executionApprovalId String?
+  executionApproval AmazonDataCenterChangeRequest? @relation("AmazonTaskApproval", fields: [organizationId, workspaceId, executionApprovalId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  frozenScope Json?
+  frozenScopeDigest String?
+
 }
 
 model AmazonInventorySnapshot {
@@ -2261,6 +2348,11 @@ model AmazonSpApiAuthorization {
   status                String @default("NOT_CONFIGURED")
   marketplaceParticipations Json @default("[]")
   lastValidatedAt       DateTime?
+  identityVerifiedAt    DateTime?
+  identityEvidence      String @default("MANUAL_UNVERIFIED")
+  authorizedByUserId    String?
+  validationAttemptedAt DateTime?
+  validationErrorCode   String?
   updatedByUserId        String
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -2290,11 +2382,14 @@ model AmazonSyncDataSource {
   coverage              Json?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  salesTrafficRows      AmazonSalesTrafficSnapshot[]
   runs                  AmazonSyncRun[] @relation("SourceTasks")
   targets               AmazonSyncPlanTarget[]
 
   @@unique([organizationId, workspaceId, id], map: "AmazonSource_scope_id_key")
   @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, resource], map: "AmazonSource_store_site_domain_key")
+  revision Int @default(1)
+
 }
 
 model AmazonSyncPlanTarget {
@@ -2351,4 +2446,136 @@ model AmazonSyncApiBudget {
   updatedAt      DateTime @updatedAt
 
   @@id([organizationId, workspaceId, authorizationId, operation])
+}
+
+// Seller/day totals only. ASIN range totals are deliberately not split into daily facts.
+model AmazonSalesTrafficSnapshot {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  source AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonSalesTraffic_source_fkey")
+  syncRunId String
+  task AmazonSyncRun @relation(fields: [syncRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonSalesTraffic_task_fkey")
+  sellerAccountId String
+  marketplaceId String
+  businessDate String @db.VarChar(10)
+  reportId String
+  documentId String
+  metrics Json
+  quality String
+  capturedAt DateTime
+
+  @@unique([organizationId, workspaceId, syncRunId, businessDate], map: "AmazonSalesTraffic_run_date_key")
+  @@index([organizationId, workspaceId, sourceId, businessDate], map: "AmazonSalesTraffic_scope_date_idx")
+}
+
+model AmazonDataExport {
+  id String @id
+  organizationId String
+  workspaceId String
+  requestedByUserId String
+  idempotencyKey String
+  query Json
+  cutoff DateTime
+  status String @default("QUEUED")
+  fileId String?
+  file FileObject? @relation(fields: [fileId], references: [id], onDelete: Restrict, map: "AmazonDataExport_file_fkey")
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, map: "AmazonDataExport_workspace_fkey")
+  actor OrganizationMember @relation(fields: [organizationId, requestedByUserId], references: [organizationId, userId], onDelete: Restrict, map: "AmazonDataExport_actor_fkey")
+  rowCount Int @default(0)
+  error String?
+  createdAt DateTime @default(now())
+  finishedAt DateTime?
+  leaseExpiresAt DateTime?
+  fence Int @default(0)
+  @@unique([organizationId, workspaceId, requestedByUserId, idempotencyKey], map: "AmazonDataExport_idempotency_key")
+  @@index([status, createdAt])
+}
+
+// Scope authorization complements existing RBAC; no implicit grants for ordinary members.
+model AmazonDataAccessGrant {
+  id String @id
+  organizationId String
+  workspaceId String
+  userId String
+  sellerAccountId String
+  enabled Boolean @default(true)
+  marketplaceIds String[] @default([])
+  actions String[] @default(["view", "sync", "export", "edit"])
+  mcpEnabled Boolean @default(false)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member OrganizationMember @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict)
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  seller SellerAccount @relation(fields: [organizationId, workspaceId, sellerAccountId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, userId, sellerAccountId], map: "AmazonAccess_member_seller_key")
+  @@index([organizationId, workspaceId, userId, enabled], map: "AmazonAccess_lookup_idx")
+}
+
+model AmazonRoleDataAccessGrant {
+  id String @id
+  organizationId String
+  workspaceId String
+  roleId String
+  sellerAccountId String
+  marketplaceIds String[] @default([])
+  actions String[] @default([])
+  mcpEnabled Boolean @default(false)
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId, workspaceId, roleId, sellerAccountId], map: "AmazonRoleGrant_scope_subject_seller_key")
+  @@index([organizationId, workspaceId, roleId, enabled], map: "AmazonRoleGrant_scope_subject_enabled_idx")
+}
+
+model AmazonMcpCredential {
+  id String @id
+  organizationId String
+  workspaceId String
+  userId String
+  name String
+  tokenHash String @unique
+  tokenPrefix String
+  tools String[]
+  scopes Json
+  status String @default("ACTIVE")
+  revision Int @default(1)
+  expiresAt DateTime
+  createdByUserId String
+  rotatedFromId String?
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId, workspaceId, userId, status])
+}
+
+model AmazonOAuthAttempt {
+  id String @id
+  organizationId String
+  workspaceId String
+  userId String
+  stateHash String @unique
+  region String
+  redirectUri String
+  status String @default("PENDING")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AmazonSellerIdentity {
+  id String @id
+  organizationId String
+  workspaceId String
+  sellerAccountId String
+  amazonSellerId String
+  marketplaceId String
+  region String
+  authorizationId String
+  verifiedAt DateTime
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId], map: "AmazonIdentity_scope_seller_site_key")
+  @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId, region], map: "AmazonIdentity_scope_amazon_site_region_key")
 }

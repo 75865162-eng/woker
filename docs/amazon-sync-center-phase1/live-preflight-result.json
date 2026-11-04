@@ -1,0 +1,25 @@
+{
+  "checks": {
+    "databaseConfigured": true,
+    "databaseLoopback": true,
+    "redisConfigured": true,
+    "redisLoopback": true,
+    "redisDriver": true,
+    "encryptionKeyValid": true,
+    "singleExplicitScope": true,
+    "conservativeConcurrency": true,
+    "authenticationConfigured": true,
+    "notProductionMode": true
+  },
+  "configurationReady": true,
+  "connectedToServices": false,
+  "amazonRequests": 0,
+  "requiresOperatorConfirmation": [
+    "Dedicated local database and Redis, not a production tunnel or test fixture database",
+    "Authorized real Seller and Marketplace configured through local UI",
+    "Migrations applied, valid local account/workspace, old and new schedules disabled",
+    "No fetch mocks or test harness in web/worker processes"
+  ],
+  "acceptance": "NOT_RUN: configuration inspection is not real Amazon acceptance",
+  "recordedAt": "2026-11-04T04:47:18.063Z"
+}

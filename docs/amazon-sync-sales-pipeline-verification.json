@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-04",
+  "authorization": "User replied continue after the concrete sales-pipeline isolated execution proposal",
+  "command": "node scripts/test-amazon-sync-integration.mjs --sales-pipeline",
+  "exitCode": 0,
+  "environment": "Disposable localhost PostgreSQL 16, Redis 7 and temporary local uploads; fixture users and credentials",
+  "migrationsApplied": [
+    "20261104000000_amazon_sync_center_phase1",
+    "20261104010000_amazon_authorization_validation_state",
+    "20261104020000_amazon_data_center_change_requests",
+    "20261104030000_amazon_sales_traffic_snapshots"
+  ],
+  "compositeTestsPassed": 1,
+  "testsFailed": 0,
+  "testDurationMs": 915.446042,
+  "testProcessDurationMs": 1296.694208,
+  "coverage": [
+    "Separate requester and approver through formal approval services",
+    "No execution task created before application of approved request",
+    "Authenticated API request to persisted task and real BullMQ consumer",
+    "Frozen business date range sent to mocked Amazon Reports transport",
+    "Report creation, polling, download, validation and publication",
+    "Seller and task lineage through filtered query API",
+    "Idempotent export request and real queue execution",
+    "Temporary local Storage and FileObject publication",
+    "Downloaded JSONL matches page filters, cutoff and data",
+    "Export requested, succeeded and downloaded audit events",
+    "Nonrequester, foreign tenant and unavailable workspace rejection",
+    "Partial report cannot replace previous valid version",
+    "Retry requires fresh approval and preserves frozen scope",
+    "Previously generated export remains unchanged after new publication",
+    "Revoked export permission fails queued export without a file",
+    "Revoked permission prevents download and creation",
+    "Revoked execution approval blocks task before HTTP",
+    "Stale queue replay cannot create another report",
+    "Sync and export do not create ProductRecord"
+  ],
+  "cleanup": {
+    "fixtureContainersRemaining": 0,
+    "temporaryDirectoryRemoved": true
+  },
+  "amazonTransport": "Mocked; unrecognized requests fail closed",
+  "realAmazonRequests": 0,
+  "existingDatabasesOrStorageModified": false,
+  "productionWorkerStarted": false,
+  "pushedOrDeployed": false,
+  "limitations": [
+    "No real Seller authorization or Amazon acceptance",
+    "Fixture scheduling timestamps and API budgets advanced to avoid real polling waits",
+    "No production systemd worker or R2/S3 integration",
+    "No production build or performance benchmark",
+    "Legacy default integration suite still requires approval-flow adaptation"
+  ]
+}
