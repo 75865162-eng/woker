@@ -11,6 +11,8 @@ import { amazonDataAccess, assertSellerMarketplaceAccess } from "@/lib/amazon-sy
 import { POST } from "@/app/api/mcp/amazon/route";
 import { requestChange, decideChange, applyChange } from "@/lib/amazon-sync/change-approval";
 import { auditAmazonLineage } from "@/lib/amazon-sync/lineage-audit";
+import { readTaskSnapshot } from "@/lib/amazon-sync/snapshots";
+import { publishedSnapshotScopes } from "@/lib/amazon-sync/read";
 import { renameAmazonStore, listAmazonStores } from "@/lib/amazon-sync/stores";
 import { assertExportJobAccess } from "@/lib/amazon-sync/exports";
 import { startAmazonOAuth, finishAmazonOAuth } from "@/lib/amazon-sync/oauth";
@@ -116,6 +118,17 @@ test("unverified identity and invalid published head fail closed", async () => {
   await prisma.amazonSyncRun.update({ where: { id: runA }, data: { status: "FAILED" } });
   assert.equal((await call("amazon.inventory.list") as { rows: unknown[] }).rows.length, 0);
   await prisma.amazonSyncRun.update({ where: { id: runA }, data: { status: "SUCCEEDED" } });
+  const original = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: runA } });
+  try {
+    for (const patch of [{ finishedAt: null }, { stage: "PURGED", finishedAt: original.finishedAt }]) {
+      await prisma.amazonSyncRun.update({ where: { id: runA }, data: patch });
+      assert.equal((await call("amazon.inventory.list") as { rows: unknown[] }).rows.length, 0);
+      assert.equal((await call("amazon.inventory.summary") as { summary: { _count: { _all: number } } }).summary._count._all, 0);
+      assert.equal((await publishedSnapshotScopes(scope, "inventory", actor)).length, 0);
+    }
+  } finally {
+    await prisma.amazonSyncRun.update({ where: { id: runA }, data: { finishedAt: original.finishedAt, stage: original.stage } });
+  }
 });
 test("no permission cache crosses two operator credentials", async () => {
   const made = await manageMcpCredential(scope, peer, { action: "create", name: "peer", scopes: [{ sellerAccountId: sellerB, marketplaceIds: [site] }], tools: ["amazon.inventory.list"], expiresAt: new Date(Date.now() + 86400000).toISOString() });
@@ -194,6 +207,22 @@ test("read-only lineage report identifies legacy orphan without guessing SKU own
   assert.equal(report.counts.MISSING_LINEAGE, 1); assert.ok(report.pendingReview.every(r => r.referenceHash.length === 64));
   assert.ok(!JSON.stringify(report).includes("SAME-SKU"));
 });
+test("lineage audit and historical reads reject mismatched and unfinished runs", async () => {
+  const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, sellerAccountId: sellerA, resource: "inventory" } });
+  for (const patch of [{ resource: "catalog" }, { status: "FAILED" }, { finishedAt: null }, { stage: "PURGED" }]) {
+    const runId = randomUUID(), rowId = randomUUID();
+    await prisma.amazonSyncRun.create({ data: { ...scope, id: runId, sourceId: source.id, requestedByUserId: owner, resource: "inventory", executionVersion: 2, status: "SUCCEEDED", finishedAt: new Date(), ...patch } });
+    await prisma.amazonInventorySnapshot.create({ data: { ...scope, id: rowId, sellerAccountId: sellerA, marketplaceId: site, syncRunId: runId, sellerSku: "CORRUPT-LINEAGE", capturedAt: new Date() } });
+    try {
+      await assert.rejects(() => readTaskSnapshot(scope, new URLSearchParams({ id: runId }), actor));
+      const report = await prisma.$transaction(async tx => { await tx.$executeRaw`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`; return auditAmazonLineage(tx, scope); });
+      assert.equal(report.counts.UNPUBLISHED_OR_MISMATCHED_RUN, 1);
+    } finally {
+      await prisma.amazonInventorySnapshot.delete({ where: { id: rowId } });
+      await prisma.amazonSyncRun.delete({ where: { id: runId } });
+    }
+  }
+});
 test("async export creation scope rejects revoked site at execution/download boundary", async () => {
   process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify([[scope.organizationId, scope.workspaceId]]);
   const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, sellerAccountId: sellerA, resource: "sales_traffic" } });
@@ -238,6 +267,28 @@ test("MCP response is withheld when ERP access is revoked while the actual snaps
   } finally { release(); await lock; }
   const result = await pending; assert.ok(result.error); assert.equal(result.value, null);
   await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: true } });
+});
+
+test("MCP response is withheld when a source binding revision changes during snapshot SQL", async () => {
+  const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, sellerAccountId: sellerA, resource: "inventory" } });
+  const fresh = await manageMcpCredential(scope, actor, { action: "create", name: "binding race", scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], tools: ["amazon.inventory.list"], expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const identity = await authenticateAmazonMcp(`Bearer ${fresh.token}`);
+  let release = () => {}, acquired = () => {};
+  const gate = new Promise<void>(r => { release = r; }), ready = new Promise<void>(r => { acquired = r; });
+  const lock = prisma.$transaction(async tx => { await tx.$executeRawUnsafe('LOCK TABLE "AmazonInventorySnapshot" IN ACCESS EXCLUSIVE MODE'); acquired(); await gate; }, { timeout: 10000 });
+  await ready;
+  const pending = invokeAmazonMcp(identity, "amazon.inventory.list", {}).then(value => ({ value, error: null }), error => ({ value: null, error }));
+  try {
+    let waiting = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const rows = await prisma.$queryRaw<Array<{ waiting: boolean }>>`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%AmazonInventorySnapshot%' AND query LIKE 'SELECT%') AS waiting`;
+      if (rows[0].waiting) { waiting = true; break; }
+      await new Promise(r => setTimeout(r, 10));
+    }
+    assert.ok(waiting, "snapshot SQL should wait on the disposable fixture lock");
+    await prisma.amazonSyncDataSource.update({ where: { id: source.id }, data: { revision: { increment: 1 } } });
+  } finally { release(); await lock; }
+  const result = await pending; assert.ok(result.error); assert.equal(result.value, null);
 });
 
 test("source preview refuses mixed authorization domains and another seller's verified identity", async () => {

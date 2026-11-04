@@ -5,15 +5,16 @@ import type { SyncScope } from "./policy";
 export async function auditAmazonLineage(tx: Prisma.TransactionClient, scope: SyncScope) {
   const anomalies = await tx.$queryRaw<Array<{ domain: string; id: string; reason: string }>>(Prisma.sql`
     WITH rows AS (
-      SELECT 'inventory' AS domain, id, "organizationId", "workspaceId", "sellerAccountId", "marketplaceId", "syncRunId" AS run FROM "AmazonInventorySnapshot"
+      SELECT 'inventory' AS domain, id, "organizationId", "workspaceId", "sellerAccountId", "marketplaceId", "syncRunId" AS run, NULL::text AS "rowSourceId" FROM "AmazonInventorySnapshot"
       WHERE "organizationId" = ${scope.organizationId} AND "workspaceId" = ${scope.workspaceId}
-      UNION ALL SELECT 'catalog', id, "organizationId", "workspaceId", "sellerAccountId", "marketplaceId", "sourceRunId" FROM "AmazonCatalogSnapshot"
+      UNION ALL SELECT 'catalog', id, "organizationId", "workspaceId", "sellerAccountId", "marketplaceId", "sourceRunId", NULL::text FROM "AmazonCatalogSnapshot"
       WHERE "organizationId" = ${scope.organizationId} AND "workspaceId" = ${scope.workspaceId}
-      UNION ALL SELECT 'sales_traffic', id, "organizationId", "workspaceId", "sellerAccountId", "marketplaceId", "syncRunId" FROM "AmazonSalesTrafficSnapshot"
+      UNION ALL SELECT 'sales_traffic', id, "organizationId", "workspaceId", "sellerAccountId", "marketplaceId", "syncRunId", "sourceId" FROM "AmazonSalesTrafficSnapshot"
       WHERE "organizationId" = ${scope.organizationId} AND "workspaceId" = ${scope.workspaceId}
     ) SELECT r.domain, r.id, CASE
       WHEN r."sellerAccountId" IS NULL OR t.id IS NULL OR s.id IS NULL THEN 'MISSING_LINEAGE'
-      WHEN r."sellerAccountId" <> s."sellerAccountId" OR r."marketplaceId" <> s."marketplaceId" OR r.domain <> s.resource THEN 'SOURCE_SCOPE_MISMATCH'
+      WHEN r."sellerAccountId" <> s."sellerAccountId" OR r."marketplaceId" <> s."marketplaceId" OR r.domain <> s.resource OR (r.domain = 'sales_traffic' AND r."rowSourceId" IS DISTINCT FROM s.id) THEN 'SOURCE_SCOPE_MISMATCH'
+      WHEN t.resource <> r.domain OR t.status <> 'SUCCEEDED' OR t."finishedAt" IS NULL OR t.stage = 'PURGED' THEN 'UNPUBLISHED_OR_MISMATCHED_RUN'
       WHEN t."executionVersion" <> 2 THEN 'LEGACY_UNVERIFIED'
       WHEN a."identityVerifiedAt" IS NULL OR i.id IS NULL THEN 'IDENTITY_UNVERIFIED'
       ELSE 'VERIFIED' END AS reason

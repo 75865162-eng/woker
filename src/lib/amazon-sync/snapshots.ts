@@ -16,6 +16,7 @@ export async function readTaskSnapshot(scope: SyncScope, params: URLSearchParams
     if (task.stage === "PURGED") throw new SyncInputError("此历史快照已按保留策略清理，任务摘要仍可查看。", 410);
     const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: task.sourceId! }, select: { id: true, resource: true, sellerAccountId: true, marketplaceId: true, activeRunId: true, authorization: { select: { amazonSellerId: true } } } });
     if (!source) throw new SyncInputError("数据源不存在。", 404);
+    if (task.resource !== source.resource || !task.finishedAt) throw new SyncInputError("任务来源链不一致，快照暂不可浏览。", 409);
     const resource = implementedDomain(source.resource);
     if (resource === "sales_traffic") throw new SyncInputError("销售流量请使用业务日报查询入口。");
     const common = { ...snapshotRowFilters(params), ...scope, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId };

@@ -7,7 +7,7 @@ import { SyncInputError, type SyncScope } from "./policy";
 export type SnapshotScope = { runId: string; sellerAccountId?: string; marketplaceId?: string; freshnessMinutes?: number; capturedAt: Date | null };
 export async function publishedSnapshotScopes(scope: SyncScope, resource: "inventory" | "catalog", actor?: string, target?: { sellerAccountId: string; marketplaceId: string }): Promise<SnapshotScope[]> {
   const allowed = sellerAccessWhere(await amazonDataAccess(scope, actor));
-  const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...allowed, resource, enabled: true, publishedRun: { status: "SUCCEEDED", executionVersion: 2, resource }, activeRunId: { not: null }, ...(target ? { AND: [target] } : {}) }, select: { activeRunId: true, sellerAccountId: true, marketplaceId: true, lastSuccessAt: true, freshnessMinutes: true }, take: 201 });
+  const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...allowed, resource, enabled: true, publishedRun: { status: "SUCCEEDED", executionVersion: 2, resource, finishedAt: { not: null }, stage: { not: "PURGED" } }, activeRunId: { not: null }, ...(target ? { AND: [target] } : {}) }, select: { activeRunId: true, sellerAccountId: true, marketplaceId: true, lastSuccessAt: true, freshnessMinutes: true }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("当前试点超过 200 个数据源，需要先完成容量评审。", 409);
   return sources.map(s => ({ runId: s.activeRunId!, sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, capturedAt: s.lastSuccessAt, freshnessMinutes: s.freshnessMinutes }));
 }

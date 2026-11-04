@@ -25,7 +25,7 @@ async function explicitSources(tx: Prisma.TransactionClient, scope: SyncScope, a
 async function verifiedSources(tx: Prisma.TransactionClient, scope: SyncScope, allowed: ReturnType<typeof sellerAccessWhere>) {
   const identities = await tx.amazonSellerIdentity.findMany({ where: { ...scope, ...allowed }, take: 201 });
   if (identities.length > 200) throw new SyncInputError("数据源超过安全上限。", 403);
-  const sources = await tx.amazonSyncDataSource.findMany({ where: { AND: [scope, allowed, { seller: { status: "active" }, authorization: { identityVerifiedAt: { not: null }, status: "CONFIGURED" }, OR: identities.map(i => ({ sellerAccountId: i.sellerAccountId, marketplaceId: i.marketplaceId, authorizationId: i.authorizationId, authorization: { amazonSellerId: i.amazonSellerId, awsRegion: i.region } })) }] }, include: { seller: { select: { displayName: true } }, authorization: { select: { amazonSellerId: true, awsRegion: true } }, publishedRun: { select: { status: true, executionVersion: true, resource: true, sourceId: true } } }, take: 201 });
+  const sources = await tx.amazonSyncDataSource.findMany({ where: { AND: [scope, allowed, { seller: { status: "active" }, authorization: { identityVerifiedAt: { not: null }, status: "CONFIGURED" }, OR: identities.map(i => ({ sellerAccountId: i.sellerAccountId, marketplaceId: i.marketplaceId, authorizationId: i.authorizationId, authorization: { amazonSellerId: i.amazonSellerId, awsRegion: i.region } })) }] }, include: { seller: { select: { displayName: true } }, authorization: { select: { amazonSellerId: true, awsRegion: true } }, publishedRun: { select: { status: true, executionVersion: true, resource: true, sourceId: true, finishedAt: true, stage: true } } }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("数据源超过安全上限。", 403);
   return sources;
 }
@@ -112,7 +112,7 @@ export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: 
       requested = selected.map(s => ({ sellerAccountId: s.sellerAccountId, marketplaceIds: [s.marketplaceId] }));
       const page = args.page === undefined ? 1 : Number(args.page);
       if (!Number.isInteger(page) || page < 1 || page > 10000) throw new SyncInputError("分页无效。");
-      const published = selected.filter(s => s.activeRunId && s.publishedRun?.status === "SUCCEEDED" && s.publishedRun.executionVersion === 2 && s.publishedRun.resource === s.resource && s.publishedRun.sourceId === s.id);
+      const published = selected.filter(s => s.activeRunId && s.publishedRun?.status === "SUCCEEDED" && s.publishedRun.finishedAt && s.publishedRun.stage !== "PURGED" && s.publishedRun.executionVersion === 2 && s.publishedRun.resource === s.resource && s.publishedRun.sourceId === s.id);
       const common = { ...scope, OR: published.filter(s => s.activeRunId).map(s => ({ sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, syncRunId: s.activeRunId! })) };
       let result: unknown;
       if (tool === "amazon.stores.list" || tool === "amazon.sync.status") result = selected.map(s => ({ sellerAccountId: s.sellerAccountId, displayName: s.seller.displayName, amazonSellerId: s.authorization.amazonSellerId, marketplaceId: s.marketplaceId, region: s.authorization.awsRegion, resource: s.resource, enabled: s.enabled, lastSyncedAt: s.lastSuccessAt, source: "amazon_sp_api_snapshot", syncRunId: s.activeRunId, rowCount: s.rowCount }));
@@ -141,7 +141,8 @@ export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: 
         result = tool === "amazon.inventory.summary" ? { summary: await prisma.amazonInventorySnapshot.aggregate({ where, _sum: { fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true }, _count: { _all: true } }), source: "amazon_sp_api_snapshot" } : { rows: await prisma.amazonInventorySnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fulfillableQuantity: true, capturedAt: true, syncRunId: true }, orderBy: { id: "asc" }, skip: (page - 1) * 50, take: 50 }), source: "amazon_sp_api_snapshot" };
       }
       const live = await resolve();
-      if (selected.some(s => !live.some(l => l.id === s.id))) throw new SyncInputError("数据范围不可访问。", 403);
+      // The source ID alone is not a fence against an in-flight binding change.
+      if (selected.some(s => !live.some(l => l.id === s.id && l.revision === s.revision && l.authorizationId === s.authorizationId && l.sellerAccountId === s.sellerAccountId && l.marketplaceId === s.marketplaceId && l.resource === s.resource && l.authorization.amazonSellerId === s.authorization.amazonSellerId && l.authorization.awsRegion === s.authorization.awsRegion))) throw new SyncInputError("数据范围不可访问。", 403);
       await audit(scope, actor, "amazon.mcp.tool.succeeded", { requestId, credentialId: identity.id, tool, scopes: requested, from: typeof args.from === "string" ? args.from : null, to: typeof args.to === "string" ? args.to : null, page });
       await prisma.amazonMcpCredential.updateMany({ where: { id: identity.id, status: "ACTIVE" }, data: { lastUsedAt: new Date() } });
       return result;

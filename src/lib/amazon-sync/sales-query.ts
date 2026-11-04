@@ -31,7 +31,7 @@ export function salesVersionSql(scope: SyncScope, query: SalesQuery, cutoff: Dat
       ${access && !access.allSellers ? (access.sellerIds.length ? Prisma.sql`AND r."sellerAccountId" IN (${Prisma.join(access.sellerIds)})` : Prisma.sql`AND FALSE`) : Prisma.empty}
       ${access?.scopes ? access.scopes.length ? Prisma.sql`AND (${Prisma.join(access.scopes.map(s => Prisma.sql`(r."sellerAccountId" = ${s.sellerAccountId} ${s.marketplaceIds.length ? Prisma.sql`AND r."marketplaceId" IN (${Prisma.join(s.marketplaceIds)})` : Prisma.empty})`), " OR ")})` : Prisma.sql`AND FALSE` : Prisma.empty}
       ${sourceFence !== undefined ? sourceFence.length ? Prisma.sql`AND r."sourceId" IN (${Prisma.join(sourceFence)})` : Prisma.sql`AND FALSE` : Prisma.empty}
-      AND t.status = 'SUCCEEDED' AND t."executionVersion" = 2 AND t.resource = 'sales_traffic' AND r.quality = 'VALID' AND t."finishedAt" <= ${cutoff}
+      AND s.resource = 'sales_traffic' AND t.status = 'SUCCEEDED' AND t."executionVersion" = 2 AND t.resource = 'sales_traffic' AND t.stage <> 'PURGED' AND r.quality = 'VALID' AND t."finishedAt" <= ${cutoff}
       ${query.from ? Prisma.sql`AND r."businessDate" >= ${query.from}` : Prisma.empty}
       ${query.to ? Prisma.sql`AND r."businessDate" <= ${query.to}` : Prisma.empty}
       ${query.sellerAccountId ? Prisma.sql`AND r."sellerAccountId" = ${query.sellerAccountId}` : Prisma.empty}

@@ -55,6 +55,20 @@ test("SQL cutoff, task lineage, backend filters and pagination agree", async () 
   assert.equal((await readSalesTraffic(scope, new URLSearchParams({ keyword: "' OR 1=1 --" }), { actor: reader })).rows.length, 0);
   assert.equal((await readSalesTraffic(scope, new URLSearchParams({ sellerAccountId: "foreign" }), { actor: reader })).pagination.total, 0);
 });
+test("sales excludes a wrong-domain source and purged evidence even when successful rows remain", async () => {
+  try {
+    await prisma.amazonSyncDataSource.update({ where: { id: sourceId }, data: { resource: "inventory" } });
+    assert.equal((await readSalesTraffic(scope, new URLSearchParams(), { actor: reader })).pagination.total, 0);
+  } finally {
+    await prisma.amazonSyncDataSource.update({ where: { id: sourceId }, data: { resource: "sales_traffic" } });
+  }
+  try {
+    await prisma.amazonSyncRun.update({ where: { id: newRun }, data: { stage: "PURGED" } });
+    assert.equal((await readSalesTraffic(scope, new URLSearchParams({ taskId: newRun }), { actor: reader })).pagination.total, 0);
+  } finally {
+    await prisma.amazonSyncRun.update({ where: { id: newRun }, data: { stage: "WAITING" } });
+  }
+});
 test("database rejects duplicate day evidence and cross-workspace source/task references", async () => {
   const row = { ...scope, id: randomUUID(), sourceId, syncRunId: oldRun, sellerAccountId, marketplaceId, businessDate: "2026-10-01", reportId: "fixture", documentId: "fixture", quality: "VALID", metrics: {}, capturedAt: new Date() };
   await assert.rejects(() => prisma.amazonSalesTrafficSnapshot.create({ data: row }), (error: unknown) => (error as { code?: string }).code === "P2002");
