@@ -141,8 +141,8 @@ export async function finishAmazonAdsOAuth(input: { scope: AdsAuthScope; actor: 
   }
 }
 
-export async function listAmazonAdsProfiles(scope: AdsAuthScope) {
-  return prisma.amazonAdsProfile.findMany({ where: scope, orderBy: [{ countryCode: "asc" }, { profileId: "asc" }], take: 1000,
+export async function listAmazonAdsProfiles(scope: AdsAuthScope, where: Prisma.AmazonAdsProfileWhereInput = scope) {
+  return prisma.amazonAdsProfile.findMany({ where, orderBy: [{ countryCode: "asc" }, { profileId: "asc" }], take: 1000,
     select: { id: true, authorizationId: true, region: true, profileId: true, countryCode: true, marketplaceId: true, currencyCode: true, timezone: true, accountInfo: true, sellerAccountId: true, lastDiscoveredAt: true, authorization: { select: { name: true, status: true, lastValidatedAt: true, refreshTokenExpiresAt: true } }, syncPlans: { take: 1, select: { id: true, status: true, nextRunAt: true, lastSuccessAt: true, lastErrorCode: true, tasks: { take: 1, orderBy: { createdAt: "desc" }, select: { status: true, stage: true, processedCount: true, errorCode: true } } } } } });
 }
 

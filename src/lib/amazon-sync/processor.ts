@@ -118,16 +118,16 @@ async function assertLiveSource(tx: Prisma.TransactionClient, run: AmazonSyncRun
   const frozen = run.frozenScope as { sourceId?: string; sourceRevision?: number; authorizationId?: string; authorizationRevision?: number; amazonSellerId?: string; sellerAccountId?: string; marketplaceId?: string; resource?: string; region?: string; endpoint?: string; scheduleId?: string; scheduleRevision?: number } | null;
   const frozenDigest = frozen ? digest(frozen) : "";
   if ((scheduled ? !schedule : !grant) || !approverStillAuthorized || !frozen || frozenDigest !== run.frozenScopeDigest || (scheduled && (frozen.scheduleId !== run.scheduleId || frozen.scheduleRevision !== run.scheduleRevision || !isAutomaticResource(run.resource) || !automaticMarketplaces.has(frozen.marketplaceId ?? "")))) throw new SyncPreflightRejected("执行审批或固定目标范围已失效。");
-  const source = await tx.amazonSyncDataSource.findFirst({ where: { id: run.sourceId!, organizationId: run.organizationId, workspaceId: run.workspaceId, enabled: true }, include: { authorization: true, seller: true } });
-  if (!source || source.id !== frozen.sourceId || source.revision !== frozen.sourceRevision || source.authorizationId !== frozen.authorizationId || source.sellerAccountId !== frozen.sellerAccountId || source.marketplaceId !== frozen.marketplaceId || source.resource !== frozen.resource || source.resource !== run.resource || source.seller.status !== "active" || source.authorization.status !== "CONFIGURED" || source.authorization.amazonSellerId !== frozen.amazonSellerId || source.authorization.revision !== frozen.authorizationRevision || source.authorization.revision !== run.authorizationRevision) throw new SyncPreflightRejected("数据源或授权在同步期间改变。");
+  const source = await tx.amazonSyncDataSource.findFirst({ where: { id: run.sourceId!, organizationId: run.organizationId, workspaceId: run.workspaceId, ...(!scheduled ? { enabled: true } : {}) }, include: { authorization: true, seller: true } });
+  if (!source || source.id !== frozen.sourceId || source.revision !== frozen.sourceRevision || source.authorizationId !== frozen.authorizationId || source.sellerAccountId !== frozen.sellerAccountId || source.marketplaceId !== frozen.marketplaceId || source.resource !== frozen.resource || source.resource !== run.resource || (!scheduled && source.seller.status !== "active") || source.authorization.status !== "CONFIGURED" || source.authorization.amazonSellerId !== frozen.amazonSellerId || source.authorization.revision !== frozen.authorizationRevision || source.authorization.revision !== run.authorizationRevision) throw new SyncPreflightRejected("数据源或授权在同步期间改变。");
   if (["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource) && (source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint)) throw new SyncPreflightRejected("授权区域与已批准范围不匹配。");
   try {
-    await assertSellerMarketplaceAccess(run, run.requestedByUserId, source.sellerAccountId, source.marketplaceId, tx, "sync");
+    await assertSellerMarketplaceAccess(run, run.requestedByUserId, source.sellerAccountId, source.marketplaceId, tx, "sync", scheduled);
     if (!scheduled) await assertSellerMarketplaceAccess(run, grant!.approvedByUserId!, source.sellerAccountId, source.marketplaceId, tx, "sync");
   } catch { throw new SyncPreflightRejected("任务或审批人的 Seller 授权已撤销。"); }
   if (run.resource === "finance") {
     try {
-      const { policy } = await assertFinanceScope(tx, run, source, scheduled ? [run.requestedByUserId] : [run.requestedByUserId, grant!.approvedByUserId!]);
+      const { policy } = await assertFinanceScope(tx, run, source, scheduled ? [run.requestedByUserId] : [run.requestedByUserId, grant!.approvedByUserId!], scheduled);
       const approved = run.frozenScope as { financePolicy?: unknown };
       if (digest(policy) !== digest(parseFinancePolicy(approved.financePolicy))) throw new Error();
     } catch { throw new SyncPreflightRejected("财务角色、卖家级站点集合或审批策略已变化。"); }

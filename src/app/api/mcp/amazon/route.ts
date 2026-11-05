@@ -10,6 +10,30 @@ function toolInputSchema(name: string) {
     sellerAccountId: { type: "string" }, sellerAccountIds: { type: "array", items: { type: "string" }, maxItems: 200 },
     marketplaceId: { type: "string" },
   };
+  if (name === "amazon.ads.reports.list") return {
+    type: "object", additionalProperties: false, properties: {
+      ...scopeProperties,
+      ...Object.fromEntries(["internalProfileId", "authorizationId", "reportType", "adProduct", "campaignId", "adGroupId", "targetingId", "advertisedAsin", "searchTerm", "placement", "search"].map(key => [key, { type: "string", maxLength: 200 }])),
+      from: { type: "string", format: "date" }, to: { type: "string", format: "date" },
+      page: { type: "integer", minimum: 1, maximum: 10000 }, pageSize: { type: "integer", minimum: 1, maximum: 100 },
+      sortBy: { type: "string", enum: ["reportDate", "campaignId", "adGroupId", "impressions", "clicks", "spend", "orders", "sales", "searchTerm"] },
+      sortDirection: { type: "string", enum: ["asc", "desc"] },
+    },
+  };
+  if (["amazon.ads.entities.list", "ads_list_entities", "ads_get_campaign_structure"].includes(name)) return {
+    type: "object", additionalProperties: false, properties: {
+      ...scopeProperties,
+      ...Object.fromEntries(["internalProfileId", "authorizationId", "campaignId", "adGroupId", "externalId", "state", "search"].map(key => [key, { type: "string", maxLength: 200 }])),
+      entityType: { type: "string", enum: ["SP:campaign", "SP:ad-group", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"] },
+      page: { type: "integer", minimum: 1, maximum: 10000, default: 1 },
+      pageSize: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+      sort: { type: "string", enum: ["entityType", "externalId", "state", "syncedAt", "sourceUpdatedAt"] },
+      direction: { type: "string", enum: ["asc", "desc"] },
+    },
+  };
+  if (["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"].includes(name)) return {
+    type: "object", additionalProperties: false, properties: scopeProperties,
+  };
   if (["data_list_tables", "data_describe_table", "data_query", "data_sync_status", "data_sync_start"].includes(name)) {
     const properties = { ...scopeProperties };
     if (name === "data_describe_table") properties.table = { type: "string", maxLength: 100 };
@@ -19,7 +43,7 @@ function toolInputSchema(name: string) {
       properties.pageSize = { type: "integer", minimum: 1, maximum: 1000, default: 100 };
         properties.filters = {
         type: "object", additionalProperties: false,
-          properties: Object.fromEntries(["sellerSku", "asin", "condition", "listingStatus", "from", "to", "reportType", "adProduct", "campaignId", "adGroupId", "advertisedAsin", "searchTerm", "placement"].map(field => [field, { type: "string", maxLength: 200, ...(field === "from" || field === "to" ? { format: "date" } : {}) }])),
+          properties: Object.fromEntries(["sellerSku", "asin", "condition", "listingStatus", "from", "to", "reportType", "adProduct", "campaignId", "adGroupId", "advertisedAsin", "searchTerm", "placement", "targetingId", "internalProfileId", "authorizationId", "sortBy", "sortDirection"].map(field => [field, { type: "string", maxLength: 200, ...(field === "from" || field === "to" ? { format: "date" } : {}) }])),
       };
     }
     if (name === "data_sync_start") {

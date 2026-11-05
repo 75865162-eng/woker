@@ -3,6 +3,8 @@ import type { AdsAuthScope } from "./authorization";
 
 export const adsSyncStages = ["campaigns", "ad-groups", "keywords", "targets", "negatives", "reports"] as const;
 export type AdsSyncStage = typeof adsSyncStages[number];
+// Keep checkpoint indexes backward compatible; index 5 remains the unsupported reports stage.
+export const adsStructureStageCount = 5;
 export function adsSyncScopes(env: Record<string, string | undefined> = process.env): AdsAuthScope[] {
   if (env.AMAZON_ADS_SYNC_ENABLED !== "true") return [];
   try {

@@ -44,6 +44,6 @@ const plan = {
 mkdirSync("dist", { recursive: true });
 writeFileSync("dist/deployment-plan.json", `${JSON.stringify(plan, null, 2)}\n`);
 if (process.env.GITHUB_OUTPUT) {
-  writeFileSync(process.env.GITHUB_OUTPUT, `release=${runtimeChanged}\nmanual_review=${deploymentChanged}\n`, { flag: "a" });
+  writeFileSync(process.env.GITHUB_OUTPUT, `release=${runtimeChanged}\nmanual_review=${plan.requiresManualDeploymentReview}\n`, { flag: "a" });
 }
 console.log(JSON.stringify(plan, null, 2));

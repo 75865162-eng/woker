@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { adsReportWindows, adsScopeEnabled, adsSyncFailureStatus, adsSyncKey, adsSyncScopes, parseAdsCheckpoint } from "@/lib/amazon-ads/sync-policy";
 import { amazonAdsTokenExpiryNotice } from "@/lib/amazon-ads/token-expiry";
-import { adsReadAdapterReady, createSponsoredProductsAdGroupReader, createSponsoredProductsCampaignNegativeKeywordReader, createSponsoredProductsCampaignNegativeTargetReader, createSponsoredProductsCampaignReader, createSponsoredProductsKeywordReader, createSponsoredProductsNegativeKeywordReader, createSponsoredProductsNegativeTargetReader, createSponsoredProductsTargetReader, pendingAdsReadAdapter, validateAdsPage } from "@/lib/amazon-ads/sync-adapter";
+import { adsReadAdapterReady, createSponsoredProductsAdGroupReader, createSponsoredProductsCampaignNegativeKeywordReader, createSponsoredProductsCampaignNegativeTargetReader, createSponsoredProductsReadAdapter, createSponsoredProductsCampaignReader, createSponsoredProductsKeywordReader, createSponsoredProductsNegativeKeywordReader, createSponsoredProductsNegativeTargetReader, createSponsoredProductsTargetReader, pendingAdsReadAdapter, validateAdsPage } from "@/lib/amazon-ads/sync-adapter";
 import { adsClientIdHash } from "@/lib/amazon-ads/api-budget";
 import { parseReportingV1Envelope } from "@/lib/amazon-ads/reporting-contract";
 
@@ -51,7 +51,7 @@ test("Ads checkpoints validate stage, cursor and page count", () => {
 });
 
 test("Ads adapter rejects incomplete pages and never fabricates data before its contract is implemented", () => {
-  assert.equal(adsReadAdapterReady(), false);
+  assert.equal(adsReadAdapterReady(), true);
   assert.throws(() => pendingAdsReadAdapter.assertImplemented(), { code: "ADS_READ_ADAPTER_NOT_IMPLEMENTED" });
   assert.throws(() => validateAdsPage({ entities: [], nextCursor: null, complete: false }, null));
   assert.deepEqual(validateAdsPage({ entities: [{ entityType: "SP:campaign", externalId: "123", payload: { name: "fixture" } }], nextCursor: null, complete: true }, null).entities.length, 1);
@@ -73,13 +73,13 @@ test("SP campaign reader builds a regional read-only request and preserves the n
   assert.equal(headers.get("Authorization"), "Bearer token-fixture");
   assert.equal(headers.get("Content-Type"), "application/vnd.spCampaign.v3+json");
   assert.equal(headers.get("Accept"), "application/vnd.spCampaign.v3+json");
-  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { includeExtendedDataFields: true, nextToken: "cursor-1" });
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { includeExtendedDataFields: true, stateFilter: { include: ["ENABLED", "PAUSED", "ARCHIVED"] }, nextToken: "cursor-1" });
   assert.deepEqual(page, {
     entities: [{ entityType: "SP:campaign", externalId: "123", state: "ENABLED", payload: { campaignId: "123", name: "fixture", state: "ENABLED", targetingType: "MANUAL", startDate: "2026-01-01", budget: { budget: 20, budgetType: "DAILY" }, extendedData: { lastUpdateDateTime: "2026-11-05T12:00:00Z" } }, sourceUpdatedAt: "2026-11-05T12:00:00Z" }],
     nextCursor: "cursor-2",
     complete: true,
   });
-  assert.equal(adsReadAdapterReady(), false);
+  assert.equal(adsReadAdapterReady(), true);
 });
 
 test("SP campaign reader rejects malformed fixtures and classifies HTTP failures without exposing bodies", async () => {
@@ -120,13 +120,13 @@ test("SP ad group reader preserves campaign parent IDs and validates its v3 cont
   assert.equal(request?.url, "https://advertising-api-fe.amazon.com/sp/adGroups/list");
   const headers = new Headers(request?.init?.headers);
   assert.equal(headers.get("Content-Type"), "application/vnd.spAdGroup.v3+json");
-  assert.deepEqual(JSON.parse(String(request?.init?.body)), { includeExtendedDataFields: true });
+  assert.deepEqual(JSON.parse(String(request?.init?.body)), { includeExtendedDataFields: true, stateFilter: { include: ["ENABLED", "PAUSED", "ARCHIVED"] } });
   assert.deepEqual(page, {
     entities: [{ entityType: "SP:ad-group", externalId: "456", parentExternalId: "123", state: "PAUSED", payload: { adGroupId: "456", campaignId: "123", name: "fixture group", state: "PAUSED", defaultBid: 0.83, extendedData: { lastUpdateDateTime: "2026-11-05T10:00:00Z" } }, sourceUpdatedAt: "2026-11-05T10:00:00Z" }],
     nextCursor: null,
     complete: true,
   });
-  assert.equal(adsReadAdapterReady(), false);
+  assert.equal(adsReadAdapterReady(), true);
   await assert.rejects(createSponsoredProductsAdGroupReader(async () => new Response(JSON.stringify({ adGroups: [{ adGroupId: "456", name: "orphan", state: "ENABLED", defaultBid: 1 }] }))).readPage({ region: "NA", profileId: "789", clientId: "fixture", accessToken: "fixture", cursor: null }), { code: "ADS_AD_GROUP_RESPONSE_INVALID" });
 });
 
@@ -149,7 +149,7 @@ test("SP keyword, target and both levels of negative readers preserve parent ide
     assert.equal(request?.url, `https://advertising-api.amazon.com${item.path}`);
     const headers = new Headers(request?.init?.headers);
     assert.equal(headers.get("Content-Type"), item.media);
-    assert.deepEqual(JSON.parse(String(request?.init?.body)), { includeExtendedDataFields: true });
+    assert.deepEqual(JSON.parse(String(request?.init?.body)), { includeExtendedDataFields: true, stateFilter: { include: ["ENABLED", "PAUSED", "ARCHIVED"] } });
     assert.deepEqual(page.entities[0], {
       entityType: item.entityType, externalId: "keywordId" in item.payload ? item.payload.keywordId : item.payload.targetId,
       parentExternalId: "adGroupId" in item.payload ? item.payload.adGroupId : item.payload.campaignId, state: item.payload.state,
@@ -157,7 +157,7 @@ test("SP keyword, target and both levels of negative readers preserve parent ide
     });
     assert.equal(page.nextCursor, "cursor-next");
   }
-  assert.equal(adsReadAdapterReady(), false);
+  assert.equal(adsReadAdapterReady(), true);
 });
 
 test("SP object readers fail closed on invalid IDs, enums and parent relationships", async () => {
@@ -214,4 +214,32 @@ test("Ads task failures distinguish retryable faults, terminal scope errors, ada
   assert.equal(adsSyncFailureStatus({ adapterReady: true, retryable: false, exhausted: false }), "BLOCKED");
   assert.equal(adsSyncFailureStatus({ adapterReady: false, retryable: false, exhausted: false }), "WAITING_FOR_ADAPTER");
   assert.equal(adsSyncFailureStatus({ adapterReady: true, retryable: true, exhausted: true }), "FAILED");
+});
+
+
+test("SP live adapter traverses four negative collections without mixing cursors or entity levels", async () => {
+  const paths: string[] = [];
+  const adapter = createSponsoredProductsReadAdapter(async (url, init) => {
+    const path = new URL(String(url)).pathname; paths.push(path);
+    assert.ok(JSON.parse(String(init?.body)).stateFilter);
+    const collection = path.includes("campaignNegativeKeywords") ? "campaignNegativeKeywords" : path.includes("campaignNegativeTargets") ? "campaignNegativeTargetingClauses" : path.includes("negativeKeywords") ? "negativeKeywords" : "negativeTargetingClauses";
+    return new Response(JSON.stringify({ [collection]: [], ...(paths.length === 1 ? { nextToken: "amazon-token" } : {}) }));
+  });
+  const input = { stage: "negatives" as const, region: "NA" as const, profileId: "123", clientId: "fixture", accessToken: "fixture" };
+  let cursor: string | null = null;
+  for (let i = 0; i < 5; i++) { const page = await adapter.readPage({ ...input, cursor }); cursor = page.nextCursor; }
+  assert.equal(cursor, null);
+  assert.deepEqual(paths, ["/sp/negativeKeywords/list", "/sp/negativeKeywords/list", "/sp/negativeTargets/list", "/sp/campaignNegativeKeywords/list", "/sp/campaignNegativeTargets/list"]);
+  await assert.rejects(adapter.readPage({ ...input, cursor: '{"v":1,"index":99,"token":null}' }), { code: "ADS_NEGATIVE_CHECKPOINT_INVALID" });
+  await assert.rejects(adapter.readPage({ ...input, stage: "reports", cursor: null }), { code: "ADS_REPORT_ADAPTER_NOT_IMPLEMENTED" });
+  assert.equal(adsReadAdapterReady(["reports"]), false);
+});
+
+
+test("SP targeting supports official OTHER expressionType and rejects malformed predicates", async () => {
+  const input = { region: "NA" as const, profileId: "123", clientId: "fixture", accessToken: "fixture", cursor: null };
+  const row = { targetId: "602", campaignId: "101", adGroupId: "202", expression: [{ type: "OTHER" }], resolvedExpression: [], expressionType: "OTHER", state: "ENABLED" };
+  const page = await createSponsoredProductsTargetReader(async () => new Response(JSON.stringify({ targetingClauses: [row] }))).readPage(input);
+  assert.equal(page.entities[0].payload.expressionType, "OTHER");
+  await assert.rejects(createSponsoredProductsTargetReader(async () => new Response(JSON.stringify({ targetingClauses: [{ ...row, expression: ["not-an-object"] }] }))).readPage(input), { code: "ADS_TARGET_RESPONSE_INVALID" });
 });

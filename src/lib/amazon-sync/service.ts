@@ -239,13 +239,13 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   const scheduled = options.trigger === "schedule";
   const approval = scheduled ? null : approvedContext(scope, "run");
   scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
-  const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: sourceId, enabled: true }, include: { authorization: true, seller: true } });
-  if (!source || source.authorization.status !== "CONFIGURED" || source.seller.status !== "active") throw new SyncInputError("数据源、授权或店铺不可用。", 409);
+  const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: sourceId, ...(!scheduled ? { enabled: true } : {}) }, include: { authorization: true, seller: true } });
+  if (!source || source.authorization.status !== "CONFIGURED" || (!scheduled && source.seller.status !== "active")) throw new SyncInputError("数据源、授权或店铺不可用。", 409);
   if (!source.authorization.amazonSellerId) throw new SyncInputError("基础连接未填写真实 Seller ID，不能启动店铺数据同步。", 409);
   implementedDomain(source.resource);
   const schedule = scheduled && options.scheduleId ? await tx.amazonSyncSchedule.findFirst({ where: { ...scope, id: options.scheduleId, resource: source.resource, executionVersion: 2, enabled: true, revision: options.scheduleRevision, targets: { some: { sourceId } } } }) : null;
   if (scheduled && (!schedule || schedule.updatedByUserId !== actorUserId || schedule.planKey !== automaticPlanKey(source.id) || !automaticMarketplaces.has(source.marketplaceId) || !(automaticResources as readonly string[]).includes(source.resource))) throw new SyncInputError("自动计划已停用、已变更或不包含此数据源。", 409);
-  await assertSellerMarketplaceAccess(scope, actorUserId, source.sellerAccountId, source.marketplaceId, tx, "sync");
+  await assertSellerMarketplaceAccess(scope, actorUserId, source.sellerAccountId, source.marketplaceId, tx, "sync", scheduled);
   const existing = await tx.amazonSyncRun.findUnique({ where: { organizationId_workspaceId_idempotencyKey: { ...scope, idempotencyKey: options.key } } });
   if (existing) {
     if (existing.sourceId !== sourceId || existing.executionVersion !== 2) throw new SyncInputError("幂等键已用于其他范围。", 409);
@@ -258,7 +258,7 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   const orderWindow = source.resource === "orders" ? orderWindowFromFrozen(options.orderWindow) : undefined;
   if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy));
   const financeWindow = source.resource === "finance" ? financeWindowFromFrozen(options.financeWindow) : undefined;
-  if (financeWindow) await assertFinanceScope(tx, scope, source, [actorUserId]);
+  if (financeWindow) await assertFinanceScope(tx, scope, source, [actorUserId], scheduled);
   const returnWindow = source.resource === "returns" ? returnWindowFromFrozen(options.returnWindow) : undefined;
   if (returnWindow) assertReturnRoles(source.authorization);
   const reportWindow = ["settlements", "inventory_events"].includes(source.resource) ? domainReportRunWindow(source.resource as DomainReportResource, options.reportWindow) : undefined;

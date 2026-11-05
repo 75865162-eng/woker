@@ -94,6 +94,48 @@ test("ERP Skill setup reports live published availability within current seller 
   assert.equal(tables.find(table => table.name === "sales_traffic_daily")?.available, true);
   assert.ok(!JSON.stringify(tables).includes(sellerB));
 });
+test("Ads Skill report table exposes only the latest successful published version in authorized scope", async () => {
+  const auth = randomUUID(), profileA = randomUUID(), profileB = randomUUID(), plan = randomUUID();
+  const adsAuthorization = await prisma.amazonAdsAuthorization.create({ data: { ...scope, id: auth, name: "fixture", credentialsCiphertext: "fixture", consentRegion: "NA", authorizedByUserId: owner } });
+  await prisma.amazonAdsProfile.create({ data: { ...scope, id: profileA, authorizationId: adsAuthorization.id, region: "NA", profileId: `10${Date.now()}`, countryCode: "US", marketplaceId: site, currencyCode: "USD", accountInfo: {}, sellerAccountId: sellerA } });
+  await prisma.amazonAdsProfile.create({ data: { ...scope, id: profileB, authorizationId: adsAuthorization.id, region: "NA", profileId: `20${Date.now()}`, countryCode: "US", marketplaceId: site, currencyCode: "USD", accountInfo: {}, sellerAccountId: sellerB } });
+  await prisma.amazonAdsSyncPlan.create({ data: { ...scope, id: plan, profileId: profileA, actorUserId: owner, sellerAccountId: sellerA, authorizationRevision: 1 } });
+  const reportTask = async (id: string, status: "SUCCEEDED" | "FAILED", profileId: string, suffix: string) => {
+    const taskId = randomUUID(), versionId = randomUUID();
+    await prisma.amazonAdsSyncTask.create({ data: { ...scope, id: taskId, planId: plan, profileId, requestedByUserId: owner, idempotencyKey: `${suffix}-${taskId}`, planRevision: 1, status } });
+    await prisma.amazonAdsReportVersion.create({ data: { ...scope, id: versionId, profileId, sourceTaskId: taskId, status: status === "SUCCEEDED" ? "PUBLISHED" : "STAGING", requestedFrom: new Date("2026-11-01T00:00:00Z"), requestedTo: new Date("2026-11-01T00:00:00Z"), rowCount: suffix === "new" ? 2 : 1, publishedAt: status === "SUCCEEDED" ? new Date(Date.now() + (suffix === "new" ? 1000 : 0)) : null } });
+    await prisma.amazonAdsReportFact.create({ data: { ...scope, id, profileId, versionId, reportType: "sp_campaigns", adProduct: "SPONSORED_PRODUCTS", reportDate: new Date("2026-11-01T00:00:00Z"), factKey: "a".repeat(64), campaignId: suffix === "old" ? "retired-campaign" : suffix === "new" ? "current-campaign" : null, impressions: BigInt(suffix === "new" ? 20 : 10), clicks: BigInt(1), spend: "1.250000", orders: BigInt(1), sales: "5.000000", units: BigInt(1), currencyCode: "USD", apiVersion: "fixture-v1", sourceTaskId: taskId, rawDimensions: {} } });
+    if (suffix === "new") await prisma.amazonAdsReportFact.create({ data: { ...scope, id: randomUUID(), profileId, versionId, reportType: "sp_campaigns", adProduct: "SPONSORED_PRODUCTS", reportDate: new Date("2026-11-01T00:00:00Z"), factKey: "b".repeat(64), campaignId: "incomplete-campaign", impressions: null, clicks: null, spend: null, orders: null, sales: null, units: null, currencyCode: "USD", apiVersion: "fixture-v1", sourceTaskId: taskId, rawDimensions: {} } });
+    return versionId;
+  };
+  await reportTask(randomUUID(), "SUCCEEDED", profileA, "old");
+  await reportTask(randomUUID(), "SUCCEEDED", profileA, "new");
+  await reportTask(randomUUID(), "FAILED", profileA, "failed");
+  await reportTask(randomUUID(), "SUCCEEDED", profileB, "foreign");
+  const reportCredential = await manageMcpCredential(scope, actor, { action: "create", name: "explicit Ads reports", tools: [...tools, "amazon.ads.reports.list"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now()+60000).toISOString() });
+  const adsCall = (tool: string, args = {}) => call(tool, args, reportCredential.token!);
+  const legacyCatalog = await call("data_list_tables") as { data: { items: Array<{ name: string }> } };
+  assert.ok(!legacyCatalog.data.items.some(table => table.name === "ads_report_daily"));
+  await assert.rejects(() => call("data_query", { table: "ads_report_daily" }), /Ads 报表工具未授权/);
+  const catalog = await adsCall("data_list_tables") as { data: { items: Array<{ name: string }> } };
+  assert.ok(catalog.data.items.some(table => table.name === "ads_report_daily"));
+  const availability = await listMcpSkillTableOptions(scope, actor);
+  const availableAds = availability.find(table => table.name === "ads_report_daily");
+  assert.ok(availableAds); assert.equal(availableAds.sourceCount, 1); assert.equal(availableAds.rowCount, null);
+  const schema = await adsCall("data_describe_table", { table: "ads_report_daily" }) as { data: { table: { fields: Array<{ name: string; nullable?: boolean }> } } };
+  assert.ok(schema.data.table.fields.some(field => field.name === "spend" && field.nullable));
+  const result = await adsCall("data_query", { table: "ads_report_daily", filters: { from: "2026-11-01", to: "2026-11-01", campaignId: "current-campaign" } }) as { data: { total: number; items: Array<{ impressions: string; currencyCode: string }> }; meta: { currency: string } };
+  assert.equal(result.data.total, 1);
+  assert.equal(result.data.items[0].impressions, "20");
+  assert.equal(result.data.items[0].currencyCode, "USD");
+  assert.equal(result.meta.currency, "per_row");
+  const stale = await adsCall("data_query", { table: "ads_report_daily", filters: { campaignId: "retired-campaign" } }) as { data: { total: number } };
+  assert.equal(stale.data.total, 0);
+  await assert.rejects(() => adsCall("data_query", { table: "ads_report_daily", filters: { from: "2020-01-01" } }), /367 天/);
+  const incomplete = await adsCall("data_query", { table: "ads_report_daily", filters: { campaignId: "incomplete-campaign" } }) as { data: { items: Array<{ impressions: string | null; spend: string | null; sales: string | null }> } };
+  assert.deepEqual(incomplete.data.items[0] && [incomplete.data.items[0].impressions, incomplete.data.items[0].spend, incomplete.data.items[0].sales], [null, null, null]);
+  assert.ok(!JSON.stringify(result).includes(sellerB));
+});
 test("generic sync request remains pending approval and requires the MCP sync grant", async () => {
   await assert.rejects(() => call("data_sync_start", { resource: "inventory" }), /授权|不可访问/);
   await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { actions: ["view", "export", "sync"] } });

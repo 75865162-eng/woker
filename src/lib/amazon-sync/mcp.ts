@@ -1,14 +1,28 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type AmazonAdsEntityRecord } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, assertAmazonScopeAdmin, explicitAmazonDataAccess, parseAccessScopes, sellerAccessWhere, withAmazonMcpBoundary, type AmazonAccessScope, type AmazonDataAction } from "./data-access";
 import { requiredText, SyncInputError, type SyncScope } from "./policy";
 import { readTaskSnapshot } from "./snapshots";
 import { readSalesTraffic } from "./sales-query";
 import { availableSkillTables, describeSkillTable, querySkillTable, skillTableAvailability } from "./skill-data";
+import { assertAdsQueryBudget } from "@/lib/amazon-ads/query-budget";
+import { queryPublishedAdsReports } from "@/lib/amazon-ads/report-query";
+import { AdsQueryError, parseAdsQuery } from "@/lib/amazon-ads/query-contract";
+import { queryAdsEntities } from "@/lib/amazon-ads/data-query";
+import { adsReadAdapterReady } from "@/lib/amazon-ads/sync-adapter";
+import { adsScopeEnabled } from "@/lib/amazon-ads/sync-policy";
 import { requestChange } from "./change-approval";
 
 export const amazonMcpTools = [
+  ["amazon.ads.reports.list", "只读查询本地最新已发布广告日报；需要独立显式授权"],
+  ["amazon.ads.entities.list", "只读分页查询已同步的 SP 广告结构；无报告日期维度"],
+  ["ads_list_entities", "Skill 兼容别名：只读查询已同步的 SP 广告结构"],
+  ["ads_get_campaign_structure", "Skill 兼容别名：只读查询活动结构"],
+  ["ads_get_sync_status", "Skill 兼容别名：读取 Ads 同步和发布状态"],
+  ["ads_get_data_health", "Skill 兼容别名：读取 Ads 数据完整性和 Schema 状态"],
+  ["ads_get_connection_status", "Skill 兼容别名：读取 Ads 连接状态"],
+  ["ads_get_settings", "Skill 兼容别名：读取 Ads Profile、合同和同步配置摘要"],
   ["amazon.stores.list", "查询当前授权店铺和站点"], ["amazon.inventory.list", "查询最近已同步的库存"],
   ["amazon.inventory.summary", "汇总授权库存"], ["amazon.catalog.list", "查询最近已同步的刊登"],
   ["amazon.sales.list", "查询店铺逐日销售流量快照"], ["amazon.sync.status", "查询同步状态"],
@@ -19,6 +33,8 @@ export const amazonMcpTools = [
   ["data_sync_status", "查询当前授权数据源和同步状态"],
   ["data_sync_start", "提交同步申请；审批并应用后才会创建同步任务"],
 ] as const;
+const canonicalMcpTool = (tool: string) => tool === "ads_list_entities" || tool === "ads_get_campaign_structure" ? "amazon.ads.entities.list" : tool;
+const adsStatusTools = new Set(["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"]);
 export const mcpTokenHash = (value: string) => createHash("sha256").update(value).digest("hex");
 const credentialSelect = { id: true, name: true, userId: true, tokenPrefix: true, tools: true, scopes: true, status: true, revision: true, expiresAt: true, createdAt: true, lastUsedAt: true } satisfies Prisma.AmazonMcpCredentialSelect;
 
@@ -54,17 +70,128 @@ export async function listMcpSkillTableOptions(scope: SyncScope, actor: string) 
     const sources = await explicitSources(prisma, scope, actor);
     const tables = skillTableAvailability(sources).filter(table => table.name !== "ads_report_daily");
     const authorizedProfiles = sources.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId }));
-    if (!authorizedProfiles.length) return tables;
-    const versions = await prisma.amazonAdsReportVersion.findMany({ where: { ...scope, status: "PUBLISHED", sourceTask: { status: "SUCCEEDED" }, profile: { ...scope, OR: authorizedProfiles } }, select: { profileId: true, rowCount: true, publishedAt: true } });
-    const publishedAt = versions.map(version => version.publishedAt).filter((value): value is Date => !!value);
-    tables.push({ name: "ads_report_daily", source: "AmazonAdsReportFact", grain: ["sellerAccountId", "marketplaceId", "reportType", "adProduct", "reportDate", "factKey", "versionId"], warnings: ["只展示完整成功任务的已发布版本。", "金额按行返回；不得跨币种汇总。", "Amazon 报表真实样本仍待核验。"], schemaStatus: "application_schema_confirmed_source_sample_pending", available: versions.length > 0, sourceCount: new Set(versions.map(version => version.profileId)).size, rowCount: versions.reduce((total, version) => total + version.rowCount, 0), lastSyncAt: publishedAt.length ? new Date(Math.max(...publishedAt.map(value => value.getTime()))).toISOString() : null, freshness: versions.length ? "ok" : "missing" });
+    if (!authorizedProfiles.length) {
+      tables.push({ name: "ads_report_daily", source: "AmazonAdsReportFact", grain: ["sellerAccountId", "marketplaceId", "reportType", "adProduct", "reportDate", "factKey", "versionId"], warnings: ["只展示完整成功任务的已发布版本。", "金额按行返回；不得跨币种汇总。", "Amazon 报表真实样本仍待核验。"], schemaStatus: "application_schema_confirmed_source_sample_pending", available: false, sourceCount: 0, rowCount: null, lastSyncAt: null, freshness: "missing" });
+      return tables;
+    }
+    const pairs = authorizedProfiles.map(source => Prisma.sql`(p."sellerAccountId" = ${source.sellerAccountId} AND p."marketplaceId" = ${source.marketplaceId})`);
+    const [adsAvailability] = await prisma.$queryRaw<Array<{ sourceCount: number; lastSyncAt: Date | null }>>(Prisma.sql`
+      SELECT COUNT(DISTINCT v."profileId")::int AS "sourceCount", MAX(v."publishedAt") AS "lastSyncAt"
+      FROM "AmazonAdsReportVersion" v
+      JOIN "AmazonAdsSyncTask" t ON t."organizationId" = v."organizationId" AND t."workspaceId" = v."workspaceId" AND t.id = v."sourceTaskId"
+      JOIN "AmazonAdsProfile" p ON p."organizationId" = v."organizationId" AND p."workspaceId" = v."workspaceId" AND p.id = v."profileId"
+      JOIN "AmazonAdsAuthorization" a ON a.id = p."authorizationId" AND a."organizationId" = p."organizationId" AND a."workspaceId" = p."workspaceId"
+      WHERE a.status = 'CONNECTED' AND v."publishedAt" IS NOT NULL AND v."organizationId" = ${scope.organizationId} AND v."workspaceId" = ${scope.workspaceId}
+        AND v.status = 'PUBLISHED' AND t.status = 'SUCCEEDED' AND (${Prisma.join(pairs, " OR ")})`);
+    const reportFreshnessRows = await prisma.$queryRaw<Array<{ profileId: string; lastPublishedAt: Date | null; intervalMinutes: number | null }>>(Prisma.sql`
+      SELECT p.id AS "profileId", MAX(CASE WHEN t.id IS NOT NULL THEN v."publishedAt" END) AS "lastPublishedAt", MAX(plan."intervalMinutes")::int AS "intervalMinutes"
+      FROM "AmazonAdsProfile" p
+      JOIN "AmazonAdsAuthorization" a ON a.id = p."authorizationId" AND a."organizationId" = p."organizationId" AND a."workspaceId" = p."workspaceId"
+      LEFT JOIN "AmazonAdsSyncPlan" plan ON plan."organizationId" = p."organizationId" AND plan."workspaceId" = p."workspaceId" AND plan."profileId" = p.id
+      LEFT JOIN "AmazonAdsReportVersion" v ON v."organizationId" = p."organizationId" AND v."workspaceId" = p."workspaceId" AND v."profileId" = p.id AND v.status = 'PUBLISHED' AND v."publishedAt" IS NOT NULL
+      LEFT JOIN "AmazonAdsSyncTask" t ON t."organizationId" = v."organizationId" AND t."workspaceId" = v."workspaceId" AND t.id = v."sourceTaskId" AND t.status = 'SUCCEEDED'
+      WHERE p."organizationId" = ${scope.organizationId} AND p."workspaceId" = ${scope.workspaceId} AND a.status = 'CONNECTED' AND (${Prisma.join(pairs, " OR ")})
+      GROUP BY p.id`);
+    const now = Date.now();
+    const reportFreshness = reportFreshnessRows.length && reportFreshnessRows.some(row => row.lastPublishedAt)
+      ? reportFreshnessRows.every(row => row.lastPublishedAt && (!row.intervalMinutes || now - row.lastPublishedAt.getTime() <= row.intervalMinutes * 2 * 60_000)) ? "ok" : "stale"
+      : "missing";
+    tables.push({ name: "ads_report_daily", source: "AmazonAdsReportFact", grain: ["sellerAccountId", "marketplaceId", "reportType", "adProduct", "reportDate", "factKey", "versionId"], warnings: ["只展示完整成功任务的已发布版本。", "金额按行返回；不得跨币种汇总。", "Amazon 报表真实样本仍待核验。"], schemaStatus: "application_schema_confirmed_source_sample_pending", available: (adsAvailability?.sourceCount ?? 0) > 0, sourceCount: adsAvailability?.sourceCount ?? 0, rowCount: null, lastSyncAt: adsAvailability?.lastSyncAt?.toISOString() ?? null, freshness: reportFreshness });
     return tables;
   }
-  catch (e) { if (e instanceof SyncInputError && e.status === 403) return skillTableAvailability([]); throw e; }
+  catch (e) { if (e instanceof SyncInputError && e.status === 403) return skillTableAvailability([]).map(table => table.name === "ads_report_daily" ? { ...table, schemaStatus: "application_schema_confirmed_source_sample_pending", rowCount: null, warnings: ["只展示完整成功任务的已发布版本。", "金额按行返回；不得跨币种汇总。", "Amazon 报表真实样本仍待核验。"] } : table); throw e; }
+}
+
+function safeCallLogMetadata(value: Prisma.JsonValue | null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const row = value as Record<string, Prisma.JsonValue | undefined>;
+  const result: Record<string, unknown> = {};
+  for (const key of ["requestId", "tool", "reason", "matchedCount", "returnedCount", "source", "page", "pageSize", "table", "resource", "from", "to", "sourceVersionIds"] as const) {
+    if (row[key] !== undefined) result[key] = row[key];
+  }
+  if (row.querySummary && typeof row.querySummary === "object" && !Array.isArray(row.querySummary)) result.querySummary = row.querySummary;
+  return result;
+}
+
+/**
+ * Server-backed status used by the Skill/ERP settings page. It intentionally
+ * reports only the current user's authorized Ads bindings and redacted MCP
+ * audit summaries; credentials, raw payloads and encrypted fields never leave
+ * the server.
+ */
+export type McpCallLogStatus = "SUCCEEDED" | "DENIED";
+export type McpSettingsSnapshotOptions = { callLogPage?: number; callLogPageSize?: number; callLogStatus?: McpCallLogStatus; callLogTool?: string };
+
+export async function getMcpSettingsSnapshot(scope: SyncScope, actor: string, options: McpSettingsSnapshotOptions = {}) {
+  try {
+    const callLogPage = options.callLogPage ?? 1;
+    const callLogPageSize = options.callLogPageSize ?? 20;
+    if (!Number.isInteger(callLogPage) || callLogPage < 1 || callLogPage > 10000 || !Number.isInteger(callLogPageSize) || callLogPageSize < 1 || callLogPageSize > 100) throw new SyncInputError("MCP 调用记录分页参数无效。", 400);
+    if (options.callLogTool && (options.callLogTool.length > 120 || !amazonMcpTools.some(([name]) => name === options.callLogTool))) throw new SyncInputError("MCP 调用工具筛选无效。", 400);
+    const callLogWhere: Prisma.AuditLogWhereInput = {
+      organizationId: scope.organizationId,
+      userId: actor,
+      action: options.callLogStatus ? `amazon.mcp.tool.${options.callLogStatus === "SUCCEEDED" ? "succeeded" : "denied"}` : { in: ["amazon.mcp.tool.succeeded", "amazon.mcp.tool.denied"] },
+      AND: [
+        { metadata: { path: ["workspaceId"], equals: scope.workspaceId } },
+        ...(options.callLogTool ? [{ metadata: { path: ["tool"], equals: options.callLogTool } }] : []),
+      ],
+    };
+    const access = await explicitAmazonDataAccess(scope, actor, prisma, "view", true);
+    const allowed = sellerAccessWhere(access);
+    const sellers = await prisma.sellerAccount.findMany({ where: { ...scope, status: "active" }, select: { id: true } });
+    const profiles = await prisma.amazonAdsProfile.findMany({
+      where: { ...scope, ...allowed, sellerAccountId: { in: sellers.map(seller => seller.id) } },
+      orderBy: { updatedAt: "desc" }, take: 500,
+      select: { id: true, profileId: true, sellerAccountId: true, marketplaceId: true, currencyCode: true, timezone: true, region: true, authorizationId: true, authorization: { select: { name: true, status: true, lastValidatedAt: true, validationErrorCode: true } } },
+    });
+    const profileIds = profiles.map(profile => profile.id);
+    const connectedProfileIds = profiles.filter(profile => profile.authorization.status === "CONNECTED" && profile.sellerAccountId).map(profile => profile.id);
+    const [plans, states, versions, callLogTotal, logs] = await Promise.all([
+      prisma.amazonAdsSyncPlan.findMany({ where: { ...scope, profileId: { in: profileIds } }, select: { profileId: true, status: true, intervalMinutes: true, reportLookbackDays: true, attributionLagDays: true, lastSuccessAt: true, lastErrorCode: true } }),
+      prisma.amazonAdsSyncDomainState.findMany({ where: { ...scope, profileId: { in: profileIds } }, orderBy: [{ profileId: "asc" }, { dataDomain: "asc" }], select: { profileId: true, dataDomain: true, reportType: true, status: true, coveredFrom: true, coveredTo: true, lastAttemptAt: true, lastSuccessAt: true, lastTaskId: true, warningCodes: true } }),
+      prisma.amazonAdsReportVersion.findMany({
+        where: { ...scope, profileId: { in: connectedProfileIds }, status: "PUBLISHED", publishedAt: { not: null }, sourceTask: { status: "SUCCEEDED" } },
+        orderBy: [{ publishedAt: "desc" }, { id: "desc" }], take: 100,
+        select: { id: true, profileId: true, sourceTaskId: true, status: true, requestedFrom: true, requestedTo: true, rowCount: true, publishedAt: true, sourceTask: { select: { status: true, finishedAt: true, errorCode: true } }, profile: { select: { profileId: true, sellerAccountId: true, marketplaceId: true, currencyCode: true, timezone: true } }, requests: { orderBy: { createdAt: "desc" }, take: 1, select: { reportType: true, adProduct: true, apiVersion: true, status: true, requestedFrom: true, requestedTo: true, completedAt: true, warningCodes: true } } },
+      }),
+      prisma.auditLog.count({ where: callLogWhere }),
+      prisma.auditLog.findMany({ where: callLogWhere, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (callLogPage - 1) * callLogPageSize, take: callLogPageSize, select: { id: true, action: true, createdAt: true, metadata: true } }),
+    ]);
+    const profilePlan = new Map(plans.map(plan => [plan.profileId, plan]));
+    const now = Date.now();
+    const latestPublishedAt = versions.map(version => version.publishedAt).filter((value): value is Date => !!value).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+    const latestPlan = profiles.map(profile => profilePlan.get(profile.id)).find(plan => plan?.intervalMinutes);
+    const freshness = !latestPublishedAt ? "missing" : latestPlan && now - latestPublishedAt.getTime() <= latestPlan.intervalMinutes * 2 * 60_000 ? "ok" : "stale";
+    return {
+      ads: {
+        connectionStatus: connectedProfileIds.length ? "CONNECTED" : profiles.length ? "DISCONNECTED_OR_UNBOUND" : "NOT_CONFIGURED",
+        oauthConfigured: Boolean(process.env.AMAZON_ADS_LWA_CLIENT_ID?.trim() && process.env.AMAZON_ADS_LWA_CLIENT_SECRET?.trim() && process.env.AMAZON_ADS_OAUTH_REDIRECT_URI?.trim()),
+        syncEnabled: adsScopeEnabled(scope),
+        structureAdapterReady: adsReadAdapterReady(),
+        reportAdapterReady: adsReadAdapterReady(["reports"]),
+        profileCount: profiles.length,
+        connectedProfileCount: connectedProfileIds.length,
+        profiles: profiles.map(profile => ({ profileRecordId: profile.id, amazonProfileId: profile.profileId, sellerAccountId: profile.sellerAccountId, marketplaceId: profile.marketplaceId, currencyCode: profile.currencyCode, timezone: profile.timezone, region: profile.region, authorizationId: profile.authorizationId, authorizationName: profile.authorization.name, authorizationStatus: profile.authorization.status, lastValidatedAt: profile.authorization.lastValidatedAt, validationErrorCode: profile.authorization.validationErrorCode, plan: profilePlan.get(profile.id) ?? null })),
+        schemaStatus: "application_schema_confirmed_source_sample_pending",
+        dataIntegrity: versions.length ? "PUBLISHED_VERSION_FACTS_ONLY" : "NO_PUBLISHED_VERSION",
+        freshness,
+        lastPublishedAt: latestPublishedAt,
+        freshnessStates: states,
+      },
+      publishedVersions: versions.map(version => ({ versionId: version.id, profileRecordId: version.profileId, amazonProfileId: version.profile.profileId, sellerAccountId: version.profile.sellerAccountId, marketplaceId: version.profile.marketplaceId, currencyCode: version.profile.currencyCode, timezone: version.profile.timezone, sourceTaskId: version.sourceTaskId, taskStatus: version.sourceTask.status, taskFinishedAt: version.sourceTask.finishedAt, taskErrorCode: version.sourceTask.errorCode, status: version.status, rowCount: version.rowCount, requestedFrom: version.requestedFrom, requestedTo: version.requestedTo, publishedAt: version.publishedAt, request: version.requests[0] ?? null })),
+      callLogs: logs.map(log => ({ id: log.id, status: log.action.endsWith("succeeded") ? "SUCCEEDED" : "DENIED", createdAt: log.createdAt, ...safeCallLogMetadata(log.metadata) })),
+      callLogPagination: { page: callLogPage, pageSize: callLogPageSize, total: callLogTotal, pageCount: Math.ceil(callLogTotal / callLogPageSize), hasMore: callLogPage * callLogPageSize < callLogTotal },
+      callLogFilters: { status: options.callLogStatus ?? null, tool: options.callLogTool ?? null },
+    };
+  } catch (error) {
+    if (error instanceof SyncInputError && error.status === 403) return { ads: { connectionStatus: "NOT_AUTHORIZED", oauthConfigured: false, syncEnabled: false, structureAdapterReady: false, reportAdapterReady: false, profileCount: 0, connectedProfileCount: 0, profiles: [], schemaStatus: "NOT_AUTHORIZED", dataIntegrity: "UNAVAILABLE", freshness: "missing", lastPublishedAt: null, freshnessStates: [] }, publishedVersions: [], callLogs: [] };
+    throw error;
+  }
 }
 async function hasPublishedAdsReports(scope: SyncScope, sources: Awaited<ReturnType<typeof explicitSources>>) {
   const authorizedProfiles = sources.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId }));
-  return authorizedProfiles.length > 0 && !!await prisma.amazonAdsReportVersion.findFirst({ where: { ...scope, status: "PUBLISHED", sourceTask: { status: "SUCCEEDED" }, profile: { ...scope, OR: authorizedProfiles } }, select: { id: true } });
+  return authorizedProfiles.length > 0 && !!await prisma.amazonAdsReportVersion.findFirst({ where: { ...scope, status: "PUBLISHED", publishedAt: { not: null }, sourceTask: { status: "SUCCEEDED" }, profile: { ...scope, authorization: { status: "CONNECTED" }, OR: authorizedProfiles } }, select: { id: true } });
 }
 export async function listMcpCredentials(scope: SyncScope, actor: string) {
   return prisma.amazonMcpCredential.findMany({ where: { ...scope, userId: actor }, select: credentialSelect, orderBy: { createdAt: "desc" }, take: 100 });
@@ -114,11 +241,13 @@ type McpIdentity = Awaited<ReturnType<typeof authenticateAmazonMcp>>;
 export async function auditAmazonMcpProtocol(identity: McpIdentity, method: string, requestId: string) {
   await audit(identity, identity.userId, "amazon.mcp.protocol", { credentialId: identity.id, requestId, method: ["initialize", "notifications/initialized", "ping", "tools/list"].includes(method) ? method : "UNKNOWN" });
 }
-function argumentsObject(value: unknown): Record<string, unknown> {
+function argumentsObject(value: unknown, tool?: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new SyncInputError("参数无效。");
   const args = value as Record<string, unknown>;
   if (args.sellerAccountId !== undefined && args.sellerAccountIds !== undefined) throw new SyncInputError("参数无效。");
-  const allowed = ["sellerAccountId", "sellerAccountIds", "marketplaceId", "from", "to", "keyword", "page", "pageSize", "taskId", "table", "filters", "resource", "dateFrom", "dateTo"];
+  const adsFields = ["internalProfileId", "authorizationId", "entityType", "campaignId", "adGroupId", "externalId", "state", "search", "sort", "direction"];
+  const reportFields = ["sellerAccountId", "sellerAccountIds", "marketplaceId", "internalProfileId", "authorizationId", "reportType", "adProduct", "campaignId", "adGroupId", "targetingId", "advertisedAsin", "searchTerm", "placement", "from", "to", "page", "pageSize", "sortBy", "sortDirection", "search"];
+  const allowed = tool === "amazon.ads.reports.list" ? reportFields : tool === "amazon.ads.entities.list" ? ["sellerAccountId", "sellerAccountIds", "marketplaceId", "page", "pageSize", ...adsFields] : ["sellerAccountId", "sellerAccountIds", "marketplaceId", "from", "to", "keyword", "page", "pageSize", "taskId", "table", "filters", "resource", "dateFrom", "dateTo"];
   if (Object.keys(args).some(k => !allowed.includes(k))) throw new SyncInputError("数据范围不可访问。", 403);
   for (const [k, v] of Object.entries(args)) {
     if (k === "sellerAccountIds") continue;
@@ -133,18 +262,40 @@ function argumentsObject(value: unknown): Record<string, unknown> {
   if (args.sellerAccountIds !== undefined && (!Array.isArray(args.sellerAccountIds) || !args.sellerAccountIds.length || args.sellerAccountIds.length > 200 || args.sellerAccountIds.some(v => typeof v !== "string" || !v || v.length > 200))) throw new SyncInputError("参数无效。");
   return args;
 }
+/** Expose only documented structure fields, including a whitelist inside nested objects. */
+function adsEntityFields(entity: AmazonAdsEntityRecord) {
+  const payload = entity.payload;
+  const row = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const scalar = (value: Prisma.JsonValue | undefined) => typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
+  const fields: Record<string, unknown> = Object.fromEntries(Object.entries(row).filter(([key, value]) => ["name", "campaignId", "adGroupId", "keywordText", "matchType", "bid", "defaultBid", "targetingType", "expressionType", "startDate", "endDate"].includes(key) && scalar(value)));
+  for (const key of ["name", "campaignId", "adGroupId", "keywordText", "matchType", "targetingType", "expressionType"] as const) if (entity[key] != null) fields[key] = entity[key];
+  if (entity.bid != null) {
+    fields.bid = entity.bid.toFixed();
+    if (entity.entityType === "SP:ad-group") fields.defaultBid = entity.bid.toFixed();
+  }
+  for (const key of ["startDate", "endDate"] as const) if (entity[key]) fields[key] = entity[key].toISOString().slice(0, 10);
+  const budget = entity.budgetAmount != null || entity.budgetType != null ? { budget: entity.budgetAmount?.toFixed() ?? null, budgetType: entity.budgetType } : row.budget;
+  if (budget && typeof budget === "object" && !Array.isArray(budget)) fields.budget = Object.fromEntries(Object.entries(budget).filter(([key, value]) => ["budget", "budgetType"].includes(key) && scalar(value)));
+  for (const key of ["expression", "resolvedExpression"]) {
+    const expressions = key === "expression" ? entity.targetingExpression ?? row[key] : row[key];
+    if (Array.isArray(expressions)) fields[key] = expressions.filter(value => value && typeof value === "object" && !Array.isArray(value)).map(value => Object.fromEntries(Object.entries(value!).filter(([key, value]) => ["type", "value"].includes(key) && scalar(value))));
+  }
+  return fields;
+}
 export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: unknown, requestId = randomUUID()) {
   const scope = { organizationId: identity.organizationId, workspaceId: identity.workspaceId }, actor = identity.userId;
   const action: AmazonDataAction = tool === "amazon.sales.export" ? "export" : tool === "data_sync_start" ? "sync" : "view";
   let requested: AmazonAccessScope[] = [];
   try {
     if (!identity.tools.includes(tool) || !amazonMcpTools.some(([name]) => name === tool)) throw new SyncInputError("工具不可访问。", 403);
-    const args = argumentsObject(raw);
+    const args = argumentsObject(raw, canonicalMcpTool(tool));
     return await withAmazonMcpBoundary({ ...scope, userId: actor, credentialId: identity.id, tool, action }, async () => {
       const resolve = async () => {
         const access = await amazonDataAccess(scope, actor);
         return verifiedSources(prisma, scope, sellerAccessWhere(access));
       };
+      const canReadAdsReports = async () => !!await prisma.amazonMcpCredential.findFirst({ where: { ...scope, id: identity.id, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() }, tools: { has: "amazon.ads.reports.list" } }, select: { id: true } });
+      const requireAdsReports = async () => { if (!await canReadAdsReports()) throw new SyncInputError("Ads 报表工具未授权，数据不可访问。", 403); };
       const sources = await resolve();
       const sellers = args.sellerAccountIds as string[] | undefined ?? (args.sellerAccountId ? [String(args.sellerAccountId)] : undefined);
       if (sellers?.some(id => !sources.some(s => s.sellerAccountId === id)) || (args.marketplaceId && !sources.some(s => s.marketplaceId === args.marketplaceId && (!sellers || sellers.includes(s.sellerAccountId))))) throw new SyncInputError("数据范围不可访问。", 403);
@@ -155,19 +306,64 @@ export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: 
       const page = args.page === undefined ? 1 : Number(args.page);
       if (!Number.isInteger(page) || page < 1 || page > 10000) throw new SyncInputError("分页无效。");
       let result: unknown;
-      if (tool === "data_list_tables") {
+      if (adsStatusTools.has(tool)) {
+        const snapshot = await getMcpSettingsSnapshot(scope, actor);
+        const statusData = tool === "ads_get_connection_status"
+          ? { connection: snapshot.ads }
+          : tool === "ads_get_data_health"
+            ? { health: { schemaStatus: snapshot.ads.schemaStatus, dataIntegrity: snapshot.ads.dataIntegrity, freshness: snapshot.ads.freshness, lastPublishedAt: snapshot.ads.lastPublishedAt, freshnessStates: snapshot.ads.freshnessStates } }
+            : tool === "ads_get_sync_status"
+              ? { sync: { enabled: snapshot.ads.syncEnabled, structureAdapterReady: snapshot.ads.structureAdapterReady, reportAdapterReady: snapshot.ads.reportAdapterReady, freshness: snapshot.ads.freshness, states: snapshot.ads.freshnessStates } }
+              : snapshot;
+        result = { data: statusData, total: 1, meta: { source: "ERP_AmazonAds_Settings", isDemo: false, isSandbox: false, dataIntegrity: snapshot.ads.dataIntegrity, schemaStatus: snapshot.ads.schemaStatus, page: { page: 1, pageSize: 1, hasNext: false } } };
+      } else if (tool === "amazon.ads.reports.list") {
+        await requireAdsReports();
+        assertAdsQueryBudget(identity.id);
+        const params = new URLSearchParams({ kind: "reports" });
+        for (const [key, value] of Object.entries(args)) if (key !== "sellerAccountIds") params.set(key, String(value));
+        const data = await queryPublishedAdsReports(scope, actor, parseAdsQuery(params), selected.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId })));
+        result = { data: { items: data.rows, total: data.total }, meta: { ...data.meta, warnings: data.warnings } };
+      } else if (tool === "amazon.ads.entities.list" || tool === "ads_list_entities" || tool === "ads_get_campaign_structure") {
+        const queryArgs = { ...args, ...(tool === "ads_get_campaign_structure" ? { entityType: "SP:campaign" } : {}) };
+        if (queryArgs.entityType !== undefined && !["SP:campaign", "SP:ad-group", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"].includes(String(queryArgs.entityType))) throw new SyncInputError("Ads 实体类型无效。");
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(queryArgs)) if (!["sellerAccountIds", "marketplaceId"].includes(key)) params.set(key, String(value));
+        const data = await queryAdsEntities(scope, actor, params, selected.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId })));
+        // Recheck Ads bindings outside the read snapshot before releasing any rows or metadata.
+        const bindings = new Map(data.meta.profiles.map(profile => [profile.id, { id: profile.id, profileId: profile.amazonProfileId, authorizationId: profile.authorizationId, sellerAccountId: profile.sellerAccountId, marketplaceId: profile.marketplaceId }]));
+        for (const row of data.rows) bindings.set(row.internalProfileId, { id: row.internalProfileId, profileId: row.amazonProfileId, authorizationId: row.profile.authorizationId, sellerAccountId: row.profile.sellerAccountId, marketplaceId: row.profile.marketplaceId });
+        if (bindings.size && await prisma.amazonAdsProfile.count({ where: { ...scope, authorization: { status: "CONNECTED" }, OR: [...bindings.values()] } }) !== bindings.size) throw new SyncInputError("数据范围不可访问。", 403);
+        result = {
+          data: { items: data.rows.map(row => ({
+            entityType: row.entityType, externalId: row.externalId, parentExternalId: row.parentExternalId,
+            internalProfileId: row.internalProfileId, amazonProfileId: row.amazonProfileId,
+            sellerAccountId: row.profile.sellerAccountId, marketplaceId: row.profile.marketplaceId,
+            state: row.state, sourceUpdatedAt: row.sourceUpdatedAt, syncedAt: row.syncedAt,
+            sourceTaskId: row.sourceTaskId, sourceTask: row.sourceTask, apiVersion: row.apiVersion,
+            fields: adsEntityFields(row),
+          })), total: data.total },
+          meta: { ...data.meta, page: { page: data.page, pageSize: data.pageSize, hasNext: data.page * data.pageSize < data.total },
+            fieldDefinitions: { internalProfileId: "ERP Profile 主键，用于筛选", amazonProfileId: "Amazon 外部 Profile ID，不是 ERP 主键", externalId: "Amazon 实体 ID，须与 Profile 和 entityType 联合识别", parentExternalId: "直接父级 Amazon ID；Campaign 级否定项不属于 Ad Group", fields: "SP v3 结构字段白名单；不含指标或原始响应", sourceUpdatedAt: "Amazon 上游更新时间，可能为空", syncedAt: "此行本地同步时间", sourceTask: "来源任务当前状态；部分失败任务的已提交行可能存在" },
+            warnings: ["只读当前已观察的结构快照；缺失行不表示已删除，不保证历史版本。", "结构数据无报告日期维度，不提供业绩指标。"],
+          },
+        };
+      } else if (tool === "data_list_tables") {
         const tables = availableSkillTables(selected);
-        if (await hasPublishedAdsReports(scope, selected)) tables.push({ name: "ads_report_daily", source: "AmazonAdsReportFact", grain: ["sellerAccountId", "marketplaceId", "reportType", "adProduct", "reportDate", "factKey", "versionId"], schemaStatus: "application_schema_confirmed_source_sample_pending", warnings: ["只展示完整成功任务的已发布版本。", "金额按行返回；不得跨币种汇总。", "Amazon 报表真实样本仍待核验。"] });
+        if (await canReadAdsReports() && await hasPublishedAdsReports(scope, selected)) tables.push({ name: "ads_report_daily", source: "AmazonAdsReportFact", grain: ["sellerAccountId", "marketplaceId", "reportType", "adProduct", "reportDate", "factKey", "versionId"], schemaStatus: "application_schema_confirmed_source_sample_pending", warnings: ["只展示完整成功任务的已发布版本。", "金额按行返回；不得跨币种汇总。", "Amazon 报表真实样本仍待核验。"] });
         const resources = new Set<string>(tables.filter(table => table.name !== "ads_report_daily").map(table => table.name === "inventory" ? "inventory" : table.name === "listings" ? "catalog" : "sales_traffic"));
         const tableSources = selected.filter(source => resources.has(source.resource));
         result = { data: { items: tables, total: tables.length }, meta: dataMeta(tableSources, "AmazonSyncDataSource", ["sellerAccountId", "marketplaceId", "resource"]) };
       } else if (tool === "data_describe_table") {
         const table = requiredText(args.table, "逻辑表", 100);
+        if (table === "ads_report_daily") await requireAdsReports();
         if (table === "ads_report_daily" && !await hasPublishedAdsReports(scope, selected)) throw new SyncInputError("TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
         const description = describeSkillTable(table, selected);
         result = { data: { table: description }, meta: dataMeta([], "Prisma application schema", description.grain, description.warnings, "schema") };
       } else if (tool === "data_query") {
         const table = requiredText(args.table, "逻辑表", 100);
+        if (table === "ads_report_daily") await requireAdsReports();
+        if (table === "ads_report_daily" && !await hasPublishedAdsReports(scope, selected)) throw new SyncInputError("TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
+        if (table === "ads_report_daily") assertAdsQueryBudget(identity.id);
         const pageSize = args.pageSize === undefined ? 100 : Number(args.pageSize);
         if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) throw new SyncInputError("pageSize 须为 1–1000 的整数。");
         const resourceByTable: Record<string, string> = { inventory: "inventory", listings: "catalog", sales_traffic_daily: "sales_traffic" };
@@ -217,18 +413,22 @@ export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: 
         result = tool === "amazon.inventory.summary" ? { summary: await prisma.amazonInventorySnapshot.aggregate({ where, _sum: { fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true }, _count: { _all: true } }), source: "amazon_sp_api_snapshot" } : { rows: await prisma.amazonInventorySnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fulfillableQuantity: true, capturedAt: true, syncRunId: true }, orderBy: { id: "asc" }, skip: (page - 1) * 50, take: 50 }), source: "amazon_sp_api_snapshot" };
         }
       }
+      if (tool === "amazon.ads.reports.list" || args.table === "ads_report_daily") await requireAdsReports();
       const live = await resolve();
       // The source ID alone is not a fence against an in-flight binding change.
       if (selected.some(s => !live.some(l => l.id === s.id && l.revision === s.revision && l.authorizationId === s.authorizationId && l.sellerAccountId === s.sellerAccountId && l.marketplaceId === s.marketplaceId && l.resource === s.resource && l.authorization.amazonSellerId === s.authorization.amazonSellerId && l.authorization.awsRegion === s.authorization.awsRegion))) throw new SyncInputError("数据范围不可访问。", 403);
+      const summary = result && typeof result === "object" ? result as { data?: { total?: number; items?: Array<{ versionId?: string }> }; meta?: { source?: string } } : {};
+      const versionIds = [...new Set((summary.data?.items ?? []).flatMap(item => typeof item.versionId === "string" ? [item.versionId] : []))].slice(0,100);
       const filters = args.filters && typeof args.filters === "object" ? args.filters as Record<string, unknown> : {};
       await audit(scope, actor, "amazon.mcp.tool.succeeded", { requestId, credentialId: identity.id, tool, scopes: requested,
         from: typeof args.from === "string" ? args.from : typeof filters.from === "string" ? filters.from : typeof args.dateFrom === "string" ? args.dateFrom : null,
         to: typeof args.to === "string" ? args.to : typeof filters.to === "string" ? filters.to : typeof args.dateTo === "string" ? args.dateTo : null,
-        page, ...(typeof args.pageSize === "number" ? { pageSize: args.pageSize } : {}), ...(typeof args.table === "string" ? { table: args.table } : {}), ...(typeof args.resource === "string" ? { resource: args.resource } : {}) });
+        page, querySummary: Object.fromEntries(["internalProfileId", "authorizationId", "reportType", "adProduct", "campaignId", "adGroupId", "targetingId", "entityType", "state", "sortBy", "sortDirection"].flatMap(key => { const value = args[key] ?? filters[key]; return typeof value === "string" ? [[key, value]] : []; })), ...(typeof summary.data?.total === "number" ? { matchedCount: summary.data.total, returnedCount: summary.data.items?.length ?? 0, source: summary.meta?.source ?? null, sourceVersionIds: versionIds } : {}), ...(typeof args.pageSize === "number" ? { pageSize: args.pageSize } : {}), ...(typeof args.table === "string" ? { table: args.table } : {}), ...(typeof args.resource === "string" ? { resource: args.resource } : {}) });
       await prisma.amazonMcpCredential.updateMany({ where: { id: identity.id, status: "ACTIVE" }, data: { lastUsedAt: new Date() } });
       return result;
     });
-  } catch (error) {
+  } catch (caught) {
+    const error = caught instanceof AdsQueryError ? new SyncInputError(caught.message, caught.status) : caught;
     await audit(scope, actor, "amazon.mcp.tool.denied", { requestId, credentialId: identity.id, tool: amazonMcpTools.some(([name]) => name === tool) ? tool : "UNKNOWN", scopes: requested, reason: error instanceof SyncInputError ? `REQUEST_REJECTED_${error.status}` : "INTERNAL_FAILURE" });
     throw error;
   }

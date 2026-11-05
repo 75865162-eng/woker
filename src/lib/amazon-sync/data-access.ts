@@ -72,10 +72,10 @@ export async function assertAmazonAction(scope: SyncScope, actor: string, action
 }
 
 /** A local Marketplace FK or a matching SKU is not evidence of an Amazon site binding. */
-export async function assertSellerMarketplaceAccess(scope: SyncScope, actor: string, sellerAccountId: string, marketplaceId: string, db: Prisma.TransactionClient = prisma, action: AmazonDataAction = "view") {
+export async function assertSellerMarketplaceAccess(scope: SyncScope, actor: string, sellerAccountId: string, marketplaceId: string, db: Prisma.TransactionClient = prisma, action: AmazonDataAction = "view", allowInactiveSeller = false) {
   scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
   const access = await assertSellerAccess(scope, actor, [sellerAccountId], db, action);
   if (access.scopes && !access.scopes.some(s => s.sellerAccountId === sellerAccountId && (!s.marketplaceIds.length || s.marketplaceIds.includes(marketplaceId)))) throw new SyncInputError("数据范围不可访问。", 403);
-  const source = await db.amazonSyncDataSource.findFirst({ where: { ...scope, sellerAccountId, marketplaceId, seller: { status: "active" } }, select: { id: true } });
+  const source = await db.amazonSyncDataSource.findFirst({ where: { ...scope, sellerAccountId, marketplaceId, ...(allowInactiveSeller ? {} : { seller: { status: "active" } }) }, select: { id: true } });
   if (!source) throw new SyncInputError("数据范围不可访问。", 403);
 }

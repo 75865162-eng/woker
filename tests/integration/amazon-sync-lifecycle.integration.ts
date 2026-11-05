@@ -162,7 +162,7 @@ test("lease recovery rolls back run transition when cursor update fails", async 
   assert.equal(await prisma.amazonSyncTaskLog.count({ where: { taskId: f.run.id, event: "LEASE_EXPIRED" } }), 0); assert.equal(f.calls.length, 0);
 });
 
-test("US/CA ready sources automatically create bounded 730-day tasks once and preserve plan pause", async () => {
+test("bound US/CA sources automatically create bounded 730-day tasks without enabled or active-store gates", async () => {
   const scope = { organizationId: `automatic-fixture-${randomUUID()}`, workspaceId: "automatic-test" };
   scopes.push([scope.organizationId, scope.workspaceId]); process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify(scopes);
   const actor = randomUUID(), store = randomUUID(), authId = randomUUID();
@@ -170,13 +170,13 @@ test("US/CA ready sources automatically create bounded 730-day tasks once and pr
   await prisma.organization.create({ data: { id: scope.organizationId, slug: scope.organizationId, name: "Automatic fixture" } });
   await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "Automatic fixture" } });
   await prisma.user.create({ data: { id: actor, email: `${actor}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
-  await prisma.sellerAccount.create({ data: { ...scope, id: store, accountKey: store, marketplaceCode: "US" } });
+  await prisma.sellerAccount.create({ data: { ...scope, id: store, accountKey: store, marketplaceCode: "US", status: "inactive" } });
   await prisma.amazonSpApiAuthorization.create({ data: { ...scope, id: authId, name: "Automatic fixture", amazonSellerId: "automatic-fixture-seller", awsRegion: region, endpoint: endpoints[region], status: "NOT_CONFIGURED", approvedRoles: ["Fixture Order Read", "Finance and Accounting"], rolesAttestedAt: new Date(), marketplaceParticipations: sites.map(marketplaceId => ({ marketplaceId, countryCode: "US" })), updatedByUserId: actor, credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture-auto-client", lwaClientSecret: "fixture-auto-secret", refreshToken: "fixture-auto-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId: authId }) } });
   const sources = [];
   for (const site of sites) for (const resource of ["inventory", "catalog", "orders", "sales_traffic"]) {
-    sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: site, resource, freshnessMinutes: 2880, ...(resource === "orders" ? { orderPolicy: { ...JSON.parse(raw("orders", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaceTimeZone: "America/Los_Angeles" } } : {}) } }));
+    sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: site, resource, freshnessMinutes: 2880, enabled: false, ...(resource === "orders" ? { orderPolicy: { ...JSON.parse(raw("orders", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaceTimeZone: "America/Los_Angeles" } } : {}) } }));
   }
-  sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: sites[0], resource: "finance", freshnessMinutes: 2880, financePolicy: { ...JSON.parse(raw("finance", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaces: sites.map(marketplaceId => ({ marketplaceId, marketplaceTimeZone: "America/Los_Angeles" })), fx: null } } }));
+  sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: sites[0], resource: "finance", freshnessMinutes: 2880, enabled: false, financePolicy: { ...JSON.parse(raw("finance", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaces: sites.map(marketplaceId => ({ marketplaceId, marketplaceTimeZone: "America/Los_Angeles" })), fx: null } } }));
   await tickSyncCenter();
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 0);
   await prisma.amazonSpApiAuthorization.update({ where: { id: authId }, data: { status: "CONFIGURED" } });

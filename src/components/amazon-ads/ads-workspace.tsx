@@ -21,8 +21,8 @@ const planned = ["marketing-mix", "brand-lift"];
 const entityLabels: Record<AdsEntity, string> = { campaigns: "广告活动名称", "ad-groups": "广告组名称", keywords: "关键词", targets: "ASIN / 商品投放表达式", negatives: "否定投放", "search-terms": "搜索词", placements: "广告位", products: "商品广告" };
 const campaignTabs = [["", "广告组"], ["bids", "竞价调整"], ["negatives", "否定投放"], ["budget-rules", "预算规则"], ["settings", "设置"], ["history", "历史"]];
 const groupTabs = [["", "商品广告"], ["keywords", "关键词"], ["targets", "商品投放"], ["negative-keywords", "否定关键词"], ["negative-targets", "否定商品投放"], ["search-terms", "搜索词"], ["performance", "广告表现"]];
-export function AdsWorkspace({ path, navigate }: { path: string; navigate: (path: string) => void }) {
-  const [workspaceView, setWorkspaceView] = useState<"demo" | "synced">("demo");
+export function AdsWorkspace({ path, navigate, initialView = "synced" }: { path: string; navigate: (path: string) => void; initialView?: "demo" | "synced" }) {
+  const [workspaceView, setWorkspaceView] = useState<"demo" | "synced">(initialView);
   const [collapsed, setCollapsed] = useState(false), [mobile, setMobile] = useState(false), [closedGroups, setClosedGroups] = useState<string[]>([]), [account, setAccount] = useState("northstar"), [marketplace, setMarketplace] = useState("US");
   const [range, setRange] = useState<DateRange>(presetRange("最近 7 天")), [home, setHome] = useState("campaigns"), [panel, setPanel] = useState<string | null>(null), [notice, setNotice] = useState("");
   const [compact, setCompact] = useState(true), [preferenceReady, setPreferenceReady] = useState(false);

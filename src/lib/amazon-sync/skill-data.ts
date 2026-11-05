@@ -1,3 +1,5 @@
+import { queryPublishedAdsReports } from "@/lib/amazon-ads/report-query";
+import { parseAdsQuery } from "@/lib/amazon-ads/query-contract";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { SyncInputError, type SyncScope } from "./policy";
@@ -81,10 +83,15 @@ export const skillDataTables: SkillTable[] = [
       { name: "campaignId", type: "string", nullable: true }, { name: "adGroupId", type: "string", nullable: true },
       { name: "targetingId", type: "string", nullable: true }, { name: "advertisedAsin", type: "string", nullable: true },
       { name: "searchTerm", type: "string", nullable: true }, { name: "placement", type: "string", nullable: true },
-      { name: "impressions", type: "integer" }, { name: "clicks", type: "integer" },
-      { name: "spend", type: "decimal", nullable: false }, { name: "orders", type: "integer" },
-      { name: "sales", type: "decimal", nullable: false }, { name: "units", type: "integer" },
-      { name: "currencyCode", type: "string", nullable: true }, { name: "attributionWindow", type: "string", nullable: true },
+      { name: "impressions", type: "integer", nullable: true }, { name: "clicks", type: "integer", nullable: true },
+      { name: "spend", type: "decimal", nullable: true }, { name: "orders", type: "integer", nullable: true },
+      { name: "sales", type: "decimal", nullable: true }, { name: "units", type: "integer", nullable: true },
+      { name: "ctr", type: "decimal", nullable: true, description: "clicks / impressions × 100；分母缺失或为 0 时为 null。" },
+      { name: "cpc", type: "decimal", nullable: true, description: "spend / clicks；分母缺失或为 0 时为 null。" },
+      { name: "cvr", type: "decimal", nullable: true, description: "orders / clicks × 100；分母缺失或为 0 时为 null。" },
+      { name: "acos", type: "decimal", nullable: true, description: "spend / sales × 100；分母缺失或为 0 时为 null。" },
+      { name: "roas", type: "decimal", nullable: true, description: "sales / spend；分母缺失或为 0 时为 null。" },
+      { name: "currencyCode", type: "string", nullable: true, description: "当前查询按 Ads Profile 提供；真实报表逐行币种仍待样本核验。" }, { name: "attributionWindow", type: "string", nullable: true },
       { name: "apiVersion", type: "string" }, { name: "versionId", type: "string" },
     ],
     warnings: ["仅展示完整成功任务的已发布报表版本。", "广告金额币种来自 Profile 配置；按行返回，不跨币种汇总。", "Amazon 报表真实样本仍待核验。"],
@@ -129,7 +136,7 @@ export function skillTableAvailability(sources: DataSource[]) {
       schemaStatus: "application_schema_confirmed_source_sample_pending",
       available: published.length > 0,
       sourceCount: published.length,
-      rowCount: published.reduce((total, source) => total + source.rowCount, 0),
+      rowCount: table.name === "ads_report_daily" ? null : published.reduce((total, source) => total + source.rowCount, 0),
       lastSyncAt: syncDates.length ? new Date(Math.min(...syncDates.map(value => value.getTime()))).toISOString() : null,
       freshness: !syncDates.length ? "missing" : published.some(source => !source.lastSuccessAt || now - source.lastSuccessAt.getTime() > source.freshnessMinutes * 60_000) ? "stale" : "ok",
     };
@@ -170,32 +177,14 @@ export async function querySkillTable(input: {
     inventory: ["sellerSku", "asin", "condition", "from", "to"],
     listings: ["sellerSku", "asin", "listingStatus", "from", "to"],
     sales_traffic_daily: ["from", "to"],
-    ads_report_daily: ["from", "to", "reportType", "adProduct", "campaignId", "adGroupId", "advertisedAsin", "searchTerm", "placement"],
+    ads_report_daily: ["from", "to", "reportType", "adProduct", "campaignId", "adGroupId", "targetingId", "advertisedAsin", "searchTerm", "placement", "internalProfileId", "authorizationId", "sortBy", "sortDirection"],
   };
   if (Object.keys(filters).some(key => !allowedFilters[table.name]?.includes(key))) throw new SyncInputError("FIELD_NOT_MAPPED: 筛选字段不属于此逻辑表。", 400);
 
   if (table.name === "ads_report_daily") {
-    const dateFilter = dateBounds(filters.from, filters.to);
-    if (filters.from && filters.to && (Date.parse(filters.to) - Date.parse(filters.from)) / 86_400_000 > 366) throw new SyncInputError("Ads 报表查询最多 367 天。");
-    const where: Prisma.AmazonAdsReportFactWhereInput = {
-      ...input.scope,
-      version: { status: "PUBLISHED", sourceTask: { status: "SUCCEEDED" } },
-      profile: { ...input.scope, OR: sources.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId })) },
-      ...(dateFilter ? { reportDate: dateFilter } : {}),
-      ...(filters.reportType ? { reportType: filters.reportType } : {}), ...(filters.adProduct ? { adProduct: filters.adProduct } : {}),
-      ...(filters.campaignId ? { campaignId: filters.campaignId } : {}), ...(filters.adGroupId ? { adGroupId: filters.adGroupId } : {}),
-      ...(filters.advertisedAsin ? { advertisedAsin: filters.advertisedAsin } : {}), ...(filters.searchTerm ? { searchTerm: filters.searchTerm } : {}),
-      ...(filters.placement ? { placement: filters.placement } : {}),
-    };
-    const [total, rows] = await Promise.all([
-      prisma.amazonAdsReportFact.count({ where }),
-      prisma.amazonAdsReportFact.findMany({ where, include: { profile: { select: { sellerAccountId: true, marketplaceId: true, currencyCode: true } }, version: { select: { id: true, publishedAt: true, rowCount: true } } }, orderBy: [{ reportDate: "desc" }, { factKey: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
-    ]);
-    const syncDates = rows.map(row => row.version?.publishedAt).filter((value): value is Date => !!value);
-    return {
-      data: { items: rows.map(row => ({ sellerAccountId: row.profile.sellerAccountId, marketplaceId: row.profile.marketplaceId, profileId: row.profileId, reportType: row.reportType, adProduct: row.adProduct, reportDate: row.reportDate.toISOString().slice(0, 10), campaignId: row.campaignId, adGroupId: row.adGroupId, targetingId: row.targetingId, advertisedAsin: row.advertisedAsin, searchTerm: row.searchTerm, placement: row.placement, impressions: row.impressions.toString(), clicks: row.clicks.toString(), spend: row.spend.toString(), orders: row.orders.toString(), sales: row.sales.toString(), units: row.units.toString(), currencyCode: row.profile.currencyCode, attributionWindow: row.attributionWindow, apiVersion: row.apiVersion, versionId: row.version?.id ?? null })), total },
-      meta: { source: table.source, isSandbox: false, lastSyncAt: syncDates.length ? new Date(Math.min(...syncDates.map(value => value.getTime()))).toISOString() : null, freshness: syncDates.length ? "ok" : "missing", grain: table.grain, currency: "per_row", attributionWindow: "per_row", warnings: table.warnings ?? [], page: { page: input.page, pageSize: input.pageSize, hasNext: input.page * input.pageSize < total } },
-    };
+    const params = new URLSearchParams({ ...filters, kind: "reports", page: String(input.page), pageSize: String(input.pageSize) });
+    const result = await queryPublishedAdsReports(input.scope, input.actor, parseAdsQuery(params), sources.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId })));
+    return { data: { items: result.rows, total: result.total }, meta: { ...result.meta, warnings: result.warnings } };
   }
 
   const now = new Date();

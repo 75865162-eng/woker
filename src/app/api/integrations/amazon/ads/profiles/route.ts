@@ -8,6 +8,9 @@ import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
 import { adsReadAdapterReady } from "@/lib/amazon-ads/sync-adapter";
 import { adsScopeEnabled } from "@/lib/amazon-ads/sync-policy";
+import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
+import { SyncInputError } from "@/lib/amazon-sync/policy";
+import { buildAdsProfileWhere } from "@/lib/amazon-ads/query-service";
 export const runtime = "nodejs";
 const jsonHeaders = { "Cache-Control": "no-store" };
 
@@ -15,12 +18,18 @@ export async function GET(request: Request) {
   const permission = await requireApiPermission("settings", "view", request);
   if (!permission.ok) return NextResponse.json({ error: "Forbidden." }, { status: permission.response.status, headers: jsonHeaders });
   const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
-  const [profiles, sellers] = await Promise.all([
-    listAmazonAdsProfiles(scope),
-    prisma.sellerAccount.findMany({ where: { ...scope, status: "active" }, select: { id: true, displayName: true, marketplaceCode: true }, orderBy: { displayName: "asc" }, take: 500 }),
-  ]);
-  await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-profiles", permission.user.role);
-  return NextResponse.json({ profiles, sellers, oauthConfigured: Boolean(process.env.AMAZON_ADS_LWA_CLIENT_ID?.trim() && process.env.AMAZON_ADS_LWA_CLIENT_SECRET?.trim() && process.env.AMAZON_ADS_OAUTH_REDIRECT_URI?.trim() && hasAmazonAdsEncryptionKey()), autoSyncConfigured: adsScopeEnabled(scope) && adsReadAdapterReady() }, { headers: jsonHeaders });
+  try {
+    const access = await amazonDataAccess(scope, permission.user.id);
+    const [profiles, sellers] = await Promise.all([
+      listAmazonAdsProfiles(scope, buildAdsProfileWhere(scope, access, {})),
+      prisma.sellerAccount.findMany({ where: { ...scope, status: "active", ...(access.allSellers ? {} : { id: { in: access.sellerIds } }) }, select: { id: true, displayName: true, marketplaceCode: true }, orderBy: { displayName: "asc" }, take: 500 }),
+    ]);
+    await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-profiles", permission.user.role);
+    return NextResponse.json({ profiles, sellers, oauthConfigured: Boolean(process.env.AMAZON_ADS_LWA_CLIENT_ID?.trim() && process.env.AMAZON_ADS_LWA_CLIENT_SECRET?.trim() && process.env.AMAZON_ADS_OAUTH_REDIRECT_URI?.trim() && hasAmazonAdsEncryptionKey()), autoSyncConfigured: adsScopeEnabled(scope) && adsReadAdapterReady() }, { headers: jsonHeaders });
+  } catch (error) {
+    if (error instanceof SyncInputError) return NextResponse.json({ error: error.message }, { status: error.status, headers: jsonHeaders });
+    throw error;
+  }
 }
 
 export async function POST(request: Request) {

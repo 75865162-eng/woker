@@ -12,7 +12,20 @@ export async function tickAmazonAds(now = new Date()) {
   const expired = await prisma.amazonAdsSyncTask.findMany({ where: { OR: scopes, status: "RUNNING", leaseExpiresAt: { lt: now } }, take: 100 });
   for (const task of expired) {
     const exhausted = task.attempts + 1 >= task.maxAttempts;
-    await prisma.amazonAdsSyncTask.updateMany({ where: { id: task.id, status: "RUNNING", fenceVersion: task.fenceVersion, leaseExpiresAt: { lt: now } }, data: { status: exhausted ? "FAILED" : "RETRY_WAIT", attempts: { increment: 1 }, dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: now, finishedAt: exhausted ? now : null, errorCode: "ADS_TASK_LEASE_EXPIRED", errorMessage: "Worker lease expired; resume from committed checkpoint." } });
+    // A lease expiry is evidence the worker vanished after a bounded page; resume
+    // the committed checkpoint immediately, while normal API throttling stays in
+    // the client-wide request budget.
+    const retryAt = now;
+    await prisma.$transaction(async tx => {
+      const changed = await tx.amazonAdsSyncTask.updateMany({ where: { organizationId: task.organizationId, workspaceId: task.workspaceId, id: task.id, status: "RUNNING", fenceVersion: task.fenceVersion, leaseExpiresAt: { lt: now } }, data: { status: exhausted ? "FAILED" : "RETRY_WAIT", attempts: { increment: 1 }, dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: retryAt, finishedAt: exhausted ? now : null, errorCode: "ADS_TASK_LEASE_EXPIRED", errorMessage: "Worker lease expired; resume from committed checkpoint." } });
+      if (!changed.count) return;
+      await tx.amazonAdsSyncAttempt.updateMany({ where: { organizationId: task.organizationId, workspaceId: task.workspaceId, taskId: task.id, attemptNumber: task.dispatchVersion, status: "RUNNING" }, data: { status: exhausted ? "FAILED" : "RETRY_WAIT", finishedAt: now, retryAt: exhausted ? null : retryAt, errorCode: "ADS_TASK_LEASE_EXPIRED", safeErrorSummary: "Worker lease expired; will resume from the committed checkpoint." } });
+      await tx.amazonAdsSyncDomainState.upsert({
+        where: { organizationId_workspaceId_profileId_dataDomain_reportType: { organizationId: task.organizationId, workspaceId: task.workspaceId, profileId: task.profileId, dataDomain: "entities", reportType: "" } },
+        create: { id: randomUUID(), organizationId: task.organizationId, workspaceId: task.workspaceId, profileId: task.profileId, dataDomain: "entities", reportType: "", status: exhausted ? "FAILED" : "RETRY_WAIT", lastAttemptAt: now, lastSuccessAt: null, lastTaskId: task.id, warningCodes: ["ADS_TASK_LEASE_EXPIRED"] },
+        update: { status: exhausted ? "FAILED" : "RETRY_WAIT", lastAttemptAt: now, lastTaskId: task.id, warningCodes: ["ADS_TASK_LEASE_EXPIRED"] },
+      });
+    });
   }
   const pending = await prisma.amazonAdsSyncTask.findMany({ where: { OR: scopes, status: { in: ["WAITING", "RETRY_WAIT"] }, nextAttemptAt: { lte: now } }, orderBy: { nextAttemptAt: "asc" }, take: 100 });
   for (const task of pending) {
@@ -26,19 +39,16 @@ export async function tickAmazonAds(now = new Date()) {
     const scope = { organizationId: candidate.organizationId, workspaceId: candidate.workspaceId };
     if (!adsScopeEnabled(scope)) continue;
     const today = now.toISOString().slice(0, 10);
-    const key = adsSyncKey([candidate.id, candidate.revision, today]);
+    const key = adsSyncKey([candidate.id, candidate.revision, "SP_STRUCTURE", today]);
     try {
       const task = await prisma.$transaction(async tx => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-sync:${candidate.profileId}`}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-sync:${candidate.profileId}`}, 0))`;
         const plan = await tx.amazonAdsSyncPlan.findFirst({ where: { ...scope, id: candidate.id, revision: candidate.revision, status: "ACTIVE", nextRunAt: { lte: now }, profile: { sellerAccountId: { not: null }, authorization: { status: "CONNECTED" } } } });
         if (!plan) return null;
         const active = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, planId: plan.id, status: { in: dueStatuses } }, select: { id: true } });
         if (active) return null;
-        const fromDate = plan.lastSuccessAt ? new Date(plan.lastSuccessAt.getTime() - plan.attributionLagDays * 86400_000) : plan.historyStartDate ?? new Date(now.getTime() - 30 * 86400_000);
-        const from = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate()));
-        const to = new Date(Date.parse(`${today}T00:00:00.000Z`) - 86400_000);
         const found = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, idempotencyKey: key } });
-        const created = found ?? await tx.amazonAdsSyncTask.create({ data: { ...scope, id: randomUUID(), planId: plan.id, profileId: plan.profileId, requestedByUserId: plan.actorUserId, idempotencyKey: key, planRevision: plan.revision, trigger: plan.lastSuccessAt ? "daily" : "initial-backfill", requestedFrom: from, requestedTo: to } });
+        const created = found ?? await tx.amazonAdsSyncTask.create({ data: { ...scope, id: randomUUID(), planId: plan.id, profileId: plan.profileId, requestedByUserId: plan.actorUserId, idempotencyKey: key, planRevision: plan.revision, trigger: "scheduled-structure" } });
         await tx.amazonAdsSyncPlan.update({ where: { id: plan.id }, data: { lastEnqueuedAt: now, nextRunAt: new Date(now.getTime() + plan.intervalMinutes * 60_000) } });
         return created;
       });

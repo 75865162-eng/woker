@@ -36,7 +36,14 @@ const spCampaignNegativeTargetingClauseMediaType = "application/vnd.spCampaignNe
 const spCampaignStates = new Set(["ARCHIVED", "ENABLED", "ENABLING", "OTHER", "PAUSED", "PROPOSED", "USER_DELETED"]);
 const spMatchTypes = new Set(["BROAD", "EXACT", "OTHER", "PHRASE"]);
 const spNegativeMatchTypes = new Set(["NEGATIVE_BROAD", "NEGATIVE_EXACT", "NEGATIVE_PHRASE", "OTHER"]);
-const spExpressionTypes = new Set(["AUTO", "MANUAL"]);
+const spExpressionTypes = new Set(["AUTO", "MANUAL", "OTHER"]);
+const spTargetPredicateTypes = new Set(["ASIN_ACCESSORY_RELATED", "ASIN_AGE_RANGE_SAME_AS", "ASIN_BRAND_SAME_AS", "ASIN_CATEGORY_SAME_AS", "ASIN_EXPANDED_FROM", "ASIN_GENRE_SAME_AS", "ASIN_IS_PRIME_SHIPPING_ELIGIBLE", "ASIN_PRICE_BETWEEN", "ASIN_PRICE_GREATER_THAN", "ASIN_PRICE_LESS_THAN", "ASIN_REVIEW_RATING_BETWEEN", "ASIN_REVIEW_RATING_GREATER_THAN", "ASIN_REVIEW_RATING_LESS_THAN", "ASIN_SAME_AS", "ASIN_SUBSTITUTE_RELATED", "KEYWORD_GROUP_SAME_AS", "OTHER", "QUERY_BROAD_REL_MATCHES", "QUERY_HIGH_REL_MATCHES"]);
+const spNegativePredicateTypes = new Set(["ASIN_BRAND_SAME_AS", "ASIN_SAME_AS", "OTHER"]);
+function validExpressions(value: unknown, types: Set<string>) {
+  return Array.isArray(value) && value.length <= 1000 && value.every(item => item && typeof item === "object" && !Array.isArray(item)
+    && (item.type === undefined || (typeof item.type === "string" && types.has(item.type)))
+    && (item.value === undefined || typeof item.value === "string"));
+}
 
 export interface SponsoredProductsCampaignTransportInput {
   profileId: string;
@@ -49,7 +56,7 @@ export interface SponsoredProductsCampaignTransportInput {
 export function createSponsoredProductsCampaignReader(fetcher: typeof fetch = fetch) {
   return {
     async readPage(input: SponsoredProductsCampaignTransportInput): Promise<AdsSyncPage> {
-      const body = await postSponsoredProductsList(fetcher, input, "CAMPAIGN", "/sp/campaigns/list", spCampaignMediaType, { includeExtendedDataFields: true });
+      const body = await postSponsoredProductsList(fetcher, input, "CAMPAIGN", "/sp/campaigns/list", spCampaignMediaType, { includeExtendedDataFields: true, stateFilter: { include: ["ENABLED", "PAUSED", "ARCHIVED"] } });
       return parseSponsoredProductsPage(body, input.cursor, "campaigns", value => {
         const campaign = asRecord(value, "CAMPAIGN");
         const budget = campaign.budget;
@@ -73,7 +80,7 @@ export function createSponsoredProductsCampaignReader(fetcher: typeof fetch = fe
 export function createSponsoredProductsAdGroupReader(fetcher: typeof fetch = fetch) {
   return {
     async readPage(input: SponsoredProductsCampaignTransportInput): Promise<AdsSyncPage> {
-      const body = await postSponsoredProductsList(fetcher, input, "AD_GROUP", "/sp/adGroups/list", spAdGroupMediaType, { includeExtendedDataFields: true });
+      const body = await postSponsoredProductsList(fetcher, input, "AD_GROUP", "/sp/adGroups/list", spAdGroupMediaType, { includeExtendedDataFields: true, stateFilter: { include: ["ENABLED", "PAUSED", "ARCHIVED"] } });
       return parseSponsoredProductsPage(body, input.cursor, "adGroups", value => {
         const adGroup = asRecord(value, "AD_GROUP");
         if (typeof adGroup.adGroupId !== "string" || !isAmazonAdsId(adGroup.adGroupId)
@@ -108,7 +115,7 @@ export function createSponsoredProductsTargetReader(fetcher: typeof fetch = fetc
     resource: "TARGET", path: "/sp/targets/list", mediaType: spTargetingClauseMediaType, collectionKey: "targetingClauses", idKey: "targetId",
     errorCode: "ADS_TARGET_RESPONSE_INVALID", entityType: "SP:target",
     parse(row) {
-      if (!hasAdsId(row.adGroupId) || !hasAdsId(row.campaignId) || !Array.isArray(row.expression) || !Array.isArray(row.resolvedExpression)
+      if (!hasAdsId(row.adGroupId) || !hasAdsId(row.campaignId) || !validExpressions(row.expression, spTargetPredicateTypes) || !validExpressions(row.resolvedExpression, spTargetPredicateTypes)
         || typeof row.expressionType !== "string" || !spExpressionTypes.has(row.expressionType) || !hasAdsState(row.state)
         || (row.bid !== undefined && row.bid !== null && (typeof row.bid !== "number" || !Number.isFinite(row.bid)))) throw new AdsSyncError("ADS_TARGET_RESPONSE_INVALID");
       return { parentExternalId: row.adGroupId, state: row.state };
@@ -133,7 +140,7 @@ export function createSponsoredProductsNegativeTargetReader(fetcher: typeof fetc
     resource: "NEGATIVE_TARGET", path: "/sp/negativeTargets/list", mediaType: spNegativeTargetingClauseMediaType, collectionKey: "negativeTargetingClauses", idKey: "targetId",
     errorCode: "ADS_NEGATIVE_TARGET_RESPONSE_INVALID", entityType: "SP:negative-target",
     parse(row) {
-      if (!hasAdsId(row.adGroupId) || !hasAdsId(row.campaignId) || !Array.isArray(row.expression) || !Array.isArray(row.resolvedExpression) || !hasAdsState(row.state)) {
+      if (!hasAdsId(row.adGroupId) || !hasAdsId(row.campaignId) || !validExpressions(row.expression, spNegativePredicateTypes) || !validExpressions(row.resolvedExpression, spNegativePredicateTypes) || !hasAdsState(row.state)) {
         throw new AdsSyncError("ADS_NEGATIVE_TARGET_RESPONSE_INVALID");
       }
       return { parentExternalId: row.adGroupId, state: row.state };
@@ -158,7 +165,7 @@ export function createSponsoredProductsCampaignNegativeTargetReader(fetcher: typ
     resource: "CAMPAIGN_NEGATIVE_TARGET", path: "/sp/campaignNegativeTargets/list", mediaType: spCampaignNegativeTargetingClauseMediaType, collectionKey: "campaignNegativeTargetingClauses", idKey: "targetId",
     errorCode: "ADS_CAMPAIGN_NEGATIVE_TARGET_RESPONSE_INVALID", entityType: "SP:campaign-negative-target",
     parse(row) {
-      if (!hasAdsId(row.campaignId) || !Array.isArray(row.expression) || !Array.isArray(row.resolvedExpression) || !hasAdsState(row.state)) {
+      if (!hasAdsId(row.campaignId) || !validExpressions(row.expression, spNegativePredicateTypes) || !validExpressions(row.resolvedExpression, spNegativePredicateTypes) || !hasAdsState(row.state)) {
         throw new AdsSyncError("ADS_CAMPAIGN_NEGATIVE_TARGET_RESPONSE_INVALID");
       }
       return { parentExternalId: row.campaignId, state: row.state };
@@ -172,7 +179,7 @@ function createSponsoredProductsChildReader(
 ) {
   return {
     async readPage(input: SponsoredProductsCampaignTransportInput): Promise<AdsSyncPage> {
-      const body = await postSponsoredProductsList(fetcher, input, contract.resource, contract.path, contract.mediaType, { includeExtendedDataFields: true });
+      const body = await postSponsoredProductsList(fetcher, input, contract.resource, contract.path, contract.mediaType, { includeExtendedDataFields: true, stateFilter: { include: ["ENABLED", "PAUSED", "ARCHIVED"] } });
       return parseSponsoredProductsPage(body, input.cursor, contract.collectionKey, value => {
         const row = asRecordWithError(value, contract.errorCode);
         if (!hasAdsId(row[contract.idKey])) throw new AdsSyncError(contract.errorCode);
@@ -283,9 +290,37 @@ export const pendingAdsReadAdapter: AdsReadAdapter = {
   assertImplemented() { throw new AdsSyncError("ADS_READ_ADAPTER_NOT_IMPLEMENTED"); },
   async readPage() { throw new AdsSyncError("ADS_READ_ADAPTER_NOT_IMPLEMENTED"); },
 };
-export const amazonAdsReadAdapter: AdsReadAdapter = pendingAdsReadAdapter;
-export const verifiedAdsReadStages: ReadonlySet<AdsSyncStage> = new Set();
-export function adsReadAdapterReady(requiredStages: readonly AdsSyncStage[] = ["campaigns", "ad-groups", "keywords", "targets", "negatives", "reports"]) {
+/** One HTTP page per dispatch, including each of the four distinct negative collections. */
+export function createSponsoredProductsReadAdapter(fetcher: typeof fetch = fetch): AdsReadAdapter {
+  const readers = { campaigns: createSponsoredProductsCampaignReader(fetcher), "ad-groups": createSponsoredProductsAdGroupReader(fetcher), keywords: createSponsoredProductsKeywordReader(fetcher), targets: createSponsoredProductsTargetReader(fetcher) };
+  const negatives = [createSponsoredProductsNegativeKeywordReader(fetcher), createSponsoredProductsNegativeTargetReader(fetcher), createSponsoredProductsCampaignNegativeKeywordReader(fetcher), createSponsoredProductsCampaignNegativeTargetReader(fetcher)];
+  return {
+    assertImplemented() { /* SP structure only; reports deliberately unsupported. */ },
+    async readPage(input) {
+      if (input.stage === "reports") throw new AdsSyncError("ADS_REPORT_ADAPTER_NOT_IMPLEMENTED");
+      if (input.stage !== "negatives") {
+        const reader = readers[input.stage];
+        if (!reader) throw new AdsSyncError("ADS_STAGE_NOT_IMPLEMENTED");
+        return reader.readPage(input);
+      }
+      let index = 0, cursor: string | null = null;
+      if (input.cursor !== null) {
+        try {
+          const value = JSON.parse(input.cursor);
+          if (!value || value.v !== 1 || !Number.isInteger(value.index) || value.index < 0 || value.index >= negatives.length || (value.token !== null && (typeof value.token !== "string" || !value.token || value.token.length > 16384))) throw new Error();
+          index = value.index; cursor = value.token;
+        } catch { throw new AdsSyncError("ADS_NEGATIVE_CHECKPOINT_INVALID"); }
+      }
+      const page = await negatives[index].readPage({ ...input, cursor });
+      const nextCursor = page.nextCursor ? JSON.stringify({ v: 1, index, token: page.nextCursor }) : index + 1 < negatives.length ? JSON.stringify({ v: 1, index: index + 1, token: null }) : null;
+      if (nextCursor && nextCursor.length > 16384) throw new AdsSyncError("ADS_NEGATIVE_CHECKPOINT_INVALID");
+      return { ...page, nextCursor };
+    },
+  };
+}
+export const amazonAdsReadAdapter: AdsReadAdapter = createSponsoredProductsReadAdapter();
+export const verifiedAdsReadStages: ReadonlySet<AdsSyncStage> = new Set(["campaigns", "ad-groups", "keywords", "targets", "negatives"]);
+export function adsReadAdapterReady(requiredStages: readonly AdsSyncStage[] = ["campaigns", "ad-groups", "keywords", "targets", "negatives"]) {
   return requiredStages.length > 0 && requiredStages.every(stage => verifiedAdsReadStages.has(stage));
 }
 export function isAdsRegion(value: string): value is AdsRegion { return value === "NA" || value === "EU" || value === "FE"; }

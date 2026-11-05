@@ -5,7 +5,7 @@
 ## 执行条件与范围
 
 - 沿用 `AMAZON_SYNC_CENTER_SCOPES` 精确组织／工作区开关、Redis worker 和现有 30 秒调度 tick。服务器未部署此版本、未应用迁移、未运行标准 worker 或范围开关未启用时，不会自动运行。
-- 已验证 `CONFIGURED` 授权必须有真实 Seller ID，来源已启用、ERP 店铺有效，Marketplace 为美国 `ATVPDKIKX0DER` 或加拿大 `A2EUQ1WTGCTBG2`。只配置凭证且未完成授权验证／店铺数据源映射时不会创建空目标任务。
+- 已验证 `CONFIGURED` 授权必须有真实 Seller ID，来源已绑定 ERP 店铺记录，Marketplace 为美国 `ATVPDKIKX0DER` 或加拿大 `A2EUQ1WTGCTBG2`。自动计划不再要求来源 `enabled=true` 或 ERP 店铺 `status=active`；绑定关系本身触发计划发现。手动任务仍保留原启用及店铺状态校验，自动计划可通过暂停操作停止未来任务。
 - 订单及财务使用已有来源策略中的应用标识、管理员角色声明、预算和时区；缺策略不能执行。参与站点查询不证明业务角色。财务仍是卖家级单源，必须满足已有所有参与站点及同一 ERP 店铺绑定校验；含额外站点时不会缩减或伪造授权范围。
 - 自动计划只覆盖在线商品、FBA 库存、订单、销售流量日报和财务。退货及其他未接入域不纳入本次自动化。
 
