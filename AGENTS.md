@@ -507,3 +507,12 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - `returnsPolicy` 明确窗口、站点时区、至少一天安全延迟、三操作预算、轮询上限和解析批次。cursor 的 `reportStateCiphertext` 保存报告/文档/原件/行 offset；每批明细和 cursor 同事务；未知 create 结果停下人工核查，不能重放创建。404 轮询与过期下载 URL 走有界退避。
 - 单份已发布报告为查询边界；`reportId + rowHash` 仅报告内幂等，不能跨报告累加当独立退货事件。原因维度保留原始代码，订单关联限 tenant/seller/site/authorization，不造订单，不修改库存/财务。原件仅加密归档，评论/商品自由文本不进普通 DTO/日志/UI；无 offset 日期 fail closed。
 - `npm run test:amazon-returns:offline`：fixture 单测、临时 PG/Redis、退货及订单/财务浏览器；全资源回归 `npm run test:amazon-sync:offline`。不得读取真实 dotenv、启动真实 job 或执行真实迁移。计划/官方依据/验收见 `docs/amazon-returns-p4-plan.md`、`docs/amazon-returns-p4-validation.md`。P5 仍需阶段确认。
+
+## Amazon 同步 P5 生命周期与观测
+
+后续用户已批准 US/CA 自动同步范围，当前持续调度规则见 `docs/amazon-automatic-sync.md`：有效授权和数据源就绪后系统建计划，订单／日报／财务最多回溯 730 天，再每日增量，商品／库存每日快照。P5 下述逐次审批描述保留为手动任务历史边界；自动任务由实时启用计划、revision、角色、数据源与授权共同控制。退货未纳入自动计划。新增计划约束迁移须随版本经 CI 发布，不得只推 worker 而遗漏迁移。
+
+- P5继续逐次审批窗口，不开放自动持续采集。新三资源的异常/控制状态经 `service.ts syncIncrementalCursorStatus` 在scope锁及run变更同事务更新；只改匹配source/resource/activeRunId且未SUCCEEDED的cursor，禁止清空watermark/token/reportState/成功水位。健康窗口RUNNING与run等待片段状态语义不同，不强制逐片同值。
+- scheduler租约恢复与执行审批阻断、processor执行前阻断/运行中pause/cancel、service显式resume/retry须遵守该边界；旧三链路保持原调度/重试/预算。Finance/Returns使用独立校验码，Orders旧码兼容。
+- source进度DTO只select资源/窗口/status/lastSuccessAt/updatedAt；任务提示只允许固定文案，不得输出token/密文/raw/签名URL/PII。现有tenant/seller/site过滤和财务管理员边界不可放宽。
+- 专项 `npm run test:amazon-sync:lifecycle`，完整 `npm run test:amazon-sync:offline`；前者仅新建临时PG/Redis与mock transport。运维、角色/额度、轮换、恢复及告警边界见 `docs/amazon-sync-p5-operations.md`；P5不新增迁移、端点或真实配置操作。

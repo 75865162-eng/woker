@@ -48,6 +48,7 @@
     "test:selection:create": "node scripts/selection-pipeline/run-create-integration.mjs",
     "test:erp": "node scripts/erp-cli/run-integration.mjs",
     "test:amazon-sync:integration": "node scripts/test-amazon-sync-integration.mjs",
+    "test:amazon-sync:lifecycle": "node scripts/test-amazon-sync-integration.mjs --lifecycle",
     "test:amazon-sync:offline": "node scripts/test-amazon-sync-integration.mjs --offline-all",
     "test:amazon-returns:offline": "node scripts/test-amazon-sync-integration.mjs --returns",
     "test:amazon-finance:offline": "node scripts/test-amazon-sync-integration.mjs --finance",

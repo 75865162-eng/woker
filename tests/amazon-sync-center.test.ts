@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { syncCenterEnabled, parseSyncPlan, officialEndpoint, retryDelay, SyncInputError } from "@/lib/amazon-sync/policy";
+import { syncCenterEnabled, syncDomains, incrementalFailureCode, parseSyncPlan, officialEndpoint, retryDelay, SyncInputError } from "@/lib/amazon-sync/policy";
 import { encryptCheckpoint, decryptCheckpoint } from "@/lib/amazon-sync/checkpoint";
 import { encryptAmazonSpApiCredentials, decryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
-import { inventoryPublishedWhere, catalogPublishedWhere, taskSummary, taskFilters, sourceHealth } from "@/lib/amazon-sync/read";
+import { inventoryPublishedWhere, catalogPublishedWhere, taskSummary, incrementalOperatorAction, taskFilters, sourceHealth } from "@/lib/amazon-sync/read";
 import { validateInventoryPage, validateCatalogCompletion, classifySyncFailure, sourceTimestamp } from "@/lib/amazon-sync/processor";
 import { AmazonSpApiError, readRetryAfter } from "@/lib/amazon/sp-api-client";
 const scope = { organizationId: "org", workspaceId: "ws" };
@@ -12,10 +12,24 @@ test("sync center defaults off and requires an exact organization/workspace pair
   assert.equal(syncCenterEnabled(scope, '[["other","ws"]]'), false);
   assert.equal(syncCenterEnabled(scope, '[["org","ws"]]'), true);
 });
+test("data domain catalog has explicit execution and planning metadata", () => {
+  assert.ok(syncDomains.length >= 10);
+  for (const domain of syncDomains) {
+    assert.ok(domain.id && domain.name && domain.group && domain.api && domain.nextStep);
+    assert.ok(["snapshot", "incremental", "report", "external"].includes(domain.mode));
+    assert.ok(["verified", "pending", "separate"].includes(domain.authorization));
+    assert.ok(Number.isInteger(domain.frequency) && domain.frequency > 0);
+    assert.ok(Number.isInteger(domain.priority) && domain.priority >= 1 && domain.priority <= 4);
+  }
+  assert.deepEqual(syncDomains.filter(domain => domain.implemented).map(domain => domain.id).sort(), ["catalog", "finance", "inventory", "orders", "returns", "sales_traffic"]);
+});
 test("plans reject unimplemented domains, incremental modes and invalid scope/frequency", () => {
   const p = { name: "inventory", resource: "inventory", enabled: false, intervalMinutes: 60, sourceIds: ["one"] };
   assert.equal(parseSyncPlan(p).mode, "snapshot");
-  for (const patch of [{ intervalMinutes: 0 }, { resource: "orders" }, { mode: "incremental" }, { sourceIds: [] }, { sourceIds: ["one", "one"] }, { maxAttempts: 11 }, { retentionDays: -1 }]) assert.throws(() => parseSyncPlan({ ...p, ...patch }), SyncInputError);
+  assert.equal(parseSyncPlan({ ...p, resource: "orders", mode: "incremental" }).mode, "incremental");
+  assert.equal(parseSyncPlan({ ...p, resource: "finance", mode: "incremental" }).mode, "incremental");
+  assert.equal(parseSyncPlan({ ...p, resource: "sales_traffic", mode: "date_range" }).mode, "date_range");
+  for (const patch of [{ intervalMinutes: 0 }, { resource: "returns" }, { mode: "incremental" }, { sourceIds: [] }, { sourceIds: ["one", "one"] }, { maxAttempts: 11 }, { retentionDays: -1 }]) assert.throws(() => parseSyncPlan({ ...p, ...patch }), SyncInputError);
 });
 test("authorization endpoints are restricted to matching official regions", () => {
   officialEndpoint("us-east-1", "https://sellingpartnerapi-na.amazon.com");
@@ -106,4 +120,16 @@ test("snapshot SKU/ASIN and explicit observation date filters are database predi
   assert.throws(() => snapshotRowFilters(new URLSearchParams({ dateField: "orderDate" })));
   assert.throws(() => snapshotRowFilters(new URLSearchParams({ from: "2026-02-30" })));
   for (const pagination of [null, false, [], ""]) assert.throws(() => validateInventoryPage({ inventorySummaries: [], pagination }));
+});
+
+test("incremental operator guidance and error codes distinguish resources without changing legacy codes", () => {
+  assert.equal(incrementalFailureCode("orders", 403), "ORDER_ROLE_OR_SCOPE");
+  assert.equal(incrementalFailureCode("finance", 400), "FINANCE_VALIDATION");
+  assert.equal(incrementalFailureCode("returns", 403), "RETURN_ROLE_OR_SCOPE");
+  for (const resource of ["orders", "finance", "returns"]) {
+    assert.match(incrementalOperatorAction(resource, "BLOCKED")!, /审批/);
+    assert.match(incrementalOperatorAction(resource, "FAILED")!, /人工核查/);
+    assert.equal(incrementalOperatorAction(resource, "SUCCEEDED"), null);
+  }
+  assert.equal(incrementalOperatorAction("inventory", "FAILED"), null);
 });

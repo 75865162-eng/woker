@@ -110,7 +110,7 @@ export async function exerciseSyncCenterBrowser(input: { organizationId: string;
           completed = job => { if (job.data.runId === taskId) resolve(); }; errored = reject;
           activeWorker.on("completed", completed); activeWorker.on("error", errored);
         });
-        await tickSyncCenter(); await finished;
+        await tickSyncCenter(new Date(), { taskIds: [taskId], exportIds: [] }); await finished;
       } finally { if (timer) clearTimeout(timer); activeWorker.off("completed", completed); activeWorker.off("error", errored); }
     };
     await dispatch(); // Caller intentionally supplies invalid Amazon response for the first attempt.

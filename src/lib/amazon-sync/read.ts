@@ -2,7 +2,7 @@ import { amazonDataAccess, sourceAccessWhere } from "./data-access";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { inventorySnapshotStatus } from "@/lib/operations/readiness";
-import { SyncInputError, type SyncScope } from "./policy";
+import { SyncInputError, isIncrementalResource, type SyncScope } from "./policy";
 
 export type SnapshotScope = { runId: string; sellerAccountId?: string; marketplaceId?: string; freshnessMinutes?: number; capturedAt: Date | null };
 export async function publishedSnapshotScopes(scope: SyncScope, resource: "inventory" | "catalog", actor?: string, target?: { sellerAccountId: string; marketplaceId: string }): Promise<SnapshotScope[]> {
@@ -28,17 +28,27 @@ export function sourceHealth(source: { enabled: boolean; lastSuccessAt: Date | n
   if (status === "FAILED" || status === "BLOCKED" || status === "PARTIAL_SUCCESS") return status;
   return source.activeRunId ? inventorySnapshotStatus(source.lastSuccessAt, new Date(), source.freshnessMinutes) : "NOT_SYNCED";
 }
-const sourceInclude = { targets: { select: { schedule: { select: { enabled: true, nextRunAt: true } } } }, authorization: { select: { id: true, name: true, status: true, amazonSellerId: true, awsRegion: true, lastValidatedAt: true } }, seller: { select: { id: true, displayName: true, accountKey: true, status: true } } } satisfies Prisma.AmazonSyncDataSourceInclude;
+const sourceInclude = { resourceCursor: { select: { resource: true, watermarkFrom: true, watermarkTo: true, status: true, lastSuccessAt: true, updatedAt: true } }, targets: { select: { schedule: { select: { enabled: true, nextRunAt: true } } } }, authorization: { select: { id: true, name: true, status: true, amazonSellerId: true, awsRegion: true, lastValidatedAt: true } }, seller: { select: { id: true, displayName: true, accountKey: true, status: true } } } satisfies Prisma.AmazonSyncDataSourceInclude;
 export async function listSources(scope: SyncScope, filters: { sellerAccountId?: string; marketplaceId?: string; resource?: string } = {}, actor?: string) {
   const allowed = sourceAccessWhere(await amazonDataAccess(scope, actor));
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { AND: [{ ...scope, ...filters }, allowed] }, include: sourceInclude, orderBy: { createdAt: "asc" }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("数据源超过试点容量，需要容量评审。", 409);
   const latest = sources.length ? await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, sourceId: { in: sources.map(s => s.id) } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], distinct: ["sourceId"] }) : [];
-  return sources.map(source => ({ ...source, nextScheduledAt: source.targets.filter(t => t.schedule.enabled && t.schedule.nextRunAt).map(t => t.schedule.nextRunAt!).sort((a, b) => a.getTime() - b.getTime())[0] ?? null, latestTask: latest.find(t => t.sourceId === source.id) ? taskSummary(latest.find(t => t.sourceId === source.id)!) : null, health: sourceHealth(source, latest.find(t => t.sourceId === source.id)?.status) }));
+  return sources.map(source => ({ ...source, resourceCursor: isIncrementalResource(source.resource) && source.resourceCursor ? { ...source.resourceCursor, hasIncompleteWindow: source.resourceCursor.status !== "SUCCEEDED" } : null, nextScheduledAt: source.targets.filter(t => t.schedule.enabled && t.schedule.nextRunAt).map(t => t.schedule.nextRunAt!).sort((a, b) => a.getTime() - b.getTime())[0] ?? null, latestTask: latest.find(t => t.sourceId === source.id) ? taskSummary(latest.find(t => t.sourceId === source.id)!) : null, health: sourceHealth(source, latest.find(t => t.sourceId === source.id)?.status) }));
+}
+/** Static advice only: no upstream error/body, cursor token or raw document. */
+export function incrementalOperatorAction(resource: string, status: string) {
+  if (!isIncrementalResource(resource)) return null;
+  if (status === "BLOCKED") return "核对当前审批有效期、店铺站点及角色；完成必要验证后重新提交执行审批。";
+  if (status === "FAILED") return "查看结构日志与失败阶段，核对参数或重试上限后申请恢复；报告创建结果不确定时先人工核查，勿重复创建。";
+  if (status === "PAUSED") return "已保留增量窗口和检查点；经审批恢复后继续，勿重置游标。";
+  if (status === "CANCELLED") return "本任务已结束；未完成窗口仍保留，核对绑定及审批后可申请新的任务。";
+  if (status === "RETRY_WAIT") return "等待有限重试与持久限流预算，勿重复申请相同窗口或绕过退避。";
+  return null;
 }
 // Whitelist output. Checkpoint ciphertext, leases and dispatch internals never leave the server.
 export function taskSummary(t: { id: string; sourceId: string | null; resource: string; status: string; stage: string; trigger: string; mode: string; scheduleId: string | null; scheduleRevision: number | null; startedAt: Date; executionStartedAt: Date | null; finishedAt: Date | null; pagesCompleted: number; processedCount: number; insertedCount: number; updatedCount: number; skippedCount: number; apiRequests: number; throttles: number; attempts: number; maxAttempts: number; error: string | null; control: string | null; nextAttemptAt: Date; summary: unknown; frozenScope?: unknown; requestedByUserId?: string; failedCount?: number; detailsCompletedCount?: number }) {
-  return { returnWindow: (t.frozenScope as { returnWindow?: unknown } | null)?.returnWindow ?? null, financeWindow: (t.frozenScope as { financeWindow?: unknown } | null)?.financeWindow ?? null, detailsCompletedCount: t.detailsCompletedCount ?? 0, failedCount: t.failedCount ?? 0, orderWindow: (t.frozenScope as { orderWindow?: unknown } | null)?.orderWindow ?? null, requestedByUserId: t.requestedByUserId, requestedRange: (t.frozenScope as { requestedRange?: unknown } | null)?.requestedRange ?? null, id: t.id, sourceId: t.sourceId, resource: t.resource, status: t.status, stage: t.stage, trigger: t.trigger, mode: t.mode, scheduleId: t.scheduleId, scheduleRevision: t.scheduleRevision, queuedAt: t.startedAt, startedAt: t.executionStartedAt, finishedAt: t.finishedAt, elapsedMs: t.executionStartedAt && t.finishedAt ? t.finishedAt.getTime() - t.executionStartedAt.getTime() : null, pagesCompleted: t.pagesCompleted, processedCount: t.processedCount, insertedCount: t.insertedCount, updatedCount: t.updatedCount, skippedCount: t.skippedCount, apiRequests: t.apiRequests, throttles: t.throttles, attempts: t.attempts, maxAttempts: t.maxAttempts, error: t.error, control: t.control, nextAttemptAt: t.nextAttemptAt, summary: t.summary };
+  return { operatorAction: incrementalOperatorAction(t.resource, t.status), returnWindow: (t.frozenScope as { returnWindow?: unknown } | null)?.returnWindow ?? null, financeWindow: (t.frozenScope as { financeWindow?: unknown } | null)?.financeWindow ?? null, detailsCompletedCount: t.detailsCompletedCount ?? 0, failedCount: t.failedCount ?? 0, orderWindow: (t.frozenScope as { orderWindow?: unknown } | null)?.orderWindow ?? null, requestedByUserId: t.requestedByUserId, requestedRange: (t.frozenScope as { requestedRange?: unknown } | null)?.requestedRange ?? null, id: t.id, sourceId: t.sourceId, resource: t.resource, status: t.status, stage: t.stage, trigger: t.trigger, mode: t.mode, scheduleId: t.scheduleId, scheduleRevision: t.scheduleRevision, queuedAt: t.startedAt, startedAt: t.executionStartedAt, finishedAt: t.finishedAt, elapsedMs: t.executionStartedAt && t.finishedAt ? t.finishedAt.getTime() - t.executionStartedAt.getTime() : null, pagesCompleted: t.pagesCompleted, processedCount: t.processedCount, insertedCount: t.insertedCount, updatedCount: t.updatedCount, skippedCount: t.skippedCount, apiRequests: t.apiRequests, throttles: t.throttles, attempts: t.attempts, maxAttempts: t.maxAttempts, error: t.error, control: t.control, nextAttemptAt: t.nextAttemptAt, summary: t.summary };
 }
 export function taskFilters(scope: SyncScope, p: URLSearchParams): Prisma.AmazonSyncRunWhereInput {
   const where: Prisma.AmazonSyncRunWhereInput = { ...scope, executionVersion: 2 };

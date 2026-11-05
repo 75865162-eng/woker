@@ -16,7 +16,17 @@ import { approvedContext } from "./approved-context";
 import { digest } from "./approval-policy";
 import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
-import { activeTaskStatuses, boundedInteger, implementedDomain, officialEndpoint, optionalAmazonSellerId, parseSyncPlan, requiredText, requireSyncCenter, SyncInputError, type SyncScope } from "./policy";
+import { automaticMarketplaces, automaticPlanKey, automaticResources } from "./automatic-schedule";
+import { activeTaskStatuses, isIncrementalResource, boundedInteger, implementedDomain, officialEndpoint, optionalAmazonSellerId, parseSyncPlan, requiredText, requireSyncCenter, SyncInputError, type SyncScope } from "./policy";
+
+/** Caller holds the run's scope lock and updates its run in this transaction.
+ * Never change a completed window or a cursor now owned by a different run.
+ * Progress ciphertext, watermarks and lastSuccessAt remain untouched.
+ */
+export async function syncIncrementalCursorStatus(tx: Prisma.TransactionClient, run: SyncScope & { id: string; sourceId: string | null; resource: string }, status: "PAUSED" | "CANCELLED" | "WAITING" | "RETRY_WAIT" | "FAILED" | "BLOCKED") {
+  if (!isIncrementalResource(run.resource) || !run.sourceId) return;
+  await tx.amazonSyncResourceCursor.updateMany({ where: { organizationId: run.organizationId, workspaceId: run.workspaceId, sourceId: run.sourceId, resource: run.resource, activeRunId: run.id, status: { not: "SUCCEEDED" } }, data: { status } });
+}
 
 export async function scopeLock(tx: Prisma.TransactionClient, scope: SyncScope) {
   const key = JSON.stringify(["amazon-sync-center", scope.organizationId, scope.workspaceId]);
@@ -195,6 +205,9 @@ export async function savePlan(scope: SyncScope, actorUserId: string, body: Reco
     if (existing && body.revision !== existing.revision) throw new SyncInputError("计划已被更新，请刷新。", 409);
     const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: sourceIds }, resource: plan.resource, ...(plan.enabled ? { enabled: true } : {}) } });
     if (sources.length !== sourceIds.length) throw new SyncInputError("计划范围包含无效、停用或其他数据域的数据源。");
+    if (existing?.planKey.startsWith("auto-v1:")) {
+      if (sourceIds.length !== 1 || existing.planKey !== automaticPlanKey(sourceIds[0]) || existing.resource !== plan.resource || existing.mode !== plan.mode || existing.intervalMinutes !== plan.intervalMinutes) throw new SyncInputError("自动计划的范围、模式和频率不可改变；可暂停或恢复。", 409);
+    }
     for (const source of sources) await assertSellerMarketplaceAccess(scope, actorUserId, source.sellerAccountId, source.marketplaceId, tx, "sync");
     if (plan.enabled) {
       const conflict = await tx.amazonSyncPlanTarget.findFirst({ where: { ...scope, sourceId: { in: sourceIds }, schedule: { enabled: true, executionVersion: 2, NOT: { id } } } });
@@ -209,12 +222,15 @@ export async function savePlan(scope: SyncScope, actorUserId: string, body: Reco
   })(db);
 }
 export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope, actorUserId: string, sourceId: string, options: { key: string; trigger: string; scheduleId?: string; scheduleRevision?: number; maxAttempts?: number; priority?: number; requestedRange?: RequestedRange; orderWindow?: OrderWindow; financeWindow?: FinanceWindow; returnWindow?: FinanceWindow }) {
-  const approval = approvedContext(scope, "run");
+  const scheduled = options.trigger === "schedule";
+  const approval = scheduled ? null : approvedContext(scope, "run");
   scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
   const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: sourceId, enabled: true }, include: { authorization: true, seller: true } });
   if (!source || source.authorization.status !== "CONFIGURED" || source.seller.status !== "active") throw new SyncInputError("数据源、授权或店铺不可用。", 409);
   if (!source.authorization.amazonSellerId) throw new SyncInputError("基础连接未填写真实 Seller ID，不能启动店铺数据同步。", 409);
   implementedDomain(source.resource);
+  const schedule = scheduled && options.scheduleId ? await tx.amazonSyncSchedule.findFirst({ where: { ...scope, id: options.scheduleId, resource: source.resource, executionVersion: 2, enabled: true, revision: options.scheduleRevision, targets: { some: { sourceId } } } }) : null;
+  if (scheduled && (!schedule || schedule.updatedByUserId !== actorUserId || schedule.planKey !== automaticPlanKey(source.id) || !automaticMarketplaces.has(source.marketplaceId) || !(automaticResources as readonly string[]).includes(source.resource))) throw new SyncInputError("自动计划已停用、已变更或不包含此数据源。", 409);
   await assertSellerMarketplaceAccess(scope, actorUserId, source.sellerAccountId, source.marketplaceId, tx, "sync");
   const existing = await tx.amazonSyncRun.findUnique({ where: { organizationId_workspaceId_idempotencyKey: { ...scope, idempotencyKey: options.key } } });
   if (existing) {
@@ -223,7 +239,7 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   }
   const active = await tx.amazonSyncRun.findFirst({ where: { ...scope, sourceId, status: { in: activeTaskStatuses } } });
   if (active) throw new SyncInputError("该数据源已有活动任务；请先完成或取消后重新申请执行审批。", 409);
-  if (!approval.commandSourceIds?.includes(sourceId)) throw new SyncInputError("任务目标超出执行审批范围。", 403);
+  if (!scheduled && !approval?.commandSourceIds?.includes(sourceId)) throw new SyncInputError("任务目标超出执行审批范围。", 403);
   if (source.resource === "sales_traffic") rangeFromFrozen({ requestedRange: options.requestedRange });
   const orderWindow = source.resource === "orders" ? orderWindowFromFrozen(options.orderWindow) : undefined;
   if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy));
@@ -231,9 +247,9 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   if (financeWindow) await assertFinanceScope(tx, scope, source, [actorUserId]);
   const returnWindow = source.resource === "returns" ? returnWindowFromFrozen(options.returnWindow) : undefined;
   if (returnWindow) assertReturnRoles(source.authorization);
-  const frozenScope = { executionExpiresAt: new Date(Date.now() + executionWindowMs).toISOString(), sourceId: source.id, sourceRevision: source.revision, authorizationId: source.authorization.id, authorizationRevision: source.authorization.revision, amazonSellerId: source.authorization.amazonSellerId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, ...(options.requestedRange ? { requestedRange: options.requestedRange } : {}), ...(returnWindow ? { returnWindow, returnsPolicy: parseReturnPolicy(source.returnsPolicy), region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}), ...(financeWindow ? { financeWindow, financePolicy: parseFinancePolicy(source.financePolicy), region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}), ...(orderWindow ? { orderWindow, orderPolicy: parseOrderSyncPolicy(source.orderPolicy), region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}) };
+  const frozenScope = { executionExpiresAt: new Date(Date.now() + executionWindowMs).toISOString(), sourceId: source.id, sourceRevision: source.revision, authorizationId: source.authorization.id, authorizationRevision: source.authorization.revision, amazonSellerId: source.authorization.amazonSellerId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, ...(scheduled ? { scheduleId: schedule!.id, scheduleRevision: schedule!.revision } : {}), ...(options.requestedRange ? { requestedRange: options.requestedRange } : {}), ...(returnWindow ? { returnWindow, returnsPolicy: parseReturnPolicy(source.returnsPolicy), region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}), ...(financeWindow ? { financeWindow, financePolicy: parseFinancePolicy(source.financePolicy), region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}), ...(orderWindow ? { orderWindow, orderPolicy: parseOrderSyncPolicy(source.orderPolicy), region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}) };
   return tx.amazonSyncRun.create({ data: { ...scope, id: randomUUID(), executionVersion: 2, sourceId, requestedByUserId: actorUserId, resource: source.resource, authorizationRevision: source.authorization.revision, idempotencyKey: options.key,
-    executionApprovalId: approval.approvalId, frozenScope, frozenScopeDigest: digest(frozenScope),
+    executionApprovalId: approval?.approvalId ?? null, frozenScope, frozenScopeDigest: digest(frozenScope),
     mode: ["orders", "finance", "returns"].includes(source.resource) ? "incremental" : source.resource === "sales_traffic" ? "date_range" : "snapshot", status: "WAITING", trigger: options.trigger, scheduleId: options.scheduleId, scheduleRevision: options.scheduleRevision, maxAttempts: options.maxAttempts ?? 3, priority: options.priority ?? 1 } });
 }
 export async function requestTasks(scope: SyncScope, actorUserId: string, body: Record<string, unknown>) {
@@ -297,12 +313,13 @@ export async function controlTask(scope: SyncScope, actorUserId: string, id: str
         await tx.amazonSalesTrafficSnapshot.deleteMany({ where: { ...scope, syncRunId: id } });
       }
       const renewedFrozen = { ...(run.frozenScope as Prisma.JsonObject ?? {}), executionExpiresAt: new Date(Date.now() + executionWindowMs).toISOString() };
-      data = { status: "WAITING", executionApprovalId: approval.approvalId, requestedByUserId: actorUserId, control: null, error: null, finishedAt: null, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: new Date(), dispatchVersion: { increment: 1 }, maxAttempts: run.attempts + 3,
+      data = { status: "WAITING", trigger: "manual", executionApprovalId: approval.approvalId, requestedByUserId: actorUserId, control: null, error: null, finishedAt: null, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: new Date(), dispatchVersion: { increment: 1 }, maxAttempts: run.attempts + 3,
         frozenScope: renewedFrozen, frozenScopeDigest: digest(renewedFrozen),
         ...(action === "retry" && !["orders", "finance", "returns"].includes(run.resource) ? { checkpointCiphertext: null, stage: "WAITING", pagesCompleted: 0, paginationComplete: false, processedCount: 0, insertedCount: 0, updatedCount: 0, skippedCount: 0, summary: Prisma.DbNull, executionStartedAt: null } : {}) };
 
     }
-    await tx.amazonSyncRun.update({ where: { id }, data });
+    const updated = await tx.amazonSyncRun.update({ where: { id }, data });
+    if (!updated.control && ["PAUSED", "CANCELLED", "WAITING"].includes(updated.status)) await syncIncrementalCursorStatus(tx, run, updated.status as "PAUSED" | "CANCELLED" | "WAITING");
     await tx.amazonSyncTaskLog.create({ data: { ...scope, id: randomUUID(), taskId: id, attempt: run.attempts, event: String(action).toUpperCase(), stage: run.stage } });
     return tx.amazonSyncRun.findUniqueOrThrow({ where: { id } });
   })(db);

@@ -21,6 +21,11 @@ let transport: (url: URL) => Response | Promise<Response> = () => Response.json(
 let catalogTransport: (url: URL) => Response | Promise<Response> = () => Response.json({ items: [] });
 let sourceId = "", secondSource = "", authId = "";
 const fixtureInventory = (sku: string) => ({ lastUpdatedTime: "2026-11-01T00:00:00Z", sellerSku: sku, condition: "NewItem", asin: "ASIN", inventoryDetails: { fulfillableQuantity: 3, inboundWorkingQuantity: 0, inboundShippedQuantity: 1, inboundReceivingQuantity: 0, reservedQuantity: { totalReservedQuantity: 0 }, unfulfillableQuantity: { totalUnfulfillableQuantity: 0 }, researchingQuantity: { totalResearchingQuantity: 0 } } });
+// These fixtures exercise explicit approvals; automatic discovery has its own US/CA contract.
+async function tickApprovedFixture() {
+  const runs = await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2 }, select: { id: true } });
+  await tickSyncCenter(new Date(), { taskIds: runs.map(run => run.id), exportIds: [] });
+}
 async function approved(target: SyncScope, user: string, command: Record<string, unknown>) {
   const row = await requestChange(target, user, command), id = String(row.id);
   assert.equal((await decideChange(target, approver, id, "APPROVED", "isolated fixture")).status, "APPROVED");
@@ -106,7 +111,7 @@ test("per-scope checkpoints survive worker interruption and stale publisher is f
   transport = async () => { requested(); await gate; return Response.json({ payload: { inventorySummaries: [fixtureInventory("STALE-WORKER")] } }); };
   const task = await request(), work = runTask(task.id); await entered;
   await prisma.amazonSyncRun.update({ where: { id: task.id }, data: { leaseExpiresAt: new Date(Date.now() - 1000) } });
-  await tickSyncCenter(); release(); await work;
+  await tickApprovedFixture(); release(); await work;
   const recovered = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: task.id } }); assert.notEqual(recovered.status, "SUCCEEDED"); assert.ok(recovered.fenceVersion > 1);
   await prisma.amazonSyncApiBudget.deleteMany({ where: scope });
   transport = () => Response.json({ payload: { inventorySummaries: [fixtureInventory("RECOVERED")] } });
@@ -127,11 +132,11 @@ test("approved policies cannot auto-run; explicit execution and Redis loss retai
   await assert.rejects(() => savePlan(scope, actor, { name: "Automatic execution denied", resource: "inventory", enabled: true, intervalMinutes: 60, sourceIds: [secondSource] }));
   await assert.rejects(() => savePlan(scope, actor, { id: plan.id, revision: 0, name: "stale", resource: "inventory", enabled: false, intervalMinutes: 60, sourceIds: [secondSource] }));
   await prisma.amazonSyncSchedule.update({ where: { id: plan.id }, data: { nextRunAt: new Date(Date.now() - 1000) } });
-  await tickSyncCenter();
+  await tickApprovedFixture();
   assert.equal(await prisma.amazonSyncRun.count({ where: { scheduleId: plan.id } }), 0);
-  await requestTasks(scope, actor, { planId: plan.id, sourceIds: [secondSource] }); await tickSyncCenter();
+  await requestTasks(scope, actor, { planId: plan.id, sourceIds: [secondSource] }); await tickApprovedFixture();
   const task = await prisma.amazonSyncRun.findFirstOrThrow({ where: { scheduleId: plan.id } }); assert.equal(task.status, "QUEUED"); assert.equal(task.priority, 1);
-  const queue = getAmazonSyncQueue(); await queue.obliterate({ force: true }); await tickSyncCenter();
+  const queue = getAmazonSyncQueue(); await queue.obliterate({ force: true }); await tickApprovedFixture();
   assert.ok(await queue.getJob(`adc-${task.id}-${task.dispatchVersion}`));
   await failCurrent(task.id);
 });
@@ -204,7 +209,7 @@ test("a real BullMQ worker consumes persisted dispatch and publishes only after 
       worker.on("failed", (job, error) => { if (job?.data.runId === task.id) reject(error); });
       worker.on("error", reject);
     });
-    await tickSyncCenter(); await finished;
+    await tickApprovedFixture(); await finished;
     assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: task.id } })).status, "SUCCEEDED");
     assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: sourceId } })).activeRunId, task.id);
   } finally { if (timer) clearTimeout(timer); await worker.close(); }
@@ -256,7 +261,7 @@ test("authenticated API to real queue/worker to seller-bound snapshot completes 
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const complete = new Promise<void>((resolve, reject) => { timer = setTimeout(() => reject(new Error("API fixture worker timed out")), 15000); worker.on("completed", job => { if (job.data.runId === id) resolve(); }); worker.on("error", reject); });
-    await tickSyncCenter(); await complete;
+    await tickApprovedFixture(); await complete;
   } finally { if (timer) clearTimeout(timer); await worker.close(); globalThis.fetch = credentialFetch; }
   const detail = await get(`section=task&id=${id}`); assert.equal(detail.status, 200); assert.equal((await detail.json()).task.status, "SUCCEEDED");
   const snapshot = await get(`section=snapshots&id=${id}`); assert.equal(snapshot.status, 200); const data = await snapshot.json();

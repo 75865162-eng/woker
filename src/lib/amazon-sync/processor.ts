@@ -1,5 +1,6 @@
 import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, parseReturnReport, returnPollDelay } from "./returns";
 import { assertExecutionWindow } from "./execution-window";
+import { automaticPlanKey, automaticMarketplaces, isAutomaticResource } from "./automatic-schedule";
 import { assertFinanceScope } from "./finance-scope";
 import { parseFinancePolicy, parseFinancePage, financeWindowFromFrozen, attributeFinanceTransaction, convertFinanceMoney } from "./finance";
 import { assertSellerMarketplaceAccess } from "./data-access";
@@ -20,8 +21,8 @@ import { extractCatalogPage } from "@/lib/amazon/catalog";
 import { withAmazonSyncLock } from "@/lib/operations/sync-lock";
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
 import { decryptCheckpoint, encryptCheckpoint } from "./checkpoint";
-import { implementedDomain, officialEndpoint, retryDelay, syncCenterEnabled, SyncInputError, type SyncScope } from "./policy";
-import { scopeLock } from "./service";
+import { implementedDomain, incrementalFailureCode, officialEndpoint, retryDelay, syncCenterEnabled, SyncInputError, type SyncScope } from "./policy";
+import { scopeLock, syncIncrementalCursorStatus } from "./service";
 import { canonical, digest, seal, unseal } from "./approval-policy";
 import { targetEnvironment } from "./approval-policy";
 import { defaultRolePermissionMap, type RolePermissionMap } from "@/lib/accounts/permissions";
@@ -98,27 +99,30 @@ async function log(tx: Prisma.TransactionClient, run: AmazonSyncRun, event: stri
   await tx.amazonSyncTaskLog.create({ data: { id: randomUUID(), organizationId: run.organizationId, workspaceId: run.workspaceId, taskId: run.id, attempt: run.attempts, event, stage: run.stage, page: run.pagesCompleted, code } });
 }
 async function assertLiveSource(tx: Prisma.TransactionClient, run: AmazonSyncRun) {
-  try { assertExecutionWindow(run.frozenScope); } catch { throw new SyncPreflightRejected("执行授权截止时间已失效。"); }
-  const grant = await tx.amazonDataCenterChangeRequest.findFirst({ where: { id: run.executionApprovalId ?? "", organizationId: run.organizationId, workspaceId: run.workspaceId, status: "APPLIED", changeType: "SyncExecutionRequest", OR: [{ operation: "run" }, { operation: "control-task", targetId: run.id }], targetEnvironment: targetEnvironment(), sourceIds: { has: run.sourceId ?? "" } } });
+  const scheduled = run.trigger === "schedule";
+  if (!scheduled) try { assertExecutionWindow(run.frozenScope); } catch { throw new SyncPreflightRejected("执行授权截止时间已失效。"); }
+  const grant = scheduled ? null : await tx.amazonDataCenterChangeRequest.findFirst({ where: { id: run.executionApprovalId ?? "", organizationId: run.organizationId, workspaceId: run.workspaceId, status: "APPLIED", changeType: "SyncExecutionRequest", OR: [{ operation: "run" }, { operation: "control-task", targetId: run.id }], targetEnvironment: targetEnvironment(), sourceIds: { has: run.sourceId ?? "" } } });
+  const schedule = scheduled && run.scheduleId && run.scheduleRevision !== null ? await tx.amazonSyncSchedule.findFirst({ where: { organizationId: run.organizationId, workspaceId: run.workspaceId, id: run.scheduleId, resource: run.resource, executionVersion: 2, enabled: true, revision: run.scheduleRevision, planKey: automaticPlanKey(run.sourceId ?? ""), updatedByUserId: run.requestedByUserId, targets: { some: { sourceId: run.sourceId ?? "" } } }, select: { id: true } }) : null;
   const approverMember = grant?.approvedByUserId ? await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: run.organizationId, userId: grant.approvedByUserId } }, include: { user: { select: { status: true } } } }) : null;
   const rolePermissions: RolePermissionMap = { ...defaultRolePermissionMap };
   for (const role of await tx.organizationRosterRole.findMany({ where: { organizationId: run.organizationId }, select: { id: true, permissions: true } })) rolePermissions[role.id] = { ...(rolePermissions[role.id] ?? {}), ...normalizeRolePermissions(role.permissions) };
-  const approverStillAuthorized = !!approverMember && approverMember.user.status === "active" && roleCanPerformAction(approverMember.role, "operations", "approve", rolePermissions);
+  const approverStillAuthorized = scheduled ? !!schedule : !!approverMember && approverMember.user.status === "active" && roleCanPerformAction(approverMember.role, "operations", "approve", rolePermissions);
   const actorMember = await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: run.organizationId, userId: run.requestedByUserId } }, include: { user: { select: { status: true } } } });
   if (!actorMember || actorMember.user.status !== "active" || !roleCanPerformAction(actorMember.role, "operations", "create", rolePermissions) || (grant?.operation === "control-task" && !roleCanPerformAction(actorMember.role, "operations", "edit", rolePermissions))) throw new SyncPreflightRejected("任务操作人权限已变化。");
-  const frozen = run.frozenScope as { sourceId?: string; sourceRevision?: number; authorizationId?: string; authorizationRevision?: number; amazonSellerId?: string; sellerAccountId?: string; marketplaceId?: string; resource?: string; region?: string; endpoint?: string } | null;
+  if (scheduled && (!["owner", "database_admin"].includes(actorMember.role) || !roleCanPerformAction(actorMember.role, "operations", "approve", rolePermissions))) throw new SyncPreflightRejected("自动计划管理员权限已变化。");
+  const frozen = run.frozenScope as { sourceId?: string; sourceRevision?: number; authorizationId?: string; authorizationRevision?: number; amazonSellerId?: string; sellerAccountId?: string; marketplaceId?: string; resource?: string; region?: string; endpoint?: string; scheduleId?: string; scheduleRevision?: number } | null;
   const frozenDigest = frozen ? digest(frozen) : "";
-  if (!grant || !approverStillAuthorized || !frozen || frozenDigest !== run.frozenScopeDigest) throw new SyncPreflightRejected("执行审批或固定目标范围已失效。");
+  if ((scheduled ? !schedule : !grant) || !approverStillAuthorized || !frozen || frozenDigest !== run.frozenScopeDigest || (scheduled && (frozen.scheduleId !== run.scheduleId || frozen.scheduleRevision !== run.scheduleRevision || !isAutomaticResource(run.resource) || !automaticMarketplaces.has(frozen.marketplaceId ?? "")))) throw new SyncPreflightRejected("执行审批或固定目标范围已失效。");
   const source = await tx.amazonSyncDataSource.findFirst({ where: { id: run.sourceId!, organizationId: run.organizationId, workspaceId: run.workspaceId, enabled: true }, include: { authorization: true, seller: true } });
   if (!source || source.id !== frozen.sourceId || source.revision !== frozen.sourceRevision || source.authorizationId !== frozen.authorizationId || source.sellerAccountId !== frozen.sellerAccountId || source.marketplaceId !== frozen.marketplaceId || source.resource !== frozen.resource || source.resource !== run.resource || source.seller.status !== "active" || source.authorization.status !== "CONFIGURED" || source.authorization.amazonSellerId !== frozen.amazonSellerId || source.authorization.revision !== frozen.authorizationRevision || source.authorization.revision !== run.authorizationRevision) throw new SyncPreflightRejected("数据源或授权在同步期间改变。");
   if (["orders", "finance", "returns"].includes(run.resource) && (source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint)) throw new SyncPreflightRejected("订单授权区域与已批准范围不匹配。");
   try {
     await assertSellerMarketplaceAccess(run, run.requestedByUserId, source.sellerAccountId, source.marketplaceId, tx, "sync");
-    await assertSellerMarketplaceAccess(run, grant.approvedByUserId!, source.sellerAccountId, source.marketplaceId, tx, "sync");
+    if (!scheduled) await assertSellerMarketplaceAccess(run, grant!.approvedByUserId!, source.sellerAccountId, source.marketplaceId, tx, "sync");
   } catch { throw new SyncPreflightRejected("任务或审批人的 Seller 授权已撤销。"); }
   if (run.resource === "finance") {
     try {
-      const { policy } = await assertFinanceScope(tx, run, source, [run.requestedByUserId, grant.approvedByUserId!]);
+      const { policy } = await assertFinanceScope(tx, run, source, scheduled ? [run.requestedByUserId] : [run.requestedByUserId, grant!.approvedByUserId!]);
       const approved = run.frozenScope as { financePolicy?: unknown };
       if (digest(policy) !== digest(parseFinancePolicy(approved.financePolicy))) throw new Error();
     } catch { throw new SyncPreflightRejected("财务角色、卖家级站点集合或审批策略已变化。"); }
@@ -138,6 +142,7 @@ async function stopForControl(tx: Prisma.TransactionClient, run: AmazonSyncRun) 
   const current = await assertFence(tx, run);
   if (!current.control) return false;
   await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: current.control === "CANCEL" ? "CANCELLED" : "PAUSED", control: null, leaseOwner: null, leaseExpiresAt: null, finishedAt: current.control === "CANCEL" ? new Date() : null } });
+  await syncIncrementalCursorStatus(tx, run, current.control === "CANCEL" ? "CANCELLED" : "PAUSED");
   await log(tx, run, current.control === "CANCEL" ? "CANCELLED" : "PAUSED");
   return true;
 }
@@ -163,7 +168,7 @@ export async function processSyncCenterTask(runId: string, dispatchVersion: numb
       await prisma.$transaction(async tx => {
         await scopeLock(tx, candidate);
         const changed = await tx.amazonSyncRun.updateMany({ where: { id: candidate.id, organizationId: candidate.organizationId, workspaceId: candidate.workspaceId, dispatchVersion, status: { in: ["WAITING", "QUEUED", "RETRY_WAIT"] } }, data: { status: "BLOCKED", error: "执行前审批、权限或冻结范围已变化；未请求 Amazon。", finishedAt: new Date(), dispatchVersion: { increment: 1 } } });
-        if (changed.count) await log(tx, candidate, "BLOCKED", "PREFLIGHT_REJECTED");
+        if (changed.count) { await syncIncrementalCursorStatus(tx, candidate, "BLOCKED"); await log(tx, candidate, "BLOCKED", "PREFLIGHT_REJECTED"); }
       });
       return;
     }
@@ -247,7 +252,7 @@ async function executeSlice(run: AmazonSyncRun, runtime: SyncTaskRuntime = {}) {
   } catch (error) {
     if (error instanceof SyncFenceLost) return;
     const failure = ["orders", "finance", "returns"].includes(run.resource) && error instanceof SyncInputError
-      ? { code: error.status === 403 ? "ORDER_ROLE_OR_SCOPE" : "ORDER_VALIDATION", retryable: false, message: error.message, retryAfterMs: 0 }
+      ? { code: incrementalFailureCode(run.resource, error.status), retryable: false, message: error.message, retryAfterMs: 0 }
       : classifySyncFailure(error);
     if (["orders", "finance", "returns"].includes(run.resource) && !(error instanceof SyncInputError)) failure.message = failure.retryable
       ? "增量请求暂时失败，按退避策略从已提交游标继续。"
@@ -264,7 +269,7 @@ async function executeSlice(run: AmazonSyncRun, runtime: SyncTaskRuntime = {}) {
         }
       }
       const retry = failure.retryable && run.attempts < run.maxAttempts;
-      if (["orders", "finance", "returns"].includes(run.resource)) await tx.amazonSyncResourceCursor.updateMany({ where: { ...scope, activeRunId: run.id }, data: { status: retry ? "RETRY_WAIT" : "FAILED" } });
+      await syncIncrementalCursorStatus(tx, run, retry ? "RETRY_WAIT" : "FAILED");
       await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: retry ? "RETRY_WAIT" : "FAILED", error: failure.message, failedCount: { increment: 1 }, finishedAt: retry ? null : new Date(), nextAttemptAt: new Date(Date.now() + retryDelay(run.attempts, failure.retryAfterMs)), leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
       await log(tx, run, retry ? "RETRY_SCHEDULED" : "FAILED", failure.code);
     });
@@ -317,7 +322,7 @@ export async function executeReportSlice(run: AmazonSyncRun, client: AmazonSpApi
   const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId }, range = rangeFromFrozen(run.frozenScope);
   const checkpoint = decryptCheckpoint(run.checkpointCiphertext, scope, run.id);
   const state = checkpoint ? JSON.parse(checkpoint) as { creating?: boolean; reportId?: string; documentId?: string; requestedAt?: string } : {};
-  if (run.executionStartedAt && Date.now() - run.executionStartedAt.getTime() > 24 * 60 * 60_000) throw new Error("报告等待超过 24 小时，需重新审批。");
+  if (run.trigger !== "schedule" && run.executionStartedAt && Date.now() - run.executionStartedAt.getTime() > 24 * 60 * 60_000) throw new Error("报告等待超过 24 小时，需重新审批。");
   if (state.creating && !state.reportId) throw new Error("报告申请结果不确定，禁止自动重复申请；需人工核查后批准重试。");
   const operation = !state.reportId ? "createReport" : !state.documentId ? "getReport" : "getReportDocument";
   const budgetKey = { ...scope, authorizationId, operation };

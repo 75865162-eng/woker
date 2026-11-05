@@ -91,9 +91,9 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     before = prior ? { id: prior.id, userId, roleId, sellerAccountId, enabled: prior.enabled, revision: prior.revision, actions: prior.actions, marketplaceIds: prior.marketplaceIds, mcpEnabled: prior.mcpEnabled } : null;
   } else if (action === "save-plan") {
     parseSyncPlan(command);
-    if (command.enabled === true) throw new SyncInputError("定时执行须逐次获得 SyncExecutionRequest 批准；本阶段不接受计划自动触发授权。", 409);
     const plan = id ? await tx.amazonSyncSchedule.findFirst({ where: { ...scope, id, executionVersion: 2 }, include: { targets: { select: { sourceId: true } } } }) : null;
     if (id && !plan) throw new SyncInputError("计划不存在。", 404);
+    if (command.enabled === true && !plan?.planKey.startsWith("auto-v1:")) throw new SyncInputError("仅可恢复系统生成的自动同步计划。", 409);
       if (plan && command.revision !== plan.revision) throw new SyncInputError("计划版本已变化。", 409);
     before = plan ? { id: plan.id, revision: plan.revision, name: plan.name, enabled: plan.enabled, resource: plan.resource, intervalMinutes: plan.intervalMinutes, retentionDays: plan.retentionDays, maxAttempts: plan.maxAttempts, priority: plan.priority, mode: plan.mode, sourceIds: plan.targets.map(t => t.sourceId).sort() } : null;
     baseRevision = plan?.revision ?? 0;

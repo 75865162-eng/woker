@@ -61,7 +61,7 @@ async function consume(id: string, exporting = false) {
     const failed = (job: Job<Payload> | undefined, error: Error) => { if (matches(job)) finish(error); };
     function finish(error?: Error) { clearTimeout(timer); worker!.off("completed", completed); worker!.off("failed", failed); worker!.off("error", finish); if (error) reject(error); else resolve(); }
     worker!.on("completed", completed); worker!.on("failed", failed); worker!.on("error", finish);
-    void tickSyncCenter().catch(finish);
+    void tickSyncCenter(new Date(), { taskIds: exporting ? [] : [id], exportIds: exporting ? [id] : [] }).catch(finish);
   });
 }
 async function finishReport(id: string) {
