@@ -1,5 +1,8 @@
+import { parseReturnPolicy } from "./returns";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { SyncInputError, type SyncScope } from "./policy";
+import { parseFinancePolicy } from "./finance";
+import { parseOrderSyncPolicy } from "./orders";
 export const operationTypes = {
   "save-access-grant": "ScopeBindingChange",
   "save-authorization": "CredentialChange", "disable-authorization": "CredentialChange",
@@ -28,9 +31,9 @@ export function operation(value: unknown): ChangeOperation {
 }
 const allowed: Record<ChangeOperation, string[]> = {
   "save-access-grant": ["id", "proposedId", "revision", "userId", "roleId", "sellerAccountId", "enabled", "marketplaceIds", "actions", "mcpEnabled"],
-  "save-authorization": ["id", "proposedId", "revision", "name", "amazonSellerId", "region", "endpoint", "lwaClientId", "lwaClientSecret", "refreshToken", "awsAccessKeyId", "awsSecretAccessKey", "awsSessionToken"],
+  "save-authorization": ["id", "proposedId", "revision", "name", "amazonSellerId", "region", "endpoint", "lwaClientId", "lwaClientSecret", "refreshToken", "awsAccessKeyId", "awsSecretAccessKey", "awsSessionToken", "approvedRoles"],
   "disable-authorization": ["id", "revision"], "validate-authorization": ["id", "revision"],
-  "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled"],
+  "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy"],
   "save-plan": ["id", "proposedId", "revision", "name", "resource", "enabled", "mode", "intervalMinutes", "priority", "maxAttempts", "retentionDays", "sourceIds"],
   "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo"], "control-task": ["id", "control"],
 };
@@ -39,6 +42,10 @@ export function normalizeCommand(body: Record<string, unknown>) {
   if (body.importLegacy) throw new SyncInputError("旧凭证导入入口已关闭。", 410);
   const command: Record<string, unknown> = { action };
   for (const field of allowed[action]) if (body[field] !== undefined && body[field] !== "") command[field] = body[field];
+  if (command.returnsPolicy !== undefined) command.returnsPolicy = parseReturnPolicy(command.returnsPolicy);
+  if (command.financePolicy !== undefined) command.financePolicy = parseFinancePolicy(command.financePolicy);
+  if (command.orderPolicy !== undefined) command.orderPolicy = parseOrderSyncPolicy(command.orderPolicy);
+  if (command.approvedRoles !== undefined && (!Array.isArray(command.approvedRoles) || command.approvedRoles.length > 30 || command.approvedRoles.some(role => typeof role !== "string" || !/^[A-Za-z][A-Za-z0-9 ()&/-]{0,99}$/.test(role)))) throw new SyncInputError("Amazon 角色集合格式无效。");
   if (action === "save-access-grant") {
     if (command.actions !== undefined && (!Array.isArray(command.actions) || command.actions.length > 4 || command.actions.some(a => typeof a !== "string" || !["view", "sync", "export", "edit"].includes(a)))) throw new SyncInputError("操作权限无效。");
     if (command.marketplaceIds !== undefined && (!Array.isArray(command.marketplaceIds) || command.marketplaceIds.length > 30 || command.marketplaceIds.some(m => typeof m !== "string" || !m || m.length > 200))) throw new SyncInputError("站点范围无效。");
@@ -58,8 +65,11 @@ export function summary(command: Record<string, unknown>) {
     // Never accept arbitrary nested objects in summaries, even under a benign key.
     if (typeof v === "string") { if (v.length > 200) throw new SyncInputError("配置字段过长。"); result[k] = v; }
     else if (typeof v === "boolean" || typeof v === "number" || v === null) result[k] = v;
-    else if (k === "requestedRanges" && v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
-    else if (["sourceIds", "marketplaceIds", "actions"].includes(k) && Array.isArray(v)) result[k] = v;
+    else if (["requestedRanges", "orderWindows", "financeWindows", "returnWindows"].includes(k) && v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
+    else if (k === "returnsPolicy") result[k] = parseReturnPolicy(v);
+    else if (k === "financePolicy") result[k] = parseFinancePolicy(v);
+    else if (k === "orderPolicy") result[k] = parseOrderSyncPolicy(v);
+    else if (["sourceIds", "marketplaceIds", "actions", "approvedRoles"].includes(k) && Array.isArray(v)) result[k] = v;
     else throw new SyncInputError("配置字段格式无效。");
   }
   return result;
@@ -92,9 +102,10 @@ export function unseal(value: string, scope: SyncScope, id: string, environment:
     return JSON.parse(Buffer.concat([cipher.update(Buffer.from(data, "base64url")), cipher.final()]).toString("utf8"));
   } catch { throw new SyncInputError("待应用配置无法解密，已阻止应用。", 409); }
 }
-export function assertDecision(row: { status: string; requestedByUserId: string; expiresAt: Date }, actor: string, now = new Date()) {
+// Self-confirmation eligibility is resolved from live server-side membership after RBAC checks.
+export function assertDecision(row: { status: string; requestedByUserId: string; expiresAt: Date }, actor: string, now = new Date(), allowSelfApproval = false) {
   if (row.status !== "REQUESTED" || row.expiresAt <= now) throw new SyncInputError("审批已处理或过期。", 409);
-  if (row.requestedByUserId === actor) throw new SyncInputError("申请人不能审批自己的请求。", 403);
+  if (row.requestedByUserId === actor && !allowSelfApproval) throw new SyncInputError("仅组织所有者或数据库管理员可确认自己的请求，且须具备审批权限。", 403);
 }
 export function assertApplicable(row: { status: string; expiresAt: Date; targetEnvironment: string; changeDigest: string; baseRevision: number; approvedByUserId: string | null }, expected: { environment: string; digest: string; revision: number }, now = new Date()) {
   if (row.status !== "APPROVED" || !row.approvedByUserId || row.expiresAt <= now || row.targetEnvironment !== expected.environment || row.changeDigest !== expected.digest || row.baseRevision !== expected.revision) throw new SyncInputError("审批已失效、已使用或变更范围不匹配。", 409);

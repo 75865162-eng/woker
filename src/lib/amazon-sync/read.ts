@@ -1,4 +1,4 @@
-import { amazonDataAccess, sellerAccessWhere } from "./data-access";
+import { amazonDataAccess, sourceAccessWhere } from "./data-access";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { inventorySnapshotStatus } from "@/lib/operations/readiness";
@@ -6,7 +6,7 @@ import { SyncInputError, type SyncScope } from "./policy";
 
 export type SnapshotScope = { runId: string; sellerAccountId?: string; marketplaceId?: string; freshnessMinutes?: number; capturedAt: Date | null };
 export async function publishedSnapshotScopes(scope: SyncScope, resource: "inventory" | "catalog", actor?: string, target?: { sellerAccountId: string; marketplaceId: string }): Promise<SnapshotScope[]> {
-  const allowed = sellerAccessWhere(await amazonDataAccess(scope, actor));
+  const allowed = sourceAccessWhere(await amazonDataAccess(scope, actor));
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...allowed, resource, enabled: true, publishedRun: { status: "SUCCEEDED", executionVersion: 2, resource, finishedAt: { not: null }, stage: { not: "PURGED" } }, activeRunId: { not: null }, ...(target ? { AND: [target] } : {}) }, select: { activeRunId: true, sellerAccountId: true, marketplaceId: true, lastSuccessAt: true, freshnessMinutes: true }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("当前试点超过 200 个数据源，需要先完成容量评审。", 409);
   return sources.map(s => ({ runId: s.activeRunId!, sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, capturedAt: s.lastSuccessAt, freshnessMinutes: s.freshnessMinutes }));
@@ -30,15 +30,15 @@ export function sourceHealth(source: { enabled: boolean; lastSuccessAt: Date | n
 }
 const sourceInclude = { targets: { select: { schedule: { select: { enabled: true, nextRunAt: true } } } }, authorization: { select: { id: true, name: true, status: true, amazonSellerId: true, awsRegion: true, lastValidatedAt: true } }, seller: { select: { id: true, displayName: true, accountKey: true, status: true } } } satisfies Prisma.AmazonSyncDataSourceInclude;
 export async function listSources(scope: SyncScope, filters: { sellerAccountId?: string; marketplaceId?: string; resource?: string } = {}, actor?: string) {
-  const allowed = sellerAccessWhere(await amazonDataAccess(scope, actor));
+  const allowed = sourceAccessWhere(await amazonDataAccess(scope, actor));
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { AND: [{ ...scope, ...filters }, allowed] }, include: sourceInclude, orderBy: { createdAt: "asc" }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("数据源超过试点容量，需要容量评审。", 409);
   const latest = sources.length ? await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, sourceId: { in: sources.map(s => s.id) } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], distinct: ["sourceId"] }) : [];
   return sources.map(source => ({ ...source, nextScheduledAt: source.targets.filter(t => t.schedule.enabled && t.schedule.nextRunAt).map(t => t.schedule.nextRunAt!).sort((a, b) => a.getTime() - b.getTime())[0] ?? null, latestTask: latest.find(t => t.sourceId === source.id) ? taskSummary(latest.find(t => t.sourceId === source.id)!) : null, health: sourceHealth(source, latest.find(t => t.sourceId === source.id)?.status) }));
 }
 // Whitelist output. Checkpoint ciphertext, leases and dispatch internals never leave the server.
-export function taskSummary(t: { id: string; sourceId: string | null; resource: string; status: string; stage: string; trigger: string; mode: string; scheduleId: string | null; scheduleRevision: number | null; startedAt: Date; executionStartedAt: Date | null; finishedAt: Date | null; pagesCompleted: number; processedCount: number; insertedCount: number; updatedCount: number; skippedCount: number; apiRequests: number; throttles: number; attempts: number; maxAttempts: number; error: string | null; control: string | null; nextAttemptAt: Date; summary: unknown; frozenScope?: unknown; requestedByUserId?: string }) {
-  return { requestedByUserId: t.requestedByUserId, requestedRange: (t.frozenScope as { requestedRange?: unknown } | null)?.requestedRange ?? null, id: t.id, sourceId: t.sourceId, resource: t.resource, status: t.status, stage: t.stage, trigger: t.trigger, mode: t.mode, scheduleId: t.scheduleId, scheduleRevision: t.scheduleRevision, queuedAt: t.startedAt, startedAt: t.executionStartedAt, finishedAt: t.finishedAt, elapsedMs: t.executionStartedAt && t.finishedAt ? t.finishedAt.getTime() - t.executionStartedAt.getTime() : null, pagesCompleted: t.pagesCompleted, processedCount: t.processedCount, insertedCount: t.insertedCount, updatedCount: t.updatedCount, skippedCount: t.skippedCount, apiRequests: t.apiRequests, throttles: t.throttles, attempts: t.attempts, maxAttempts: t.maxAttempts, error: t.error, control: t.control, nextAttemptAt: t.nextAttemptAt, summary: t.summary };
+export function taskSummary(t: { id: string; sourceId: string | null; resource: string; status: string; stage: string; trigger: string; mode: string; scheduleId: string | null; scheduleRevision: number | null; startedAt: Date; executionStartedAt: Date | null; finishedAt: Date | null; pagesCompleted: number; processedCount: number; insertedCount: number; updatedCount: number; skippedCount: number; apiRequests: number; throttles: number; attempts: number; maxAttempts: number; error: string | null; control: string | null; nextAttemptAt: Date; summary: unknown; frozenScope?: unknown; requestedByUserId?: string; failedCount?: number; detailsCompletedCount?: number }) {
+  return { returnWindow: (t.frozenScope as { returnWindow?: unknown } | null)?.returnWindow ?? null, financeWindow: (t.frozenScope as { financeWindow?: unknown } | null)?.financeWindow ?? null, detailsCompletedCount: t.detailsCompletedCount ?? 0, failedCount: t.failedCount ?? 0, orderWindow: (t.frozenScope as { orderWindow?: unknown } | null)?.orderWindow ?? null, requestedByUserId: t.requestedByUserId, requestedRange: (t.frozenScope as { requestedRange?: unknown } | null)?.requestedRange ?? null, id: t.id, sourceId: t.sourceId, resource: t.resource, status: t.status, stage: t.stage, trigger: t.trigger, mode: t.mode, scheduleId: t.scheduleId, scheduleRevision: t.scheduleRevision, queuedAt: t.startedAt, startedAt: t.executionStartedAt, finishedAt: t.finishedAt, elapsedMs: t.executionStartedAt && t.finishedAt ? t.finishedAt.getTime() - t.executionStartedAt.getTime() : null, pagesCompleted: t.pagesCompleted, processedCount: t.processedCount, insertedCount: t.insertedCount, updatedCount: t.updatedCount, skippedCount: t.skippedCount, apiRequests: t.apiRequests, throttles: t.throttles, attempts: t.attempts, maxAttempts: t.maxAttempts, error: t.error, control: t.control, nextAttemptAt: t.nextAttemptAt, summary: t.summary };
 }
 export function taskFilters(scope: SyncScope, p: URLSearchParams): Prisma.AmazonSyncRunWhereInput {
   const where: Prisma.AmazonSyncRunWhereInput = { ...scope, executionVersion: 2 };
@@ -55,7 +55,7 @@ export function taskFilters(scope: SyncScope, p: URLSearchParams): Prisma.Amazon
   return where;
 }
 export async function readTasks(scope: SyncScope, p: URLSearchParams, actor?: string) {
-  const allowed = sellerAccessWhere(await amazonDataAccess(scope, actor));
+  const allowed = sourceAccessWhere(await amazonDataAccess(scope, actor));
   const where = { AND: [taskFilters(scope, p), { source: allowed }] }, page = Math.min(10000, Math.max(1, Math.floor(Number(p.get("page")) || 1))), pageSize = 30;
   const [total, rows] = await Promise.all([prisma.amazonSyncRun.count({ where }), prisma.amazonSyncRun.findMany({ where, orderBy: [{ startedAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { source: { select: { sellerAccountId: true, marketplaceId: true, seller: { select: { displayName: true, accountKey: true } } } } } })]);
   return { rows: rows.map(row => ({ ...taskSummary(row), scope: row.source })), pagination: { total, page, pageSize, pageCount: Math.ceil(total / pageSize) } };

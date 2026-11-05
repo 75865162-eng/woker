@@ -31,6 +31,7 @@ test("SP-API client obtains LWA token and signs the marketplace request without 
   assert.match(String(calls[1]?.init?.headers && new Headers(calls[1].init.headers).get("authorization")), /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\//);
   assert.equal(new Headers(calls[1]?.init?.headers).get("x-amz-access-token"), "short-lived-token");
   assert.equal(new Headers(calls[1]?.init?.headers).get("x-amz-date"), "20261022T080000Z");
+  assert.equal(new Headers(calls[1]?.init?.headers).get("user-agent"), "amazon-ad-bulk-operation/1.0 (Language=TypeScript/5)");
 
   await client.getInventorySummaries({ marketplaceId: "ATVPDKIKX0DER", nextToken: "page-token" });
   const inventoryUrl = new URL(calls[2]?.url ?? "https://invalid.example");
@@ -94,6 +95,7 @@ test("LWA-only configuration validates and sends requests without AWS signing", 
   await client.getMarketplaceParticipations();
   const headers = new Headers(calls[1].headers);
   assert.equal(headers.get("x-amz-access-token"), "lwa-token");
+  assert.equal(headers.get("user-agent"), "amazon-ad-bulk-operation/1.0 (Language=TypeScript/5)");
   assert.equal(headers.has("authorization"), false);
   assert.equal(headers.has("x-amz-security-token"), false);
 });
@@ -114,6 +116,19 @@ test("LWA HTTP 400 invalid grants are terminal authorization failures without le
     });
     assert.equal(requests, 1);
   }
+});
+
+test("SP-API errors array is surfaced without leaking credentials", async () => {
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async (url) =>
+    String(url).includes("api.amazon.com")
+      ? Response.json({ access_token: "token", expires_in: 3600 })
+      : Response.json({ errors: [{ code: "Unauthorized", message: "Access to requested resource is denied." }] }, { status: 403 }) });
+  await assert.rejects(() => client.getMarketplaceParticipations(), (error: unknown) => {
+    assert.ok(error instanceof AmazonSpApiError);
+    assert.match(error.message, /Access to requested resource is denied/);
+    assert.match(error.message, /403/);
+    return true;
+  });
 });
 
 test("LWA token is reused within expiry and refreshed after expiry without changing refresh token", async () => {

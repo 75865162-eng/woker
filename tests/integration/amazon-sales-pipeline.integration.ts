@@ -90,6 +90,7 @@ before(async () => {
     if (url.hostname === "api.amazon.com" && url.pathname === "/auth/o2/token") return Response.json({ access_token: "fixture-token", expires_in: 3600 });
     if (url.hostname === "sellingpartnerapi-na.amazon.com") {
       if (url.pathname.includes("marketplaceParticipations")) return Response.json({ payload: [{ marketplace: { id: site, countryCode: "US" }, participation: { isParticipating: true } }] });
+      if (url.pathname.startsWith("/listings/2021-08-01/items/")) return Response.json({ items: [] });
       if (url.pathname === "/reports/2021-06-30/reports" && init?.method === "POST") { const body = JSON.parse(String(init.body)); assert.equal(body.dataStartTime, range.startAt); assert.equal(body.dataEndTime, range.reportEndAt); reportRequests.push(body); return Response.json({ reportId: `report-${++reportCount}` }); }
       if (url.pathname.startsWith("/reports/2021-06-30/reports/")) return Response.json({ reportId: `report-${reportCount}`, reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [site], processingStatus: "DONE", reportDocumentId: "fixture-document" });
       if (url.pathname === "/reports/2021-06-30/documents/fixture-document") return Response.json({ reportDocumentId: "fixture-document", url: "https://fixture.s3.us-east-1.amazonaws.com/report" });

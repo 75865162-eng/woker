@@ -1,0 +1,7 @@
+{
+  "orders": [
+    { "orderId": "fixture-order-1", "createdTime": "2026-10-31T20:00:00Z", "lastUpdatedTime": "2026-11-01T00:10:00Z", "salesChannel": { "marketplaceId": "fixture-marketplace" }, "fulfillment": { "fulfillmentStatus": "UNSHIPPED" } }
+  ],
+  "pagination": { "nextToken": "fixture-next-page-2" },
+  "lastUpdatedBefore": "2026-11-01T01:00:00Z"
+}

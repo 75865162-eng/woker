@@ -4,21 +4,21 @@ export const syncDomains = [
   { id: "inventory", name: "FBA 库存", group: "商品与库存", implemented: true, frequency: 60, priority: 1, api: "FBA Inventory v1 / getInventorySummaries" },
   { id: "fbm_inventory", name: "FBM 库存", group: "商品与库存", implemented: false, frequency: 60, priority: 1, api: "待核验 Listings Items 数量与履约渠道" },
   { id: "fulfillment", name: "FBA 在途货件", group: "商品与库存", implemented: false, frequency: 120, priority: 2, api: "Fulfillment Inbound / 版本待冻结" },
-  { id: "orders", name: "订单", group: "订单与经营", implemented: false, frequency: 15, priority: 1, api: "Orders 2026-01-01 / 版本待联调" },
-  { id: "order_items", name: "订单商品", group: "订单与经营", implemented: false, frequency: 15, priority: 1, api: "随订单；新版 includedData 待联调" },
+  { id: "orders", name: "订单", group: "订单与经营", implemented: true, frequency: 15, priority: 1, api: "Orders 2026-01-01 / searchOrders + getOrder（详情按审批选择）" },
+  { id: "order_items", name: "订单商品", group: "订单与经营", implemented: false, frequency: 15, priority: 1, api: "随 orders getOrder 详情分片同步；独立域未启用" },
   { id: "sales_traffic", name: "销售与流量日报", group: "订单与经营", implemented: true, frequency: 1440, priority: 2, api: "GET_SALES_AND_TRAFFIC_REPORT" },
-  { id: "finance", name: "财务交易", group: "财务与售后", implemented: false, frequency: 360, priority: 2, api: "Finances 2024-06-19 / listTransactions" },
+  { id: "finance", name: "财务交易", group: "财务与售后", implemented: true, frequency: 360, priority: 2, api: "Finances 2024-06-19 / listTransactions" },
   { id: "settlements", name: "结算报告", group: "财务与售后", implemented: false, frequency: 1440, priority: 2, api: "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2（仅发现）" },
-  { id: "returns", name: "退货", group: "财务与售后", implemented: false, frequency: 1440, priority: 3, api: "GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA" },
+  { id: "returns", name: "退货", group: "财务与售后", implemented: true, frequency: 1440, priority: 3, api: "Reports 2021-06-30 / FBA Returns Report" },
   { id: "reimbursements", name: "赔偿", group: "财务与售后", implemented: false, frequency: 1440, priority: 3, api: "GET_FBA_REIMBURSEMENTS_DATA" },
   { id: "inventory_age", name: "库龄", group: "财务与售后", implemented: false, frequency: 1440, priority: 3, api: "GET_FBA_INVENTORY_PLANNING_DATA（资格待核验）" },
   { id: "pricing", name: "商品价格", group: "价格与竞争", implemented: false, frequency: 60, priority: 4, api: "Product Pricing / 操作和规模待冻结" },
   { id: "buy_box", name: "Featured Offer / Buy Box", group: "价格与竞争", implemented: false, frequency: 60, priority: 4, api: "Product Pricing / 操作待冻结" },
   { id: "brand_analytics", name: "搜索词与品牌分析", group: "品牌分析", implemented: false, frequency: 1440, priority: 4, api: "GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT（按报告周期）" },
 ] as const;
-export type ImplementedDomain = "inventory" | "catalog" | "sales_traffic";
+export type ImplementedDomain = "inventory" | "catalog" | "sales_traffic" | "orders" | "finance" | "returns";
 export function implementedDomain(value: unknown): ImplementedDomain {
-  if (value !== "inventory" && value !== "catalog" && value !== "sales_traffic") throw new SyncInputError("该数据域规划中，不能启用同步。");
+  if (value !== "inventory" && value !== "catalog" && value !== "sales_traffic" && value !== "orders" && value !== "finance" && value !== "returns") throw new SyncInputError("该数据域规划中，不能启用同步。");
   return value;
 }
 export class SyncInputError extends Error {
@@ -43,9 +43,17 @@ export function requiredText(value: unknown, name: string, limit = 200): string 
   if (typeof value !== "string" || !value.trim() || value.trim().length > limit) throw new SyncInputError(`${name}缺失或超出长度限制。`);
   return value.trim();
 }
+/** Empty means no Seller identity has been supplied; never substitute a display name. */
+export function optionalAmazonSellerId(value: unknown): string {
+  if (value === undefined || (typeof value === "string" && !value.trim())) return "";
+  return requiredText(value, "Amazon Seller ID");
+}
 export function parseSyncPlan(value: Record<string, unknown>) {
   const resource = implementedDomain(value.resource);
   if (resource === "sales_traffic") throw new SyncInputError("销售流量报告当前仅支持逐次审批的指定日期任务，不支持快照计划。");
+  if (resource === "returns") throw new SyncInputError("退货仅支持逐次审批有界报告窗口，不支持自动计划。");
+  if (resource === "finance") throw new SyncInputError("财务仅支持逐次审批的卖家级有界增量任务，不支持自动计划。");
+  if (resource === "orders") throw new SyncInputError("订单 P1 仅支持逐次审批的有界增量任务，暂不支持计划。");
   if (value.mode !== undefined && value.mode !== "snapshot") throw new SyncInputError("当前执行器仅支持完整快照；增量和报告仍待接入。");
   if (typeof value.enabled !== "boolean") throw new SyncInputError("请选择是否启用计划。");
   if (!Array.isArray(value.sourceIds) || !value.sourceIds.length || value.sourceIds.length > 100 || value.sourceIds.some(v => typeof v !== "string" || !v || v.length > 200) || new Set(value.sourceIds).size !== value.sourceIds.length) throw new SyncInputError("请选择 1–100 个不重复的店铺／站点数据源。");

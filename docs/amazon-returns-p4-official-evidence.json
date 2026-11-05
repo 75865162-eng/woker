@@ -1,0 +1,85 @@
+{
+  "reviewDate": "2026-11-05",
+  "retrieval": "Read-only public official documentation; no SP-API business endpoint or credential involved. Extract only document fields, never SSR site configuration.",
+  "documents": [
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba",
+      "title": "Fulfillment by Amazon (FBA) Reports",
+      "htmlSha256": "ff43b48d6ac23e29e0695febd1879c4a95c2317dee0d6416606ec989d8f5e56a",
+      "apiVersion": null,
+      "excerpt": "FBA Returns Report\n\n**`reportType` Value**: `GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA`\n\n**Roles**: [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)\n\n**Availability**: FBA sellers\n\n**Requested/scheduled**: This report can only be requested.\n\n**Report output type**: Tab-delimited flat file\n\nContains customer returned items received at an Amazon fulfillment center, including Return Reason and Disposition. Content updated daily.\n\n<details>\n<summary>Select to expand list of report attributes.</summary>\n<ul>\n<li><code>return-date</code></li>\n<li><code>order-id</code></li>\n<li><code>sku</code></li>\n<li><code>asin</code></li>\n<li><code>fnsku</code></li>\n<li><code>product-name</code></li>\n<li><code>quantity</code></li>\n<li><code>fulfillment-center-id</code></li>\n<li><code>detailed-disposition</code></li>\n<li><code>reason</code></li>\n<li><code>status</code></li>\n<li><code>license-plate-number</code></li>\n<li><code>customer-comments</code></li>\n</ul>\n</details>\n\n"
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/reference/createreport",
+      "title": "createReport",
+      "htmlSha256": "7c3ccaa86431805c015682d60a373c2caa5c21c0c2d9249bf05e64d2198d6b0c",
+      "apiVersion": "2021-06-30"
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/reference/getreport",
+      "title": "getReport",
+      "htmlSha256": "e83e05d7aa94f61d7c3670b72d590ea65e10d574e6c1fafc477fea00779aa37f",
+      "apiVersion": "2021-06-30"
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/reference/getreportdocument",
+      "title": "getReportDocument",
+      "htmlSha256": "91c6dd00d06475ff7e474f7b58b4e0b5cbdddfe70a2957d587803efced767a51",
+      "apiVersion": "2021-06-30"
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/docs/retrieve-a-report",
+      "title": "Retrieve a report",
+      "htmlSha256": "8f773b88c564379ae995a35135d5922d7c34e7c6556c9f8de4cd35fd8a1c0b49",
+      "apiVersion": null,
+      "excerpts": [
+        "> - The `getReportDocument` operation is considered a restricted operation only when a <<glossary:restricted report type>> is specified. ",
+        ">  - When calling the `createRestrictedDataToken` operation to get an RDT for the `getReportDocument` operation, the specified restricted resource can contain only a <<glossary:specific path>>, not a <<glossary:generic path>>. ",
+        "> You must always maintain encryption at rest. Unencrypted report content must never be stored on disk, even temporarily, because reports can contain sensitive information. The sample code that we provide demonstrates this principle."
+      ]
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/docs/get-authorization-to-access-restricted-report-types",
+      "title": "Get authorization to access restricted report types with PII information",
+      "htmlSha256": "228bea743a3d213b6270daef8ef5da1a655871862aea885dd06c02c1e3cdfdd0",
+      "apiVersion": null,
+      "excerpts": [
+        "Learn how to use the Tokens API to get authorization to access restricted report types with PII information. The `getReportDocument` operation is considered a restricted operation only when a restricted report type is specified. When calling the `createRestrictedDataToken` operation to get an RDT for the `getReportDocument` operation, the specified restricted resource can contain only a specific path, not a generic path.",
+        "1. Call the [`createRestrictedDataToken`](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken) operation.",
+        "2. Save the `restrictedDataToken` value (the RDT) to provide it in the `getReportDocument` operation."
+      ]
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/docs/external-fulfillment-returns",
+      "title": "External Fulfillment Returns API",
+      "htmlSha256": "d929f8220f501da1d3652c9bdcef93a624dfa1ec9c8239e6ed88159fbfbb6705",
+      "apiVersion": null,
+      "excerpts": [
+        "The following use case example is available for the External Fulfillment Returns API v2024-09-11:",
+        "## Roles for the External Fulfillment Returns API v2024-09-11"
+      ]
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/reference/external-fulfillment-returns-v2024-09-11",
+      "title": "External Fulfillment Returns v2024-09-11",
+      "htmlSha256": "30a69a46257d90b7a28c80af2e91a7fb24330b0c9c9be9b9f822c5ccad8284cb",
+      "apiVersion": null,
+      "excerpts": [
+        "- [External Fulfillment Returns model](https://github.com/amzn/selling-partner-api-models/blob/main/models/external-fulfillment/externalFulfillmentReturns_2024-09-11.json)"
+      ]
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/docs/retrieve-return-information",
+      "title": "Retrieve Return Information",
+      "htmlSha256": "f828129e4f8240e7a74756b9b80fd46f4d32e441a7e9999662c4385c47768fa7",
+      "apiVersion": null,
+      "excerpts": [
+        "- Location ID and SKU ID details from the seller.",
+        "- Approval for the [Direct-to-Consumer Shipping (Restricted) role](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted) in your developer profile.",
+        "- The Direct-to-Consumer Shipping (Restricted) role selected in the App registration page for your application.",
+        "Call the [`listReturns`](https://developer-docs.amazon.com/sp-api/reference/listreturns) operation to retrieve a list of return items. You can filter the list by return location, status, or time.",
+        "Call the [`getReturn`](https://developer-docs.amazon.com/sp-api/reference/getreturn) operation with the `returnId` of the return item."
+      ]
+    }
+  ]
+}

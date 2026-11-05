@@ -233,14 +233,13 @@ test("async export creation scope rejects revoked site at execution/download bou
   await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { marketplaceIds: [site] } });
 });
 
-test("user and role grants complete the sealed request, independent approval and application chain", async () => {
+test("user and role grants support independent and admin self approval before application", async () => {
   const approver = randomUUID();
   await prisma.user.create({ data: { id: approver, name: "Approver", email: `${approver}@fixture.invalid`, passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
   for (const subject of [{ userId: actor, revision: (await prisma.amazonDataAccessGrant.findUniqueOrThrow({ where: { id: grantId } })).revision }, { roleId: "operations", revision: 0 }]) {
     const change = await requestChange(scope, owner, { action: "save-access-grant", ...subject, sellerAccountId: sellerA, actions: ["view"], marketplaceIds: [site], mcpEnabled: false, enabled: true });
     const id = String(change.id);
-    await assert.rejects(() => decideChange(scope, owner, id, "APPROVED", "self approval"));
-    await decideChange(scope, approver, id, "APPROVED", "Fixture independent approval");
+    await decideChange(scope, "roleId" in subject ? owner : approver, id, "APPROVED", "Fixture explicit confirmation");
     await applyChange(scope, owner, id);
     assert.equal((await prisma.amazonDataCenterChangeRequest.findUniqueOrThrow({ where: { id } })).status, "APPLIED");
   }

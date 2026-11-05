@@ -296,6 +296,17 @@ GitHub CI 负责测试、lint、build、打包和 release-check；本机不重�
 - 未完成任务按 ProductRecord 当前阶段和负责人判断，不以通知 readAt 判断完成；关闭弹窗只收起，同一次登录去重，下次登录仍有任务才弹。详细边界与回滚见 `docs/product-domain-simple-architecture-plan.md` 的业务流转通知段落。
 - `npx playwright test --config tests/browser/notifications.config.ts`：模拟通知 API、真实 Tailwind 样式的隔离登录提醒回归，不访问生产。
 
+## Amazon 数据同步中心审批
+
+- 支持单管理员流程：当前组织有效 `owner` / `database_admin` 在具备 `operations:approve` 和原有业务权限时，可批准自己的申请；普通成员仍不得自行审批。角色与权限必须在服务端从数据库实时读取，不接受客户端声明。
+- 保留申请、脱敏审阅、批准、独立应用、revision、有效期、范围和审计校验；批准不等于应用或启动任务。批准审计记录 `selfApproved` / `approverRole`，不自动批准既有申请；其他业务模块的审批规则不变。
+
+### Amazon Orders P1/P2 离线开发边界
+
+- `orders` uses Orders v2026-01-01 `searchOrders` plus optional approval-bound `getOrder` detail. Each job resumes a bounded cursor; page/work/fact/raw commits are idempotent and raw PII remains AES-GCM encrypted. Amazon documents say v2026-01-01 Orders PII does not require RDT; do not create or reuse a v0 Tokens path. PII datasets require explicit business-purpose and restricted-role attestation; standard queries/UI expose no PII or raw envelopes. Official pages: `https://developer-docs.amazon.com/sp-api/reference/getorder-3`, `https://developer-docs.amazon.com/sp-api/docs/access-orders-pii`.
+- `npm run test:amazon-orders:offline`: disposable preinstalled Docker PG/Redis + `.invalid` fixture HTTP + order browser; no inherited credentials/database config, dotenv, image pulls or real sync. `npm run test:amazon-sync:offline` includes existing sync regressions. Specs, validation, and remaining financial/returns gates: `docs/amazon-orders-p1.md`, `docs/amazon-orders-p2-plan.md`.
+- Amazon 角色仅记录管理员核实的 attestation，不把 Marketplace 参与资格当作 Orders 域权限证明。非敏感 applicationId/预算同应用跨站点一致；新数据仍隔离 organization/workspace/seller/site，不改 ProductRecord 或 PPC 存储边界。
+
 ## UI 与交互约定
 
 - 整体是工具型 SaaS，不是营销落地页。优先信息密度、可扫描性、稳定布局和明确操作。
@@ -482,3 +493,17 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - OAuth 使用固定登记 callback、单次 state 及卖家范围验证；参与站点不能单独证明 Seller ID。OAuth 配置变量名及历史数据核查/回滚规则见交付文档，不在仓库保存真实值。
 - `npx tsx scripts/audit-amazon-lineage.ts --report-only --organization-id=<id> --workspace-id=<id>` 是有界只读归属报告，不加载 `.env`，不按 SKU/ASIN 推测或自动回填。连接真实目标前仍须具体审批；截断/异常退出 2，不能当作全库核查完成。
 - 主要 ERP 读取入口与 MCP 有 append-only 审计；CLI 业务查询仍在 READ ONLY 事务中，输出前在事务外追加读取审计。不得为写审计放宽业务查询范围。
+
+## Amazon 财务 P3 本地实现边界
+
+- Finances v2024-06-19 只使用 `listTransactions`，复用现有审批 / service / processor / SP-API client。`financePolicy` 明确卖家级范围、全部验证站点、时区、窗口、预算和可选 FX；source marketplace 仅为管理锚点，不是返回行的默认归属。
+- 财务采集及查询当前限实时 owner/database_admin，仍须逐次范围审批和每站点有效绑定。site-only grant / MCP 不暴露财务 source、run 或 raw。缺角色或范围变化在 HTTP 前阻断；落库前再次检查。
+- 金额保留 JSON number 原文并使用 NUMERIC，不经 JS Number；未知归属加密隔离，查询排除；不把完成 posted 窗口称作结算完整。生产不提供 raw 自动重放入口。
+- `npm run test:amazon-finance:offline` 运行 fixture 单测、临时 PG/Redis 集成与浏览器验证；`npm run test:amazon-sync:offline` 扩展旧三链路及 Orders 回归。均不加载真实 dotenv 或运行真实任务。详见 `docs/amazon-finance-p3-plan.md`、`docs/amazon-finance-p3-validation.md`。P4 须阶段确认后推进。
+
+## Amazon 退货 P4 本地实现边界
+
+- P4 仅 FBA 仓收退货，复用 Reports v2021-06-30/client/processor/审批；reportType 仅由 `returns.ts` 枚举及批准策略 allowlist 提供。Pricing 或 Amazon Fulfillment 角色须已确认；本报告非受限类型，不申请 RDT。不借此允许其他报告类型。
+- `returnsPolicy` 明确窗口、站点时区、至少一天安全延迟、三操作预算、轮询上限和解析批次。cursor 的 `reportStateCiphertext` 保存报告/文档/原件/行 offset；每批明细和 cursor 同事务；未知 create 结果停下人工核查，不能重放创建。404 轮询与过期下载 URL 走有界退避。
+- 单份已发布报告为查询边界；`reportId + rowHash` 仅报告内幂等，不能跨报告累加当独立退货事件。原因维度保留原始代码，订单关联限 tenant/seller/site/authorization，不造订单，不修改库存/财务。原件仅加密归档，评论/商品自由文本不进普通 DTO/日志/UI；无 offset 日期 fail closed。
+- `npm run test:amazon-returns:offline`：fixture 单测、临时 PG/Redis、退货及订单/财务浏览器；全资源回归 `npm run test:amazon-sync:offline`。不得读取真实 dotenv、启动真实 job 或执行真实迁移。计划/官方依据/验收见 `docs/amazon-returns-p4-plan.md`、`docs/amazon-returns-p4-validation.md`。P5 仍需阶段确认。

@@ -1,6 +1,10 @@
+import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, nextReturnWindow } from "./returns";
 import { saveAccessGrant } from "./access-management";
-import { amazonDataAccess, assertAmazonScopeAdmin, assertSellerMarketplaceAccess } from "./data-access";
+import { amazonDataAccess, assertAmazonScopeAdmin, assertSellerMarketplaceAccess, isAmazonScopeAdmin } from "./data-access";
 import { resolveRequestedRange, rangeFromFrozen } from "./date-range";
+import { parseFinancePolicy, nextFinanceWindow, financeWindowFromFrozen } from "./finance";
+import { assertFinanceScope } from "./finance-scope";
+import { parseOrderSyncPolicy, nextOrderWindow, orderWindowFromFrozen } from "./orders";
 import { randomUUID } from "node:crypto";
 import { Prisma, type AmazonDataCenterChangeRequest } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -8,7 +12,7 @@ import { defaultRolePermissionMap, type RolePermissionMap } from "@/lib/accounts
 import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
-import { SyncInputError, requiredText, parseSyncPlan, officialEndpoint, implementedDomain, type SyncScope } from "./policy";
+import { SyncInputError, requiredText, optionalAmazonSellerId, parseSyncPlan, officialEndpoint, implementedDomain, type SyncScope } from "./policy";
 import { operation, operationTypes, normalizeCommand, summary, safeState, digest, seal, unseal, targetEnvironment, assertDecision, assertApplicable, type ChangeOperation } from "./approval-policy";
 import { withApprovedChange } from "./approved-context";
 import { scopeLock, saveAuthorization, saveSource, savePlan, requestTasks, controlTask, disableAuthorization, performAuthorizationValidation } from "./service";
@@ -29,11 +33,12 @@ export async function assertChangePermission(scope: SyncScope, actor: string, ac
   if (config) await assertAmazonScopeAdmin(scope, actor, tx);
   else await amazonDataAccess(scope, actor, tx);
   if ((action === "save-plan" || action === "control-task") && !roleCanPerformAction(member.role, "operations", "create", permissions)) throw new SyncInputError("执行策略变更需要 create 权限。", 403);
+  return member;
 }
 async function audit(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, id: string, event: string, metadata: Record<string, unknown> = {}) {
   await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: `amazon.data_center.change.${event}`, entityType: "AmazonDataCenterChangeRequest", entityId: id, metadata: json({ workspaceId: scope.workspaceId, ...metadata }) } });
 }
-const authSelect = { id: true, name: true, amazonSellerId: true, awsRegion: true, endpoint: true, revision: true, status: true } as const;
+const authSelect = { id: true, name: true, amazonSellerId: true, awsRegion: true, endpoint: true, revision: true, status: true, approvedRoles: true, rolesAttestedAt: true } as const;
 // Resolve all scope and revision evidence from PostgreSQL, never from the request summaries.
 async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: Record<string, unknown>) {
   const action = operation(command.action), id = typeof command.id === "string" ? command.id : "";
@@ -47,10 +52,10 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     if (id && !auth) throw new SyncInputError("授权不存在。", 404);
     if (action !== "save-authorization" && !auth) throw new SyncInputError("请选择授权。");
     before = auth ? { ...auth, credentials: "已配置" } : { credentials: "未配置" }; baseRevision = auth?.revision ?? 0;
-    if (action === "save-authorization" && auth && (auth.amazonSellerId !== command.amazonSellerId || auth.awsRegion !== command.region || auth.endpoint !== command.endpoint)) throw new SyncInputError("Seller 身份和区域不可原地更换，须新增授权记录。");
+    if (action === "save-authorization" && auth && ((auth.amazonSellerId && auth.amazonSellerId !== optionalAmazonSellerId(command.amazonSellerId ?? auth.amazonSellerId)) || auth.awsRegion !== command.region || auth.endpoint !== command.endpoint)) throw new SyncInputError("Seller 身份和区域不可原地更换，须新增授权记录。");
     if (auth && command.revision !== undefined && command.revision !== auth.revision) throw new SyncInputError("授权版本已变化。", 409);
     if (action === "save-authorization") {
-      requiredText(command.name, "授权名称", 100); requiredText(command.amazonSellerId, "Seller");
+      requiredText(command.name, "授权名称", 100); optionalAmazonSellerId(command.amazonSellerId);
       officialEndpoint(requiredText(command.region, "区域"), requiredText(command.endpoint, "endpoint"));
       for (const field of ["lwaClientId", "lwaClientSecret", "refreshToken"]) if ((!auth && !command[field]) || (command[field] !== undefined && (typeof command[field] !== "string" || String(command[field]).length > 16384))) throw new SyncInputError("凭证字段无效。");
     }
@@ -64,11 +69,15 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     const auth = await tx.amazonSpApiAuthorization.findFirst({ where: { ...scope, id: authorizationId }, select: authSelect });
     if (!auth) throw new SyncInputError("授权不属于当前范围。", 409);
     if (command.enabled !== false) {
+      if (!auth.amazonSellerId) throw new SyncInputError("基础连接未填写 Seller ID；绑定同步店铺前请补充真实卖家编号。", 409);
       const conflict = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, marketplaceId, OR: [{ sellerAccountId, authorizationId: { not: authorizationId } }, { authorizationId, sellerAccountId: { not: sellerAccountId } }] }, select: { id: true } });
       const identity = await tx.amazonSellerIdentity.findFirst({ where: { ...scope, marketplaceId, OR: [{ sellerAccountId }, { authorizationId }] }, select: { authorizationId: true, sellerAccountId: true } });
       if (conflict || (identity && (identity.authorizationId !== authorizationId || identity.sellerAccountId !== sellerAccountId))) throw new SyncInputError("店铺站点授权绑定冲突，须先核查历史归属。", 409);
     }
-    before = { source: source ? { id: source.id, revision: source.revision, authorizationId: source.authorizationId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, enabled: source.enabled, freshnessMinutes: source.freshnessMinutes } : null, authorization: auth, seller };
+    if (resource === "returns" && command.enabled !== false) { parseReturnPolicy(command.returnsPolicy ?? source?.returnsPolicy); assertReturnRoles(auth); }
+    if (resource === "orders" && command.enabled !== false) parseOrderSyncPolicy(command.orderPolicy ?? source?.orderPolicy);
+    if (resource === "finance" && command.enabled !== false) await assertFinanceScope(tx, scope, { authorizationId, sellerAccountId, marketplaceId, financePolicy: command.financePolicy ?? source?.financePolicy }, [ ]);
+    before = { source: source ? { id: source.id, revision: source.revision, authorizationId: source.authorizationId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, enabled: source.enabled, freshnessMinutes: source.freshnessMinutes, ...(source.resource === "orders" ? { orderPolicy: source.orderPolicy } : {}), ...(source.resource === "finance" ? { financePolicy: source.financePolicy } : {}), ...(source.resource === "returns" ? { returnsPolicy: source.returnsPolicy } : {}) } : null, authorization: auth, seller };
     targetId = source?.id ?? targetId; baseRevision = source?.revision ?? 0; authId = auth.id;
     if (source && command.revision !== undefined && command.revision !== baseRevision) throw new SyncInputError("数据源版本已变化。", 409);
   } else if (action === "save-access-grant") {
@@ -109,12 +118,20 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
       const ranges = command.requestedRanges as Record<string, unknown> | undefined;
       rangeFromFrozen({ requestedRange: ranges?.[source.id] });
     }
+    if (source.resource === "returns") returnWindowFromFrozen((command.returnWindows as Record<string, unknown> | undefined)?.[source.id]);
+    if (source.resource === "finance") financeWindowFromFrozen((command.financeWindows as Record<string, unknown> | undefined)?.[source.id]);
+    if (source.resource === "orders") orderWindowFromFrozen((command.orderWindows as Record<string, unknown> | undefined)?.[source.id]);
   }
-  const targets = sources.map(s => ({ sourceId: s.id, sourceRevision: s.revision, enabled: s.enabled, authorizationId: s.authorizationId, authorizationRevision: s.authorization.revision, authorizationStatus: s.authorization.status, amazonSellerId: s.authorization.amazonSellerId, sellerAccountId: s.sellerAccountId, sellerStatus: s.seller.status, sellerUpdatedAt: s.seller.updatedAt, marketplaceId: s.marketplaceId, resource: s.resource }));
+  const targets = sources.map(s => ({ sourceId: s.id, sourceRevision: s.revision, enabled: s.enabled, authorizationId: s.authorizationId, authorizationRevision: s.authorization.revision, authorizationStatus: s.authorization.status, amazonSellerId: s.authorization.amazonSellerId, sellerAccountId: s.sellerAccountId, sellerStatus: s.seller.status, sellerUpdatedAt: s.seller.updatedAt, marketplaceId: s.marketplaceId, resource: s.resource, ...(s.resource === "orders" ? { orderPolicy: parseOrderSyncPolicy(s.orderPolicy) } : {}), ...(s.resource === "finance" ? { financePolicy: parseFinancePolicy(s.financePolicy) } : {}), ...(s.resource === "returns" ? { returnsPolicy: parseReturnPolicy(s.returnsPolicy) } : {}) }));
+  const orderCursors = [];
+  for (const source of sources.filter(s => ["orders", "finance", "returns"].includes(s.resource))) {
+    const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+    orderCursors.push({ sourceId: source.id, cursorVersion: cursor?.updatedAt.toISOString() ?? null });
+  }
   const boundAuth = authId ? await tx.amazonSpApiAuthorization.findFirst({ where: { ...scope, id: authId }, select: authSelect }) : null;
-  return { targetId, baseRevision, beforeSummary: { current: before, targets }, afterSummary: after,
+  return { targetId, baseRevision, beforeSummary: { current: before, targets, ...(orderCursors.length ? { orderCursors } : {}) }, afterSummary: after,
     sellerIds: [...new Set([...targets.map(s => s.amazonSellerId), ...(boundAuth ? [boundAuth.amazonSellerId] : []), ...(typeof command.amazonSellerId === "string" ? [command.amazonSellerId] : [])])].sort(),
-    marketplaceIds: [...new Set([...targets.map(s => s.marketplaceId), ...(typeof command.marketplaceId === "string" ? [command.marketplaceId] : [])])].sort(),
+    marketplaceIds: [...new Set([...targets.flatMap(s => s.financePolicy ? s.financePolicy.marketplaces.map(m => m.marketplaceId) : [s.marketplaceId]), ...(command.financePolicy ? parseFinancePolicy(command.financePolicy).marketplaces.map(m => m.marketplaceId) : []), ...(typeof command.marketplaceId === "string" ? [command.marketplaceId] : [])])].sort(),
     domains: [...new Set([...targets.map(s => s.resource), ...(typeof command.resource === "string" ? [command.resource] : [])])].sort(), sourceIds: [...sourceIds].sort() };
 }
 function evidenceDigest(scope: SyncScope, row: { targetEnvironment: string; operation: string; payloadDigest: string }, evidence: unknown) {
@@ -128,11 +145,32 @@ export async function requestChange(scope: SyncScope, actor: string, input: Reco
     if (action === "run") {
       const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: command.sourceIds as string[] ?? [] } } });
       const requestedRanges: Record<string, unknown> = {};
+      const orderWindows: Record<string, unknown> = {};
+      const financeWindows: Record<string, unknown> = {};
+      const returnWindows: Record<string, unknown> = {};
       for (const source of sources) {
         if (source.resource === "sales_traffic") requestedRanges[source.id] = resolveRequestedRange(source.marketplaceId, command);
+        else if (source.resource === "orders") {
+          if (command.dateFrom || command.dateTo || command.datePreset) throw new SyncInputError("订单窗口由持久化游标和已审批策略确定，不接受临时历史日期。");
+          const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+          orderWindows[source.id] = nextOrderWindow(parseOrderSyncPolicy(source.orderPolicy), cursor, new Date());
+        }
+        else if (source.resource === "returns") {
+          if (command.dateFrom || command.dateTo || command.datePreset) throw new SyncInputError("退货窗口由批准策略与持久游标确定。");
+          const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+          returnWindows[source.id] = nextReturnWindow(parseReturnPolicy(source.returnsPolicy), cursor, new Date());
+        }
+        else if (source.resource === "finance") {
+          if (command.dateFrom || command.dateTo || command.datePreset) throw new SyncInputError("财务窗口由持久化游标确定，不接受临时全量日期。");
+          const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+          financeWindows[source.id] = nextFinanceWindow(parseFinancePolicy(source.financePolicy), cursor, new Date());
+        }
         else if (command.dateFrom || command.dateTo || command.datePreset) throw new SyncInputError("库存和刊登是当前完整快照，不支持历史日期同步；请分开申请。");
       }
       if (Object.keys(requestedRanges).length) command.requestedRanges = requestedRanges;
+      if (Object.keys(returnWindows).length) command.returnWindows = returnWindows;
+      if (Object.keys(financeWindows).length) command.financeWindows = financeWindows;
+      if (Object.keys(orderWindows).length) command.orderWindows = orderWindows;
     }
     const ciphertext = seal(command, scope, id, environment), payloadDigest = digest(ciphertext);
     const evidence = await inspect(tx, scope, command); evidence.targetId ||= String(command.proposedId ?? id);
@@ -145,7 +183,7 @@ export async function requestChange(scope: SyncScope, actor: string, input: Reco
 }
 export async function decideChange(scope: SyncScope, actor: string, id: string, decision: "APPROVED" | "REJECTED" | "REVOKED", reason: string) {
   return prisma.$transaction(async tx => {
-    await scopeLock(tx, scope); await assertChangePermission(scope, actor, "approve", tx);
+    await scopeLock(tx, scope); const approver = await assertChangePermission(scope, actor, "approve", tx);
     const row = await tx.amazonDataCenterChangeRequest.findFirst({ where: { ...scope, id } });
     if (!row) throw new SyncInputError("审批不存在。", 404);
     if (["save-access-grant", "save-authorization", "disable-authorization", "save-source", "validate-authorization"].includes(row.operation)) await assertAmazonScopeAdmin(scope, actor, tx);
@@ -157,7 +195,7 @@ export async function decideChange(scope: SyncScope, actor: string, id: string, 
     }
     if (decision === "REVOKED") {
       if (!["REQUESTED", "APPROVED"].includes(row.status) && !(row.status === "APPLIED" && row.changeType === "SyncExecutionRequest")) throw new SyncInputError("已应用配置不能撤销；须另行提交反向变更。", 409);
-    } else assertDecision(row, actor);
+    } else assertDecision(row, actor, new Date(), isAmazonScopeAdmin(approver.role));
     if (row.sourceIds.length) await checkTargetAccess(tx, scope, actor, row.sourceIds);
     if (row.targetEnvironment !== targetEnvironment()) throw new SyncInputError("目标环境不匹配。", 409);
     if (decision === "APPROVED") {
@@ -176,14 +214,17 @@ export async function decideChange(scope: SyncScope, actor: string, id: string, 
     if (!changed.count) throw new SyncInputError("审批状态已被其他操作变更。", 409);
     if (decision === "REJECTED" || decision === "REVOKED") await tx.amazonDataCenterSealedCommand.deleteMany({ where: { ...scope, id } });
     const updated = await tx.amazonDataCenterChangeRequest.findFirstOrThrow({ where: { ...scope, id } });
-    await audit(tx, scope, actor, id, decision.toLowerCase(), { digest: row.changeDigest }); return changeView(updated);
+    await audit(tx, scope, actor, id, decision.toLowerCase(), { digest: row.changeDigest, ...(decision === "APPROVED" ? { selfApproved: row.requestedByUserId === actor, approverRole: approver.role } : {}) }); return changeView(updated);
   });
 }
 async function checkTargetAccess(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, sourceIds: string[]) {
   if (!sourceIds.length) return;
-  const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: sourceIds } }, select: { sellerAccountId: true, marketplaceId: true } });
+  const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: sourceIds } }, });
   if (sources.length !== sourceIds.length) throw new SyncInputError("审批数据源范围无效。", 403);
-  for (const source of sources) await assertSellerMarketplaceAccess(scope, actor, source.sellerAccountId, source.marketplaceId, tx, "sync");
+  for (const source of sources) {
+    if (source.resource === "finance") await assertFinanceScope(tx, scope, source, [actor]);
+    else await assertSellerMarketplaceAccess(scope, actor, source.sellerAccountId, source.marketplaceId, tx, "sync");
+  }
 }
 async function dispatch(scope: SyncScope, actor: string, command: Record<string, unknown>) {
   switch (operation(command.action)) {
@@ -205,6 +246,16 @@ async function applyAuthorizationValidation(scope: SyncScope, actor: string, id:
     await assertChangePermission(scope, actor, "validate-authorization", tx);
     await assertChangePermission(scope, row.approvedByUserId ?? "", "approve", tx);
     await assertAmazonScopeAdmin(scope, row.approvedByUserId ?? "", tx);
+    // Terminal requests deliberately have no sealed command. Report their state
+    // before checking the payload, without allowing them to execute again.
+    if (row.status !== "APPROVED") {
+      const message = row.status === "FAILED" ? "本次授权验证已失败，不能重复应用。请到“店铺与授权”查看失败原因，更新凭证后重新提交验证申请。"
+        : row.status === "APPLYING" ? "授权验证正在执行，请稍候刷新查看结果。"
+        : row.status === "APPLIED" ? "本次授权验证已完成，不能重复应用。"
+        : row.status === "REQUESTED" ? "授权验证申请尚未批准，请先批准。"
+        : "授权验证审批已失效，请重新提交验证申请。";
+      throw new SyncInputError(message, 409);
+    }
     await checkTargetAccess(tx, scope, actor, row.sourceIds);
     await checkTargetAccess(tx, scope, row.approvedByUserId ?? "", row.sourceIds);
     const envelope = await tx.amazonDataCenterSealedCommand.findFirst({ where: { ...scope, id } });

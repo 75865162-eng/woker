@@ -1,0 +1,57 @@
+{
+  "order": {
+    "orderId": "fixture-order-2",
+    "createdTime": "2026-10-31T21:00:00+01:00",
+    "lastUpdatedTime": "2026-11-01T00:20:00Z",
+    "salesChannel": {
+      "marketplaceId": "fixture-marketplace",
+      "channelName": "AMAZON"
+    },
+    "fulfillment": {
+      "fulfillmentStatus": null
+    },
+    "buyer": {
+      "buyerName": "fixture-private-buyer",
+      "buyerEmail": "buyer@fixture.invalid"
+    },
+    "recipient": {
+      "deliveryAddress": {
+        "name": "fixture-private-recipient",
+        "addressLine1": "fixture-private-street",
+        "phone": "fixture-private-phone"
+      }
+    },
+    "proceeds": {
+      "grandTotal": {
+        "amount": "9007199254740993.123456789012345678901234567890",
+        "currencyCode": "XXX"
+      }
+    },
+    "orderItems": [
+      {
+        "orderItemId": "fixture-item-1",
+        "quantityOrdered": 2,
+        "product": {
+          "asin": "fixture-asin",
+          "sellerSku": "fixture-sku",
+          "customization": {
+            "customizedUrl": "https://custom.fixture.invalid/fixture-private-custom"
+          }
+        },
+        "proceeds": {
+          "proceedsTotal": {
+            "amount": "12.3400",
+            "currencyCode": "XXX"
+          }
+        },
+        "fulfillment": {
+          "packing": {
+            "giftOption": {
+              "giftMessage": "fixture-private-gift"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

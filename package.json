@@ -48,6 +48,10 @@
     "test:selection:create": "node scripts/selection-pipeline/run-create-integration.mjs",
     "test:erp": "node scripts/erp-cli/run-integration.mjs",
     "test:amazon-sync:integration": "node scripts/test-amazon-sync-integration.mjs",
+    "test:amazon-sync:offline": "node scripts/test-amazon-sync-integration.mjs --offline-all",
+    "test:amazon-returns:offline": "node scripts/test-amazon-sync-integration.mjs --returns",
+    "test:amazon-finance:offline": "node scripts/test-amazon-sync-integration.mjs --finance",
+    "test:amazon-orders:offline": "node scripts/test-amazon-sync-integration.mjs --orders",
     "test:amazon-sync:browser": "playwright test --config tests/browser/sync-center.config.ts"
   },
   "dependencies": {

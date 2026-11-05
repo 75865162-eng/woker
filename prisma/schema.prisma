@@ -1526,6 +1526,13 @@ model AmazonSyncRun {
   updatedCount      Int       @default(0)
   skippedCount      Int       @default(0)
   salesTrafficRows  AmazonSalesTrafficSnapshot[]
+  orderRows         AmazonOrderRecord[]
+  financeRows       AmazonFinanceRecord[]
+  returnRows        AmazonReturnRecord[]
+  resourceCursors   AmazonSyncResourceCursor[]
+  rawPages          AmazonSyncRawPage[]
+  failedCount       Int       @default(0)
+  detailsCompletedCount Int   @default(0)
   logs              AmazonSyncTaskLog[]
   pages             AmazonSyncPage[]
   publishedSources  AmazonSyncDataSource[] @relation("PublishedHead")
@@ -2344,6 +2351,8 @@ model AmazonSpApiAuthorization {
   awsRegion             String
   endpoint              String
   credentialsCiphertext String @db.Text
+  approvedRoles         String[] @default([])
+  rolesAttestedAt       DateTime?
   revision              Int @default(1)
   status                String @default("NOT_CONFIGURED")
   marketplaceParticipations Json @default("[]")
@@ -2383,6 +2392,13 @@ model AmazonSyncDataSource {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   salesTrafficRows      AmazonSalesTrafficSnapshot[]
+  orderPolicy           Json?
+  financePolicy         Json?
+  returnsPolicy         Json?
+  returnRows            AmazonReturnRecord[]
+  financeRows           AmazonFinanceRecord[]
+  orderRows             AmazonOrderRecord[]
+  resourceCursor        AmazonSyncResourceCursor?
   runs                  AmazonSyncRun[] @relation("SourceTasks")
   targets               AmazonSyncPlanTarget[]
 
@@ -2446,6 +2462,179 @@ model AmazonSyncApiBudget {
   updatedAt      DateTime @updatedAt
 
   @@id([organizationId, workspaceId, authorizationId, operation])
+}
+
+// Orders v2026-01-01 only. PII lives only in an encrypted detail envelope.
+model AmazonOrderRecord {
+  id                  String @id
+  organizationId      String
+  workspaceId         String
+  sourceId            String
+  source              AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  sourceRunId         String
+  task                AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict)
+  sellerAccountId     String
+  amazonSellerId      String
+  marketplaceId       String
+  amazonOrderId       String
+  createdTime         DateTime @db.Timestamptz(3)
+  sourceUpdatedAt     DateTime @db.Timestamptz(3)
+  rawStatus           String?
+  normalizedStatus    String?
+  marketplaceTimeZone String
+  capturedAt          DateTime @db.Timestamptz(3)
+  detailsUpdatedAt    DateTime? @db.Timestamptz(3)
+  detailPolicyDigest  String?
+  detailHash          String?
+  detailCiphertext    String? @db.Text
+  grandTotalOriginal  String?
+  grandTotalAmount    Decimal? @db.Decimal(65, 30)
+  currencyCode        String?
+  items               AmazonOrderItemRecord[]
+  detailWork          AmazonOrderDetailWork[]
+
+  @@unique([organizationId, workspaceId, sourceId, id], map: "AmazonOrder_scope_record_key")
+  @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId, amazonOrderId], map: "AmazonOrder_scope_business_key")
+  @@index([organizationId, workspaceId, sourceId, sourceUpdatedAt], map: "AmazonOrder_source_updated_idx")
+}
+
+model AmazonOrderItemRecord {
+  organizationId String
+  workspaceId String
+  sourceId String
+  orderRecordId String
+  order AmazonOrderRecord @relation(fields: [organizationId, workspaceId, sourceId, orderRecordId], references: [organizationId, workspaceId, sourceId, id], onDelete: Restrict, map: "AmazonOrderItemRecord_order_fkey")
+  orderItemId String
+  asin String?
+  sellerSku String?
+  quantityOrdered Int
+  proceedsOriginal String?
+  proceedsAmount Decimal? @db.Decimal(65, 30)
+  currencyCode String?
+
+  @@id([orderRecordId, orderItemId])
+  @@index([organizationId, workspaceId, sourceId, asin], map: "AmazonOrderItem_scope_asin_idx")
+}
+
+// Durable detail work is part of the existing orders job, not another scheduler.
+model AmazonOrderDetailWork {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  orderRecordId String
+  order AmazonOrderRecord @relation(fields: [organizationId, workspaceId, sourceId, orderRecordId], references: [organizationId, workspaceId, sourceId, id], onDelete: Restrict, map: "AmazonOrderDetailWork_order_fkey")
+  amazonOrderId String
+  listedUpdatedAt DateTime @db.Timestamptz(3)
+  watermarkFrom DateTime @db.Timestamptz(3)
+  watermarkTo DateTime @db.Timestamptz(3)
+  policyDigest String
+  status String @default("PENDING")
+  completedAt DateTime? @db.Timestamptz(3)
+
+  @@unique([sourceId, amazonOrderId, listedUpdatedAt, policyDigest], map: "AmazonOrderDetail_business_key")
+  @@index([organizationId, workspaceId, sourceId, status, watermarkFrom, watermarkTo], map: "AmazonOrderDetail_pending_idx")
+}
+
+model AmazonFinanceRecord {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  source AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonFinance_source_fkey")
+  sourceRunId String
+  task AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonFinance_run_fkey")
+  sellerAccountId String
+  amazonSellerId String
+  transactionId String
+  marketplaceId String?
+  marketplaceTimeZone String?
+  attributionStatus String
+  quarantineReason String?
+  postedAt DateTime @db.Timestamptz(3)
+  transactionType String?
+  rawStatus String?
+  orderId String?
+  classification String
+  originalAmount String?
+  amount Decimal? @db.Decimal(65,30)
+  currency String?
+  convertedAmount Decimal? @db.Decimal(65,30)
+  convertedCurrency String?
+  conversionStatus String
+  fxEvidence Json?
+  observationSequence Int
+  rowHash String
+  capturedAt DateTime @db.Timestamptz(3)
+  quarantine AmazonFinanceQuarantine?
+
+  @@unique([organizationId, workspaceId, amazonSellerId, transactionId], map: "AmazonFinance_business_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonFinance_scope_id_key")
+  @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, postedAt], map: "AmazonFinance_scope_posted_idx")
+  @@index([organizationId, workspaceId, sourceId, attributionStatus, postedAt], map: "AmazonFinance_source_posted_idx")
+}
+
+// Unknown attribution stays outside the queryable financial facts/amounts.
+model AmazonFinanceQuarantine {
+  organizationId String
+  workspaceId String
+  recordId String @id
+  record AmazonFinanceRecord @relation(fields: [organizationId, workspaceId, recordId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonFinanceQuarantine_record_fkey")
+  ciphertext String @db.Text
+  createdAt DateTime @db.Timestamptz(3)
+  @@unique([organizationId, workspaceId, recordId], map: "AmazonFinanceQuarantine_scope_key")
+}
+
+// A business cursor survives task termination and is committed with each page.
+model AmazonSyncResourceCursor {
+  id                  String @id
+  organizationId      String
+  workspaceId         String
+  sourceId            String @unique
+  source              AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  resource            String
+  amazonSellerId      String
+  marketplaceId       String
+  watermarkFrom       DateTime @db.Timestamptz(3)
+  watermarkTo         DateTime @db.Timestamptz(3)
+  nextTokenCiphertext String? @db.Text
+  activeRunId         String?
+  task                AmazonSyncRun? @relation(fields: [activeRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict)
+  lastSuccessAt       DateTime? @db.Timestamptz(3)
+  status              String
+  listComplete        Boolean @default(false)
+  detailPolicyDigest  String?
+  captureSequence     Int @default(0)
+  reportStateCiphertext String? @db.Text
+  updatedAt           DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, resource, amazonSellerId, marketplaceId], map: "AmazonCursor_scope_resource_key")
+  @@unique([organizationId, workspaceId, sourceId], map: "AmazonCursor_scope_source_key")
+}
+
+// Response body is an encrypted envelope; metadata never contains credentials/PII.
+model AmazonSyncRawPage {
+  organizationId  String
+  workspaceId     String
+  taskId          String
+  task            AmazonSyncRun @relation(fields: [organizationId, workspaceId, taskId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  page            Int
+  resource        String
+  requestMetadata Json
+  rawCiphertext   String @db.Text
+  bodySha256      String
+  capturedAt      DateTime @db.Timestamptz(3)
+
+  @@id([taskId, page])
+}
+
+// Shared seller/application bucket across marketplaces; operation has its own quota.
+model AmazonSyncTokenBucket {
+  bucketKey       String @id
+  tokens          Float
+  replenishedAt   DateTime @db.Timestamptz(3)
+  blockedUntil    DateTime? @db.Timestamptz(3)
+  observedLimit   Float?
 }
 
 // Seller/day totals only. ASIN range totals are deliberately not split into daily facts.
@@ -2578,4 +2767,43 @@ model AmazonSellerIdentity {
   verifiedAt DateTime
   @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId], map: "AmazonIdentity_scope_seller_site_key")
   @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId, region], map: "AmazonIdentity_scope_amazon_site_region_key")
+}
+
+model AmazonReturnReason {
+  id String @id
+  organizationId String
+  workspaceId String
+  code String
+  rows AmazonReturnRecord[]
+  @@unique([organizationId, workspaceId, code], map: "AmazonReturnReason_code_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonReturnReason_scope_key")
+}
+model AmazonReturnRecord {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  source AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonReturn_source_fkey")
+  sourceRunId String
+  task AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonReturn_run_fkey")
+  sellerAccountId String
+  amazonSellerId String
+  marketplaceId String
+  marketplaceTimeZone String
+  reportId String
+  rowHash String
+  returnAt DateTime @db.Timestamptz(3)
+  amazonOrderId String
+  sellerSku String
+  asin String
+  fnsku String?
+  quantity Int
+  fulfillmentCenterId String?
+  disposition String?
+  reasonId String?
+  reason AmazonReturnReason? @relation(fields: [organizationId, workspaceId, reasonId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonReturn_reason_fkey")
+  rawStatus String?
+  capturedAt DateTime @db.Timestamptz(3)
+  @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId, reportId, rowHash], map: "AmazonReturn_business_key")
+  @@index([organizationId, workspaceId, sourceId, reportId, returnAt], map: "AmazonReturn_report_idx")
 }

@@ -1,23 +1,28 @@
+import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, parseReturnReport, returnPollDelay } from "./returns";
 import { assertExecutionWindow } from "./execution-window";
+import { assertFinanceScope } from "./finance-scope";
+import { parseFinancePolicy, parseFinancePage, financeWindowFromFrozen, attributeFinanceTransaction, convertFinanceMoney } from "./finance";
 import { assertSellerMarketplaceAccess } from "./data-access";
 import { rangeFromFrozen } from "./date-range";
 import { parseSalesTraffic, salesTrafficReportType } from "./sales-traffic";
+import { assertOrderRoles, orderWindowFromFrozen, parseOrderPage, parseOrderDetail, parseOrderSyncPolicy, type OrderSyncPolicy, type OrderWindow } from "./orders";
+import { orderBucketKey, reserveOrderToken } from "./orders-rate-limit";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { Prisma, type AmazonSyncRun } from "@prisma/client";
+import { Prisma, type AmazonSyncRun, type AmazonSyncResourceCursor, type AmazonOrderDetailWork } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
 import { roleCanPerformAction } from "@/lib/accounts/permissions";
-import { AmazonSpApiClient, AmazonSpApiError, type AmazonRequestEvent } from "@/lib/amazon/sp-api-client";
+import { AmazonSpApiClient, AmazonSpApiError, type AmazonRequestEvent, type AmazonSpApiClientOptions } from "@/lib/amazon/sp-api-client";
 import { decryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
 import { extractAmazonInventorySnapshots } from "@/lib/amazon/inventory";
 import { extractCatalogPage } from "@/lib/amazon/catalog";
 import { withAmazonSyncLock } from "@/lib/operations/sync-lock";
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
 import { decryptCheckpoint, encryptCheckpoint } from "./checkpoint";
-import { implementedDomain, officialEndpoint, retryDelay, syncCenterEnabled, type SyncScope } from "./policy";
+import { implementedDomain, officialEndpoint, retryDelay, syncCenterEnabled, SyncInputError, type SyncScope } from "./policy";
 import { scopeLock } from "./service";
-import { canonical, digest } from "./approval-policy";
+import { canonical, digest, seal, unseal } from "./approval-policy";
 import { targetEnvironment } from "./approval-policy";
 import { defaultRolePermissionMap, type RolePermissionMap } from "@/lib/accounts/permissions";
 import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
@@ -101,15 +106,32 @@ async function assertLiveSource(tx: Prisma.TransactionClient, run: AmazonSyncRun
   const approverStillAuthorized = !!approverMember && approverMember.user.status === "active" && roleCanPerformAction(approverMember.role, "operations", "approve", rolePermissions);
   const actorMember = await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: run.organizationId, userId: run.requestedByUserId } }, include: { user: { select: { status: true } } } });
   if (!actorMember || actorMember.user.status !== "active" || !roleCanPerformAction(actorMember.role, "operations", "create", rolePermissions) || (grant?.operation === "control-task" && !roleCanPerformAction(actorMember.role, "operations", "edit", rolePermissions))) throw new SyncPreflightRejected("任务操作人权限已变化。");
-  const frozen = run.frozenScope as { sourceId?: string; sourceRevision?: number; authorizationId?: string; authorizationRevision?: number; amazonSellerId?: string; sellerAccountId?: string; marketplaceId?: string; resource?: string } | null;
+  const frozen = run.frozenScope as { sourceId?: string; sourceRevision?: number; authorizationId?: string; authorizationRevision?: number; amazonSellerId?: string; sellerAccountId?: string; marketplaceId?: string; resource?: string; region?: string; endpoint?: string } | null;
   const frozenDigest = frozen ? digest(frozen) : "";
   if (!grant || !approverStillAuthorized || !frozen || frozenDigest !== run.frozenScopeDigest) throw new SyncPreflightRejected("执行审批或固定目标范围已失效。");
   const source = await tx.amazonSyncDataSource.findFirst({ where: { id: run.sourceId!, organizationId: run.organizationId, workspaceId: run.workspaceId, enabled: true }, include: { authorization: true, seller: true } });
   if (!source || source.id !== frozen.sourceId || source.revision !== frozen.sourceRevision || source.authorizationId !== frozen.authorizationId || source.sellerAccountId !== frozen.sellerAccountId || source.marketplaceId !== frozen.marketplaceId || source.resource !== frozen.resource || source.resource !== run.resource || source.seller.status !== "active" || source.authorization.status !== "CONFIGURED" || source.authorization.amazonSellerId !== frozen.amazonSellerId || source.authorization.revision !== frozen.authorizationRevision || source.authorization.revision !== run.authorizationRevision) throw new SyncPreflightRejected("数据源或授权在同步期间改变。");
+  if (["orders", "finance", "returns"].includes(run.resource) && (source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint)) throw new SyncPreflightRejected("订单授权区域与已批准范围不匹配。");
   try {
     await assertSellerMarketplaceAccess(run, run.requestedByUserId, source.sellerAccountId, source.marketplaceId, tx, "sync");
     await assertSellerMarketplaceAccess(run, grant.approvedByUserId!, source.sellerAccountId, source.marketplaceId, tx, "sync");
   } catch { throw new SyncPreflightRejected("任务或审批人的 Seller 授权已撤销。"); }
+  if (run.resource === "finance") {
+    try {
+      const { policy } = await assertFinanceScope(tx, run, source, [run.requestedByUserId, grant.approvedByUserId!]);
+      const approved = run.frozenScope as { financePolicy?: unknown };
+      if (digest(policy) !== digest(parseFinancePolicy(approved.financePolicy))) throw new Error();
+    } catch { throw new SyncPreflightRejected("财务角色、卖家级站点集合或审批策略已变化。"); }
+  }
+  if (run.resource === "returns") {
+    try {
+      assertReturnRoles(source.authorization);
+      const p = parseReturnPolicy(source.returnsPolicy);
+      if (digest(p) !== digest(parseReturnPolicy((run.frozenScope as { returnsPolicy?: unknown }).returnsPolicy))) throw new Error();
+      officialEndpoint(source.authorization.awsRegion, source.authorization.endpoint);
+      if (!extractMarketplaceParticipations({ payload: source.authorization.marketplaceParticipations }).some(m => m.marketplaceId === source.marketplaceId)) throw new Error();
+    } catch { throw new SyncPreflightRejected("退货角色、站点或冻结策略已变化。"); }
+  }
   return source;
 }
 async function stopForControl(tx: Prisma.TransactionClient, run: AmazonSyncRun) {
@@ -119,7 +141,8 @@ async function stopForControl(tx: Prisma.TransactionClient, run: AmazonSyncRun) 
   await log(tx, run, current.control === "CANCEL" ? "CANCELLED" : "PAUSED");
   return true;
 }
-export async function processSyncCenterTask(runId: string, dispatchVersion: number) {
+type SyncTaskRuntime = { clientOptions?: Pick<AmazonSpApiClientOptions, "fetch" | "now" | "tokenEndpoint" | "reportDownloadTestHost"> };
+export async function processSyncCenterTask(runId: string, dispatchVersion: number, runtime: SyncTaskRuntime = {}) {
   const candidate = await prisma.amazonSyncRun.findFirst({ where: { id: runId, executionVersion: 2 } });
   if (!candidate || !syncCenterEnabled(candidate) || candidate.dispatchVersion !== dispatchVersion || !["WAITING", "QUEUED", "RETRY_WAIT"].includes(candidate.status)) return;
   const source = await prisma.amazonSyncDataSource.findFirst({ where: { id: candidate.sourceId!, organizationId: candidate.organizationId, workspaceId: candidate.workspaceId }, include: { authorization: true } });
@@ -145,10 +168,10 @@ export async function processSyncCenterTask(runId: string, dispatchVersion: numb
       return;
     }
     if (!run) return;
-    await executeSlice(run);
+    await executeSlice(run, runtime);
   });
 }
-async function executeSlice(run: AmazonSyncRun) {
+async function executeSlice(run: AmazonSyncRun, runtime: SyncTaskRuntime = {}) {
   const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
   try {
     await assertActor(run);
@@ -158,7 +181,10 @@ async function executeSlice(run: AmazonSyncRun) {
     const sites = extractMarketplaceParticipations({ payload: auth.marketplaceParticipations });
     if (!sites.some(s => s.marketplaceId === source.marketplaceId)) throw new Error("站点未验证。");
     const events: AmazonRequestEvent[] = [];
-    const client = new AmazonSpApiClient({ ...decryptAmazonSpApiCredentials(auth.credentialsCiphertext, { ...scope, authorizationId: auth.id }), region: auth.awsRegion, endpoint: auth.endpoint }, { onResponse: e => events.push(e) });
+    const client = new AmazonSpApiClient({ ...decryptAmazonSpApiCredentials(auth.credentialsCiphertext, { ...scope, authorizationId: auth.id }), region: auth.awsRegion, endpoint: auth.endpoint }, { ...runtime.clientOptions, ...(["orders", "finance", "returns"].includes(run.resource) ? { cacheScope: canonical([scope, auth.id, auth.revision]) } : {}), onResponse: e => events.push(e) });
+    if (run.resource === "returns") { await executeReturnSlice(run, client, events); return; }
+    if (run.resource === "finance") { await executeFinanceSlice(run, client, events); return; }
+    if (run.resource === "orders") { await executeOrderSlice(run, client, events); return; }
     if (run.resource === "sales_traffic") { await executeReportSlice(run, client, events, auth.id, source.marketplaceId, source.sellerAccountId); return; }
     let token = decryptCheckpoint(run.checkpointCiphertext, scope, run.id);
     const operation = run.resource === "inventory" ? "getInventorySummaries" : "searchListingsItems";
@@ -220,7 +246,12 @@ async function executeSlice(run: AmazonSyncRun) {
     if (run.paginationComplete) await publish(run); else await yieldSlice(run);
   } catch (error) {
     if (error instanceof SyncFenceLost) return;
-    const failure = classifySyncFailure(error);
+    const failure = ["orders", "finance", "returns"].includes(run.resource) && error instanceof SyncInputError
+      ? { code: error.status === 403 ? "ORDER_ROLE_OR_SCOPE" : "ORDER_VALIDATION", retryable: false, message: error.message, retryAfterMs: 0 }
+      : classifySyncFailure(error);
+    if (["orders", "finance", "returns"].includes(run.resource) && !(error instanceof SyncInputError)) failure.message = failure.retryable
+      ? "增量请求暂时失败，按退避策略从已提交游标继续。"
+      : "增量请求或响应校验失败；已保留提交页和游标，请核对参数、授权及分页有效期后重新申请。";
     await prisma.$transaction(async tx => {
       await scopeLock(tx, scope);
       try { await assertFence(tx, run); } catch (e) { if (e instanceof SyncFenceLost) return; throw e; }
@@ -233,7 +264,8 @@ async function executeSlice(run: AmazonSyncRun) {
         }
       }
       const retry = failure.retryable && run.attempts < run.maxAttempts;
-      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: retry ? "RETRY_WAIT" : "FAILED", error: failure.message, finishedAt: retry ? null : new Date(), nextAttemptAt: new Date(Date.now() + retryDelay(run.attempts, failure.retryAfterMs)), leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
+      if (["orders", "finance", "returns"].includes(run.resource)) await tx.amazonSyncResourceCursor.updateMany({ where: { ...scope, activeRunId: run.id }, data: { status: retry ? "RETRY_WAIT" : "FAILED" } });
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: retry ? "RETRY_WAIT" : "FAILED", error: failure.message, failedCount: { increment: 1 }, finishedAt: retry ? null : new Date(), nextAttemptAt: new Date(Date.now() + retryDelay(run.attempts, failure.retryAfterMs)), leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
       await log(tx, run, retry ? "RETRY_SCHEDULED" : "FAILED", failure.code);
     });
   }
@@ -259,7 +291,7 @@ async function yieldSlice(run: AmazonSyncRun, nextAttemptAt = new Date()) {
   await prisma.$transaction(async tx => {
     await scopeLock(tx, run); await assertFence(tx, run); await assertLiveSource(tx, run);
     if (await stopForControl(tx, run)) return;
-    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "WAITING", stage: run.resource === "sales_traffic" ? run.stage : run.paginationComplete ? "VALIDATING" : "FETCHING", leaseOwner: null, leaseExpiresAt: null, nextAttemptAt, dispatchVersion: { increment: 1 } } });
+    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "WAITING", stage: ["sales_traffic", "orders", "finance", "returns"].includes(run.resource) ? run.stage : run.paginationComplete ? "VALIDATING" : "FETCHING", leaseOwner: null, leaseExpiresAt: null, nextAttemptAt, dispatchVersion: { increment: 1 } } });
   });
 }
 async function publish(run: AmazonSyncRun) {
@@ -349,6 +381,190 @@ export async function executeReportSlice(run: AmazonSyncRun, client: AmazonSpApi
   });
 }
 
+/** Orders 2026-01-01: one page per slice. No worker sleeps and no automatic
+ * historical sweep. HTTP remains in the existing SP-API client. The cursor,
+ * business upserts and encrypted replay evidence share one transaction.
+ * https://developer-docs.amazon.com/sp-api/reference/searchorders
+ */
+export async function executeOrderSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[], now: () => Date = () => new Date()) {
+  const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
+  await assertActor(run);
+  const source = await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run);
+    return assertLiveSource(tx, run);
+  });
+  const policy = parseOrderSyncPolicy(source.orderPolicy), auth = source.authorization;
+  officialEndpoint(auth.awsRegion, auth.endpoint);
+  assertOrderRoles(auth, policy);
+  const sites = extractMarketplaceParticipations({ payload: auth.marketplaceParticipations });
+  if (!sites.some(site => site.marketplaceId === source.marketplaceId)) throw new SyncPreflightRejected("订单站点未验证。");
+  const window = orderWindowFromFrozen((run.frozenScope as { orderWindow?: unknown } | null)?.orderWindow);
+  const frozenPolicy = (run.frozenScope as { orderPolicy?: unknown } | null)?.orderPolicy;
+  if ((frozenPolicy !== undefined && digest(parseOrderSyncPolicy(frozenPolicy)) !== digest(policy)) || (policy.details && frozenPolicy === undefined)) throw new SyncPreflightRejected("订单详情策略不在已批准执行范围内。");
+  const detailPolicyDigest = policy.details ? digest(policy.details) : null;
+  const bucketKey = orderBucketKey(auth.amazonSellerId, policy.applicationId);
+  const prepared = await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) return null;
+    let cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+    if (cursor && (cursor.organizationId !== scope.organizationId || cursor.workspaceId !== scope.workspaceId || cursor.amazonSellerId !== auth.amazonSellerId || cursor.marketplaceId !== source.marketplaceId || cursor.resource !== "orders")) throw new SyncPreflightRejected("订单游标与卖家绑定不匹配。");
+    if (cursor && cursor.status !== "SUCCEEDED" && (cursor.watermarkFrom.toISOString() !== window.from || cursor.watermarkTo.toISOString() !== window.to)) throw new SyncPreflightRejected("订单窗口与未完成游标不匹配。");
+    if (cursor?.status === "SUCCEEDED" && cursor.activeRunId === run.id) return { complete: true as const, cursor };
+    const starting = !cursor || cursor.status === "SUCCEEDED";
+    if (!starting && cursor?.detailPolicyDigest !== detailPolicyDigest) throw new SyncPreflightRejected("未完成窗口的详情策略发生变化。");
+    if (cursor && cursor.status === "SUCCEEDED" && Date.parse(window.to) <= cursor.watermarkTo.getTime()) throw new SyncPreflightRejected("订单窗口已被其他任务完成，请重新申请。");
+    cursor = await tx.amazonSyncResourceCursor.upsert({ where: { sourceId: source.id }, create: { ...scope, id: randomUUID(), sourceId: source.id, resource: "orders", amazonSellerId: auth.amazonSellerId, marketplaceId: source.marketplaceId, watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), activeRunId: run.id, status: "RUNNING", detailPolicyDigest }, update: { activeRunId: run.id, status: "RUNNING", ...(starting ? { watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), nextTokenCiphertext: null, listComplete: false, detailPolicyDigest } : {}) } });
+    if (policy.details) {
+      const work = await tx.amazonOrderDetailWork.findFirst({ where: { ...scope, sourceId: source.id, watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), policyDigest: detailPolicyDigest!, status: "PENDING" }, orderBy: [{ listedUpdatedAt: "asc" }, { id: "asc" }] });
+      if (work || cursor.listComplete) return { complete: false as const, cursor, work };
+    }
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
+    const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
+    const reservation = reserveOrderToken(bucket, policy, now());
+    await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: reservation.tokens, replenishedAt: reservation.replenishedAt }, update: { tokens: reservation.tokens, replenishedAt: reservation.replenishedAt } });
+    return { complete: false as const, cursor, reservation };
+  });
+  if (!prepared) return;
+  if (prepared.complete) return;
+  if ("work" in prepared) { await executeOrderDetailSlice(run, source, policy, window, prepared.cursor, prepared.work ?? null, client, events, now); return; }
+  if (!prepared.reservation.allowed) { await yieldSlice(run, prepared.reservation.nextAt); return; }
+  const token = decryptCheckpoint(prepared.cursor.nextTokenCiphertext, scope, prepared.cursor.id);
+  const tokenHash = digest([window, token ?? null]);
+  if (await prisma.amazonSyncPage.findUnique({ where: { taskId_tokenHash: { taskId: run.id, tokenHash } } })) throw new Error("订单分页 token 循环。");
+  events.length = 0;
+  let response: Awaited<ReturnType<AmazonSpApiClient["searchOrders"]>>;
+  try {
+    // Recheck authorization immediately before any HTTP, including the LWA refresh.
+    await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run); });
+    response = await client.searchOrders({ marketplaceId: source.marketplaceId, lastUpdatedAfter: window.from, lastUpdatedBefore: window.to, paginationToken: token });
+  } catch (error) {
+    await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, now(), error);
+    throw error;
+  }
+  await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, now());
+  const page = parseOrderPage(response.body, source.marketplaceId, policy, window);
+  if (page.orders.length > 100 || run.pagesCompleted >= maxPages || run.processedCount + page.orders.length > maxRows) throw new Error("订单窗口超过安全容量，请缩小窗口并重新审批。");
+  if (page.nextToken && digest([window, page.nextToken]) === tokenHash) throw new Error("订单分页 token 循环。");
+  const capturedAt = now(), pageNumber = run.pagesCompleted + 1;
+  const rawCiphertext = seal({ rawBody: response.rawBody }, scope, `${run.id}:${pageNumber}`, "amazon-orders-raw.v1");
+  await assertActor(run);
+  await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) return;
+    const currentCursor = await tx.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: source.id } });
+    if (currentCursor.activeRunId !== run.id || currentCursor.nextTokenCiphertext !== prepared.cursor.nextTokenCiphertext) throw new SyncFenceLost();
+    let inserted = 0, updated = 0, skipped = 0;
+    for (const row of page.orders) {
+      const key = { ...scope, amazonSellerId: auth.amazonSellerId, marketplaceId: source.marketplaceId, amazonOrderId: row.amazonOrderId };
+      const existing = await tx.amazonOrderRecord.findUnique({ where: { organizationId_workspaceId_amazonSellerId_marketplaceId_amazonOrderId: key } });
+      if (existing && existing.sourceUpdatedAt.getTime() === row.sourceUpdatedAt.getTime() && (existing.rawStatus !== row.rawStatus || existing.createdTime.getTime() !== row.createdTime.getTime())) throw new SyncInputError("同一订单版本出现冲突数据，已保留游标并阻止提交。");
+      if (existing && existing.sourceId !== source.id) throw new SyncInputError("订单事实不属于当前数据源，禁止跨绑定覆盖。");
+      const skip = existing && (existing.sourceUpdatedAt > row.sourceUpdatedAt || (existing.sourceUpdatedAt.getTime() === row.sourceUpdatedAt.getTime() && existing.rawStatus === row.rawStatus && existing.normalizedStatus === row.normalizedStatus));
+      const data = { ...scope, sourceId: source.id, sourceRunId: run.id, sellerAccountId: source.sellerAccountId, amazonSellerId: auth.amazonSellerId, marketplaceTimeZone: policy.marketplaceTimeZone, ...row, capturedAt };
+      if (skip) skipped++;
+      else {
+        await tx.amazonOrderRecord.upsert({ where: { organizationId_workspaceId_amazonSellerId_marketplaceId_amazonOrderId: key }, create: { id: digest(key), ...data }, update: data });
+        if (existing) updated++; else inserted++;
+      }
+      if (policy.details && (!existing || existing.sourceUpdatedAt <= row.sourceUpdatedAt) && !(existing?.detailsUpdatedAt && existing.detailsUpdatedAt >= row.sourceUpdatedAt && existing.detailPolicyDigest === detailPolicyDigest)) {
+        const workKey = { sourceId: source.id, amazonOrderId: row.amazonOrderId, listedUpdatedAt: row.sourceUpdatedAt, policyDigest: detailPolicyDigest! };
+        await tx.amazonOrderDetailWork.upsert({ where: { sourceId_amazonOrderId_listedUpdatedAt_policyDigest: workKey }, create: { id: digest(workKey), ...scope, ...workKey, orderRecordId: existing?.id ?? digest(key), watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to) }, update: {} });
+      }
+    }
+    const workWhere = { ...scope, sourceId: source.id, watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), policyDigest: detailPolicyDigest ?? "" };
+    if (policy.details && await tx.amazonOrderDetailWork.count({ where: workWhere }) > policy.details.maxOrders) throw new SyncInputError("订单详情超过本窗口批准的订单预算，未提交当前页。");
+    await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: pageNumber, resource: "orders", requestMetadata: { apiVersion: "2026-01-01", operation: "searchOrders", method: "GET", path: "/orders/2026-01-01/orders", marketplaceId: source.marketplaceId, window, pageTokenHash: tokenHash, requestId: events.findLast(e => e.operation === "searchOrders")?.requestId ?? null }, rawCiphertext, bodySha256: createHash("sha256").update(response.rawBody).digest("hex"), capturedAt } });
+    await tx.amazonSyncPage.create({ data: { ...scope, taskId: run.id, page: pageNumber, tokenHash, rowCount: page.orders.length } });
+    const pending = policy.details ? await tx.amazonOrderDetailWork.count({ where: { ...workWhere, status: "PENDING" } }) : 0;
+    const complete = !page.nextToken && !pending;
+    await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { listComplete: !page.nextToken, nextTokenCiphertext: encryptCheckpoint(page.nextToken, scope, prepared.cursor.id), status: complete ? "SUCCEEDED" : "RUNNING", ...(complete ? { lastSuccessAt: capturedAt } : {}) } });
+    const coverage = { type: "incremental_window", apiVersion: "2026-01-01", window, complete, listComplete: !page.nextToken, detailsEnabled: !!policy.details, detailsComplete: !!policy.details && complete, pendingDetails: pending, piiCollected: null, factsContainPii: false, rawMayContainPii: true, rowCount: await tx.amazonOrderRecord.count({ where: { ...scope, sourceId: source.id } }) };
+    if (complete) await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: capturedAt, rowCount: coverage.rowCount, coverage } });
+    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: complete ? "SUCCEEDED" : "WAITING", stage: complete ? "COMPLETED" : pending ? "FETCHING_DETAILS" : "FETCHING", pagesCompleted: { increment: 1 }, processedCount: { increment: page.orders.length }, insertedCount: { increment: inserted }, updatedCount: { increment: updated }, skippedCount: { increment: skipped }, paginationComplete: !page.nextToken, checkpointCiphertext: encryptCheckpoint(page.nextToken, scope, run.id), summary: { coverage }, finishedAt: complete ? capturedAt : null, nextAttemptAt: capturedAt, leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
+    await log(tx, run, complete ? "ORDER_WINDOW_COMPLETED" : "ORDER_PAGE_COMMITTED");
+  });
+}
+
+/** Orders v2026-01-01 getOrder: exactly one durable work item per slice.
+ * https://developer-docs.amazon.com/sp-api/reference/getorder-3
+ * https://developer-docs.amazon.com/sp-api/docs/access-orders-pii
+ * LWA/approved roles, no RDT. PII is never placed in logs or query projections.
+ */
+async function executeOrderDetailSlice(run: AmazonSyncRun, source: Awaited<ReturnType<typeof assertLiveSource>>, policy: OrderSyncPolicy, window: OrderWindow, cursor: AmazonSyncResourceCursor, work: AmazonOrderDetailWork | null, client: AmazonSpApiClient, events: AmazonRequestEvent[], now: () => Date) {
+  const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
+  const details = policy.details!;
+  const bucketKey = orderBucketKey(source.authorization.amazonSellerId, policy.applicationId, "getOrder");
+  let response: Awaited<ReturnType<AmazonSpApiClient["getOrder"]>> | null = null;
+  if (work) {
+    const reservation = await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run);
+      const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy);
+      if (await stopForControl(tx, run)) return null;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
+      const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
+      const result = reserveOrderToken(bucket, details, now());
+      await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: result.tokens, replenishedAt: result.replenishedAt }, update: { tokens: result.tokens, replenishedAt: result.replenishedAt } });
+      return result;
+    });
+    if (!reservation) return;
+    if (!reservation.allowed) { await yieldSlice(run, reservation.nextAt); return; }
+    events.length = 0;
+    try {
+      await assertActor(run);
+      await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy); });
+      response = await client.getOrder({ orderId: work.amazonOrderId, includedData: details.includedData });
+    } catch (error) {
+      await persistOrderRequests(run, events, bucketKey, details.requestsPerSecond, now(), error); throw error;
+    }
+    await persistOrderRequests(run, events, bucketKey, details.requestsPerSecond, now());
+  }
+  const parsed = response && work ? parseOrderDetail(response.body, work.amazonOrderId, source.marketplaceId, policy, work.listedUpdatedAt) : null;
+  const capturedAt = now(), policyDigest = digest(details);
+  await assertActor(run);
+  await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy);
+    if (await stopForControl(tx, run)) return;
+    const currentCursor = await tx.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: source.id } });
+    if (currentCursor.activeRunId !== run.id || currentCursor.detailPolicyDigest !== policyDigest || currentCursor.watermarkFrom.toISOString() !== window.from || currentCursor.watermarkTo.toISOString() !== window.to || currentCursor.nextTokenCiphertext !== cursor.nextTokenCiphertext) throw new SyncFenceLost();
+    if (work && parsed && response) {
+      const currentWork = await tx.amazonOrderDetailWork.findFirstOrThrow({ where: { ...scope, id: work.id, sourceId: source.id, policyDigest, status: "PENDING" } });
+      const current = await tx.amazonOrderRecord.findFirstOrThrow({ where: { ...scope, id: currentWork.orderRecordId, sourceId: source.id, amazonSellerId: source.authorization.amazonSellerId, marketplaceId: source.marketplaceId, amazonOrderId: work.amazonOrderId } });
+      const detailHash = digest(response.body);
+      if (current.sourceUpdatedAt > parsed.sourceUpdatedAt || current.createdTime.getTime() !== parsed.createdTime.getTime()) throw new SyncInputError("订单详情版本落后或创建时间冲突，未覆盖现有事实。");
+      if (current.detailsUpdatedAt?.getTime() === parsed.sourceUpdatedAt.getTime() && current.detailPolicyDigest === policyDigest && current.detailHash !== detailHash) throw new SyncInputError("同一订单详情版本出现冲突，未覆盖已提交详情。");
+      await tx.amazonOrderRecord.update({ where: { id: current.id }, data: { sourceRunId: run.id, sourceUpdatedAt: parsed.sourceUpdatedAt, rawStatus: parsed.rawStatus, normalizedStatus: parsed.normalizedStatus, capturedAt, detailsUpdatedAt: parsed.sourceUpdatedAt, detailPolicyDigest: policyDigest, detailHash,
+        detailCiphertext: seal({ rawBody: response.rawBody }, scope, current.id, "amazon-order-detail.v1"), grandTotalOriginal: parsed.grandTotal?.original ?? null, grandTotalAmount: parsed.grandTotal ? new Prisma.Decimal(parsed.grandTotal.original) : null, currencyCode: parsed.grandTotal?.currency ?? null } });
+      await tx.amazonOrderItemRecord.deleteMany({ where: { ...scope, sourceId: source.id, orderRecordId: current.id } });
+      if (parsed.items.length) await tx.amazonOrderItemRecord.createMany({ data: parsed.items.map(item => ({ ...scope, sourceId: source.id, orderRecordId: current.id, orderItemId: item.orderItemId, asin: item.asin, sellerSku: item.sellerSku, quantityOrdered: item.quantityOrdered, proceedsOriginal: item.proceeds?.original ?? null, proceedsAmount: item.proceeds ? new Prisma.Decimal(item.proceeds.original) : null, currencyCode: item.proceeds?.currency ?? null })) });
+      // Positive list pages occupy 1..maxPages. Detail archive ordinals occupy
+      // maxPages+1 onward; operation metadata distinguishes them from list pages.
+      const archiveOrdinal = maxPages + run.detailsCompletedCount + 1;
+      await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: archiveOrdinal, resource: "orders", requestMetadata: { apiVersion: "2026-01-01", operation: "getOrder", method: "GET", path: `/orders/2026-01-01/orders/${encodeURIComponent(work.amazonOrderId)}`, marketplaceId: source.marketplaceId, includedData: details.includedData, purpose: details.purpose, window, rawMayContainPii: true, requestId: events.findLast(e => e.operation === "getOrder")?.requestId ?? null }, rawCiphertext: seal({ rawBody: response.rawBody }, scope, `${run.id}:${archiveOrdinal}`, "amazon-orders-raw.v1"), bodySha256: createHash("sha256").update(response.rawBody).digest("hex"), capturedAt } });
+      await tx.amazonOrderDetailWork.update({ where: { id: work.id }, data: { status: "SUCCEEDED", completedAt: capturedAt } });
+    }
+    const pendingDetails = await tx.amazonOrderDetailWork.count({ where: { ...scope, sourceId: source.id, watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), policyDigest, status: "PENDING" } });
+    const complete = currentCursor.listComplete && pendingDetails === 0;
+    const coverage = { type: "incremental_window", apiVersion: "2026-01-01", window, complete, listComplete: currentCursor.listComplete, detailsEnabled: true, detailsComplete: complete, pendingDetails, piiCollected: null, factsContainPii: false, rawMayContainPii: true, rowCount: await tx.amazonOrderRecord.count({ where: { ...scope, sourceId: source.id } }) };
+    await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { status: complete ? "SUCCEEDED" : "RUNNING", ...(complete ? { lastSuccessAt: capturedAt } : {}) } });
+    if (complete) await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: capturedAt, rowCount: coverage.rowCount, coverage } });
+    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: complete ? "SUCCEEDED" : "WAITING", stage: complete ? "COMPLETED" : pendingDetails ? "FETCHING_DETAILS" : "FETCHING", ...(work ? { detailsCompletedCount: { increment: 1 } } : {}), paginationComplete: currentCursor.listComplete, summary: { coverage }, finishedAt: complete ? capturedAt : null, nextAttemptAt: capturedAt, leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
+    await log(tx, run, complete ? "ORDER_WINDOW_COMPLETED" : "ORDER_DETAIL_COMMITTED");
+  });
+}
+
+async function persistOrderRequests(run: AmazonSyncRun, events: AmazonRequestEvent[], bucketKey: string, configuredRate: number, now: Date, error?: unknown) {
+  await prisma.$transaction(async tx => {
+    await scopeLock(tx, run); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (events.length) await tx.amazonSyncTaskLog.createMany({ data: events.map(e => ({ organizationId: run.organizationId, workspaceId: run.workspaceId, id: randomUUID(), taskId: run.id, attempt: run.attempts, event: e.operation, stage: "REQUEST", requestId: e.requestId, statusCode: e.status, rateLimit: e.rateLimit })) });
+    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { apiRequests: { increment: events.length }, throttles: { increment: events.filter(e => e.status === 429).length }, leaseExpiresAt: new Date(now.getTime() + leaseMs) } });
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
+    const event = events.findLast(e => ["searchOrders", "getOrder", "listTransactions", "createReport", "getReport", "getReportDocument"].includes(e.operation) && e.rateLimit);
+    const observed = event?.rateLimit ? Number(event.rateLimit) : null;
+    const data = { ...(observed && observed > 0 && Number.isFinite(observed) ? { observedLimit: Math.min(observed, configuredRate) } : {}), ...(error instanceof AmazonSpApiError && error.status === 429 ? { tokens: 0, blockedUntil: new Date(now.getTime() + retryDelay(run.attempts, error.retryAfterMs)) } : {}) };
+    await tx.amazonSyncTokenBucket.update({ where: { bucketKey }, data });
+  });
+}
+
 export function assertConsistentSnapshotRows(rows: object[], resource: string) {
   const seen = new Map<string, string>();
   const fields = resource === "inventory" ? ["sellerSku", "condition", "asin", "fnSku", "fulfillableQuantity", "inboundWorkingQuantity", "inboundShippedQuantity", "inboundReceivingQuantity", "reservedQuantity", "unfulfillableQuantity", "researchingQuantity", "sourceUpdatedAt"] : ["sellerSku", "asin", "listingStatus", "fulfillmentType", "sourceUpdatedAt"];
@@ -359,4 +575,248 @@ export function assertConsistentSnapshotRows(rows: object[], resource: string) {
     if (seen.has(key) && seen.get(key) !== signature) throw new Error("重复业务键包含冲突数据；不能发布完整快照。");
     seen.set(key, signature);
   }
+}
+
+/** Finances v2024-06-19 listTransactions. One bounded page per slice; the
+ * original number lexemes are encrypted and committed with the business cursor.
+ * https://developer-docs.amazon.com/sp-api/reference/listtransactions
+ */
+export async function executeFinanceSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[], now: () => Date = () => new Date()) {
+  const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
+  await assertActor(run);
+  const source = await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); return assertLiveSource(tx, run); });
+  const policy = parseFinancePolicy(source.financePolicy), auth = source.authorization;
+  const window = financeWindowFromFrozen((run.frozenScope as { financeWindow?: unknown }).financeWindow);
+  if (Date.parse(window.to) > now().getTime() - 120000) throw new SyncInputError("财务窗口须早于请求至少两分钟。");
+  const policyDigest = digest(policy);
+  const bucketKey = digest(["listTransactions.2024-06-19", auth.amazonSellerId, policy.applicationId]);
+  const prepared = await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) return null;
+    let cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+    if (cursor && (cursor.resource !== "finance" || cursor.amazonSellerId !== auth.amazonSellerId || cursor.marketplaceId !== source.marketplaceId || cursor.organizationId !== scope.organizationId || cursor.workspaceId !== scope.workspaceId)) throw new SyncInputError("财务游标身份不匹配。", 403);
+    if (cursor && cursor.status !== "SUCCEEDED" && (cursor.watermarkFrom.toISOString() !== window.from || cursor.watermarkTo.toISOString() !== window.to || cursor.detailPolicyDigest !== policyDigest)) throw new SyncInputError("财务窗口或策略与未完成游标不匹配。", 409);
+    if (cursor?.status === "SUCCEEDED" && Date.parse(window.to) <= cursor.watermarkTo.getTime()) throw new SyncInputError("财务窗口已完成，请重新申请后续窗口。", 409);
+    const starting = !cursor || cursor.status === "SUCCEEDED";
+    cursor = await tx.amazonSyncResourceCursor.upsert({ where: { sourceId: source.id }, create: { ...scope, id: randomUUID(), sourceId: source.id, resource: "finance", amazonSellerId: auth.amazonSellerId, marketplaceId: source.marketplaceId, watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), activeRunId: run.id, status: "RUNNING", detailPolicyDigest: policyDigest }, update: { activeRunId: run.id, status: "RUNNING", ...(starting ? { watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), nextTokenCiphertext: null, detailPolicyDigest: policyDigest } : {}) } });
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
+    const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
+    const reservation = reserveOrderToken(bucket, policy, now());
+    await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: reservation.tokens, replenishedAt: reservation.replenishedAt }, update: { tokens: reservation.tokens, replenishedAt: reservation.replenishedAt } });
+    return { cursor, reservation };
+  });
+  if (!prepared) return;
+  if (!prepared.reservation.allowed) { await yieldSlice(run, prepared.reservation.nextAt); return; }
+  const token = decryptCheckpoint(prepared.cursor.nextTokenCiphertext, scope, prepared.cursor.id);
+  const tokenHash = digest([window, policyDigest, token ?? null]);
+  if (await prisma.amazonSyncPage.findFirst({ where: { ...scope, tokenHash, task: { sourceId: source.id } } })) throw new SyncInputError("财务分页循环，未推进游标。");
+  events.length = 0;
+  let response: Awaited<ReturnType<AmazonSpApiClient["listTransactions"]>>;
+  try {
+    await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run); });
+    response = await client.listTransactions({ postedAfter: window.from, postedBefore: window.to, nextToken: token });
+  } catch (error) { await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, now(), error); throw error; }
+  await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, now());
+  const page = parseFinancePage(response.rawBody, window);
+  if (run.pagesCompleted >= maxPages || run.processedCount + page.transactions.length > maxRows) throw new SyncInputError("财务窗口超过安全容量，保留游标并停止。");
+  if (page.nextToken && digest([window, policyDigest, page.nextToken]) === tokenHash) throw new SyncInputError("财务分页循环，未推进游标。");
+  // Validate every row before committing anything, including an out-of-scope site.
+  const rows = page.transactions.map(row => {
+    const attribution = attributeFinanceTransaction(row, auth.amazonSellerId, policy);
+    return { row, attribution, converted: attribution.reason ? null : convertFinanceMoney(row.amount, row.postedAt, policy) };
+  });
+  const capturedAt = now(), pageNumber = run.pagesCompleted + 1;
+  await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) return;
+    const cursor = await tx.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: source.id } });
+    if (cursor.activeRunId !== run.id || cursor.captureSequence !== prepared.cursor.captureSequence || cursor.nextTokenCiphertext !== prepared.cursor.nextTokenCiphertext) throw new SyncFenceLost();
+    const observationSequence = cursor.captureSequence + 1;
+    let inserted = 0, updated = 0, skipped = 0;
+    for (const { row, attribution, converted } of rows) {
+      const key = { ...scope, amazonSellerId: auth.amazonSellerId, transactionId: row.transactionId };
+      const existing = await tx.amazonFinanceRecord.findUnique({ where: { organizationId_workspaceId_amazonSellerId_transactionId: key } });
+      if (existing && (existing.sourceId !== source.id || existing.observationSequence >= observationSequence)) throw new SyncInputError("财务采集顺序或来源冲突，禁止旧观察覆盖新事实。");
+      const rowHash = digest({ ...row, postedAt: row.postedAt.toISOString(), attribution, converted });
+      if (existing?.rowHash === rowHash) { skipped++; continue; }
+      const id = existing?.id ?? digest(key), quarantined = !!attribution.reason;
+      const data = { ...key, sourceId: source.id, sourceRunId: run.id, sellerAccountId: source.sellerAccountId,
+        marketplaceId: attribution.marketplaceId, marketplaceTimeZone: attribution.marketplaceTimeZone, attributionStatus: quarantined ? "QUARANTINED" : "ATTRIBUTED", quarantineReason: attribution.reason,
+        postedAt: row.postedAt, transactionType: quarantined ? null : row.transactionType, rawStatus: quarantined ? null : row.rawStatus,
+        orderId: quarantined ? null : row.orderId, classification: quarantined ? "UNATTRIBUTED" : row.classification,
+        originalAmount: quarantined ? null : row.amount.original, amount: quarantined ? null : row.amount.original, currency: quarantined ? null : row.amount.currency,
+        convertedAmount: converted?.amount ?? null, convertedCurrency: converted?.currency ?? null, conversionStatus: converted?.status ?? "QUARANTINED",
+        fxEvidence: converted?.evidence ? converted.evidence as Prisma.InputJsonValue : Prisma.DbNull,
+        observationSequence, rowHash, capturedAt };
+      await tx.amazonFinanceRecord.upsert({ where: { organizationId_workspaceId_amazonSellerId_transactionId: key }, create: { id, ...data }, update: data });
+      if (quarantined) await tx.amazonFinanceQuarantine.upsert({ where: { recordId: id }, create: { ...scope, recordId: id, ciphertext: seal({ ...row, postedAt: row.postedAt.toISOString() }, scope, id, "amazon-finance-quarantine.v1"), createdAt: capturedAt }, update: { ciphertext: seal({ ...row, postedAt: row.postedAt.toISOString() }, scope, id, "amazon-finance-quarantine.v1"), createdAt: capturedAt } });
+      else await tx.amazonFinanceQuarantine.deleteMany({ where: { ...scope, recordId: id } });
+      if (existing) updated++; else inserted++;
+    }
+    await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: pageNumber, resource: "finance", requestMetadata: { apiVersion: "2024-06-19", operation: "listTransactions", method: "GET", path: "/finances/2024-06-19/transactions", sellerWide: true, approvedMarketplaceIds: policy.marketplaces.map(m => m.marketplaceId), window, pageTokenHash: tokenHash, requestId: events.findLast(e => e.operation === "listTransactions")?.requestId ?? null }, rawCiphertext: seal({ rawBody: response.rawBody }, scope, `${run.id}:${pageNumber}`, "amazon-finance-raw.v1"), bodySha256: createHash("sha256").update(response.rawBody).digest("hex"), capturedAt } });
+    await tx.amazonSyncPage.create({ data: { ...scope, taskId: run.id, page: pageNumber, tokenHash, rowCount: rows.length } });
+    const complete = !page.nextToken;
+    await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { captureSequence: observationSequence, nextTokenCiphertext: encryptCheckpoint(page.nextToken, scope, cursor.id), status: complete ? "SUCCEEDED" : "RUNNING", ...(complete ? { lastSuccessAt: capturedAt } : {}) } });
+    const where = { ...scope, sourceId: source.id };
+    const rowCount = await tx.amazonFinanceRecord.count({ where });
+    const quarantinedCount = await tx.amazonFinanceRecord.count({ where: { ...where, attributionStatus: "QUARANTINED" } });
+    const unconvertedCount = await tx.amazonFinanceRecord.count({ where: { ...where, conversionStatus: "UNCONVERTED" } });
+    const coverage = { type: "posted_incremental_window", apiVersion: "2024-06-19", window, sellerWide: true, marketplaceIds: policy.marketplaces.map(m => m.marketplaceId), transportComplete: complete, financialFinal: false, overlapSeconds: policy.overlapSeconds, rowCount, quarantinedCount, unconvertedCount };
+    if (complete) await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: capturedAt, rowCount, coverage } });
+    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: complete ? "SUCCEEDED" : "WAITING", stage: complete ? "COMPLETED" : "FETCHING", pagesCompleted: { increment: 1 }, processedCount: { increment: rows.length }, insertedCount: { increment: inserted }, updatedCount: { increment: updated }, skippedCount: { increment: skipped }, paginationComplete: complete, checkpointCiphertext: encryptCheckpoint(page.nextToken, scope, run.id), summary: { coverage }, finishedAt: complete ? capturedAt : null, nextAttemptAt: capturedAt, leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
+    await log(tx, run, complete ? "FINANCE_WINDOW_COMPLETED" : "FINANCE_PAGE_COMMITTED");
+  }, { timeout: 60000 });
+}
+
+/** Reports v2021-06-30 FBA Returns: one HTTP operation or one bounded DB batch.
+ * https://developer-docs.amazon.com/sp-api/reference/createreport
+ * https://developer-docs.amazon.com/sp-api/reference/getreport
+ * https://developer-docs.amazon.com/sp-api/reference/getreportdocument
+ * https://developer-docs.amazon.com/sp-api/docs/retrieve-a-report
+ * This registered report is not restricted; arbitrary report types are rejected.
+ */
+export async function executeReturnSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[], now: () => Date = () => new Date()) {
+  const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
+  const source = await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); return assertLiveSource(tx, run); });
+  const policy = parseReturnPolicy(source.returnsPolicy), auth = source.authorization;
+  const window = returnWindowFromFrozen((run.frozenScope as { returnWindow?: unknown }).returnWindow), policyDigest = digest(policy);
+  const cursor = await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    const old = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+    if (old && (old.resource !== "returns" || old.amazonSellerId !== auth.amazonSellerId || old.marketplaceId !== source.marketplaceId || old.organizationId !== scope.organizationId || old.workspaceId !== scope.workspaceId)) throw new SyncInputError("退货游标身份不匹配。", 403);
+    const starting = !old || old.status === "SUCCEEDED";
+    if (old && !starting && (old.watermarkFrom.toISOString() !== window.from || old.watermarkTo.toISOString() !== window.to || old.detailPolicyDigest !== policyDigest)) throw new SyncInputError("退货窗口或策略与未完成游标不符。", 409);
+    if (old?.status === "SUCCEEDED" && Date.parse(window.to) <= old.watermarkTo.getTime()) throw new SyncInputError("该退货窗口已完成。", 409);
+    return tx.amazonSyncResourceCursor.upsert({ where: { sourceId: source.id }, create: { ...scope, id: randomUUID(), sourceId: source.id, resource: "returns", amazonSellerId: auth.amazonSellerId, marketplaceId: source.marketplaceId, watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), status: "RUNNING", activeRunId: run.id, detailPolicyDigest: policyDigest }, update: { activeRunId: run.id, status: "RUNNING", ...(starting ? { watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), reportStateCiphertext: null, detailPolicyDigest: policyDigest } : {}) } });
+  });
+  const state = parseReturnState(decryptCheckpoint(cursor.reportStateCiphertext, scope, cursor.id));
+  const commit = async (stage: string, mutate?: (tx: Prisma.TransactionClient) => Promise<void>, complete = false, nextAt = now()) => {
+    await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+      if (await stopForControl(tx, run)) return;
+      const live = await tx.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: source.id } });
+      if (live.activeRunId !== run.id || live.reportStateCiphertext !== cursor.reportStateCiphertext) throw new SyncFenceLost();
+      if (mutate) await mutate(tx);
+      const ciphertext = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+      await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: ciphertext, status: complete ? "SUCCEEDED" : "RUNNING", ...(complete ? { lastSuccessAt: now() } : {}) } });
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { stage, status: complete ? "SUCCEEDED" : "WAITING", paginationComplete: complete, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: nextAt, finishedAt: complete ? now() : null, dispatchVersion: { increment: 1 } } });
+      await log(tx, run, stage);
+    }, { timeout: 60000 });
+  };
+  if (state.archiveTaskId) {
+    const archive = await prisma.amazonSyncRawPage.findFirst({ where: { ...scope, taskId: state.archiveTaskId, page: 1, resource: "returns", task: { sourceId: source.id } } });
+    if (!archive || !state.reportId) throw new SyncInputError("退货密文报告证据缺失。");
+    const envelope = unseal(archive.rawCiphertext, scope, `${state.archiveTaskId}:1`, "amazon-returns-raw.v1") as { rawText: string };
+    if (createHash("sha256").update(envelope.rawText).digest("hex") !== archive.bodySha256) throw new SyncInputError("退货报告原件校验失败。");
+    const parsed = parseReturnReport(envelope.rawText, window, policy, state.offset);
+    state.offset = parsed.nextOffset;
+    await commit(parsed.complete ? "RETURN_REPORT_COMPLETED" : "RETURN_BATCH_COMMITTED", async tx => {
+      let inserted = 0;
+      for (const { reasonCode, ...row } of parsed.rows) {
+        let reasonId: string | null = null;
+        if (reasonCode) {
+          reasonId = digest([scope, reasonCode]);
+          await tx.amazonReturnReason.upsert({ where: { organizationId_workspaceId_code: { ...scope, code: reasonCode } }, create: { ...scope, id: reasonId, code: reasonCode }, update: {} });
+        }
+        const key = { ...scope, amazonSellerId: auth.amazonSellerId, marketplaceId: source.marketplaceId, reportId: state.reportId!, rowHash: row.rowHash };
+        const result = await tx.amazonReturnRecord.createMany({ data: [{ id: digest(key), ...key, ...row, reasonId, sourceId: source.id, sourceRunId: run.id, sellerAccountId: source.sellerAccountId, marketplaceTimeZone: policy.marketplaceTimeZone, capturedAt: now() }], skipDuplicates: true });
+        inserted += result.count;
+      }
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { pagesCompleted: { increment: 1 }, processedCount: { increment: parsed.rows.length }, insertedCount: { increment: inserted }, skippedCount: { increment: parsed.rows.length - inserted } } });
+      if (parsed.complete) {
+        const rowCount = await tx.amazonReturnRecord.count({ where: { ...scope, sourceId: source.id, reportId: state.reportId } });
+        const coverage = { type: "fba_received_returns_report", apiVersion: "2021-06-30", reportType: policy.reportType, reportId: state.reportId!, window, complete: true, returnsUniverseComplete: false, rowCount, rawRows: parsed.total, duplicateRows: parsed.total - rowCount, archiveTaskId: state.archiveTaskId!, reasonMapping: "RAW_CODE_ONLY" };
+        await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: now(), rowCount, coverage } });
+        await tx.amazonSyncRun.update({ where: { id: run.id }, data: { summary: { coverage } } });
+      }
+    }, parsed.complete);
+    return;
+  }
+  if (state.creating && !state.reportId) throw new SyncInputError("退货报告申请结果不确定，禁止自动重复创建；需人工核查。");
+  if (state.requestedAt && (state.polls >= policy.pollMaxAttempts || now().getTime() - Date.parse(state.requestedAt) > policy.pollDeadlineMinutes * 60000)) throw new SyncInputError("退货报告等待达到上限，保留报告与游标，需人工核查。");
+  const operation = !state.reportId ? "createReport" : !state.documentId ? "getReport" : "getReportDocument";
+  const budget = policy.budgets[operation], bucketKey = digest([`${operation}.2021-06-30`, auth.amazonSellerId, policy.applicationId]);
+  // Respect the existing Reports budget too, so new returns traffic cannot ignore
+  // a recently observed throttle from the pre-existing sales-report flow.
+  const oldBudget = await prisma.amazonSyncApiBudget.findUnique({ where: { organizationId_workspaceId_authorizationId_operation: { ...scope, authorizationId: auth.id, operation } } });
+  if (oldBudget && oldBudget.nextRequestAt > now()) { await yieldSlice(run, oldBudget.nextRequestAt); return; }
+  const reservation = await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
+    const old = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
+    const r = reserveOrderToken(old, budget, now());
+    await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: r.tokens, replenishedAt: r.replenishedAt }, update: { tokens: r.tokens, replenishedAt: r.replenishedAt } }); return r;
+  });
+  if (!reservation.allowed) { await yieldSlice(run, reservation.nextAt); return; }
+  const record = async (error?: unknown) => {
+    await persistOrderRequests(run, events, bucketKey, budget.requestsPerSecond, now(), error);
+    const key = { ...scope, authorizationId: auth.id, operation };
+    const nextRequestAt = new Date(now().getTime() + Math.ceil(1000 / budget.requestsPerSecond));
+    await prisma.amazonSyncApiBudget.upsert({ where: { organizationId_workspaceId_authorizationId_operation: key }, create: { ...key, nextRequestAt }, update: { nextRequestAt } });
+    events.length = 0;
+  };
+  const wait = () => new Date(now().getTime() + returnPollDelay(policy, state.polls));
+  if (!state.reportId) {
+    state.creating = true; state.requestedAt = now().toISOString();
+    // Save uncertain-create intent while retaining the current fenced lease.
+    await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+      const text = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+      await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: text } }); cursor.reportStateCiphertext = text;
+    });
+    events.length = 0;
+    try {
+      await prisma.$transaction(tx => assertLiveSource(tx, run));
+      const response = await client.createReport({ reportType: policy.reportType, marketplaceId: source.marketplaceId, ...window }) as { reportId?: unknown };
+      await record();
+      if (typeof response.reportId !== "string" || !response.reportId || response.reportId.length > 200) throw new SyncInputError("退货报告 ID 无效，保留不确定创建状态。");
+      state.reportId = response.reportId; state.creating = false;
+      await commit("RETURN_REPORT_POLLING", undefined, false, wait());
+    } catch (error) {
+      if (events.length) await record(error);
+      if (error instanceof AmazonSpApiError && error.status !== null && error.status >= 400 && error.status < 500 && error.status !== 408) {
+        state.creating = false;
+        await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: encryptCheckpoint(JSON.stringify(state), scope, cursor.id) } }); });
+        throw error;
+      }
+      throw new SyncInputError("退货报告创建结果不确定，禁止自动重放，请人工核查。");
+    }
+    return;
+  }
+  state.polls++;
+  events.length = 0;
+  let response: unknown;
+  try {
+    await prisma.$transaction(tx => assertLiveSource(tx, run));
+    response = state.documentId ? await client.getReportDocument(state.documentId) : await client.getReport(state.reportId);
+    await record();
+  } catch (error) {
+    await record(error);
+    if (error instanceof AmazonSpApiError && error.status === 404) { await commit("RETURN_RESOURCE_PENDING", undefined, false, wait()); return; }
+    // Persist attempt count without releasing the lease used by error handling.
+    await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: encryptCheckpoint(JSON.stringify(state), scope, cursor.id) } }); });
+    throw error;
+  }
+  if (!state.documentId) {
+    const r = response as { reportId?: string; reportType?: string; marketplaceIds?: string[]; dataStartTime?: string; dataEndTime?: string; processingStatus?: string; reportDocumentId?: string };
+    if (r.reportId !== state.reportId || r.reportType !== policy.reportType || !Array.isArray(r.marketplaceIds) || r.marketplaceIds.length !== 1 || r.marketplaceIds[0] !== source.marketplaceId || Date.parse(r.dataStartTime ?? "") !== Date.parse(window.from) || Date.parse(r.dataEndTime ?? "") !== Date.parse(window.to)) throw new SyncInputError("退货报告身份、站点或时间窗与审批不一致。");
+    if (r.processingStatus === "IN_QUEUE" || r.processingStatus === "IN_PROGRESS") { await commit("RETURN_REPORT_POLLING", undefined, false, wait()); return; }
+    if (r.processingStatus !== "DONE" || !r.reportDocumentId || r.reportDocumentId.length > 200) throw new SyncInputError("退货报告失败、取消或文档身份缺失，未推断为空报告。");
+    state.documentId = r.reportDocumentId; await commit("RETURN_REPORT_DOWNLOADING"); return;
+  }
+  if ((response as { reportDocumentId?: unknown })?.reportDocumentId !== state.documentId) throw new SyncInputError("退货文档身份不匹配。");
+  events.length = 0;
+  let text: string;
+  try { await prisma.$transaction(tx => assertLiveSource(tx, run)); text = await client.downloadReportText(response); }
+  catch (error) {
+    await record(error);
+    if (error instanceof AmazonSpApiError && [403, 404].includes(error.status ?? 0)) { await commit("RETURN_URL_REFRESH", undefined, false, wait()); return; }
+    throw error;
+  }
+  await record();
+  parseReturnReport(text, window, policy); // validate entire bounded file before staging any facts
+  state.archiveTaskId = run.id; state.offset = 0;
+  await commit("RETURN_REPORT_PARSING", async tx => {
+    await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: 1, resource: "returns", requestMetadata: { apiVersion: "2021-06-30", operation: "getReportDocument", reportId: state.reportId!, documentId: state.documentId!, reportType: policy.reportType, marketplaceId: source.marketplaceId, window, rawMayContainPii: true }, rawCiphertext: seal({ rawText: text }, scope, `${run.id}:1`, "amazon-returns-raw.v1"), bodySha256: createHash("sha256").update(text).digest("hex"), capturedAt: now() } });
+  });
 }

@@ -1,6 +1,9 @@
+import { readReturns } from "@/lib/amazon-sync/returns-query";
+import { readFinance } from "@/lib/amazon-sync/finance-query";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
-import { amazonDataAccess, sellerAccessWhere, assertAmazonScopeAdmin } from "@/lib/amazon-sync/data-access";
+import { amazonDataAccess, sourceAccessWhere, assertAmazonScopeAdmin } from "@/lib/amazon-sync/data-access";
 import { readSalesTraffic } from "@/lib/amazon-sync/sales-query";
+import { readOrders } from "@/lib/amazon-sync/orders-query";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
@@ -30,13 +33,16 @@ export async function GET(request: Request) {
     if (!process.env.DATABASE_URL) return json({ error: "数据库未配置。" }, 503);
     const actor = permission.user.id;
     await auditAmazonDataRead(scope, actor, "sync-center", permission.user.role);
-    const dataAccess = await amazonDataAccess(scope, actor), sellerWhere = sellerAccessWhere(dataAccess);
+    const dataAccess = await amazonDataAccess(scope, actor), sellerWhere = sourceAccessWhere(dataAccess);
     const allowedSources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...sellerWhere }, select: { id: true } });
     const sourceIds = allowedSources.map(s => s.id);
     const p = new URL(request.url).searchParams, section = p.get("section") ?? "overview";
     const permissions = await getOrganizationRolePermissions(scope.organizationId);
     const access = { canExport: roleCanPerformAction(permission.user.role, "operations", "export", permissions), canApprove: roleCanPerformAction(permission.user.role, "operations", "approve", permissions), canEdit: roleCanPerformAction(permission.user.role, "operations", "edit", permissions), canCreate: roleCanPerformAction(permission.user.role, "operations", "create", permissions), canConfigure: dataAccess.allSellers && roleCanPerformAction(permission.user.role, "settings", "edit", permissions) };
     if (section === "sales-traffic") return json({ ...await readSalesTraffic(scope, p, { actor }), access });
+    if (section === "returns") return json({ ...await readReturns(scope, p, actor), access });
+    if (section === "finance") return json({ ...await readFinance(scope, p, actor), access });
+    if (section === "orders") return json({ ...await readOrders(scope, p, actor), access });
     if (section === "approvals") return json({ requests: await prisma.amazonDataCenterChangeRequest.findMany({ where: { ...scope, ...(dataAccess.allSellers ? {} : { requestedByUserId: actor, sourceIds: { hasSome: sourceIds } }) }, select: approvalSelect, orderBy: { createdAt: "desc" }, take: 200 }).then(rows => rows.filter(row => dataAccess.allSellers || row.sourceIds.every(id => sourceIds.includes(id)))), access });
     if (section === "overview") return json({ ...await readOverview(scope, p, actor), access, domains: syncDomains });
     if (section === "sources") return json({ sources: await listSources(scope, { ...(p.get("sellerAccountId") ? { sellerAccountId: p.get("sellerAccountId")!.slice(0, 200) } : {}), ...(p.get("marketplaceId") ? { marketplaceId: p.get("marketplaceId")!.slice(0, 200) } : {}), ...(p.get("resource") ? { resource: p.get("resource")!.slice(0, 200) } : {}) }, actor), access, domains: syncDomains });

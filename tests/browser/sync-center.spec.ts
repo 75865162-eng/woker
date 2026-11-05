@@ -15,7 +15,7 @@ const sources: SyncSourceView[] = ["a", "b"].map((v, i) => ({ id: `source-${v}`,
 async function setup(page: Page, readOnly = false, entry = false) {
   const businessCalls: string[] = [];
   const calls: Array<{ section: string; params: URLSearchParams; body?: Record<string, unknown> }> = [];
-  const state = { grants: [] as Array<{ id: string; userId: string; sellerAccountId: string; enabled: boolean; revision: number }>, salesSources: [] as SyncSourceView[], exportStatus: "QUEUED", plans: [] as SyncPlanView[], approvalStatus: "REQUESTED", denied: false, succeeded: false, invalidAuth: false, workerOnline: false, delayed: false, release: () => {} };
+  const state = { grants: [] as Array<{ id: string; userId: string; sellerAccountId: string; enabled: boolean; revision: number }>, salesSources: [] as SyncSourceView[], exportStatus: "QUEUED", plans: [] as SyncPlanView[], approvalStatus: "REQUESTED", approvalOperation: "save-authorization", disabledAuth: false, denied: false, succeeded: false, invalidAuth: false, workerOnline: false, delayed: false, release: () => {} };
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url()); expect(url.origin).toBe("http://127.0.0.1:43224");
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
@@ -57,14 +57,15 @@ async function setup(page: Page, readOnly = false, entry = false) {
     const visible = sources.filter(s => (!url.searchParams.get("sellerAccountId") || s.sellerAccountId === url.searchParams.get("sellerAccountId")) && (!url.searchParams.get("marketplaceId") || s.marketplaceId === url.searchParams.get("marketplaceId")));
     const common = { access, sources: visible };
     if (section === "overview") return route.fulfill({ json: { ...common, metrics: { connectedStores: visible.length, enabledDomains: 1, running: 0, issues: 1, expired: 0, lastSuccessAt: "2026-11-04T01:00:00Z" }, trend: [], legacyActive: 0 } });
-    if (section === "approvals") return route.fulfill({ json: { ...common, requests: [{ id: "approval-1", targetEnvironment: "local", changeType: "CredentialChange", operation: "save-authorization", targetId: "auth-a", beforeSummary: { credentials: "已配置" }, afterSummary: { refreshToken: "将替换／新增" }, sellerIds: ["SELLER-a"], marketplaceIds: ["US"], domains: ["inventory"], sourceIds: [], baseRevision: 1, changeDigest: "fixture-digest", requestedByUserId: "requester", approvedByUserId: state.approvalStatus === "APPROVED" ? "approver" : null, status: state.approvalStatus, expiresAt: "2026-11-04T02:00:00Z", appliedAt: null, createdAt: "2026-11-04T01:00:00Z" }] } });
+    if (section === "approvals") return route.fulfill({ json: { ...common, requests: [{ id: "approval-1", targetEnvironment: "local", changeType: "CredentialChange", operation: state.approvalOperation, targetId: "auth-a", beforeSummary: { credentials: "已配置" }, afterSummary: { refreshToken: "将替换／新增" }, sellerIds: ["SELLER-a"], marketplaceIds: ["US"], domains: ["inventory"], sourceIds: [], baseRevision: 1, changeDigest: "fixture-digest", requestedByUserId: "requester", approvedByUserId: state.approvalStatus === "APPROVED" ? "approver" : null, status: state.approvalStatus, expiresAt: "2026-11-04T02:00:00Z", appliedAt: null, createdAt: "2026-11-04T01:00:00Z" }] } });
     if (section === "sources") return route.fulfill({ json: { ...common, sources: state.salesSources.length ? state.salesSources : sources } });
+    if (section === "orders") return route.fulfill({ json: { access, rows: [], sources: [], pagination: { total: 0, pageCount: 0 } } });
     if (section === "plans") return route.fulfill({ json: { ...common, sources, plans: state.plans } });
     if (section === "tasks") return route.fulfill({ json: { ...common, rows: [{ ...task, scope: { sellerAccountId: "store-a", marketplaceId: "US", seller: sources[0].seller } }], pagination: { total: 31, page: Number(url.searchParams.get("page")), pageSize: 30, pageCount: 2 } } });
     if (section === "task") return route.fulfill({ json: { ...common, task: state.succeeded ? { ...task, status: "SUCCEEDED", stage: "COMPLETED", error: null } : task, source: sources[0], logs: [{ id: "log", attempt: 1, event: "FAILED", stage: "FETCHING", page: 2, code: "THROTTLE", statusCode: 429, rateLimit: "1", requestId: "fixture-request", createdAt: "2026-11-04T01:00:05Z" }], nextAfter: null } });
     if (section === "snapshots") return route.fulfill({ json: { snapshot: { taskId: task.id, sourceId: "source-a", sellerAccountId: "store-a", amazonSellerId: "SELLER-a", marketplaceId: "US", resource: "inventory", publishedAt: task.finishedAt, isCurrent: true }, snapshotRows: [{ sellerSku: "FIXTURE-SNAPSHOT-SKU", asin: "B-FIXTURE", condition: "NewItem", fulfillableQuantity: 5, reservedQuantity: 1, capturedAt: task.finishedAt, sourceUpdatedAt: null, dataVersion: 1 }], pagination: { page: Number(url.searchParams.get("page")), pageSize: 50, total: 51, pageCount: 2 } } });
     if (section === "sales-traffic") return route.fulfill({ json: { ...common, rows: [{ id: "sale-row", businessDate: "2026-11-01", sellerName: "报告店铺", amazonSellerId: "REAL_TRANSPORT_FIXTURE", marketplaceId: "ATVPDKIKX0DER", metrics: { unitsOrdered: 2, totalOrderItems: 1, sessions: 10, pageViews: 15, orderedProductSales: { amount: 20, currencyCode: "USD" } }, quality: "VALID", reportId: "report-fixture", documentId: "doc-fixture", syncRunId: "sale-task", capturedAt: "2026-11-04T01:00:00Z", publishedAt: "2026-11-04T01:01:00Z" }], pagination: { total: 60, pageCount: 2 }, asOf: "2026-11-04T02:00:00.000Z" } });
-    if (section === "connections") return route.fulfill({ json: { ...common, sources, grants: state.grants, grantMembers: [{ userId: "member-a", user: { name: "运营成员" } }], authorizations: [{ id: "auth-a", name: "授权 a", amazonSellerId: "SELLER-a", awsRegion: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", revision: 1, status: state.invalidAuth ? "ERROR" : "CONFIGURED", lastValidatedAt: null, validationErrorCode: state.invalidAuth ? "AUTH_REJECTED" : null, validationAttemptedAt: "2026-11-04T01:00:00Z", marketplaceParticipations: [{ marketplaceId: "US", countryCode: "US", name: "US" }] }], sellers: [{ id: "store-a", displayName: "店铺 A", accountKey: "a" }] } });
+    if (section === "connections") return route.fulfill({ json: { ...common, sources, grants: state.grants, grantMembers: [{ userId: "member-a", user: { name: "运营成员" } }], authorizations: [{ id: "auth-a", name: "授权 a", amazonSellerId: "SELLER-a", awsRegion: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", revision: 1, status: state.disabledAuth ? "DISABLED" : state.invalidAuth ? "ERROR" : "CONFIGURED", lastValidatedAt: null, validationErrorCode: state.invalidAuth ? "AUTH_REJECTED" : null, validationAttemptedAt: "2026-11-04T01:00:00Z", marketplaceParticipations: [{ marketplaceId: "US", countryCode: "US", name: "US" }] }], sellers: [{ id: "store-a", displayName: "店铺 A", accountKey: "a" }] } });
     if (section === "settings") return route.fulfill({ json: { ...common, heartbeats: state.workerOnline ? [{ workerName: "fixture-worker", concurrency: 1, online: true, lastSeenAt: "2026-11-04T01:00:00Z" }] : [], queueConfigured: true } });
     throw new Error(`unexpected section ${section}`);
   });
@@ -73,10 +74,10 @@ async function setup(page: Page, readOnly = false, entry = false) {
 }
 test("sync views and merged business navigation remain reachable with real styles and explicit planned domains", async ({ page }) => {
   await setup(page);
-  for (const label of ["同步计划", "同步任务", "数据域管理", "数据质量", "店铺与授权", "同步设置", "数据总览"]) { await page.getByRole("button", { name: label, exact: true }).click(); await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible(); }
+  for (const label of ["订单列表", "同步计划", "同步任务", "数据域管理", "数据质量", "店铺与授权", "同步设置", "数据总览"]) { await page.getByRole("button", { name: label, exact: true }).click(); await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible(); }
   await expect(page.getByRole("navigation", { name: "业务数据导航" }).getByRole("button", { name: "补货计划", exact: true })).toBeVisible();
   await expect(page.getByText("原有业务入口 · 保留", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "数据域管理", exact: true }).click(); await page.getByRole("button", { name: "订单 规划中", exact: true }).click(); await expect(page.getByText("尚未接入；实施前核验官方版本、角色和店铺资格。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "数据域管理", exact: true }).click(); await page.getByRole("button", { name: "订单 已接入", exact: true }).click(); await expect(page.getByText("Orders 2026-01-01 / searchOrders（P1 有界列表）", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 test("plan creation, custom frequency, pause, copy and history use persisted contracts", async ({ page }) => {
@@ -90,13 +91,50 @@ test("plan creation, custom frequency, pause, copy and history use persisted con
 test("server filters/pagination and failure retry never claim success before worker publication", async ({ page }) => {
   const { calls } = await setup(page); await page.getByRole("button", { name: "同步任务", exact: true }).click(); await page.getByLabel("任务状态", { exact: true }).selectOption("FAILED");
   await page.getByRole("button", { name: "下一页", exact: true }).click(); await expect.poll(() => calls.some(c => c.section === "tasks" && c.params.get("status") === "FAILED" && c.params.get("page") === "2")).toBe(true);
-  await page.getByRole("button", { name: "详情", exact: true }).click(); await expect(page.getByText("THROTTLE", { exact: false })).toBeVisible(); await page.getByRole("button", { name: "重试完整快照", exact: true }).click(); await expect(page.getByRole("status")).toContainText("尚未应用配置或启动任务");
+  await page.getByRole("button", { name: "详情", exact: true }).click(); await expect(page.getByText("THROTTLE", { exact: false })).toBeVisible(); await page.getByRole("button", { name: "重试完整快照", exact: true }).click(); await expect(page.getByRole("status").filter({ hasText: "审批请求已创建" })).toContainText("尚未应用配置或启动任务");
   expect(calls.find(c => c.body?.action === "control-task")?.body).toMatchObject({ control: "retry", id: "fixture-task" });
 });
 test("read-only access disables writes and permission failure clears stale task content", async ({ page }) => {
   const { state } = await setup(page, true); await page.getByRole("button", { name: "同步计划", exact: true }).click(); await expect(page.getByRole("button", { name: "新建计划", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "店铺与授权", exact: true }).click(); await expect(page.getByRole("button", { name: "新增授权", exact: true })).toBeDisabled();
   state.denied = true; await page.getByRole("button", { name: "刷新", exact: true }).click(); await expect(page.getByRole("alert")).toContainText("禁止读取"); await expect(page.getByRole("heading", { name: "授权 a", exact: true })).toHaveCount(0);
+});
+
+test("authorization configuration remains discoverable after a read failure and recovers on refresh", async ({ page }) => {
+  const { calls } = await setup(page);
+  let unavailable = true;
+  await page.route("**/api/operations/sync-center?*", route => unavailable
+    ? route.fulfill({ status: 500, json: { error: "同步中心请求失败。" } })
+    : route.fallback());
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("同步中心请求失败");
+  await expect(page.getByRole("heading", { name: "Amazon SP-API 配置", exact: true })).toBeVisible();
+  await expect(page.getByText(/配置数据及权限尚未读取成功/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "新增授权", exact: true })).toBeDisabled();
+  await expect(page.getByText(/读取配置列表不调用 Amazon API/)).toBeVisible();
+  expect(calls.some(c => c.body)).toBe(false);
+  unavailable = false;
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await page.getByRole("button", { name: "新增授权", exact: true }).click();
+  await expect(page.getByLabel("lwaClientId", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("lwaClientSecret", { exact: true })).toHaveAttribute("type", "password");
+  await expect(page.getByLabel("refreshToken", { exact: true })).toHaveAttribute("type", "password");
+  expect(calls.some(c => c.body)).toBe(false);
+});
+
+test("entry probe failure explains configuration prerequisites and can retry", async ({ page }) => {
+  await setup(page);
+  let unavailable = true;
+  await page.route("**/api/operations/sync-center?*", route => unavailable
+    ? route.fulfill({ status: 500, json: { error: "同步中心请求失败。" } })
+    : route.fallback());
+  await page.goto("http://127.0.0.1:43224/?entry=1&view=connections");
+  await expect(page.getByRole("heading", { name: "Amazon SP-API 配置", exact: true })).toBeVisible();
+  await expect(page.getByText(/AMAZON_SP_API_ENCRYPTION_KEY/)).toBeVisible();
+  await expect(page.getByLabel("refreshToken", { exact: true })).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole("button", { name: "重新读取", exact: true }).click();
+  await expect(page.getByRole("button", { name: "新增授权", exact: true })).toBeEnabled();
 });
 
 
@@ -126,6 +164,8 @@ test("successful task opens seller-bound snapshot pages and failed authorization
   state.invalidAuth = true;
   await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("AUTH_REJECTED");
+  await expect(page.getByRole("alert")).toContainText("亚马逊返回：");
+  await expect(page.getByRole("alert")).toContainText("排查建议");
   await page.getByRole("button", { name: "更新授权／凭证", exact: true }).click();
   await expect(page.getByLabel("refreshToken（留空保留）")).toHaveAttribute("type", "password");
 });
@@ -174,9 +214,9 @@ test("plan domain navigation selects real defaults, blocks planned domains and p
   await page.getByRole("button", { name: "新建计划", exact: true }).click();
   await expect(page.getByLabel("数据域", { exact: true })).toHaveValue("catalog");
   await expect(page.getByLabel("周期分钟（15–10080）", { exact: true })).toHaveValue("1440");
-  await picker.getByRole("button", { name: "订单 规划中", exact: true }).click();
+  await picker.getByRole("button", { name: "订单 已接入", exact: true }).click();
   await expect(page.getByRole("button", { name: "新建计划", exact: true })).toBeDisabled();
-  await expect(page.getByRole("heading", { name: "规划中", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "订单仅支持逐次执行审批", exact: true })).toBeVisible();
   await expect(page.getByLabel("计划名称", { exact: true })).toHaveCount(0);
   await picker.getByRole("button", { name: "FBA 库存 已接入", exact: true }).click();
   await page.getByRole("button", { name: "新建计划", exact: true }).click();
@@ -265,6 +305,7 @@ test("new page URLs restore navigation and disabled center never falls back to t
 test("approval page lists only masked summaries and separates approval from application", async ({ page }) => {
   const { calls } = await setup(page);
   await page.getByRole("button", { name: "变更审批", exact: true }).click();
+  await expect(page.getByText(/具备审批权限的组织所有者／数据库管理员可批准自己的申请/)).toBeVisible();
   await expect(page.getByTestId("amazon-change-request")).toContainText("local");
   await expect(page.getByTestId("amazon-change-request")).toContainText("已配置");
   await expect(page.getByText("fixture-secret", { exact: false })).toHaveCount(0);
@@ -331,4 +372,174 @@ test("scope grants and revocations submit explicit revisions for approval", asyn
   await expect(page.getByRole("button", { name: "申请保存授权", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "申请撤销范围", exact: true }).click();
   await expect.poll(() => calls.find(c => c.body?.action === "save-access-grant" && c.body.enabled === false)?.body).toMatchObject({ userId: "member-a", sellerAccountId: "store-a", revision: 3, enabled: false });
+});
+
+
+test("authorization save shows pending and inline failure, preserves input, and focuses approval success", async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 900, height: 550 });
+  let attempts = 0;
+  let finish: () => void = () => {};
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  await page.route("**/api/operations/sync-center", async route => {
+    const body = route.request().postDataJSON();
+    expect(body.action).toBe("save-authorization");
+    expect(body.amazonSellerId).toBe("");
+    attempts++;
+    if (attempts === 1) {
+      await pending;
+      return route.fulfill({ status: 400, json: { error: "模拟授权配置校验失败，请检查服务端配置。" } });
+    }
+    return route.fulfill({ status: 202, json: { approvalRequired: true } });
+  });
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByRole("button", { name: "新增授权", exact: true }).click();
+  await page.getByLabel("授权名称", { exact: true }).fill("模拟授权");
+  await expect(page.getByLabel("Amazon Seller ID（业务同步时填写真实编号）")).toBeHidden();
+  for (const field of ["lwaClientId", "lwaClientSecret", "refreshToken"]) await page.getByLabel(field, { exact: true }).fill(`mock-${field}`);
+  await page.getByRole("button", { name: "保存授权", exact: true }).click();
+  await expect(page.getByRole("button", { name: "正在提交…", exact: true })).toBeDisabled();
+  await expect(page.getByRole("status").filter({ hasText: "正在提交授权审批请求" })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "关闭", exact: true })).toBeDisabled();
+  expect(attempts).toBe(1);
+  finish();
+  const error = page.getByRole("alert").filter({ hasText: "模拟授权配置校验失败" });
+  await expect(error).toBeInViewport();
+  await expect(page.getByLabel("refreshToken", { exact: true })).toHaveValue("mock-refreshToken");
+  await expect(page.getByRole("button", { name: "保存授权", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "保存授权", exact: true }).click();
+  const success = page.getByRole("status").filter({ hasText: "审批请求已创建" });
+  await expect(success).toContainText("尚未应用配置或启动任务");
+  await expect(success).toBeFocused();
+  await expect(success).toBeInViewport();
+  await expect(page.getByLabel("refreshToken", { exact: true })).toHaveCount(0);
+  expect(attempts).toBe(2);
+});
+
+test("authorization update shows network failure beside save and closing never submits", async ({ page }) => {
+  await setup(page);
+  let attempts = 0;
+  await page.route("**/api/operations/sync-center", route => { attempts++; return route.abort("failed"); });
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByRole("button", { name: "更新授权／凭证", exact: true }).click();
+  await page.getByRole("button", { name: "保存授权", exact: true }).click();
+  const form = page.locator("form").filter({ has: page.getByRole("button", { name: "保存授权", exact: true }) });
+  await expect(form.getByRole("alert")).toBeVisible();
+  await expect(form.getByRole("button", { name: "保存授权", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("授权名称", { exact: true })).toHaveValue("授权 a");
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(page.getByLabel("授权名称", { exact: true })).toHaveCount(0);
+  expect(attempts).toBe(1);
+});
+
+
+for (const kind of ["validate", "disable"] as const) test(`${kind} authorization shows local submission feedback and opens approvals without applying`, async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.setViewportSize({ width: 900, height: 550 });
+  let finish: () => void = () => {};
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  let submissions = 0;
+  await page.route("**/api/operations/sync-center", async route => {
+    expect(route.request().postDataJSON()).toEqual({ action: `${kind}-authorization`, id: "auth-a", ...(kind === "disable" ? { revision: 1 } : {}) });
+    submissions++;
+    await pending;
+    return route.fulfill({ status: 202, json: { approvalRequired: true } });
+  });
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByRole("button", { name: kind === "validate" ? "验证参与站点" : "停用授权", exact: true }).click();
+  const feedback = page.getByTestId(`authorization-${kind === "validate" ? "validation" : "disable"}-auth-a`);
+  await expect(page.getByRole("button", { name: kind === "validate" ? "正在提交验证申请…" : "正在提交停用申请…", exact: true })).toBeDisabled();
+  await expect(feedback.getByRole("status")).toBeInViewport();
+  expect(submissions).toBe(1);
+  finish();
+  await expect(feedback.getByRole("status")).toContainText(kind === "validate" ? "尚未请求 Amazon" : "授权尚未停用");
+  await expect(feedback.getByRole("status")).toBeInViewport();
+  await expect(page.getByText(/尚未成功验证/)).toBeVisible();
+  await feedback.getByRole("button", { name: "前往变更审批", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "变更审批", exact: true })).toBeVisible();
+  expect(calls.some(c => c.body?.decision)).toBe(false);
+  expect(submissions).toBe(1);
+});
+
+for (const kind of ["validate", "disable"] as const) test(`${kind} authorization request failure is visible at the clicked authorization and can retry`, async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 900, height: 550 });
+  let submissions = 0;
+  await page.route("**/api/operations/sync-center", route => {
+    submissions++;
+    return submissions === 1
+      ? route.fulfill({ status: 403, json: { error: "模拟验证申请被拒绝。" } })
+      : route.fulfill({ status: 202, json: { approvalRequired: true } });
+  });
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByRole("button", { name: kind === "validate" ? "验证参与站点" : "停用授权", exact: true }).click();
+  const feedback = page.getByTestId(`authorization-${kind === "validate" ? "validation" : "disable"}-auth-a`);
+  await expect(feedback.getByRole("alert")).toContainText("模拟验证申请被拒绝");
+  await expect(feedback.getByRole("alert")).toBeInViewport();
+  await expect(feedback.getByRole("button", { name: "前往变更审批", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: kind === "validate" ? "验证参与站点" : "停用授权", exact: true }).click();
+  await expect(feedback.getByRole("status")).toContainText(kind === "validate" ? "验证申请已创建" : "停用申请已创建");
+  await expect(feedback.getByRole("alert")).toHaveCount(0);
+  expect(submissions).toBe(2);
+});
+
+
+test("failed validation application refreshes terminal state, retains error and links to authorization result", async ({ page }) => {
+  const { state, calls } = await setup(page);
+  state.approvalStatus = "APPROVED";
+  await page.route("**/api/operations/sync-center?*", async route => {
+    if (new URL(route.request().url()).searchParams.get("section") !== "approvals") return route.fallback();
+    return route.fulfill({ json: { access: { canApprove: true, canConfigure: true }, requests: [{ id: "validation-fixture", targetEnvironment: "local", changeType: "SyncExecutionRequest", operation: "validate-authorization", targetId: "auth-a", sellerIds: [], marketplaceIds: [], domains: [], sourceIds: [], baseRevision: 1, changeDigest: "fixture", status: state.approvalStatus, expiresAt: "2099-01-01T00:00:00Z", beforeSummary: {}, afterSummary: {} }] } });
+  });
+  let applications = 0;
+  await page.route("**/api/operations/sync-center/approvals", route => {
+    applications++;
+    state.approvalStatus = "FAILED"; state.invalidAuth = true;
+    return route.fulfill({ status: 409, json: { error: "Amazon 授权验证失败；错误信息已脱敏记录。" } });
+  });
+  await page.getByRole("button", { name: "变更审批", exact: true }).click();
+  await page.getByRole("button", { name: "应用已批准变更", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Amazon 授权验证失败" })).toBeVisible();
+  await expect(page.getByTestId("amazon-change-request")).toContainText("不能重复应用");
+  await expect(page.getByRole("button", { name: "应用已批准变更", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "查看授权验证结果", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("AUTH_REJECTED");
+  await expect(page.getByRole("alert")).toContainText("亚马逊返回：");
+  await expect(page.getByRole("alert")).toContainText("排查建议");
+  expect(applications).toBe(1);
+  expect(calls.some(c => c.body?.action === "validate-authorization")).toBe(false);
+});
+
+
+test("authorization disable stays pending until explicit approval and application then disables all authorization actions", async ({ page }) => {
+  const { state } = await setup(page);
+  state.approvalOperation = "disable-authorization";
+  let submissions = 0, applications = 0;
+  await page.route("**/api/operations/sync-center", route => {
+    expect(route.request().postDataJSON()).toEqual({ action: "disable-authorization", id: "auth-a", revision: 1 });
+    submissions++;
+    return route.fulfill({ status: 202, json: { approvalRequired: true } });
+  });
+  await page.route("**/api/operations/sync-center/approvals", route => {
+    if (route.request().postDataJSON().decision !== "APPLY") return route.fallback();
+    applications++; state.disabledAuth = true; state.approvalStatus = "APPLIED";
+    return route.fulfill({ json: { applied: true } });
+  });
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByRole("button", { name: "停用授权", exact: true }).click();
+  const feedback = page.getByTestId("authorization-disable-auth-a");
+  await expect(feedback.getByRole("status")).toContainText("授权尚未停用");
+  await expect(page.getByRole("button", { name: "停用授权", exact: true })).toBeEnabled();
+  expect(applications).toBe(0);
+  await feedback.getByRole("button", { name: "前往变更审批", exact: true }).click();
+  await page.getByRole("button", { name: "批准", exact: true }).click();
+  expect(applications).toBe(0);
+  await page.getByRole("button", { name: "应用已批准变更", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "已应用本次批准变更" })).toBeVisible();
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await expect(page.getByText("已停用", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "停用授权", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "更新授权／凭证", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "验证参与站点", exact: true })).toBeDisabled();
+  expect(submissions).toBe(1); expect(applications).toBe(1);
 });

@@ -18,6 +18,7 @@ const scope = { organizationId: `sync-fixture-${randomUUID()}`, workspaceId: "sy
 const actor = randomUUID(), approver = randomUUID(), store = randomUUID(), storeB = randomUUID();
 const originalFetch = globalThis.fetch;
 let transport: (url: URL) => Response | Promise<Response> = () => Response.json({ payload: { inventorySummaries: [] } });
+let catalogTransport: (url: URL) => Response | Promise<Response> = () => Response.json({ items: [] });
 let sourceId = "", secondSource = "", authId = "";
 const fixtureInventory = (sku: string) => ({ lastUpdatedTime: "2026-11-01T00:00:00Z", sellerSku: sku, condition: "NewItem", asin: "ASIN", inventoryDetails: { fulfillableQuantity: 3, inboundWorkingQuantity: 0, inboundShippedQuantity: 1, inboundReceivingQuantity: 0, reservedQuantity: { totalReservedQuantity: 0 }, unfulfillableQuantity: { totalUnfulfillableQuantity: 0 }, researchingQuantity: { totalResearchingQuantity: 0 } } });
 async function approved(target: SyncScope, user: string, command: Record<string, unknown>) {
@@ -49,6 +50,7 @@ before(async () => {
     assert.ok(["api.amazon.com", "sellingpartnerapi-na.amazon.com"].includes(url.hostname), "Only mocked official endpoints are allowed");
     if (url.hostname === "api.amazon.com") return Response.json({ access_token: "fixture-token", expires_in: 3600 });
     if (url.pathname.includes("marketplaceParticipations")) return Response.json({ payload: [{ marketplace: { id: "ATVPDKIKX0DER", countryCode: "US" }, participation: { isParticipating: true } }, { marketplace: { id: "A2EUQ1WTGCTBG2", countryCode: "CA" }, participation: { isParticipating: true } }] });
+    if (url.pathname.startsWith("/listings/2021-08-01/items/")) return catalogTransport(url);
     return transport(url);
   };
   const a = await saveAuthorization(scope, actor, { name: "Fixture Auth", amazonSellerId: "FIXTURE_SELLER", region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh" });
@@ -145,13 +147,13 @@ test("approval cannot be replayed or bypassed and task ownership is checked", as
 
 test("listing adapter rejects malformed pagination and publishes only a validated catalog", async () => {
   const source = await saveSource(scope, actor, { authorizationId: authId, sellerAccountId: store, marketplaceId: "ATVPDKIKX0DER", resource: "catalog", enabled: true });
-  transport = () => Response.json({ items: [], pagination: { nextToken: 123 } });
+  catalogTransport = () => Response.json({ items: [], pagination: { nextToken: 123 } });
   const broken = await request(source.id); assert.equal((await runTask(broken.id)).status, "FAILED");
-  transport = () => Response.json({ numberOfResults: 25, items: [{ sku: "TRUNCATED-SKU" }] });
+  catalogTransport = () => Response.json({ numberOfResults: 25, items: [{ sku: "TRUNCATED-SKU" }] });
   const truncated = await request(source.id); assert.equal((await runTask(truncated.id)).status, "FAILED");
   assert.equal((await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: source.id } })).activeRunId, null);
   const good = await request(source.id);
-  transport = () => Response.json({ items: [{ sku: "LISTING-SKU", summaries: [{ marketplaceId: "ATVPDKIKX0DER", asin: "LISTING-ASIN", status: ["BUYABLE"] }] }] });
+  catalogTransport = () => Response.json({ items: [{ sku: "LISTING-SKU", summaries: [{ marketplaceId: "ATVPDKIKX0DER", asin: "LISTING-ASIN", status: ["BUYABLE"] }] }] });
   assert.equal((await runTask(good.id)).status, "SUCCEEDED");
   const rows = await prisma.amazonCatalogSnapshot.findMany({ where: { sourceRunId: good.id } }); assert.equal(rows.length, 1); assert.equal(rows[0].sourceUpdatedAt, null); assert.equal(rows[0].dataVersion, 1);
 });

@@ -1,4 +1,4 @@
-import { amazonDataAccess, sellerAccessWhere } from "./data-access";
+import { amazonDataAccess, sourceAccessWhere } from "./data-access";
 import { snapshotRowFilters } from "./snapshot-query";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -6,7 +6,7 @@ import { implementedDomain, requiredText, SyncInputError, type SyncScope } from 
 
 /** Only completed, tenant-bound snapshots are readable; staging never becomes a public result. */
 export async function readTaskSnapshot(scope: SyncScope, params: URLSearchParams, actor?: string) {
-  const allowed = sellerAccessWhere(await amazonDataAccess(scope, actor));
+  const allowed = sourceAccessWhere(await amazonDataAccess(scope, actor));
   const taskId = requiredText(params.get("id"), "任务 ID");
   const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = 50;
   return prisma.$transaction(async tx => {
@@ -19,6 +19,9 @@ export async function readTaskSnapshot(scope: SyncScope, params: URLSearchParams
     if (task.resource !== source.resource || !task.finishedAt) throw new SyncInputError("任务来源链不一致，快照暂不可浏览。", 409);
     const resource = implementedDomain(source.resource);
     if (resource === "sales_traffic") throw new SyncInputError("销售流量请使用业务日报查询入口。");
+    if (resource === "returns") throw new SyncInputError("退货请使用已发布报告查询入口。");
+    if (resource === "finance") throw new SyncInputError("财务为逐页提交的增量记录，请使用财务交易入口。");
+    if (resource === "orders") throw new SyncInputError("订单为逐页提交的增量记录，请使用订单列表查询入口。");
     const common = { ...snapshotRowFilters(params), ...scope, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId };
     const pagination = { skip: (page - 1) * pageSize, take: pageSize, orderBy: [{ sellerSku: "asc" as const }, { id: "asc" as const }] };
     const [total, snapshotRows] = resource === "inventory"
