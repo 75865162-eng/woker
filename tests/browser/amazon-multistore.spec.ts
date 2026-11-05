@@ -12,11 +12,14 @@ test("personal MCP credential lifecycle is reachable; plaintext clears on worksp
     if (url.pathname === "/api/operations/amazon-stores") return route.fulfill({ json: { stores: [] } });
     if (url.pathname === "/api/operations/amazon-mcp") {
       if (r.method() === "POST") { const body = r.postDataJSON(); commands.push(body); credential = { id: "credential", name: "我的 Amazon MCP", status: body.action === "disable" ? "DISABLED" : "ACTIVE", revision: commands.length, tokenPrefix: "amcp_fixture", expiresAt: "2026-12-01T00:00:00Z", lastUsedAt: null, tools: ["amazon.inventory.list"], scopes: [{ sellerAccountId: "seller-a", marketplaceIds: ["US"] }] }; return route.fulfill({ json: { credential, ...(body.action === "disable" ? {} : { token: `fixture-once-${commands.length}` }) } }); }
-      return route.fulfill({ json: { credentials: credential ? [credential] : [], scopes: [{ sellerAccountId: "seller-a", marketplaceId: "US", displayName: "店铺 A" }], tools: [["amazon.inventory.list", "查询库存"]] } });
+      return route.fulfill({ json: { credentials: credential ? [credential] : [], scopes: [{ sellerAccountId: "seller-a", marketplaceId: "US", displayName: "店铺 A" }], tools: [["amazon.inventory.list", "查询库存"]], tables: [{ name: "inventory", source: "AmazonInventorySnapshot", grain: ["sellerAccountId", "marketplaceId", "sellerSku"], schemaStatus: "application_schema_confirmed_source_sample_pending", available: true, sourceCount: 1, rowCount: 24, lastSyncAt: "2026-11-06T00:00:00Z", freshness: "ok", warnings: [] }] } });
     }
     return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
   });
   await page.goto("http://127.0.0.1:43225");
+  await expect(page.getByRole("heading", { name: "当前 ERP 数据可用性" })).toBeVisible();
+  await expect(page.getByText("1 个来源 / 24 行")).toBeVisible();
+  await expect(page.getByText("来源样本待核验 · 新鲜")).toBeVisible();
   await page.getByRole("checkbox", { name: "店铺 A / US" }).check(); await page.getByRole("checkbox", { name: "查询库存" }).check();
   await page.getByRole("button", { name: "创建个人凭证" }).click();
   await expect(page.getByLabel("新 MCP 密钥")).toHaveValue("fixture-once-1");

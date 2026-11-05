@@ -6,20 +6,24 @@ test.beforeAll(async () => {
   const [{ readFile }, { default: postcss }, { default: tailwind }] = await Promise.all([import("node:fs/promises"), import("postcss"), import("@tailwindcss/postcss")]);
   styles = (await postcss([tailwind()]).process(await readFile("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css + await readFile("src/components/amazon-ads/amazon-ads.css", "utf8");
 });
-async function setup(page: Page, mockAccounts = false) {
+async function setup(page: Page, mockAccounts = false, refreshTokenExpiresAt: string | null = "2027-11-05T08:00:00.000Z", syncedDataMode: "rows" | "empty" = "rows") {
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
   let boundSeller = "";
   await page.route("**/*", route => {
     const url = new URL(route.request().url());
     expect(url.origin).toBe("http://127.0.0.1:43239");
     if (url.pathname.startsWith("/api/")) {
+      if (url.pathname === "/api/integrations/amazon/ads/data") {
+        const rows = syncedDataMode === "empty" ? [] : url.searchParams.get("kind") === "reports" ? [{ id: "fact-1", profileId: "profile-db-1", reportType: "campaigns", adProduct: "SPONSORED_PRODUCTS", reportDate: "2026-11-05", campaignId: "amazon-campaign-1", adGroupId: null, targetingId: null, advertisedAsin: null, searchTerm: null, placement: null, impressions: "120", clicks: "8", spend: "12.34", orders: "2", sales: "45.67", units: "2", attributionWindow: "7d", apiVersion: "v3", rawDimensions: { campaignName: "Stored campaign" }, sourceTaskId: "task-report-1", syncedAt: "2026-11-06T01:02:00.000Z" }] : [{ id: "entity-1", profileId: "profile-db-1", entityType: "SP:campaign", externalId: "amazon-campaign-1", parentExternalId: null, state: "enabled", payload: { campaignName: "Stored campaign", dailyBudget: 25 }, sourceUpdatedAt: "2026-11-05T12:00:00.000Z", sourceTaskId: "task-entity-1", syncedAt: "2026-11-06T01:02:00.000Z" }];
+        return route.fulfill({ contentType: "application/json", body: JSON.stringify({ rows, page: Number(url.searchParams.get("page") ?? 1), pageSize: 100, ...(url.searchParams.get("kind") === "reports" ? { from: "2026-10-08", to: "2026-11-06" } : {}) }) });
+      }
       expect(mockAccounts).toBe(true);
       expect(url.pathname).toBe("/api/integrations/amazon/ads/profiles");
       if (route.request().method() === "POST") {
         boundSeller = String(route.request().postDataJSON().sellerAccountId ?? "");
         return route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
       }
-      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ oauthConfigured: false, sellers: [{ id: "seller-us", displayName: "Northstar US", marketplaceCode: "US" }], profiles: [{ id: "ads-profile-1", authorizationId: "ads-auth-1", region: "NA", profileId: "189000123456789", countryCode: "US", marketplaceId: "ATVPDKIKX0DER", currencyCode: "USD", timezone: "America/Los_Angeles", sellerAccountId: boundSeller || null, lastDiscoveredAt: "2026-11-05T08:00:00.000Z", accountInfo: { name: "Northstar Ads", type: "seller" }, authorization: { name: "Northstar Ads", status: "CONNECTED", lastValidatedAt: "2026-11-05T08:00:00.000Z" } }] }) });
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ oauthConfigured: false, sellers: [{ id: "seller-us", displayName: "Northstar US", marketplaceCode: "US" }], profiles: [{ id: "ads-profile-1", authorizationId: "ads-auth-1", region: "NA", profileId: "189000123456789", countryCode: "US", marketplaceId: "ATVPDKIKX0DER", currencyCode: "USD", timezone: "America/Los_Angeles", sellerAccountId: boundSeller || null, lastDiscoveredAt: "2026-11-05T08:00:00.000Z", accountInfo: { name: "Northstar Ads", type: "seller" }, authorization: { name: "Northstar Ads", status: "CONNECTED", lastValidatedAt: "2026-11-05T08:00:00.000Z", refreshTokenExpiresAt } }] }) });
     }
     if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
@@ -63,6 +67,39 @@ test("accounts page displays persisted Profiles and binds an ERP seller without 
   await expect(page.getByRole("button", { name: "连接 Amazon Ads", exact: true })).toBeDisabled();
   await page.getByLabel("189000123456789 ERP 店铺绑定").selectOption("seller-us");
   await expect(page.getByRole("status")).toContainText("店铺绑定已保存");
+  expect(errors).toEqual([]);
+});
+test("accounts page marks a missing refresh-token expiry date as unknown", async ({ page }) => {
+  const errors = await setup(page, true, null);
+  await page.locator(".ads-sidebar").getByRole("button", { name: "广告账户与授权", exact: true }).click();
+  await expect(page.locator(".ads-account-expiry.unknown")).toContainText("到期状态未知");
+  expect(errors).toEqual([]);
+});
+test("synced-data view reads persisted facts without falling back to demo fixtures", async ({ page }) => {
+  const errors = await setup(page);
+  await page.getByRole("button", { name: "已同步数据", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "已同步 Ads 数据" })).toBeVisible();
+  await expect(page.locator(".ads-synced-table")).toContainText("内部 Profile ID");
+  await expect(page.locator(".ads-synced-notice")).toContainText("不是 Amazon Profile ID");
+  await expect(page.locator(".ads-synced-table tbody")).toContainText("amazon-campaign-1");
+  await expect(page.locator(".ads-synced-table tbody")).toContainText("SP:campaign");
+  await expect(page.locator(".ads-metric-grid")).toHaveCount(0);
+  await page.getByRole("tab", { name: "日报事实" }).click();
+  const reportTypeRequest = page.waitForRequest(request => new URL(request.url()).searchParams.get("reportType") === "campaigns");
+  await page.getByLabel("报告类型筛选").fill("campaigns");
+  await reportTypeRequest;
+  await expect(page.locator(".ads-synced-table tbody")).toContainText("12.34");
+  await expect(page.locator(".ads-synced-table tbody")).toContainText("v3");
+  await page.getByRole("button", { name: "返回演示工作台" }).click();
+  await expect(page.locator(".ads-demo-banner")).toContainText("Mock Fixture 驱动");
+  expect(errors).toEqual([]);
+});
+test("synced-data empty state does not show fixture rows", async ({ page }) => {
+  const errors = await setup(page, false, "2027-11-05T08:00:00.000Z", "empty");
+  await page.getByRole("button", { name: "已同步数据", exact: true }).click();
+  await expect(page.locator(".ads-synced-empty")).toContainText("没有已保存的广告结构");
+  await expect(page.locator(".ads-synced-table")).toHaveCount(0);
+  await expect(page.getByText("Bamboo Kitchen Organizer", { exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 test("campaign detail, dates, KPI, group navigation, settings and creation", async ({ page }) => {
@@ -259,6 +296,7 @@ test("campaign history keeps list-wide and other-campaign events out of detail",
   await expect(page.locator(".ads-simple-table tbody tr")).toHaveCount(1);
   expect(errors).toEqual([]);
 });
+
 test("search term rows expose their actual trigger and omit irrelevant bid columns", async ({ page }) => {
   const errors = await setup(page);
   await page.locator(".ads-sidebar").getByRole("button", { name: "搜索词", exact: true }).click();

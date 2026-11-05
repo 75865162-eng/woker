@@ -7,6 +7,7 @@ import { WorkerHealthPanel } from "@/components/settings/worker-health-panel";
 import { WorkspaceScopePanel } from "@/components/settings/workspace-scope-panel";
 import { WeComNotificationSettingsPanel } from "@/components/settings/wecom-notification-settings";
 import { AmazonSpApiSettingsPanel } from "@/components/settings/amazon-sp-api-settings-panel";
+import { SkillErpSettingsPanel } from "@/components/settings/skill-erp-settings-panel";
 import { Suspense } from "react";
 
 export default function SettingsPage() {
@@ -17,6 +18,7 @@ export default function SettingsPage() {
         workspaceContent={<WorkspaceScopePanel />}
         notificationContent={<WeComNotificationSettingsPanel />}
         integrationsContent={<AmazonSpApiSettingsPanel />}
+        skillErpContent={<SkillErpSettingsPanel />}
         operationsContent={
           <div className="space-y-3">
             <Suspense fallback={<div className="h-16 animate-pulse rounded-md border border-border bg-white" />}>

@@ -1467,6 +1467,7 @@ model AmazonAdsProfile {
   syncTasks          AmazonAdsSyncTask[]
   entities           AmazonAdsEntityRecord[]
   reportFacts        AmazonAdsReportFact[]
+  reportVersions     AmazonAdsReportVersion[]
 
   @@unique([organizationId, workspaceId, authorizationId, region, profileId], map: "AmazonAdsProfile_auth_profile_key")
   @@unique([organizationId, workspaceId, id], map: "AmazonAdsProfile_scope_id_key")
@@ -1544,6 +1545,7 @@ model AmazonAdsSyncTask {
   updatedAt           DateTime @updatedAt
   entities            AmazonAdsEntityRecord[]
   reportFacts         AmazonAdsReportFact[]
+  reportVersions      AmazonAdsReportVersion[]
 
   @@unique([organizationId, workspaceId, idempotencyKey], map: "AmazonAdsSyncTask_idempotency_key")
   @@unique([organizationId, workspaceId, id], map: "AmazonAdsSyncTask_scope_id_key")
@@ -1572,12 +1574,36 @@ model AmazonAdsEntityRecord {
   @@index([organizationId, workspaceId, profileId, syncedAt], map: "AmazonAdsEntity_sync_idx")
 }
 
+model AmazonAdsReportVersion {
+  id                String   @id
+  organizationId    String
+  workspaceId       String   @default("default")
+  profileId         String
+  profile           AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  sourceTaskId      String
+  sourceTask        AmazonAdsSyncTask @relation(fields: [organizationId, workspaceId, sourceTaskId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  status            String   @default("STAGING")
+  requestedFrom     DateTime? @db.Date
+  requestedTo       DateTime? @db.Date
+  rowCount          Int      @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  facts             AmazonAdsReportFact[]
+
+  @@unique([organizationId, workspaceId, id], map: "AmazonAdsReportVersion_scope_id_key")
+  @@unique([organizationId, workspaceId, sourceTaskId], map: "AmazonAdsReportVersion_task_key")
+  @@index([organizationId, workspaceId, profileId, status, publishedAt], map: "AmazonAdsReportVersion_published_idx")
+}
+
 model AmazonAdsReportFact {
   id                  String   @id
   organizationId      String
   workspaceId         String   @default("default")
   profileId           String
   profile             AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  versionId           String?
+  version             AmazonAdsReportVersion? @relation(fields: [organizationId, workspaceId, versionId], references: [organizationId, workspaceId, id], onDelete: Restrict)
   reportType          String
   adProduct           String
   reportDate          DateTime @db.Date
@@ -1601,7 +1627,7 @@ model AmazonAdsReportFact {
   rawDimensions       Json
   syncedAt            DateTime @default(now())
 
-  @@unique([organizationId, workspaceId, profileId, reportType, adProduct, reportDate, factKey], map: "AmazonAdsReportFact_business_key")
+  @@unique([organizationId, workspaceId, versionId, reportType, adProduct, reportDate, factKey], map: "AmazonAdsReportFact_version_business_key")
   @@index([organizationId, workspaceId, profileId, reportDate], map: "AmazonAdsReportFact_profile_date_idx")
   @@index([organizationId, workspaceId, profileId, campaignId, reportDate], map: "AmazonAdsReportFact_campaign_date_idx")
 }

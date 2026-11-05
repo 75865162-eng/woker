@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp } from "@/lib/amazon-sync/mcp";
+import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp, listMcpSkillTableOptions } from "@/lib/amazon-sync/mcp";
 import { amazonDataAccess, assertSellerMarketplaceAccess } from "@/lib/amazon-sync/data-access";
 import { POST } from "@/app/api/mcp/amazon/route";
 import { requestChange, decideChange, applyChange } from "@/lib/amazon-sync/change-approval";
@@ -23,7 +23,8 @@ const actor = randomUUID(), peer = randomUUID(), owner = randomUUID(), sellerA =
 const site = "ATVPDKIKX0DER", ca = "A2EUQ1WTGCTBG2";
 let grantId = "", token = "", credentialId = "", runA = "";
 const originalFetch = globalThis.fetch;
-const tools = ["amazon.stores.list", "amazon.inventory.list", "amazon.inventory.summary", "amazon.catalog.list", "amazon.sales.list", "amazon.sync.status", "amazon.history.read", "amazon.sales.export"];
+const tools = ["amazon.stores.list", "amazon.inventory.list", "amazon.inventory.summary", "amazon.catalog.list", "amazon.sales.list", "amazon.sync.status", "amazon.history.read", "amazon.sales.export", "data_list_tables", "data_describe_table", "data_query", "data_sync_status", "data_sync_start"];
+const readTools = tools.filter(tool => tool !== "amazon.history.read" && tool !== "data_sync_start");
 async function call(tool: string, args = {}, bearer = token) { return invokeAmazonMcp(await authenticateAmazonMcp(`Bearer ${bearer}`), tool, args); }
 async function seed(sellerAccountId: string, qty: number) {
   const auth = randomUUID(), amazonSellerId = `SELLER${qty}FIXTURE`;
@@ -32,7 +33,7 @@ async function seed(sellerAccountId: string, qty: number) {
   let inventory = "";
   for (const resource of ["inventory", "catalog", "sales_traffic"]) {
     const sourceId = randomUUID(), runId = randomUUID();
-    await prisma.amazonSyncDataSource.create({ data: { ...scope, id: sourceId, authorizationId: auth, sellerAccountId, marketplaceId: site, resource, freshnessMinutes: 360, enabled: true } });
+    await prisma.amazonSyncDataSource.create({ data: { ...scope, id: sourceId, authorizationId: auth, sellerAccountId, marketplaceId: site, resource, freshnessMinutes: 360, enabled: true, rowCount: 1 } });
     await prisma.amazonSyncRun.create({ data: { ...scope, id: runId, sourceId, resource, mode: resource === "sales_traffic" ? "date_range" : "snapshot", requestedByUserId: owner, executionVersion: 2, status: "SUCCEEDED", finishedAt: new Date() } });
     await prisma.amazonSyncDataSource.update({ where: { id: sourceId }, data: { activeRunId: runId, lastSuccessAt: new Date() } });
     if (resource === "inventory") { inventory = runId; await prisma.amazonInventorySnapshot.create({ data: { ...scope, id: randomUUID(), sellerAccountId, marketplaceId: site, sellerSku: "SAME-SKU", fulfillableQuantity: qty, syncRunId: runId, capturedAt: new Date() } }); }
@@ -59,12 +60,55 @@ test("MCP personal hash only; metadata never includes plaintext", async () => {
   assert.notEqual(row.tokenHash, token); assert.equal(row.tokenHash.length, 64); assert.ok(!JSON.stringify(row).includes(token));
 });
 test("all real MCP read tools and identical SKUs stay inside seller A", async () => {
-  for (const tool of tools.filter(t => t !== "amazon.history.read")) { const result = await call(tool); assert.ok(!JSON.stringify(result).includes(sellerB), tool); }
+  for (const tool of readTools) {
+    const args = tool === "data_describe_table" || tool === "data_query" ? { table: "inventory" } : {};
+    const result = await call(tool, args); assert.ok(!JSON.stringify(result).includes(sellerB), tool);
+  }
   const rows = await call("amazon.inventory.list") as { rows: { sellerSku: string; fulfillableQuantity: number }[] };
   assert.equal(rows.rows.length, 1); assert.equal(rows.rows[0].sellerSku, "SAME-SKU"); assert.equal(rows.rows[0].fulfillableQuantity, 3);
 });
+test("generic Skill table catalog and queries expose only published authorized facts", async () => {
+  const catalog = await call("data_list_tables") as { data: { items: Array<{ name: string; schemaStatus: string }> }; meta: { isSandbox: boolean } };
+  assert.deepEqual(catalog.data.items.map(table => table.name).sort(), ["inventory", "listings", "sales_traffic_daily"]);
+  assert.ok(catalog.data.items.every(table => table.schemaStatus === "application_schema_confirmed_source_sample_pending")); assert.equal(catalog.meta.isSandbox, false);
+  const schema = await call("data_describe_table", { table: "inventory" }) as { data: { table: { fields: Array<{ name: string }> } } };
+  assert.ok(schema.data.table.fields.some(field => field.name === "fulfillableQuantity"));
+  const inventory = await call("data_query", { table: "inventory", filters: { sellerSku: "SAME-SKU" }, pageSize: 10 }) as { data: { items: Array<{ fulfillableQuantity: number }>; total: number }; meta: { source: string; page: { hasNext: boolean } } };
+  assert.equal(inventory.data.total, 1); assert.equal(inventory.data.items[0].fulfillableQuantity, 3); assert.equal(inventory.meta.source, "AmazonInventorySnapshot"); assert.equal(inventory.meta.page.hasNext, false);
+  const listings = await call("data_query", { table: "listings" }) as { data: { total: number } };
+  assert.equal(listings.data.total, 1);
+  const sales = await call("data_query", { table: "sales_traffic_daily" }) as { data: { total: number; items: Array<{ metrics: { unitsOrdered: number } }> }; meta: { warnings: string[] } };
+  assert.equal(sales.data.total, 1); assert.equal(sales.data.items[0].metrics.unitsOrdered, 3); assert.ok(sales.meta.warnings.some(warning => warning.includes("不含 ASIN/SKU")));
+  await assert.rejects(() => call("data_query", { table: "sales_traffic_asin" }), /SCHEMA_UNVERIFIED/);
+  await assert.rejects(() => call("data_query", { table: "inventory", filters: { arbitraryColumn: "x" } }), /FIELD_NOT_MAPPED/);
+  await assert.rejects(() => call("data_query", { table: "inventory", sellerAccountId: sellerB }), /数据范围不可访问/);
+});
+test("ERP Skill setup reports live published availability within current seller grants", async () => {
+  const tables = await listMcpSkillTableOptions(scope, actor);
+  const inventory = tables.find(table => table.name === "inventory")!;
+  assert.equal(inventory.available, true);
+  assert.equal(inventory.sourceCount, 1);
+  assert.equal(inventory.rowCount, 1);
+  assert.equal(inventory.freshness, "ok");
+  assert.equal(tables.find(table => table.name === "listings")?.available, true);
+  assert.equal(tables.find(table => table.name === "sales_traffic_daily")?.available, true);
+  assert.ok(!JSON.stringify(tables).includes(sellerB));
+});
+test("generic sync request remains pending approval and requires the MCP sync grant", async () => {
+  await assert.rejects(() => call("data_sync_start", { resource: "inventory" }), /授权|不可访问/);
+  await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { actions: ["view", "export", "sync"] } });
+  process.env.AMAZON_SP_API_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
+  const beforeRuns = await prisma.amazonSyncRun.count({ where: scope });
+  try {
+    const response = await call("data_sync_start", { resource: "inventory", sellerAccountId: sellerA }) as { data: { approvalRequired: boolean; started: boolean; changeRequest: { status: string } } };
+    assert.equal(response.data.approvalRequired, true); assert.equal(response.data.started, false); assert.equal(response.data.changeRequest.status, "REQUESTED");
+    assert.equal(await prisma.amazonSyncRun.count({ where: scope }), beforeRuns);
+  } finally {
+    await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { actions: ["view", "export"] } });
+  }
+});
 test("seller tampering and unknown seller have identical errors on every tool", async () => {
-  for (const tool of tools) for (const id of [sellerB, randomUUID()]) await assert.rejects(() => call(tool, { sellerAccountId: id }), /数据范围不可访问/);
+  for (const tool of tools.filter(tool => tool !== "data_sync_start")) for (const id of [sellerB, randomUUID()]) await assert.rejects(() => call(tool, { sellerAccountId: id }), /数据范围不可访问/);
 });
 test("site tampering and every multi-seller request are checked", async () => {
   await assert.rejects(() => call("amazon.inventory.list", { marketplaceId: ca }), /不可访问/);
@@ -137,7 +181,12 @@ test("no permission cache crosses two operator credentials", async () => {
 });
 test("real JSON-RPC Route authenticates bearer, rejects origin and hides failures", async () => {
   const request = (authorization: string, origin?: string) => new Request("http://localhost/api/mcp/amazon", { method: "POST", headers: { authorization, "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
-  assert.equal((await POST(request(`Bearer ${token}`))).status, 200);
+  const listed = await POST(request(`Bearer ${token}`)); assert.equal(listed.status, 200);
+  const body = await listed.json() as { result: { tools: Array<{ name: string; inputSchema: { required?: string[] } }> } };
+  assert.ok(body.result.tools.some(tool => tool.name === "data_query" && tool.inputSchema.required?.includes("table")));
+  const unavailable = await POST(new Request("http://localhost/api/mcp/amazon", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "data_query", arguments: { table: "sales_traffic_asin" } } }) }));
+  assert.equal(unavailable.status, 409);
+  assert.equal((await unavailable.json() as { error: { code: string } }).error.code, "SCHEMA_UNVERIFIED");
   assert.equal((await POST(request("Bearer invalid"))).status, 401);
   assert.equal((await POST(request(`Bearer ${token}`, "https://evil.invalid"))).status, 403);
 });

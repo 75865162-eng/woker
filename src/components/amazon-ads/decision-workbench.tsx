@@ -1,0 +1,84 @@
+"use client";
+import { useMemo, useState } from "react";
+import { ArrowLeftRight, Ban, CircleHelp, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { AdsButton, StatusBadge } from "./ads-controls";
+import type { AdsStatus } from "@/lib/amazon-ads/types";
+import { asinDemoStatus, createDecisionDemo, demoStatusLabels, prepareDemoOrder, prepareDemoRollback, transitionDemoOrder, type DecisionDemo, type DemoAction, type DemoActionType, type DemoEvidence, type DemoOrder } from "@/lib/amazon-ads/decision-demo";
+
+const sections = [["keywords", "关键词"], ["targets", "定向"], ["budget", "竞价与预算"], ["asins", "商品联动"], ["orders", "建议与审批"], ["audit", "审计与回滚"]] as const;
+type Section = typeof sections[number][0];
+const actionLabels: Record<DemoActionType, string> = { update_bid: "调价", update_budget: "调预算", create_keyword: "新建关键词", set_budget_rule: "设预算规则", pause: "启用 / 暂停" };
+const id = () => `demo-${crypto.randomUUID()}`;
+const fmt = (value: number | null, currency = "USD") => value === null ? "未知" : new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+const updateEvidence: DemoEvidence = { at: "2026-11-05T08:00:00.000Z", metrics: { spend7d: 80, sales7d: 240, clicks7d: 120 } };
+function statusLabel(order: DemoOrder) { return demoStatusLabels[order.status]; }
+function moneyField(type: DemoActionType) { return type === "update_budget" ? "budget" : type === "set_budget_rule" ? "rule" : "bid"; }
+function Button({ children, disabled, onClick, title }: { children: React.ReactNode; disabled?: boolean; onClick: () => void; title?: string }) { return <AdsButton disabled={disabled} title={title} onClick={onClick}>{children}</AdsButton>; }
+function Table({ children, headers }: { children: React.ReactNode; headers: string[] }) { return <div className="ads-table-scroll"><table className="ads-simple-table"><thead><tr>{headers.map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
+
+export function AdsDecisionWorkbench({ account, marketplace }: { account: string; marketplace: string }) {
+  const [data, setData] = useState<DecisionDemo>(() => createDecisionDemo(account, marketplace));
+  const [section, setSection] = useState<Section>("keywords");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [budgetCampaignId, setBudgetCampaignId] = useState("");
+  const [actionType, setActionType] = useState<DemoActionType>("update_bid");
+  const [value, setValue] = useState("1.15"), [reason, setReason] = useState("近 7 天花费 $80、销售额 $240、点击 120；评估后小幅提价"), [keyword, setKeyword] = useState(""), [match, setMatch] = useState("EXACT"), [notice, setNotice] = useState("");
+  const entities = useMemo(() => data.entities, [data.entities]);
+  const campaignRows = entities.filter(row => row.kind === "campaign");
+  const visibleEntities = entities.filter(row => row.kind === (section === "targets" ? "target" : "keyword"));
+  const setError = (error: unknown) => setNotice(error instanceof Error ? error.message : "演示操作失败");
+  function addAction() {
+    try {
+      const amount = actionType === "pause" ? value === "1" ? 1 : 0 : Number(value);
+      const targets = section === "keywords" || section === "targets" ? (selected.length ? selected : [entities.find(row => row.status !== "archived")?.id ?? ""]) : [section === "budget" ? budgetCampaignId || campaignRows[0].id : selected[0] ?? entities[0].id];
+      const actions = targets.map(entityId => ({ type: actionType, entityId, value: amount, reason: reason.trim(), ...(actionType === "create_keyword" ? { keyword, match } : {}) } satisfies DemoAction));
+      const preview = prepareDemoOrder(data, { id: id(), actions, source: "页面" });
+      const order = preview.orders.at(-1)!;
+      const reviewed = transitionDemoOrder(preview, order.id, "review");
+      setData(reviewed); setSelected([]); setNotice("已生成演示 dry-run；逐条影响如下。当前数据、资格和状态都来自固定 Mock Fixture。");
+    } catch (error) { setError(error); }
+  }
+  function prepareAiSuggestion() {
+    try {
+      const entity = entities.find(row => row.id.endsWith("/healthy"))!;
+      const preview = prepareDemoOrder(data, { id: id(), actions: [{ type: "update_bid", entityId: entity.id, value: Number((entity.bid * 1.1).toFixed(2)), reason: "Fixture 支出与销售指标支持小幅测试" }], source: "AI", evidence: updateEvidence });
+      const order = preview.orders.at(-1)!;
+      setData(transitionDemoOrder(preview, order.id, "review")); setSection("orders"); setNotice("");
+    } catch (error) { setError(error); }
+  }
+  function transition(orderId: string, command: "submit" | "approve" | "reject" | "execute" | "finish") {
+    try {
+      let next = transitionDemoOrder(data, orderId, command);
+      if (command === "execute") next = transitionDemoOrder(next, orderId, "finish", next.orders.find(order => order.id === orderId)!.items.length > 1 ? [next.orders.find(order => order.id === orderId)!.items.at(-1)!.action.entityId] : []);
+      setData(next); setNotice("");
+    } catch (error) { setError(error); }
+  }
+  function rollback(orderId: string) {
+    try { setData(prepareDemoRollback(data, orderId, id())); setSection("orders"); setNotice("逆向演示草稿已生成。请查看 dry-run 后再提交模拟审批。"); }
+    catch (error) { setError(error); }
+  }
+  function selectEntity(entityId: string) { setSelected(current => current.includes(entityId) ? current.filter(value => value !== entityId) : [...current, entityId]); }
+  function selectType(next: DemoActionType) { setActionType(next); if (next === "create_keyword") { setValue("1.15"); } else if (next === "set_budget_rule") setValue("10"); else if (next === "update_budget") setValue("35"); else if (next === "pause") setValue("0"); else setValue("1.15"); }
+  const blockedEntityIds = new Set(entities.filter(entity => !!(data.capabilities.write.state !== "supported" || entity.status === "archived" || (actionType === "update_bid" && Number(value) > entity.bid || actionType === "update_budget" && Number(value) > entity.budget) && (() => { const asins = entity.asins.map(asin => data.asins.find(row => row.asin === asin)); return data.capabilities.business.state !== "supported" || asins.some(row => !row || row.stock === null || row.stock <= 0 || row.buyBox !== true); })())).map(row => row.id));
+  const actionBlocked = (section === "budget" ? [budgetCampaignId || campaignRows[0].id] : selected).some(entityId => blockedEntityIds.has(entityId));
+  return <section className="ads-decision-workbench">
+    <div className="ads-decision-banner"><span><strong>S5–S9 演示与规划验证</strong> 固定 Fixture · 不连接 Amazon，不接真实审批或审计服务</span><span>{data.scope}</span></div>
+    <nav className="ads-decision-tabs" aria-label="S5 至 S9 功能面板">{sections.map(([key, label]) => <button key={key} role="tab" aria-selected={section === key} onClick={() => { setSection(key); setNotice(""); }}>{label}</button>)}</nav>
+    {notice && <p className="ads-decision-notice" role="status">{notice}</p>}
+    {section === "keywords" && <><div className="ads-decision-heading"><div><h2>关键词与定向</h2><p>仅展示当前演示范围；实际变更先生成可审阅草稿。</p></div><span className={`ads-capability ${data.capabilities.write.state}`}>{data.capabilities.write.state === "supported" ? "演示策略开放" : "演示策略关闭"} · {data.capabilities.write.reason}</span></div>
+      <div className="ads-decision-compose"><label>动作<select aria-label="演示动作" value={actionType} onChange={event => selectType(event.target.value as DemoActionType)}><option value="update_bid">调整竞价</option><option value="create_keyword">新建关键词</option><option value="pause">启用 / 暂停</option></select></label>{actionType === "create_keyword" && <><label>关键词<input aria-label="新关键词" value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="输入关键词" /></label><label>匹配类型<select aria-label="新关键词匹配类型" value={match} onChange={event => setMatch(event.target.value)}><option value="EXACT">精准</option><option value="PHRASE">词组</option><option value="BROAD">广泛</option></select></label></>}
+        <label>{actionType === "pause" ? "目标状态" : actionType === "create_keyword" ? "初始竞价 (USD)" : "新竞价 (USD)"}<input aria-label="动作目标值" type="number" step="0.01" min={actionType === "pause" ? "0" : "0.02"} max={actionType === "pause" ? "1" : "100"} value={value} onChange={event => setValue(event.target.value)} /></label><label className="wide">依据摘要<input aria-label="变更依据" value={reason} onChange={event => setReason(event.target.value)} /></label>
+        <Button disabled={data.capabilities.write.state !== "supported" || actionBlocked || (actionType === "create_keyword" && !keyword.trim())} onClick={addAction}>生成 dry-run 草稿</Button></div>
+      <Table headers={["选择", "关键词 / ASIN", "Campaign / Ad Group", "匹配类型", "状态", "竞价 (USD)", "近 7 天花费", "操作保护"]}>{visibleEntities.map(row => { const blocked = blockedEntityIds.has(row.id); return <tr key={row.id}><td><input aria-label={`选择 ${row.name}`} type="checkbox" checked={selected.includes(row.id)} onChange={() => selectEntity(row.id)} /></td><td>{row.name}</td><td>{row.campaign}<br /><small>{row.group}</small></td><td>{row.match}</td><td><StatusBadge status={row.status as AdsStatus} /></td><td>{fmt(row.bid)}</td><td>{fmt(row.spend)}</td><td>{blocked ? <span className="ads-protected"><Ban size={14} />{data.capabilities.write.state !== "supported" ? data.capabilities.write.reason : row.status === "archived" ? "已归档" : data.capabilities.business.state !== "supported" ? data.capabilities.business.reason : "断货 / BuyBox 丢失 / 上下文未知"}</span> : <span>通过演示预检</span>}</td></tr>; })}</Table>
+      <p className="ads-demo-footnote"><CircleHelp size={14} />US SP 的 0.02–100 USD 是本地保守测试闸门，不代表 Amazon 官方站点限额。重复关键词以 Campaign + Ad Group + 关键词 + 匹配类型检查。推荐词入口：{data.capabilities.official.reason}。</p>
+    </>}
+    {section === "targets" && <><div className="ads-decision-heading"><div><h2>商品与类目定向</h2><p>定向变更复用同一草稿和演示闸门。</p></div></div><Table headers={["选择", "定向表达式", "Campaign / Ad Group", "状态", "关联 ASIN", "竞价", "经营护栏"]}>{visibleEntities.map(row => <tr key={row.id}><td><input aria-label={`选择 ${row.name}`} type="checkbox" checked={selected.includes(row.id)} onChange={() => selectEntity(row.id)} /></td><td>{row.name}</td><td>{row.campaign}<br />{row.group}</td><td><StatusBadge status={row.status as AdsStatus} /></td><td>{row.asins.join(", ")}</td><td>{fmt(row.bid)}</td><td>{blockedEntityIds.has(row.id) ? "禁止加价" : "演示检查通过"}</td></tr>)}</Table></>}
+    {section === "budget" && <><div className="ads-decision-heading"><div><h2>竞价与预算规则</h2><p>Stream 榜单与官方建议只在能力可用时呈现。</p></div></div><div className="ads-decision-cards"><article><h3>预算规则 · SP</h3><Table headers={["Campaign", "规则", "每日预算", "规则来源"]}>{entities.filter(row => row.kind === "campaign").map(row => <tr key={row.id}><td>{row.campaign}</td><td>预算最多提高 {row.rule}%</td><td>{fmt(row.budget)}</td><td>演示本地规则</td></tr>)}</Table><p>当前没有可绑定的真实预算规则端点。规则动作只生成演示变更单。</p></article><article><h3>预算消耗榜</h3><p><Ban size={14} /> 未开通：{data.capabilities.stream.reason}</p></article><article><h3>官方建议</h3><p><Ban size={14} /> {data.capabilities.official.reason}</p><p>建议不会自动应用。</p></article></div>
+      <div className="ads-decision-compose"><label>动作<select aria-label="预算操作" value={actionType === "update_budget" ? "update_budget" : "set_budget_rule"} onChange={event => selectType(event.target.value as DemoActionType)}><option value="set_budget_rule">设预算规则</option><option value="update_budget">调整每日预算</option></select></label><label>Campaign<select aria-label="规则绑定活动" value={budgetCampaignId || campaignRows[0].id} onChange={event => setBudgetCampaignId(event.target.value)}>{campaignRows.filter(row => row.status !== "archived").map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label>{actionType === "update_budget" ? "新每日预算 (USD)" : "规则提幅 (%)"}<input aria-label="预算规则比例" type="number" min={actionType === "update_budget" ? "1" : "0"} max={actionType === "update_budget" ? "100000" : "30"} step="0.01" value={value} onChange={event => setValue(event.target.value)} /></label><label>当前每日预算 (USD)<input aria-label="当前每日预算" value={campaignRows.find(row => row.id === (budgetCampaignId || campaignRows[0].id))?.budget ?? 30} readOnly /></label><Button disabled={data.capabilities.write.state !== "supported" || actionBlocked} onClick={addAction}>生成变更 dry-run</Button></div>
+    </>}
+    {section === "asins" && data.capabilities.business.state === "unsupported" && <div className="ads-planned"><h2>商品 × 广告联动不可用</h2><p>{data.capabilities.business.reason}</p></div>}
+    {section === "asins" && data.capabilities.business.state !== "unsupported" && <><div className="ads-decision-heading"><div><h2>商品 × 广告联动</h2><p>缺失的库存、BuyBox 或销售上下文显示为未知，不作安全推断。</p></div></div><Table headers={["ASIN", "广告花费", "广告销售额", "ACOS", "TACoS", "BuyBox", "FBA 可售 / 在途", "状态", "入口"]}>{data.asins.map(row => <tr key={row.asin}><td>{row.asin}</td><td>{fmt(row.spend)}</td><td>{fmt(row.adSales)}</td><td>{row.adSales ? `${(row.spend / row.adSales * 100).toFixed(1)}%` : "—"}</td><td>{row.totalSales ? `${(row.spend / row.totalSales * 100).toFixed(1)}%` : "未知"}</td><td>{row.buyBox === null ? "未知" : row.buyBox ? "拥有" : "丢失"}</td><td>{row.stock === null ? "未知" : row.stock} / {row.inbound === null ? "未知" : row.inbound}</td><td>{asinDemoStatus(row)}</td><td><button className="ads-link" onClick={() => { setSection("keywords"); setSelected(entities.filter(entity => entity.asins.includes(row.asin)).map(entity => entity.id)); }}>查看搜索词</button></td></tr>)}</Table><p className="ads-demo-footnote">同一 Campaign 关联多个 ASIN 时不据此推断整场广告的经营安全；未知/断货/失去 BuyBox 一律禁止增加出价、预算或提幅。</p></>}
+    {section === "orders" && <><div className="ads-decision-heading"><div><h2>建议与变更单</h2><p>流程只在当前页面内模拟，不触发权限检查、Amazon 写请求或持久化审计。正式单人/双人审批策略未接入。</p></div><Button onClick={prepareAiSuggestion}><Sparkles size={15} />创建有依据的 AI 演示建议</Button></div>{data.orders.length === 0 ? <div className="ads-empty">暂无演示建议或变更单。可从关键词页生成草稿。</div> : <div className="ads-decision-orders">{data.orders.toReversed().map(order => <article key={order.id} className="ads-simple-panel"><header><strong>{order.id}</strong><span>{order.source} · {order.tool}</span><span>{statusLabel(order)}</span></header>{order.evidence && <p>依据时间：{order.evidence.at} · 指标：{Object.entries(order.evidence.metrics).map(([key, metric]) => `${key} ${metric ?? "未知"}`).join(" / ")}</p>}<Table headers={["动作", "实体", "旧值", "新值", "Dry-run 影响", "结果"]}>{order.items.map((item, index) => <tr key={`${order.id}-${index}`}><td>{actionLabels[item.action.type]}</td><td>{item.action.keyword ?? item.before?.name ?? item.after.name}</td><td>{item.before ? item.action.type === "pause" ? item.before.status : String(item.before[moneyField(item.action.type)]) : "不存在"}</td><td>{item.action.type === "pause" ? item.after.status : String(item.after[moneyField(item.action.type)])}</td><td>{item.before ? `仅修改 ${item.action.type}；当前值 ${item.before.bid} / ${item.before.budget}` : "先创建为暂停状态；不会投放"}</td><td>{item.result === "waiting" ? "等待" : item.result === "success" ? "成功" : item.error}</td></tr>)}</Table>{order.beforeSnapshot && <p>执行前快照：{order.beforeSnapshot}{order.afterSnapshot && ` · 执行后快照：${order.afterSnapshot}`}</p>}<div className="ads-decision-actions">{order.status === "draft" && <>{!order.reviewed && <Button onClick={() => { try { setData(transitionDemoOrder(data, order.id, "review")); } catch (error) { setError(error); } }}>查看 dry-run 并确认影响</Button>}{order.reviewed && <Button onClick={() => transition(order.id, "submit")}>提交模拟审批</Button>}</>}{order.status === "pending" && <><Button onClick={() => transition(order.id, "approve")}>模拟批准</Button><Button onClick={() => transition(order.id, "reject")}>模拟拒绝</Button></>}{order.status === "approved" && <Button onClick={() => transition(order.id, "execute")}>运行逐条模拟执行</Button>}{["done", "partial_failed"].includes(order.status) && !order.inverseOf && <Button onClick={() => rollback(order.id)}><RotateCcw size={14} />生成逆向草稿</Button>}{order.inverseOf && <small>逆向 {order.inverseOf}</small>}</div></article>)}</div>}</>}
+    {section === "audit" && <><div className="ads-decision-heading"><div><h2>审计与快照</h2><p>只显示本页面本次打开后的演示事件；非数据库审计记录。</p></div></div>{data.events.length ? <Table headers={["时间", "操作者", "工具来源", "变更单 / 事件"]}>{[...data.events].reverse().map((event, index) => <tr key={`${event.orderId}-${event.at}-${index}`}><td>{event.at}</td><td>{event.actor}</td><td>{event.tool}</td><td><button className="ads-link" onClick={() => { setSection("orders"); }}>{event.orderId} · {event.message}</button></td></tr>)}</Table> : <div className="ads-empty">当前演示会话暂无审计事件。</div>}<div className="ads-decision-snapshots"><h3>可浏览快照</h3>{data.orders.filter(order => order.beforeSnapshot || order.afterSnapshot).map(order => <p key={order.id}><ArrowLeftRight size={14} /> {order.id}：{order.beforeSnapshot ?? "—"} → {order.afterSnapshot ?? "—"} · {order.items.length} 条动作</p>)}</div><p className="ads-demo-footnote"><ShieldCheck size={14} />归档实体、执行后状态冲突、部分成功以外的未成功项以及重复回滚不会自动覆盖。回滚只针对已成功项生成需审批的逆向草稿。</p></>}
+  </section>;
+}

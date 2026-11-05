@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     const from = dateParam(params.get("from"), new Date(to.getTime() - 29 * 86400_000));
     if (from > to || to.getTime() - from.getTime() > 366 * 86400_000) return NextResponse.json({ error: "报表日期范围最多 367 天。" }, { status: 400, headers });
     const reportType = params.get("reportType");
-    const rows = await prisma.amazonAdsReportFact.findMany({ where: { ...scope, ...(reportType ? { reportType: reportType.slice(0, 100) } : {}), reportDate: { gte: from, lte: to }, profile: { ...scope, ...profileWhere } }, orderBy: [{ reportDate: "desc" }, { campaignId: "asc" }, { factKey: "asc" }], skip: (page - 1) * pageSize, take: pageSize });
+    const rows = await prisma.amazonAdsReportFact.findMany({ where: { ...scope, version: { status: "PUBLISHED", sourceTask: { status: "SUCCEEDED" } }, ...(reportType ? { reportType: reportType.slice(0, 100) } : {}), reportDate: { gte: from, lte: to }, profile: { ...scope, ...profileWhere } }, orderBy: [{ reportDate: "desc" }, { campaignId: "asc" }, { factKey: "asc" }], skip: (page - 1) * pageSize, take: pageSize });
     await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-report-facts", permission.user.role);
     return NextResponse.json({ rows: rows.map(row => ({ ...row, impressions: row.impressions.toString(), clicks: row.clicks.toString(), spend: row.spend.toString(), orders: row.orders.toString(), sales: row.sales.toString(), units: row.units.toString() })), page, pageSize, from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }, { headers });
   } catch (error) {
