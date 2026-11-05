@@ -3,17 +3,18 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import { formatAppReleaseLabel } from "../src/lib/app-version";
 
 const script = readFileSync(new URL("../scripts/server-artifact-release.sh", import.meta.url), "utf8");
 // Extract only these functions so the test cannot execute the release workflow.
 const functions = ["read_previous_version", "next_version_label"].map((name) => {
-  const match = script.match(new RegExp(`^${name}\\(\\) \\{[\\s\\S]*?^\\}`, "m"));
+  const match = script.match(new RegExp(`^${name}\\(\\) \\{[\\s\\S]*?^\\}(?=\\n\\n)`, "m"));
   assert.ok(match, `Missing release function: ${name}`);
   return match[0];
 }).join("\n");
 
-function checkVersion(t, state, release, expected) {
+function checkVersion(t: TestContext, state: string | undefined, release: string | undefined, expected: string[]) {
   const dir = mkdtempSync(path.join(tmpdir(), "release-version-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const stateFile = path.join(dir, "version state.json");
@@ -73,4 +74,11 @@ test("first release without metadata starts at v0.0.1", (t) => {
 
 test("unusable state and current release retain the existing v0.0.1 default", (t) => {
   checkVersion(t, "{broken", '{"appVersion":null}', ["", "v0.0.1"]);
+});
+
+test("release label uses the fixed release date in Shanghai across UTC midnight", () => {
+  assert.equal(formatAppReleaseLabel("v0.0.12", "2026-11-05T16:30:00Z"), "26/11/06/v0.0.12");
+  assert.equal(formatAppReleaseLabel("v0.0.13", "2026-11-06T02:00:00Z"), "26/11/06/v0.0.13");
+  assert.equal(formatAppReleaseLabel("v0.0.12", undefined), "v0.0.12");
+  assert.equal(formatAppReleaseLabel("v0.0.12", "invalid"), "v0.0.12");
 });

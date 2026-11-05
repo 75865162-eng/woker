@@ -1,0 +1,81 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { csv, datesInRange, mockAdsProvider, sumMetrics } from "../src/lib/amazon-ads/mock-provider";
+import type { AdsQuery } from "../src/lib/amazon-ads/types";
+const query: AdsQuery = { account: "northstar", marketplace: "US", from: "2026-10-30", to: "2026-11-05", entity: "campaigns" };
+test("campaigns, groups, leaf partitions and daily trends reconcile; ratios use aggregate facts", () => {
+  const campaigns = mockAdsProvider.read(query);
+  assert.equal(campaigns.rows.length, 64);
+  const c = campaigns.rows[0];
+  const groups = mockAdsProvider.read({ ...query, campaignId: c.id, entity: "ad-groups" });
+  assert.equal(groups.rows.length, 6);
+  assert.equal(c.spend, groups.total.spend);
+  assert.equal(c.orders, groups.total.orders);
+  assert.equal(c.clicks, groups.total.clicks);
+  const facts = sumMetrics(campaigns.trend);
+  assert.ok(Math.abs(facts.spend - campaigns.total.spend) < 0.00001);
+  assert.equal(facts.impressions, campaigns.total.impressions);
+  assert.equal(campaigns.total.ctr, campaigns.total.clicks / campaigns.total.impressions * 100);
+  const keywords = mockAdsProvider.read({ ...query, campaignId: c.id, adGroupId: groups.rows[0].id, entity: "keywords" });
+  assert.equal(keywords.total.clicks, groups.rows[0].clicks);
+  assert.ok(Math.abs(keywords.total.spend - groups.rows[0].spend) < 0.001);
+});
+test("scope and date changes are deterministic and isolated", () => {
+  const us = mockAdsProvider.read(query), ca = mockAdsProvider.read({ ...query, marketplace: "CA" });
+  assert.equal(us.rows.some(a => ca.rows.some(b => a.id === b.id)), false);
+  const account = mockAdsProvider.read({ ...query, account: "evergreen" });
+  assert.notEqual(us.total.spend, account.total.spend);
+  assert.deepEqual(mockAdsProvider.read(query), us);
+  const day = mockAdsProvider.read({ ...query, from: "2026-11-05" });
+  assert.ok(day.total.spend < us.total.spend);
+  assert.equal(day.trend.length, 1);
+  assert.equal(mockAdsProvider.read({ ...query, campaignId: ca.rows[0].id }).rows.length, 0);
+});
+test("date guards and CSV escaping protect export boundaries", () => {
+  assert.deepEqual(datesInRange({ from: "invalid", to: "2026-11-05" }), []);
+  assert.deepEqual(datesInRange({ from: "2026-11-05", to: "2026-01-01" }), []);
+  assert.deepEqual(datesInRange({ from: "2020-01-01", to: "2026-01-01" }), []);
+  const out = csv([{ name: '=HYPERLINK("x")' }, { name: 'a,"b"\nc' }], [{ key: "name", label: "名称" }]);
+  assert.ok(out.includes('"\'=HYPERLINK(""x"")"'));
+  assert.ok(out.includes('"a,""b""\nc"'));
+});
+test("ad type and group filters apply to rows, totals and trends together", () => {
+  const sb = mockAdsProvider.read({ ...query, adType: "SB" });
+  assert.ok(sb.rows.length > 0);
+  assert.ok(sb.rows.every(row => row.adType === "SB"));
+  assert.equal(sumMetrics(sb.trend).clicks, sb.total.clicks);
+  const campaignId = sb.rows[0].id;
+  const group = mockAdsProvider.read({ ...query, entity: "ad-groups", campaignId, adType: "SB" }).rows[0];
+  const filtered = mockAdsProvider.read({ ...query, entity: "keywords", campaignId, adGroupId: group.id, adType: "SB" });
+  assert.equal(filtered.rows.length, 4);
+  assert.equal(filtered.total.clicks, group.clicks);
+  assert.equal(sumMetrics(filtered.trend).clicks, filtered.total.clicks);
+  const mismatch = mockAdsProvider.read({ ...query, entity: "placements", campaignId, adType: "SP" });
+  assert.deepEqual(mismatch.rows, []);
+  assert.equal(mismatch.total.spend, 0);
+});
+test("placement reports retain campaign, type and account identity", () => {
+  const data = mockAdsProvider.read({ ...query, entity: "placements", adType: "SB" });
+  assert.ok(data.rows.length > 3);
+  assert.ok(data.rows.every(row => row.adType === "SB" && row.id.startsWith("northstar-US-")));
+  assert.equal(new Set(data.rows.map(row => row.id)).size, data.rows.length);
+  const facts = sumMetrics(data.trend);
+  assert.ok(Math.abs(facts.spend - data.total.spend) < 0.001);
+  assert.equal(facts.orders, data.total.orders);
+});
+test("negative fixtures have proper keyword/ASIN matches and never invent performance", () => {
+  const data = mockAdsProvider.read({ ...query, entity: "negatives" });
+  assert.ok(data.rows.length > 0);
+  assert.ok(data.rows.filter(row => row.kind === "否定商品投放").every(row => /^asin="[A-Z0-9]{10}"$/.test(row.name) && row.match === "ASIN"));
+  assert.ok(data.rows.filter(row => row.kind === "否定关键词").every(row => row.match === "否定精准"));
+  assert.ok(data.rows.every(row => row.clicks === 0 && row.spend === 0 && row.orders === 0 && row.sales === 0));
+});
+test("search term fixtures preserve trigger identity and valid advertised target references", () => {
+  const data = mockAdsProvider.read({ ...query, entity: "search-terms" });
+  assert.ok(data.rows.every(row => row.trigger && row.campaignId && row.adGroupId && row.match));
+  const keyword = data.rows.find(row => row.kind === "关键词")!;
+  const advertisedProduct = data.rows.find(row => row.kind === "商品投放")!;
+  assert.ok(keyword.name.startsWith(keyword.trigger!.toLowerCase()));
+  assert.match(advertisedProduct.expression!, /^.+ · asin="[A-Z0-9]{10}"$/);
+  assert.equal(data.rows.every(row => row.orders >= 0 && row.sales >= 0), true);
+});

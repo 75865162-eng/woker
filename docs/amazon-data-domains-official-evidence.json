@@ -1,0 +1,66 @@
+{
+  "retrievedOn": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/models/fulfillment-inbound-api-model/fulfillmentInbound_2024-03-20.json",
+      "sha256": "a4d4cdd08dd3f381f27154d7f9f503d45e0486d416c629598341bbd23c7ff487",
+      "retrieval": "public GitHub page download via browser; TLS verified; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/models/product-pricing-api-model/productPricing_2022-05-01.json",
+      "sha256": "db6ffeab130bf1d4ab8fa47e4e83417d30d9cb682b3ce53f74ed51b62f6f817c",
+      "retrieval": "public GitHub page download via browser; TLS verified; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/schemas/reports/sellingPartnerSearchTermsReport.json",
+      "sha256": "6ca8ee05a011b8c277302b1e0d91b5cbe1f6650f40a841605009722d50dbd225",
+      "retrieval": "public GitHub page download via browser; TLS verified; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/schemas/reports/sellingPartnerSearchQueryPerformanceReport.json",
+      "sha256": "19033f718f54f7d2f9d2ecdbfd2b8ca7c9c7aaadc1049924281b496ec339ccd7",
+      "retrieval": "public GitHub page download via browser; TLS verified; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/schemas/reports/sellingPartnerSearchCatalogPerformanceReport.json",
+      "sha256": "7cb09e4b494cc7a37c811f2266a096e3dc331e73a18609c3659ef920462b53be",
+      "retrieval": "public GitHub page download via browser; TLS verified; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/schemas/reports/sellingPartnerMarketBasketAnalysisReport.json",
+      "sha256": "d3764e14bb934462873816e5516e79ac5b4dc018f20005da9c8d4da1275f3663",
+      "retrieval": "public GitHub page download via browser; TLS verified; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/schemas/reports/sellerSalesAndTrafficReport.json",
+      "sha256": "912c0d01073c4770f8bbd1e24f5553afa197920ac12b37d2b59726118c21105d",
+      "retrieval": "public GitHub page download via browser; TLS verified; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/models/product-pricing-api-model/productPricingV0.json",
+      "sha256": "86d65f691a5611f951a4e61df206e518ec663064ecfa8733105f2ca259d4ded6",
+      "retrieval": "public GitHub download via browser; no SP-API request"
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/models/listings-items-api-model/listingsItems_2021-08-01.json",
+      "sha256": "d60eed7106d5cdd5bb455c916230ad04eb9c4e2cad7d1139b1ab986ea588a3a9",
+      "retrieval": "public GitHub download via browser; no SP-API request",
+      "runtimeExcerpt": "src/data/amazon-contracts/listings-detail-model.json",
+      "note": "Only read operation and selected reachable observation fields; attributes handled by bounded product attribute projection."
+    },
+    {
+      "url": "https://github.com/amzn/selling-partner-api-models/blob/main/models/catalog-items-api-model/catalogItems_2022-04-01.json",
+      "sha256": "1a029b01df1d847d3057740a6e877f89f2ab78104b5b4d8f4b839f8d00f600c2",
+      "retrieval": "public GitHub download via browser; no SP-API request",
+      "runtimeExcerpt": "src/data/amazon-contracts/catalog-detail-model.json",
+      "note": "Only read operation and selected reachable observation fields; attributes handled by bounded product attribute projection."
+    },
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#inventory-ledger-report-detailed-view",
+      "sha256": "6340d0ed46e91fa009c3fee53aa1618d8364cd7275943c6b7a7cbac02dd4f394",
+      "retrieval": "public Amazon documentation HTML retrieved over TLS; no SP-API request; original HTML not retained",
+      "runtimeExcerpt": "src/data/amazon-contracts/inventory-ledger-detail-contract.json",
+      "note": "Inventory Ledger Detailed View is request-only, supports eventType filtering and documents up to 18 months of history; implementation caps individual requests to 31 closed days and 540 days of lookback."
+    }
+  ]
+}

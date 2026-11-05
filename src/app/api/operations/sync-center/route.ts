@@ -1,9 +1,11 @@
+import { readObservations } from "@/lib/amazon-sync/observations-query";
 import { readReturns } from "@/lib/amazon-sync/returns-query";
 import { readFinance } from "@/lib/amazon-sync/finance-query";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
 import { amazonDataAccess, sourceAccessWhere, assertAmazonScopeAdmin } from "@/lib/amazon-sync/data-access";
 import { readSalesTraffic } from "@/lib/amazon-sync/sales-query";
 import { readOrders } from "@/lib/amazon-sync/orders-query";
+import { readDomainReports } from "@/lib/amazon-sync/domain-reports-query";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { getOrganizationRolePermissions } from "@/lib/accounts/role-permissions-server";
@@ -43,6 +45,8 @@ export async function GET(request: Request) {
     if (section === "returns") return json({ ...await readReturns(scope, p, actor), access });
     if (section === "finance") return json({ ...await readFinance(scope, p, actor), access });
     if (section === "orders") return json({ ...await readOrders(scope, p, actor), access });
+    if (section === "observations") return json({ ...await readObservations(scope, p, actor), access });
+    if (section === "domain-reports") return json({ ...await readDomainReports(scope, p, actor), access });
     if (section === "approvals") return json({ requests: await prisma.amazonDataCenterChangeRequest.findMany({ where: { ...scope, ...(dataAccess.allSellers ? {} : { requestedByUserId: actor, sourceIds: { hasSome: sourceIds } }) }, select: approvalSelect, orderBy: { createdAt: "desc" }, take: 200 }).then(rows => rows.filter(row => dataAccess.allSellers || row.sourceIds.every(id => sourceIds.includes(id)))), access });
     if (section === "overview") return json({ ...await readOverview(scope, p, actor), access, domains: syncDomains });
     if (section === "sources" || section === "domains") return json({ sources: await listSources(scope, { ...(p.get("sellerAccountId") ? { sellerAccountId: p.get("sellerAccountId")!.slice(0, 200) } : {}), ...(p.get("marketplaceId") ? { marketplaceId: p.get("marketplaceId")!.slice(0, 200) } : {}), ...(p.get("resource") ? { resource: p.get("resource")!.slice(0, 200) } : {}) }, actor), access, domains: syncDomains });

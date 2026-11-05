@@ -1,4 +1,6 @@
+import { isObservationResource, parseObservationPolicy, assertObservationRoles, assertObservationClosed } from "./observation-policy";
 import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, nextReturnWindow } from "./returns";
+import { assertDomainReportRoles, domainReportRunWindow, type DomainReportResource } from "./domain-reports";
 import { saveAccessGrant } from "./access-management";
 import { amazonDataAccess, assertAmazonScopeAdmin, assertSellerMarketplaceAccess, isAmazonScopeAdmin } from "./data-access";
 import { resolveRequestedRange, rangeFromFrozen } from "./date-range";
@@ -74,10 +76,12 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
       const identity = await tx.amazonSellerIdentity.findFirst({ where: { ...scope, marketplaceId, OR: [{ sellerAccountId }, { authorizationId }] }, select: { authorizationId: true, sellerAccountId: true } });
       if (conflict || (identity && (identity.authorizationId !== authorizationId || identity.sellerAccountId !== sellerAccountId))) throw new SyncInputError("店铺站点授权绑定冲突，须先核查历史归属。", 409);
     }
+    if (isObservationResource(resource) && command.enabled !== false) { const p = parseObservationPolicy(command.domainPolicy ?? source?.domainPolicy, resource); assertObservationRoles(p, auth); assertObservationClosed(p, new Date(), marketplaceId); }
     if (resource === "returns" && command.enabled !== false) { parseReturnPolicy(command.returnsPolicy ?? source?.returnsPolicy); assertReturnRoles(auth); }
+    if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(resource) && command.enabled !== false) assertDomainReportRoles(resource as DomainReportResource, auth);
     if (resource === "orders" && command.enabled !== false) parseOrderSyncPolicy(command.orderPolicy ?? source?.orderPolicy);
     if (resource === "finance" && command.enabled !== false) await assertFinanceScope(tx, scope, { authorizationId, sellerAccountId, marketplaceId, financePolicy: command.financePolicy ?? source?.financePolicy }, [ ]);
-    before = { source: source ? { id: source.id, revision: source.revision, authorizationId: source.authorizationId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, enabled: source.enabled, freshnessMinutes: source.freshnessMinutes, ...(source.resource === "orders" ? { orderPolicy: source.orderPolicy } : {}), ...(source.resource === "finance" ? { financePolicy: source.financePolicy } : {}), ...(source.resource === "returns" ? { returnsPolicy: source.returnsPolicy } : {}) } : null, authorization: auth, seller };
+    before = { source: source ? { id: source.id, revision: source.revision, authorizationId: source.authorizationId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, enabled: source.enabled, freshnessMinutes: source.freshnessMinutes, ...(isObservationResource(source.resource) ? { domainPolicy: source.domainPolicy } : {}), ...(source.resource === "orders" ? { orderPolicy: source.orderPolicy } : {}), ...(source.resource === "finance" ? { financePolicy: source.financePolicy } : {}), ...(source.resource === "returns" ? { returnsPolicy: source.returnsPolicy } : {}) } : null, authorization: auth, seller };
     targetId = source?.id ?? targetId; baseRevision = source?.revision ?? 0; authId = auth.id;
     if (source && command.revision !== undefined && command.revision !== baseRevision) throw new SyncInputError("数据源版本已变化。", 409);
   } else if (action === "save-access-grant") {
@@ -114,6 +118,8 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
   const sources = sourceIds.length ? await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: sourceIds } }, include: { authorization: { select: authSelect }, seller: { select: { status: true, updatedAt: true } } }, orderBy: { id: "asc" } }) : [];
   if (sources.length !== sourceIds.length) throw new SyncInputError("数据源不属于当前组织／工作区。", 403);
   if (action === "run") for (const source of sources) {
+    if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)) assertDomainReportRoles(source.resource as DomainReportResource, source.authorization);
+    if (isObservationResource(source.resource)) { const p = parseObservationPolicy(source.domainPolicy, source.resource); assertObservationRoles(p, source.authorization); assertObservationClosed(p, new Date(), source.marketplaceId); }
     if (source.resource === "sales_traffic") {
       const ranges = command.requestedRanges as Record<string, unknown> | undefined;
       rangeFromFrozen({ requestedRange: ranges?.[source.id] });
@@ -121,8 +127,9 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     if (source.resource === "returns") returnWindowFromFrozen((command.returnWindows as Record<string, unknown> | undefined)?.[source.id]);
     if (source.resource === "finance") financeWindowFromFrozen((command.financeWindows as Record<string, unknown> | undefined)?.[source.id]);
     if (source.resource === "orders") orderWindowFromFrozen((command.orderWindows as Record<string, unknown> | undefined)?.[source.id]);
+    if (["settlements", "inventory_events"].includes(source.resource)) domainReportRunWindow(source.resource as DomainReportResource, (command.reportWindows as Record<string, unknown> | undefined)?.[source.id]);
   }
-  const targets = sources.map(s => ({ sourceId: s.id, sourceRevision: s.revision, enabled: s.enabled, authorizationId: s.authorizationId, authorizationRevision: s.authorization.revision, authorizationStatus: s.authorization.status, amazonSellerId: s.authorization.amazonSellerId, sellerAccountId: s.sellerAccountId, sellerStatus: s.seller.status, sellerUpdatedAt: s.seller.updatedAt, marketplaceId: s.marketplaceId, resource: s.resource, ...(s.resource === "orders" ? { orderPolicy: parseOrderSyncPolicy(s.orderPolicy) } : {}), ...(s.resource === "finance" ? { financePolicy: parseFinancePolicy(s.financePolicy) } : {}), ...(s.resource === "returns" ? { returnsPolicy: parseReturnPolicy(s.returnsPolicy) } : {}) }));
+  const targets = sources.map(s => ({ sourceId: s.id, sourceRevision: s.revision, enabled: s.enabled, authorizationId: s.authorizationId, authorizationRevision: s.authorization.revision, authorizationStatus: s.authorization.status, amazonSellerId: s.authorization.amazonSellerId, sellerAccountId: s.sellerAccountId, sellerStatus: s.seller.status, sellerUpdatedAt: s.seller.updatedAt, marketplaceId: s.marketplaceId, resource: s.resource, ...(isObservationResource(s.resource) ? { domainPolicy: parseObservationPolicy(s.domainPolicy, s.resource) } : {}), ...(s.resource === "orders" ? { orderPolicy: parseOrderSyncPolicy(s.orderPolicy) } : {}), ...(s.resource === "finance" ? { financePolicy: parseFinancePolicy(s.financePolicy) } : {}), ...(s.resource === "returns" ? { returnsPolicy: parseReturnPolicy(s.returnsPolicy) } : {}) }));
   const orderCursors = [];
   for (const source of sources.filter(s => ["orders", "finance", "returns"].includes(s.resource))) {
     const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
@@ -148,6 +155,7 @@ export async function requestChange(scope: SyncScope, actor: string, input: Reco
       const orderWindows: Record<string, unknown> = {};
       const financeWindows: Record<string, unknown> = {};
       const returnWindows: Record<string, unknown> = {};
+      const reportWindows: Record<string, unknown> = {};
       for (const source of sources) {
         if (source.resource === "sales_traffic") requestedRanges[source.id] = resolveRequestedRange(source.marketplaceId, command);
         else if (source.resource === "orders") {
@@ -165,12 +173,20 @@ export async function requestChange(scope: SyncScope, actor: string, input: Reco
           const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
           financeWindows[source.id] = nextFinanceWindow(parseFinancePolicy(source.financePolicy), cursor, new Date());
         }
+        else if (source.resource === "settlements") {
+          const until = new Date();
+          reportWindows[source.id] = { createdSince: new Date(until.getTime() - 90 * 24 * 60 * 60_000).toISOString(), createdUntil: until.toISOString() };
+        }
+        else if (source.resource === "inventory_events") {
+          reportWindows[source.id] = { from: command.dateFrom, to: command.dateTo, eventType: command.eventType ?? "" };
+        }
         else if (command.dateFrom || command.dateTo || command.datePreset) throw new SyncInputError("库存和刊登是当前完整快照，不支持历史日期同步；请分开申请。");
       }
       if (Object.keys(requestedRanges).length) command.requestedRanges = requestedRanges;
       if (Object.keys(returnWindows).length) command.returnWindows = returnWindows;
       if (Object.keys(financeWindows).length) command.financeWindows = financeWindows;
       if (Object.keys(orderWindows).length) command.orderWindows = orderWindows;
+      if (Object.keys(reportWindows).length) command.reportWindows = reportWindows;
     }
     const ciphertext = seal(command, scope, id, environment), payloadDigest = digest(ciphertext);
     const evidence = await inspect(tx, scope, command); evidence.targetId ||= String(command.proposedId ?? id);

@@ -6,6 +6,22 @@ export function normalizeAppVersionLabel(value: unknown, fallback = defaultAppVe
   return typeof value === "string" && APP_VERSION_PATTERN.test(value) ? value : fallback;
 }
 
+export function formatAppReleaseLabel(version: unknown, releasedAt: unknown) {
+  const label = normalizeAppVersionLabel(version);
+  if (typeof releasedAt !== "string" || !releasedAt.trim()) return label;
+  const date = new Date(releasedAt);
+  if (!Number.isFinite(date.getTime())) return label;
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Shanghai",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value;
+  return `${part("year")}/${part("month")}/${part("day")}/${label}`;
+}
+
 export function nextAppVersionLabel(current?: string | null) {
   const match = current?.match(APP_VERSION_PATTERN);
   if (!match) {

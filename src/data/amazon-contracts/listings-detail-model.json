@@ -1,0 +1,993 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "The Selling Partner API for Listings Items (Listings Items API) provides programmatic access to selling partner listings on Amazon. Use this API in collaboration with the Selling Partner API for Product Type Definitions, which you can use to retrieve the information about Amazon product types needed to use the Listings Items API.\n\nFor more information, refer to the [Listings Items API Use Case Guide](https://developer-docs.amazon.com/sp-api/docs/listings-items-api-v2021-08-01-use-case-guide).",
+    "version": "2021-08-01",
+    "title": "Selling Partner API for Listings Items",
+    "contact": {
+      "name": "Selling Partner API Developer Support",
+      "url": "https://sellercentral.amazon.com/gp/mws/contactus.html"
+    },
+    "license": {
+      "name": "Apache License 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0"
+    }
+  },
+  "paths": {
+    "/listings/2021-08-01/items/{sellerId}/{sku}": {
+      "get": {
+        "x-amzn-api-internal": "INTERNAL_AND_EXTERNAL",
+        "tags": [
+          "listings"
+        ],
+        "description": "Returns details about a listings item for a selling partner.\n\n**Usage Plan:**\n\n| Rate (requests per second) | Burst |\n| ---- | ---- |\n| 5 | 10 |\n\nThe `x-amzn-RateLimit-Limit` response header returns the usage plan rate limits that were applied to the requested operation, when available. The preceding table indicates the default rate and burst values for this operation. Selling partners whose business demands require higher throughput can receive higher rate and burst values than those shown here. For more information, refer to [Usage Plans and Rate Limits](https://developer-docs.amazon.com/sp-api/docs/usage-plans-and-rate-limits-in-the-sp-api) in the Selling Partner API documentation.",
+        "operationId": "getListingsItem",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "sellerId",
+            "description": "A selling partner identifier, such as a merchant account or vendor code.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "sku",
+            "description": "A selling partner-provided identifier for an Amazon listing.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "marketplaceIds",
+            "description": "A comma-delimited list of Amazon store identifiers for the request.",
+            "in": "query",
+            "required": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "x-example": "ATVPDKIKX0DER"
+          },
+          {
+            "name": "issueLocale",
+            "description": "A locale for localization of issues. When not provided, the default language code of the first Amazon store is used. Examples: `en_US`, `fr_CA`, `fr_FR`. Localized messages default to `en_US` when localization is not available for the specified locale.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "x-example": "en_US"
+          },
+          {
+            "name": "includedData",
+            "description": "A comma-delimited list of data sets to include in the response. Default: `summaries`.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "enum": [
+                "summaries",
+                "attributes",
+                "issues",
+                "offers",
+                "fulfillmentAvailability",
+                "procurement",
+                "relationships",
+                "productTypes"
+              ],
+              "x-docgen-enum-table-extension": [
+                {
+                  "value": "summaries",
+                  "description": "Summary details of the listing item."
+                },
+                {
+                  "value": "attributes",
+                  "description": "JSON object containing structured listing item attribute data keyed by attribute name."
+                },
+                {
+                  "value": "issues",
+                  "description": "Issues associated with the listing item."
+                },
+                {
+                  "value": "offers",
+                  "description": "Current offers for the listing item."
+                },
+                {
+                  "value": "fulfillmentAvailability",
+                  "description": "Fulfillment availability details for the listing item."
+                },
+                {
+                  "value": "procurement",
+                  "description": "Vendor procurement details for the listing item."
+                },
+                {
+                  "value": "relationships",
+                  "description": "Relationship details for a listing item (for example, variations)."
+                },
+                {
+                  "value": "productTypes",
+                  "description": "Product types that are associated with a listing item."
+                }
+              ],
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "x-example": "summaries",
+            "default": [
+              "summaries"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "schema": {
+              "$ref": "#/definitions/Item"
+            },
+            "headers": {
+              "x-amzn-RateLimit-Limit": {
+                "description": "Your rate limit (requests per second) for this operation.",
+                "type": "string"
+              },
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "examples": {
+              "application/json": {
+                "sku": "GM-ZDPI-9B4E",
+                "summaries": [
+                  {
+                    "marketplaceId": "ATVPDKIKX0DER",
+                    "asin": "B071VG5N9D",
+                    "productType": "LUGGAGE",
+                    "conditionType": "new_new",
+                    "status": [
+                      "BUYABLE"
+                    ],
+                    "itemName": "Hardside Carry-On Spinner Suitcase Luggage",
+                    "createdDate": "2021-02-01T00:00:00Z",
+                    "lastUpdatedDate": "2021-03-01T00:00:00Z",
+                    "mainImage": {
+                      "link": "https://www.example.com/luggage.png",
+                      "height": 500,
+                      "width": 500
+                    }
+                  },
+                  {
+                    "marketplaceId": "A2EUQ1WTGCTBG2",
+                    "asin": "B071VG5N9D",
+                    "productType": "LUGGAGE",
+                    "conditionType": "new_new",
+                    "status": [],
+                    "itemName": "Hardside Carry-On Spinner Suitcase Luggage",
+                    "createdDate": "2021-02-02T01:00:00Z",
+                    "lastUpdatedDate": "2021-03-05T00:00:00Z",
+                    "mainImage": {
+                      "link": "https://www.example.com/luggage.png",
+                      "height": 500,
+                      "width": 500
+                    }
+                  }
+                ],
+                "offers": [
+                  {
+                    "marketplaceId": "ATVPDKIKX0DER",
+                    "offerType": "B2C",
+                    "price": {
+                      "currencyCode": "USD",
+                      "amount": "100.00"
+                    },
+                    "audience": {
+                      "value": "ALL",
+                      "displayName": "Sell on Amazon"
+                    },
+                    "replenishmentDiscount": {
+                      "discountPercentage": 5
+                    },
+                    "quantityDiscountPlan": {
+                      "discountType": "PERCENT",
+                      "levels": [
+                        {
+                          "lowerBound": 5,
+                          "value": "5.0"
+                        },
+                        {
+                          "lowerBound": 10,
+                          "value": "10.0"
+                        },
+                        {
+                          "lowerBound": 25,
+                          "value": "15.0"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "marketplaceId": "A2EUQ1WTGCTBG2",
+                    "offerType": "B2C",
+                    "price": {
+                      "currencyCode": "CAD",
+                      "amount": "130.00"
+                    },
+                    "audience": {
+                      "value": "ALL",
+                      "displayName": "Sell on Amazon"
+                    }
+                  }
+                ],
+                "fulfillmentAvailability": [
+                  {
+                    "fulfillmentChannelCode": "DEFAULT",
+                    "quantity": 100
+                  }
+                ],
+                "issues": [
+                  {
+                    "code": "90220",
+                    "message": "'size' is required but not supplied.",
+                    "severity": "ERROR",
+                    "attributeNames": [
+                      "size"
+                    ],
+                    "categories": [
+                      "MISSING_ATTRIBUTE",
+                      "LISTING"
+                    ],
+                    "marketplaceIds": [
+                      "ATVPDKIKX0DER"
+                    ]
+                  },
+                  {
+                    "code": "18027",
+                    "message": "We believe the main image has text, logo, graphic, or watermark that is not permitted for this product type. Submit a compliant image to lift the suppression. Also refer to Product image requirements.",
+                    "severity": "ERROR",
+                    "categories": [
+                      "INVALID_IMAGE",
+                      "LISTING"
+                    ],
+                    "enforcements": {
+                      "actions": [
+                        {
+                          "action": "SEARCH_SUPPRESSED"
+                        }
+                      ],
+                      "exemption": {
+                        "status": "EXEMPT_UNTIL_EXPIRY_DATE",
+                        "expiryDate": "2025-05-28T00:36:48.914Z"
+                      }
+                    },
+                    "marketplaceIds": [
+                      "ATVPDKIKX0DER",
+                      "A2EUQ1WTGCTBG2"
+                    ]
+                  },
+                  {
+                    "code": "99300",
+                    "message": "Product Detail Page Rules Violation (Inaccurate information on product detail page).",
+                    "severity": "ERROR",
+                    "categories": [
+                      "PRODUCT"
+                    ],
+                    "enforcements": {
+                      "actions": [
+                        {
+                          "action": "ATTRIBUTE_SUPPRESSED"
+                        }
+                      ],
+                      "exemption": {
+                        "status": "EXEMPT"
+                      }
+                    },
+                    "marketplaceIds": [
+                      "ATVPDKIKX0DER",
+                      "A2EUQ1WTGCTBG2"
+                    ]
+                  },
+                  {
+                    "code": "18155",
+                    "message": "The 'minimum price' is greater than the selling price (excluding shipping) for the listing. Review and update your price and/or minimum price.",
+                    "severity": "ERROR",
+                    "categories": [
+                      "INVALID_PRICE",
+                      "LISTING"
+                    ],
+                    "enforcements": {
+                      "actions": [
+                        {
+                          "action": "LISTING_SUPPRESSED"
+                        }
+                      ],
+                      "exemption": {
+                        "status": "NOT_EXEMPT"
+                      }
+                    },
+                    "marketplaceIds": [
+                      "ATVPDKIKX0DER"
+                    ]
+                  },
+                  {
+                    "code": "18742",
+                    "message": "Restricted Products Policy Violation",
+                    "severity": "ERROR",
+                    "categories": [
+                      "PRODUCT"
+                    ],
+                    "enforcements": {
+                      "actions": [
+                        {
+                          "action": "CATALOG_ITEM_REMOVED"
+                        }
+                      ],
+                      "exemption": {
+                        "status": "NOT_EXEMPT"
+                      }
+                    },
+                    "marketplaceIds": [
+                      "ATVPDKIKX0DER"
+                    ]
+                  }
+                ]
+              }
+            },
+            "x-amzn-api-sandbox": {
+              "static": [
+                {
+                  "request": {
+                    "parameters": {
+                      "body": {}
+                    }
+                  },
+                  "response": {
+                    "sku": "GM-ZDPI-9B4E",
+                    "summaries": [
+                      {
+                        "marketplaceId": "ATVPDKIKX0DER",
+                        "asin": "B071VG5N9D",
+                        "productType": "LUGGAGE",
+                        "conditionType": "new_new",
+                        "status": [
+                          "BUYABLE"
+                        ],
+                        "itemName": "Hardside Carry-On Spinner Suitcase Luggage",
+                        "createdDate": "2021-02-01T00:00:00Z",
+                        "lastUpdatedDate": "2021-03-01T00:00:00Z",
+                        "mainImage": {
+                          "link": "https://www.example.com/luggage.png",
+                          "height": 500,
+                          "width": 500
+                        }
+                      },
+                      {
+                        "marketplaceId": "A2EUQ1WTGCTBG2",
+                        "asin": "B071VG5N9D",
+                        "productType": "LUGGAGE",
+                        "conditionType": "new_new",
+                        "status": [],
+                        "itemName": "Hardside Carry-On Spinner Suitcase Luggage",
+                        "createdDate": "2021-02-02T01:00:00Z",
+                        "lastUpdatedDate": "2021-03-05T00:00:00Z",
+                        "mainImage": {
+                          "link": "https://www.example.com/luggage.png",
+                          "height": 500,
+                          "width": 500
+                        }
+                      }
+                    ],
+                    "offers": [
+                      {
+                        "marketplaceId": "ATVPDKIKX0DER",
+                        "offerType": "B2C",
+                        "price": {
+                          "currencyCode": "USD",
+                          "amount": "100.00"
+                        },
+                        "audience": {
+                          "value": "ALL",
+                          "displayName": "Sell on Amazon"
+                        },
+                        "replenishmentDiscount": {
+                          "discountPercentage": 5
+                        },
+                        "quantityDiscountPlan": {
+                          "discountType": "PERCENT",
+                          "levels": [
+                            {
+                              "lowerBound": 5,
+                              "value": "5.0"
+                            },
+                            {
+                              "lowerBound": 10,
+                              "value": "10.0"
+                            },
+                            {
+                              "lowerBound": 25,
+                              "value": "15.0"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "marketplaceId": "A2EUQ1WTGCTBG2",
+                        "offerType": "B2C",
+                        "price": {
+                          "currencyCode": "CAD",
+                          "amount": "130.00"
+                        },
+                        "audience": {
+                          "value": "ALL",
+                          "displayName": "Sell on Amazon"
+                        }
+                      }
+                    ],
+                    "fulfillmentAvailability": [
+                      {
+                        "fulfillmentChannelCode": "DEFAULT",
+                        "quantity": 100
+                      }
+                    ],
+                    "issues": [
+                      {
+                        "code": "90220",
+                        "message": "'size' is required but not supplied.",
+                        "severity": "ERROR",
+                        "attributeNames": [
+                          "size"
+                        ],
+                        "categories": [
+                          "MISSING_ATTRIBUTE",
+                          "LISTING"
+                        ],
+                        "marketplaceIds": [
+                          "ATVPDKIKX0DER"
+                        ]
+                      },
+                      {
+                        "code": "18027",
+                        "message": "We believe the main image has text, logo, graphic, or watermark that is not permitted for this product type. Submit a compliant image to lift the suppression. Also refer to Product image requirements.",
+                        "severity": "ERROR",
+                        "categories": [
+                          "INVALID_IMAGE",
+                          "LISTING"
+                        ],
+                        "enforcements": {
+                          "actions": [
+                            {
+                              "action": "SEARCH_SUPPRESSED"
+                            }
+                          ],
+                          "exemption": {
+                            "status": "EXEMPT_UNTIL_EXPIRY_DATE",
+                            "expiryDate": "2025-05-28T00:36:48.914Z"
+                          }
+                        },
+                        "marketplaceIds": [
+                          "ATVPDKIKX0DER",
+                          "A2EUQ1WTGCTBG2"
+                        ]
+                      },
+                      {
+                        "code": "99300",
+                        "message": "Product Detail Page Rules Violation (Inaccurate information on product detail page).",
+                        "severity": "ERROR",
+                        "categories": [
+                          "PRODUCT"
+                        ],
+                        "enforcements": {
+                          "actions": [
+                            {
+                              "action": "ATTRIBUTE_SUPPRESSED"
+                            }
+                          ],
+                          "exemption": {
+                            "status": "EXEMPT"
+                          }
+                        },
+                        "marketplaceIds": [
+                          "ATVPDKIKX0DER",
+                          "A2EUQ1WTGCTBG2"
+                        ]
+                      },
+                      {
+                        "code": "18155",
+                        "message": "The 'minimum price' is greater than the selling price (excluding shipping) for the listing. Review and update your price and/or minimum price.",
+                        "severity": "ERROR",
+                        "categories": [
+                          "INVALID_PRICE",
+                          "LISTING"
+                        ],
+                        "enforcements": {
+                          "actions": [
+                            {
+                              "action": "LISTING_SUPPRESSED"
+                            }
+                          ],
+                          "exemption": {
+                            "status": "NOT_EXEMPT"
+                          }
+                        },
+                        "marketplaceIds": [
+                          "ATVPDKIKX0DER"
+                        ]
+                      },
+                      {
+                        "code": "18742",
+                        "message": "Restricted Products Policy Violation",
+                        "severity": "ERROR",
+                        "categories": [
+                          "PRODUCT"
+                        ],
+                        "enforcements": {
+                          "actions": [
+                            {
+                              "action": "CATALOG_ITEM_REMOVED"
+                            }
+                          ],
+                          "exemption": {
+                            "status": "NOT_EXEMPT"
+                          }
+                        },
+                        "marketplaceIds": [
+                          "ATVPDKIKX0DER"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "400": {
+            "description": "Request has missing or invalid parameters and cannot be parsed.",
+            "headers": {
+              "x-amzn-RateLimit-Limit": {
+                "description": "Your rate limit (requests per second) for this operation.",
+                "type": "string"
+              },
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            },
+            "x-amzn-api-sandbox": {
+              "static": [
+                {
+                  "request": {
+                    "parameters": {
+                      "sku": {
+                        "value": "BadSKU"
+                      }
+                    }
+                  },
+                  "response": {
+                    "errors": [
+                      {
+                        "code": "BAD_REQUEST",
+                        "message": "Invalid input",
+                        "details": "Invalid input"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "403": {
+            "description": "Indicates that access to the resource is forbidden. Possible reasons include Access Denied, Unauthorized, Expired Token, or Invalid Signature.",
+            "headers": {
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            }
+          },
+          "404": {
+            "description": "The resource specified does not exist.",
+            "headers": {
+              "x-amzn-RateLimit-Limit": {
+                "description": "Your rate limit (requests per second) for this operation.",
+                "type": "string"
+              },
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            }
+          },
+          "413": {
+            "description": "The request size exceeded the maximum accepted size.",
+            "headers": {
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            }
+          },
+          "415": {
+            "description": "The request payload is in an unsupported format.",
+            "headers": {
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            }
+          },
+          "429": {
+            "description": "The frequency of requests was greater than allowed.",
+            "headers": {
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            }
+          },
+          "500": {
+            "description": "An unexpected condition occurred that prevented the server from fulfilling the request.",
+            "headers": {
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            }
+          },
+          "503": {
+            "description": "Temporary overloading or maintenance of the server.",
+            "headers": {
+              "x-amzn-RequestId": {
+                "description": "Unique request reference identifier.",
+                "type": "string"
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ErrorList"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Item": {
+      "description": "A listings item.",
+      "properties": {
+        "sku": {
+          "description": "A selling partner-provided identifier for an Amazon listing.",
+          "type": "string"
+        },
+        "summaries": {
+          "$ref": "#/definitions/ItemSummaries"
+        },
+        "relationships": {
+          "$ref": "#/definitions/ItemRelationships"
+        },
+        "productTypes": {
+          "$ref": "#/definitions/ItemProductTypes"
+        }
+      },
+      "required": [
+        "sku"
+      ],
+      "type": "object"
+    },
+    "ItemSummaries": {
+      "description": "Summary details for a listings item.",
+      "items": {
+        "$ref": "#/definitions/ItemSummaryByMarketplace"
+      },
+      "type": "array"
+    },
+    "ItemSummaryByMarketplace": {
+      "description": "Summary details for a listings item for an Amazon store.",
+      "properties": {
+        "marketplaceId": {
+          "description": "An Amazon store identifier. Identifies the listings item's Amazon store.",
+          "type": "string"
+        },
+        "asin": {
+          "description": "The ASIN of the listings item.",
+          "type": "string"
+        },
+        "productType": {
+          "description": "The listings item's Amazon product type.",
+          "type": "string"
+        },
+        "conditionType": {
+          "description": "Identifies the condition of the listings item.",
+          "enum": [
+            "new_new",
+            "new_open_box",
+            "new_oem",
+            "refurbished_refurbished",
+            "used_like_new",
+            "used_very_good",
+            "used_good",
+            "used_acceptable",
+            "collectible_like_new",
+            "collectible_very_good",
+            "collectible_good",
+            "collectible_acceptable",
+            "club_club"
+          ],
+          "x-docgen-enum-table-extension": [
+            {
+              "value": "new_new",
+              "description": "New"
+            },
+            {
+              "value": "new_open_box",
+              "description": "New - Open Box."
+            },
+            {
+              "value": "new_oem",
+              "description": "New - OEM."
+            },
+            {
+              "value": "refurbished_refurbished",
+              "description": "Refurbished"
+            },
+            {
+              "value": "used_like_new",
+              "description": "Used - Like New."
+            },
+            {
+              "value": "used_very_good",
+              "description": "Used - Very Good."
+            },
+            {
+              "value": "used_good",
+              "description": "Used - Good."
+            },
+            {
+              "value": "used_acceptable",
+              "description": "Used - Acceptable."
+            },
+            {
+              "value": "collectible_like_new",
+              "description": "Collectible - Like New."
+            },
+            {
+              "value": "collectible_very_good",
+              "description": "Collectible - Very Good."
+            },
+            {
+              "value": "collectible_good",
+              "description": "Collectible - Good."
+            },
+            {
+              "value": "collectible_acceptable",
+              "description": "Collectible - Acceptable."
+            },
+            {
+              "value": "club_club",
+              "description": "Club"
+            }
+          ],
+          "type": "string"
+        },
+        "status": {
+          "description": "Statuses that apply to the listings item.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "BUYABLE",
+              "DISCOVERABLE"
+            ],
+            "x-docgen-enum-table-extension": [
+              {
+                "value": "BUYABLE",
+                "description": "The listings item can be purchased by shoppers. This status does not apply to vendor listings."
+              },
+              {
+                "value": "DISCOVERABLE",
+                "description": "The listings item is visible to shoppers."
+              }
+            ]
+          }
+        },
+        "fnSku": {
+          "description": "Fulfillment network stock keeping unit is an identifier used by Amazon fulfillment centers to identify each unique item.",
+          "type": "string"
+        },
+        "itemName": {
+          "description": "Name, or title, associated with an Amazon catalog item.",
+          "type": "string"
+        },
+        "createdDate": {
+          "description": "Date the listings item was created, in ISO 8601 format.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastUpdatedDate": {
+          "description": "Date the listings item was last updated, in ISO 8601 format.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "mainImage": {
+          "description": "The listings item's main image.",
+          "$ref": "#/definitions/ItemImage"
+        }
+      },
+      "required": [
+        "marketplaceId",
+        "productType",
+        "status",
+        "createdDate",
+        "lastUpdatedDate"
+      ],
+      "type": "object"
+    },
+    "ItemImage": {
+      "description": "The listings item's image.",
+      "properties": {
+        "link": {
+          "description": "The image's link or URL.",
+          "type": "string"
+        },
+        "height": {
+          "description": "The image's height, in pixels.",
+          "type": "integer"
+        },
+        "width": {
+          "description": "The image's width, in pixels.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "link",
+        "height",
+        "width"
+      ],
+      "type": "object"
+    },
+    "ItemRelationships": {
+      "description": "Relationships for a listing item, by Amazon store (for example, variations).",
+      "items": {
+        "$ref": "#/definitions/ItemRelationshipsByMarketplace"
+      },
+      "type": "array"
+    },
+    "ItemRelationshipsByMarketplace": {
+      "description": "Relationship details for the listing item in the specified Amazon store.",
+      "properties": {
+        "marketplaceId": {
+          "description": "Amazon store identifier.",
+          "type": "string"
+        },
+        "relationships": {
+          "description": "Relationships for the listing item.",
+          "items": {
+            "$ref": "#/definitions/ItemRelationship"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "marketplaceId",
+        "relationships"
+      ],
+      "type": "object"
+    },
+    "ItemRelationship": {
+      "description": "The relationship details for a listing item.",
+      "properties": {
+        "childSkus": {
+          "description": "Identifiers (SKUs) of the related items that are children of this listing item.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parentSkus": {
+          "description": "Identifiers (SKUs) of the related items that are parents of this listing item.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "variationTheme": {
+          "description": "For `VARIATION` relationships, the variation theme is the combination of listing item attributes that define the variation family.",
+          "$ref": "#/definitions/ItemVariationTheme"
+        },
+        "type": {
+          "description": "The type of relationship.",
+          "example": "VARIATION",
+          "enum": [
+            "VARIATION",
+            "PACKAGE_HIERARCHY"
+          ],
+          "x-docgen-enum-table-extension": [
+            {
+              "value": "VARIATION",
+              "description": "The listing item in the request is a variation parent or variation child of the related listing items, indicated by SKU."
+            },
+            {
+              "value": "PACKAGE_HIERARCHY",
+              "description": "The listing item in the request is a package container or is contained by the related listing items, indicated by SKU."
+            }
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "ItemVariationTheme": {
+      "description": "A variation theme that indicates the combination of listing item attributes that define the variation family.",
+      "properties": {
+        "attributes": {
+          "description": "The names of the listing item attributes that are associated with the variation theme.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "theme": {
+          "description": "The variation theme that indicates the combination of listing item attributes that define the variation family.",
+          "example": "COLOR_NAME/STYLE_NAME",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attributes",
+        "theme"
+      ],
+      "type": "object"
+    },
+    "ItemProductTypes": {
+      "description": "Product types for a listing item, by Amazon store.",
+      "items": {
+        "$ref": "#/definitions/ItemProductTypeByMarketplace"
+      },
+      "type": "array"
+    },
+    "ItemProductTypeByMarketplace": {
+      "description": "Product types that are associated with the listing item for the specified Amazon store.",
+      "properties": {
+        "marketplaceId": {
+          "description": "Amazon store identifier.",
+          "type": "string"
+        },
+        "productType": {
+          "description": "The name of the product type that is submitted by the Selling Partner.",
+          "example": "LUGGAGE",
+          "type": "string"
+        }
+      },
+      "required": [
+        "marketplaceId",
+        "productType"
+      ],
+      "type": "object"
+    }
+  }
+}

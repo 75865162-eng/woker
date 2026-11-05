@@ -7,6 +7,7 @@ const zones: Record<string, string> = {
   A1F83G8C2ARO7P: "Europe/London", APJ6JRA9NG5V4: "Europe/Rome", A1VC38T7YXB528: "Asia/Tokyo",
   A39IBJ37TRP1C6: "Australia/Sydney", A19VAU5U5O7RUS: "Asia/Singapore", A21TJRUUN4KGV: "Asia/Kolkata",
 };
+export function reportTimeZone(marketplaceId: string): string { const zone = zones[marketplaceId]; if (!zone) throw new SyncInputError("该站点业务时区尚未核验。"); return zone; }
 export type RequestedRange = { from: string; to: string; timeZone: string; startAt: string; endExclusive: string; dateField: "report_business_date"; endInclusive: true; reportEndAt: string; periodClosed: boolean };
 export function businessDate(value: unknown): string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) throw new SyncInputError("业务日期无效。");

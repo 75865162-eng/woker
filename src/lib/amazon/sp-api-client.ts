@@ -7,6 +7,31 @@ const signingService = "execute-api";
 const tokenRefreshSkewMs = 5 * 60_000;
 const userAgent = "amazon-ad-bulk-operation/1.0 (Language=TypeScript/5)";
 
+const inboundReadPath = "/inbound/fba/2024-03-20/inboundPlans";
+function inboundPathId(value: string): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(value)) throw new AmazonSpApiError("FBA 在途读取标识无效。");
+  return encodeURIComponent(value);
+}
+function inboundPageQuery(token?: string): string {
+  const query = new URLSearchParams({ pageSize: "10" });
+  if (token !== undefined) {
+    if (typeof token !== "string" || !token.trim() || token.length > 4096 || /[\u0000-\u001f\u007f]/.test(token)) throw new AmazonSpApiError("FBA 在途分页标识无效。");
+    query.set("paginationToken", token);
+  }
+  return query.toString();
+}
+function inboundRequestOperation(url: string): string | undefined {
+  const path = new URL(url).pathname;
+  if (path === inboundReadPath) return "listInboundPlans";
+  if (!path.startsWith(inboundReadPath + "/")) return undefined;
+  const parts = path.slice(inboundReadPath.length + 1).split("/");
+  if (parts.length === 1) return "getInboundPlan";
+  if (parts.length === 2 && parts[1] === "items") return "listInboundPlanItems";
+  if (parts.length === 3 && parts[1] === "shipments") return "getShipment";
+  if (parts.length === 4 && parts[1] === "shipments" && parts[3] === "items") return "listShipmentItems";
+  return undefined;
+}
+
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export type AmazonSpApiClientOptions = {
@@ -83,10 +108,72 @@ export class AmazonSpApiClient {
     return this.request("GET", "/sellers/v1/marketplaceParticipations");
   }
 
+  async getListingDetail(input: { sellerId: string; sellerSku: string; marketplaceId: string }): Promise<{ body: unknown; rawBody: string }> {
+    if (!input.sellerId || input.sellerId.length > 200 || !input.sellerSku.trim() || input.sellerSku.length > 255 || /[\u0000-\u001f\u007f]/.test(input.sellerSku)) throw new AmazonSpApiError("Listing 详情范围无效。");
+    const query = new URLSearchParams({ marketplaceIds: input.marketplaceId, includedData: "summaries,attributes,relationships,productTypes" });
+    let rawBody = "";
+    const body = await this.request("GET", `/listings/2021-08-01/items/${encodeURIComponent(input.sellerId)}/${encodeURIComponent(input.sellerSku)}?${query}`, undefined, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+  async getCatalogDetail(input: { asin: string; marketplaceId: string }): Promise<{ body: unknown; rawBody: string }> {
+    if (!/^[A-Z0-9]{10}$/.test(input.asin)) throw new AmazonSpApiError("目录详情 ASIN 无效。");
+    const query = new URLSearchParams({ marketplaceIds: input.marketplaceId, includedData: "summaries,attributes,classifications,images,identifiers,productTypes,relationships,dimensions" });
+    let rawBody = "";
+    const body = await this.request("GET", `/catalog/2022-04-01/items/${input.asin}?${query}`, undefined, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+
   async searchListingsItems(input: { sellerId: string; marketplaceId: string; nextToken?: string }): Promise<unknown> {
     const query = new URLSearchParams({ marketplaceIds: input.marketplaceId, includedData: "summaries,fulfillmentAvailability", pageSize: "20" });
     if (input.nextToken) query.set("pageToken", input.nextToken);
     return this.request("GET", `/listings/2021-08-01/items/${encodeURIComponent(input.sellerId)}?${query}`);
+  }
+
+  /** Read-only inbound candidates; adding client methods does not enable the
+   * fulfillment resource. Raw address/contact payloads must remain encrypted.
+   * No marketplace filter is invented for a seller-scoped upstream operation.
+   */
+  async getOwnPrices(input: { asins: string[]; marketplaceId: string }): Promise<{ body: unknown; rawBody: string }> {
+    if (!input.asins.length || input.asins.length > 20 || input.asins.some(asin => !/^[A-Z0-9]{10}$/.test(asin)) || new Set(input.asins).size !== input.asins.length) throw new AmazonSpApiError("价格请求 ASIN 范围无效。");
+    const query = new URLSearchParams({ MarketplaceId: input.marketplaceId, Asins: input.asins.join(","), ItemType: "Asin", ItemCondition: "New", OfferType: "B2C" });
+    let rawBody = "";
+    const body = await this.request("GET", `/products/pricing/v0/price?${query}`, undefined, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+  async getCompetitiveSummary(input: { asins: string[]; marketplaceId: string }): Promise<{ body: unknown; rawBody: string }> {
+    if (!input.asins.length || input.asins.length > 20 || input.asins.some(asin => !/^[A-Z0-9]{10}$/.test(asin)) || new Set(input.asins).size !== input.asins.length) throw new AmazonSpApiError("价格请求 ASIN 范围无效。");
+    let rawBody = "";
+    const body = await this.request("POST", "/batches/products/pricing/2022-05-01/items/competitiveSummary", { requests: input.asins.map(asin => ({ asin, marketplaceId: input.marketplaceId, includedData: ["featuredBuyingOptions", "referencePrices"], method: "GET", uri: "/products/pricing/2022-05-01/items/competitiveSummary" })) }, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+  async createObservationReport(input: { reportType: string; marketplaceIds: string[]; dataStartTime: string; dataEndTime: string; reportOptions: Record<string, string> }): Promise<unknown> {
+    if (!["GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT", "GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT", "GET_SALES_AND_TRAFFIC_REPORT"].includes(input.reportType) || input.marketplaceIds.length !== 1) throw new AmazonSpApiError("报告请求类型或站点范围无效。");
+    return this.request("POST", "/reports/2021-06-30/reports", input);
+  }
+  async listInboundPlans(input: { paginationToken?: string } = {}): Promise<{ body: unknown; rawBody: string }> {
+    return this.readInbound(`${inboundReadPath}?${inboundPageQuery(input.paginationToken)}`);
+  }
+
+  async getInboundPlan(input: { inboundPlanId: string }): Promise<{ body: unknown; rawBody: string }> {
+    return this.readInbound(`${inboundReadPath}/${inboundPathId(input.inboundPlanId)}`);
+  }
+
+  async listInboundPlanItems(input: { inboundPlanId: string; paginationToken?: string }): Promise<{ body: unknown; rawBody: string }> {
+    return this.readInbound(`${inboundReadPath}/${inboundPathId(input.inboundPlanId)}/items?${inboundPageQuery(input.paginationToken)}`);
+  }
+
+  async getInboundShipment(input: { inboundPlanId: string; shipmentId: string }): Promise<{ body: unknown; rawBody: string }> {
+    return this.readInbound(`${inboundReadPath}/${inboundPathId(input.inboundPlanId)}/shipments/${inboundPathId(input.shipmentId)}`);
+  }
+
+  async listInboundShipmentItems(input: { inboundPlanId: string; shipmentId: string; paginationToken?: string }): Promise<{ body: unknown; rawBody: string }> {
+    return this.readInbound(`${inboundReadPath}/${inboundPathId(input.inboundPlanId)}/shipments/${inboundPathId(input.shipmentId)}/items?${inboundPageQuery(input.paginationToken)}`);
+  }
+
+  private async readInbound(path: string): Promise<{ body: unknown; rawBody: string }> {
+    let rawBody = "";
+    const body = await this.request("GET", path, undefined, text => { rawBody = text; });
+    return { body, rawBody };
   }
 
   /** Orders API 2026-01-01, searchOrders. FULFILLMENT may include gift-message PII;
@@ -153,6 +240,40 @@ export class AmazonSpApiClient {
    * https://developer-docs.amazon.com/sp-api/reference/createreport */
   async createReport(input: { reportType: string; marketplaceId: string; from: string; to: string }): Promise<unknown> {
     return this.request("POST", "/reports/2021-06-30/reports", { reportType: input.reportType, marketplaceIds: [input.marketplaceId], dataStartTime: input.from, dataEndTime: input.to });
+  }
+  /** Reports v2021-06-30 createReport for the two request-only FBA reports.
+   * Their reviewed catalog entries do not define a date window; do not send one.
+   * https://developer-docs.amazon.com/sp-api/reference/createreport
+   */
+  async createSnapshotReport(input: { reportType: string; marketplaceId: string }): Promise<unknown> {
+    return this.request("POST", "/reports/2021-06-30/reports", { reportType: input.reportType, marketplaceIds: [input.marketplaceId] });
+  }
+  /** Reports v2021-06-30 FBA Inventory Ledger Detailed View. The event filter
+   * and closed date window are frozen by the approval workflow.
+   */
+  async createInventoryLedgerReport(input: { marketplaceId: string; from: string; to: string; eventType: string }): Promise<unknown> {
+    const allowed = ["", "Adjustments", "CustomerReturns", "Receipts", "Shipments", "VendorReturns", "WhseTransfers"];
+    if (!allowed.includes(input.eventType) || !/^\d{4}-\d{2}-\d{2}T00:00:00Z$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}T23:59:59Z$/.test(input.to)) throw new AmazonSpApiError("库存事件报告范围无效。");
+    return this.request("POST", "/reports/2021-06-30/reports", {
+      reportType: "GET_LEDGER_DETAIL_VIEW_DATA", marketplaceIds: [input.marketplaceId],
+      dataStartTime: input.from, dataEndTime: input.to, reportOptions: { eventType: input.eventType },
+    });
+  }
+  /** Reports v2021-06-30 getReports. Amazon requires a nextToken follow-up to
+   * contain only nextToken, so keep the token branch separate from initial filters.
+   * https://developer-docs.amazon.com/sp-api/reference/getreports
+   */
+  async getReports(input: { reportType: string; marketplaceId: string; createdSince: string; createdUntil: string; nextToken?: string }): Promise<unknown> {
+    const query = new URLSearchParams();
+    if (input.nextToken) query.set("nextToken", input.nextToken);
+    else {
+      query.set("reportTypes", input.reportType);
+      query.set("marketplaceIds", input.marketplaceId);
+      query.set("createdSince", input.createdSince);
+      query.set("createdUntil", input.createdUntil);
+      query.set("pageSize", "100");
+    }
+    return this.request("GET", `/reports/2021-06-30/reports?${query.toString()}`);
   }
   /** Reports v2021-06-30 https://developer-docs.amazon.com/sp-api/reference/getreport */
   async getReport(reportId: string): Promise<unknown> {
@@ -290,7 +411,7 @@ export class AmazonSpApiClient {
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     try {
       const response = await this.fetcher(input, { ...init, signal: controller.signal });
-      this.onResponse?.({ operation: input === this.tokenEndpoint ? "LWA" : new URL(input).pathname === "/finances/2024-06-19/transactions" ? "listTransactions" : new URL(input).pathname.startsWith("/orders/2026-01-01/orders/") ? "getOrder" : input.includes("/orders/2026-01-01/orders") ? "searchOrders" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/listings/") ? "searchListingsItems" : input.includes("/reports/2021-06-30/documents/") ? "getReportDocument" : input.includes("/reports/2021-06-30/reports/") ? "getReport" : input.includes("/reports/2021-06-30/reports") ? "createReport" : "getMarketplaceParticipations", status: response.status,
+      this.onResponse?.({ operation: input === this.tokenEndpoint ? "LWA" : inboundRequestOperation(input) ?? (input.includes("/products/pricing/v0/price") ? "getPricing" : input.includes("/products/pricing/2022-05-01/") ? "getCompetitiveSummary" : new URL(input).pathname === "/finances/2024-06-19/transactions" ? "listTransactions" : new URL(input).pathname.startsWith("/orders/2026-01-01/orders/") ? "getOrder" : input.includes("/orders/2026-01-01/orders") ? "searchOrders" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/catalog/2022-04-01/items/") ? "getCatalogItem" : input.includes("/listings/") ? (new URL(input).pathname.split("/").length > 5 ? "getListingsItem" : "searchListingsItems") : input.includes("/reports/2021-06-30/documents/") ? "getReportDocument" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("nextToken") ? "getReports" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("reportTypes") ? "getReports" : input.includes("/reports/2021-06-30/reports/") ? "getReport" : input.includes("/reports/2021-06-30/reports") ? "createReport" : "getMarketplaceParticipations"), status: response.status,
         requestId: safeRequestId(response.headers.get("x-amzn-requestid")), rateLimit: safeRateLimit(response.headers.get("x-amzn-ratelimit-limit")) });
       return response;
     } catch (error) {

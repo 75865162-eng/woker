@@ -18,6 +18,7 @@ export async function readTaskSnapshot(scope: SyncScope, params: URLSearchParams
     if (!source) throw new SyncInputError("数据源不存在。", 404);
     if (task.resource !== source.resource || !task.finishedAt) throw new SyncInputError("任务来源链不一致，快照暂不可浏览。", 409);
     const resource = implementedDomain(source.resource);
+    if (["fulfillment", "pricing", "brand_analytics", "buy_box_history"].includes(resource)) throw new SyncInputError("该域请使用已发布观察版本查询入口。", 409);
     if (resource === "sales_traffic") throw new SyncInputError("销售流量请使用业务日报查询入口。");
     if (resource === "returns") throw new SyncInputError("退货请使用已发布报告查询入口。");
     if (resource === "finance") throw new SyncInputError("财务为逐页提交的增量记录，请使用财务交易入口。");

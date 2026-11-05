@@ -21,7 +21,7 @@ test("data domain catalog has explicit execution and planning metadata", () => {
     assert.ok(Number.isInteger(domain.frequency) && domain.frequency > 0);
     assert.ok(Number.isInteger(domain.priority) && domain.priority >= 1 && domain.priority <= 4);
   }
-  assert.deepEqual(syncDomains.filter(domain => domain.implemented).map(domain => domain.id).sort(), ["catalog", "finance", "inventory", "orders", "returns", "sales_traffic"]);
+  assert.deepEqual(syncDomains.filter(domain => domain.implemented).map(domain => domain.id).sort(), ["brand_analytics", "buy_box_history", "catalog", "catalog_items", "finance", "fulfillment", "inventory", "inventory_age", "inventory_events", "listing_details", "orders", "pricing", "reimbursements", "returns", "sales_traffic", "settlements"]);
 });
 test("plans reject unimplemented domains, incremental modes and invalid scope/frequency", () => {
   const p = { name: "inventory", resource: "inventory", enabled: false, intervalMinutes: 60, sourceIds: ["one"] };

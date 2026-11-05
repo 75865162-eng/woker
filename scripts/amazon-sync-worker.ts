@@ -5,9 +5,11 @@ import { tickSyncCenter } from "@/lib/amazon-sync/scheduler";
 import { processSyncCenterTask } from "@/lib/amazon-sync/processor";
 import { Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
-import { createRedisConnectionOptions, getAmazonSyncQueueName } from "@/lib/queue/redis-queue";
+import { createRedisConnectionOptions, getAmazonSyncQueueName, type AmazonSyncQueueJob } from "@/lib/queue/redis-queue";
 import { prisma } from "@/lib/db/prisma";
 import { refreshDueReplenishmentPlans } from "@/lib/operations/replenishment-service";
+import { processAmazonAdsSyncTask } from "@/lib/amazon-ads/sync-processor";
+import { tickAmazonAds } from "@/lib/amazon-ads/sync-scheduler";
 
 const policy = amazonWorkerPolicy();
 const amazonSyncQueueName = getAmazonSyncQueueName();
@@ -15,10 +17,11 @@ const configuredConcurrency = Number(process.env.AMAZON_SYNC_WORKER_CONCURRENCY 
 const concurrency = Number.isFinite(configuredConcurrency) ? Math.max(1, Math.min(Math.floor(configuredConcurrency), 2)) : 1;
 const workerName = process.env.AMAZON_SYNC_WORKER_NAME?.trim() || `${amazonSyncQueueName}-${process.pid}`;
 const workerId = process.env.AMAZON_SYNC_WORKER_ID?.trim() || `${workerName}-${process.pid}`;
-const worker = new Worker<{ runId: string; dispatchVersion?: number; exportId?: string; fence?: number }>(
+const worker = new Worker<AmazonSyncQueueJob>(
   amazonSyncQueueName,
   async (job) => {
     if (job.name === "export-amazon-sales" && job.data.exportId && Number.isInteger(job.data.fence)) { if (workerAllows(policy, "export", job.data.exportId)) await processSalesExport(job.data.exportId, job.data.fence!); return; }
+    if (job.name === "process-amazon-ads-sync-task" && job.data.adsTaskId && Number.isInteger(job.data.adsDispatchVersion)) { if (workerAllows(policy, "task", job.data.adsTaskId)) await processAmazonAdsSyncTask(job.data.adsTaskId, job.data.adsDispatchVersion!); return; }
     if (!Number.isInteger(job.data.dispatchVersion)) throw new Error("Legacy/unversioned jobs are rejected.");
     if (workerAllows(policy, "task", job.data.runId)) await processSyncCenterTask(job.data.runId, job.data.dispatchVersion!);
   },
@@ -31,6 +34,7 @@ async function recoverQueuedRuns() {
   recovering = true;
   try {
     await tickSyncCenter(new Date(), policy.mode === "approved-only" ? { taskIds: policy.taskIds!, exportIds: policy.exportIds! } : undefined);
+    if (policy.mode === "standard") await tickAmazonAds();
     if (policy.runReplenishment) await refreshDueReplenishmentPlans();
   } finally { recovering = false; }
 }

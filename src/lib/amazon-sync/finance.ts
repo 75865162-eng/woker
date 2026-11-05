@@ -12,7 +12,8 @@ const maxPageBytes = 4 * 1024 * 1024;
 const maxValues = 100000;
 const maxDepth = 64;
 const maxTransactions = 5000;
-class WireDecimal {
+/** Exact wire-number representation shared with price/report readers. */
+export class WireDecimal {
   constructor(readonly source: string) {}
 }
 type WireValue = null | boolean | string | WireDecimal | WireValue[] | { [key: string]: WireValue };
@@ -22,7 +23,7 @@ type WireValue = null | boolean | string | WireDecimal | WireValue[] | { [key: s
  * Duplicate decoded keys fail closed, including escaped aliases of money keys.
  * Errors never echo source text, parser context or upstream exception messages.
  */
-function readFinanceJson(source: string): WireValue {
+export function readFinanceJson(source: string): WireValue {
   if (typeof source !== "string" || source.length > maxPageBytes || new TextEncoder().encode(source).byteLength > maxPageBytes) throw new SyncInputError("财务响应超过单页大小限制。");
   let offset = 0, values = 0;
   const number = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;

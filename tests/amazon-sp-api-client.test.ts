@@ -156,3 +156,22 @@ test("short-lived LWA tokens are never cached beyond Amazon expiry", async () =>
   await client.getMarketplaceParticipations(); await client.getMarketplaceParticipations();
   assert.equal(refreshes, 2);
 });
+
+test("product detail clients request only their read allowlists and encode SKU path segments", async () => {
+  const calls: Array<{ url: string; method?: string }> = [];
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async (url, init) => {
+    calls.push({ url: String(url), method: init?.method });
+    return String(url).includes("api.amazon.com") ? Response.json({ access_token: "fixture-token", expires_in: 3600 }) : Response.json({ fixture: true });
+  } });
+  const listing = await client.getListingDetail({ sellerId: "SELLER", sellerSku: "sku/with space", marketplaceId: "ATVPDKIKX0DER" });
+  const catalog = await client.getCatalogDetail({ asin: "B123456789", marketplaceId: "ATVPDKIKX0DER" });
+  const listingUrl = new URL(calls[1].url), catalogUrl = new URL(calls[2].url);
+  assert.equal(calls[1].method, "GET"); assert.equal(listingUrl.pathname, "/listings/2021-08-01/items/SELLER/sku%2Fwith%20space");
+  assert.equal(listingUrl.searchParams.get("marketplaceIds"), "ATVPDKIKX0DER");
+  assert.equal(listingUrl.searchParams.get("includedData"), "summaries,attributes,relationships,productTypes");
+  assert.equal(catalogUrl.pathname, "/catalog/2022-04-01/items/B123456789");
+  assert.equal(catalogUrl.searchParams.get("includedData"), "summaries,attributes,classifications,images,identifiers,productTypes,relationships,dimensions");
+  assert.equal((listing.body as { fixture: boolean }).fixture, true); assert.equal(listing.rawBody, '{"fixture":true}');
+  assert.equal((catalog.body as { fixture: boolean }).fixture, true); assert.equal(catalog.rawBody, '{"fixture":true}');
+  await assert.rejects(() => client.getCatalogDetail({ asin: "bad", marketplaceId: "ATVPDKIKX0DER" }));
+});

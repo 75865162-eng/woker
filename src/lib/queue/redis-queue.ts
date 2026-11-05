@@ -26,7 +26,8 @@ export function createRedisConnectionOptions() {
 let importJobQueue: Queue<{ jobId: string }> | undefined;
 let imageUpscaleJobQueue: Queue<{ jobId: string }> | undefined;
 let productOutboxQueue: Queue<{ eventId: string }> | undefined;
-let amazonSyncQueue: Queue<{ runId: string; dispatchVersion?: number; exportId?: string; fence?: number }> | undefined;
+export type AmazonSyncQueueJob = { runId: string; dispatchVersion?: number; exportId?: string; fence?: number; adsTaskId?: string; adsDispatchVersion?: number };
+let amazonSyncQueue: Queue<AmazonSyncQueueJob> | undefined;
 let sellfoxSyncQueue: Queue<{ runId: string }> | undefined;
 
 export function getImportJobQueue() {
@@ -54,7 +55,7 @@ export function getProductOutboxQueue() {
 }
 
 export function getAmazonSyncQueue() {
-  amazonSyncQueue ??= new Queue<{ runId: string; dispatchVersion?: number; exportId?: string; fence?: number }>(getAmazonSyncQueueName(), {
+  amazonSyncQueue ??= new Queue<AmazonSyncQueueJob>(getAmazonSyncQueueName(), {
     connection: createRedisConnectionOptions(),
   });
   return amazonSyncQueue;

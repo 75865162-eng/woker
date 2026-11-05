@@ -10,6 +10,7 @@ export function orderReadWhere(scope: SyncScope, params: URLSearchParams, access
     const value = params.get(key);
     if (value) { if (value.length > 200) throw new SyncInputError("订单筛选长度超限。"); filters[key] = value; }
   }
+  const dateField = params.get("dateField") === "createdTime" ? "createdTime" : "sourceUpdatedAt";
   const dates: { gte?: Date; lt?: Date } = {};
   for (const key of ["from", "to"] as const) {
     const value = params.get(key); if (!value) continue;
@@ -17,7 +18,12 @@ export function orderReadWhere(scope: SyncScope, params: URLSearchParams, access
     if (key === "from") dates.gte = new Date(value); else dates.lt = new Date(Date.parse(value) + 86400000);
   }
   if (dates.gte && dates.lt && dates.gte >= dates.lt) throw new SyncInputError("订单日期范围无效。");
-  if (Object.keys(dates).length) filters.sourceUpdatedAt = dates;
+  if (Object.keys(dates).length) filters[dateField] = dates;
+  const sellerSku = params.get("sellerSku"), asin = params.get("asin");
+  if (sellerSku || asin) {
+    if ((sellerSku?.length ?? 0) > 500 || (asin?.length ?? 0) > 500) throw new SyncInputError("订单商品筛选长度超限。");
+    filters.items = { some: { ...(sellerSku ? { sellerSku } : {}), ...(asin ? { asin } : {}) } };
+  }
   return { AND: [scope, sellerAccessWhere(access), filters, { source: { resource: "orders" } }] };
 }
 
@@ -32,7 +38,7 @@ export async function readOrders(scope: SyncScope, params: URLSearchParams, acto
     const [total, rows, sources] = await Promise.all([
       tx.amazonOrderRecord.count({ where }),
       tx.amazonOrderRecord.findMany({ where, orderBy: [{ sourceUpdatedAt: "desc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize,
-        select: { amazonOrderId: true, sourceId: true, sourceRunId: true, sellerAccountId: true, marketplaceId: true, createdTime: true, sourceUpdatedAt: true, rawStatus: true, normalizedStatus: true, marketplaceTimeZone: true, capturedAt: true, detailsUpdatedAt: true, detailPolicyDigest: true, grandTotalOriginal: true, currencyCode: true } }),
+        select: { amazonOrderId: true, sourceId: true, sourceRunId: true, sellerAccountId: true, marketplaceId: true, createdTime: true, sourceUpdatedAt: true, rawStatus: true, normalizedStatus: true, marketplaceTimeZone: true, capturedAt: true, detailsUpdatedAt: true, detailPolicyDigest: true, grandTotalOriginal: true, currencyCode: true, items: { select: { orderItemId: true, asin: true, sellerSku: true, quantityOrdered: true, proceedsOriginal: true, currencyCode: true } } } }),
       tx.amazonSyncDataSource.findMany({ where: { AND: [{ ...scope, resource: "orders", ...(params.get("sellerAccountId") ? { sellerAccountId: params.get("sellerAccountId")! } : {}), ...(params.get("marketplaceId") ? { marketplaceId: params.get("marketplaceId")! } : {}), ...(params.get("sourceId") ? { id: params.get("sourceId")! } : {}) }, sellerAccessWhere(access)] },
         select: { id: true, enabled: true, marketplaceId: true, orderPolicy: true, seller: { select: { displayName: true } }, resourceCursor: { select: { watermarkFrom: true, watermarkTo: true, lastSuccessAt: true, status: true, listComplete: true, detailPolicyDigest: true, updatedAt: true } } }, take: 201 }),
     ]);

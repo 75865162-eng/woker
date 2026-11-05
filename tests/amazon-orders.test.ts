@@ -152,9 +152,12 @@ test("orders refresh is single flight across client instances and rotates with c
 
 test("orders query intersects tenant, seller/site grants and explicit filters", () => {
   const access = { allSellers: false, sellerIds: ["allowed-seller"], scopes: [{ sellerAccountId: "allowed-seller", marketplaceIds: ["allowed-site"] }] };
-  const result = orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ sellerAccountId: "forbidden-seller", marketplaceId: "forbidden-site", amazonOrderId: "fixture-order", from: "2026-11-01", to: "2026-11-02" }), access);
+  const result = orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ sellerAccountId: "forbidden-seller", marketplaceId: "forbidden-site", amazonOrderId: "fixture-order", from: "2026-11-01", to: "2026-11-02", dateField: "createdTime", sellerSku: "fixture-sku", asin: "fixture-asin" }), access);
   const text = JSON.stringify(result);
-  assert.ok(text.includes('"AND"') && text.includes("allowed-seller") && text.includes("forbidden-seller") && text.includes("allowed-site") && text.includes("forbidden-site"));
+  assert.ok(text.includes('"AND"') && text.includes("allowed-seller") && text.includes("forbidden-seller") && text.includes("allowed-site") && text.includes("forbidden-site") && text.includes("fixture-sku") && text.includes("fixture-asin"));
+  assert.ok(text.includes('"createdTime"') && text.includes('"items"') && text.includes('"some"'));
   assert.ok(text.includes("2026-11-03T00:00:00.000Z"));
+  const updatedDate = orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ from: "2026-11-01" }), access);
+  assert.ok(JSON.stringify(updatedDate).includes('"sourceUpdatedAt"'));
   for (const from of ["2026-02-30", "invalid", "2026-11-04"]) assert.throws(() => orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ from, to: "2026-11-01" }), access));
 });

@@ -60,6 +60,10 @@ async function setup(page: Page, readOnly = false, entry = false) {
     if (section === "approvals") return route.fulfill({ json: { ...common, requests: [{ id: "approval-1", targetEnvironment: "local", changeType: "CredentialChange", operation: state.approvalOperation, targetId: "auth-a", beforeSummary: { credentials: "已配置" }, afterSummary: { refreshToken: "将替换／新增" }, sellerIds: ["SELLER-a"], marketplaceIds: ["US"], domains: ["inventory"], sourceIds: [], baseRevision: 1, changeDigest: "fixture-digest", requestedByUserId: "requester", approvedByUserId: state.approvalStatus === "APPROVED" ? "approver" : null, status: state.approvalStatus, expiresAt: "2026-11-04T02:00:00Z", appliedAt: null, createdAt: "2026-11-04T01:00:00Z" }] } });
     if (section === "sources") return route.fulfill({ json: { ...common, sources: state.salesSources.length ? state.salesSources : sources } });
     if (section === "orders") return route.fulfill({ json: { access, rows: [], sources: [], pagination: { total: 0, pageCount: 0 } } });
+    if (section === "domain-reports") {
+      const eventSource = { id: "inventory-event-source", resource: "inventory_events", sellerAccountId: "store-a", marketplaceId: "US", seller: { displayName: "店铺 A" } };
+      return route.fulfill({ json: { resource: url.searchParams.get("resource"), source: eventSource, sources: [eventSource], documents: [], rows: [], pagination: { page: 1, pageSize: 50, total: 0, pageCount: 0 }, dateMeaning: "Amazon ledger event date", amountMeaning: "Original report values" } });
+    }
     if (section === "plans") return route.fulfill({ json: { ...common, sources, plans: state.plans } });
     if (section === "tasks") return route.fulfill({ json: { ...common, rows: [{ ...task, scope: { sellerAccountId: "store-a", marketplaceId: "US", seller: sources[0].seller } }], pagination: { total: 31, page: Number(url.searchParams.get("page")), pageSize: 30, pageCount: 2 } } });
     if (section === "task") return route.fulfill({ json: { ...common, task: state.succeeded ? { ...task, status: "SUCCEEDED", stage: "COMPLETED", error: null } : task, source: sources[0], logs: [{ id: "log", attempt: 1, event: "FAILED", stage: "FETCHING", page: 2, code: "THROTTLE", statusCode: 429, rateLimit: "1", requestId: "fixture-request", createdAt: "2026-11-04T01:00:05Z" }], nextAfter: null } });
@@ -120,6 +124,19 @@ test("authorization configuration remains discoverable after a read failure and 
   await expect(page.getByLabel("lwaClientSecret", { exact: true })).toHaveAttribute("type", "password");
   await expect(page.getByLabel("refreshToken", { exact: true })).toHaveAttribute("type", "password");
   expect(calls.some(c => c.body)).toBe(false);
+});
+
+test("inventory event page submits a bounded report request through approval", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.getByRole("button", { name: "FBA 库存事件", exact: true }).click();
+  await expect(page.getByTestId("amazon-inventory_events-workbench")).toBeVisible();
+  await page.getByRole("combobox", { name: "事件类型", exact: true }).selectOption("Adjustments");
+  await page.getByRole("textbox", { name: "开始日期", exact: true }).fill("2026-11-02");
+  await page.getByRole("textbox", { name: "结束日期（含）", exact: true }).fill("2026-11-04");
+  await page.getByRole("button", { name: "申请库存事件采集", exact: true }).click();
+  await expect.poll(() => calls.some(call => call.body?.action === "run" && call.body?.eventType === "Adjustments")).toBe(true);
+  expect(calls.find(call => call.body?.action === "run")?.body).toMatchObject({ dateFrom: "2026-11-02", dateTo: "2026-11-04", eventType: "Adjustments", sourceIds: ["inventory-event-source"] });
+  await expect(page.getByText("申请经审批后才可执行；本页面不直接请求 Amazon。", { exact: true })).toBeVisible();
 });
 
 test("entry probe failure explains configuration prerequisites and can retry", async ({ page }) => {
@@ -542,4 +559,74 @@ test("authorization disable stays pending until explicit approval and applicatio
   await expect(page.getByRole("button", { name: "更新授权／凭证", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "验证参与站点", exact: true })).toBeDisabled();
   expect(submissions).toBe(1); expect(applications).toBe(1);
+});
+
+test("observation domains expose inbound layers, own prices, brand analyses and history without snapshot fallback", async ({ page }) => {
+  await setup(page);
+  const observed: URLSearchParams[] = [];
+  await page.route("**/api/operations/sync-center?*", async route => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("section") !== "observations") return route.fallback();
+    observed.push(params);
+    const resource = params.get("resource"), kind = params.get("kind")!;
+    const facts = resource === "fulfillment" ? { inboundPlanId: "fixture-plan", shipmentId: "fixture-shipment", sourceStatus: "SHIPPED", sellerSku: "OBSERVATION-SKU", declaredQuantity: 20, quantitySemantics: "SHIPMENT_DECLARED", inTransitQuantity: null } : resource === "buy_box_history" ? { businessDate: "2026-11-01", asin: "B123456789", buyBoxPercentage: "0", sessions: "10", pageViews: "15" } : resource === "pricing" ? { asin: "B123456789", marketplaceId: "US", offers: [], featuredBuyingOptions: [], referencePrices: [], availability: "NO_OFFER_RETURNED" } : { from: "2026-10-01", to: "2026-10-31", searchTerm: "fixture search", searchFrequencyRank: "10", clickShare: "0.2" };
+    return route.fulfill({ json: { resource, sources: [{ id: "observation-source", marketplaceId: "US", seller: { displayName: "店铺 A" } }], source: { id: "observation-source", lastSuccessAt: "2026-11-01T01:00:00Z" }, versions: [{ id: "observation-run", finishedAt: "2026-11-01T01:00:00Z" }], rows: [{ id: "observation-row", sourceRunId: "observation-run", kind, asin: "B123456789", sellerSku: "OBSERVATION-SKU", searchTerm: null, facts, capturedAt: "2026-11-01T01:00:00Z" }], pagination: { total: 51, pageCount: 2 } } });
+  });
+  await page.getByRole("button", { name: "FBA 在途货件", exact: true }).click();
+  const inbound = page.getByTestId("amazon-fulfillment-observations");
+  await expect(inbound.getByText("fixture-plan", { exact: true })).toBeVisible();
+  await inbound.getByRole("button", { name: "货件商品", exact: true }).click();
+  await expect(inbound.getByText("SHIPMENT_DECLARED", { exact: true })).toBeVisible();
+  await inbound.getByLabel("ASIN", { exact: true }).fill("B123456789");
+  await expect.poll(() => observed.at(-1)?.get("asin")).toBe("B123456789");
+  await inbound.getByRole("button", { name: "下一页", exact: true }).click();
+  await expect.poll(() => observed.at(-1)?.get("page")).toBe("2");
+  await page.getByRole("button", { name: "价格与 Featured Offer", exact: true }).click();
+  await expect(page.getByTestId("amazon-pricing-observations").getByText("NO_OFFER_RETURNED", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "品牌分析", exact: true }).click();
+  for (const label of ["搜索查询绩效", "搜索目录绩效", "购买组合", "搜索词分析"]) {
+    await page.getByTestId("amazon-brand_analytics-observations").getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByText("fixture search", { exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Buy Box 历史日报", exact: true }).click();
+  await expect(page.getByTestId("amazon-buy_box_history-observations").getByText("0%", { exact: true })).toBeVisible();
+});
+
+test("observation read errors show retryable UI and clear stale records", async ({ page }) => {
+  await setup(page); let denied = false;
+  await page.route("**/api/operations/sync-center?*", route => {
+    if (new URL(route.request().url()).searchParams.get("section") !== "observations") return route.fallback();
+    return route.fulfill(denied ? { status: 403, json: { error: "该来源不可访问。" } } : { json: { sources: [], source: null, versions: [], rows: [], pagination: { total: 0, pageCount: 0 } } });
+  });
+  await page.getByRole("button", { name: "FBA 在途货件", exact: true }).click();
+  const panel = page.getByTestId("amazon-fulfillment-observations"); await expect(panel.getByText(/暂无已发布数据/)).toBeVisible();
+  denied = true; await panel.getByRole("button", { name: "刷新列表", exact: true }).click();
+  await expect(panel.getByRole("alert")).toHaveText("该来源不可访问。");
+  await expect(panel.getByRole("table")).toHaveCount(0);
+  denied = false; await panel.getByRole("button", { name: "刷新列表", exact: true }).click();
+  await expect(panel.getByText(/暂无已发布数据/)).toBeVisible();
+});
+
+test("Listing and Catalog source configuration submits only the selected bounded identifiers", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByLabel("ERP 店铺", { exact: true }).selectOption("store-a");
+  await page.getByLabel("已验证 Marketplace", { exact: true }).selectOption("US");
+  await page.getByLabel("数据域", { exact: true }).selectOption("listing_details");
+  await page.getByLabel("应用标识（非敏感）", { exact: true }).fill("fixture-app");
+  await page.getByLabel("Seller SKU（最多 100 个，每项最多 255 字符，逗号或换行分隔）", { exact: true }).fill("sku-1\nsku-2");
+  await page.getByRole("button", { name: "保存数据源", exact: true }).click();
+  await expect.poll(() => calls.find(c => c.body && (c.body as { resource?: string }).resource === "listing_details")?.body).toMatchObject({ resource: "listing_details", domainPolicy: { sellerSkus: ["sku-1", "sku-2"], requestsPerSecond: 1 } });
+});
+
+test("Catalog source configuration submits only the selected bounded ASINs", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
+  await page.getByLabel("ERP 店铺", { exact: true }).selectOption("store-a");
+  await page.getByLabel("已验证 Marketplace", { exact: true }).selectOption("US");
+  await page.getByLabel("数据域", { exact: true }).selectOption("catalog_items");
+  await page.getByLabel("应用标识（非敏感）", { exact: true }).fill("fixture-app");
+  await page.getByLabel("ASIN（最多 100 个，逗号或换行分隔）", { exact: true }).fill("B123456789\nB987654321");
+  await page.getByRole("button", { name: "保存数据源", exact: true }).click();
+  await expect.poll(() => calls.find(c => c.body && (c.body as { resource?: string }).resource === "catalog_items")?.body).toMatchObject({ resource: "catalog_items", domainPolicy: { asins: ["B123456789", "B987654321"] } });
 });

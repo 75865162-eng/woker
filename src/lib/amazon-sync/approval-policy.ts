@@ -1,3 +1,4 @@
+import { parseObservationPolicy } from "./observation-policy";
 import { parseReturnPolicy } from "./returns";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { SyncInputError, type SyncScope } from "./policy";
@@ -33,15 +34,16 @@ const allowed: Record<ChangeOperation, string[]> = {
   "save-access-grant": ["id", "proposedId", "revision", "userId", "roleId", "sellerAccountId", "enabled", "marketplaceIds", "actions", "mcpEnabled"],
   "save-authorization": ["id", "proposedId", "revision", "name", "amazonSellerId", "region", "endpoint", "lwaClientId", "lwaClientSecret", "refreshToken", "awsAccessKeyId", "awsSecretAccessKey", "awsSessionToken", "approvedRoles"],
   "disable-authorization": ["id", "revision"], "validate-authorization": ["id", "revision"],
-  "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy"],
+  "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy", "domainPolicy"],
   "save-plan": ["id", "proposedId", "revision", "name", "resource", "enabled", "mode", "intervalMinutes", "priority", "maxAttempts", "retentionDays", "sourceIds"],
-  "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo"], "control-task": ["id", "control"],
+  "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo", "eventType", "reportWindows"], "control-task": ["id", "control"],
 };
 export function normalizeCommand(body: Record<string, unknown>) {
   const action = operation(body.action);
   if (body.importLegacy) throw new SyncInputError("旧凭证导入入口已关闭。", 410);
   const command: Record<string, unknown> = { action };
   for (const field of allowed[action]) if (body[field] !== undefined && body[field] !== "") command[field] = body[field];
+  if (command.domainPolicy !== undefined) command.domainPolicy = parseObservationPolicy(command.domainPolicy, typeof command.resource === "string" ? command.resource : undefined);
   if (command.returnsPolicy !== undefined) command.returnsPolicy = parseReturnPolicy(command.returnsPolicy);
   if (command.financePolicy !== undefined) command.financePolicy = parseFinancePolicy(command.financePolicy);
   if (command.orderPolicy !== undefined) command.orderPolicy = parseOrderSyncPolicy(command.orderPolicy);
@@ -65,7 +67,8 @@ export function summary(command: Record<string, unknown>) {
     // Never accept arbitrary nested objects in summaries, even under a benign key.
     if (typeof v === "string") { if (v.length > 200) throw new SyncInputError("配置字段过长。"); result[k] = v; }
     else if (typeof v === "boolean" || typeof v === "number" || v === null) result[k] = v;
-    else if (["requestedRanges", "orderWindows", "financeWindows", "returnWindows"].includes(k) && v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
+    else if (["requestedRanges", "orderWindows", "financeWindows", "returnWindows", "reportWindows"].includes(k) && v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
+    else if (k === "domainPolicy") result[k] = parseObservationPolicy(v);
     else if (k === "returnsPolicy") result[k] = parseReturnPolicy(v);
     else if (k === "financePolicy") result[k] = parseFinancePolicy(v);
     else if (k === "orderPolicy") result[k] = parseOrderSyncPolicy(v);

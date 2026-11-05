@@ -1,4 +1,9 @@
+import { deduplicateFacts } from "./observation-parsers";
+import { advanceObservation, parseObservationState, observationOperation, type ObservationState } from "./observation-machine";
+import { observationReportSpec } from "./observation-policy";
+import { isObservationResource, parseObservationPolicy, assertObservationRoles, assertObservationClosed } from "./observation-policy";
 import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, parseReturnReport, returnPollDelay } from "./returns";
+import { assertDomainReportRoles, domainReportRunWindow, domainReportTypes, parseDomainReport, parseGetReportsPage, type DomainReportResource } from "./domain-reports";
 import { assertExecutionWindow } from "./execution-window";
 import { automaticPlanKey, automaticMarketplaces, isAutomaticResource } from "./automatic-schedule";
 import { assertFinanceScope } from "./finance-scope";
@@ -115,7 +120,7 @@ async function assertLiveSource(tx: Prisma.TransactionClient, run: AmazonSyncRun
   if ((scheduled ? !schedule : !grant) || !approverStillAuthorized || !frozen || frozenDigest !== run.frozenScopeDigest || (scheduled && (frozen.scheduleId !== run.scheduleId || frozen.scheduleRevision !== run.scheduleRevision || !isAutomaticResource(run.resource) || !automaticMarketplaces.has(frozen.marketplaceId ?? "")))) throw new SyncPreflightRejected("执行审批或固定目标范围已失效。");
   const source = await tx.amazonSyncDataSource.findFirst({ where: { id: run.sourceId!, organizationId: run.organizationId, workspaceId: run.workspaceId, enabled: true }, include: { authorization: true, seller: true } });
   if (!source || source.id !== frozen.sourceId || source.revision !== frozen.sourceRevision || source.authorizationId !== frozen.authorizationId || source.sellerAccountId !== frozen.sellerAccountId || source.marketplaceId !== frozen.marketplaceId || source.resource !== frozen.resource || source.resource !== run.resource || source.seller.status !== "active" || source.authorization.status !== "CONFIGURED" || source.authorization.amazonSellerId !== frozen.amazonSellerId || source.authorization.revision !== frozen.authorizationRevision || source.authorization.revision !== run.authorizationRevision) throw new SyncPreflightRejected("数据源或授权在同步期间改变。");
-  if (["orders", "finance", "returns"].includes(run.resource) && (source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint)) throw new SyncPreflightRejected("订单授权区域与已批准范围不匹配。");
+  if (["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource) && (source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint)) throw new SyncPreflightRejected("授权区域与已批准范围不匹配。");
   try {
     await assertSellerMarketplaceAccess(run, run.requestedByUserId, source.sellerAccountId, source.marketplaceId, tx, "sync");
     if (!scheduled) await assertSellerMarketplaceAccess(run, grant!.approvedByUserId!, source.sellerAccountId, source.marketplaceId, tx, "sync");
@@ -135,6 +140,22 @@ async function assertLiveSource(tx: Prisma.TransactionClient, run: AmazonSyncRun
       officialEndpoint(source.authorization.awsRegion, source.authorization.endpoint);
       if (!extractMarketplaceParticipations({ payload: source.authorization.marketplaceParticipations }).some(m => m.marketplaceId === source.marketplaceId)) throw new Error();
     } catch { throw new SyncPreflightRejected("退货角色、站点或冻结策略已变化。"); }
+  }
+  if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource)) {
+    try {
+      const resource = run.resource as DomainReportResource;
+      assertDomainReportRoles(resource, source.authorization);
+      if (["settlements", "inventory_events"].includes(resource)) domainReportRunWindow(resource, (run.frozenScope as { reportWindow?: unknown }).reportWindow);
+      if (!extractMarketplaceParticipations({ payload: source.authorization.marketplaceParticipations }).some(m => m.marketplaceId === source.marketplaceId)) throw new Error();
+      if (resource === "inventory_age" && ["A1F83G8C2ARO7P", "A13V1IB3VIYZZH", "A1PA6795UKMFR9", "APJ6JRA9NG5V4"].includes(source.marketplaceId)) throw new Error();
+    } catch { throw new SyncPreflightRejected("报告角色、站点资格或冻结范围已变化。未请求 Amazon。"); }
+  }
+  if (isObservationResource(run.resource)) {
+    try {
+      const p = parseObservationPolicy(source.domainPolicy, run.resource);
+      assertObservationRoles(p, source.authorization); assertObservationClosed(p, new Date(), source.marketplaceId);
+      if (digest(p) !== digest(parseObservationPolicy((run.frozenScope as { domainPolicy?: unknown }).domainPolicy, run.resource)) || source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint) throw new Error();
+    } catch { throw new SyncPreflightRejected("观察域角色、站点或冻结策略已变化。"); }
   }
   return source;
 }
@@ -186,8 +207,10 @@ async function executeSlice(run: AmazonSyncRun, runtime: SyncTaskRuntime = {}) {
     const sites = extractMarketplaceParticipations({ payload: auth.marketplaceParticipations });
     if (!sites.some(s => s.marketplaceId === source.marketplaceId)) throw new Error("站点未验证。");
     const events: AmazonRequestEvent[] = [];
-    const client = new AmazonSpApiClient({ ...decryptAmazonSpApiCredentials(auth.credentialsCiphertext, { ...scope, authorizationId: auth.id }), region: auth.awsRegion, endpoint: auth.endpoint }, { ...runtime.clientOptions, ...(["orders", "finance", "returns"].includes(run.resource) ? { cacheScope: canonical([scope, auth.id, auth.revision]) } : {}), onResponse: e => events.push(e) });
+    const client = new AmazonSpApiClient({ ...decryptAmazonSpApiCredentials(auth.credentialsCiphertext, { ...scope, authorizationId: auth.id }), region: auth.awsRegion, endpoint: auth.endpoint }, { ...runtime.clientOptions, ...(["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource) ? { cacheScope: canonical([scope, auth.id, auth.revision]) } : {}), onResponse: e => events.push(e) });
+    if (isObservationResource(run.resource)) { await executeObservationSlice(run, client, events); return; }
     if (run.resource === "returns") { await executeReturnSlice(run, client, events); return; }
+    if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource)) { await executeDomainReportSlice(run, client, events); return; }
     if (run.resource === "finance") { await executeFinanceSlice(run, client, events); return; }
     if (run.resource === "orders") { await executeOrderSlice(run, client, events); return; }
     if (run.resource === "sales_traffic") { await executeReportSlice(run, client, events, auth.id, source.marketplaceId, source.sellerAccountId); return; }
@@ -251,10 +274,10 @@ async function executeSlice(run: AmazonSyncRun, runtime: SyncTaskRuntime = {}) {
     if (run.paginationComplete) await publish(run); else await yieldSlice(run);
   } catch (error) {
     if (error instanceof SyncFenceLost) return;
-    const failure = ["orders", "finance", "returns"].includes(run.resource) && error instanceof SyncInputError
+    const failure = ["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource) && error instanceof SyncInputError
       ? { code: incrementalFailureCode(run.resource, error.status), retryable: false, message: error.message, retryAfterMs: 0 }
       : classifySyncFailure(error);
-    if (["orders", "finance", "returns"].includes(run.resource) && !(error instanceof SyncInputError)) failure.message = failure.retryable
+    if (["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource) && !(error instanceof SyncInputError)) failure.message = failure.retryable
       ? "增量请求暂时失败，按退避策略从已提交游标继续。"
       : "增量请求或响应校验失败；已保留提交页和游标，请核对参数、授权及分页有效期后重新申请。";
     await prisma.$transaction(async tx => {
@@ -557,13 +580,242 @@ async function executeOrderDetailSlice(run: AmazonSyncRun, source: Awaited<Retur
   });
 }
 
+/** One Reports operation or one bounded normalization batch per worker slice. */
+export async function executeDomainReportSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[], now: () => Date = () => new Date()) {
+  const resource = run.resource as DomainReportResource;
+  if (!Object.hasOwn(domainReportTypes, resource)) throw new SyncInputError("未注册的 Amazon 报告域。");
+  const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
+  const source = await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); return assertLiveSource(tx, run); });
+  assertDomainReportRoles(resource, source.authorization);
+  const window = domainReportRunWindow(resource, (run.frozenScope as { reportWindow?: unknown }).reportWindow);
+  const discoveryWindow = window && "createdSince" in window ? window : null;
+  const inventoryEventWindow = window && "dataStartTime" in window ? window : null;
+  const cursor = await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    const old = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
+    if (old && (old.resource !== resource || old.amazonSellerId !== source.authorization.amazonSellerId || old.marketplaceId !== source.marketplaceId || old.organizationId !== scope.organizationId || old.workspaceId !== scope.workspaceId)) throw new SyncInputError("报告游标身份不匹配。", 403);
+    const reportWindow = (run.frozenScope as { reportWindow?: { createdSince?: string; createdUntil?: string } }).reportWindow;
+    const starting = !old || old.status === "SUCCEEDED";
+    if (old && !starting && resource === "settlements" && (old.watermarkFrom.toISOString() !== reportWindow?.createdSince || old.watermarkTo.toISOString() !== reportWindow?.createdUntil)) throw new SyncInputError("结算发现窗口与未完成游标不匹配。", 409);
+    const create = {
+      ...scope,
+      id: randomUUID(),
+      sourceId: source.id,
+      resource,
+      amazonSellerId: source.authorization.amazonSellerId,
+      marketplaceId: source.marketplaceId,
+      watermarkFrom: new Date(discoveryWindow?.createdSince ?? inventoryEventWindow?.dataStartTime ?? now()),
+      watermarkTo: new Date(discoveryWindow?.createdUntil ?? inventoryEventWindow?.dataEndTime ?? now()),
+      status: "RUNNING",
+      activeRunId: run.id,
+    } as const;
+    const update = {
+      activeRunId: run.id,
+      status: "RUNNING",
+      ...(starting ? {
+        watermarkFrom: new Date(discoveryWindow?.createdSince ?? inventoryEventWindow?.dataStartTime ?? now()),
+        watermarkTo: new Date(discoveryWindow?.createdUntil ?? inventoryEventWindow?.dataEndTime ?? now()),
+        reportStateCiphertext: null,
+      } : {}),
+    };
+    return tx.amazonSyncResourceCursor.upsert({ where: { sourceId: source.id }, create, update });
+  });
+  const state = cursor.reportStateCiphertext ? JSON.parse(decryptCheckpoint(cursor.reportStateCiphertext, scope, cursor.id) ?? "{}") as { reportId?: string; documentId?: string; archiveTaskId?: string; archivePage?: number; offset?: number; rows?: number; totalRows?: number; publishedRows?: number; reportIds?: Array<{ reportId: string; createdTime: string | null }>; reportIndex?: number; discoveryToken?: string; creating?: boolean; polls?: number; reportCreatedAt?: string | null; requestedAt?: string; documentSaved?: boolean; reconcileToken?: string; reconcileCandidates?: Array<{ reportId: string; createdTime: string | null }> } : {};
+  const operation = resource === "settlements" && !state.reportId || state.creating ? "getReports" : !state.reportId ? "createReport" : !state.documentId ? "getReport" : "getReportDocument";
+  const budgetKey = { ...scope, authorizationId: source.authorization.id, operation };
+  const budget = await prisma.amazonSyncApiBudget.findUnique({ where: { organizationId_workspaceId_authorizationId_operation: budgetKey } });
+  if (!state.archiveTaskId && budget && budget.nextRequestAt > now()) { await yieldSlice(run, budget.nextRequestAt); return; }
+  const saveState = async (stage: string, status: "WAITING" | "SUCCEEDED" = "WAITING", nextAttemptAt = now()) => {
+    await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+      if (await stopForControl(tx, run)) return;
+      const cipher = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+      await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: cipher, status: status === "SUCCEEDED" ? "SUCCEEDED" : "RUNNING", ...(status === "SUCCEEDED" ? { lastSuccessAt: now() } : {}) } });
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { checkpointCiphertext: cipher, status, stage, finishedAt: status === "SUCCEEDED" ? now() : null, nextAttemptAt, leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 }, ...(status === "SUCCEEDED" ? { paginationComplete: true } : {}) } });
+      await log(tx, run, stage);
+    });
+  };
+  const saveProgress = async (stage: string) => prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) return true;
+    const cipher = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+    await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: cipher } });
+    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { checkpointCiphertext: cipher, stage, leaseExpiresAt: new Date(now().getTime() + leaseMs) } });
+    await log(tx, run, stage);
+    return false;
+  });
+  const record = async (error?: unknown) => persistRequests(run, events, budgetKey, error);
+  if (resource === "settlements" && !state.reportId) {
+    const response = await client.getReports({ reportType: domainReportTypes.settlements, marketplaceId: source.marketplaceId, ...discoveryWindow!, ...(state.discoveryToken ? { nextToken: state.discoveryToken } : {}) }).catch(async e => { await record(e); throw e; });
+    await record();
+    const page = parseGetReportsPage(response, domainReportTypes.settlements, source.marketplaceId);
+    const discovered = [...new Map([...(state.reportIds ?? []), ...page.reports].map(item => [item.reportId, item])).values()];
+    if (discovered.length > 1000) throw new SyncInputError("结算报告超过单任务 1000 份上限；缩小报告创建时间窗口后重新申请。", 409);
+    state.reportIds = discovered;
+    if (page.nextToken) { state.discoveryToken = page.nextToken; await saveState("SETTLEMENT_DISCOVERY"); return; }
+    if (!state.reportIds.length) {
+      await prisma.$transaction(async tx => {
+        await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+        if (await stopForControl(tx, run)) return;
+        const capturedAt = now(), cipher = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+        await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: cipher, status: "SUCCEEDED", lastSuccessAt: capturedAt } });
+        await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: capturedAt, rowCount: 0, coverage: { type: "report_discovery", reportType: domainReportTypes.settlements, reportCount: 0, createdSince: discoveryWindow!.createdSince, createdUntil: discoveryWindow!.createdUntil, capturedAt: capturedAt.toISOString() } } });
+        await tx.amazonSyncRun.update({ where: { id: run.id }, data: { checkpointCiphertext: cipher, status: "SUCCEEDED", stage: "COMPLETED", finishedAt: capturedAt, paginationComplete: true, summary: { coverage: { reportType: domainReportTypes.settlements, reportCount: 0, discoveryOnly: true } }, leaseOwner: null, leaseExpiresAt: null } });
+        await log(tx, run, "SETTLEMENT_DISCOVERY_EMPTY");
+      });
+      return;
+    }
+    state.reportIndex = 0; state.reportId = state.reportIds[0].reportId; state.reportCreatedAt = state.reportIds[0].createdTime;
+    await saveState("SETTLEMENT_REPORT_SELECTED"); return;
+  }
+  if (resource !== "settlements" && !state.reportId) {
+    if (state.creating) {
+      const requestedAt = Date.parse(state.requestedAt ?? "");
+      if (!Number.isFinite(requestedAt)) throw new SyncInputError("报告创建检查点缺少申请时间；禁止重复创建。", 409);
+      const response = await client.getReports({ reportType: domainReportTypes[resource], marketplaceId: source.marketplaceId, createdSince: new Date(requestedAt - 5_000).toISOString(), createdUntil: now().toISOString(), ...(state.reconcileToken ? { nextToken: state.reconcileToken } : {}) }).catch(async e => { await record(e); throw e; });
+      await record();
+      const page = parseGetReportsPage(response, domainReportTypes[resource], source.marketplaceId);
+      const candidates = [...new Map([...(state.reconcileCandidates ?? []), ...page.reports.filter(item => item.createdTime !== null && Date.parse(item.createdTime) >= requestedAt - 5_000)].map(item => [item.reportId, item])).values()];
+      if (candidates.length > 100) throw new SyncInputError("Amazon 报告创建核对结果超过容量上限；已停止自动处理。", 409);
+      state.reconcileCandidates = candidates;
+      if (page.nextToken) { state.reconcileToken = page.nextToken; await saveState("REPORT_CREATE_RECONCILING"); return; }
+      delete state.reconcileToken;
+      if (candidates.length > 1) throw new SyncInputError("报告申请时间范围内存在多个候选报告，无法安全确认本任务的报告；请人工核对。", 409);
+      if (candidates.length === 1) {
+        state.reportId = candidates[0].reportId;
+        state.reportCreatedAt = candidates[0].createdTime;
+        state.creating = false;
+        delete state.reconcileCandidates;
+        state.polls = 0;
+        await saveState("REPORT_CREATE_RECONCILED"); return;
+      }
+      state.polls = (state.polls ?? 0) + 1;
+      if (state.polls >= 100 || now().getTime() - requestedAt > 24 * 60 * 60_000) throw new SyncInputError("Amazon 尚未提供可核對的報告記錄；為避免重複建立，已停止自動重試。", 409);
+      await saveState("REPORT_CREATE_RECONCILING", "WAITING", new Date(now().getTime() + 60_000)); return;
+    }
+    state.creating = true; state.requestedAt = now().toISOString(); state.polls = 0; state.reconcileCandidates = [];
+    if (await saveProgress("REPORT_CREATING")) return;
+    let response;
+    try {
+      response = resource === "inventory_events"
+        ? await client.createInventoryLedgerReport({ marketplaceId: source.marketplaceId, from: inventoryEventWindow!.dataStartTime, to: inventoryEventWindow!.dataEndTime, eventType: inventoryEventWindow!.eventType })
+        : await client.createSnapshotReport({ reportType: domainReportTypes[resource], marketplaceId: source.marketplaceId });
+    }
+    catch (e) {
+      await record(e);
+      if (e instanceof AmazonSpApiError && e.status !== null && e.status >= 400 && e.status < 500 && e.status !== 408) {
+        state.creating = false; delete state.requestedAt; state.polls = 0;
+        await saveProgress("REPORT_CREATE_REJECTED");
+      }
+      throw e;
+    }
+    await record();
+    const reportId = (response as { reportId?: unknown })?.reportId;
+    if (typeof reportId !== "string" || !reportId || reportId.length > 200) throw new SyncInputError("Amazon 报告未返回有效 reportId。", 422);
+    state.reportId = reportId; state.creating = false; state.polls = 0; await saveState("REPORT_POLLING", "WAITING", new Date(now().getTime() + 60_000)); return;
+  }
+  if (!state.documentId) {
+    const report = await client.getReport(state.reportId!).catch(async e => { await record(e); throw e; }); await record();
+    const data = report as { reportId?: unknown; reportType?: unknown; marketplaceIds?: unknown; processingStatus?: unknown; reportDocumentId?: unknown; createdTime?: unknown };
+    if (data.reportId !== state.reportId || data.reportType !== domainReportTypes[resource] || !Array.isArray(data.marketplaceIds) || data.marketplaceIds.length !== 1 || data.marketplaceIds[0] !== source.marketplaceId) throw new SyncInputError("Amazon 报告身份与任务范围不一致。", 422);
+    if (resource === "inventory_events" && inventoryEventWindow) {
+      const ledger = report as { dataStartTime?: unknown; dataEndTime?: unknown };
+      if ((ledger.dataStartTime !== undefined && Date.parse(String(ledger.dataStartTime)) !== Date.parse(inventoryEventWindow.dataStartTime)) || (ledger.dataEndTime !== undefined && Date.parse(String(ledger.dataEndTime)) !== Date.parse(inventoryEventWindow.dataEndTime))) throw new SyncInputError("库存事件报告日期与审批范围不一致。", 422);
+    }
+    if (data.createdTime !== undefined && (typeof data.createdTime !== "string" || !Number.isFinite(Date.parse(data.createdTime)))) throw new SyncInputError("Amazon 报告创建时间无效。", 422);
+    if (typeof data.createdTime === "string") state.reportCreatedAt = new Date(data.createdTime).toISOString();
+    if (["IN_QUEUE", "IN_PROGRESS"].includes(String(data.processingStatus))) { state.polls = (state.polls ?? 0) + 1; if (state.polls > 100) throw new SyncInputError("报告轮询达到上限，请人工检查后重新申请。", 409); await saveState("REPORT_POLLING", "WAITING", new Date(now().getTime() + 60_000)); return; }
+    if (data.processingStatus !== "DONE" || typeof data.reportDocumentId !== "string" || !data.reportDocumentId) throw new SyncInputError("Amazon 报告失败、取消或缺少文档 ID。", 422);
+    state.documentId = data.reportDocumentId; await saveState("REPORT_DOWNLOADING"); return;
+  }
+  if (!state.archiveTaskId) {
+    const document = await client.getReportDocument(state.documentId).catch(async e => { await record(e); throw e; }); await record();
+    let text: string;
+    try { text = await client.downloadReportText(document); } catch (e) { await record(e); throw e; }
+    await record();
+    const parsed = parseDomainReport(resource, text, { limit: 0, ...(inventoryEventWindow ? { inventoryEventWindow } : {}) });
+    const rawPage = Math.max(run.pagesCompleted + 1, 1);
+    await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+      if (await stopForControl(tx, run)) return;
+      await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: rawPage, resource, requestMetadata: { apiVersion: "2021-06-30", operation: "getReportDocument", reportId: state.reportId, documentId: state.documentId, reportCreatedAt: state.reportCreatedAt ?? null, reportType: domainReportTypes[resource], marketplaceId: source.marketplaceId, ...(resource === "inventory_events" ? { reportWindow: window } : {}), rawMayContainPii: true }, rawCiphertext: seal({ rawText: text }, scope, `${run.id}:${rawPage}`, `amazon-${resource}-raw.v1`), bodySha256: createHash("sha256").update(text).digest("hex"), capturedAt: now() } });
+      state.archiveTaskId = run.id; state.archivePage = rawPage; state.offset = 0; state.rows = parsed.rowCount;
+      const cipher = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+      await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: cipher } });
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { checkpointCiphertext: cipher, pagesCompleted: { increment: 1 }, status: "WAITING", stage: "REPORT_PARSING", nextAttemptAt: now(), leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
+    });
+    return;
+  }
+  const archive = await prisma.amazonSyncRawPage.findFirst({ where: { ...scope, taskId: state.archiveTaskId, page: state.archivePage, resource, task: { sourceId: source.id } } });
+  if (!archive) throw new SyncInputError("报告密文原件缺失，无法解析。", 409);
+  const raw = unseal(archive.rawCiphertext, scope, `${archive.taskId}:${archive.page}`, `amazon-${resource}-raw.v1`) as { rawText: string };
+  if (createHash("sha256").update(raw.rawText).digest("hex") !== archive.bodySha256) throw new SyncInputError("报告原件摘要校验失败。", 409);
+  const offset = state.offset ?? 0, parsed = parseDomainReport(resource, raw.rawText, { offset, limit: 500, ...(inventoryEventWindow ? { inventoryEventWindow } : {}) }), batch = parsed.rows;
+  if (!state.documentSaved) {
+    await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+      if (await stopForControl(tx, run)) return;
+      const id = digest([scope, source.id, state.reportId]);
+      const prior = await tx.amazonSyncReportDocument.findUnique({ where: { organizationId_workspaceId_sourceId_reportId: { ...scope, sourceId: source.id, reportId: state.reportId! } } });
+      if (prior && prior.contentSha256 !== archive.bodySha256) throw new SyncInputError("相同 Amazon reportId 返回了不同内容摘要；拒绝覆盖已归档报告。", 409);
+      await tx.amazonSyncReportDocument.createMany({ data: [{ id, ...scope, sourceId: source.id, sourceRunId: run.id, sellerAccountId: source.sellerAccountId, amazonSellerId: source.authorization.amazonSellerId, marketplaceId: source.marketplaceId, resource, reportType: domainReportTypes[resource], reportId: state.reportId!, reportCreatedAt: state.reportCreatedAt ? new Date(state.reportCreatedAt) : null, businessDateField: parsed.dateField, rowCount: parsed.rowCount, contentSha256: archive.bodySha256, status: "STAGED", capturedAt: now() }], skipDuplicates: true });
+      state.documentSaved = true;
+      const cipher = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+      await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: cipher } });
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { checkpointCiphertext: cipher, status: "WAITING", stage: "REPORT_PARSING", nextAttemptAt: now(), leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
+    });
+    return;
+  }
+  const documentId = digest([scope, source.id, state.reportId]);
+  await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) return;
+    const inserted = await tx.amazonSyncReportRow.createMany({ data: batch.map(row => ({ id: digest([documentId, row.rowNumber]), ...scope, sourceId: source.id, reportDocumentId: documentId, reportId: state.reportId!, ...row, fields: row.fields as Prisma.InputJsonValue })), skipDuplicates: true });
+    state.offset = offset + batch.length;
+    state.totalRows = (state.totalRows ?? 0) + batch.length;
+    const complete = state.offset >= parsed.rowCount;
+    if (complete) await tx.amazonSyncReportDocument.update({ where: { id: documentId }, data: { status: "PUBLISHED", publishedAt: now() } });
+    const nextReport = complete && resource === "settlements" ? state.reportIds?.[(state.reportIndex ?? 0) + 1] : undefined;
+    if (nextReport) {
+      state.reportIndex = (state.reportIndex ?? 0) + 1; state.reportId = nextReport.reportId; state.reportCreatedAt = nextReport.createdTime;
+      delete state.documentId; delete state.archiveTaskId; delete state.archivePage; delete state.offset; delete state.rows; delete state.documentSaved;
+      state.polls = 0;
+    }
+    const finished = complete && !nextReport;
+    const totalProcessed = state.totalRows;
+    const totalInserted = run.insertedCount + inserted.count;
+    const cipher = encryptCheckpoint(JSON.stringify(state), scope, cursor.id);
+    await tx.amazonSyncResourceCursor.update({ where: { sourceId: source.id }, data: { reportStateCiphertext: cipher, ...(finished ? { status: "SUCCEEDED", lastSuccessAt: now() } : { status: "RUNNING" }) } });
+    await tx.amazonSyncRun.update({ where: { id: run.id }, data: { checkpointCiphertext: cipher, pagesCompleted: { increment: 1 }, processedCount: { increment: batch.length }, insertedCount: { increment: inserted.count }, status: finished ? "SUCCEEDED" : "WAITING", stage: finished ? "COMPLETED" : nextReport ? "SETTLEMENT_NEXT_REPORT" : "REPORT_PARSING", finishedAt: finished ? now() : null, paginationComplete: finished, summary: finished ? { coverage: { reportType: domainReportTypes[resource], reportIds: resource === "settlements" ? (state.reportIds ?? []).map(item => item.reportId) : [state.reportId!], rows: totalProcessed, insertedRows: totalInserted, businessDateField: parsed.dateField, dateMeaning: resource === "inventory_age" ? "snapshot; not historical inventory" : parsed.dateField } } : undefined, leaseOwner: null, leaseExpiresAt: null, dispatchVersion: { increment: 1 } } });
+    if (finished) {
+      const publishedRowCount = await tx.amazonSyncReportRow.count({ where: { ...scope, sourceId: source.id, document: { status: "PUBLISHED", resource } } });
+      await tx.amazonSyncDataSource.update({
+        where: { id: source.id },
+        data: {
+          activeRunId: run.id,
+          lastSuccessAt: now(),
+          rowCount: publishedRowCount,
+          coverage: {
+            reportType: domainReportTypes[resource],
+            reportIds: resource === "settlements" ? (state.reportIds ?? []).map(item => item.reportId) : [state.reportId!],
+            rowCount: publishedRowCount,
+            capturedAt: now().toISOString(),
+            businessDateField: parsed.dateField,
+          },
+        },
+      });
+    }
+    await log(tx, run, finished ? "REPORT_PUBLISHED" : complete ? "REPORT_ROWS_COMMITTED" : "REPORT_ROWS_COMMITTED");
+  });
+}
+
 async function persistOrderRequests(run: AmazonSyncRun, events: AmazonRequestEvent[], bucketKey: string, configuredRate: number, now: Date, error?: unknown) {
   await prisma.$transaction(async tx => {
     await scopeLock(tx, run); await assertFence(tx, run); await assertLiveSource(tx, run);
     if (events.length) await tx.amazonSyncTaskLog.createMany({ data: events.map(e => ({ organizationId: run.organizationId, workspaceId: run.workspaceId, id: randomUUID(), taskId: run.id, attempt: run.attempts, event: e.operation, stage: "REQUEST", requestId: e.requestId, statusCode: e.status, rateLimit: e.rateLimit })) });
     await tx.amazonSyncRun.update({ where: { id: run.id }, data: { apiRequests: { increment: events.length }, throttles: { increment: events.filter(e => e.status === 429).length }, leaseExpiresAt: new Date(now.getTime() + leaseMs) } });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
-    const event = events.findLast(e => ["searchOrders", "getOrder", "listTransactions", "createReport", "getReport", "getReportDocument"].includes(e.operation) && e.rateLimit);
+    const event = events.findLast(e => ["searchOrders", "getOrder", "listTransactions", "createReport", "getReport", "getReportDocument", "getInboundPlan", "listInboundPlanItems", "getShipment", "listShipmentItems", "getCompetitiveSummary", "getPricing"].includes(e.operation) && e.rateLimit);
     const observed = event?.rateLimit ? Number(event.rateLimit) : null;
     const data = { ...(observed && observed > 0 && Number.isFinite(observed) ? { observedLimit: Math.min(observed, configuredRate) } : {}), ...(error instanceof AmazonSpApiError && error.status === 429 ? { tokens: 0, blockedUntil: new Date(now.getTime() + retryDelay(run.attempts, error.retryAfterMs)) } : {}) };
     await tx.amazonSyncTokenBucket.update({ where: { bucketKey }, data });
@@ -824,4 +1076,110 @@ export async function executeReturnSlice(run: AmazonSyncRun, client: AmazonSpApi
   await commit("RETURN_REPORT_PARSING", async tx => {
     await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: 1, resource: "returns", requestMetadata: { apiVersion: "2021-06-30", operation: "getReportDocument", reportId: state.reportId!, documentId: state.documentId!, reportType: policy.reportType, marketplaceId: source.marketplaceId, window, rawMayContainPii: true }, rawCiphertext: seal({ rawText: text }, scope, `${run.id}:1`, "amazon-returns-raw.v1"), bodySha256: createHash("sha256").update(text).digest("hex"), capturedAt: now() } });
   });
+}
+
+/** Shared observation receiver. Each leased slice performs at most one bounded
+ * request; facts remain staged until a fenced, scope-checked publication. */
+async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[]) {
+  const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
+  const source = await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); return assertLiveSource(tx, run); });
+  const policy = parseObservationPolicy(source.domainPolicy, run.resource);
+  let state = parseObservationState(run.checkpointCiphertext ? unseal(run.checkpointCiphertext, scope, run.id, "amazon-observation-state.v1").state : null, policy);
+  if (observationOperation(state, policy.resource) === "uncertainCreate") throw new SyncInputError("报告申请结果不确定；禁止自动再次创建，需核对原任务。", 409);
+  const saveState = async (tx: Prisma.TransactionClient, next: ObservationState) => {
+    const checkpointCiphertext = seal({ state: next }, scope, run.id, "amazon-observation-state.v1");
+    Object.assign(run, await tx.amazonSyncRun.update({ where: { id: run.id }, data: { checkpointCiphertext, leaseExpiresAt: new Date(Date.now() + leaseMs) } }));
+  };
+  if (state.stage === "COMPLETE") {
+    await assertActor(run);
+    await prisma.$transaction(async tx => {
+      await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run);
+      if (await stopForControl(tx, run)) return;
+      const rowCount = await tx.amazonDomainObservation.count({ where: { ...scope, sourceRunId: run.id, sourceId: live.id } });
+      if (rowCount !== run.insertedCount || rowCount + run.skippedCount !== run.processedCount || !state.requests || !syncCenterEnabled(run)) throw new SyncInputError("观察记录完整性校验失败。");
+      const coverage = { type: "APPROVED_SCOPE_OBSERVATION", resource: policy.resource, complete: true, accountUniverseComplete: false, rowCount, capturedFrom: run.executionStartedAt!.toISOString(), capturedTo: new Date().toISOString(), ...(policy.resource === "fulfillment" ? { planIds: policy.planIds, marketplaceVerified: true, quantitySemantics: "DECLARED_ONLY", transportEventsAvailable: false } : policy.resource === "listing_details" ? { sellerSkus: policy.sellerSkus, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "catalog_items" ? { asins: policy.asins, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "pricing" ? { asins: policy.asins, ownPriceCoverage: "APPROVED_ASINS_NEW_B2C_GET_PRICING" } : { from: policy.from, to: policy.to, asins: policy.asins, ...(policy.resource === "brand_analytics" ? { reportKind: policy.reportKind, reportPeriod: policy.reportPeriod } : {}), reportId: state.reportId! }) };
+      await tx.amazonSyncDataSource.update({ where: { id: live.id }, data: { activeRunId: run.id, lastSuccessAt: new Date(), rowCount, coverage } });
+      await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", stage: "COMPLETED", paginationComplete: true, finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, checkpointCiphertext: null, summary: { coverage } } });
+      await log(tx, run, "OBSERVATIONS_PUBLISHED");
+    }); return;
+  }
+  if (state.requests >= policy.maxRequests) throw new SyncInputError("观察任务已达到审批请求预算，未发布新版本。", 409);
+  const operation = observationOperation(state, policy.resource), auth = source.authorization;
+  const key = { ...scope, authorizationId: auth.id, operation };
+  // Same bucket namespace as existing Reports receivers. Never split by site.
+  const bucketKey = digest([`${operation}.${["createReport", "getReport", "getReportDocument"].includes(operation) ? "2021-06-30" : policy.resource === "listing_details" ? "2021-08-01" : policy.resource === "catalog_items" ? "2022-04-01" : policy.resource === "fulfillment" ? "2024-03-20" : operation === "getPricing" ? "v0" : "2022-05-01"}`, auth.amazonSellerId, policy.applicationId]);
+  const reserve = await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) return null;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
+    const budget = await tx.amazonSyncApiBudget.findUnique({ where: { organizationId_workspaceId_authorizationId_operation: key } });
+    if (budget && budget.nextRequestAt > new Date()) return { allowed: false, nextAt: budget.nextRequestAt };
+    const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
+    const result = reserveOrderToken(bucket, { requestsPerSecond: policy.requestsPerSecond, burst: 1 }, new Date());
+    await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: result.tokens, replenishedAt: result.replenishedAt }, update: { tokens: result.tokens, replenishedAt: result.replenishedAt } });
+    if (result.allowed) {
+      state.requests++; if (state.stage === "CREATE") state.stage = "CREATING";
+      await saveState(tx, state);
+      const nextRequestAt = new Date(Date.now() + Math.ceil(1000 / policy.requestsPerSecond));
+      await tx.amazonSyncApiBudget.upsert({ where: { organizationId_workspaceId_authorizationId_operation: key }, create: { ...key, nextRequestAt }, update: { nextRequestAt } });
+    }
+    return result;
+  });
+  if (!reserve) return;
+  if (!reserve.allowed) { await yieldSlice(run, reserve.nextAt); return; }
+  let body: unknown, rawBody = ""; events.length = 0;
+  try {
+    if (policy.resource === "fulfillment") {
+      const inboundPlanId = policy.planIds[state.planIndex], shipmentId = state.shipmentIds[state.shipmentIndex];
+      const result = state.stage === "PLAN" || state.stage === "VERIFY_PLAN" ? await client.getInboundPlan({ inboundPlanId }) : state.stage === "PLAN_ITEMS" ? await client.listInboundPlanItems({ inboundPlanId, paginationToken: state.token }) : state.stage === "SHIPMENT" ? await client.getInboundShipment({ inboundPlanId, shipmentId }) : await client.listInboundShipmentItems({ inboundPlanId, shipmentId, paginationToken: state.token });
+      body = result.body; rawBody = result.rawBody;
+    } else if (policy.resource === "listing_details" || policy.resource === "catalog_items") {
+      const result = policy.resource === "listing_details" ? await client.getListingDetail({ sellerId: auth.amazonSellerId, sellerSku: policy.sellerSkus[state.planIndex], marketplaceId: source.marketplaceId }) : await client.getCatalogDetail({ asin: policy.asins[state.planIndex], marketplaceId: source.marketplaceId });
+      body = result.body; rawBody = result.rawBody;
+    } else if (policy.resource === "pricing") {
+      const result = state.stage === "OWN_PRICE" ? await client.getOwnPrices({ asins: policy.asins, marketplaceId: source.marketplaceId }) : await client.getCompetitiveSummary({ asins: policy.asins, marketplaceId: source.marketplaceId }); body = result.body; rawBody = result.rawBody;
+    } else if (state.stage === "CREATING") body = await client.createObservationReport(observationReportSpec(policy, source.marketplaceId));
+    else if (state.stage === "POLL") body = await client.getReport(state.reportId!);
+    else if (state.stage === "DOCUMENT") body = await client.getReportDocument(state.documentId!);
+    else if (state.stage === "DOWNLOAD") { rawBody = await client.downloadReportText(state.document); body = null; }
+    else throw new SyncInputError("观察任务阶段无效。");
+    if (!rawBody) rawBody = JSON.stringify(body);
+  } catch (error) {
+    await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, new Date(), error);
+    // A definite 429 means create was rejected. All uncertain outcomes retain intent.
+    if (state.stage === "CREATING" && error instanceof AmazonSpApiError && error.status === 429 || state.stage === "DOWNLOAD" && error instanceof AmazonSpApiError && [403, 404].includes(error.status ?? 0)) {
+      state.stage = state.stage === "CREATING" ? "CREATE" : "DOCUMENT"; delete state.document;
+      await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run); await saveState(tx, state); });
+      await yieldSlice(run, new Date(Date.now() + Math.max(60_000, error instanceof AmazonSpApiError ? error.retryAfterMs : 0))); return;
+    }
+    throw error;
+  }
+  await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, new Date());
+  const capturedAt = new Date();
+  // Archive before validation, including rejected contracts; never expose raw data.
+  if (Buffer.byteLength(rawBody, "utf8") > 4 * 1024 * 1024) throw new SyncInputError("Amazon 单次观察响应超过 4 MiB 限制；保留旧版本。", 413);
+  await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) throw new SyncFenceLost();
+    await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: state.requests, resource: run.resource, requestMetadata: { operation }, rawCiphertext: seal({ rawBody }, scope, `${run.id}:${state.requests}`, "amazon-observation-raw.v1"), bodySha256: digest(rawBody), capturedAt } });
+  });
+  const result = advanceObservation(policy, state, body, { rawBody, marketplaceId: source.marketplaceId, sellerId: auth.amazonSellerId });
+  await prisma.$transaction(async tx => {
+    await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
+    if (await stopForControl(tx, run)) throw new SyncFenceLost();
+    if (run.processedCount + result.rows.length > policy.maxRows) throw new SyncInputError("观察记录超过审批行数预算。");
+    let inserted = 0;
+    const normalized = deduplicateFacts(result.rows, policy.maxRows);
+    for (let offset = 0; offset < normalized.length; offset += 500) {
+      const batch = normalized.slice(offset, offset + 500).map(row => ({ ...scope, sourceId: source.id, sourceRunId: run.id, id: digest([run.id, row.kind, row.businessKey]), ...row, facts: row.facts as Prisma.InputJsonValue, capturedAt }));
+      const existing = new Map((await tx.amazonDomainObservation.findMany({ where: { ...scope, sourceRunId: run.id, id: { in: batch.map(row => row.id) } }, select: { id: true, facts: true } })).map(row => [row.id, row.facts]));
+      for (const row of batch) if (existing.has(row.id) && canonical(existing.get(row.id)) !== canonical(row.facts)) throw new SyncInputError("重复观察业务键存在冲突，拒绝发布。");
+      inserted += (await tx.amazonDomainObservation.createMany({ data: batch, skipDuplicates: true })).count;
+    }
+    await saveState(tx, result.state);
+    Object.assign(run, await tx.amazonSyncRun.update({ where: { id: run.id }, data: { pagesCompleted: { increment: 1 }, processedCount: { increment: result.rows.length }, insertedCount: { increment: inserted }, skippedCount: { increment: result.rows.length - inserted } } }));
+    await log(tx, run, "OBSERVATION_SLICE_COMMITTED");
+  });
+  state = result.state;
+  await yieldSlice(run, new Date(Date.now() + (state.stage === "POLL" ? 60_000 : 0)));
 }
