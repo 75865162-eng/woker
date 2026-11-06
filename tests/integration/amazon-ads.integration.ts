@@ -326,7 +326,7 @@ test("binding a ready Profile persists an initial task and the existing worker c
 
     await getAmazonSyncQueue().drain();
     const worker = new Worker<AmazonSyncQueueJob>(getAmazonSyncQueueName(), async job => {
-      if (job.data.adsTaskId) await processAmazonAdsSyncTask(job.data.adsTaskId, job.data.adsDispatchVersion, { adapter, oauth });
+      if (job.data.adsTaskId && typeof job.data.adsDispatchVersion === "number") await processAmazonAdsSyncTask(job.data.adsTaskId, job.data.adsDispatchVersion, { adapter, oauth });
     }, { connection: createRedisConnectionOptions(), concurrency: 2 });
     closeWorker = () => worker.close();
     const done = new Promise<void>((resolve, reject) => {
@@ -346,6 +346,7 @@ test("binding a ready Profile persists an initial task and the existing worker c
         } catch (error) { clearTimeout(timer); reject(error); }
       });
     });
+    await prisma.amazonAdsApiBudget.updateMany({ data: { nextRequestAt: new Date(0), leaseOwner: null, leaseExpiresAt: null } });
     await tickAmazonAds();
     await done;
     const persisted = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: initialTask.id } });
