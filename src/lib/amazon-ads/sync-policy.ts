@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
 import type { AdsAuthScope } from "./authorization";
 
-export const adsSyncStages = ["campaigns", "ad-groups", "keywords", "targets", "negatives", "reports"] as const;
+export const adsSyncStages = ["campaigns", "ad-groups", "keywords", "targets", "negatives", "reports", "product-ads"] as const;
 export type AdsSyncStage = typeof adsSyncStages[number];
 // Keep checkpoint indexes backward compatible; index 5 remains the unsupported reports stage.
-export const adsStructureStageCount = 5;
+export const adsStructureCompleteStage = 5;
+export function nextAdsStructureStage(stage: number) {
+  // Preserve indexes 0–5 in existing encrypted checkpoints. New Product Ads use 6.
+  if (stage === 4) return 6;
+  if (stage === 6) return adsStructureCompleteStage;
+  if (Number.isInteger(stage) && stage >= 0 && stage < 4) return stage + 1;
+  throw new AdsSyncError("ADS_REPORT_ADAPTER_NOT_IMPLEMENTED");
+}
 export function adsSyncScopes(env: Record<string, string | undefined> = process.env): AdsAuthScope[] {
   if (env.AMAZON_ADS_SYNC_ENABLED !== "true") return [];
   try {

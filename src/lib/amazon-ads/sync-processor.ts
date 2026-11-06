@@ -5,7 +5,7 @@ import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import { createAmazonAdsOAuthTransport, type AmazonAdsOAuthTransport } from "./oauth-contract";
 import { decryptAmazonAdsRefreshToken, decryptAmazonAdsCheckpoint, encryptAmazonAdsCheckpoint } from "./credentials";
 import { adsReadAdapterReady, amazonAdsReadAdapter, isAdsRegion, validateAdsPage, type AdsReadAdapter } from "./sync-adapter";
-import { adsSyncStages, adsStructureStageCount, parseAdsCheckpoint, AdsSyncError, adsSyncFailureStatus } from "./sync-policy";
+import { adsSyncStages, adsStructureCompleteStage, nextAdsStructureStage, parseAdsCheckpoint, AdsSyncError, adsSyncFailureStatus } from "./sync-policy";
 import { assertAdsLivePlan } from "./sync-service";
 import { withAmazonAdsClientLease } from "./api-budget";
 import { adsStructureTaskWhere } from "./task-routing";
@@ -73,7 +73,7 @@ export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: 
     const credentialScope = { ...scope, authorizationId: auth.id };
     const checkpoint = parseAdsCheckpoint(decryptAmazonAdsCheckpoint(initial.checkpointCiphertext, credentialScope, initial.id));
     const stage = adsSyncStages[checkpoint.stage];
-    if (checkpoint.stage >= adsStructureStageCount) throw new AdsSyncError("ADS_REPORT_ADAPTER_NOT_IMPLEMENTED");
+    if (checkpoint.stage === adsStructureCompleteStage) throw new AdsSyncError("ADS_REPORT_ADAPTER_NOT_IMPLEMENTED");
     const refreshToken = decryptAmazonAdsRefreshToken(auth.credentialsCiphertext, credentialScope);
     const accessToken = await (transport.oauth ?? createAmazonAdsOAuthTransport()).refreshAccessToken({ region: consentRegion, refreshToken, clientId, clientSecret });
     const dateRange = stage === "reports" && initial.requestedFrom && initial.requestedTo ? { from: initial.requestedFrom.toISOString().slice(0, 10), to: initial.requestedTo.toISOString().slice(0, 10) } : undefined;
@@ -85,9 +85,9 @@ export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: 
     if (page.reportFacts?.length) throw new AdsSyncError("ADS_UNEXPECTED_REPORT_FACTS");
     const pages = checkpoint.pages + 1;
     if (pages > 10000) throw new AdsSyncError("ADS_PAGE_LIMIT_EXCEEDED");
-    const checkpointAfter = page.nextCursor ? { stage: checkpoint.stage, cursor: page.nextCursor, pages } : { stage: checkpoint.stage + 1, cursor: null, pages: 0 };
+    const checkpointAfter = page.nextCursor ? { stage: checkpoint.stage, cursor: page.nextCursor, pages } : { stage: nextAdsStructureStage(checkpoint.stage), cursor: null, pages: 0 };
     const ciphertext = encryptAmazonAdsCheckpoint(checkpointAfter, credentialScope, initial.id);
-    const stageFinished = checkpointAfter.stage >= adsStructureStageCount;
+    const stageFinished = checkpointAfter.stage === adsStructureCompleteStage;
     let insertedCount = 0, updatedCount = 0;
     await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-sync:${initial.profileId}`}, 0))`;

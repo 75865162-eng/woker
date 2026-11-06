@@ -72,6 +72,7 @@ export async function POST(request: Request, context: { params: Promise<{ agentI
 
     const { user } = permission;
     const { agentId } = await context.params;
+    if (agentId.startsWith("selection-research-v1:")) return NextResponse.json({ error: "Use the gated selection research API." }, { status: 404 });
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const scope = workspaceScopeFromRequest(request, body.context as Record<string, unknown> | null | undefined);
     const hasAgentPersistence = hasAgentPlatformPrismaDelegates();

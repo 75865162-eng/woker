@@ -67,6 +67,7 @@
 10. Repository First
 11. Three-End Production Closure
 12. Minimum Scope Verification
+13. Runnable MVP First
 
 ## Minimum Change Principle
 
@@ -80,6 +81,10 @@ Avoid:
 - Reorganizing folders
 - Reformatting unrelated files
 - Updating dependencies
+
+## Runnable MVP First
+
+Build each request on top of the core code that already exists and prioritize a working, verifiable MVP. Before implementing, check the relevant existing workflow and reuse or extend its capabilities; do not rewrite features that already exist. Avoid broad standalone audits, architecture design, and fine-grained optimization unless they are necessary to make the requested MVP work safely and reliably.
 ## Backward Compatibility
 
 Every modification must preserve existing functionality unless the task explicitly requests a behavior change.
@@ -531,3 +536,9 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - scheduler租约恢复与执行审批阻断、processor执行前阻断/运行中pause/cancel、service显式resume/retry须遵守该边界；旧三链路保持原调度/重试/预算。Finance/Returns使用独立校验码，Orders旧码兼容。
 - source进度DTO只select资源/窗口/status/lastSuccessAt/updatedAt；任务提示只允许固定文案，不得输出token/密文/raw/签名URL/PII。现有tenant/seller/site过滤和财务管理员边界不可放宽。
 - 专项 `npm run test:amazon-sync:lifecycle`，完整 `npm run test:amazon-sync:offline`；前者仅新建临时PG/Redis与mock transport。运维、角色/额度、轮换、恢复及告警边界见 `docs/amazon-sync-p5-operations.md`；P5不新增迁移、端点或真实配置操作。
+
+## Amazon API 参考文档
+
+- 查阅 SP-API 配置或接入说明时，优先参考本机文档 `/Users/chenjieliang/Desktop/亚马逊SP-API新人配置指南.md`。
+- 查阅 Amazon Ads API 配置或接入说明时，优先参考本机文档 `/Users/chenjieliang/Desktop/Amazon-Ads-API-单配置.md`。
+- 以上文档仅作为配置与接入参考；任何真实凭证、外部 API、配置写入或生产操作仍须遵守本文件的长期安全审批规则。

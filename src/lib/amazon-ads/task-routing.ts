@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 // These are the triggers emitted by existing structure creation/retry paths.
 // Unknown tasks must never be treated as structure merely because they share a plan.
 const structureTriggers = ["schedule", "scheduled-structure", "manual-structure", "manual-retry"];
-const structureStages = ["DISCOVER", "campaigns", "ad-groups", "keywords", "targets", "negatives", "reports", "COMPLETED_SP_STRUCTURE"];
+const structureStages = ["DISCOVER", "campaigns", "ad-groups", "keywords", "targets", "negatives", "product-ads", "reports", "COMPLETED_SP_STRUCTURE"];
 
 export const adsTaskRoutingSelect = {
   trigger: true, stage: true, requestedFrom: true, requestedTo: true,

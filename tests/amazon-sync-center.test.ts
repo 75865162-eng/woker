@@ -101,6 +101,7 @@ test("task DTO excludes checkpoint, lease and dispatch secrets", () => {
 test("official source update timestamps remain distinct from synchronization time", () => {
   assert.equal(sourceTimestamp("2026-11-01T00:00:00Z")?.toISOString(), "2026-11-01T00:00:00.000Z");
   assert.equal(sourceTimestamp(undefined), null);
+  assert.equal(sourceTimestamp(""), null);
   assert.throws(() => sourceTimestamp("not-a-date"));
 });
 

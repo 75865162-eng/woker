@@ -35,6 +35,7 @@ export const skillDataTables: SkillTable[] = [
       { name: "sellerAccountId", type: "string" }, { name: "marketplaceId", type: "string" },
       { name: "sellerSku", type: "string" }, { name: "asin", type: "string" },
       { name: "listingStatus", type: "string", nullable: true }, { name: "fulfillmentType", type: "string", nullable: true },
+      { name: "listingAttributes", type: "object", nullable: true, description: "已白名单化的 GET_MERCHANT_LISTINGS_ALL_DATA 商品字段；金额与数量为 Amazon 源文本。" },
       { name: "sourceUpdatedAt", type: "datetime", nullable: true }, { name: "capturedAt", type: "datetime" },
       { name: "sourceRunId", type: "string" },
     ],
@@ -119,7 +120,7 @@ const date: FieldSchema = { type: "string", format: "date" };
 const direction: FieldSchema = { type: "string", enum: ["asc", "desc"] };
 const strings = (names: string[]) => Object.fromEntries(names.map(name => [name, text]));
 const sorting = (values: string[]) => ({ sortBy: { type: "string" as const, enum: values }, sortDirection: direction });
-export const adsEntityTypes = ["SP:campaign", "SP:ad-group", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"] as const;
+export const adsEntityTypes = ["SP:campaign", "SP:ad-group", "SP:product-ad", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"] as const;
 
 const contracts: Record<string, Omit<McpDataset, keyof SkillTable>> = {
   inventory: {

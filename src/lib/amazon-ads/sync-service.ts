@@ -26,12 +26,27 @@ export async function ensureAdsPlan(tx: Prisma.TransactionClient, scope: AdsAuth
   }
   const data = { actorUserId: actor, sellerAccountId: bound.id, authorizationRevision: profile.authorization.revision };
   const readyStatus = !adsScopeEnabled(scope) ? "WAITING_FOR_CONFIG" : !adsReadAdapterReady() ? "WAITING_FOR_ADAPTER" : "ACTIVE";
+  let currentPlan;
   if (!prior) {
-    const plan = await tx.amazonAdsSyncPlan.create({ data: { ...scope, profileId, id: randomUUID(), ...data, status: readyStatus } });
-    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.sync.plan.created", entityType: "AmazonAdsSyncPlan", entityId: plan.id, metadata: { workspaceId: scope.workspaceId, profileId, sellerAccountId: bound.id } } });
+    currentPlan = await tx.amazonAdsSyncPlan.create({ data: { ...scope, profileId, id: randomUUID(), ...data, status: readyStatus } });
+    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.sync.plan.created", entityType: "AmazonAdsSyncPlan", entityId: currentPlan.id, metadata: { workspaceId: scope.workspaceId, profileId, sellerAccountId: bound.id } } });
   } else if (prior.sellerAccountId !== bound.id || prior.authorizationRevision !== profile.authorization.revision || prior.status === "BLOCKED" || prior.status.startsWith("WAITING_FOR_")) {
-    await tx.amazonAdsSyncPlan.update({ where: { id: prior.id }, data: { ...data, status: readyStatus, revision: { increment: 1 }, nextRunAt: new Date(), lastErrorCode: readyStatus === "ACTIVE" ? null : readyStatus } });
-  }
+    currentPlan = await tx.amazonAdsSyncPlan.update({ where: { id: prior.id }, data: { ...data, status: readyStatus, revision: { increment: 1 }, nextRunAt: new Date(), lastErrorCode: readyStatus === "ACTIVE" ? null : readyStatus } });
+  } else currentPlan = prior;
+
+  if (currentPlan.status !== "ACTIVE" || readyStatus !== "ACTIVE") return;
+  const existingStructure = await tx.amazonAdsSyncTask.findFirst({
+    where: { ...scope, planId: currentPlan.id, planRevision: currentPlan.revision, trigger: { in: ["schedule", "scheduled-structure", "manual-structure", "manual-retry"] }, status: { in: ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT", "SUCCEEDED"] }, requestedFrom: null, requestedTo: null, reportRequests: { none: {} }, reportVersions: { none: {} } },
+    select: { id: true },
+  });
+  if (existingStructure) return;
+  const idempotencyKey = `initial-structure:${currentPlan.id}:${currentPlan.revision}`;
+  const priorInitial = await tx.amazonAdsSyncTask.findUnique({ where: { organizationId_workspaceId_idempotencyKey: { ...scope, idempotencyKey } }, select: { id: true } });
+  if (priorInitial) return;
+  await tx.amazonAdsSyncTask.create({ data: {
+    ...scope, id: randomUUID(), planId: currentPlan.id, profileId: currentPlan.profileId,
+    requestedByUserId: actor, idempotencyKey, planRevision: currentPlan.revision, trigger: "schedule",
+  } });
 }
 export async function assertAdsLivePlan(tx: Prisma.TransactionClient, scope: AdsAuthScope, planId: string, revision: number) {
   if (!adsScopeEnabled(scope)) throw new AdsSyncError("ADS_SYNC_DISABLED");

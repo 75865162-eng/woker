@@ -41,6 +41,7 @@ const later = new Set<AdsCapabilityDomain>(["portfolios", "budget-bidding", "cre
 const structure = {
   campaigns: ["/sp/campaigns/list", "SP:campaign"],
   "ad-groups": ["/sp/adGroups/list", "SP:ad-group"],
+  "product-ads": ["/sp/productAds/list", "SP:product-ad"],
   keywords: ["/sp/keywords/list", "SP:keyword"],
   targets: ["/sp/targets/list", "SP:target"],
   "negative-keywords": ["/sp/negativeKeywords/list", "SP:negative-keyword"],

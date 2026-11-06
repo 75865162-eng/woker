@@ -27,7 +27,7 @@ try {
   const fixtureConfig = join(temporary, "prisma.config.ts");
   await writeFile(fixtureConfig, `import { defineConfig } from ${JSON.stringify(join(root, "node_modules/prisma/config.js"))}; export default defineConfig({schema:${JSON.stringify(baseline)},datasource:{url:${JSON.stringify(env.DATABASE_URL)}}});`);
   await run(process.execPath, ["node_modules/prisma/build/index.js", "db", "push", "--config", fixtureConfig], env);
-  const testFiles = process.argv.includes("--report-worker") ? ["tests/integration/amazon-ads-report-worker.integration.ts"] : process.argv.includes("--reports") ? ["tests/integration/amazon-ads-reports.integration.ts"] : process.argv.includes("--mcp")
+  const testFiles = process.argv.includes("--reporting-v1") ? ["tests/integration/amazon-ads-reporting-v1.integration.ts"] : process.argv.includes("--report-worker") ? ["tests/integration/amazon-ads-report-worker.integration.ts"] : process.argv.includes("--reports") ? ["tests/integration/amazon-ads-reports.integration.ts"] : process.argv.includes("--mcp")
     ? ["tests/integration/amazon-ads-mcp.integration.ts"]
     : ["tests/integration/amazon-ads.integration.ts", "tests/integration/amazon-ads-mcp.integration.ts"];
   for (const testFile of testFiles) {

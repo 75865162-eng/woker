@@ -15,4 +15,5 @@ test("legacy and current structure tasks retain routing while report evidence fa
   assert.equal(isAdsStructureTask({ ...task, _count: { reportRequests: 0, reportVersions: 1 } }), false);
   // Historical checkpoint index 5 is handled by the existing explicit adapter gate.
   assert.equal(isAdsStructureTask({ ...task, stage: "reports" }), true);
+  assert.equal(isAdsStructureTask({ ...task, stage: "product-ads" }), true);
 });

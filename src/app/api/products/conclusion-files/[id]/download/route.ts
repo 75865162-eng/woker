@@ -25,7 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       },
     });
 
-    if (!file) {
+    if (!file || file.storageKey.startsWith("selection-research/")) {
       return NextResponse.json({ error: "结论 Excel 文件不存在。" }, { status: 404 });
     }
 

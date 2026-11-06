@@ -34,6 +34,14 @@
 
 历史域以 730 天为目标分段回溯，遵守各 API 的历史保留和窗口限制；当前快照域不能被展示为已经回溯 730 天。新连接、自动建源、跨站点范围、幂等键及可能需要的 migration 应一起离线验证，再按 CI artifact 链路发布。发布前说明完整改动范围；不得为了本次核查直接修改生产绑定或启动真实请求。
 
+## 2026-11-06 本地修复补充
+
+- 自动计划重建不再因已存在 FAILED/BLOCKED 等非成功游标而停住；订单和财务在重建计划后优先续接失败游标原窗口，成功游标仍允许首次自动计划从 730 天起点回补。
+- 730 天是按 API 能力分段的历史回溯目标，不表示所有资源都有 730 天历史：Orders 每段最多 1 天，Finance 与 Returns 每段最多 30 天，Sales & Traffic 每段最多 31 个业务日；Inventory Ledger 当前最多 540 天且每段最多 31 个闭合日期；结算报告按创建时间发现且单次最多 90 天。在线 Listing、库存和库存龄是当前快照/报告，不构成 730 天历史。
+- 全量 Listing 报告新增白名单结构化字段 `listingId/productId/productIdType/itemName/itemCondition/price/quantity/openDate/merchantShippingGroup/itemIsMarketplace`，金额与数量按源文本保存。`item-note` 等自由文本不公开；历史行不回填，新列为空。
+- 离线验证：Listing 解析/MCP/同步中心定向单测 25 项通过；Amazon Sync lifecycle 集成 30 项通过（含失败游标恢复、730 天分段与 Listing 发布/读取）；Prisma schema validate、定向 ESLint 通过。全仓 TypeScript 检查仍受工作区 `src/lib/selection-research/engine.ts` 两个类型错误阻断。
+- 本次没有查询服务器状态、调用 Amazon API、启动真实同步或部署；线上任务是否已开始仍待服务器只读核验。
+
 ## 官方依据
 
 - [All Listings Report](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)：报告类型、角色、单站点限制、列契约、BOM 与 locale/cache 说明。

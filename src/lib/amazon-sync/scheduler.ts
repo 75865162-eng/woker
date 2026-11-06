@@ -22,6 +22,34 @@ export function enabledSyncScopes(value = process.env.AMAZON_SYNC_CENTER_SCOPES)
     return rows.filter((r): r is [string, string] => Array.isArray(r) && r.length === 2 && r.every(v => typeof v === "string" && v.length > 0 && v.length < 201)).map(([organizationId, workspaceId]) => ({ organizationId, workspaceId }));
   } catch { return []; }
 }
+
+/** Persist the first automatic work for one validated authorization before relying on Redis. */
+export async function ensureAmazonSyncInitialized(scope: SyncScope, authorizationId: string, now = new Date()) {
+  const enabled = enabledSyncScopes().some(candidate => candidate.organizationId === scope.organizationId && candidate.workspaceId === scope.workspaceId);
+  if (!enabled) return { status: "scope_disabled" as const, sourceCount: 0, planCount: 0, taskCount: 0 };
+  if (!process.env.DATABASE_URL) return { status: "database_unavailable" as const, sourceCount: 0, planCount: 0, taskCount: 0 };
+
+  const beforeSources = await prisma.amazonSyncDataSource.count({ where: { ...scope, authorizationId } });
+  const beforePlans = await prisma.amazonSyncSchedule.count({ where: { ...scope, executionVersion: 2, planKey: { startsWith: "auto-v1:" }, targets: { some: { source: { authorizationId } } } } });
+  await ensureAutomaticConnections([scope], now, authorizationId);
+  const sourceIds = (await prisma.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId }, select: { id: true } })).map(source => source.id);
+  if (!sourceIds.length) return { status: "no_eligible_sources" as const, sourceCount: 0, planCount: 0, taskCount: 0 };
+  await ensureAutomaticSchedules([scope], now, sourceIds);
+  await enqueueDueAutomaticPlans([scope], now, sourceIds);
+
+  const [sourceCount, planCount, taskCount] = await Promise.all([
+    prisma.amazonSyncDataSource.count({ where: { ...scope, authorizationId } }),
+    prisma.amazonSyncSchedule.count({ where: { ...scope, executionVersion: 2, planKey: { startsWith: "auto-v1:" }, targets: { some: { sourceId: { in: sourceIds } } } } }),
+    prisma.amazonSyncRun.count({ where: { ...scope, executionVersion: 2, sourceId: { in: sourceIds }, trigger: "schedule" } }),
+  ]);
+  return {
+    status: sourceCount > 0 && planCount > 0 && taskCount > 0 ? "initialized" as const : "deferred" as const,
+    sourceCount: Math.max(0, sourceCount - beforeSources),
+    planCount: Math.max(0, planCount - beforePlans),
+    taskCount,
+  };
+}
+
 export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[]; exportIds: string[] }) {
   const scopes = enabledSyncScopes();
   if (!scopes.length || !process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis") return;
@@ -62,9 +90,9 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
   }
 }
 
-async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date) {
+async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceIds?: string[]) {
   const sources = await prisma.amazonSyncDataSource.findMany({
-    where: { OR: scopes, resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED" } },
+    where: { OR: scopes, ...(sourceIds ? { id: { in: sourceIds } } : {}), resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED" } },
     include: { authorization: { select: { updatedByUserId: true } }, resourceCursor: true }, take: 200,
   });
   for (const candidate of sources) {
@@ -81,8 +109,6 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date) {
       await assertAmazonAction(scope, source.authorization.updatedByUserId, "create", tx);
       await assertAmazonAction(scope, source.authorization.updatedByUserId, "approve", tx);
       if (await tx.amazonSyncRun.findFirst({ where: { ...scope, sourceId: source.id, status: { in: activeTaskStatuses } }, select: { id: true } })) return;
-      const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
-      if (cursor && cursor.status !== "SUCCEEDED") return;
       const backfillStart = automaticBackfillStart(now);
       if (source.resource === "orders" && source.orderPolicy) {
         const policy = { ...parseOrderSyncPolicy(source.orderPolicy), initialFrom: backfillStart, windowMinutes: 1440 };
@@ -104,8 +130,8 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date) {
   }
 }
 
-async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date) {
-  const plans = await prisma.amazonSyncSchedule.findMany({ where: { OR: scopes, executionVersion: 2, enabled: true, planKey: { startsWith: "auto-v1:" }, nextRunAt: { lte: now } }, include: { targets: { include: { source: { include: { authorization: true, seller: true, resourceCursor: true } } } } }, orderBy: { nextRunAt: "asc" }, take: 100 });
+async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceIds?: string[]) {
+  const plans = await prisma.amazonSyncSchedule.findMany({ where: { OR: scopes, executionVersion: 2, enabled: true, planKey: { startsWith: "auto-v1:" }, ...(sourceIds ? { targets: { some: { sourceId: { in: sourceIds } } } } : {}), nextRunAt: { lte: now } }, include: { targets: { include: { source: { include: { authorization: true, seller: true, resourceCursor: true } } } } }, orderBy: { nextRunAt: "asc" }, take: 100 });
   for (const plan of plans) {
     if (!isAutomaticResource(plan.resource)) continue;
     const target = plan.targets[0]?.source;
@@ -118,13 +144,15 @@ async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date) {
       if (plan.resource === "orders") {
         if (!target.orderPolicy) continue;
         const policy = parseOrderSyncPolicy(target.orderPolicy);
-        const window = nextOrderWindow(policy, plan.lastEnqueuedAt ? target.resourceCursor : null, now);
+        const cursor = target.resourceCursor;
+        const window = nextOrderWindow(policy, cursor && cursor.status !== "SUCCEEDED" ? cursor : plan.lastEnqueuedAt ? cursor : null, now);
         options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, orderWindow: orderWindowFromFrozen(window) };
         backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
       } else if (plan.resource === "finance") {
         if (!target.financePolicy) continue;
         const policy = parseFinancePolicy(target.financePolicy);
-        const window = nextFinanceWindow(policy, plan.lastEnqueuedAt ? target.resourceCursor : null, now);
+        const cursor = target.resourceCursor;
+        const window = nextFinanceWindow(policy, cursor && cursor.status !== "SUCCEEDED" ? cursor : plan.lastEnqueuedAt ? cursor : null, now);
         options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, financeWindow: financeWindowFromFrozen(window) };
         backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
       } else if (plan.resource === "returns") {

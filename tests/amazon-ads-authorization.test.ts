@@ -73,3 +73,86 @@ test("OAuth transport uses LwA token exchange, refresh and regional Ads Profile 
   assert.equal(lwaConsentHosts.EU, "https://eu.account.amazon.com/ap/oa");
   assert.equal(lwaConsentHosts.FE, "https://apac.account.amazon.com/ap/oa");
 });
+
+test("Profile identity rejects unsafe numeric IDs rather than silently binding a rounded account", () => {
+  for (const profileId of [Number.MAX_SAFE_INTEGER + 1, 1.5, -1, NaN, Infinity]) {
+    assert.throws(() => parseAmazonAdsProfiles([{ profileId, countryCode: "US" }]));
+  }
+  assert.equal(parseAmazonAdsProfiles([{ profileId: "900719925474099312345", countryCode: "US" }])[0].profileId, "900719925474099312345");
+});
+
+test("OAuth connection errors distinguish permission, throttling and network without exposing upstream data", async () => {
+  const { AmazonAdsConnectionError } = await import("@/lib/amazon-ads/oauth-contract");
+  const { AdsSyncError } = await import("@/lib/amazon-ads/sync-policy");
+  for (const status of [400, 401, 403, 429, 503]) {
+    let calls = 0;
+    const transport = createAmazonAdsOAuthTransport(async () => {
+      calls++;
+      return new Response("secret-token signed-url private-upstream", { status, headers: { "retry-after": "120" } });
+    });
+    await assert.rejects(transport.refreshAccessToken({ region: "EU", refreshToken: "private-refresh", clientId: "client", clientSecret: "private-secret" }), error => {
+      assert.ok(error instanceof AmazonAdsConnectionError && error instanceof AdsSyncError);
+      assert.equal(error.code, `ADS_CONNECTION_REFRESH_HTTP_${status}`);
+      assert.equal(error.httpStatus, status);
+      assert.equal(error.region, "EU");
+      assert.equal(error.retryable, status === 429 || status >= 500);
+      assert.equal(error.retryAfterMs, 120000);
+      assert.doesNotMatch(String(error), /private|signed-url|secret-token/);
+      return true;
+    });
+    assert.equal(calls, 1); // No implicit retry, including the one-time code exchange.
+  }
+  const failed = createAmazonAdsOAuthTransport(async () => { throw new Error("private network URL"); });
+  await assert.rejects(failed.listProfiles({ region: "NA", clientId: "client", accessToken: "access" }), { code: "ADS_CONNECTION_PROFILES_NETWORK", retryable: true });
+});
+
+test("OAuth bounds actual streamed bytes and rejects malformed token/profile bodies", async () => {
+  const input = { region: "NA" as const, refreshToken: "refresh", clientId: "client", clientSecret: "secret" };
+  let cancelled = false;
+  const oversized = createAmazonAdsOAuthTransport(async () => new Response(new ReadableStream({
+    pull(controller) { controller.enqueue(new Uint8Array(65537)); },
+    cancel() { cancelled = true; },
+  })));
+  await assert.rejects(oversized.refreshAccessToken(input), { code: "ADS_CONNECTION_REFRESH_RESPONSE_LIMIT", retryable: false });
+  assert.equal(cancelled, true);
+  for (const body of ['null', '[]', '{"access_token":""}', '{"access_token":"bad\\r\\nheader"}', 'invalid-json']) {
+    const transport = createAmazonAdsOAuthTransport(async () => new Response(body));
+    await assert.rejects(transport.refreshAccessToken(input), { code: "ADS_CONNECTION_REFRESH_RESPONSE_INVALID" });
+  }
+  const profiles = createAmazonAdsOAuthTransport(async () => new Response('[{"profileId":9007199254740993,"countryCode":"US"}]'));
+  await assert.rejects(profiles.listProfiles({ region: "NA", clientId: "client", accessToken: "access" }), { code: "ADS_CONNECTION_PROFILES_RESPONSE_INVALID" });
+  let calls = 0;
+  const transport = createAmazonAdsOAuthTransport(async () => { calls++; return Response.json([]); });
+  await assert.rejects(transport.listProfiles({ region: "INVALID" as "NA", clientId: "client", accessToken: "access" }), { code: "ADS_REGION_INVALID" });
+  assert.equal(calls, 0);
+});
+
+test("OAuth deadline includes a stalled response body and cancels it", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let cancelled = false;
+  const transport = createAmazonAdsOAuthTransport(async () => new Response(new ReadableStream({
+    cancel() { cancelled = true; },
+  })));
+  const pending = transport.listProfiles({ region: "FE", clientId: "client", accessToken: "access" });
+  const rejected = assert.rejects(pending, { code: "ADS_CONNECTION_PROFILES_TIMEOUT", retryable: true });
+  await Promise.resolve();
+  await Promise.resolve();
+  t.mock.timers.tick(20000);
+  await rejected;
+  assert.equal(cancelled, true);
+});
+
+test("a fetcher resolving after the deadline cannot leave a late body consuming resources", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let resolveFetch!: (value: Response) => void;
+  let cancelled = false;
+  const transport = createAmazonAdsOAuthTransport(() => new Promise<Response>(resolve => { resolveFetch = resolve; }));
+  const pending = transport.listProfiles({ region: "NA", clientId: "client", accessToken: "access" });
+  const rejected = assert.rejects(pending, { code: "ADS_CONNECTION_PROFILES_TIMEOUT" });
+  t.mock.timers.tick(20000);
+  await rejected;
+  resolveFetch(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(cancelled, true);
+});

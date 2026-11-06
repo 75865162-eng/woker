@@ -7,13 +7,15 @@ import { requestChange, decideChange, applyChange } from "@/lib/amazon-sync/chan
 import { processSyncCenterTask } from "@/lib/amazon-sync/processor";
 import { encryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
 import { endpoints } from "@/lib/amazon-sync/policy";
-import { tickSyncCenter } from "@/lib/amazon-sync/scheduler";
+import { ensureAmazonSyncInitialized, tickSyncCenter } from "@/lib/amazon-sync/scheduler";
 import { scopeLock, syncIncrementalCursorStatus } from "@/lib/amazon-sync/service";
 import { listSources, readTasks } from "@/lib/amazon-sync/read";
 import { digest } from "@/lib/amazon-sync/approval-policy";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import type { AmazonSyncResourceCursor } from "@prisma/client";
 import { automaticPlanId } from "@/lib/amazon-sync/automatic-schedule";
+import { readTaskSnapshot } from "@/lib/amazon-sync/snapshots";
+import { finishAmazonOAuth, startAmazonOAuth } from "@/lib/amazon-sync/oauth";
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline database required");
 const raw = (resource: string, name: string) => readFileSync(new URL(`../fixtures/amazon/${resource}/${name}`, import.meta.url), "utf8");
 const scopes: Array<[string, string]> = [], region = "lifecycle-fixture-region";
@@ -59,6 +61,84 @@ async function fresh(resource: "orders" | "finance" | "returns") {
   await slice(); calls.length = 0;
   return { scope, actor, approver, source, run, grant, calls, approved, current, cursor, slice };
 }
+
+test("applying a successful authorization validation persists the first automatic task", async () => {
+  const scope = { organizationId: `auto-apply-${randomUUID()}`, workspaceId: "auto-apply-test" };
+  scopes.push([scope.organizationId, scope.workspaceId]); process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify(scopes);
+  const actor = randomUUID(), authId = randomUUID();
+  await prisma.organization.create({ data: { id: scope.organizationId, slug: scope.organizationId, name: "Automatic apply fixture" } });
+  await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "Automatic apply fixture" } });
+  await prisma.user.create({ data: { id: actor, email: `${actor}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
+  await prisma.amazonSpApiAuthorization.create({ data: {
+    ...scope, id: authId, name: "Automatic apply fixture", amazonSellerId: "AUTOFIXTURE1", awsRegion: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", status: "NOT_CONFIGURED", updatedByUserId: actor,
+    credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture-auto-apply-client", lwaClientSecret: "fixture-auto-apply-secret", refreshToken: "fixture-auto-apply-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId: authId }),
+  } });
+
+  const previousFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input)); requests.push(`${url.hostname}${url.pathname}`);
+    if (url.hostname === "api.amazon.com" && url.pathname === "/auth/o2/token") return Response.json({ access_token: "fixture-validation-token", expires_in: 3600 });
+    if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/sellers/v1/marketplaceParticipations") return Response.json({ payload: [{ marketplace: { id: "ATVPDKIKX0DER", countryCode: "US" }, participation: { isParticipating: true } }] });
+    throw new Error(`Unexpected fixture request ${url.hostname}${url.pathname}`);
+  };
+  try {
+    const request = await requestChange(scope, actor, { action: "validate-authorization", id: authId, revision: 1 });
+    await decideChange(scope, actor, String(request.id), "APPROVED", "offline fixture approval");
+    const applied = await applyChange(scope, actor, String(request.id));
+    assert.equal((applied as unknown as { result: { automaticSync: { status: string } } }).result.automaticSync.status, "initialized");
+    assert.deepEqual(requests, ["api.amazon.com/auth/o2/token", "sellingpartnerapi-na.amazon.com/sellers/v1/marketplaceParticipations"]);
+    const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId: authId } });
+    const plans = await prisma.amazonSyncSchedule.findMany({ where: { ...scope, executionVersion: 2, planKey: { startsWith: "auto-v1:" } } });
+    const tasks = await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, sourceId: { in: sources.map(source => source.id) }, trigger: "schedule" } });
+    assert.ok(sources.length > 0);
+    assert.equal(plans.length, tasks.length);
+    assert.ok(tasks.length > 0);
+    assert.ok(tasks.every(task => ["WAITING", "QUEUED"].includes(task.status)));
+  } finally { globalThis.fetch = previousFetch; }
+});
+
+test("completing the SP-API OAuth callback initializes automatic work after authorization commit", async () => {
+  const scope = { organizationId: `oauth-auto-${randomUUID()}`, workspaceId: "oauth-auto-test" };
+  scopes.push([scope.organizationId, scope.workspaceId]); process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify(scopes);
+  const actor = randomUUID();
+  const priorEnv = Object.fromEntries(["AMAZON_SP_API_APPLICATION_ID", "AMAZON_SP_API_LWA_CLIENT_ID", "AMAZON_SP_API_LWA_CLIENT_SECRET", "AMAZON_SP_API_OAUTH_REDIRECT_URI"].map(key => [key, process.env[key]]));
+  process.env.AMAZON_SP_API_APPLICATION_ID = "fixture-application";
+  process.env.AMAZON_SP_API_LWA_CLIENT_ID = "fixture-oauth-client";
+  process.env.AMAZON_SP_API_LWA_CLIENT_SECRET = "fixture-oauth-secret";
+  process.env.AMAZON_SP_API_OAUTH_REDIRECT_URI = "http://localhost/api/integrations/amazon/sp-api/oauth/callback";
+  await prisma.organization.create({ data: { id: scope.organizationId, slug: scope.organizationId, name: "OAuth automatic fixture" } });
+  await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "OAuth automatic fixture" } });
+  await prisma.user.create({ data: { id: actor, email: `${actor}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
+  const previousFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input)); requests.push(`${url.hostname}${url.pathname}`);
+    if (url.hostname === "api.amazon.com" && url.pathname === "/auth/o2/token") return Response.json({ access_token: "fixture-oauth-access", expires_in: 3600, refresh_token: "fixture-oauth-refresh" });
+    if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/sellers/v1/marketplaceParticipations") return Response.json({ payload: [{ marketplace: { id: "ATVPDKIKX0DER", countryCode: "US" }, participation: { isParticipating: true } }] });
+    if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/listings/2021-08-01/items/AUTOFIXTURE1") return Response.json({ items: [] });
+    throw new Error(`Unexpected fixture request ${url.hostname}${url.pathname}`);
+  };
+  try {
+    const started = await startAmazonOAuth(scope, actor, "us-east-1");
+    const state = new URL(started.consentUrl).searchParams.get("state")!;
+    const completed = await finishAmazonOAuth(actor, new URLSearchParams({ state, selling_partner_id: "AUTOFIXTURE1", spapi_oauth_code: "fixture-code" }));
+    assert.equal(completed.automaticSync.status, "initialized");
+    assert.deepEqual(requests, [
+      "api.amazon.com/auth/o2/token", "api.amazon.com/auth/o2/token",
+      "sellingpartnerapi-na.amazon.com/sellers/v1/marketplaceParticipations",
+      "sellingpartnerapi-na.amazon.com/listings/2021-08-01/items/AUTOFIXTURE1",
+    ]);
+    const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId: completed.authorizationId } });
+    const tasks = await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, sourceId: { in: sources.map(source => source.id) }, trigger: "schedule" } });
+    assert.ok(sources.length > 0);
+    assert.ok(tasks.length > 0);
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [key, value] of Object.entries(priorEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
 for (const resource of ["orders", "finance", "returns"] as const) {
   test(`${resource}: pause/resume/cancel synchronize cursor and preserve encrypted progress`, async () => {
     const f = await fresh(resource), saved = evidence(await f.cursor()), old = (await f.current()).dispatchVersion;
@@ -183,15 +263,24 @@ test("validated Seller ID must not gate bounded 730-day tasks for existing US/CA
       : ["fulfillment", "listing_details", "catalog_items", "pricing"].includes(resource) ? { domainPolicy: { resource, applicationId: appId, maxRequests: 30, maxRows: 1000, requestsPerSecond: resource === "pricing" ? .01 : resource === "fulfillment" ? .1 : .5, ...(resource === "fulfillment" ? { planIds: ["A".repeat(38)] } : resource === "listing_details" ? { sellerSkus: ["fixture-sku"] } : { asins: ["B123456789"] }) } } : {};
     sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: sites[0], resource, freshnessMinutes: 2880, enabled: false, ...data } }));
   }
+  const now = new Date();
+  const failedOrdersSource = sources.find(source => source.resource === "orders")!;
+  const failedWindowFrom = new Date(now.getTime() - 730 * 86_400_000);
+  const failedWindowTo = new Date(failedWindowFrom.getTime() + 86_400_000);
+  await prisma.amazonSyncResourceCursor.create({ data: {
+    id: randomUUID(), ...scope, sourceId: failedOrdersSource.id, resource: "orders", amazonSellerId: "automatic-fixture-seller",
+    marketplaceId: failedOrdersSource.marketplaceId, watermarkFrom: failedWindowFrom, watermarkTo: failedWindowTo, status: "FAILED",
+  } });
   await tickSyncCenter();
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 0);
   await prisma.amazonSpApiAuthorization.update({ where: { id: authId }, data: { status: "CONFIGURED" } });
-  const now = new Date();
   await tickSyncCenter(now, { taskIds: [], exportIds: [] });
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 0, "approved-only mode cannot create future tasks");
-  await tickSyncCenter(now);
+  const initialized = await ensureAmazonSyncInitialized(scope, authId, now);
+  assert.equal(initialized.status, "initialized");
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 18);
   assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 18);
+  await ensureAmazonSyncInitialized(scope, authId, now);
   await tickSyncCenter(now);
   assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 18, "duplicate ticks cannot create duplicate tasks");
   for (const source of sources) {
@@ -200,7 +289,10 @@ test("validated Seller ID must not gate bounded 730-day tasks for existing US/CA
     const frozen = run.frozenScope as { requestedRange?: { from: string; to: string }; orderWindow?: { from: string; to: string }; financeWindow?: { from: string; to: string } };
     const window = frozen.orderWindow ?? frozen.financeWindow;
     if (window) {
-      assert.equal(Date.parse(window.from), now.getTime() - 730 * 86400_000);
+      if (source.id === failedOrdersSource.id) {
+        assert.equal(window.from, failedWindowFrom.toISOString());
+        assert.equal(window.to, failedWindowTo.toISOString(), "failed cursor window is resumed after automatic schedule recreation");
+      } else assert.equal(Date.parse(window.from), now.getTime() - 730 * 86400_000);
       assert.ok(Date.parse(window.to) - Date.parse(window.from) <= (source.resource === "orders" ? 1 : 30) * 86400_000);
     }
     if (frozen.requestedRange) assert.equal(Date.parse(frozen.requestedRange.to) - Date.parse(frozen.requestedRange.from), 30 * 86400_000);
@@ -261,6 +353,14 @@ test("a validated token without Seller ID auto-binds four North American sites a
   const catalog = sources.find(source => source.resource === "catalog" && source.marketplaceId === sites[0])!;
   const run = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...scope, sourceId: catalog.id } });
   assert.equal((run.frozenScope as { requestedRange?: unknown }).requestedRange, undefined, "a current Listing snapshot must not claim historical coverage");
+  await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { status: "FAILED" } });
+  const retry = await requestChange(scope, actor, { action: "control-task", id: run.id, control: "retry" });
+  await decideChange(scope, actor, String(retry.id), "APPROVED", "offline approved automatic retry");
+  await applyChange(scope, actor, String(retry.id));
+  const retried = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+  assert.equal(retried.trigger, "schedule");
+  assert.equal(retried.scheduleRevision, run.scheduleRevision);
+  assert.equal(retried.executionApprovalId, retry.id);
 
   const fetch = async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -271,7 +371,7 @@ test("a validated token without Seller ID auto-binds four North American sites a
     }
     if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/reports/2021-06-30/reports/fixture-listings-report") return Response.json({ reportId: "fixture-listings-report", reportType: "GET_MERCHANT_LISTINGS_ALL_DATA", marketplaceIds: [sites[0]], processingStatus: "DONE", reportDocumentId: "fixture-listings-document" });
     if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/reports/2021-06-30/documents/fixture-listings-document") return Response.json({ reportDocumentId: "fixture-listings-document", url: "https://s3.amazonaws.com/fixture/report" });
-    if (url.hostname === "s3.amazonaws.com") return new Response("seller-sku\tasin1\tstatus\tfulfillment-channel\nSKU-1\tB012345678\tActive\tAMAZON_NA\n", { headers: { "content-type": "text/plain" } });
+    if (url.hostname === "s3.amazonaws.com") return new Response("seller-sku\tasin1\tstatus\tfulfillment-channel\titem-name\tprice\tquantity\titem-note\nSKU-1\tB012345678\tActive\tAMAZON_NA\tFixture listing\t19.9900\t03\tprivate fixture note\n", { headers: { "content-type": "text/plain" } });
     throw new Error(`Unexpected fixture URL ${url.hostname}${url.pathname}`);
   };
   for (let i = 0; i < 5; i++) {
@@ -284,6 +384,11 @@ test("a validated token without Seller ID auto-binds four North American sites a
   const completed = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
   assert.equal(completed.status, "SUCCEEDED");
   assert.equal(await prisma.amazonCatalogSnapshot.count({ where: { ...scope, sourceRunId: run.id, sellerSku: "SKU-1", asin: "B012345678" } }), 1);
+  const listingSnapshot = await readTaskSnapshot(scope, new URLSearchParams({ id: run.id }), actor);
+  const catalogRow = listingSnapshot.snapshotRows[0];
+  assert.ok("listingAttributes" in catalogRow);
+  assert.deepEqual(catalogRow.listingAttributes, { listingId: null, productId: null, productIdType: null, itemName: "Fixture listing", itemCondition: null, price: "19.9900", quantity: "03", openDate: null, merchantShippingGroup: null, itemIsMarketplace: null });
+  assert.ok(!JSON.stringify(listingSnapshot).includes("private fixture note"));
   const published = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: catalog.id } });
   assert.equal(published.activeRunId, run.id); assert.equal(published.rowCount, 1);
   const coverage = published.coverage as { historicalSnapshot?: boolean; reportType?: string };

@@ -1,0 +1,169 @@
+[
+  {
+    "index": 1,
+    "slug": "monday-review",
+    "category": "reports",
+    "titleEn": "Monday business review",
+    "summaryEn": "Every Monday, see what happened last week and what to do this week in ten minutes.",
+    "steps": [
+      "Use store-weekly-review to recap last week's sales, traffic, ads, fees and inventory risk against the week before.",
+      "Use weekly-ads-review-routine on ads: is the data healthy, which two or three campaigns moved most in spend or ACOS, and which recommendations are still open.",
+      "Use buybox-competition-watch to see whether any ASIN lost the Buy Box, on which day, and at what price.",
+      "Use turbot-inventory-restock to list SKUs that may stock out within two weeks, with a suggested quantity and a last order date."
+    ],
+    "close": "Finish with an HTML report: three sentences first, then a prioritized action list. Each action names the lane (ads, inventory, or pricing) and the metric to watch this week."
+  },
+  {
+    "index": 2,
+    "slug": "ads-stop-bleeding",
+    "category": "ads",
+    "titleEn": "Stop the ad bleed",
+    "summaryEn": "ACOS is up and spend hurts. Find the causes and get an action list in one pass.",
+    "steps": [
+      "Use acos-spike-triage to compare the last 7 days with the last 30 and find the three campaigns whose ACOS moved most. Separate a spend increase from a sales drop.",
+      "Use wasted-spend-audit to find search terms and targets that spent with no orders in 30 days, and total the monthly waste.",
+      "Use negative-keyword-strategy to choose exact or phrase, and ad group or campaign. Do not negate a term that converts somewhere else.",
+      "Use bid-adjustment-strategy to list bids to lower and bids to raise, with the current bid and the suggested bid."
+    ],
+    "close": "Finish with an HTML report: three sentences first, then a prioritized action list. Each line says how much it might save or sell per month. Any step that changes the store or spends money must be previewed and confirmed."
+  },
+  {
+    "index": 3,
+    "slug": "sales-drop",
+    "category": "data",
+    "titleEn": "Diagnose a sales drop end to end",
+    "summaryEn": "Sales fell and you can't tell if it's traffic, conversion, or the Buy Box.",
+    "steps": [
+      "Use traffic-conversion-triage to compare the last 7 days with the previous four weeks by ASIN, and split each drop into sessions, conversion, or Buy Box.",
+      "Where the Buy Box is the problem, use buybox-competition-watch for the day it was lost and the other price.",
+      "Where traffic is the problem, use impression-drop-diagnosis: budget capped, bid no longer competitive, campaign paused, or the product lost eligibility.",
+      "Where conversion is the problem, use low-conversion-diagnosis on high-click terms that do not order, and separate bad traffic from the detail page."
+    ],
+    "close": "Finish with an HTML report: three sentences first, then a prioritized action list. One sentence of cause and a first step for each ASIN that fell. List anything the data cannot show and that has to be checked in Seller Central."
+  },
+  {
+    "index": 4,
+    "slug": "new-listing-to-ads",
+    "category": "listing",
+    "titleEn": "Launch: listing to ads",
+    "summaryEn": "Turn photos and basics into a listing and starter ads.",
+    "steps": [
+      "Use amazon-keyword-research to group terms by intent and mark the ones worth bidding first.",
+      "Use listing-new-product-oneshot to fill attributes from the photos, write the title and bullets, and prepare images. Stop for a preview.",
+      "Use acos-target-setting to turn cost and price into an ACOS the launch period can afford.",
+      "Use ads-build-from-scratch for the starter structure: which terms in which group, bids, budget, and negatives."
+    ],
+    "close": "Stop after each step. Any step that changes the store or spends money must be previewed and confirmed. Then one HTML report with the listing, the keyword groups, and the ad plan."
+  },
+  {
+    "index": 5,
+    "slug": "selection-doc",
+    "category": "market",
+    "titleEn": "From idea to product brief",
+    "summaryEn": "Go from a broad direction to a brief a factory can use.",
+    "steps": [
+      "Use amazon-niche-finder to find 3 to 5 niches inside the direction that still have demand and tolerable competition, and say why.",
+      "After one is chosen, use amazon-product-research for demand, competition, price band, and barriers.",
+      "Use amazon-review-analyzer on the leaders' critical reviews and rank the pains by how much a fix is worth.",
+      "Use tariff-calculator-amazon for duty and landed cost from China to the target marketplace.",
+      "Use amazon-product-selection to score the candidate, estimate profit, and give a go or no-go."
+    ],
+    "close": "Stop after step 1 and step 5. Say how many paid market calls this would make before starting. Deliver an HTML brief: selling points, spec, target cost, changes, and acceptance checks."
+  },
+  {
+    "index": 6,
+    "slug": "competitor-teardown",
+    "category": "market",
+    "titleEn": "Full competitor teardown",
+    "summaryEn": "A competitor is doing well and you want to know how it grew and where it's weak.",
+    "steps": [
+      "Use competitor-playbook-teardown to reconstruct how it grew: when volume started, how ads were run, how reviews accumulated, and how price moved.",
+      "Use amazon-competitor-analysis to compare it with your ASIN on listing, images, price, reviews, and ads.",
+      "Use amazon-review-analyzer for what buyers repeat and what they complain about.",
+      "If a price history is provided, use it to judge match, hold, or differentiate. If not, skip and say so."
+    ],
+    "close": "Say how many paid market calls this would make before starting. Finish with an HTML report: three sentences, then a prioritized action list, with the three weaknesses and where to enter."
+  },
+  {
+    "index": 7,
+    "slug": "restock-to-ship",
+    "category": "restock",
+    "titleEn": "Restock through to shipment",
+    "summaryEn": "Go from restock quantities to a shipment with paperwork ready.",
+    "steps": [
+      "Use turbot-inventory-restock for what to replenish, the suggested quantity, and the last order date. Wait for the quantities you will actually ship.",
+      "With the carton contents, dimensions, and gross weight, use fba-inbound-shipment to create the inbound plan and finish packing, then show placement options and fees.",
+      "After placement is confirmed, register transportation, show carrier options and fees, and only then get the box labels.",
+      "Use amazon-fba-shipment-kit to file the quote, labels, and pickup handoff for this shipment."
+    ],
+    "close": "Placement and carrier steps spend real money in the live product, so they wait for an explicit yes. Do not guess carton size or weight. End with what is done and what is still open. Live write execution is unavailable until a real integration is implemented."
+  },
+  {
+    "index": 8,
+    "slug": "profit-checkup",
+    "category": "profit",
+    "titleEn": "Profit health check",
+    "summaryEn": "Revenue looks fine but profit doesn't. Find where it leaks.",
+    "steps": [
+      "Use profit-fee-analysis on the last 30 days of Amazon fees by SKU. Flag losses and odd fee ratios.",
+      "Use reimbursement-recovery for inventory Amazon lost or damaged and has not paid after 30 days.",
+      "Use clearance-aging-decision for aged stock and what the storage fee costs each month if nothing changes.",
+      "Use amazon-return-weekly-analysis for the highest return rates and the main reasons."
+    ],
+    "close": "Finish with an HTML report: three sentences, then actions sorted by monthly money leaking. These numbers exclude product cost and inbound freight. Say that in the report."
+  },
+  {
+    "index": 9,
+    "slug": "peak-prep",
+    "category": "ads",
+    "titleEn": "Get ready for a sales peak",
+    "summaryEn": "Plan stock, ads, and promotions a few weeks before a sales peak.",
+    "steps": [
+      "Use turbot-seasonal-planning for a week-by-week list from now through the end of the event.",
+      "Use turbot-inventory-restock with the event's expected velocity. Call out SKUs that cannot arrive in time.",
+      "Use amazon-deal-finder for which products can take a Deal or a coupon and still make money.",
+      "Use seasonal-peak-preparation for which campaigns get more budget, which terms get a higher bid, and which settings stay frozen."
+    ],
+    "close": "Finish with an HTML report: three sentences, then actions by week with a due date. Show the math for stock and discounts. The decision stays with you."
+  },
+  {
+    "index": 10,
+    "slug": "sunset-sku",
+    "category": "ads",
+    "titleEn": "Retire an aging product",
+    "summaryEn": "You want to phase out an older product: clear the stock without wasting ad spend.",
+    "steps": [
+      "Use clearance-aging-decision for units left, age, monthly storage, and how long the current pace takes to sell through.",
+      "Use ads-sunset-wind-down to see if ads can step down: ad-sales share, and whether organic rank can hold. Give staged bid and budget cuts plus what to watch.",
+      "Use turbot-coupon-strategy to see if a coupon speeds the exit and where the discount stops breaking even."
+    ],
+    "close": "Combine the three into a weekly exit calendar: ads, price, and when it should be gone. Any step that changes the store or spends money must be previewed and confirmed. Finish with an HTML report."
+  },
+  {
+    "index": 11,
+    "slug": "returns-push",
+    "category": "returns",
+    "titleEn": "Bring returns down",
+    "summaryEn": "A product's return rate is high. Find out why and what to fix first.",
+    "steps": [
+      "Use amazon-return-weekly-analysis on recent weeks: the trend, which color and size pairs are worst, and what the return comments actually say.",
+      "Use turbot-return-reduction to map reasons onto listing, images, product, and packaging, with a concrete change for each.",
+      "Where the listing or the photos mislead, use amazon-listing-optimization for a revised title, bullets, and shot list."
+    ],
+    "close": "Finish with an HTML report: three sentences, then actions sorted by how fast they are and how many returns they might remove. Put changes that do not touch the product first."
+  },
+  {
+    "index": 12,
+    "slug": "monthly-report",
+    "category": "reports",
+    "titleEn": "Monthly business report",
+    "summaryEn": "At the start of the month, get a full report on the last one for yourself or the team.",
+    "steps": [
+      "Use amazon-ads-performance-report for spend, ad sales, and ACOS, the best and worst campaigns, and the comparison with the month before.",
+      "Use profit-fee-analysis for revenue, Amazon fees, and profit by SKU, and whether the fee mix changed.",
+      "Use promotions-review for what ran, what it cost, and what failed or overlapped.",
+      "If there is more than one marketplace, use multi-marketplace-ads-review and compare ratios, not amounts. Skip this step when there is only one."
+    ],
+    "close": "Deliver an HTML monthly report. The first screen is the key numbers and three sentences. Then ads, profit, promotions, and marketplaces. End with three jobs for next month. Do not add different currencies together."
+  }
+]

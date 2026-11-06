@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       },
     });
 
-    if (!file) {
+    if (!file || file.storageKey.startsWith("selection-research/")) {
       return NextResponse.json({ error: "Workbook not found." }, { status: 404 });
     }
 

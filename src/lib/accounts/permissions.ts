@@ -1,4 +1,5 @@
 import { buildRoleDefinitions } from "@/lib/accounts/role-definitions";
+import { resolveLiliPage } from "@/lib/lili/routes";
 
 export type PermissionAction = "view" | "create" | "edit" | "approve" | "export";
 
@@ -22,7 +23,7 @@ export const permissionModules = [
   { id: "workspace", name: "PPC 优化 /workspace", paths: ["/workspace"] },
   { id: "searchMerge", name: "赛狐搜词合并 /saihu-search-merge、/history", paths: ["/saihu-search-merge", "/history"] },
   { id: "listingAi", name: "Listing AI /listing-ai", paths: ["/listing-ai"] },
-  { id: "agents", name: "Amazon AI Agent Platform /agents", paths: ["/agents"] },
+  { id: "agents", name: "Amazon AI Agent Platform /agents、Lili /lili", paths: ["/agents", "/lili"] },
   { id: "operations", name: "经营中台 /operations", paths: ["/operations"] },
   { id: "imageUpscale", name: "图片放大 /image-upscale", paths: ["/image-upscale"] },
   { id: "logistics", name: "物流处理 /logistics", paths: ["/logistics"] },
@@ -92,6 +93,9 @@ export function getEffectiveRolePermissionMap(overrides?: RolePermissionMap | nu
 }
 
 export function getModuleIdForPath(pathname: string): string | null {
+  if (pathname === "/lili" || pathname.startsWith("/lili/")) {
+    return resolveLiliPage(pathname.split("/").filter(Boolean).slice(1))?.moduleId ?? "agents";
+  }
   const match = routeModuleIds.find(({ path }) => pathname === path || pathname.startsWith(`${path}/`));
 
   return match?.moduleId ?? null;

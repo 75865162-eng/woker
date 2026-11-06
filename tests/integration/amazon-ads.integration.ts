@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { before, after, test } from "node:test";
 import { prisma } from "@/lib/db/prisma";
 import { encryptAmazonAdsRefreshToken, encryptAmazonAdsCheckpoint, decryptAmazonAdsCheckpoint } from "@/lib/amazon-ads/credentials";
@@ -8,11 +9,12 @@ import { processAmazonAdsSyncTask } from "@/lib/amazon-ads/sync-processor";
 import { queryAdsEntities, parseAdsEntityQuery } from "@/lib/amazon-ads/data-query";
 import { createAmazonAdsOAuthTransport } from "@/lib/amazon-ads/oauth-contract";
 import { AdsSyncError } from "@/lib/amazon-ads/sync-policy";
-import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
+import { getAmazonSyncQueue, type AmazonSyncQueueJob } from "@/lib/queue/redis-queue";
 import { queryAmazonAdsData, withAdsQueryReadSnapshot } from "@/lib/amazon-ads/query-service";
 import { parseAdsQuery } from "@/lib/amazon-ads/query-contract";
 import { createAmazonAdsRepository } from "@/lib/amazon-ads/repository";
 import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
+import { bindAmazonAdsProfile } from "@/lib/amazon-ads/authorization";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1") throw new Error("Disposable runner required");
 const scope = { organizationId: randomUUID(), workspaceId: "main" };
@@ -23,6 +25,7 @@ let profile: string, plan: string, otherProfile: string, secondPlan: string;
 let http = 0, refreshes = 0;
 const payloads: Record<string, [string, Record<string, unknown>]> = {
   "/sp/campaigns/list": ["campaigns", { campaignId: "101", name: "Stored Alpha", state: "ARCHIVED", targetingType: "MANUAL", startDate: "2026-11-01", budget: { budget: 25, budgetType: "DAILY" } }],
+  "/sp/productAds/list": ["productAds", { adId: "701", campaignId: "101", adGroupId: "201", sku: "fixture-sku", state: "ENABLED" }],
   "/sp/adGroups/list": ["adGroups", { adGroupId: "201", campaignId: "101", name: "Stored Group", defaultBid: 0.7, state: "ENABLED" }],
   "/sp/keywords/list": ["keywords", { keywordId: "301", campaignId: "101", adGroupId: "201", keywordText: "fixture keyword", matchType: "EXACT", state: "ENABLED" }],
   "/sp/targets/list": ["targetingClauses", { targetId: "401", campaignId: "101", adGroupId: "201", expression: [], resolvedExpression: [], expressionType: "MANUAL", state: "PAUSED" }],
@@ -34,7 +37,7 @@ const payloads: Record<string, [string, Record<string, unknown>]> = {
 const adapter = createSponsoredProductsReadAdapter(async (url, init) => {
   http++;
   assert.equal(new URL(String(url)).host, "advertising-api-eu.amazon.com");
-  assert.ok(["999", "888"].includes(new Headers(init?.headers).get("Amazon-Advertising-API-Scope")!));
+  assert.ok(["999", "888", "777"].includes(new Headers(init?.headers).get("Amazon-Advertising-API-Scope")!));
   const [key, row] = payloads[new URL(String(url)).pathname];
   return new Response(JSON.stringify({ [key]: [{ ...row, extendedData: { lastUpdateDateTime: "2026-11-06T01:00:00Z" } }] }));
 });
@@ -88,21 +91,21 @@ async function assertEntityResponseWithheld(change: () => Promise<unknown>, rest
   } finally { await restore(); }
 }
 
-test("eight real adapter collections persist via worker, checkpoint, queue and remain Profile isolated", async () => {
+test("nine real adapter collections persist via worker, checkpoint, queue and remain Profile isolated", async () => {
   const task = await newTask();
   const done = await drain(task.id);
-  assert.equal(done.stage, "COMPLETED_SP_STRUCTURE"); assert.equal(done.apiRequests, 8); assert.equal(done.processedCount, 8);
+  assert.equal(done.stage, "COMPLETED_SP_STRUCTURE"); assert.equal(done.apiRequests, 9); assert.equal(done.processedCount, 9);
   const attempts = await prisma.amazonAdsSyncAttempt.findMany({ where: { ...scope, taskId: task.id }, orderBy: { attemptNumber: "asc" } });
-  assert.equal(attempts.length, 8);
+  assert.equal(attempts.length, 9);
   assert.ok(attempts.every(attempt => attempt.status === "SUCCEEDED" && attempt.apiRequests === 1 && attempt.processedCount === 1));
   assert.equal((await prisma.amazonAdsSyncDomainState.findUniqueOrThrow({ where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: profile, dataDomain: "entities", reportType: "" } } })).status, "CURRENT");
-  assert.equal(await prisma.amazonAdsEntityRecord.count({ where: { ...scope, profileId: profile } }), 8);
+  assert.equal(await prisma.amazonAdsEntityRecord.count({ where: { ...scope, profileId: profile } }), 9);
   await drain((await newTask(secondPlan, otherProfile)).id);
-  assert.equal(await prisma.amazonAdsEntityRecord.count({ where: scope }), 16);
+  assert.equal(await prisma.amazonAdsEntityRecord.count({ where: scope }), 18);
   const data = await queryAdsEntities(scope, member, new URLSearchParams({ pageSize: "2", sort: "externalId", direction: "desc" }));
-  assert.equal(data.total, 8); assert.equal(data.rows.length, 2); assert.ok(data.rows.every(r => r.profileId === profile && r.amazonProfileId === "999"));
+  assert.equal(data.total, 9); assert.equal(data.rows.length, 2); assert.ok(data.rows.every(r => r.profileId === profile && r.amazonProfileId === "999"));
   const forbidden = await queryAdsEntities(scope, member, new URLSearchParams({ internalProfileId: otherProfile })); assert.equal(forbidden.total, 0);
-  assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ campaignId: "101", adGroupId: "201" }))).total, 5);
+  assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ campaignId: "101", adGroupId: "201" }))).total, 6);
   assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ search: "Stored Alpha", state: "ARCHIVED" }))).total, 1);
   assert.equal((await queryAdsEntities(scope, member, new URLSearchParams({ entityType: "SP:campaign-negative-keyword" }))).rows[0].parentExternalId, "101");
   assert.throws(() => parseAdsEntityQuery(new URLSearchParams({ sort: "payload" })), /排序/);
@@ -148,7 +151,7 @@ test("older tasks cannot overwrite newer current snapshots or infer deletion", a
   await drain(task.id);
   const rows = await prisma.amazonAdsEntityRecord.findMany({ where: { ...scope, profileId: profile } });
   assert.ok(rows.every(row => row.sourceTaskId !== task.id));
-  assert.equal(rows.length, 8);
+  assert.equal(rows.length, 9);
   const cp = decryptAmazonAdsCheckpoint<{ stage: number }>((await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: task.id } })).checkpointCiphertext, credentialScope, task.id);
   assert.equal(cp?.stage, 5);
 });
@@ -162,7 +165,7 @@ test("authenticated data API returns server totals, bounded filters and denies m
   const request = (query: string) => GET(new Request(`http://localhost/api/integrations/amazon/ads/data?${query}`, { headers }));
   const response = await request(`internalProfileId=${profile}&pageSize=2&sort=externalId`);
   assert.equal(response.status, 200);
-  const result = await response.json(); assert.equal(result.total, 8); assert.equal(result.rows.length, 2); assert.equal(result.source, "amazon_ads_postgres");
+  const result = await response.json(); assert.equal(result.total, 9); assert.equal(result.rows.length, 2); assert.equal(result.source, "amazon_ads_postgres");
   assert.equal((await request("page=1.5")).status, 400);
   assert.equal((await request("sort=credentialsCiphertext")).status, 400);
   assert.equal((await request("from=2026-01-01")).status, 400);
@@ -274,7 +277,7 @@ test("cancellation closes only the latest attempt and fences a stale dispatch", 
   }
 });
 
-test("real BullMQ worker consumes persisted structure dispatch and completes all eight collections", async () => {
+test("real BullMQ worker consumes persisted structure dispatch and completes all nine collections", async () => {
   const { Worker } = await import("bullmq");
   const { createRedisConnectionOptions, getAmazonSyncQueueName } = await import("../../src/lib/queue/redis-queue");
   const { runAdsPlanNow } = await import("../../src/lib/amazon-ads/sync-service");
@@ -296,9 +299,71 @@ test("real BullMQ worker consumes persisted structure dispatch and completes all
       worker.on("completed", () => { void check().catch(reject); });
       void check().catch(reject);
     });
-    assert.equal(done.apiRequests, 8); assert.equal(done.stage, "COMPLETED_SP_STRUCTURE");
+    assert.equal(done.apiRequests, 9); assert.equal(done.stage, "COMPLETED_SP_STRUCTURE");
     assert.deepEqual(taskErrors, []);
   } finally { await worker.close(); }
+});
+
+test("binding a ready Profile persists an initial task and the existing worker consumes it", async () => {
+  const { Worker } = await import("bullmq");
+  const { createRedisConnectionOptions, getAmazonSyncQueueName } = await import("../../src/lib/queue/redis-queue");
+  const { tickAmazonAds } = await import("../../src/lib/amazon-ads/sync-scheduler");
+  const externalProfileId = "777";
+  const boundProfile = await prisma.amazonAdsProfile.create({ data: {
+    ...scope, id: randomUUID(), authorizationId: auth, region: "EU", profileId: externalProfileId,
+    countryCode: "US", marketplaceId: site, currencyCode: "USD", timezone: "America/Los_Angeles", accountInfo: {},
+  } });
+  let closeWorker: (() => Promise<void>) | undefined;
+  try {
+    await bindAmazonAdsProfile(scope, owner, externalProfileId, seller);
+    const boundPlan = await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { organizationId_workspaceId_profileId: { ...scope, profileId: boundProfile.id } } });
+    assert.equal(boundPlan.status, "ACTIVE");
+    const initialTask = await prisma.amazonAdsSyncTask.findFirstOrThrow({ where: { ...scope, planId: boundPlan.id, idempotencyKey: `initial-structure:${boundPlan.id}:${boundPlan.revision}` } });
+    assert.equal(initialTask.status, "WAITING");
+    assert.equal(initialTask.trigger, "schedule");
+    assert.equal(initialTask.requestedFrom, null);
+    assert.equal(initialTask.requestedTo, null);
+
+    await getAmazonSyncQueue().drain();
+    const worker = new Worker<AmazonSyncQueueJob>(getAmazonSyncQueueName(), async job => {
+      if (job.data.adsTaskId) await processAmazonAdsSyncTask(job.data.adsTaskId, job.data.adsDispatchVersion, { adapter, oauth });
+    }, { connection: createRedisConnectionOptions(), concurrency: 2 });
+    closeWorker = () => worker.close();
+    const done = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Initial Ads sync fixture timed out")), 10000);
+      worker!.on("failed", (job, error) => {
+        if (job?.data.adsTaskId !== initialTask.id) return;
+        clearTimeout(timer);
+        reject(error);
+      });
+      worker.on("completed", async job => {
+        if (job.data.adsTaskId !== initialTask.id) return;
+        try {
+          const persisted = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: initialTask.id } });
+          if (persisted.status !== "SUCCEEDED") return;
+          clearTimeout(timer);
+          resolve();
+        } catch (error) { clearTimeout(timer); reject(error); }
+      });
+    });
+    await tickAmazonAds();
+    await done;
+    const persisted = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: initialTask.id } });
+    assert.equal(persisted.stage, "COMPLETED_SP_STRUCTURE");
+    assert.equal(persisted.apiRequests, 9);
+    assert.equal(await prisma.amazonAdsEntityRecord.count({ where: { ...scope, profileId: boundProfile.id } }), 9);
+  } finally {
+    await closeWorker?.();
+    const boundPlan = await prisma.amazonAdsSyncPlan.findFirst({ where: { ...scope, profileId: boundProfile.id } });
+    if (boundPlan) {
+      await prisma.amazonAdsSyncDomainState.deleteMany({ where: { ...scope, profileId: boundProfile.id } });
+      await prisma.amazonAdsEntityRecord.deleteMany({ where: { ...scope, profileId: boundProfile.id } });
+      await prisma.amazonAdsSyncAttempt.deleteMany({ where: { ...scope, profileId: boundProfile.id } });
+      await prisma.amazonAdsSyncTask.deleteMany({ where: { ...scope, planId: boundPlan.id } });
+      await prisma.amazonAdsSyncPlan.delete({ where: { id: boundPlan.id } });
+    }
+    await prisma.amazonAdsProfile.delete({ where: { id: boundProfile.id } });
+  }
 });
 
 test("scheduler recovers expired leases with a new fence and pause cancels pending tasks", async () => {
@@ -416,7 +481,7 @@ test("authenticated structure API paginates actual rows and withholds reads revo
   const response = await GET(new Request(url, { headers }));
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.equal(body.total, 8); assert.equal(body.rows.length, 1); assert.equal(body.pagination.hasMore, true);
+  assert.equal(body.total, 9); assert.equal(body.rows.length, 1); assert.equal(body.pagination.hasMore, true);
   assert.equal(body.rows[0].internalProfileId, profile); assert.equal(body.rows[0].amazonProfileId, "999");
   let release = () => {}, ready = () => {};
   const gate = new Promise<void>(resolve => { release = resolve; }), acquired = new Promise<void>(resolve => { ready = resolve; });
@@ -452,7 +517,7 @@ test("Campaign filter distinguishes a direct Campaign parent from an equal Ad Gr
     ] });
     const input = parseAdsQuery(new URLSearchParams({ kind: "entities", internalProfileId: profile, campaignId: "101", pageSize: "100" }));
     const result = await queryAmazonAdsData(scope, owner, input);
-    assert.equal(result.total, 10);
+    assert.equal(result.total, 11);
     assert.ok(!result.rows.some(row => row.id === ids[0]), "equal numeric IDs do not imply a parent Campaign relationship");
     assert.ok(result.rows.some(row => row.id === ids[1]), "legacy Ad Group keeps its direct Campaign relationship");
     assert.ok(result.rows.some(row => row.id === ids[2]), "legacy Campaign negative keeps its direct Campaign relationship");
@@ -489,7 +554,7 @@ test("snapshot fallback requires a verified structure completion stage before cl
     await prisma.amazonAdsSyncDomainState.delete({ where });
     await prisma.amazonAdsSyncTask.update({ where: { id: task.id }, data: { status: "SUCCEEDED", stage: "LEGACY_UNVERIFIED" } });
     const unknown = await queryAmazonAdsData(scope, owner, input);
-    assert.equal(unknown.total, 8); assert.equal(unknown.freshness.status, "UNKNOWN");
+    assert.equal(unknown.total, 9); assert.equal(unknown.freshness.status, "UNKNOWN");
     assert.equal(unknown.meta.lastSyncAt, null); assert.equal(unknown.syncedAt, null);
     const state = unknown.freshness.profiles[0];
     assert.ok("warningCodes" in state); assert.ok(state.warningCodes.includes("ENTITY_FRESHNESS_FROM_SNAPSHOT"));
@@ -529,12 +594,12 @@ test("structure rows, total and freshness share one snapshot across concurrent c
         async listFreshness(scope, ids, dataDomain, reportType) { await committed; return reader.repository.listFreshness(scope, ids, dataDomain, reportType); },
       } })),
     });
-    assert.equal(result.rows.length, 8); assert.equal(result.total, 8);
+    assert.equal(result.rows.length, 9); assert.equal(result.total, 9);
     assert.ok(!result.rows.some(row => row.id === id));
     assert.equal(result.freshness.profiles[0].status, domain.status);
     // A subsequent production query sees the committed write and new domain state together.
     const next = await queryAmazonAdsData(scope, owner, input);
-    assert.equal(next.rows.length, 9); assert.equal(next.total, 9); assert.equal(next.freshness.status, "FAILED");
+    assert.equal(next.rows.length, 10); assert.equal(next.total, 10); assert.equal(next.freshness.status, "FAILED");
   } finally {
     await prisma.amazonAdsEntityRecord.deleteMany({ where: { ...scope, id } });
     await prisma.amazonAdsSyncDomainState.update({ where: domainWhere, data: { status: domain.status } });
@@ -561,5 +626,62 @@ test("authenticated Ads API rejects ambiguous scope and sort parameters for both
     }
   }
   const response = await GET(new Request(`http://localhost/api/integrations/amazon/ads/data?kind=entities&profileRecordId=${profile}&internalProfileId=${profile}&profileId=${profile}`, { headers }));
-  assert.equal(response.status, 200); assert.equal((await response.json()).total, 8);
+  assert.equal(response.status, 200); assert.equal((await response.json()).total, 9);
+});
+
+test("advertiser account binding uses exact scoped Profile, CAS revision, audit, and leaves plan/tasks unchanged", async () => {
+  const before = await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { id: secondPlan } });
+  const accountBefore = await prisma.amazonAdsProfile.findUniqueOrThrow({ where: { id: otherProfile } });
+  const tasksBefore = await prisma.amazonAdsSyncTask.count({ where: { ...scope, profileId: otherProfile } });
+  await assert.rejects(bindAmazonAdsProfile(scope, member, "888", seller, "fixture-account", otherProfile, null, 0));
+  await assert.rejects(bindAmazonAdsProfile({ ...scope, workspaceId: "wrong-workspace" }, owner, "888", seller, "fixture-account", otherProfile, null, 0));
+  const saved = await bindAmazonAdsProfile(scope, owner, "888", seller, "fixture-account", otherProfile, accountBefore.advertiserAccountId, accountBefore.advertiserAccountRevision);
+  assert.equal(saved.advertiserAccountId, "fixture-account");
+  assert.equal(saved.advertiserAccountRevision, accountBefore.advertiserAccountRevision + 1);
+  await assert.rejects(bindAmazonAdsProfile(scope, owner, "888", seller, "stale-account", otherProfile, accountBefore.advertiserAccountId, accountBefore.advertiserAccountRevision));
+  assert.equal((await prisma.amazonAdsProfile.findUniqueOrThrow({ where: { id: otherProfile } })).advertiserAccountId, "fixture-account");
+  assert.deepEqual(await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { id: secondPlan } }), before);
+  assert.equal(await prisma.amazonAdsSyncTask.count({ where: { ...scope, profileId: otherProfile } }), tasksBefore);
+  const audit = await prisma.auditLog.findFirstOrThrow({ where: { organizationId: scope.organizationId, entityId: otherProfile, action: "amazon.ads.profile.binding.changed" }, orderBy: { createdAt: "desc" } });
+  assert.equal((audit.metadata as { identityEvidence: string }).identityEvidence, "ADMIN_ENTERED_UNVERIFIED");
+  assert.equal(JSON.stringify(audit.metadata).includes("fixture-account"), false);
+  const cleared = await bindAmazonAdsProfile(scope, owner, "888", undefined, null, otherProfile, saved.advertiserAccountId, saved.advertiserAccountRevision);
+  assert.equal(cleared.sellerAccountId, seller, "account-only updates preserve the current store");
+  await assert.rejects(bindAmazonAdsProfile(scope, owner, "888", undefined, "stale-after-clear", otherProfile, accountBefore.advertiserAccountId, accountBefore.advertiserAccountRevision), { message: "账户绑定已被修改，请刷新后重试。" });
+});
+
+test("Product Ad pagination resumes checkpoint 6, updates the current object and remains scoped", async () => {
+  const original = await prisma.amazonAdsEntityRecord.findFirstOrThrow({ where: { ...scope, profileId: profile, entityType: "SP:product-ad", externalId: "701" } });
+  const originalPlan = await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { id: plan } });
+  const task = await newTask();
+  const cursors: Array<string | null> = [];
+  const productAdapter = createSponsoredProductsReadAdapter(async (url, init) => {
+    assert.equal(new URL(String(url)).pathname, "/sp/productAds/list");
+    const body = JSON.parse(String(init?.body)); cursors.push(body.nextToken ?? null);
+    return Response.json(body.nextToken
+      ? { productAds: [{ adId: "702", campaignId: "101", adGroupId: "201", state: "ENABLED", asin: "B000FIXTURE" }] }
+      : { productAds: [{ adId: "701", campaignId: "101", adGroupId: "201", state: "PAUSED", sku: "updated fixture sku", extendedData: { lastUpdateDateTime: "2026-11-06T02:00:00Z" } }], nextToken: "product-page2" });
+  });
+  try {
+    await prisma.amazonAdsSyncPlan.update({ where: { id: plan }, data: { status: "ACTIVE" } });
+    await prisma.amazonAdsSyncTask.update({ where: { id: task.id }, data: { stage: "product-ads", planRevision: originalPlan.revision, checkpointCiphertext: encryptAmazonAdsCheckpoint({ stage: 6, cursor: null, pages: 0 }, credentialScope, task.id) } });
+    await processAmazonAdsSyncTask(task.id, 1, { adapter: productAdapter, oauth });
+    const pending = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: task.id } });
+    assert.equal(pending.status, "WAITING");
+    assert.equal(pending.stage, "product-ads");
+    assert.deepEqual(decryptAmazonAdsCheckpoint(pending.checkpointCiphertext, credentialScope, task.id), { stage: 6, cursor: "product-page2", pages: 1 });
+    const done = await drain(task.id, productAdapter);
+    assert.equal(done.status, "SUCCEEDED"); assert.equal(done.apiRequests, 2);
+    assert.deepEqual(cursors, [null, "product-page2"]);
+    const data = await queryAdsEntities(scope, member, new URLSearchParams({ internalProfileId: profile, entityType: "SP:product-ad", campaignId: "101", adGroupId: "201" }));
+    assert.equal(data.total, 2);
+    assert.equal(data.rows.find(row => row.externalId === "701")?.state, "PAUSED");
+    assert.equal((data.rows.find(row => row.externalId === "701")?.payload as { sku: string }).sku, "updated fixture sku");
+    assert.equal(await prisma.amazonAdsEntityRecord.count({ where: { ...scope, profileId: profile, entityType: "SP:product-ad", externalId: "701" } }), 1);
+    assert.equal((await prisma.amazonAdsEntityRecord.findFirstOrThrow({ where: { ...scope, profileId: otherProfile, entityType: "SP:product-ad", externalId: "701" } })).state, "ENABLED");
+  } finally {
+    await prisma.amazonAdsEntityRecord.deleteMany({ where: { ...scope, profileId: profile, entityType: "SP:product-ad", externalId: "702" } });
+    await prisma.amazonAdsEntityRecord.update({ where: { id: original.id }, data: { state: original.state, payload: original.payload as Prisma.InputJsonValue, sourceUpdatedAt: original.sourceUpdatedAt, sourceTaskId: original.sourceTaskId } });
+    await prisma.amazonAdsSyncPlan.update({ where: { id: plan }, data: { status: originalPlan.status } });
+  }
 });

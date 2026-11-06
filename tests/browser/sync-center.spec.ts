@@ -255,6 +255,28 @@ test("plan domain navigation selects real defaults, blocks planned domains and p
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test("bounded catalog guidance distinguishes existing full listing plans without starting sync", async ({ page }) => {
+  const { state, calls } = await setup(page);
+  state.plans = [{ id: "amazon-sync-auto-fixture", revision: 1, name: "在线商品自动计划", resource: "catalog", enabled: true, mode: "snapshot", intervalMinutes: 1440, priority: 1, maxAttempts: 3, retentionDays: 30, nextRunAt: null, targets: [{ sourceId: "source-a" }] }];
+  await page.getByRole("button", { name: "同步计划", exact: true }).click();
+  const picker = page.getByRole("navigation", { name: "同步计划数据域", exact: true });
+  await picker.getByRole("button", { name: "商品目录 已接入", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "需配置采集范围", exact: true })).toBeVisible();
+  await expect(page.getByText("商品目录仅读取来源策略明确列出的 ASIN", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("sync-plan-coverage")).toContainText("当前工作区可见计划共 1 个");
+  await expect(page.getByRole("button", { name: "新建计划", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "查看在线商品全量计划", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "在线商品自动计划", exact: true })).toBeVisible();
+  await page.getByLabel("店铺", { exact: true }).selectOption("store-b");
+  await expect(page.getByRole("heading", { name: "当前筛选下无计划", exact: true })).toBeVisible();
+  await expect(page.getByTestId("sync-plan-coverage")).toContainText("在线商品 1 个，当前筛选显示 0 个");
+  await page.getByRole("button", { name: "清除店铺／站点筛选", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "在线商品自动计划", exact: true })).toBeVisible();
+  await picker.getByRole("button", { name: "搜索词与品牌分析 已接入", exact: true }).click();
+  await expect(page.getByText("当前不自动建立品牌分析计划", { exact: false })).toBeVisible();
+  expect(calls.filter(call => call.body)).toHaveLength(0);
+});
+
 test("quality issues link to the correct task and secondary pages remain usable on narrow screens", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   const { state } = await setup(page);

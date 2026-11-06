@@ -161,7 +161,7 @@ export function AdsSyncedData({ onBack, onCampaigns }: { onBack: () => void; onC
   const rows = data?.rows ?? [];
   const selectedExpression = selectedEntity ? entityExpression(selectedEntity) : null;
   const isLastPage = data?.total !== undefined ? page * pageSize >= data.total : rows.length < pageSize;
-  const entityViews = [["", "全部已存结构"], ["SP:campaign", "Campaign"], ["SP:ad-group", "Ad Group"], ["SP:keyword", "Keyword"], ["SP:target", "Target"], ["SP:negative-keyword", "广告组否定词"], ["SP:negative-target", "广告组商品否定"], ["SP:campaign-negative-keyword", "Campaign 否定词"], ["SP:campaign-negative-target", "Campaign 商品否定"]];
+  const entityViews = [["", "全部已存结构"], ["SP:campaign", "Campaign"], ["SP:ad-group", "Ad Group"], ["SP:product-ad", "广告商品 Product Ad"], ["SP:keyword", "Keyword"], ["SP:target", "Target"], ["SP:negative-keyword", "广告组否定词"], ["SP:negative-target", "广告组商品否定"], ["SP:campaign-negative-keyword", "Campaign 否定词"], ["SP:campaign-negative-target", "Campaign 商品否定"]];
 
   return <div className="ads-synced-view">
     <header className="ads-synced-heading">
@@ -232,6 +232,7 @@ export function AdsSyncedData({ onBack, onCampaigns }: { onBack: () => void; onC
       <header><h2>{entityName(selectedEntity) ?? selectedEntity.externalId} · 只读详情</h2><button type="button" className="ads-link" onClick={() => setSelectedEntity(null)}>关闭实体详情</button></header>
       <dl>
         {[["实体类型", selectedEntity.entityType], ["Amazon 实体 ID", selectedEntity.externalId], ["内部 Profile ID", selectedEntity.profileId], ["Amazon Profile ID", selectedEntity.amazonProfileId], ["直接父级 ID", selectedEntity.parentExternalId], ["状态", selectedEntity.state], ["Campaign ID", entityField(selectedEntity, "campaignId")], ["Ad Group ID", entityField(selectedEntity, "adGroupId")], ["匹配类型", entityField(selectedEntity, "matchType")], ["竞价", entityBid(selectedEntity)], ["预算", storedBudget(selectedEntity)], ["预算类型", entityField(selectedEntity, "budgetType")], ["投放类型", entityField(selectedEntity, "targetingType")], ["表达式类型", entityField(selectedEntity, "expressionType")], ["开始日期", entityField(selectedEntity, "startDate")], ["结束日期", entityField(selectedEntity, "endDate")], ["上游更新时间", formatDate(selectedEntity.sourceUpdatedAt)], ["本地同步时间", formatDate(selectedEntity.syncedAt)], ["来源任务", selectedEntity.sourceTaskId], ["来源状态", selectedEntity.sourceTask ? `${selectedEntity.sourceTask.status} / ${selectedEntity.sourceTask.stage}` : "未知"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value ?? "—"}</dd></div>)}
+        {selectedEntity.entityType === "SP:product-ad" && <><div><dt>SKU</dt><dd>{entityText(selectedEntity.payload, "sku") ?? "—"}</dd></div><div><dt>ASIN</dt><dd>{entityText(selectedEntity.payload, "asin") ?? "—"}</dd></div></>}
       </dl>
       {selectedExpression != null && <details><summary>投放表达式</summary><pre>{JSON.stringify(selectedExpression, null, 2)}</pre></details>}
       <p>{selectedEntity.entityType.includes("campaign-negative") ? "Campaign 级否定项，直接属于 Campaign，不属于 Ad Group。" : "父级关系来自已保存的 Amazon 结构数据。"} 当前快照不提供历史版本或业绩指标。</p>
@@ -241,7 +242,7 @@ export function AdsSyncedData({ onBack, onCampaigns }: { onBack: () => void; onC
           setAdGroupId(""); setSearch(""); setReportType("spCampaigns"); setAdProduct("SPONSORED_PRODUCTS");
           setPage(1); setSelectedEntity(null); setData(null); setLoading(true); setKind("reports");
         }}>查看 Campaign 已发布日报</button>}
-        {(selectedEntity.entityType === "SP:campaign" ? [["SP:ad-group", "查看下属 Ad Group"], ["SP:campaign-negative-keyword", "查看 Campaign 否定词"], ["SP:campaign-negative-target", "查看 Campaign 商品否定"]] : selectedEntity.entityType === "SP:ad-group" ? [["SP:keyword", "查看下属 Keyword"], ["SP:target", "查看下属 Target"], ["SP:negative-keyword", "查看广告组否定词"], ["SP:negative-target", "查看广告组商品否定"]] : []).map(([type, label]) => <button type="button" className="ads-link" key={type} onClick={() => {
+        {(selectedEntity.entityType === "SP:campaign" ? [["SP:ad-group", "查看下属 Ad Group"], ["SP:campaign-negative-keyword", "查看 Campaign 否定词"], ["SP:campaign-negative-target", "查看 Campaign 商品否定"]] : selectedEntity.entityType === "SP:ad-group" ? [["SP:product-ad", "查看广告商品"], ["SP:keyword", "查看下属 Keyword"], ["SP:target", "查看下属 Target"], ["SP:negative-keyword", "查看广告组否定词"], ["SP:negative-target", "查看广告组商品否定"]] : []).map(([type, label]) => <button type="button" className="ads-link" key={type} onClick={() => {
           setProfileId(selectedEntity.profileId);
           setCampaignId(selectedEntity.entityType === "SP:campaign" ? selectedEntity.externalId : entityField(selectedEntity, "campaignId") ?? "");
           setAdGroupId(selectedEntity.entityType === "SP:ad-group" ? selectedEntity.externalId : "");

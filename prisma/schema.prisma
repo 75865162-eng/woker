@@ -1454,6 +1454,8 @@ model AmazonAdsProfile {
   authorization      AmazonAdsAuthorization @relation(fields: [organizationId, workspaceId, authorizationId], references: [organizationId, workspaceId, id], onDelete: Restrict)
   region             String
   profileId          String
+  advertiserAccountId String?
+  advertiserAccountRevision Int @default(0)
   countryCode        String
   marketplaceId      String?
   currencyCode       String?
@@ -1973,6 +1975,7 @@ model AmazonCatalogSnapshot {
   asin             String   @default("")
   listingStatus    String?
   fulfillmentType  String?
+  listingAttributes Json?
   sourceRunId      String
   fieldSources     Json
   sourceUpdatedAt  DateTime?

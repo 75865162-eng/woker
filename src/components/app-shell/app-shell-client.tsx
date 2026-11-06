@@ -34,6 +34,7 @@ const navItems = [
   { href: "/saihu-search-merge", label: "赛狐搜词合并", icon: SearchCheck },
   { href: "/listing-ai", label: "Listing AI", icon: Sparkles, moduleId: "listingAi" },
   { href: "/agents", label: "Amazon AI Agent Platform", icon: Bot, moduleId: "agents" },
+  { href: "/lili", label: "粒粒 Lili 技能中心", icon: Sparkles, moduleId: "agents" },
   { href: "/operations", label: "经营中台", icon: ChartNoAxesCombined, moduleId: "operations" },
   { href: "/logistics", label: "物流处理", icon: PackageSearch, moduleId: "logistics" },
 ];

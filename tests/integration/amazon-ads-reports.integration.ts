@@ -61,6 +61,42 @@ test("report freshness must ignore newer unpublished rows", async () => {
   assert.equal(result.freshness.profiles[0]?.coveredTo, "2026-11-01");
   assert.equal(result.freshness.profiles[0]?.lastSuccessAt, "2026-11-03T00:00:00.000Z");
 });
+
+test("report freshness uses exact-domain state, ignores structure cadence and retains failure without facts", async () => {
+  const genericId = randomUUID(), exactId = randomUUID();
+  const task = await prisma.amazonAdsSyncTask.findFirstOrThrow({ where: { ...scope, profileId: profile, status: "SUCCEEDED" } });
+  const previousPlan = await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { id: plan } });
+  try {
+    await prisma.amazonAdsSyncDomainState.createMany({ data: [
+      { ...scope, id: genericId, profileId: profile, dataDomain: "reports", reportType: "", status: "FAILED", lastTaskId: task.id, warningCodes: ["GENERIC_FAILURE"], lastAttemptAt: new Date("2026-11-06T01:00:00Z") },
+      { ...scope, id: exactId, profileId: profile, dataDomain: "reports", reportType: "fixture_campaign", status: "CURRENT", lastTaskId: task.id, warningCodes: ["EXACT_REPORT_STATE"], lastAttemptAt: new Date("2026-11-06T00:00:00Z") },
+    ] });
+    const input = parseAdsQuery(new URLSearchParams({ kind: "reports", from: "2026-11-01", to: "2026-11-01", reportType: "fixture_campaign", internalProfileId: profile }));
+    for (const intervalMinutes of [1, 5256000]) {
+      await prisma.amazonAdsSyncPlan.update({ where: { id: plan }, data: { intervalMinutes } });
+      const result = await queryPublishedAdsReports(scope, actor, input);
+      assert.equal(result.freshness.status, "OBSERVED_PUBLISHED");
+      assert.deepEqual(result.freshness.profiles[0].warningCodes, ["EXACT_REPORT_STATE"]);
+      assert.equal(result.freshness.profiles[0].lastTaskId, task.id);
+    }
+    const all = await read();
+    assert.equal(all.freshness.status, "FAILED", "all-report read must retain generic failure");
+    assert.deepEqual(all.freshness.profiles[0].warningCodes, ["GENERIC_FAILURE"]);
+    await prisma.amazonAdsSyncDomainState.update({ where: { id: exactId }, data: { status: "FAILED" } });
+    const emptyInput = { ...input, campaignId: "not-observed" };
+    const empty = await queryPublishedAdsReports(scope, actor, emptyInput);
+    assert.equal(empty.total, 0);
+    assert.equal(empty.freshness.status, "FAILED", "empty facts must not erase an existing failed report state");
+    await prisma.amazonAdsSyncDomainState.update({ where: { id: exactId }, data: { status: "RUNNING" } });
+    assert.equal((await queryPublishedAdsReports(scope, actor, emptyInput)).freshness.status, "SYNCING");
+    await prisma.amazonAdsSyncDomainState.delete({ where: { id: exactId } });
+    assert.equal((await queryPublishedAdsReports(scope, actor, input)).freshness.status, "FAILED", "generic state remains a fallback when exact state is absent");
+  } finally {
+    await prisma.amazonAdsSyncDomainState.deleteMany({ where: { ...scope, id: { in: [genericId, exactId] } } });
+    await prisma.amazonAdsSyncPlan.update({ where: { id: plan }, data: { intervalMinutes: previousPlan.intervalMinutes } });
+  }
+});
+
 test("old generic MCP credential must not acquire report-domain access implicitly", async () => {
   await assert.rejects(mcp, /不可访问|未授权|NOT_ALLOWED/);
 });

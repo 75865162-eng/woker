@@ -134,3 +134,46 @@
 2026-11-06追加。Campaign 日报事实表将来源任务ID改为按需展开，复用既有 `GET /api/integrations/amazon/ads/sync?taskId=...&profileId=...` 与 `TaskEvidence`。请求同时绑定事实的内部Profile及sourceTaskId；沿用同步中心原有任务查看权限，权限错误只影响任务详情，不清空已经授权的日报。关闭状态不发任务请求。
 
 相关改动仅在 `src/components/amazon-ads/ads-campaign-workspace.tsx` 与 `tests/browser/amazon-ads-campaigns.spec.ts`；没有新增API/查询/权限/数据库逻辑。日报表格继续展示版本和本地同步时间。浏览器验证 sourceTaskId、Profile范围、返回任务阶段及既有权限行为；Amazon Ads隔离浏览器回归 **25/25**，定向ESLint和相关diff空白检查通过。此前同批报告集成 **43/43**、TypeScript通过；本小批仅复用既有TaskEvidence，不重复数据库测试。无迁移/外部调用/提交/推送/部署。
+
+
+## 后续交付：逐 Profile 日报新鲜度与观察覆盖
+
+2026-11-06追加。在Campaign日报中消费既有 `freshness.profiles`：展示内部Profile、报告类型、状态、当前筛选已观察起止日期、最近成功发布、最近尝试、warningCodes及独立权限的任务详情。明确分开查询日期与观察日期，不以MIN/MAX断言连续覆盖，不将未知/无明细呈现为健康。没有新增查询、API、权限、模型或Worker。
+
+运行时校验新增可选freshness明细字段类型，兼容旧接口但明确提示“覆盖范围与最近尝试不可判定”。任务详情仅点击后请求，403不影响已授权日报/新鲜度。修改 `src/components/amazon-ads/ads-campaign-workspace.tsx` 与 `tests/browser/amazon-ads-campaigns.spec.ts`；扩展现有fixture及新增任务403/旧响应回归。
+
+本轮验证：浏览器专项 **26/26**，定向ESLint通过，相关diff空白检查通过。全仓 `npm run typecheck` **未通过**：并行修改的 `tests/integration/amazon-mcp.integration.ts` 第325–332行读取failureClass/toolVersion/gatewayStatus/durationMs，但实际类型仅有id/status/createdAt；本轮修改文件无诊断。未覆盖或修改该并行任务文件，不沿用之前TypeScript成功结果作为当前通过证据。
+
+本轮仅UI消费既有数据，采用专项浏览器/类型/定向lint，不重复数据库集成或生产构建。完整上线关口需类型阻断处理后再跑。回滚移除该freshness区块及可选响应校验即可，不改变事实/同步状态。未调用真实API、操作配置/凭证、迁移、提交、推送或部署；其他并行改动保留。
+
+
+## 后续交付：服务端报告新鲜度判定纠偏
+
+2026-11-06追加。发现共享报告查询将generic和exact域状态按未排序SQL返回顺序存入Map，存在覆盖不确定性；还把结构SyncPlan.intervalMinutes用于报告CURRENT/STALE，空结果时全局MISSING又会掩盖报告失败。
+
+- 新纯函数 `src/lib/amazon-ads/report-freshness.ts` 收口确定性判定。指定reportType时，优先同Profile的exact状态，无exact才回退generic；跨报告查询按FAILED→SYNCING→STALE→观察态保守选取，并使用尝试时间/报告类型/任务ID确定性打破平局，返回任务、警告与状态属于同一条证据。
+- 不再查询结构SyncPlan并用于报告新鲜度。没有报告专属时效合同就仅报告OBSERVED_PUBLISHED；保存的明确STALE、失败和进行中状态继续保留。无事实时仍保留FAILED/SYNCING，不用MISSING掩盖。
+- API/MCP沿用既有共同服务、字段和权限，不修改数据库或计划、不开启同步；warnings解释OBSERVED_PUBLISHED边界。查询少读一类结构计划，不新增SQL/往返。未来报告专属cadence/SLA需合同确认后另行实施。
+- 改动：`src/lib/amazon-ads/report-query.ts`、新增 `src/lib/amazon-ads/report-freshness.ts` / `tests/amazon-ads-report-freshness.test.ts`；扩展 `tests/integration/amazon-ads-reports.integration.ts`，保留其中其他工作区改动。
+
+验证：报告隔离数据库集成 **44/44**（新场景验证exact覆盖、generic回退、不同结构频率、空事实下失败/运行中保留），新纯函数 **3/3**（包含顺序置换和多Profile边界）；`npm run typecheck`、4个相关文件定向ESLint及相关diff空白检查通过。一次性PG/Redis、fixture及网络守卫，无真实服务/凭证。
+
+此次共享判定使用真实SQL集成+纯函数矩阵+全仓类型+定向lint进行风险收敛；没有重复浏览器测试（UI未修改）、全量check或生产构建。现工作区曾出现生成目录lint问题，不清理其他任务产物。未做生产P95benchmark；未改Schema/迁移/配置/凭证，没有真实API、生产任务、提交、推送、部署。
+
+回滚仅恢复query-service内部新鲜度计算并移除helper，API和数据库不需回滚；但会重新引入覆盖顺序/错误cadence问题。正式报表合同、账号验收、日期完整性、报告专属时效计划及广告审批执行仍待完成。
+
+## 后续交付：独立关键词、商品投放与两级否定业务页面
+
+2026-11-06追加。将已具备本地结构读取能力的六个数据域接入正式业务导航，减少必须逐级进入详情才能管理结构数据的限制：
+
+- `/amazon-ads/keywords`：`SP:keyword`；`/amazon-ads/targets`：`SP:target`。
+- `/amazon-ads/negatives`：分开选择 `SP:negative-keyword`、`SP:negative-target`、`SP:campaign-negative-keyword`、`SP:campaign-negative-target`，不混合层级。三个入口均接受 `/sp` 列表别名；未知详情路径明确显示未接入。
+- 复用既有列表筛选与读取边界：店铺、Marketplace、Profile、状态、Campaign/Ad Group ID、搜索、排序及25条分页均通过 `GET /api/integrations/amazon/ads/data?kind=entities` 在服务端执行；沿用原实时权限与范围过滤，没有新增API、查询合同、Repository、Schema或迁移。活动级否定项不提供广告组筛选，所有否定项不显示竞价或竞价排序。
+- 读取规范化关键词、匹配类型、投放表达式、竞价与归属，不把raw payload旧值作为表格事实。每行从所属Profile解析站点/币种；同Amazon ID的跨Profile父对象链接均携带该行内部Profile。来源任务与raw按需展开，任务权限继续独立校验。
+- 切换数据域重置筛选和页码，旧请求中止且延迟响应不能覆盖新域。复用加载、超时、空、403、失败与重试状态；正式工作台不回退Demo。结构页面明确标注当前快照，不提供伪历史日期或占位业绩；未接入关键词/投放日报、历史观察、导出及写操作。
+
+修改文件：`src/components/amazon-ads/ads-campaign-workspace.tsx`、`src/components/amazon-ads/ads-workspace-route.tsx`、`tests/browser/amazon-ads-campaigns.spec.ts`，以及本交付与原任务/待办状态说明。保持原Demo与Campaign/Ad Group列表详情能力。
+
+回滚仅撤销本批独立入口、列表domain扩展及对应浏览器测试；已有详情内子实体读取仍保留，不涉及数据库/运行配置/外部服务。下一步仍为正式Campaign报表合同补证和受控只读验收；Search Term、Placement、Product Ads等未确认数据域不以此次结构页面交付宣称完成。真实API/凭证/配置/任务/生产迁移/部署均未执行，未提交或推送。
+
+验证结果：Amazon Ads浏览器回归 **57/57**（原22项、工作台35项，其中本批新增9项），覆盖六域接线、Profile限定父对象链接、规范字段与币种、分页/组合筛选、四类否定域切换与筛选重置、403/500/格式错误/空结果恢复、加载及延迟响应隔离，同时回归旧Demo。`npm run typecheck`、三个相关文件定向ESLint及相关diff空白检查通过。首次使用顶层playwright包CLI遇到本机已安装版本不一致，改用项目`@playwright/test/cli.js`即通过，未改依赖。验证仅为拦截全部网络的浏览器fixture；本批没有修改后端/数据库，未重复数据库集成、check:fast或生产构建，合码/上线时再按全量关口验证。

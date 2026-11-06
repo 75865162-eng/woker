@@ -36,6 +36,7 @@ export async function POST(request: Request) {
         organizationId: permission.user.organizationId,
         workspaceId: scope.workspaceId,
         accountId: scope.accountId,
+        NOT: { storageKey: { startsWith: "selection-research/" } },
       },
       select: { id: true, storageKey: true, storageType: true },
     });

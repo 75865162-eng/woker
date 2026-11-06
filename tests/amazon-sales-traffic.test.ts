@@ -56,7 +56,7 @@ test("real Reports transport sends frozen dates and uses independent authenticat
   const calls: Array<{ url: URL; init?: RequestInit }> = [];
   const client = new AmazonSpApiClient(config, { fetch: async (input, init) => { const url = new URL(String(input)); calls.push({ url, init }); return url.hostname === "api.amazon.com" ? Response.json({ access_token: "fixture-access", expires_in: 3600 }) : Response.json({ reportId: "r" }); } });
   await client.createSalesTrafficReport({ marketplaceId: site, ...range }); await client.getReport("r/id"); await client.getReportDocument("doc/id");
-  const body = JSON.parse(calls[1].init?.body as string); assert.equal(body.dataStartTime, range.startAt); assert.equal(body.dataEndTime, range.reportEndAt); assert.deepEqual(body.marketplaceIds, [site]);
+  const body = JSON.parse(calls[1].init?.body as string); assert.equal(body.dataStartTime, `${range.from}T00:00:00Z`); assert.equal(body.dataEndTime, `${range.to}T23:59:59Z`); assert.deepEqual(body.marketplaceIds, [site]);
   assert.equal(calls[1].url.pathname, "/reports/2021-06-30/reports"); assert.equal(calls[2].url.pathname, "/reports/2021-06-30/reports/r%2Fid"); assert.equal(calls[3].url.pathname, "/reports/2021-06-30/documents/doc%2Fid");
 });
 test("presigned report download omits credentials, refuses SSRF and handles bounded gzip", async () => {

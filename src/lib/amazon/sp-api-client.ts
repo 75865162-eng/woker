@@ -229,10 +229,12 @@ export class AmazonSpApiClient {
     return this.request("GET", `/fba/inventory/v1/summaries?${query.toString()}`);
   }
 
-  async createSalesTrafficReport(input: { marketplaceId: string; startAt: string; endExclusive: string; reportEndAt?: string }): Promise<unknown> {
+  async createSalesTrafficReport(input: { marketplaceId: string; startAt: string; endExclusive: string; reportEndAt?: string; from?: string; to?: string }): Promise<unknown> {
     return this.request("POST", "/reports/2021-06-30/reports", {
       reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [input.marketplaceId],
-      dataStartTime: input.startAt, dataEndTime: input.reportEndAt ?? new Date(Date.parse(input.endExclusive) - 1000).toISOString(),
+      // DAY reports normalize timestamps to UTC calendar dates.
+      dataStartTime: input.from ? `${input.from}T00:00:00Z` : input.startAt,
+      dataEndTime: input.to ? `${input.to}T23:59:59Z` : input.reportEndAt ?? new Date(Date.parse(input.endExclusive) - 1000).toISOString(),
       reportOptions: { dateGranularity: "DAY", asinGranularity: "CHILD" },
     });
   }

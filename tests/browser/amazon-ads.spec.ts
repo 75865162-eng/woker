@@ -8,7 +8,7 @@ test.beforeAll(async () => {
 });
 async function setup(page: Page, mockAccounts = false, refreshTokenExpiresAt: string | null = "2027-11-05T08:00:00.000Z", syncedDataMode: "rows" | "empty" = "rows", fixtureTaskStatus = "SUCCEEDED") {
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
-  let boundSeller = "", taskStatus = fixtureTaskStatus;
+  let boundSeller = "", boundAdvertiser = "", taskStatus = fixtureTaskStatus;
   await page.route("**/*", route => {
     const url = new URL(route.request().url());
     expect(url.origin).toBe("http://127.0.0.1:43239");
@@ -33,10 +33,12 @@ async function setup(page: Page, mockAccounts = false, refreshTokenExpiresAt: st
       }
       expect(url.pathname).toBe("/api/integrations/amazon/ads/profiles");
       if (route.request().method() === "POST") {
-        boundSeller = String(route.request().postDataJSON().sellerAccountId ?? "");
+        const body = route.request().postDataJSON();
+        if (body.sellerAccountId !== undefined) boundSeller = String(body.sellerAccountId ?? "");
+        if (body.advertiserAccountId !== undefined) boundAdvertiser = String(body.advertiserAccountId ?? "");
         return route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
       }
-      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ oauthConfigured: false, sellers: [{ id: "seller-us", displayName: "Northstar US", marketplaceCode: "US" }], profiles: [{ id: "ads-profile-1", authorizationId: "ads-auth-1", region: "NA", profileId: "189000123456789", countryCode: "US", marketplaceId: "ATVPDKIKX0DER", currencyCode: "USD", timezone: "America/Los_Angeles", sellerAccountId: boundSeller || null, lastDiscoveredAt: "2026-11-05T08:00:00.000Z", accountInfo: { name: "Northstar Ads", type: "seller" }, authorization: { name: "Northstar Ads", status: "CONNECTED", lastValidatedAt: "2026-11-05T08:00:00.000Z", refreshTokenExpiresAt } }] }) });
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ oauthConfigured: false, sellers: [{ id: "seller-us", displayName: "Northstar US", marketplaceCode: "US" }], profiles: [{ id: "ads-profile-1", authorizationId: "ads-auth-1", region: "NA", profileId: "189000123456789", advertiserAccountId: boundAdvertiser || null, countryCode: "US", marketplaceId: "ATVPDKIKX0DER", currencyCode: "USD", timezone: "America/Los_Angeles", sellerAccountId: boundSeller || null, lastDiscoveredAt: "2026-11-05T08:00:00.000Z", accountInfo: { name: "Northstar Ads", type: "seller" }, authorization: { name: "Northstar Ads", status: "CONNECTED", lastValidatedAt: "2026-11-05T08:00:00.000Z", refreshTokenExpiresAt } }] }) });
     }
     if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
@@ -82,6 +84,11 @@ test("accounts page displays persisted Profiles and binds an ERP seller without 
   await expect(page.getByRole("button", { name: "连接 Amazon Ads", exact: true })).toBeDisabled();
   await page.getByLabel("189000123456789 ERP 店铺绑定").selectOption("seller-us");
   await expect(page.getByRole("status")).toContainText("店铺绑定已保存");
+  const accountId = page.getByLabel("189000123456789 V1 Advertiser Account ID");
+  await accountId.fill("verified-account-1");
+  await page.getByRole("button", { name: "保存绑定", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("账户绑定已保存");
+  await expect(accountId).toHaveValue("verified-account-1");
   expect(errors).toEqual([]);
 });
 test("sync task history filters every authorized Profile, paginates server results and refreshes cancellation", async ({ page }) => {
@@ -656,4 +663,29 @@ test("Bulk export retains identity and immutable source while blocking stale or 
   await page.addScriptTag({ content: regression });
   const result = await page.evaluate(() => (window as unknown as { runBulkRegression: () => Promise<Record<string, unknown>> }).runBulkRegression());
   expect(result).toEqual({ writable: 1, valid: true, bid: 0.4, operation: "Update", campaign: "campaign-1", group: "group-1", keyword: "keyword-1", state: "enabled", immutable: true, conflict: 1, staleWritable: 0, uncheckedWritable: 0, uncheckedBid: 0.5 });
+});
+
+test("Product Ad stored view drills down from Ad Group and preserves seller SKU without inventing ASIN", async ({ page }) => {
+  const errors = await setup(page);
+  const requests: URL[] = [];
+  await page.route("**/api/integrations/amazon/ads/data?*", route => {
+    const url = new URL(route.request().url()); requests.push(url);
+    const product = url.searchParams.get("entityType") === "SP:product-ad";
+    const row = { id: product ? "product-row" : "group-row", profileId: "product-profile", amazonProfileId: "123", entityType: product ? "SP:product-ad" : "SP:ad-group",
+      externalId: product ? "701" : "201", campaignId: "101", adGroupId: "201", parentExternalId: product ? "201" : "101", state: "PAUSED",
+      payload: product ? { adId: "701", sku: "seller fixture sku" } : { name: "Fixture group" }, sourceTaskId: "product-source", syncedAt: "2026-11-06T00:00:00Z" };
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ rows: [row], total: 1, page: 1, pageSize: 100 }) });
+  });
+  await page.goto("http://127.0.0.1:43239/amazon-ads/campaigns?real=1");
+  await page.getByRole("button", { name: "查看实体 201", exact: true }).click();
+  const detail = page.getByRole("region", { name: "广告实体详情" });
+  await detail.getByRole("button", { name: "查看广告商品", exact: true }).click();
+  await expect.poll(() => requests.at(-1)?.searchParams.get("entityType")).toBe("SP:product-ad");
+  expect(requests.at(-1)?.searchParams.get("internalProfileId")).toBe("product-profile");
+  expect(requests.at(-1)?.searchParams.get("campaignId")).toBe("101");
+  expect(requests.at(-1)?.searchParams.get("adGroupId")).toBe("201");
+  await page.getByRole("button", { name: "查看实体 701", exact: true }).click();
+  await expect(detail.locator("div").filter({ has: page.locator("dt", { hasText: /^SKU$/ }) }).locator("dd")).toHaveText("seller fixture sku");
+  await expect(detail.locator("div").filter({ has: page.locator("dt", { hasText: /^ASIN$/ }) }).locator("dd")).toHaveText("—");
+  expect(errors).toEqual([]);
 });

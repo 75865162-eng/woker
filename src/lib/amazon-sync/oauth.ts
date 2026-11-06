@@ -8,6 +8,7 @@ import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
 import { mcpTokenHash } from "./mcp";
 import { endpoints, requiredText, SyncInputError, type SyncScope } from "./policy";
 import { scopeLock } from "./service";
+import { ensureAmazonSyncInitialized } from "./scheduler";
 
 const consentHosts: Record<string, string> = { "us-east-1": "sellercentral.amazon.com", "eu-west-1": "sellercentral-europe.amazon.com", "us-west-2": "sellercentral.amazon.co.jp" };
 function appSettings() {
@@ -66,7 +67,7 @@ export async function finishAmazonOAuth(actor: string, params: URLSearchParams) 
       const listing = await client.searchListingsItems({ sellerId, marketplaceId: site.marketplaceId });
       if (!listing || typeof listing !== "object" || !Array.isArray((listing as { items?: unknown }).items)) throw new SyncInputError("无法验证卖家范围。", 409);
     }
-    return await prisma.$transaction(async tx => {
+    const completed = await prisma.$transaction(async tx => {
       await scopeLock(tx, scope); await assertManager(scope, actor, tx);
       if (!await tx.amazonOAuthAttempt.findFirst({ where: { id: attempt.id, status: "EXCHANGING", expiresAt: { gt: new Date() } }, select: { id: true } })) throw new SyncInputError("授权会话已过期。", 403);
       const existing = await tx.amazonSpApiAuthorization.findUnique({ where: { organizationId_workspaceId_amazonSellerId_awsRegion: { ...scope, amazonSellerId: sellerId, awsRegion: attempt.region } } });
@@ -94,6 +95,13 @@ export async function finishAmazonOAuth(actor: string, params: URLSearchParams) 
       await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.oauth.completed", entityType: "AmazonSpApiAuthorization", entityId: id, metadata: { workspaceId: scope.workspaceId, amazonSellerId: sellerId, marketplaceIds: sites.map(s => s.marketplaceId), identityEvidence: "OAUTH_SELLER_SCOPE_PROBE" } } });
       return { authorizationId: id, sellerId, marketplaces: sites.map(s => s.marketplaceId) };
     });
+    let automaticSync: Awaited<ReturnType<typeof ensureAmazonSyncInitialized>>;
+    try { automaticSync = await ensureAmazonSyncInitialized(scope, completed.authorizationId); }
+    catch {
+      console.error(`[amazon-sync-center] automatic initialization deferred for authorization ${completed.authorizationId}`);
+      automaticSync = { status: "deferred", sourceCount: 0, planCount: 0, taskCount: 0 };
+    }
+    return { ...completed, automaticSync };
   } catch {
     await prisma.$transaction(async tx => {
       await tx.amazonOAuthAttempt.updateMany({ where: { id: attempt.id, status: "EXCHANGING" }, data: { status: "FAILED" } });

@@ -1,0 +1,2902 @@
+[
+  {
+    "slug": "acos-reduction-plan",
+    "zh": "ACOS 压降计划",
+    "en": "ACOS reduction plan",
+    "cat": "ads",
+    "zhSum": "把高于目标的 ACOS 拆成降出价、加否定和收预算三组动作。",
+    "enSum": "Split an above-target ACOS into bid cuts, negatives, and budget cuts.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "acos-spike-triage",
+    "zh": "ACOS 飙升分诊",
+    "en": "ACOS spike triage",
+    "cat": "ads",
+    "zhSum": "对比近 7 天和近 30 天，分清是花费涨了还是销售掉了。",
+    "enSum": "Compare 7-day and 30-day windows to see whether spend rose or sales fell.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_data_health",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "acos-target-setting",
+    "zh": "ACOS 目标设定",
+    "en": "ACOS target setting",
+    "cat": "ads",
+    "zhSum": "用成本、售价和目标利润倒推新品期与稳定期能接受的 ACOS。",
+    "enSum": "Back into an acceptable ACOS from cost, price, and target margin.",
+    "tools": [
+      "finance_get_fee_estimate",
+      "ads_get_settings",
+      "ads_update_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "ads-build-from-scratch",
+    "zh": "从零搭建广告",
+    "en": "Build ads from scratch",
+    "cat": "ads",
+    "zhSum": "设计活动结构、词组、出价、预算和否定词，先给预览再执行。",
+    "enSum": "Design campaign structure, keywords, bids, budget, and negatives, then preview.",
+    "tools": [
+      "ads_get_bid_recommendations",
+      "ads_prepare_changes",
+      "ads_list_entities"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "ads-data-health-interpretation",
+    "zh": "广告数据健康解读",
+    "en": "Ads data health readout",
+    "cat": "ads",
+    "zhSum": "判断报表是否新鲜、完整、够格拿来做决定。",
+    "enSum": "Judge whether the ads reports are fresh and complete enough to act on.",
+    "tools": [
+      "ads_get_data_health",
+      "ads_get_sync_status",
+      "data_sync_status"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "ads-data-pull",
+    "zh": "广告数据拉取",
+    "en": "Ads data pull",
+    "cat": "ads",
+    "zhSum": "按活动、关键词、搜索词把同步下来的广告数据拉出来核对。",
+    "enSum": "Pull synced campaign, keyword, and search-term data for a check.",
+    "tools": [
+      "ads_start_sync",
+      "ads_get_sync_status",
+      "ads_list_entities"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "ads-metrics-glossary",
+    "zh": "广告指标词典",
+    "en": "Ads metrics glossary",
+    "cat": "ads",
+    "zhSum": "用卖家能看懂的话解释 ACOS、CTR、CVR、CPC 和曝光。",
+    "enSum": "Explain ACOS, CTR, CVR, CPC, and impressions in seller language.",
+    "tools": [
+      "ads_list_entities",
+      "data_describe_table",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "ads-playbook-interview",
+    "zh": "广告打法访谈",
+    "en": "Ads playbook interview",
+    "cat": "ads",
+    "zhSum": "用一组问题问清预算、目标 ACOS、品牌词和不能动的活动。",
+    "enSum": "Interview the operator for budget, target ACOS, brand terms, and locked campaigns.",
+    "tools": [
+      "ads_get_settings",
+      "ads_list_entities",
+      "meta_load_skill"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "ads-sunset-wind-down",
+    "zh": "广告退坡收尾",
+    "en": "Ads sunset wind-down",
+    "cat": "ads",
+    "zhSum": "判断广告销售占比和自然位，给出分阶段降出价、降预算的方案。",
+    "enSum": "Stage bid and budget cuts when organic rank can carry the SKU.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "ads-tune-live",
+    "zh": "在投广告微调",
+    "en": "Tune live ads",
+    "cat": "ads",
+    "zhSum": "只动已经在跑的投放：小步调出价，并写明观察指标。",
+    "enSum": "Make small bid edits on live targets and name the metric to watch.",
+    "tools": [
+      "ads_list_recommendations",
+      "ads_prepare_changes",
+      "ads_get_bid_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-a-plus-content",
+    "zh": "A+ 内容",
+    "en": "A+ content",
+    "cat": "listing",
+    "zhSum": "按模块规划 A+：主图对比、要点和品牌故事，先预览再提交。",
+    "enSum": "Plan A+ modules, then preview before any submit.",
+    "tools": [
+      "listing_list_aplus",
+      "listing_get_aplus",
+      "listing_create_aplus"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "amazon-ads-analysis-operator",
+    "zh": "广告分析操作员",
+    "en": "Ads analysis operator",
+    "cat": "ads",
+    "zhSum": "按固定顺序做一次广告分析：健康、结构、浪费、建议。",
+    "enSum": "Run ads analysis in a fixed order: health, structure, waste, recommendations.",
+    "tools": [
+      "ads_get_data_health",
+      "ads_list_entities",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-ads-funnel-sop",
+    "zh": "广告漏斗 SOP",
+    "en": "Ads funnel SOP",
+    "cat": "ads",
+    "zhSum": "从曝光到点击再到转化，定位漏斗断在哪一层。",
+    "enSum": "Locate whether the funnel breaks at impression, click, or conversion.",
+    "tools": [
+      "ads_list_entities",
+      "brand_get_search_query_performance",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-ads-funnel-sop-keywords-negatives",
+    "zh": "漏斗：关键词与否定",
+    "en": "Funnel: keywords and negatives",
+    "cat": "ads",
+    "zhSum": "把出单词留在精确组，把花钱不出单的词做成否定预览。",
+    "enSum": "Keep converting terms on exact and preview negatives for wasted queries.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-ads-funnel-sop-pitfalls",
+    "zh": "漏斗：常见坑",
+    "en": "Funnel pitfalls",
+    "cat": "ads",
+    "zhSum": "检查预算撞线、匹配过宽、品牌词和通用词混投这些常见坑。",
+    "enSum": "Check capped budgets, wide match, and branded terms mixed with generic.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_settings",
+      "ads_get_data_health"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-ads-funnel-sop-report-rules",
+    "zh": "漏斗：报表规则",
+    "en": "Funnel report rules",
+    "cat": "ads",
+    "zhSum": "写清报表口径：归因窗口、时区和不要把不同币种加在一起。",
+    "enSum": "State attribution window, timezone, and never add mixed currencies.",
+    "tools": [
+      "data_describe_table",
+      "ads_get_sync_status",
+      "data_query"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-ads-funnel-sop-structure-bids",
+    "zh": "漏斗：结构与出价",
+    "en": "Funnel structure and bids",
+    "cat": "ads",
+    "zhSum": "核对自动、广泛、词组、精确是否分层，以及出价有没有上下限。",
+    "enSum": "Check auto, broad, phrase, and exact layers plus bid floors and ceilings.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_bid_recommendations",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-ads-performance-report",
+    "zh": "广告业绩报告",
+    "en": "Ads performance report",
+    "cat": "report",
+    "zhSum": "汇总花费、广告销售额和 ACOS 走势，并和上一周期对比。",
+    "enSum": "Summarize spend, ad sales, and ACOS against the previous period.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_data_health",
+      "data_query"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "amazon-advertising-strategy",
+    "zh": "广告策略",
+    "en": "Advertising strategy",
+    "cat": "ads",
+    "zhSum": "按产品阶段选择防守品牌词、进攻通用词或收割搜索词。",
+    "enSum": "Pick defend, attack, or harvest tactics for the product stage.",
+    "tools": [
+      "ads_get_settings",
+      "ads_list_entities",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-backend-keywords",
+    "zh": "后台搜索词",
+    "en": "Backend search terms",
+    "cat": "listing",
+    "zhSum": "整理后台搜索词：去重、避开已在标题里的词、守住字节数。",
+    "enSum": "Deduplicate backend terms, skip words already in the title, and watch bytes.",
+    "tools": [
+      "listing_get_live",
+      "listing_prepare_change",
+      "market_research_keyword"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "amazon-boutique-rank-tracker",
+    "zh": "精品排名追踪",
+    "en": "Boutique rank tracker",
+    "cat": "research",
+    "zhSum": "盯住小类目里的目标 ASIN，记录排名和价格变化。",
+    "enSum": "Track target ASINs inside a small category for rank and price changes.",
+    "tools": [
+      "market_get_asin",
+      "market_find_products",
+      "market_scan_node"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-brand-analytics",
+    "zh": "品牌分析",
+    "en": "Brand analytics",
+    "cat": "research",
+    "zhSum": "看搜索查询表现：曝光、点击份额和转化份额。",
+    "enSum": "Read search-query performance: impression, click, and purchase share.",
+    "tools": [
+      "brand_get_search_query_performance",
+      "market_aba_keywords",
+      "data_query"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-buy-box",
+    "zh": "购物车",
+    "en": "Buy Box",
+    "cat": "ops",
+    "zhSum": "解释购物车占比下降时该先看价格、配送还是账户资格。",
+    "enSum": "When Buy Box share drops, check price, fulfillment, then eligibility.",
+    "tools": [
+      "data_query",
+      "market_get_asin",
+      "orders_get_recent"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "amazon-competitor-analysis",
+    "zh": "竞品分析",
+    "en": "Competitor analysis",
+    "cat": "research",
+    "zhSum": "把竞品和自己的 Listing、价格、评价、广告逐项对比。",
+    "enSum": "Compare a rival and your listing, price, reviews, and ads item by item.",
+    "tools": [
+      "market_get_asin",
+      "market_list_competitors",
+      "competitor_find_similar"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-competitor-monitoring",
+    "zh": "竞品监控",
+    "en": "Competitor monitoring",
+    "cat": "research",
+    "zhSum": "列一份要长期盯的竞品清单：价格、评价增速和是否在做促销。",
+    "enSum": "Keep a watchlist of rival price, review velocity, and deals.",
+    "tools": [
+      "market_list_competitors",
+      "market_get_asin",
+      "promotions_search"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-deal-finder",
+    "zh": "Deal 机会发现",
+    "en": "Deal finder",
+    "cat": "promo",
+    "zhSum": "判断哪些 SKU 适合报秒杀或开券，并先算折扣后利润。",
+    "enSum": "See which SKUs can take a Deal or coupon and still clear a margin.",
+    "tools": [
+      "promotions_search",
+      "finance_get_fee_estimate",
+      "promotions_get_items"
+    ],
+    "stepsZh": [
+      "列出正在跑和最近结束的券、秒杀和促销。",
+      "算折扣后还能不能保住目标利润。",
+      "撞档、失败或和广告叠加的，单独标出。",
+      "要改促销时先预览，再审批。"
+    ],
+    "stepsEn": [
+      "List running and recently ended coupons, deals, and promotions.",
+      "Check whether the discount still clears the target margin.",
+      "Flag overlaps, failures, and stacking with ads.",
+      "Preview any promotion change, then approve it."
+    ]
+  },
+  {
+    "slug": "amazon-display-ads",
+    "zh": "展示广告 SD",
+    "en": "Sponsored Display",
+    "cat": "ads",
+    "zhSum": "说明 SD 适合再营销还是抢竞品详情页，并给出预算上限。",
+    "enSum": "Decide whether Sponsored Display is for remarketing or competitor pages.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-fba-calculator",
+    "zh": "FBA 费用计算",
+    "en": "FBA fee calculator",
+    "cat": "profit",
+    "zhSum": "按尺寸重量估算配送费，并和当前 SKU 的费用并排看。",
+    "enSum": "Estimate FBA fulfillment from size and weight next to the live SKU fee.",
+    "tools": [
+      "finance_get_fee_estimate",
+      "finance_get_balances",
+      "data_query"
+    ],
+    "stepsZh": [
+      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
+      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
+      "能索赔或该清仓的，单独折成每月金额。",
+      "动作按金额从大到小排。"
+    ],
+    "stepsEn": [
+      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
+      "Flag losses and odd fee ratios, and say which costs are excluded.",
+      "Turn claims and clearance into a monthly amount.",
+      "Sort actions by money."
+    ]
+  },
+  {
+    "slug": "amazon-fba-prep",
+    "zh": "FBA 预处理",
+    "en": "FBA prep",
+    "cat": "inventory",
+    "zhSum": "核对贴标、预处理和包装要求，缺信息就停下来问。",
+    "enSum": "Check labeling and prep requirements and stop when a fact is missing.",
+    "tools": [
+      "restock_get_item_compliance",
+      "restock_set_prep_details",
+      "restock_get_item_labels"
+    ],
+    "stepsZh": [
+      "按可售天数列出两周内可能断货的 SKU。",
+      "给出建议数量和最晚下单日期，等确认实际发货量。",
+      "货件、分仓和承运进入审批。箱规和重量不明就不要猜。",
+      "批准后只在沙盒生成货件草稿，不会提交 Amazon。"
+    ],
+    "stepsEn": [
+      "List SKUs that may stock out within two weeks by days of cover.",
+      "Give a suggested quantity and last order date, then wait for the real ship quantity.",
+      "Shipment, placement, and carrier steps go to approval. Do not guess carton facts.",
+      "Write tools remain unavailable until a live integration and confirmation workflow is implemented; do not claim a draft or change was created."
+    ]
+  },
+  {
+    "slug": "amazon-fba-shipment-kit",
+    "zh": "FBA 发货资料包",
+    "en": "FBA shipment kit",
+    "cat": "inventory",
+    "zhSum": "把箱唛、提货交接和报价整理成一票货的资料清单。",
+    "enSum": "Assemble labels, handoff notes, and the quote into one shipment kit.",
+    "tools": [
+      "restock_get_shipment_labels",
+      "restock_get_shipment_draft",
+      "restock_list_shipment_drafts"
+    ],
+    "stepsZh": [
+      "按可售天数列出两周内可能断货的 SKU。",
+      "给出建议数量和最晚下单日期，等确认实际发货量。",
+      "货件、分仓和承运进入审批。箱规和重量不明就不要猜。",
+      "批准后只在沙盒生成货件草稿，不会提交 Amazon。"
+    ],
+    "stepsEn": [
+      "List SKUs that may stock out within two weeks by days of cover.",
+      "Give a suggested quantity and last order date, then wait for the real ship quantity.",
+      "Shipment, placement, and carrier steps go to approval. Do not guess carton facts.",
+      "Write tools remain unavailable until a live integration and confirmation workflow is implemented; do not claim a draft or change was created."
+    ]
+  },
+  {
+    "slug": "amazon-global-selling",
+    "zh": "全球开店",
+    "en": "Global selling",
+    "cat": "ops",
+    "zhSum": "比较站点之间的语言、税率和广告，不把金额直接相加。",
+    "enSum": "Compare marketplaces by language and fees without adding currencies.",
+    "tools": [
+      "meta_list_stores",
+      "finance_get_fee_estimate",
+      "ads_list_entities"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "amazon-keyword-research",
+    "zh": "关键词调研",
+    "en": "Keyword research",
+    "cat": "research",
+    "zhSum": "按搜索意图分组，标出最值得先打的词和只该放后台的词。",
+    "enSum": "Group keywords by intent and mark which to bid and which stay backend.",
+    "tools": [
+      "market_research_keyword",
+      "market_mine_keywords",
+      "market_aba_keywords"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-keyword-tracker",
+    "zh": "关键词排名追踪",
+    "en": "Keyword rank tracker",
+    "cat": "research",
+    "zhSum": "记录核心词的自然排名和广告排名，用来判断该不该加价。",
+    "enSum": "Log organic and sponsored rank for core terms before raising bids.",
+    "tools": [
+      "market_research_keyword",
+      "market_aba_trend",
+      "ads_list_entities"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-listing-images",
+    "zh": "Listing 图片",
+    "en": "Listing images",
+    "cat": "listing",
+    "zhSum": "按主图、辅图、尺寸图和场景图列拍摄清单。",
+    "enSum": "List main, secondary, size, and lifestyle shots to shoot.",
+    "tools": [
+      "listing_get_live",
+      "listing_create_image_upload",
+      "listing_import_image_from_url"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "amazon-listing-optimization",
+    "zh": "Listing 优化",
+    "en": "Listing optimization",
+    "cat": "listing",
+    "zhSum": "改标题、五点和图片说明，先出对照预览。",
+    "enSum": "Rewrite title and bullets, with a before and after preview.",
+    "tools": [
+      "listing_get_live",
+      "listing_prepare_change",
+      "market_research_keyword"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "amazon-negative-keywords",
+    "zh": "否定关键词",
+    "en": "Negative keywords",
+    "cat": "ads",
+    "zhSum": "决定否定加在组还是活动、用精确还是词组，出过单的词不要否。",
+    "enSum": "Choose match type and level for negatives, and never negate a converter.",
+    "tools": [
+      "ads_prepare_changes",
+      "ads_list_entities",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-niche-finder",
+    "zh": "细分市场发现",
+    "en": "Niche finder",
+    "cat": "research",
+    "zhSum": "在一个大方向里找 3 到 5 个需求还在、竞争可承受的细分。",
+    "enSum": "Find three to five niches inside a broad idea with tolerable competition.",
+    "tools": [
+      "market_find_products",
+      "market_find_node",
+      "market_scan_node"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-ppc-campaign",
+    "zh": "PPC 广告活动",
+    "en": "PPC campaigns",
+    "cat": "ads",
+    "zhSum": "检查单个活动的预算、状态、投放和搜索词。",
+    "enSum": "Inspect one campaign's budget, status, targets, and search terms.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_bid_recommendations",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "amazon-product-intelligence-report",
+    "zh": "产品情报报告",
+    "en": "Product intelligence report",
+    "cat": "report",
+    "zhSum": "把销量、价格带、评价和广告收成一页产品情报。",
+    "enSum": "Combine sales, price band, reviews, and ads into one product brief.",
+    "tools": [
+      "market_get_asin",
+      "market_get_reviews",
+      "ads_list_entities"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "amazon-product-photography",
+    "zh": "产品摄影",
+    "en": "Product photography",
+    "cat": "listing",
+    "zhSum": "按亚马逊主图规则和场景图用途写拍摄说明。",
+    "enSum": "Write a shot list that respects main-image rules and lifestyle use.",
+    "tools": [
+      "listing_get_live",
+      "listing_create_image_upload",
+      "listing_import_image_from_url"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "amazon-product-research",
+    "zh": "产品调研",
+    "en": "Product research",
+    "cat": "research",
+    "zhSum": "把需求规模、竞争、价格带和进入门槛写成调研纪要。",
+    "enSum": "Write up demand, competition, price band, and barriers to entry.",
+    "tools": [
+      "market_find_products",
+      "market_get_asin",
+      "market_research_keyword"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-product-selection",
+    "zh": "选品决策",
+    "en": "Product selection decision",
+    "cat": "research",
+    "zhSum": "给候选产品打分，并给出做或不做的结论。",
+    "enSum": "Score candidates and end with a go or no-go.",
+    "tools": [
+      "market_find_products",
+      "finance_get_fee_estimate",
+      "market_get_reviews"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-profit-analysis",
+    "zh": "利润分析",
+    "en": "Profit analysis",
+    "cat": "profit",
+    "zhSum": "按 SKU 拆收入、亚马逊费用和广告后还剩多少。",
+    "enSum": "Split revenue, Amazon fees, and what remains after ads by SKU.",
+    "tools": [
+      "finance_get_fee_estimate",
+      "finance_get_balances",
+      "data_query"
+    ],
+    "stepsZh": [
+      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
+      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
+      "能索赔或该清仓的，单独折成每月金额。",
+      "动作按金额从大到小排。"
+    ],
+    "stepsEn": [
+      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
+      "Flag losses and odd fee ratios, and say which costs are excluded.",
+      "Turn claims and clearance into a monthly amount.",
+      "Sort actions by money."
+    ]
+  },
+  {
+    "slug": "amazon-rank-tracker",
+    "zh": "排名追踪",
+    "en": "Rank tracker",
+    "cat": "research",
+    "zhSum": "追踪 BSR 和小类排名，区分自然波动和真实掉位。",
+    "enSum": "Track BSR and subcategory rank, and separate noise from a real drop.",
+    "tools": [
+      "market_get_asin",
+      "market_aba_trend",
+      "market_scan_node"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-repricing-strategy",
+    "zh": "调价策略",
+    "en": "Repricing strategy",
+    "cat": "ops",
+    "zhSum": "在守购物车、保利润和跟价之间选一个规则，不自动改价。",
+    "enSum": "Choose a rule among Buy Box, margin, and matching, without auto-repricing.",
+    "tools": [
+      "market_get_asin",
+      "finance_get_fee_estimate",
+      "data_query"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "amazon-return-weekly-analysis",
+    "zh": "退货周报",
+    "en": "Weekly returns analysis",
+    "cat": "report",
+    "zhSum": "看退货率趋势、高风险变体，以及评论里买家的原话。",
+    "enSum": "Read return-rate trend, risky variations, and the buyers' own words.",
+    "tools": [
+      "data_query",
+      "orders_get_recent",
+      "market_get_reviews"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "amazon-review-analyzer",
+    "zh": "评论分析",
+    "en": "Review analyzer",
+    "cat": "research",
+    "zhSum": "把差评收成痛点清单，按值得改良的程度排序。",
+    "enSum": "Turn critical reviews into a pain list ranked by how much a fix is worth.",
+    "tools": [
+      "market_get_reviews",
+      "market_get_asin",
+      "competitor_find_similar"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-sales-estimator",
+    "zh": "销量估算",
+    "en": "Sales estimator",
+    "cat": "research",
+    "zhSum": "用 BSR 和类目样本粗估月销量，并写明误差很大。",
+    "enSum": "Roughly estimate monthly sales from BSR and say the error is wide.",
+    "tools": [
+      "market_get_asin",
+      "market_find_products",
+      "market_scan_node"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "amazon-search-optimization",
+    "zh": "搜索优化",
+    "en": "Search optimization",
+    "cat": "listing",
+    "zhSum": "让标题、五点、后台词和广告核心词指向同一组意图。",
+    "enSum": "Align title, bullets, backend terms, and core ad keywords.",
+    "tools": [
+      "listing_get_live",
+      "market_research_keyword",
+      "listing_prepare_change"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "amazon-seller-analytics",
+    "zh": "卖家数据分析",
+    "en": "Seller analytics",
+    "cat": "report",
+    "zhSum": "把会话、转化、广告和库存放在同一张读数表里。",
+    "enSum": "Put sessions, conversion, ads, and inventory on one readout.",
+    "tools": [
+      "data_query",
+      "data_list_tables",
+      "ads_list_entities"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "amazon-shipping-calculator",
+    "zh": "头程运费计算",
+    "en": "Inbound freight calculator",
+    "cat": "profit",
+    "zhSum": "按重量、体积和报价估算头程，不把海运空运混成一个数。",
+    "enSum": "Estimate inbound freight by weight and cube, keeping modes separate.",
+    "tools": [
+      "finance_get_fee_estimate",
+      "restock_get_reference_summary",
+      "data_query"
+    ],
+    "stepsZh": [
+      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
+      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
+      "能索赔或该清仓的，单独折成每月金额。",
+      "动作按金额从大到小排。"
+    ],
+    "stepsEn": [
+      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
+      "Flag losses and odd fee ratios, and say which costs are excluded.",
+      "Turn claims and clearance into a monthly amount.",
+      "Sort actions by money."
+    ]
+  },
+  {
+    "slug": "amazon-trending-products",
+    "zh": "趋势产品",
+    "en": "Trending products",
+    "cat": "research",
+    "zhSum": "从类目扫描里找近期上升的价格带，只当线索不当结论。",
+    "enSum": "Scan a node for rising price bands and treat them as leads, not decisions.",
+    "tools": [
+      "market_scan_node",
+      "market_find_products",
+      "market_aba_trend"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "auto-campaign-strategy",
+    "zh": "自动广告策略",
+    "en": "Auto campaign strategy",
+    "cat": "ads",
+    "zhSum": "说明自动广告四个定向组该观察什么、什么时候收割到手动。",
+    "enSum": "Define what to watch on the four auto groups and when to harvest.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_bid_recommendations",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "bid-adjustment-strategy",
+    "zh": "出价调整策略",
+    "en": "Bid adjustment strategy",
+    "cat": "ads",
+    "zhSum": "列出该降和该加的投放，写明当前出价和建议出价。",
+    "enSum": "List targets to lower or raise, with current and suggested bids.",
+    "tools": [
+      "ads_get_bid_recommendations",
+      "ads_prepare_changes",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "bid-floor-ceiling-guardrails",
+    "zh": "出价上下限护栏",
+    "en": "Bid floor and ceiling",
+    "cat": "ads",
+    "zhSum": "给每组投放一个最低和最高出价，防止自动规则跑飞。",
+    "enSum": "Set a floor and ceiling so automated rules cannot run away.",
+    "tools": [
+      "ads_get_settings",
+      "ads_update_settings",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "branded-vs-generic-split",
+    "zh": "品牌词与通用词拆分",
+    "en": "Branded vs generic split",
+    "cat": "ads",
+    "zhSum": "把品牌词和通用词拆开看 ACOS，避免品牌词掩盖浪费。",
+    "enSum": "Split branded and generic ACOS so brand terms do not hide waste.",
+    "tools": [
+      "ads_list_entities",
+      "brand_get_search_query_performance",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "budget-capped-campaigns",
+    "zh": "预算撞线活动",
+    "en": "Budget-capped campaigns",
+    "cat": "ads",
+    "zhSum": "找出一天里提前花完预算的活动，判断该加预算还是该降出价。",
+    "enSum": "Find campaigns that exhaust budget early and choose budget or bid.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_settings",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "budget-pacing-review",
+    "zh": "预算节奏复盘",
+    "en": "Budget pacing review",
+    "cat": "ads",
+    "zhSum": "看本月预算花得快还是慢，和销售节奏是否匹配。",
+    "enSum": "See whether month-to-date spend is ahead or behind sales pace.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_data_health",
+      "finance_get_balances"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "buybox-competition-watch",
+    "zh": "购物车竞争监控",
+    "en": "Buy Box competition watch",
+    "cat": "ops",
+    "zhSum": "检查有没有 ASIN 丢了购物车，是哪天、被什么价格抢走的。",
+    "enSum": "See which ASINs lost the Buy Box, on which day, and at what price.",
+    "tools": [
+      "market_get_asin",
+      "data_query",
+      "orders_get_recent"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "campaign-structure-audit",
+    "zh": "广告结构审计",
+    "en": "Campaign structure audit",
+    "cat": "ads",
+    "zhSum": "检查命名、分组、匹配方式和同一词是否打在多个活动里。",
+    "enSum": "Audit names, ad groups, match types, and duplicate targets.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_settings",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "category-node-scan",
+    "zh": "类目节点扫描",
+    "en": "Category node scan",
+    "cat": "research",
+    "zhSum": "定位类目节点，看这个节点里的价格带和评分门槛。",
+    "enSum": "Locate a category node and read its price band and rating bar.",
+    "tools": [
+      "market_find_node",
+      "market_scan_node",
+      "market_find_products"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "clearance-aging-decision",
+    "zh": "库龄清仓决策",
+    "en": "Aged-inventory clearance",
+    "cat": "inventory",
+    "zhSum": "算库龄长的库存每月仓储费，以及按当前速度多久能卖完。",
+    "enSum": "Price monthly storage on aged stock and how long the current pace takes.",
+    "tools": [
+      "restock_get_clearance",
+      "restock_get_forecast",
+      "finance_get_fee_estimate"
+    ],
+    "stepsZh": [
+      "按可售天数列出两周内可能断货的 SKU。",
+      "给出建议数量和最晚下单日期，等确认实际发货量。",
+      "货件、分仓和承运进入审批。箱规和重量不明就不要猜。",
+      "批准后只在沙盒生成货件草稿，不会提交 Amazon。"
+    ],
+    "stepsEn": [
+      "List SKUs that may stock out within two weeks by days of cover.",
+      "Give a suggested quantity and last order date, then wait for the real ship quantity.",
+      "Shipment, placement, and carrier steps go to approval. Do not guess carton facts.",
+      "Write tools remain unavailable until a live integration and confirmation workflow is implemented; do not claim a draft or change was created."
+    ]
+  },
+  {
+    "slug": "competitor-playbook-teardown",
+    "zh": "竞品打法拆解",
+    "en": "Competitor playbook teardown",
+    "cat": "research",
+    "zhSum": "还原竞品何时起量、广告怎么投、评价和价格怎么变。",
+    "enSum": "Reconstruct when a rival grew, how they advertised, and how price moved.",
+    "tools": [
+      "market_get_asin",
+      "market_get_reviews",
+      "competitor_find_similar"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "cross-border-bestseller-radar",
+    "zh": "跨境爆款雷达",
+    "en": "Cross-border bestseller radar",
+    "cat": "research",
+    "zhSum": "在目标站点找已经验证过的形态，再评估运费和关税是否还成立。",
+    "enSum": "Find proven forms on the target marketplace, then test freight and duty.",
+    "tools": [
+      "market_find_products",
+      "market_aba_trend",
+      "finance_get_fee_estimate"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "fba-inbound-shipment",
+    "zh": "FBA 入库货件",
+    "en": "FBA inbound shipment",
+    "cat": "inventory",
+    "zhSum": "从数量确认走到装箱、分仓和承运预览，费用步骤必须等人点头。",
+    "enSum": "Walk quantity, packing, placement, and carrier preview, and wait for a yes on fees.",
+    "tools": [
+      "restock_preview_shipment",
+      "restock_create_shipment_draft",
+      "restock_prepare_placement"
+    ],
+    "stepsZh": [
+      "按可售天数列出两周内可能断货的 SKU。",
+      "给出建议数量和最晚下单日期，等确认实际发货量。",
+      "货件、分仓和承运进入审批。箱规和重量不明就不要猜。",
+      "批准后只在沙盒生成货件草稿，不会提交 Amazon。"
+    ],
+    "stepsEn": [
+      "List SKUs that may stock out within two weeks by days of cover.",
+      "Give a suggested quantity and last order date, then wait for the real ship quantity.",
+      "Shipment, placement, and carrier steps go to approval. Do not guess carton facts.",
+      "Write tools remain unavailable until a live integration and confirmation workflow is implemented; do not claim a draft or change was created."
+    ]
+  },
+  {
+    "slug": "harvest-search-terms",
+    "zh": "搜索词收割",
+    "en": "Harvest search terms",
+    "cat": "ads",
+    "zhSum": "从自动和广泛里挑出单的搜索词，准备加到精确组。",
+    "enSum": "Harvest converting queries from auto and broad into exact.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_bid_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "impression-drop-diagnosis",
+    "zh": "曝光下跌诊断",
+    "en": "Impression drop diagnosis",
+    "cat": "ads",
+    "zhSum": "区分预算撞线、出价失去竞争力、活动暂停和商品失去资格。",
+    "enSum": "Separate capped budget, weak bids, paused campaigns, and lost eligibility.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_data_health",
+      "listing_check_restrictions"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "keyword-benchmark-diagnosis",
+    "zh": "关键词基准诊断",
+    "en": "Keyword benchmark diagnosis",
+    "cat": "ads",
+    "zhSum": "拿核心词的点击、转化和建议竞价做对照，看是词的问题还是出价的问题。",
+    "enSum": "Compare clicks, conversion, and suggested bids to separate term quality from bid.",
+    "tools": [
+      "market_research_keyword",
+      "ads_get_bid_recommendations",
+      "ads_list_entities"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "keyword-match-type-strategy",
+    "zh": "匹配方式策略",
+    "en": "Match type strategy",
+    "cat": "ads",
+    "zhSum": "决定一个词该用广泛试探、词组控制还是精确收口。",
+    "enSum": "Decide broad for discovery, phrase for control, or exact to close.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_bid_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "keyword-role-taxonomy",
+    "zh": "关键词角色分类",
+    "en": "Keyword role taxonomy",
+    "cat": "ads",
+    "zhSum": "把词分成品牌、核心、属性、竞品和垃圾五类角色。",
+    "enSum": "Label terms as brand, core, attribute, competitor, or junk.",
+    "tools": [
+      "market_research_keyword",
+      "ads_list_entities",
+      "market_mine_keywords"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "listing-direct-creation",
+    "zh": "Listing 直接创建",
+    "en": "Direct listing creation",
+    "cat": "listing",
+    "zhSum": "按类目模板填必填属性，生成新建预览，不直接上架。",
+    "enSum": "Fill required attributes from the product type and preview a create.",
+    "tools": [
+      "catalog_get_product_type",
+      "listing_prepare_change",
+      "listing_check_restrictions"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "listing-new-product-oneshot",
+    "zh": "新品 Listing 一次成型",
+    "en": "New listing in one pass",
+    "cat": "listing",
+    "zhSum": "看图补属性、写标题和五点、准备图片，交一份完整预览。",
+    "enSum": "Draft attributes, title, bullets, and images into one preview.",
+    "tools": [
+      "listing_prepare_change",
+      "catalog_search_product_types",
+      "market_research_keyword"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "low-conversion-diagnosis",
+    "zh": "低转化诊断",
+    "en": "Low conversion diagnosis",
+    "cat": "ads",
+    "zhSum": "找出点击多但不出单的词，分清是流量不对还是详情页的问题。",
+    "enSum": "Find high-click, no-order terms and separate bad traffic from the detail page.",
+    "tools": [
+      "ads_list_entities",
+      "listing_get_live",
+      "market_get_reviews"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "low-ctr-diagnosis",
+    "zh": "低点击率诊断",
+    "en": "Low CTR diagnosis",
+    "cat": "ads",
+    "zhSum": "曝光够但点得少时，先看主图、价格和标题，而不是先加出价。",
+    "enSum": "When impressions do not click, check image, price, and title before bids.",
+    "tools": [
+      "ads_list_entities",
+      "listing_get_live",
+      "market_get_asin"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "mcf-fulfillment",
+    "zh": "多渠道配送 MCF",
+    "en": "Multi-channel fulfillment",
+    "cat": "inventory",
+    "zhSum": "预览用 FBA 库存给站外订单发货的费用和时效。",
+    "enSum": "Preview fee and speed for fulfilling an off-Amazon order from FBA.",
+    "tools": [
+      "restock_preview_mcf",
+      "restock_list_mcf_orders",
+      "restock_get_mcf_order"
+    ],
+    "stepsZh": [
+      "按可售天数列出两周内可能断货的 SKU。",
+      "给出建议数量和最晚下单日期，等确认实际发货量。",
+      "货件、分仓和承运进入审批。箱规和重量不明就不要猜。",
+      "批准后只在沙盒生成货件草稿，不会提交 Amazon。"
+    ],
+    "stepsEn": [
+      "List SKUs that may stock out within two weeks by days of cover.",
+      "Give a suggested quantity and last order date, then wait for the real ship quantity.",
+      "Shipment, placement, and carrier steps go to approval. Do not guess carton facts.",
+      "Write tools remain unavailable until a live integration and confirmation workflow is implemented; do not claim a draft or change was created."
+    ]
+  },
+  {
+    "slug": "multi-marketplace-ads-review",
+    "zh": "多站点广告复盘",
+    "en": "Multi-marketplace ads review",
+    "cat": "report",
+    "zhSum": "用比率而不是金额比较各站点广告，币种分开列。",
+    "enSum": "Compare marketplaces with ratios, and keep currencies in separate columns.",
+    "tools": [
+      "meta_list_stores",
+      "ads_list_entities",
+      "ads_get_data_health"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "negative-keyword-strategy",
+    "zh": "否定词策略",
+    "en": "Negative keyword strategy",
+    "cat": "ads",
+    "zhSum": "给浪费词定否定方式，并检查这个词在别的活动是否出过单。",
+    "enSum": "Assign a negative match type and check whether the term converts elsewhere.",
+    "tools": [
+      "ads_prepare_changes",
+      "ads_list_entities",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "new-product-launch-ads",
+    "zh": "新品期广告",
+    "en": "New-product launch ads",
+    "cat": "ads",
+    "zhSum": "新品期用自动加少量精确词起步，并写明可接受的学习期 ACOS。",
+    "enSum": "Start with auto plus a few exact terms and name the learning-period ACOS.",
+    "tools": [
+      "ads_prepare_changes",
+      "ads_get_bid_recommendations",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "placement-optimization",
+    "zh": "广告位优化",
+    "en": "Placement optimization",
+    "cat": "ads",
+    "zhSum": "看顶部、其余搜索位和商品页的 ACOS，再决定加价比例。",
+    "enSum": "Read top-of-search, rest-of-search, and product-page ACOS before placement bids.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "post-peak-wind-down",
+    "zh": "旺季后收尾",
+    "en": "Post-peak wind-down",
+    "cat": "ads",
+    "zhSum": "大促结束后按天把预算和出价收回日常水平。",
+    "enSum": "Walk budget and bids back to everyday levels after the peak.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "promotions_search"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "product-selection",
+    "zh": "选品",
+    "en": "Product selection",
+    "cat": "research",
+    "zhSum": "用需求、竞争、利润和合规四个问题筛掉不该做的款。",
+    "enSum": "Filter ideas with demand, competition, margin, and compliance.",
+    "tools": [
+      "market_find_products",
+      "finance_get_fee_estimate",
+      "listing_check_restrictions"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "profit-fee-analysis",
+    "zh": "费用与利润拆解",
+    "en": "Fee and profit breakdown",
+    "cat": "profit",
+    "zhSum": "按实际费用算近 30 天每个 SKU 的利润，标出亏钱的款。",
+    "enSum": "Compute 30-day profit by SKU from actual fees and flag losses.",
+    "tools": [
+      "finance_get_fee_estimate",
+      "finance_get_balances",
+      "data_query"
+    ],
+    "stepsZh": [
+      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
+      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
+      "能索赔或该清仓的，单独折成每月金额。",
+      "动作按金额从大到小排。"
+    ],
+    "stepsEn": [
+      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
+      "Flag losses and odd fee ratios, and say which costs are excluded.",
+      "Turn claims and clearance into a monthly amount.",
+      "Sort actions by money."
+    ]
+  },
+  {
+    "slug": "promotions-review",
+    "zh": "促销复盘",
+    "en": "Promotions review",
+    "cat": "promo",
+    "zhSum": "盘点跑过的券和秒杀：花了多少、有没有失败或撞档。",
+    "enSum": "Review coupons and deals for spend, failures, and overlaps.",
+    "tools": [
+      "promotions_search",
+      "promotions_get",
+      "promotions_get_items"
+    ],
+    "stepsZh": [
+      "列出正在跑和最近结束的券、秒杀和促销。",
+      "算折扣后还能不能保住目标利润。",
+      "撞档、失败或和广告叠加的，单独标出。",
+      "要改促销时先预览，再审批。"
+    ],
+    "stepsEn": [
+      "List running and recently ended coupons, deals, and promotions.",
+      "Check whether the discount still clears the target margin.",
+      "Flag overlaps, failures, and stacking with ads.",
+      "Preview any promotion change, then approve it."
+    ]
+  },
+  {
+    "slug": "recommendation-review-workflow",
+    "zh": "建议审核工作流",
+    "en": "Recommendation review",
+    "cat": "ads",
+    "zhSum": "把广告建议逐条看成可批准或可驳回的动作，不批量盲点。",
+    "enSum": "Review each ads recommendation as an approve-or-reject action.",
+    "tools": [
+      "ads_list_recommendations",
+      "ads_mark_recommendation",
+      "ads_prepare_apply"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "reimbursement-recovery",
+    "zh": "索赔追回",
+    "en": "Reimbursement recovery",
+    "cat": "profit",
+    "zhSum": "找出丢失或损坏、超过 30 天还没赔的库存，估算可索赔金额。",
+    "enSum": "Find lost or damaged units unpaid after 30 days and estimate the claim.",
+    "tools": [
+      "data_query",
+      "finance_get_balances",
+      "restock_get_reference_summary"
+    ],
+    "stepsZh": [
+      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
+      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
+      "能索赔或该清仓的，单独折成每月金额。",
+      "动作按金额从大到小排。"
+    ],
+    "stepsEn": [
+      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
+      "Flag losses and odd fee ratios, and say which costs are excluded.",
+      "Turn claims and clearance into a monthly amount.",
+      "Sort actions by money."
+    ]
+  },
+  {
+    "slug": "report-spec",
+    "zh": "报表口径",
+    "en": "Report specification",
+    "cat": "report",
+    "zhSum": "先写时间范围、时区、币种和是否含促销，再开始报数字。",
+    "enSum": "Write the date range, timezone, currency, and promo treatment before any number.",
+    "tools": [
+      "data_describe_table",
+      "data_list_tables",
+      "ads_get_sync_status"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "review-solicitation",
+    "zh": "邀评",
+    "en": "Review solicitation",
+    "cat": "ops",
+    "zhSum": "只对符合条件的订单准备邀评，不做违规索评。",
+    "enSum": "Prepare review requests only for eligible orders, with no incentive.",
+    "tools": [
+      "orders_check_review_eligibility",
+      "orders_request_reviews",
+      "orders_get_recent"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "search-term-cleanup",
+    "zh": "搜索词清理",
+    "en": "Search term cleanup",
+    "cat": "ads",
+    "zhSum": "清理近 30 天花了钱没出单的搜索词，汇总每月白花多少。",
+    "enSum": "Clean 30-day spend with no orders and total the monthly waste.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "seasonal-peak-preparation",
+    "zh": "旺季广告备战",
+    "en": "Seasonal ads preparation",
+    "cat": "ads",
+    "zhSum": "定哪些活动加预算、哪些词提价，以及大促前不要动的设置。",
+    "enSum": "Choose budgets and bids to raise, and settings to freeze before the peak.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "sorftime-multiplatform",
+    "zh": "Sorftime 多平台",
+    "en": "Sorftime multi-platform",
+    "cat": "research",
+    "zhSum": "说明沙盒里的 Sorftime 结果是样本，用来练习选品问题而不是真实行情。",
+    "enSum": "Use Sorftime data only when returned by the configured live provider; otherwise report unavailable data without substitutes.",
+    "tools": [
+      "market_list_sorftime_tools",
+      "market_query_sorftime",
+      "market_find_products"
+    ],
+    "stepsZh": [
+      "写清站点、价格带和自己的成本假设。",
+      "用沙盒里的样本市场数据看需求、竞争和差评，并标明不是真实行情。",
+      "给出做或不做的结论，以及还要人工确认的点。",
+      "真实产品里的付费数据调用要先说明次数，这里只计数。"
+    ],
+    "stepsEn": [
+      "State the marketplace, price band, and your cost assumption.",
+      "Use live market, competitor, and review data only from a mapped provider; if unavailable, report an error and do not substitute sample values.",
+      "End with a go or no-go and the points a person still must check.",
+      "A live product would quote paid data calls first. Here we only count them."
+    ]
+  },
+  {
+    "slug": "sponsored-products-funnel-metrics",
+    "zh": "SP 漏斗指标",
+    "en": "Sponsored Products funnel metrics",
+    "cat": "ads",
+    "zhSum": "用曝光、点击、转化和 ACOS 四格读一个 SP 活动。",
+    "enSum": "Read a Sponsored Products campaign as impressions, clicks, conversion, and ACOS.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_data_health",
+      "data_describe_table"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "store-weekly-review",
+    "zh": "店铺周复盘",
+    "en": "Store weekly review",
+    "cat": "report",
+    "zhSum": "用十分钟看清上周销售、流量、广告、费用和库存风险。",
+    "enSum": "See last week's sales, traffic, ads, fees, and inventory risk in one pass.",
+    "tools": [
+      "data_query",
+      "ads_list_entities",
+      "restock_get_stockout_alerts"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "sync-cadence-and-freshness",
+    "zh": "同步节奏与新鲜度",
+    "en": "Sync cadence and freshness",
+    "cat": "ops",
+    "zhSum": "看最近一次同步是否成功，数据太旧就不要拿来改价或改广告。",
+    "enSum": "Check the last sync and refuse bid or price actions on stale data.",
+    "tools": [
+      "ads_get_sync_status",
+      "data_sync_status",
+      "data_sync_start"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "tariff-calculator-amazon",
+    "zh": "关税计算器",
+    "en": "Tariff calculator",
+    "cat": "profit",
+    "zhSum": "估算从中国发到目标站点的关税和到岸成本，并列出假设。",
+    "enSum": "Estimate duty and landed cost into the target marketplace and list assumptions.",
+    "tools": [
+      "finance_get_fee_estimate",
+      "market_get_asin",
+      "data_query"
+    ],
+    "stepsZh": [
+      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
+      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
+      "能索赔或该清仓的，单独折成每月金额。",
+      "动作按金额从大到小排。"
+    ],
+    "stepsEn": [
+      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
+      "Flag losses and odd fee ratios, and say which costs are excluded.",
+      "Turn claims and clearance into a monthly amount.",
+      "Sort actions by money."
+    ]
+  },
+  {
+    "slug": "traffic-conversion-triage",
+    "zh": "流量转化分诊",
+    "en": "Traffic and conversion triage",
+    "cat": "report",
+    "zhSum": "按 ASIN 对比近 7 天和前四周，分清是访问少了、转化掉了还是购物车掉了。",
+    "enSum": "Split each ASIN's drop into sessions, conversion, or Buy Box.",
+    "tools": [
+      "data_query",
+      "ads_list_entities",
+      "market_get_asin"
+    ],
+    "stepsZh": [
+      "先统一口径：时间范围、币种、是否剔除异常订单。",
+      "先给关键数字，再和上一周期对比。",
+      "不同币种不要相加。",
+      "收尾写下一周期的三件要事。"
+    ],
+    "stepsEn": [
+      "Lock the spec first: dates, currency, and whether odd orders are excluded.",
+      "Lead with the key numbers, then the comparison.",
+      "Do not add different currencies.",
+      "Close with three priorities for the next period."
+    ]
+  },
+  {
+    "slug": "turbot-account-health-appeal",
+    "zh": "账户健康申诉",
+    "en": "Account health appeal",
+    "cat": "ops",
+    "zhSum": "整理绩效通知、证据和申诉草稿，不假装已经提交。",
+    "enSum": "Assemble the notice, evidence, and an appeal draft without pretending it was sent.",
+    "tools": [
+      "meta_list_stores",
+      "data_query",
+      "meta_submit_feedback"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "turbot-ad-scheduling",
+    "zh": "广告分时",
+    "en": "Ad scheduling",
+    "cat": "ads",
+    "zhSum": "按星期和时间段看浪费，再决定要不要分时降价。",
+    "enSum": "Read waste by weekday and hour before any dayparting change.",
+    "tools": [
+      "ads_list_entities",
+      "ads_prepare_changes",
+      "ads_get_settings"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "turbot-brand-promotions",
+    "zh": "品牌促销",
+    "en": "Brand promotions",
+    "cat": "promo",
+    "zhSum": "规划品牌定制促销和旗舰店优惠，先算利润再预览。",
+    "enSum": "Plan brand promotions and check margin before a preview.",
+    "tools": [
+      "promotions_search",
+      "promotions_get",
+      "finance_get_fee_estimate"
+    ],
+    "stepsZh": [
+      "列出正在跑和最近结束的券、秒杀和促销。",
+      "算折扣后还能不能保住目标利润。",
+      "撞档、失败或和广告叠加的，单独标出。",
+      "要改促销时先预览，再审批。"
+    ],
+    "stepsEn": [
+      "List running and recently ended coupons, deals, and promotions.",
+      "Check whether the discount still clears the target margin.",
+      "Flag overlaps, failures, and stacking with ads.",
+      "Preview any promotion change, then approve it."
+    ]
+  },
+  {
+    "slug": "turbot-brand-registry",
+    "zh": "品牌备案",
+    "en": "Brand registry",
+    "cat": "ops",
+    "zhSum": "列出备案前要备的商标、品牌名和授权材料。",
+    "enSum": "List trademark, brand name, and authorization needed before Brand Registry.",
+    "tools": [
+      "meta_list_stores",
+      "listing_get_live",
+      "listing_check_restrictions"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "turbot-bundling",
+    "zh": "捆绑销售",
+    "en": "Bundling",
+    "cat": "listing",
+    "zhSum": "判断捆绑是否能提高客单，同时写清捆绑后的费用和退货风险。",
+    "enSum": "Judge whether a bundle lifts order value without hiding fee and return risk.",
+    "tools": [
+      "listing_prepare_change",
+      "finance_get_fee_estimate",
+      "listing_get_live"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "turbot-coupon-strategy",
+    "zh": "优惠券策略",
+    "en": "Coupon strategy",
+    "cat": "promo",
+    "zhSum": "算开券加速清货或拉排名划不划算，折扣设多少还能保本。",
+    "enSum": "See whether a coupon pays for itself and where the break-even discount sits.",
+    "tools": [
+      "promotions_search",
+      "finance_get_fee_estimate",
+      "promotions_get_items"
+    ],
+    "stepsZh": [
+      "列出正在跑和最近结束的券、秒杀和促销。",
+      "算折扣后还能不能保住目标利润。",
+      "撞档、失败或和广告叠加的，单独标出。",
+      "要改促销时先预览，再审批。"
+    ],
+    "stepsEn": [
+      "List running and recently ended coupons, deals, and promotions.",
+      "Check whether the discount still clears the target margin.",
+      "Flag overlaps, failures, and stacking with ads.",
+      "Preview any promotion change, then approve it."
+    ]
+  },
+  {
+    "slug": "turbot-inventory-restock",
+    "zh": "库存补货",
+    "en": "Inventory restock",
+    "cat": "inventory",
+    "zhSum": "列出两周内可能断货的 SKU、建议数量和最晚下单日期。",
+    "enSum": "List SKUs that may stock out in two weeks, with quantity and a last order date.",
+    "tools": [
+      "restock_get_stockout_alerts",
+      "restock_get_plan",
+      "restock_get_forecast"
+    ],
+    "stepsZh": [
+      "按可售天数列出两周内可能断货的 SKU。",
+      "给出建议数量和最晚下单日期，等确认实际发货量。",
+      "货件、分仓和承运进入审批。箱规和重量不明就不要猜。",
+      "批准后只在沙盒生成货件草稿，不会提交 Amazon。"
+    ],
+    "stepsEn": [
+      "List SKUs that may stock out within two weeks by days of cover.",
+      "Give a suggested quantity and last order date, then wait for the real ship quantity.",
+      "Shipment, placement, and carrier steps go to approval. Do not guess carton facts.",
+      "Write tools remain unavailable until a live integration and confirmation workflow is implemented; do not claim a draft or change was created."
+    ]
+  },
+  {
+    "slug": "turbot-listing-localization",
+    "zh": "Listing 本地化",
+    "en": "Listing localization",
+    "cat": "listing",
+    "zhSum": "把 Listing 改成目标站点的语言和单位，而不是只做机器翻译。",
+    "enSum": "Adapt copy to the marketplace language and units, not word-for-word translation.",
+    "tools": [
+      "listing_get_live",
+      "listing_prepare_change",
+      "market_research_keyword"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "turbot-private-label",
+    "zh": "自有品牌",
+    "en": "Private label",
+    "cat": "ops",
+    "zhSum": "从差异点、合规和毛利三件事判断这个自有品牌款能不能做。",
+    "enSum": "Judge a private-label idea on differentiation, compliance, and margin.",
+    "tools": [
+      "market_get_reviews",
+      "listing_check_restrictions",
+      "finance_get_fee_estimate"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "turbot-product-compliance",
+    "zh": "产品合规",
+    "en": "Product compliance",
+    "cat": "ops",
+    "zhSum": "按类目列出可能要的认证和受限风险，不确定就标成待确认。",
+    "enSum": "List likely certifications and restricted-product risk, and mark unknowns.",
+    "tools": [
+      "listing_check_restrictions",
+      "catalog_get_product_type",
+      "restock_get_item_compliance"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "turbot-return-reduction",
+    "zh": "降低退货",
+    "en": "Return reduction",
+    "cat": "ops",
+    "zhSum": "把退货原因对应到 Listing、图片、产品和包装，先改不用动产品的。",
+    "enSum": "Map return reasons to listing, images, product, and packaging, starting with copy.",
+    "tools": [
+      "data_query",
+      "listing_prepare_change",
+      "market_get_reviews"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "turbot-review-compliance",
+    "zh": "评价合规",
+    "en": "Review compliance",
+    "cat": "ops",
+    "zhSum": "区分正常邀评和违规索评，只保留合规动作。",
+    "enSum": "Separate a normal review request from an incentive, and keep only the compliant step.",
+    "tools": [
+      "orders_check_review_eligibility",
+      "orders_request_reviews",
+      "market_get_reviews"
+    ],
+    "stepsZh": [
+      "先确认是哪一家店，避免 NS 店和 TK 店混在一起。",
+      "按这个技能的检查单收集证据。",
+      "需要提交给 Amazon 的动作只生成草稿。",
+      "列出还要你去后台确认的事项。"
+    ],
+    "stepsEn": [
+      "Confirm which store, so NS and TK never mix.",
+      "Collect evidence from this skill's checklist.",
+      "Anything that would be sent to Amazon stays a draft.",
+      "List what you still have to confirm in Seller Central."
+    ]
+  },
+  {
+    "slug": "turbot-seasonal-planning",
+    "zh": "季节性规划",
+    "en": "Seasonal planning",
+    "cat": "inventory",
+    "zhSum": "从现在排到大促结束，每周该完成备货、广告和促销里的哪一件。",
+    "enSum": "Lay out each week through the peak: stock, ads, or promotion.",
+    "tools": [
+      "restock_get_forecast",
+      "ads_list_entities",
+      "promotions_search"
+    ],
+    "stepsZh": [
+      "按可售天数列出两周内可能断货的 SKU。",
+      "给出建议数量和最晚下单日期，等确认实际发货量。",
+      "货件、分仓和承运进入审批。箱规和重量不明就不要猜。",
+      "批准后只在沙盒生成货件草稿，不会提交 Amazon。"
+    ],
+    "stepsEn": [
+      "List SKUs that may stock out within two weeks by days of cover.",
+      "Give a suggested quantity and last order date, then wait for the real ship quantity.",
+      "Shipment, placement, and carrier steps go to approval. Do not guess carton facts.",
+      "Write tools remain unavailable until a live integration and confirmation workflow is implemented; do not claim a draft or change was created."
+    ]
+  },
+  {
+    "slug": "turbot-storefront",
+    "zh": "品牌旗舰店",
+    "en": "Brand storefront",
+    "cat": "listing",
+    "zhSum": "规划旗舰店页面：主推款、系列和品牌故事，不直接发布。",
+    "enSum": "Plan storefront pages for the hero SKU, the line, and the story.",
+    "tools": [
+      "listing_list_aplus",
+      "listing_get_live",
+      "listing_create_aplus"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "turbot-subscribe-save",
+    "zh": "订购省",
+    "en": "Subscribe and Save",
+    "cat": "promo",
+    "zhSum": "估算订购省折扣对复购和利润的影响，再决定开不开。",
+    "enSum": "Estimate how a Subscribe and Save discount hits repeat rate and margin.",
+    "tools": [
+      "promotions_get",
+      "finance_get_fee_estimate",
+      "orders_get_recent"
+    ],
+    "stepsZh": [
+      "列出正在跑和最近结束的券、秒杀和促销。",
+      "算折扣后还能不能保住目标利润。",
+      "撞档、失败或和广告叠加的，单独标出。",
+      "要改促销时先预览，再审批。"
+    ],
+    "stepsEn": [
+      "List running and recently ended coupons, deals, and promotions.",
+      "Check whether the discount still clears the target margin.",
+      "Flag overlaps, failures, and stacking with ads.",
+      "Preview any promotion change, then approve it."
+    ]
+  },
+  {
+    "slug": "turbot-variation-strategy",
+    "zh": "变体策略",
+    "en": "Variation strategy",
+    "cat": "listing",
+    "zhSum": "决定哪些属性做成变体，避免把不相关的款硬塞进一个父体。",
+    "enSum": "Choose variation themes and keep unrelated products out of the parent.",
+    "tools": [
+      "listing_get_live",
+      "listing_prepare_change",
+      "catalog_get_product_type"
+    ],
+    "stepsZh": [
+      "确认站点、类目和必填属性，缺图或缺字段就停下来问。",
+      "按搜索意图写标题、五点和后台词，避免堆砌。",
+      "生成 Listing 预览，确认后再准备变更。",
+      "在审批单里写清哪些字段会改。"
+    ],
+    "stepsEn": [
+      "Confirm marketplace, product type, and required attributes. Stop if an image or field is missing.",
+      "Write the title, bullets, and backend terms for search intent.",
+      "Preview the listing and only then prepare a change.",
+      "Name the fields that would change on the approval."
+    ]
+  },
+  {
+    "slug": "turbot-vine",
+    "zh": "Vine 计划",
+    "en": "Vine program",
+    "cat": "promo",
+    "zhSum": "说明 Vine 适合评论少的新品，并提醒沙盒里的 Vine 订单应单独看待。",
+    "enSum": "Use Vine for new listings with few reviews, and keep Vine orders separate in analysis.",
+    "tools": [
+      "orders_get_recent",
+      "listing_get_live",
+      "data_query"
+    ],
+    "stepsZh": [
+      "列出正在跑和最近结束的券、秒杀和促销。",
+      "算折扣后还能不能保住目标利润。",
+      "撞档、失败或和广告叠加的，单独标出。",
+      "要改促销时先预览，再审批。"
+    ],
+    "stepsEn": [
+      "List running and recently ended coupons, deals, and promotions.",
+      "Check whether the discount still clears the target margin.",
+      "Flag overlaps, failures, and stacking with ads.",
+      "Preview any promotion change, then approve it."
+    ]
+  },
+  {
+    "slug": "turbot-wholesale-sourcing",
+    "zh": "批发采购",
+    "en": "Wholesale sourcing",
+    "cat": "profit",
+    "zhSum": "核对批发价、起订量和到岸成本，看这个价还能不能上架。",
+    "enSum": "Check wholesale price, MOQ, and landed cost before listing.",
+    "tools": [
+      "finance_get_fee_estimate",
+      "market_get_asin",
+      "market_find_products"
+    ],
+    "stepsZh": [
+      "用售价、采购、头程、佣金、FBA 和广告费拆每个 SKU。",
+      "标出亏损和费用占比异常的款，并写明不含哪些成本。",
+      "能索赔或该清仓的，单独折成每月金额。",
+      "动作按金额从大到小排。"
+    ],
+    "stepsEn": [
+      "Split each SKU into price, cost, freight, referral, FBA, and ads.",
+      "Flag losses and odd fee ratios, and say which costs are excluded.",
+      "Turn claims and clearance into a monthly amount.",
+      "Sort actions by money."
+    ]
+  },
+  {
+    "slug": "wasted-spend-audit",
+    "zh": "浪费花费审计",
+    "en": "Wasted spend audit",
+    "cat": "ads",
+    "zhSum": "找出近 30 天花了钱没出单的搜索词和投放，汇总每月白花多少。",
+    "enSum": "Find 30-day spend with no orders and total the monthly waste.",
+    "tools": [
+      "ads_list_entities",
+      "ads_list_recommendations",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "weekday-dayparting-review",
+    "zh": "工作日分时复盘",
+    "en": "Weekday dayparting review",
+    "cat": "ads",
+    "zhSum": "比较工作日和周末的转化，再决定要不要分时。",
+    "enSum": "Compare weekday and weekend conversion before dayparting.",
+    "tools": [
+      "ads_list_entities",
+      "ads_get_data_health",
+      "ads_prepare_changes"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  },
+  {
+    "slug": "weekly-ads-review-routine",
+    "zh": "广告周检例行",
+    "en": "Weekly ads review",
+    "cat": "ads",
+    "zhSum": "每周看数据是否健康、哪几个活动变化最大、有哪些待处理建议。",
+    "enSum": "Each week: data health, the campaigns that moved, and open recommendations.",
+    "tools": [
+      "ads_get_data_health",
+      "ads_list_entities",
+      "ads_list_recommendations"
+    ],
+    "stepsZh": [
+      "先确认广告同步是新鲜的，再读近 7 天和近 30 天。",
+      "只挑变化最大的两三个活动或搜索词，写清原因。",
+      "改出价、否定或预算时生成预览，放进审批。",
+      "用三句话结论和按优先级排的动作收尾。"
+    ],
+    "stepsEn": [
+      "Confirm the ads sync is fresh, then read 7-day and 30-day numbers.",
+      "Pick the two or three campaigns or queries that moved most and say why.",
+      "Preview bid, negative, or budget edits and send them to approval.",
+      "Close with three sentences and a prioritized action list."
+    ]
+  }
+]

@@ -19,8 +19,8 @@ const json = (v: unknown) => v as Prisma.InputJsonValue;
  * No synthetic Amazon seller identity, role attestation or cross-account merge.
  * No source policy, paused plan, cursor or existing ownership is overwritten.
  */
-export async function ensureAutomaticConnections(scopes: SyncScope[], now: Date) {
-  const authorizations = await prisma.amazonSpApiAuthorization.findMany({ where: { OR: scopes, status: "CONFIGURED", awsRegion: "us-east-1", lastValidatedAt: { not: null } }, select: { id: true, organizationId: true, workspaceId: true }, take: 200 });
+export async function ensureAutomaticConnections(scopes: SyncScope[], now: Date, authorizationId?: string) {
+  const authorizations = await prisma.amazonSpApiAuthorization.findMany({ where: { OR: scopes, ...(authorizationId ? { id: authorizationId } : {}), status: "CONFIGURED", awsRegion: "us-east-1", lastValidatedAt: { not: null } }, select: { id: true, organizationId: true, workspaceId: true }, take: 200 });
   for (const candidate of authorizations) {
     const scope = { organizationId: candidate.organizationId, workspaceId: candidate.workspaceId };
     try {

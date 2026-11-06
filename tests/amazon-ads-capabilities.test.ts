@@ -3,12 +3,12 @@ import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { adsCapabilityBlockers, listAdsCapabilities } from "../src/lib/amazon-ads/capabilities";
 
-test("SP structure coverage does not imply Product Ad, SB or SD support", () => {
+test("SP Product Ad structure coverage does not imply SB or SD support", () => {
   const all = listAdsCapabilities();
   const sp = listAdsCapabilities("SP");
-  assert.equal(all.filter(row => row.read === "STRUCTURE_WORKER").length, 8);
+  assert.equal(all.filter(row => row.read === "STRUCTURE_WORKER").length, 9);
   assert.ok(all.filter(row => row.product !== "SP" && row.domain !== "profiles").every(row => row.read === "NOT_IMPLEMENTED" && row.mcpTool === null));
-  assert.equal(sp.find(row => row.domain === "product-ads")?.read, "NOT_IMPLEMENTED");
+  assert.equal(sp.find(row => row.domain === "product-ads")?.read, "STRUCTURE_WORKER");
   const campaignNegative = sp.find(row => row.domain === "campaign-negative-keywords")!;
   const groupNegative = sp.find(row => row.domain === "negative-keywords")!;
   assert.notEqual(campaignNegative.entityType, groupNegative.entityType);

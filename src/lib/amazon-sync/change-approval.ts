@@ -18,6 +18,7 @@ import { SyncInputError, requiredText, optionalAmazonSellerId, parseSyncPlan, of
 import { operation, operationTypes, normalizeCommand, summary, safeState, digest, seal, unseal, targetEnvironment, assertDecision, assertApplicable, type ChangeOperation } from "./approval-policy";
 import { withApprovedChange } from "./approved-context";
 import { scopeLock, saveAuthorization, saveSource, savePlan, requestTasks, controlTask, disableAuthorization, performAuthorizationValidation } from "./service";
+import { ensureAmazonSyncInitialized } from "./scheduler";
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 export const approvalSelect = { id: true, organizationId: true, workspaceId: true, targetEnvironment: true, changeType: true, operation: true, targetId: true, beforeSummary: true, afterSummary: true, sellerIds: true, marketplaceIds: true, domains: true, sourceIds: true, baseRevision: true, changeDigest: true, requestedByUserId: true, approvedByUserId: true, decidedAt: true, status: true, expiresAt: true, appliedAt: true, decisionReason: true, createdAt: true } satisfies Prisma.AmazonDataCenterChangeRequestSelect;
 export function changeView(row: AmazonDataCenterChangeRequest) {
@@ -295,7 +296,13 @@ async function applyAuthorizationValidation(scope: SyncScope, actor: string, id:
       await tx.amazonDataCenterChangeRequest.update({ where: { id }, data: { status: "APPLIED", appliedAt: new Date() } });
       await audit(tx, scope, actor, id, "applied", { digest: digest({ id, result: "validated" }) });
     });
-    return { applied: true, changeRequestId: id, result };
+    let automaticSync: Awaited<ReturnType<typeof ensureAmazonSyncInitialized>>;
+    try { automaticSync = await ensureAmazonSyncInitialized(scope, requiredText(approved.command.id, "授权 ID")); }
+    catch {
+      console.error(`[amazon-sync-center] automatic initialization deferred for authorization ${String(approved.command.id).slice(0, 80)}`);
+      automaticSync = { status: "deferred", sourceCount: 0, planCount: 0, taskCount: 0 };
+    }
+    return { applied: true, changeRequestId: id, result: { ...result, automaticSync } };
   } catch (error) {
     await prisma.$transaction(async tx => {
       await scopeLock(tx, scope);

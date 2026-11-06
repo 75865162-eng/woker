@@ -17,7 +17,7 @@ test("personal MCP credential lifecycle is reachable; plaintext clears on worksp
       return route.fulfill({ json: { credentials: credential ? [credential] : [], scopes: [{ sellerAccountId: "seller-a", marketplaceId: "US", displayName: "店铺 A" }], tools: mcpToolTuples, toolCatalog: mcpToolCatalog, tables: [
         { name: "inventory", source: "AmazonInventorySnapshot", grain: ["sellerAccountId", "marketplaceId", "sellerSku"], schemaStatus: "application_schema_confirmed_source_sample_pending", available: true, sourceCount: 1, rowCount: 24, lastSyncAt: "2026-11-06T00:00:00Z", freshness: "ok", warnings: [] },
         { name: "ads_report_daily", source: "AmazonAdsReportFact", grain: ["sellerAccountId", "marketplaceId", "reportDate", "factKey", "versionId"], schemaStatus: "application_schema_confirmed_source_sample_pending", available: true, sourceCount: 1, rowCount: null, lastSyncAt: "2026-11-06T00:00:00Z", freshness: "ok", warnings: ["版本行数尚未汇总"] },
-      ] } });
+      ], status: { ads: { connectionStatus: "NOT_CONNECTED", oauthConfigured: false, syncEnabled: false, structureAdapterReady: false, reportAdapterReady: false, profileCount: 0, connectedProfileCount: 0, schemaStatus: "UNAVAILABLE", dataIntegrity: "UNAVAILABLE", freshness: "missing", lastPublishedAt: null, profiles: [], freshnessStates: [] }, publishedVersions: [], callLogs: [{ id: "audit-1", status: "DENIED", createdAt: "2026-11-06T00:00:00Z", requestId: "request-fixture", tool: "amazon.inventory.list", toolVersion: "1.1.0", gatewayStatus: "FAILED", failureClass: "SCHEMA_VALIDATION", durationMs: 12, reason: "INVALID_INPUT" }], callLogPagination: { page: 1, pageSize: 20, pageCount: 1, total: 1, hasMore: false } } } });
     }
     return route.fulfill({ contentType: "text/html", body: '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
   });
@@ -26,6 +26,10 @@ test("personal MCP credential lifecycle is reachable; plaintext clears on worksp
   await expect(page.getByRole("heading", { name: "当前 MCP 工具目录" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "amazon.ads.entities.list" })).toContainText("只读分页查询已同步的 SP 广告结构");
   await expect(page.getByRole("row").filter({ hasText: "amazon.ads.reports.list" })).toContainText("需要独立显式授权");
+  const auditRow = page.getByRole("row").filter({ hasText: "request-fixture" });
+  await expect(auditRow).toContainText("v1.1.0");
+  await expect(auditRow).toContainText("12 ms");
+  await expect(auditRow).toContainText("SCHEMA_VALIDATION");
   await expect(page.getByRole("checkbox", { name: "只读查询本地最新已发布广告日报；需要独立显式授权" })).toBeEnabled();
   await expect(page.getByText("1 个来源 / 24 行")).toBeVisible();
   await expect(page.getByText("1 个来源 / 版本行数未汇总")).toBeVisible();

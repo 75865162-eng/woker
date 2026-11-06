@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     const where: Prisma.FileObjectWhereInput = {
       organizationId: user.organizationId,
       workspaceId: scope.workspaceId,
+      NOT: { storageKey: { startsWith: "selection-research/" } },
       ...(search
         ? {
             originalName: { contains: search, mode: "insensitive" },

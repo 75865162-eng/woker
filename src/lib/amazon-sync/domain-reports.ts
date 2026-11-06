@@ -101,7 +101,7 @@ export function* readTsv(text: string): Generator<string[]> {
         yield cells; cells = []; touched = false;
       }
     } else {
-      if (closed || char === '"') return invalid();
+      if (closed) return invalid();
       cell += char;
     }
     if (cell.length > maxCellLength) return invalid();

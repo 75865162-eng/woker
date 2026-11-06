@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { roleCanPerformAction, defaultRolePermissionMap } from "@/lib/accounts/permissions";
 import { normalizeRolePermissions } from "@/lib/accounts/role-permissions-utils";
 import { encryptAmazonAdsRefreshToken } from "./credentials";
-import { createAmazonAdsOAuthTransport, lwaConsentHosts, type AdsRegion, type AmazonAdsOAuthTransport, type AmazonAdsProfilePayload } from "./oauth-contract";
+import { AmazonAdsConnectionError, createAmazonAdsOAuthTransport, lwaConsentHosts, type AdsRegion, type AmazonAdsOAuthTransport, type AmazonAdsProfilePayload } from "./oauth-contract";
 import { missingAmazonAdsProfileIds } from "./profile-reconciliation";
 import { ensureAdsPlan } from "./sync-service";
 
@@ -83,16 +83,21 @@ export async function finishAmazonAdsOAuth(input: { scope: AdsAuthScope; actor: 
     const tokens = await transport.exchangeAuthorizationCode({ region: consentRegion, code, redirectUri: settings.redirectUri, clientId: settings.clientId, clientSecret: settings.clientSecret });
     const discovered: Array<ReturnType<typeof normalizedProfile>> = [];
     const successfulRegions: AdsRegion[] = [];
+    const discoveryFailures: AmazonAdsConnectionError[] = [];
     for (const region of regions) {
       try {
         const profiles = await transport.listProfiles({ region, clientId: settings.clientId, accessToken: tokens.accessToken });
         successfulRegions.push(region);
         discovered.push(...profiles.map((profile) => normalizedProfile(profile, region)));
-      } catch {
+      } catch (error) {
+        if (error instanceof AmazonAdsConnectionError) discoveryFailures.push(error);
         // Keep profiles from healthy regions; a regional outage must not erase that region's prior rows.
       }
     }
-    if (!successfulRegions.length) throw new Error("Amazon Ads Profile discovery was unavailable in all regions.");
+    if (!successfulRegions.length) {
+      // The consent region is the most useful diagnostic; never relay arbitrary transport errors.
+      throw discoveryFailures.find(error => error.region === consentRegion) ?? discoveryFailures[0] ?? new Error("Amazon Ads Profile discovery was unavailable in all regions.");
+    }
 
     return await prisma.$transaction(async (tx) => {
       await assertAdsSettingsManager(input.scope, input.actor, tx);
@@ -135,21 +140,26 @@ export async function finishAmazonAdsOAuth(input: { scope: AdsAuthScope; actor: 
       await tx.auditLog.create({ data: { organizationId: input.scope.organizationId, userId: input.actor, action: "amazon.ads.oauth.completed", entityType: "AmazonAdsAuthorization", entityId: authorizationId, metadata: { workspaceId: input.scope.workspaceId, profileCount: discovered.length, regions: successfulRegions } } });
       return { authorizationId, profileCount: discovered.length, regions: successfulRegions };
     });
-  } catch {
+  } catch (error) {
     await prisma.amazonAdsOAuthAttempt.updateMany({ where: { id: attempt.id, status: "EXCHANGING" }, data: { status: "FAILED" } });
+    if (error instanceof AmazonAdsConnectionError) throw error;
     throw new Error("Amazon Ads 授权或 Profile 发现失败。未向前端返回上游凭证或原始响应。");
   }
 }
 
 export async function listAmazonAdsProfiles(scope: AdsAuthScope, where: Prisma.AmazonAdsProfileWhereInput = scope) {
   return prisma.amazonAdsProfile.findMany({ where, orderBy: [{ countryCode: "asc" }, { profileId: "asc" }], take: 1000,
-    select: { id: true, authorizationId: true, region: true, profileId: true, countryCode: true, marketplaceId: true, currencyCode: true, timezone: true, accountInfo: true, sellerAccountId: true, lastDiscoveredAt: true, authorization: { select: { name: true, status: true, lastValidatedAt: true, refreshTokenExpiresAt: true } }, syncPlans: { take: 1, select: { id: true, status: true, nextRunAt: true, lastSuccessAt: true, lastErrorCode: true, tasks: { take: 1, orderBy: { createdAt: "desc" }, select: { status: true, stage: true, processedCount: true, errorCode: true } } } } } });
+    select: { id: true, authorizationId: true, region: true, profileId: true, advertiserAccountId: true, advertiserAccountRevision: true, countryCode: true, marketplaceId: true, currencyCode: true, timezone: true, accountInfo: true, sellerAccountId: true, lastDiscoveredAt: true, authorization: { select: { name: true, status: true, lastValidatedAt: true, refreshTokenExpiresAt: true } }, syncPlans: { take: 1, select: { id: true, status: true, nextRunAt: true, lastSuccessAt: true, lastErrorCode: true, tasks: { take: 1, orderBy: { createdAt: "desc" }, select: { status: true, stage: true, processedCount: true, errorCode: true } } } } } });
 }
 
-export async function bindAmazonAdsProfile(scope: AdsAuthScope, actor: string, profileId: string, sellerAccountId: string | null) {
+export async function bindAmazonAdsProfile(scope: AdsAuthScope, actor: string, profileId: string, sellerAccountId: string | null | undefined, advertiserAccountId?: string | null, profileRecordId?: string, expectedAdvertiserAccountId?: string | null, expectedAdvertiserAccountRevision?: number) {
+  if (advertiserAccountId !== undefined && advertiserAccountId !== null && (advertiserAccountId.length > 512 || !advertiserAccountId.trim() || advertiserAccountId.trim() !== advertiserAccountId || /[\u0000-\u001f\u007f]/.test(advertiserAccountId))) throw new Error("Amazon Ads Advertiser Account ID 无效。");
+  if (advertiserAccountId !== undefined && (!profileRecordId || expectedAdvertiserAccountId === undefined || !Number.isSafeInteger(expectedAdvertiserAccountRevision) || expectedAdvertiserAccountRevision! < 0)) throw new Error("账户绑定需要内部 Profile ID 和当前绑定值，请刷新后重试。");
   return prisma.$transaction(async (tx) => {
     await assertAdsSettingsManager(scope, actor, tx);
-    const profile = await tx.amazonAdsProfile.findFirst({ where: { ...scope, profileId }, select: { id: true, countryCode: true, marketplaceId: true, sellerAccountId: true } });
+    const matches = await tx.amazonAdsProfile.findMany({ where: { ...scope, ...(profileRecordId ? { id: profileRecordId } : { profileId }) }, select: { id: true, profileId: true, countryCode: true, marketplaceId: true, sellerAccountId: true, advertiserAccountId: true }, take: 2 });
+    if (matches.length > 1) throw new Error("同一工作区存在重复 Amazon Profile ID，请使用唯一 Profile 绑定。");
+    const profile = matches[0];
     if (!profile) throw new Error("Amazon Ads Profile 不存在。");
     if (sellerAccountId) {
       const seller = await tx.sellerAccount.findFirst({ where: { ...scope, id: sellerAccountId, status: "active" }, select: { id: true, marketplaceCode: true } });
@@ -157,9 +167,17 @@ export async function bindAmazonAdsProfile(scope: AdsAuthScope, actor: string, p
       const sellerCountry = seller.marketplaceCode.trim().toUpperCase();
       if (/^[A-Z]{2}$/.test(sellerCountry) && sellerCountry !== profile.countryCode && sellerCountry !== profile.marketplaceId) throw new Error("ERP 店铺 Marketplace 与 Ads Profile 不匹配。");
     }
-    const updated = await tx.amazonAdsProfile.update({ where: { id: profile.id }, data: { sellerAccountId } });
-    await ensureAdsPlan(tx, scope, updated.id, actor);
-    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.profile.binding.changed", entityType: "AmazonAdsProfile", entityId: profile.id, metadata: { workspaceId: scope.workspaceId, profileId, sellerAccountId, previousSellerAccountId: profile.sellerAccountId } } });
+    if (advertiserAccountId !== undefined && sellerAccountId !== undefined && sellerAccountId !== profile.sellerAccountId) throw new Error("店铺绑定已变化，请刷新后单独保存账户绑定。");
+    const data = advertiserAccountId !== undefined
+      ? { advertiserAccountId, advertiserAccountRevision: { increment: 1 } }
+      : sellerAccountId !== undefined ? { sellerAccountId } : null;
+    if (!data) throw new Error("绑定请求无变更内容。");
+    const changed = await tx.amazonAdsProfile.updateMany({ where: { ...scope, id: profile.id, ...(advertiserAccountId !== undefined ? { advertiserAccountId: expectedAdvertiserAccountId, advertiserAccountRevision: expectedAdvertiserAccountRevision, sellerAccountId: profile.sellerAccountId } : {}) }, data });
+    if (changed.count !== 1) throw new Error("账户绑定已被修改，请刷新后重试。");
+    const updated = await tx.amazonAdsProfile.findUniqueOrThrow({ where: { id: profile.id } });
+    // Recording an unverified v1 identity must never create/resume a structure plan.
+    if (advertiserAccountId === undefined && sellerAccountId !== undefined) await ensureAdsPlan(tx, scope, updated.id, actor);
+    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.profile.binding.changed", entityType: "AmazonAdsProfile", entityId: profile.id, metadata: { workspaceId: scope.workspaceId, profileId: profile.profileId, sellerAccountId: updated.sellerAccountId, previousSellerAccountId: profile.sellerAccountId, ...(advertiserAccountId !== undefined ? { identityEvidence: "ADMIN_ENTERED_UNVERIFIED", advertiserAccountRevision: updated.advertiserAccountRevision, previousAccountDigest: profile.advertiserAccountId ? stateHash(profile.advertiserAccountId) : null, accountDigest: advertiserAccountId ? stateHash(advertiserAccountId) : null } : {}) } } });
     return updated;
   });
 }

@@ -1,0 +1,2608 @@
+{
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Generate a fresh batch of ads optimization recommendations from the latest synced data. Charged per batch.",
+      "inputSchema": {
+        "properties": {
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope"
+        ],
+        "type": "object"
+      },
+      "name": "ads_generate_recommendations"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Amazon's own SUGGESTED BIDS (建议竞价) with ranges for keywords or auto-targeting themes — the number Seller Central shows, LIVE and free. Two modes: pass asins (up to 10, comma list) to get bids for a NEW ad group before anything is created (use when building campaigns with ads_prepare_changes), or pass campaign_id + ad_group_id for an existing one. keywords is a comma list (up to 50) scored at match_type BROAD/PHRASE/EXACT; set auto_targeting=true to also get the four auto themes (CLOSE_MATCH etc.). Returns suggested/range per expression. Free live Amazon Ads read.",
+      "inputSchema": {
+        "properties": {
+          "ad_group_id": {
+            "type": "string"
+          },
+          "asins": {
+            "type": "string"
+          },
+          "auto_targeting": {
+            "type": "boolean"
+          },
+          "campaign_id": {
+            "type": "string"
+          },
+          "keywords": {
+            "type": "string"
+          },
+          "match_type": {
+            "type": "string"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          },
+          "strategy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope"
+        ],
+        "type": "object"
+      },
+      "name": "ads_get_bid_recommendations"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Whether the seller's Amazon Ads account(s) are connected — a seller may hold SEVERAL Ads authorizations — and the list of ad profiles (stores/marketplaces) with their ids. Use the profile id as store_scope for every other ads tool; each profile names the connection (account) it belongs to.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "ads_get_connection_status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Data health for an ads profile: is the synced report data fresh, complete and trustworthy enough to act on.",
+      "inputSchema": {
+        "properties": {
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope"
+        ],
+        "type": "object"
+      },
+      "name": "ads_get_data_health"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Effective ads optimizer settings for a profile: ACOS thresholds, click/cost gates for each rule type.",
+      "inputSchema": {
+        "properties": {
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope"
+        ],
+        "type": "object"
+      },
+      "name": "ads_get_settings"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Recent report sync runs for an ads profile: when data was last pulled from Amazon and whether it succeeded. Each run carries per-family progress (families[]): a family with complete=true is ALREADY written and queryable — during a running sync you can answer from the landed families (campaigns usually lands first) instead of waiting for the slowest report.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope"
+        ],
+        "type": "object"
+      },
+      "name": "ads_get_sync_status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Live Amazon Ads entities straight from the Ads API — the current bids, budgets, states and settings the daily report sync does not carry. Covers Sponsored Products, Sponsored Display AND Sponsored Brands: entity_type one of sp_campaigns, sp_ad_groups, sp_product_ads, sp_keywords, sp_targets, sp_negative_keywords, sp_campaign_negative_keywords, sp_negative_targets, sp_campaign_negative_targets, sd_campaigns, sd_ad_groups, sd_product_ads, sd_targets, sd_negative_targets, sb_campaigns, sb_ad_groups, sb_ads, sb_keywords, sb_negative_keywords. Narrow with campaign_id / ad_group_id and page with cursor (feed back the next_cursor you got) — a real account has thousands of targets, so hunting for one keywordId/targetId in an unfiltered first page will not find it. Historical metrics belong in data_query, not here.",
+      "inputSchema": {
+        "properties": {
+          "ad_group_id": {
+            "type": "string"
+          },
+          "campaign_id": {
+            "type": "string"
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope",
+          "entity_type"
+        ],
+        "type": "object"
+      },
+      "name": "ads_list_entities"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Latest ads optimization recommendations (negatives, bid changes, budget reviews, harvest opportunities) with evidence. Filter by handled status.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope"
+        ],
+        "type": "object"
+      },
+      "name": "ads_list_recommendations"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Mark an ads recommendation as done (seller applied it in Amazon) or ignored (seller declined it).",
+      "inputSchema": {
+        "properties": {
+          "handled_status": {
+            "type": "string"
+          },
+          "recommendation_id": {
+            "type": "string"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope",
+          "recommendation_id",
+          "handled_status"
+        ],
+        "type": "object"
+      },
+      "name": "ads_mark_recommendation"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "STEP 1 of applying ads recommendations over MCP: validate the selected pending recommendations against LIVE Amazon state and create a one-time write plan. Returns a per-item preview (live value, proposed value, drift, blockers), a plan_id valid for 30 minutes, and the confirmation phrase required by ads_execute_apply. Show the preview to the seller and get their explicit go-ahead before executing. recommendation_ids: comma-separated ids from ads_list_recommendations (max 50). Free to prepare.",
+      "inputSchema": {
+        "properties": {
+          "recommendation_ids": {
+            "type": "string"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope",
+          "recommendation_ids"
+        ],
+        "type": "object"
+      },
+      "name": "ads_prepare_apply"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "STEP 1 of changing ads yourself: validate a list of changes you authored and get a one-time write plan. changes_json is a JSON array; each item has a 'kind' plus its fields. Creating (Sponsored Products and Sponsored Display; pass family='sd' for SD): create_campaign, create_ad_group, create_product_ad, create_keyword (SP only — SD has no keywords; match_type BROAD/PHRASE/EXACT, default EXACT), create_target (SP takes asin; SD takes expression_json for product/views/audience targeting) — link them in one batch with 'ref' on a parent and 'campaign_ref'/'ad_group_ref' on children, in any order. Sponsored Brands cannot be created here (brand registry plus moderated creative). Changing (SP, and SB/SD for budget and state): set_bid, set_budget, set_placement, set_campaign_state, set_ad_group_state, set_keyword_state; pass family='sb'|'sd' for those campaigns. Negatives: add_negative_keyword (campaign_id, keyword_text, match_type EXACT|PHRASE default EXACT) and add_negative_target (campaign_id, asin). SP: with ad_group_id = ad-group level, without = campaign level. SB (family='sb'): both, ad_group_id required. SD (family='sd'): add_negative_target only, ad_group_id required — SD has no keywords, so no negative keywords. State is ENABLED or PAUSED — archiving is not offered because Amazon cannot undo it. New campaigns are created PAUSED unless you pass state explicitly. Max 50 changes. Nothing is written; you get the parsed plan back to show the seller. Free.",
+      "inputSchema": {
+        "properties": {
+          "changes_json": {
+            "type": "string"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope",
+          "changes_json"
+        ],
+        "type": "object"
+      },
+      "name": "ads_prepare_changes"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Pull fresh ad reports from Amazon for a profile (campaign, search term, targeting, placement).",
+      "inputSchema": {
+        "properties": {
+          "days": {
+            "type": "integer"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope"
+        ],
+        "type": "object"
+      },
+      "name": "ads_start_sync"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Change ads optimizer settings for a profile, e.g. the target ACOS or rule thresholds. Pass only the keys to change, as a JSON object string.",
+      "inputSchema": {
+        "properties": {
+          "patch_json": {
+            "type": "string"
+          },
+          "store_scope": {
+            "description": "which store this call targets — an id from meta_list_stores. This tool takes an ads_profile id. Omit only when the account has a single store of that kind.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_scope",
+          "patch_json"
+        ],
+        "type": "object"
+      },
+      "name": "ads_update_settings"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "搜索查询表现 SQP（实时，Brand Analytics 直通，需品牌备案）: 自家 ASIN 在每个搜索词上的完整漏斗——市场总展示/点击/加购/购买 vs 这个 ASIN 的数量、份额，以及各环节指数（ASIN 环节转化率 ÷ 市场同环节转化率，1.0 = 市场平均）和 weakest_stage（第一个明显低于市场的环节）。用来回答「我在这个词上掉在哪一层：曝光、点击、加购还是购买」。asins 只能是本店品牌的 ASIN（空格或逗号分隔，最多约 18 个）；period = week/month/quarter，date 取该周期内任一天，空 = 最近完整周期；keyword 过滤包含该词的搜索词。group_by='query' 把所有子 ASIN 按搜索词加总（一个父体的全部尺码一起分析时用）；行数超过 limit（最多 100）时用 next_offset 翻页、带同一个 report_id 取下一页。报告生成要几分钟：返回 status=pending 时，等 1-2 分钟带同样参数和 report_id 再调。拿不到竞品 ASIN 的漏斗——竞品点击/转化份额用 market_aba_keywords。",
+      "inputSchema": {
+        "properties": {
+          "asins": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "group_by": {
+            "type": "string"
+          },
+          "keyword": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "period": {
+            "type": "string"
+          },
+          "report_id": {
+            "type": "string"
+          },
+          "sort_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asins"
+        ],
+        "type": "object"
+      },
+      "name": "brand_get_search_query_performance"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Amazon's current requirements for one product type in the seller's marketplace, normalized for payload authoring: fields[] (name, path/arrays/value_key show where the leaf sits in the nested attributes object, plus type, constraints, allowed_values), required_fields, conditional_fields, property_groups. Read this before constructing or debugging listing attribute payloads. Product type names come from catalog_search_product_types or Amazon error messages.",
+      "inputSchema": {
+        "properties": {
+          "marketplace_id": {
+            "type": "string"
+          },
+          "product_type": {
+            "type": "string"
+          },
+          "requirements": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_type"
+        ],
+        "type": "object"
+      },
+      "name": "catalog_get_product_type"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Find the Amazon product type for an item — STEP 0 of authoring a listing payload. Pass keywords (e.g. 'running shoes') or an item_name (a draft title works); returns [{name, display_name}] candidates. Feed the chosen name to catalog_get_product_type. Free live SP-API read.",
+      "inputSchema": {
+        "properties": {
+          "item_name": {
+            "type": "string"
+          },
+          "keywords": {
+            "type": "string"
+          },
+          "marketplace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "catalog_search_product_types"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Find the products Amazon itself lists as SIMILAR / comparable to your ASINs (up to 20 per call) — the free, first-party starting point for benchmarking competitors — enriched with title, brand, sales rank and main image, plus Amazon's reference prices (CompetitivePrice / WasPrice) for your own ASIN. Free live SP-API read, but Amazon allows roughly one call per 30 seconds per store: batch your ASINs and expect rate_limited with retry_after_seconds if called again too soon; results are cached for 24h. Get your own ASINs from data_query on the listings table. For a competitor's sales, reviews and keywords, follow up with market_list_competitors / market_get_reviews (credits).",
+      "inputSchema": {
+        "properties": {
+          "asins": {
+            "type": "string"
+          },
+          "enrich": {
+            "type": "boolean"
+          },
+          "marketplace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asins"
+        ],
+        "type": "object"
+      },
+      "name": "competitor_find_similar"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Column names and types for one table in the store extract, plus what the table means. Call before writing SQL against an unfamiliar table.",
+      "inputSchema": {
+        "properties": {
+          "table": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "type": "object"
+      },
+      "name": "data_describe_table"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "START HERE whenever the user asks anything about their Amazon business — 销量/订单/广告花费/ACOS/库存/退货/换货/利润/流量 (sales, orders, ad spend, inventory, returns, exchanges, profit, traffic). Lists the SQL tables in this seller's REAL store extract (orders, inventory, returns, replacements = FBA exchanges, ads daily metrics, finance, restock engine outputs) with row counts and descriptions. Use data_describe_table for columns, then data_query to run SQL.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "data_list_tables"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Answer any question about the seller's REAL Amazon store data — 销量、订单、广告花费、ACOS、库存、退货率、利润 — with one read-only DuckDB SQL query: the primary tool for analysis, aggregation, trends, rankings, and joins across orders/ads/inventory/returns (e.g. return rate by SKU = returns joined to orders), plus slicing the restock engine's outputs. Free and instant — prefer this over paid diagnostics for any statistics question. Standard SQL plus DuckDB functions; results capped at 200 rows (aggregate or LIMIT/OFFSET for more). Writes and multi-statement scripts are rejected.",
+      "inputSchema": {
+        "properties": {
+          "sql": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "name": "data_query"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Sync ALL account data from Amazon SP-API into the store extract: orders, inventory, returns, FBA exchanges, finance (fees, settlements, reimbursements), traffic reports, storage costs, listings, buy box, sales rank and the rest. Runs in the background — poll data_sync_status; when runs succeed, data_query sees the fresh data automatically. Use when the seller wants up-to-date numbers. (Ads reports sync separately via ads_start_sync.)",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "data_sync_start"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Status of the account's data syncs: the latest run per kind (orders, inventory, returns, finance, insights) with success/failure and row counts, plus when the SQL extract was last built. Poll after data_sync_start.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "data_sync_status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "账户余额（实时，Finances v2024-06-19 直通，不经本地数据）: 各站点/账户类型的 AVAILABLE（可放款）与 RESERVED（预留/押款）余额；传 as_of_date (YYYY-MM-DD) 可查历史时点。回答「账上现在有多少钱 / 这期能放多少款 / 被预留多少」。押款明细（哪些交易、为什么、几时放）用 data_query 查 finance_transactions WHERE transaction_status='DEFERRED'。",
+      "inputSchema": {
+        "properties": {
+          "as_of_date": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "finance_get_balances"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "费用试算（实时，Product Fees 直通）: 「这个 ASIN/SKU 按 X 价卖，亚马逊收多少费、到手多少」。传 asin 或 sku 二选一 + price；fulfillment 默认 fba。返回费用总额、明细（referral/FBA 及内嵌子费）与 net_after_fees。注意这是**事前估算**，不含仓储费/广告/退货/采购成本——事后实收查 economics_daily 的 net_proceeds_total。定价与选品决策用。",
+      "inputSchema": {
+        "properties": {
+          "asin": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "fulfillment": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "finance_get_fee_estimate"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "可售性检查（实时，Listings Restrictions 直通）: 「这个 ASIN 我能卖吗」——返回品牌门槛/类目限制与申请链接（中文原因）。选品或准备上新之前先查，免得文案图片都做完才发现不能上。无限制 = can_sell true。condition 默认全新。",
+      "inputSchema": {
+        "properties": {
+          "asin": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asin"
+        ],
+        "type": "object"
+      },
+      "name": "listing_check_restrictions"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "创建 A+ 图文草稿（低风险写）: 用文案+图片 URL 生成 STANDARD A+ 内容文档草稿。草稿买家不可见；发布需另行调用 listing_submit_aplus（高风险，需卖家确认）。modules_json 支持 3 种模块: {type:'text',headline,body} / {type:'four_image_text',headline,blocks:[{image_url,alt,headline,body}]} / {type:'single_image_specs',image_url,alt,headline,description,specs:[..]}。图片须 https JPEG/PNG ≤10MB（Listing 工厂 R2 图直接可用）。asins 给出时先免费校验再建稿并绑定。需品牌备案。",
+      "inputSchema": {
+        "properties": {
+          "asins": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "modules_json": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "modules_json"
+        ],
+        "type": "object"
+      },
+      "name": "listing_create_aplus"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Get a one-time upload URL for a listing image, so the image ends up on a PUBLIC https URL Amazon will accept in main_product_image_locator / other_product_image_locator_*. Pass the filename (extension decides the type: jpg, png, webp, gif, tiff). Returns upload_url (valid 15 min) and the permanent public_url. You must then PUT the file yourself, e.g. curl -X PUT -H 'Content-Type: <content_type>' --upload-file <local path> '<upload_url>' — the bytes never pass through this tool. Verify with a HEAD request, then use public_url in the attributes payload. Use listing_import_image_from_url instead when the image is already on the public web or you have no shell.",
+      "inputSchema": {
+        "properties": {
+          "filename": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename"
+        ],
+        "type": "object"
+      },
+      "name": "listing_create_image_upload"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "A+ 图文详情（实时，只读）: 按 content_reference_key 取单篇A+ 的模块结构（类型 + 文案摘录）与挂载 ASIN。key 从 listing_list_aplus 获取。",
+      "inputSchema": {
+        "properties": {
+          "content_reference_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_reference_key"
+        ],
+        "type": "object"
+      },
+      "name": "listing_get_aplus"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Read one listing LIVE from Amazon (not the daily snapshot): current summaries, attributes, Amazon's own issues list (the authoritative answer to why a listing is suppressed), offers and fulfillment availability. included_data is a comma list from: summaries, attributes, issues, offers, fulfillmentAvailability, relationships.",
+      "inputSchema": {
+        "properties": {
+          "included_data": {
+            "type": "string"
+          },
+          "marketplace_id": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku"
+        ],
+        "type": "object"
+      },
+      "name": "listing_get_live"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Copy an image that is ALREADY on the public web into the seller's own hosting, and return a stable public URL for the listing payload. Use for AI-generated images that live on a short-lived provider URL, or when your client has no shell to PUT with. Downloads server-side (20MB cap, image types only). For a local file use listing_create_image_upload.",
+      "inputSchema": {
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_url"
+        ],
+        "type": "object"
+      },
+      "name": "listing_import_image_from_url"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "A+ 图文列表（实时，只读）: 列出店铺的 A+ 内容文档（名称/审核状态/key）及各自挂载的 ASIN。配合 listings 表可回答「哪些在售 ASIN 还没有 A+」。status 可过滤 APPROVED/DRAFT/SUBMITTED/REJECTED。需品牌备案。",
+      "inputSchema": {
+        "properties": {
+          "page_token": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "listing_list_aplus"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "STEP 1 of changing or creating a listing over MCP: run Amazon's FULL server-side validation (VALIDATION_PREVIEW — nothing is written) on a listing payload you constructed, and get a one-time write plan when it passes. operation='put' creates/fully replaces (attributes_json = the complete attributes object per catalog_get_product_type); operation='patch' partially updates (patches_json = JSON Patch array, e.g. [{\"op\":\"replace\",\"path\":\"/attributes/item_name\",\"value\":[...]}]). For a VARIATION FAMILY (父子/变体) pass items_json instead: a JSON array [{sku, operation, attributes|patches}, ...] — parent SKU with parentage_level+variation_theme and no offer, each child with child_parent_sku_relationship and its axis attributes; every item is validated, cross-SKU consistency is linted, and ONE plan (one confirmation) covers the whole family. Returns Amazon's issues; a plan_id is only created when there are no ERROR-severity issues. Free.",
+      "inputSchema": {
+        "properties": {
+          "attributes_json": {
+            "type": "string"
+          },
+          "items_json": {
+            "type": "string"
+          },
+          "marketplace_id": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "patches_json": {
+            "type": "string"
+          },
+          "product_type": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_type"
+        ],
+        "type": "object"
+      },
+      "name": "listing_prepare_change"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Amazon Brand Analytics (ABA) search terms for the WHOLE marketplace, weekly or monthly (SellerSprite's ABA copy — no brand registry needed). Per keyword: ABA search-frequency rank and its 1/4/12-week change, searches, clicks, impressions, purchases and purchase rate, click concentration, the top 3 clicked ASINs with each one's click share and conversion share, top 3 brands, title density and PPC bid range. keyword filters to terms CONTAINING it; leave it empty for the whole marketplace (~3M terms a week — read the top pages, never page through all of it). mode narrows to a market type: hot / movers / steady_growth / surging / potential / long_tail (empty = all terms). Sorted by searches unless sort_by says otherwise; no category filter. date: week = any yyyyMMdd (snapped to the Saturday ending that ABA week), month = yyyyMM; empty = latest. For one keyword's rank history use market_aba_trend. For the seller's OWN asins' ABA rows use data_query on search_terms_weekly — that is free. Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "exclude_keywords": {
+            "type": "string"
+          },
+          "filters_json": {
+            "type": "string"
+          },
+          "keyword": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "period": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "sort_by": {
+            "type": "string"
+          },
+          "sort_desc": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "market_aba_keywords"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "One keyword's ABA history: search-frequency rank and searches per week (or per month), newest last. Use to see seasonality, whether a term is rising or fading, and when its peak weeks are before planning launch or ad budget. last_n keeps the most recent points (default 52 weeks / 24 months; SellerSprite holds data back to 2022). Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "granularity": {
+            "type": "string"
+          },
+          "keyword": {
+            "type": "string"
+          },
+          "last_n": {
+            "type": "integer"
+          },
+          "marketplace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyword"
+        ],
+        "type": "object"
+      },
+      "name": "market_aba_trend"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Resolve an Amazon browse node: give a category name (e.g. 'Cat Houses & Condos') or a node id / id path and get back the full category path, node id path and the number of products listed in it. The node id path is what market_scan_node and market_find_products take. Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "marketplace": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "market_find_node"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Find products in a browse node or keyword market that match conditions — price band, monthly units, rating — sorted by sales, price, rating, reviews, profit or listed date, with per-ASIN price / units / revenue / rating / reviews / listed date / brand / seller. This is the sampler behind category scans: pull the top 100 by units to compute medians and quartiles yourself, or pull a price gap (min_price/max_price) to see who sits in it. node_id_path comes from market_find_node. Parent ASINs only (variations collapsed); include_subcategories=false restricts to the exact node. filters_json passes any other SellerSprite product_research field (e.g. minProfit, sellerNation, badgeBS). Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "filters_json": {
+            "type": "string"
+          },
+          "include_subcategories": {
+            "type": "boolean"
+          },
+          "keyword": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "max_price": {},
+          "max_rating": {},
+          "max_units": {},
+          "min_price": {},
+          "min_rating": {},
+          "min_units": {},
+          "node_id_path": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "sort_by": {
+            "type": "string"
+          },
+          "sort_desc": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "market_find_products"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Full detail for ONE ASIN — price and promotions, rating and review count, first-listed date, variation count, seller and fulfilment, bullet points, Listing quality score, Best Seller / Amazon's Choice badges. Call it once per competitor to build a comparison table (price / rating / reviews / listed date / variations / selling points). Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "asin": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asin"
+        ],
+        "type": "object"
+      },
+      "name": "market_get_asin"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Customer reviews for an ASIN — title, body, star rating, date. The voice-of-customer input: run it on COMPETITOR asins and mine the low-star reviews for the pain points your bullets should answer and your images should disprove. stars filters to specific ratings (e.g. '1,2' for the complaints). Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "asin": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "stars": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asin"
+        ],
+        "type": "object"
+      },
+      "name": "market_get_reviews"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "The competitor ASINs Amazon and shoppers actually associate with one ASIN. Use to find who you are really up against before writing copy or setting a price, and as the input to market_get_reviews for voice-of-customer. Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "asin": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "asin"
+        ],
+        "type": "object"
+      },
+      "name": "market_list_competitors"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "List the Sorftime multi-platform data tools 粒粒 can query for you — Walmart, TikTok Shop, Shopee, Temu, 1688 sourcing (incl. search by image), Reddit / Quora consumer discussions, and Amazon views not covered by the market_* tools (customer-says summaries, 2-year monthly product snapshots, historical hot-keyword lists, category trends, seller search). Returns each tool's name, purpose, parameters and credit cost. Free. Call it before market_query_sorftime; pass platform to narrow.",
+      "inputSchema": {
+        "properties": {
+          "platform": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "market_list_sorftime_tools"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "List the 西柚洞察 (Xiyou) competitor-traffic tools 粒粒 can query for you — any ASIN's (competitors included) keyword reverse lookup with organic / ad traffic and rank, keyword → which ASINs take its traffic, multi-ASIN keyword comparison, and daily traffic / rank / BSR / price / listing-change / ad trends. Returns each tool's name, purpose, parameters and how its credits are counted. Free. Call it before market_query_xiyou; pass group (asin / asin_trend / keyword) to narrow.",
+      "inputSchema": {
+        "properties": {
+          "group": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "market_list_xiyou_tools"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Expand one seed keyword into the keyword universe around it, each with search volume, purchases, purchase rate, product and ad-competitor counts, title density, relevancy, SPR, click concentration and PPC bid. This is the keyword-library builder: run it on the seed term, then split the results into terms worth ranking for organically, terms worth buying impressions on, and cheap long-tail for backend search terms (see the keyword-role-taxonomy skill). Costs credits per call.",
+      "inputSchema": {
+        "properties": {
+          "filters_json": {
+            "type": "string"
+          },
+          "keyword": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "keyword"
+        ],
+        "type": "object"
+      },
+      "name": "market_mine_keywords"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Query one Sorftime multi-platform data tool (Walmart, TikTok Shop, Shopee, Temu, 1688, Reddit, Quora, extra Amazon views). tool = a name from market_list_sorftime_tools; arguments_json = a JSON object with that tool's parameters. Costs 1-2 credits per call (listed per tool); no data, no charge. For Amazon keyword / competitor / review research use the other market_* tools; for the seller's OWN store data use data_query (free).",
+      "inputSchema": {
+        "properties": {
+          "arguments_json": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool"
+        ],
+        "type": "object"
+      },
+      "name": "market_query_sorftime"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Query one 西柚洞察 (Xiyou) tool: competitor ASIN keyword traffic and rank, keyword → competing ASINs, traffic / rank / BSR trends. tool = a name from market_list_xiyou_tools; arguments_json = a JSON object with that tool's parameters. Costs what 西柚 charges, 1:1 (usually 1 credit; more for many rows, ASINs or days); no data, no charge. For the seller's OWN ASINs' search funnel use brand_get_search_query_performance; for keyword volume / ABA weekly trend (market_aba_trend) / single-ASIN detail (market_get_asin) / product research use the other market_* tools; for the seller's own store data use data_query (free).",
+      "inputSchema": {
+        "properties": {
+          "arguments_json": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool"
+        ],
+        "type": "object"
+      },
+      "name": "market_query_xiyou"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Is a keyword market worth entering? Monthly search volume, purchases and purchase rate, supply/demand ratio, product count, click concentration (how much the head sellers own), average price and PPC bid range, plus growth trend — for one keyword or a whole keyword market. Use before choosing what to launch, or to compare several keyword directions. Costs credits per call (SellerSprite data). For the seller's OWN already-earned search terms use data_query instead — that is free.",
+      "inputSchema": {
+        "properties": {
+          "filters_json": {
+            "type": "string"
+          },
+          "keywords": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "keywords"
+        ],
+        "type": "object"
+      },
+      "name": "market_research_keyword"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Category-node health check in one call: overview (product count, average price / profit margin / rating / review count, new-product share, head vs. overall), price-band distribution, rating distribution, listed-date distribution and head-N product concentration (share of units the top N ASINs own). Optionally brand and seller concentration. node_id_path comes from market_find_node. Each section is one SellerSprite call, so a default scan costs 5 credits' worth of calls (7 with brands + sellers); a section that fails is reported under errors and refunded, the rest still return. Numbers come from SellerSprite's sample of the node (top-selling listings), not the full node — say so when you quote them. For medians / quartiles or a specific price gap, follow up with market_find_products.",
+      "inputSchema": {
+        "properties": {
+          "include_brands": {
+            "type": "boolean"
+          },
+          "include_sellers": {
+            "type": "boolean"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "new_product_months": {
+            "type": "integer"
+          },
+          "node_id_path": {
+            "type": "string"
+          },
+          "top_n": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "node_id_path"
+        ],
+        "type": "object"
+      },
+      "name": "market_scan_node"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Delegate a broad or data-heavy analysis to a read-only analyst with its own working memory — use when answering well needs many metrics or several angles at once (full account review, cross-campaign comparison, complete restock assessment). Give it a specific, self-contained request and it returns a findings report; it can read data but never change anything.",
+      "inputSchema": {
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "name": "meta_deep_analysis"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "This account's own MCP usage and balance: calls and credits used per day over the last 30 days, and credits left. Use when the seller asks how much they have used or have left.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "meta_get_usage"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Detail of one workflow run: per-step outcomes, errors, and how many write steps were skipped.",
+      "inputSchema": {
+        "properties": {
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "name": "meta_get_workflow_run"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "All stores connected to this account, with the store_scope id to pass to other tools: Amazon Ads profiles (for ads_* tools) and the Amazon store connection (for restock_* tools). Each Amazon store's label is its store name — use it when confirming with the seller which store they mean.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "meta_list_stores"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "The seller's saved workflows (with schedules and last run) plus the builtin templates available to save.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "meta_list_workflows"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Load a skill from the internal library by name (from meta_search_skills). Returns the full procedure to follow, plus the tools it references.",
+      "inputSchema": {
+        "properties": {
+          "skill_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_name"
+        ],
+        "type": "object"
+      },
+      "name": "meta_load_skill"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Run a saved workflow now. Read steps execute; mutating steps are SKIPPED with guidance (call that tool directly through its own confirm gates) — a workflow never applies anything itself. dry_run=true (default) is the rehearsal required before daily scheduling; dry_run=false is a real run that stamps last_run_at.",
+      "inputSchema": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "workflow_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id"
+        ],
+        "type": "object"
+      },
+      "name": "meta_run_workflow"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Save a reusable workflow for the seller: a fixed list of tool steps that can be re-run manually or daily. Either pass a builtin template name (weekly_ads_review / restock_morning_check / ads_data_freshness) with the store ids, or pass steps_json directly. Workflows execute READ steps only: a mutating step is never executed — runs skip it with guidance to call that tool directly through its own confirm gates. Requires the seller's approval to save.",
+      "inputSchema": {
+        "properties": {
+          "ads_store_scope": {
+            "type": "string"
+          },
+          "amazon_store_scope": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "steps_json": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string"
+          },
+          "trigger_kind": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "meta_save_workflow"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Search the internal skill library for an operating procedure matching the seller's question — how to diagnose, optimize, clean up, plan or review something (怎么优化/怎么排查/为什么涨了/该怎么做). Returns candidate skills with descriptions; load the best one with meta_load_skill. Use for operational or advisory questions, AND for multi-step analyses (weekly review, profit/fee audit, reimbursement recovery, clearance decisions, traffic triage) — those have tested SQL playbooks here. Skip it only for simple one-shot statistics, which go straight to data_query.",
+      "inputSchema": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "meta_search_skills"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Enable or disable a workflow's daily schedule. Enabling requires a completed dry run first; disabling is the per-workflow kill switch.",
+      "inputSchema": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "workflow_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "name": "meta_set_workflow_schedule"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "把卖家的功能需求、问题反馈或其它意见提交给粒粒团队。只在卖家明确要求反馈 / 提需求 / 报问题时调用，不要把普通抱怨或你自己的想法替卖家提交。调用前先把要提交的内容用一两句话复述给卖家，得到同意后再提交。kind 取 request（功能需求）/ bug（问题）/ other（其它）；body 用卖家的原意写清楚想要什么或遇到了什么。只收文字——卖家要附截图、表格等文件时，告诉他在粒粒网页右上角的「反馈」里上传。",
+      "inputSchema": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "meta_submit_feedback"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "请求评价·资格检查（实时，只读）: 传订单号列表（逗号分隔，≤20），逐单查「请求评价」动作是否可用。不可用 = 已请求过/买家退订/不在妥投后 5-30 天窗口——Amazon 自己判定。规划批量发送前先用本工具 dry-run。候选订单从 data_query 的 orders 表选（Shipped、6-29 天前）。",
+      "inputSchema": {
+        "properties": {
+          "order_ids": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_ids"
+        ],
+        "type": "object"
+      },
+      "name": "orders_check_review_eligibility"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "实时订单（Orders API 直通，不经本地数据）: 最近 N 小时（默认 24，上限 72）的订单数、状态分布（PENDING/UNSHIPPED/SHIPPED/CANCELLED）、金额合计与按 SKU 的 Top 清单。报表表 orders 滞后数小时且看不到未结算的 Pending 单——「今天卖了多少 / 有多少单没发货」用本工具；更久的历史用 data_query。金额口径: grand_total 含税含运费, item_subtotal 为商品口径(可与业务报表对比)。",
+      "inputSchema": {
+        "properties": {
+          "hours": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "orders_get_recent"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "批量请求评价（写操作，低风险）: 对可用的订单发送 Amazon 官方模板的评价+反馈请求邮件（卖家不能自定义任何内容，无政策风险）。每订单一生只能请求一次。逐单先查资格再发送，不可用的跳过并注明原因。一次最多 20 单。先用 orders_check_review_eligibility 规划，向卖家确认数量后再调本工具。",
+      "inputSchema": {
+        "properties": {
+          "order_ids": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_ids"
+        ],
+        "type": "object"
+      },
+      "name": "orders_request_reviews"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Read one promotion LIVE by promotion_id (from promotions_search): full schedule, budget, benefit, purchase requirements, fee preview, customer segments, issues, and whether an edit is pending or failed (latest revision). Returns the selection id/revision needed by promotions_get_items. Free live SP-API read. Does not list the items — use promotions_get_items.",
+      "inputSchema": {
+        "properties": {
+          "include_issues": {
+            "type": "boolean"
+          },
+          "promotion_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "promotion_id"
+        ],
+        "type": "object"
+      },
+      "name": "promotions_get"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "List the ASINs/SKUs enrolled in one promotion LIVE, with each item's benefit (fixed or discounted price), per-customer uses, budget and item-level issues (why an ASIN was rejected). Pass promotion_id; selection_id and revision_id are looked up automatically unless you pass both (do so when paging with cursor). Only works for promotions that enrol explicit items (selection type ITEMS) — CATALOG-rule promotions have no item list on Amazon's side. Free live SP-API read.",
+      "inputSchema": {
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "include_issues": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "promotion_id": {
+            "type": "string"
+          },
+          "revision_id": {
+            "type": "integer"
+          },
+          "selection_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "promotion_id"
+        ],
+        "type": "object"
+      },
+      "name": "promotions_get_items"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "List this store's promotions LIVE from Amazon — coupons, lightning/best deals, price discounts, basket-building offers — with status, dates, budget, discount, fee preview and Amazon's own issues (e.g. overlapping promotions). Filter by statuses (RUNNING,UPCOMING,EXPIRED,FAILED,…), promotion_types (COUPON,DEAL,PRICE_DISCOUNT,BASKET_BUILDING), up to 10 asins or skus, ISO-8601 date windows, updated_after. revision LATEST shows pending edits, PUBLISHED (default) shows what buyers see. Page with cursor (feed back next_cursor). Free live SP-API read. Drill into one with promotions_get.",
+      "inputSchema": {
+        "properties": {
+          "asins": {
+            "type": "string"
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "ends_after": {
+            "type": "string"
+          },
+          "ends_before": {
+            "type": "string"
+          },
+          "include_issues": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "marketplace_id": {
+            "type": "string"
+          },
+          "promotion_types": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "skus": {
+            "type": "string"
+          },
+          "starts_after": {
+            "type": "string"
+          },
+          "starts_before": {
+            "type": "string"
+          },
+          "statuses": {
+            "type": "string"
+          },
+          "updated_after": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "promotions_search"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "取消 MCF 履约单（低风险写）: Received 状态内免费撤销；已进入拣货/发货的无法取消。",
+      "inputSchema": {
+        "properties": {
+          "order_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_cancel_mcf_order"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "FBA 入库资格检查（实时，Inbound Eligibility 直通）: 「这个 ASIN 能进 FBA 吗」——建货件前先查，免得 createInboundPlan 才报错。返回 eligible 与不合格原因列表。program 默认 INBOUND（也支持 COMMINGLING 混储资格）。与 restock_preview_shipment 互补：preview 校验粒粒侧映射与箱规，本工具查 Amazon 侧商品资格。",
+      "inputSchema": {
+        "properties": {
+          "asin": {
+            "type": "string"
+          },
+          "program": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asin"
+        ],
+        "type": "object"
+      },
+      "name": "restock_check_inbound_eligibility"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Confirm the seller-chosen delivery window for ONE shipment (confirmDeliveryWindowOptions). Free. Re-validates against live options (gone, BLOCKED or past valid_until are refused). After confirming, Amazon no longer generates new window options for that shipment, but the chosen window can still be changed until the shipment closes — call again with another id. Only pass a window the seller picked.",
+      "inputSchema": {
+        "properties": {
+          "delivery_window_option_id": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "shipment_id",
+          "delivery_window_option_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_confirm_delivery_window"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "STEP 3 — confirm a packing option and submit the box details. ONE BOX MAY CONTAIN SEVERAL MSKUs: pass items[] per box in boxes_json, e.g. {box_count:1, dimensions:{length:50,width:45,height:45,unit:'CM'}, weight:{value:9.6,unit:'KG'}, items:[{msku:'A',quantity:7},{msku:'B',quantity:5}]} — dimensions, weight and quantities are PER box. The legacy per-MSKU shape {msku, units_per_box, box_count, length, width, height, weight} still works (IN/LB) but cannot express mixed boxes; never put both shapes in one entry. Every MSKU in a box must belong to the same Amazon packing group. Expiry-based box splitting is not supported. Idempotent retry: if this draft already confirmed the SAME packing_option_id, the confirm is skipped and only the box details are (re)submitted; a DIFFERENT id returns packing_option_conflict. Across all boxes the per-MSKU totals must equal the plan's quantities exactly — over- and under-packing both reject the whole call.",
+      "inputSchema": {
+        "properties": {
+          "boxes_json": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "packing_option_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "packing_option_id",
+          "boxes_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_confirm_packing"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "STEP 1 — create an FBA inbound plan (DRAFT) on Amazon from selected restock rows. Runs the same validation as restock_preview_shipment and refuses if any row is invalid, so preview first. Ship-from address comes from inbound settings. Creates a plan on Amazon but nothing is committed or charged — abandoned drafts simply expire. rows_json as in restock_preview_shipment. Optionally pass boxes_json (same shape as restock_preview_shipment) when the packing is already decided — the draft then carries the real physical box count instead of a per-SKU estimate. marketplace as in preview (the plan's destination marketplace). If Amazon is slow, returns operation_pending with the draft_id — call restock_get_shipment_draft later to settle it; never re-create (that makes a duplicate plan).",
+      "inputSchema": {
+        "properties": {
+          "boxes_json": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "rows_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rows_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_create_shipment_draft"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "AWD 上游仓配全貌（实时，只读）: 一次调用给出 AWD 库存、入库货件、补货单、出库单各 ≤25 条。没用 AWD 的店铺返回 in_use=false 并说明。AWD 是 FBA 之前的亚马逊低成本大宗仓，与 FBA 库存（inventory 表）和 FBA 入库（restock_* 货件工具）是两回事。",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "restock_get_awd_status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Slow movers with excess stock — the clearance advice list (candidates for promotion or disposal). Stores selling in several marketplaces get one plan per inventory pool: pool='EU' (Pan-EU countries combined), 'UK', 'US', 'CA'…, or a country code ('DE') for that country alone; empty = the store's main pool. The response names the pool and lists the store's pools.",
+      "inputSchema": {
+        "properties": {
+          "pool": {
+            "type": "string"
+          },
+          "top": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_get_clearance"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "India only: the Delivery Challan document for a shipment (getDeliveryChallanDocument) — download link (it expires; download right away).",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "shipment_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_delivery_challan"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Generate + list delivery window options (预计送达时间窗) for a placement-confirmed draft — required before confirming any transportation option whose preconditions include CONFIRMED_DELIVERY_WINDOW (every own-carrier option, and partnered LTL). shipment_id narrows to one shipment; default all. Each option: delivery_window_option_id, start/end, availability (AVAILABLE / CONGESTED / DISCOUNTED / BLOCKED), valid_until. Show them to the seller and let them pick — the carrier must book the FC appointment inside the chosen window. Creates regenerable option resources on Amazon (free) until a window is confirmed.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_delivery_windows"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "The 12-month demand forecast by month (deseasonalized velocity re-seasonalized), plus monthly sales history. Stores selling in several marketplaces get one plan per inventory pool: pool='EU' (Pan-EU countries combined), 'UK', 'US', 'CA'…, or a country code ('DE') for that country alone; empty = the store's main pool. The response names the pool and lists the store's pools.",
+      "inputSchema": {
+        "properties": {
+          "pool": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_get_forecast"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Restock data hygiene: unmapped SKUs, missing reference entries and other issues that silently distort the plan.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "restock_get_hygiene"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "One inbound plan from Amazon by inbound_plan_id (works for Seller Central plans too): status, source address, items with FNSKU / owners / expiration, shipments with status, packing and placement option ids. Read-only — MCP only continues plans it created (draft_id set); a Seller Central plan is finished in Seller Central.",
+      "inputSchema": {
+        "properties": {
+          "inbound_plan_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inbound_plan_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_inbound_plan"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "FBA inbound shipment prerequisites in one read: ship-from address, contact, packing specs (which styles lack carton dims) and SKU mappings (which styles lack a seller SKU), plus whether the SP-API grant covers inbound at all (inbound_access). Call this FIRST before creating a shipment — `ready: false` means restock_preview_shipment would reject rows; fix gaps with restock_set_inbound_settings.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "restock_get_inbound_settings"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Item compliance details (listItemComplianceDetails) for a draft's SKUs (draft_id) or mskus_json [..]: ASIN, FNSKU and tax details (HSN code, declared value, GST/cess rates). Tax details matter for the India marketplace. Read-only.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "mskus_json": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_get_item_compliance"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "FNSKU item labels (商品标签, one per unit) via createMarketplaceItemLabels — needed when the seller is the label owner (labelOwner SELLER in the draft items). Pass draft_id to label every unit of that plan, or msku_quantities_json [{msku, quantity}] (≤100 SKUs, 1–10000 each). label_type STANDARD_FORMAT (sheet; page_type default Letter_30 in US/CA/MX, A4_24 elsewhere; also A4_21/A4_27/A4_40_52x29/A4_44_48x25…) or THERMAL_PRINTING with width_mm/height_mm 25–100. Returns download links (they expire — download right away). Creates nothing on the plan.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "height_mm": {
+            "type": "number"
+          },
+          "label_type": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "msku_quantities_json": {
+            "type": "string"
+          },
+          "page_type": {
+            "type": "string"
+          },
+          "width_mm": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_get_item_labels"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "查 MCF 履约单（实时，只读）: 按建单时的 order_id 查状态、货件与包裹追踪号。",
+      "inputSchema": {
+        "properties": {
+          "order_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_mcf_order"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "STEP 2 — generate + list Amazon's packing options for a draft. Creates option resources on Amazon's side (free, regenerable) — pick one and call restock_confirm_packing.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_packing_options"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "STEP 4 — generate + list Amazon's placement (分仓) options for a draft: how the shipment splits across fulfillment centers and what each split costs in placement fees. Creates option resources on Amazon (free, regenerable). Pick one and run restock_prepare_placement.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_placement_options"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "The FBA restock plan: per-SKU quantities to reorder now (velocity, seasonality and lead time applied), with plan KPIs. Stores selling in several marketplaces get one plan per inventory pool: pool='EU' (Pan-EU countries combined), 'UK', 'US', 'CA'…, or a country code ('DE') for that country alone; empty = the store's main pool. The response names the pool and lists the store's pools.",
+      "inputSchema": {
+        "properties": {
+          "pool": {
+            "type": "string"
+          },
+          "top": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_get_plan"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Read the box / item / pallet lists Amazon keeps for a plan (listInboundPlanBoxes, listShipmentBoxes, listPackingGroupBoxes, listInboundPlanItems, listShipmentItems, listInboundPlanPallets, listShipmentPallets, content-update previews). what: boxes (box ids, package ids, dims, weight, per-box items) / items (MSKU, ASIN, FNSKU, quantity, label owner, prep instructions, expiration, lot) / pallets / content_update_previews (needs shipment_id; preview_id for one). Scope: draft_id or inbound_plan_id (Seller Central plans too); shipment_id for one shipment; packing_group_id for one packing group's boxes. Up to 500 rows plus totals. Read-only.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "inbound_plan_id": {
+            "type": "string"
+          },
+          "packing_group_id": {
+            "type": "string"
+          },
+          "preview_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          },
+          "what": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "what"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_plan_contents"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Row counts of the seller-maintained reference tables (SKU mapping, seasonal index, box specs …) — the quickest completeness check for restock setup.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "restock_get_reference_summary"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Self-ship appointment slots for one shipment — ONLY in the MX, BR, EG, SA, AE and IN marketplaces (elsewhere the carrier books the FC appointment inside the confirmed delivery window). Generates + lists slots (slot_id, start, end); optional desired_start_date / desired_end_date (YYYY-MM-DD) narrow the search. Then restock_manage_self_ship_appointment.",
+      "inputSchema": {
+        "properties": {
+          "desired_end_date": {
+            "type": "string"
+          },
+          "desired_start_date": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "shipment_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_self_ship_slots"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "One FBA inbound draft in full: stage, items, totals, the options Amazon returned for the current step (packing/placement), selected option ids, last error if a step failed, and next_action saying exactly which tool to call next.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_shipment_draft"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "STEP 10 — box label (箱唛) download links, one per shipment (optional shipment_id narrows to one). NOTE: Amazon's links expire in ~15 SECONDS — tell the seller to download immediately, and simply re-call this tool for a fresh link anytime. page_type: PackageLabel_Letter_4 (default) / PackageLabel_Letter_2 / PackageLabel_Letter_6 and other v0 enums; label_type: BARCODE_2D (default) / UNIQUE / PALLET (托盘发货, requires number_of_pallets). Carton labels cover every box submitted for the shipment. Paging: page_size (1–1000) + page_start_index fetch labels page by page — required by Amazon for own-carrier truck (LTL/FTL) shipments, which this tool pages automatically; it also retries with paging when Amazon asks for PageSize. Each page returns its own link (download_urls). Labels can always be re-fetched — never rebuild the shipment to get labels.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "label_type": {
+            "type": "string"
+          },
+          "number_of_pallets": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "page_start_index": {
+            "type": "integer"
+          },
+          "page_type": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_shipment_labels"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Shipment details via getShipment: for each shipment of the draft — destination warehouse code (warehouse_id, e.g. ONT8) and full destination address, FBA shipment id (shipment_confirmation_id), status (UNCONFIRMED → WORKING → READY_TO_SHIP → SHIPPED …), ready-to-ship and delivery windows, selected carrier option, and reported tracking with Amazon's validation status. Before placement is confirmed it reads the shipments of every generated placement option, so the seller can compare destinations. shipment_id narrows to one. Read-only.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_shipments"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "SKUs at risk of stocking out soon — the stockout alert list from the restock engine. Stores selling in several marketplaces get one plan per inventory pool: pool='EU' (Pan-EU countries combined), 'UK', 'US', 'CA'…, or a country code ('DE') for that country alone; empty = the store's main pool. The response names the pool and lists the store's pools.",
+      "inputSchema": {
+        "properties": {
+          "pool": {
+            "type": "string"
+          },
+          "top": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_get_stockout_alerts"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "STEP 7 — generate + list carrier (承运) options per shipment for a placement-confirmed draft. ready_to_ship_date is YYYY-MM-DD; the contact comes from inbound settings (missing contact → fix via restock_set_inbound_settings). Options group by shipment: AMAZON_PARTNERED_CARRIER ones carry a cost quote (charged on confirm), USE_YOUR_OWN_CARRIER ones are free registration. Creates regenerable option resources on Amazon. Pick one option PER SHIPMENT, then restock_prepare_transportation. Palletized / truck (LTL/FTL) shipments: pass freight_json so Amazon can quote freight — either one object for every shipment or an array of objects each with shipment_id: {pallets: [{quantity, length, width, height, unit: IN|CM, weight, weight_unit: LB|KG, stackability: STACKABLE|NON_STACKABLE}], freight_class: NONE|FC_50…FC_500, declared_value: {amount, currency}} (dims/weight PER pallet). Omit for small parcel.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "freight_json": {
+            "type": "string"
+          },
+          "ready_to_ship_date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "ready_to_ship_date"
+        ],
+        "type": "object"
+      },
+      "name": "restock_get_transportation_options"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Inbound plans that exist on Amazon for this store, newest first — including ones created in Seller Central (Send to Amazon) or by other tools. status: ACTIVE / VOIDED / SHIPPED (default all). draft_id is set when the plan is a 粒粒 draft that MCP can continue. Read-only.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_list_inbound_plans"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "MCF 履约单列表（实时，只读）: 最近 days 天内的多渠道履约单（含非粒粒建的），看单号/状态/速度。详情与追踪用 restock_get_mcf_order。",
+      "inputSchema": {
+        "properties": {
+          "days": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_list_mcf_orders"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Recent FBA inbound shipment drafts: draft_id, name, stage, unit/box totals, created time, and what to do next for the latest one. The draft walks stages created → packing → placement →（二期）transportation → labels.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_list_shipment_drafts"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Schedule, reschedule or cancel a self-ship appointment (MX, BR, EG, SA, AE, IN only). action=schedule with a slot_id the seller picked (rescheduling an existing appointment needs a reason); action=cancel needs a reason. reason: APPOINTMENT_REQUESTED_BY_MISTAKE / VEHICLE_DELAY / SLOT_NOT_SUITABLE / OUTSIDE_CARRIER_BUSINESS_HOURS / UNFAVOURABLE_EXTERNAL_CONDITIONS / PROCUREMENT_DELAY / SHIPPING_PLAN_CHANGED / INCREASED_QUANTITY / OTHER.",
+      "inputSchema": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          },
+          "slot_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "shipment_id",
+          "action"
+        ],
+        "type": "object"
+      },
+      "name": "restock_manage_self_ship_appointment"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Prepare cancelling an FBA inbound plan (cancelInboundPlan): shows what the plan has committed (placement / carrier confirmed), each partnered carrier's free-cancel deadline (voidable_until — 24h small parcel / 1h LTL per Amazon; after it, charges may apply) and a warning, then creates a one-time write plan (30 min). Use for a plan created by mistake or abandoned mid-way. Show the preview to the seller and get explicit approval before restock_execute_cancel_plan. Free to prepare.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_prepare_cancel_plan"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Change a shipment's boxes/items AFTER the carrier was confirmed (generateShipmentContentUpdatePreviews). boxes_json is the FULL new contents of that shipment, same shape as restock_preview_shipment's boxes_json (per physical box; mixed boxes allowed; only SKUs of this plan). Returns the requested contents, the new carrier quote next to the current one, and a one-time write plan (30 min) for restock_execute_content_update. Show both quotes to the seller and get explicit approval first. Before carrier confirmation use restock_confirm_packing instead.",
+      "inputSchema": {
+        "properties": {
+          "boxes_json": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "shipment_id",
+          "boxes_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_prepare_content_update"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "STEP 5 — prepare the placement confirmation: re-reads the LIVE placement options from Amazon (fees can change), verifies the chosen option still exists and isn't expired, flags fee_changed against what the draft cached, and creates a one-time write plan (30 min). Returns the fee preview and the confirmation phrase restock_execute_placement requires. Show the seller the fees and get explicit approval before executing — placement confirmation is charged by Amazon and irreversible. Free to prepare.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "placement_option_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "placement_option_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_prepare_placement"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "STEP 8 — prepare the carrier confirmation: re-reads LIVE transportation options, verifies every confirmed shipment has exactly one chosen option that still exists with an unexpired quote and no unmet preconditions, and creates a one-time write plan (30 min). selections_json: [{shipment_id, transportation_option_id}] covering every shipment — or, when the plan has a single shipment, just the option id string. Returns per-shipment carrier + cost preview (fee_changed flagged against the cached quote). Show the seller the preview and get explicit approval before executing. Free to prepare.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "selections_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "selections_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_prepare_transportation"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "MCF 履约预览（实时，免费，只读）: 用 FBA 库存给站外订单（如 Shopify）发货前，先看三档速度的运费/时效/可行性。address_json={name,addressLine1,city,stateOrRegion,postalCode,countryCode}；items_json=[{sku,quantity}]。不产生任何费用或订单。",
+      "inputSchema": {
+        "properties": {
+          "address_json": {
+            "type": "string"
+          },
+          "items_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address_json",
+          "items_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_preview_mcf"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Dry-run a shipment before anything is created on Amazon: validates the selected restock rows into MSKUs and, when boxes_json is given, checks the packing plan and returns the REAL physical box count. A box may hold SEVERAL MSKUs — pass items[] per box for mixed boxes. boxes_json is a JSON array; each entry is {box_count, dimensions:{length,width,height,unit:IN|CM}, weight:{value,unit:LB|KG}, items:[{msku,quantity}], client_box_ids?:[...]} where dimensions, weight and item quantities are PER physical box. Without boxes_json the box count is only a per-SKU estimate (box_count_source=ESTIMATED_SINGLE_SKU) and must not be used for quoting. Writes nothing to Amazon; it does one read-only lookup of each MSKU's prep/label owner so the preview shows the SAME prepOwner/labelOwner the create will submit (owners_resolved=false means Amazon could not be reached and the shown values are defaults). Rows are {style, color, size, quantity}; for dated goods (food, cosmetics, supplements…) add expiration (YYYY-MM-DD) and optionally manufacturing_lot_code per row — one expiration per SKU per plan (Amazon rule; different dates need separate plans). marketplace: optional site (US/CA/MX/UK/DE/JP… or a marketplace id); default is the store's own marketplace.",
+      "inputSchema": {
+        "properties": {
+          "boxes_json": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "rows_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rows_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_preview_shipment"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Query the full restock plan rows (every SKU, all velocity windows, in-transit, suggested quantity, and the per-row calculation explanation) with a text filter and pagination. only_restock=True keeps rows with a suggestion > 0; include_explain=False trims the calculation steps for lighter pages. Feed next_cursor back to page. Stores selling in several marketplaces get one plan per inventory pool: pool='EU' (Pan-EU countries combined), 'UK', 'US', 'CA'…, or a country code ('DE') for that country alone; empty = the store's main pool. The response names the pool and lists the store's pools.",
+      "inputSchema": {
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "include_explain": {
+            "type": "boolean"
+          },
+          "only_restock": {
+            "type": "boolean"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "pool": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "restock_query_plan"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Rename an inbound plan (default) or one of its shipments (shipment_id) on Amazon — e.g. to match the seller's PO or batch number. 1–100 characters. Free.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "restock_rename_shipment"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Fix FBA inbound prerequisites without the web 后台. patch_json is a JSON object with any of: source_address (required: name/addressLine1/city/postalCode/countryCode/phoneNumber, plus stateOrProvinceCode for US/CA/AU/MX/BR/IN/CN/JP; optional addressLine2/companyName/email/districtOrCounty — incomplete address is rejected listing what's missing), contact {name, phoneNumber, email}, packing_specs [{style_code, box_qty, carton_length_in, carton_width_in, carton_height_in, carton_weight_lb}] and sku_mappings [{asin, seller_sku, style_code, color, size}]. Spec/mapping rows UPSERT by style_code/asin (rows not mentioned stay; max 200 per call). Writes only 粒粒's own database, never Amazon.",
+      "inputSchema": {
+        "properties": {
+          "patch_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "patch_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_set_inbound_settings"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Set India (IN) inbound compliance per SKU (updateItemComplianceDetails — Amazon only uses it for IN). details_json: [{msku, hsn_code?, declared_value?: {amount, currency}, tax_rates?: [{tax_type: CGST|SGST|IGST|TOTAL_TAX, gst_rate?, cess_rate?}]}] (≤100). Values must come from the seller's tax records — never guess.",
+      "inputSchema": {
+        "properties": {
+          "details_json": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "details_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_set_item_compliance"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Set each MSKU's FBA prep classification on Amazon (setPrepDetails). Needed when preview returns prep_classification_missing or creating a plan fails with FBA_INB_0182: prep set only in Seller Central is invisible to the API (category UNKNOWN). details_json: JSON array of {msku, prep_category, prep_types}. prep_category: NONE (no prep — prep_types defaults to [ITEM_NO_PREP]) / ADULT / BABY / FRAGILE / GRANULAR / HANGER / LIQUID / PERFORATED / SET / SHARP / SMALL / TEXTILE; other categories need at least one prep_type (ITEM_POLYBAGGING, ITEM_BUBBLEWRAP, ITEM_BOXING, ITEM_TAPING, ITEM_SETCREAT, ...). The classification MUST come from the seller — never guess; list the SKUs with the values you will send and get the seller's confirmation first. Writes the seller's catalog prep setting on Amazon for this marketplace (free, can be changed by calling again; it decides who preps/labels). Max 100 SKUs; invalid rows reject the whole batch before anything is sent. Returns what Amazon now stores per SKU plus the prep/label owners a plan will use.",
+      "inputSchema": {
+        "properties": {
+          "details_json": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "details_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_set_prep_details"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Report own-carrier tracking for one shipment after the carrier picks it up (updateShipmentTrackingDetails) — required for USE_YOUR_OWN_CARRIER shipments, so Amazon can match the arrival. tracking_json: small parcel → JSON array of tracking numbers in box order (one per box, count must equal the shipment's boxes) or [{box_id, tracking_id}]; freight (LTL/FTL) → {freight_bill_number (PRO, string or array), bill_of_lading_number?}. Partnered-carrier shipments are tracked by Amazon automatically (refused). Can be called again to correct numbers.",
+      "inputSchema": {
+        "properties": {
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          },
+          "tracking_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "shipment_id",
+          "tracking_json"
+        ],
+        "type": "object"
+      },
+      "name": "restock_set_shipment_tracking"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Change where a shipment ships FROM (updateShipmentSourceAddress) — e.g. goods moved to another warehouse or forwarder. Only BEFORE the carrier is confirmed (Amazon rule). address_json: {name, addressLine1, addressLine2?, city, stateOrProvinceCode (US/CA/AU/MX/BR/IN/CN/JP), postalCode, countryCode, phoneNumber, companyName?, email?, districtOrCounty?}; omit to use the current inbound settings address. shipment_id narrows to one shipment (default all). Amazon invalidates existing carrier options — regenerate them with restock_get_transportation_options (next_action says so) and re-show quotes, which may change.",
+      "inputSchema": {
+        "properties": {
+          "address_json": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "shipment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "type": "object"
+      },
+      "name": "restock_update_source_address"
+    }
+  ]
+}

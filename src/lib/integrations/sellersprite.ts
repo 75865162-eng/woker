@@ -94,6 +94,121 @@ export function validateSellerSpriteMcpSettings(settings: SellerSpriteMcpSetting
 }
 
 type McpEnvelope = { result?: unknown; error?: { message?: string; data?: unknown } };
+export type SellerSpriteRemoteTool = { name: string; description?: string; inputSchema: Record<string, unknown>; annotations?: { readOnlyHint?: boolean } };
+
+/** Read the provider's current runtime registry; aliases/catalog definitions are not returned here. */
+export async function listSellerSpriteRemoteTools(settings: SellerSpriteMcpSettings, signal?: AbortSignal): Promise<SellerSpriteRemoteTool[]> {
+  const error = validateSellerSpriteMcpSettings(settings);
+  if (error || !settings.enabled || !settings.apiKey) throw new Error("SELLERSPRITE_MCP_NOT_CONFIGURED");
+  const url = new URL(settings.serverUrl);
+  if (url.username || url.password || url.search || url.hash || url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) throw new Error("SELLERSPRITE_MCP_ENDPOINT_UNSAFE");
+  const headers = { Accept: "application/json, text/event-stream", "Content-Type": "application/json", Authorization: `Bearer ${settings.apiKey}`, "X-API-Key": settings.apiKey };
+  let session: string | null = null;
+  let protocol: string | undefined;
+  const request = async (id: string | null, method: string, params?: Record<string, unknown>) => {
+    const response = await fetch(url, { method: "POST", redirect: "error", headers: { ...headers, ...(session ? { "Mcp-Session-Id": session } : {}), ...(protocol ? { "Mcp-Protocol-Version": protocol } : {}) }, cache: "no-store",
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(settings.timeoutSeconds * 1000)]) : AbortSignal.timeout(settings.timeoutSeconds * 1000),
+      body: JSON.stringify({ jsonrpc: "2.0", ...(id ? { id } : {}), method, ...(params ? { params } : {}) }) });
+    if (method === "initialize") session = response.headers.get("mcp-session-id");
+    const text = await boundedSellerSpriteBody(response);
+    if (text.includes(settings.apiKey)) throw new Error("SELLERSPRITE_MCP_SECRET_ECHO_REJECTED");
+    if (!response.ok) throw new Error("SELLERSPRITE_MCP_HTTP_ERROR");
+    if (!id) return null;
+    const data = parseSellerSpriteRpc(text, id);
+    if (!isRecord(data) || data.id !== id || !isRecord(data.result) || data.error) throw new Error("SELLERSPRITE_MCP_PROTOCOL_ERROR");
+    if (method === "initialize" && typeof data.result.protocolVersion === "string") protocol = data.result.protocolVersion;
+    return data.result;
+  };
+  const initialized = await request("initialize", "initialize", { protocolVersion: /^\d{4}-\d{2}-\d{2}$/.test(settings.protocolVersion) ? settings.protocolVersion : "2024-11-05", capabilities: {}, clientInfo: { name: "erp-selection-research", version: "1" } });
+  if (!isRecord(initialized) || typeof initialized.protocolVersion !== "string") throw new Error("SELLERSPRITE_MCP_PROTOCOL_ERROR");
+  await request(null, "notifications/initialized");
+  return readSellerSpriteRegistry((params) => request("tools-list", "tools/list", params));
+}
+
+async function boundedSellerSpriteBody(response: Response) {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > 8_000_000) { await reader.cancel(); throw new Error("SELLERSPRITE_MCP_RESPONSE_TOO_LARGE"); }
+      chunks.push(part.value);
+    }
+  } finally { reader.releaseLock(); }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function parseSellerSpriteRpc(text: string, id: string): Record<string, unknown> {
+  const candidates = [text, ...text.split(/\r?\n\r?\n/).map((event) => event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n"))];
+  for (const candidate of candidates) {
+    try {
+      const value: unknown = JSON.parse(candidate);
+      if (isRecord(value) && value.jsonrpc === "2.0" && value.id === id) return value;
+    } catch { /* Ignore unrelated SSE events and keepalives. */ }
+  }
+  throw new Error("SELLERSPRITE_MCP_PROTOCOL_ERROR");
+}
+
+async function readSellerSpriteRegistry(request: (params: Record<string, unknown>) => Promise<unknown>): Promise<SellerSpriteRemoteTool[]> {
+  const tools: SellerSpriteRemoteTool[] = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const result = await request(cursor ? { cursor } : {});
+    if (!isRecord(result) || !Array.isArray(result.tools)) throw new Error("SELLERSPRITE_MCP_REGISTRY_INVALID");
+    for (const tool of result.tools) {
+      if (!isRecord(tool) || typeof tool.name !== "string" || !isRecord(tool.inputSchema) || tools.some((entry) => entry.name === tool.name)) throw new Error("SELLERSPRITE_MCP_REGISTRY_INVALID");
+      tools.push(tool as SellerSpriteRemoteTool);
+    }
+    cursor = typeof result.nextCursor === "string" && result.nextCursor ? result.nextCursor : undefined;
+    if (cursor) {
+      if (cursors.has(cursor) || cursors.size >= 100) throw new Error("SELLERSPRITE_MCP_REGISTRY_CURSOR_LOOP");
+      cursors.add(cursor);
+    }
+  } while (cursor);
+  return tools;
+}
+
+/** Dispatch an exact name selected from the runtime registry, preserving the raw result envelope. */
+export async function callSellerSpriteRemoteTool(settings: SellerSpriteMcpSettings, name: string, args: Record<string, unknown>, signal: AbortSignal, expectedSchema?: Record<string, unknown>): Promise<unknown> {
+  if (validateSellerSpriteMcpSettings(settings) || !settings.enabled || !settings.apiKey) throw new Error("SELLERSPRITE_MCP_NOT_CONFIGURED");
+  const url = new URL(settings.serverUrl);
+  if (url.username || url.password || url.search || url.hash || url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) throw new Error("SELLERSPRITE_MCP_ENDPOINT_UNSAFE");
+  const headers = { Accept: "application/json, text/event-stream", "Content-Type": "application/json", Authorization: `Bearer ${settings.apiKey}`, "X-API-Key": settings.apiKey };
+  let session: string | null = null;
+  let protocol: string | undefined;
+  let id = 0;
+  const request = async (method: string, params: Record<string, unknown>, requestId?: string) => {
+    const response = await fetch(url, { method: "POST", redirect: "error", headers: { ...headers, ...(session ? { "Mcp-Session-Id": session } : {}), ...(protocol ? { "Mcp-Protocol-Version": protocol } : {}) }, cache: "no-store",
+      signal: AbortSignal.any([signal, AbortSignal.timeout(settings.timeoutSeconds * 1000)]), body: JSON.stringify({ jsonrpc: "2.0", ...(requestId ? { id: requestId } : {}), method, params }) });
+    if (method === "initialize") session = response.headers.get("mcp-session-id");
+    const text = await boundedSellerSpriteBody(response);
+    if (text.includes(settings.apiKey)) throw new Error("SELLERSPRITE_MCP_SECRET_ECHO_REJECTED");
+    if (!response.ok) throw new Error("SELLERSPRITE_MCP_HTTP_ERROR");
+    if (!requestId) return null;
+    const envelope = parseSellerSpriteRpc(text, requestId);
+    if (!isRecord(envelope) || envelope.id !== requestId) throw new Error("SELLERSPRITE_MCP_PROTOCOL_ERROR");
+    if (envelope.error) {
+      if (method === "tools/call") return envelope;
+      throw new Error("SELLERSPRITE_MCP_PROTOCOL_ERROR");
+    }
+    if (method === "initialize" && isRecord(envelope.result) && typeof envelope.result.protocolVersion === "string") protocol = envelope.result.protocolVersion;
+    return method === "tools/call" ? envelope : envelope.result;
+  };
+  const initialized = await request("initialize", { protocolVersion: /^\d{4}-\d{2}-\d{2}$/.test(settings.protocolVersion) ? settings.protocolVersion : "2024-11-05", capabilities: {}, clientInfo: { name: "erp-selection-research", version: "1" } }, String(++id));
+  if (!isRecord(initialized) || typeof initialized.protocolVersion !== "string") throw new Error("SELLERSPRITE_MCP_PROTOCOL_ERROR");
+  await request("notifications/initialized", {});
+  const registry = await readSellerSpriteRegistry((params) => request("tools/list", params, String(++id)));
+  const registered = registry.find((item) => item.name === name);
+  if (!registered) throw new Error("SELLERSPRITE_MCP_TOOL_NOT_FOUND");
+  if (registered.annotations?.readOnlyHint === false) throw new Error("SELLERSPRITE_MCP_TOOL_NOT_READ_ONLY");
+  if (expectedSchema && JSON.stringify(registered.inputSchema) !== JSON.stringify(expectedSchema)) throw new Error("SELLERSPRITE_MCP_SCHEMA_CHANGED");
+  return request("tools/call", { name, arguments: args }, String(++id));
+}
 
 const toolAliases: Record<string, string[]> = {
   "sellersprite.market.search": ["market_find_products", "market.search", "product_research"],

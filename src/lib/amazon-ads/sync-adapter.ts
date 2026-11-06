@@ -110,6 +110,19 @@ export function createSponsoredProductsKeywordReader(fetcher: typeof fetch = fet
   });
 }
 
+/** Official SP v3 ProductAd: seller SKU and vendor ASIN are optional, not interchangeable. */
+export function createSponsoredProductsProductAdReader(fetcher: typeof fetch = fetch) {
+  return createSponsoredProductsChildReader(fetcher, {
+    resource: "PRODUCT_AD", path: "/sp/productAds/list", mediaType: "application/vnd.spProductAd.v3+json", collectionKey: "productAds", idKey: "adId",
+    errorCode: "ADS_PRODUCT_AD_RESPONSE_INVALID", entityType: "SP:product-ad",
+    parse(row) {
+      if (!hasAdsId(row.adGroupId) || !hasAdsId(row.campaignId) || !hasAdsState(row.state)
+        || ["asin", "sku", "customText", "globalAdId"].some(key => row[key] !== undefined && typeof row[key] !== "string")) throw new AdsSyncError("ADS_PRODUCT_AD_RESPONSE_INVALID");
+      return { parentExternalId: row.adGroupId, state: row.state };
+    },
+  });
+}
+
 export function createSponsoredProductsTargetReader(fetcher: typeof fetch = fetch) {
   return createSponsoredProductsChildReader(fetcher, {
     resource: "TARGET", path: "/sp/targets/list", mediaType: spTargetingClauseMediaType, collectionKey: "targetingClauses", idKey: "targetId",
@@ -175,7 +188,7 @@ export function createSponsoredProductsCampaignNegativeTargetReader(fetcher: typ
 
 function createSponsoredProductsChildReader(
   fetcher: typeof fetch,
-  contract: { resource: "KEYWORD" | "TARGET" | "NEGATIVE_KEYWORD" | "NEGATIVE_TARGET" | "CAMPAIGN_NEGATIVE_KEYWORD" | "CAMPAIGN_NEGATIVE_TARGET"; path: string; mediaType: string; collectionKey: string; idKey: "keywordId" | "targetId"; errorCode: string; entityType: string; parse: (row: Record<string, unknown>) => { parentExternalId: string; state: string } },
+  contract: { resource: "KEYWORD" | "TARGET" | "NEGATIVE_KEYWORD" | "NEGATIVE_TARGET" | "CAMPAIGN_NEGATIVE_KEYWORD" | "CAMPAIGN_NEGATIVE_TARGET" | "PRODUCT_AD"; path: string; mediaType: string; collectionKey: string; idKey: "keywordId" | "targetId" | "adId"; errorCode: string; entityType: string; parse: (row: Record<string, unknown>) => { parentExternalId: string; state: string } },
 ) {
   return {
     async readPage(input: SponsoredProductsCampaignTransportInput): Promise<AdsSyncPage> {
@@ -195,7 +208,7 @@ function createSponsoredProductsChildReader(
 async function postSponsoredProductsList(
   fetcher: typeof fetch,
   input: SponsoredProductsCampaignTransportInput,
-  resource: "CAMPAIGN" | "AD_GROUP" | "KEYWORD" | "TARGET" | "NEGATIVE_KEYWORD" | "NEGATIVE_TARGET" | "CAMPAIGN_NEGATIVE_KEYWORD" | "CAMPAIGN_NEGATIVE_TARGET",
+  resource: "CAMPAIGN" | "AD_GROUP" | "KEYWORD" | "TARGET" | "NEGATIVE_KEYWORD" | "NEGATIVE_TARGET" | "CAMPAIGN_NEGATIVE_KEYWORD" | "CAMPAIGN_NEGATIVE_TARGET" | "PRODUCT_AD",
   path: string,
   mediaType: string,
   requestBody: Record<string, unknown>,
@@ -292,7 +305,7 @@ export const pendingAdsReadAdapter: AdsReadAdapter = {
 };
 /** One HTTP page per dispatch, including each of the four distinct negative collections. */
 export function createSponsoredProductsReadAdapter(fetcher: typeof fetch = fetch): AdsReadAdapter {
-  const readers = { campaigns: createSponsoredProductsCampaignReader(fetcher), "ad-groups": createSponsoredProductsAdGroupReader(fetcher), keywords: createSponsoredProductsKeywordReader(fetcher), targets: createSponsoredProductsTargetReader(fetcher) };
+  const readers = { campaigns: createSponsoredProductsCampaignReader(fetcher), "ad-groups": createSponsoredProductsAdGroupReader(fetcher), keywords: createSponsoredProductsKeywordReader(fetcher), targets: createSponsoredProductsTargetReader(fetcher), "product-ads": createSponsoredProductsProductAdReader(fetcher) };
   const negatives = [createSponsoredProductsNegativeKeywordReader(fetcher), createSponsoredProductsNegativeTargetReader(fetcher), createSponsoredProductsCampaignNegativeKeywordReader(fetcher), createSponsoredProductsCampaignNegativeTargetReader(fetcher)];
   return {
     assertImplemented() { /* SP structure only; reports deliberately unsupported. */ },
@@ -319,8 +332,8 @@ export function createSponsoredProductsReadAdapter(fetcher: typeof fetch = fetch
   };
 }
 export const amazonAdsReadAdapter: AdsReadAdapter = createSponsoredProductsReadAdapter();
-export const verifiedAdsReadStages: ReadonlySet<AdsSyncStage> = new Set(["campaigns", "ad-groups", "keywords", "targets", "negatives"]);
-export function adsReadAdapterReady(requiredStages: readonly AdsSyncStage[] = ["campaigns", "ad-groups", "keywords", "targets", "negatives"]) {
+export const verifiedAdsReadStages: ReadonlySet<AdsSyncStage> = new Set(["campaigns", "ad-groups", "keywords", "targets", "negatives", "product-ads"]);
+export function adsReadAdapterReady(requiredStages: readonly AdsSyncStage[] = ["campaigns", "ad-groups", "keywords", "targets", "negatives", "product-ads"]) {
   return requiredStages.length > 0 && requiredStages.every(stage => verifiedAdsReadStages.has(stage));
 }
 export function isAdsRegion(value: string): value is AdsRegion { return value === "NA" || value === "EU" || value === "FE"; }

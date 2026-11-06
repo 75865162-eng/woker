@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
-import { parseReturnPolicy, parseReturnReport, nextReturnWindow, assertReturnRoles, returnPollDelay, returnWindowFromFrozen, returnReportTypes } from "@/lib/amazon-sync/returns";
+import { reportTimestampMatches, parseReturnPolicy, parseReturnReport, nextReturnWindow, assertReturnRoles, returnPollDelay, returnWindowFromFrozen, returnReportTypes } from "@/lib/amazon-sync/returns";
+
+test("report time matches exact time or whole-second truncation only", () => {
+  assert.equal(reportTimestampMatches("2026-11-01T00:00:00+00:00", "2026-11-01T00:00:00.189Z"), true);
+  assert.equal(reportTimestampMatches("2026-11-01T00:00:01Z", "2026-11-01T00:00:00.189Z"), false);
+  assert.equal(reportTimestampMatches("bad", "bad"), false);
+  assert.equal(reportTimestampMatches("2026-11-01T00:00:00.188Z", "2026-11-01T00:00:00.189Z"), false);
+});
 import { AmazonSpApiClient } from "@/lib/amazon/sp-api-client";
 import { normalizeCommand } from "@/lib/amazon-sync/approval-policy";
 const file = (name: string) => readFileSync(new URL(`./fixtures/amazon/returns/${name}`, import.meta.url), "utf8");

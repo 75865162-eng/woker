@@ -47,6 +47,8 @@ Ad Group list 核验日期：2026-11-06。使用同一 OAS 3.0.1 JSON 核对 `/s
 
 Sponsored Products v3 Keyword/Target/Negative list 核验日期：2026-11-06。使用官方 `SponsoredProducts_prod_3p.json` 检查 `/sp/keywords/list`、`/sp/targets/list`、`/sp/negativeKeywords/list`、`/sp/negativeTargets/list`、`/sp/campaignNegativeKeywords/list`、`/sp/campaignNegativeTargets/list`。各端点均使用 `nextToken` 分页并支持 `includeExtendedDataFields`；request `maxResults` 没有声明统一边界，因此 readers 使用默认页大小，通用本地页上限保持 1000。广告组级对象要求 Campaign/Ad Group 归属，Campaign 级否定对象只以 Campaign 为父级；Keyword 含 matchType/text，Target 含 expression/resolvedExpression，keyword 可选 bid。否定词要求 `NEGATIVE_*` matchType。reader 保留原始 payload 与正确父级 ID。此实现仅覆盖 SP 只读 transport fixture，不代表其他广告产品或 live adapter 已同步。
 
+Product Ad 结构已在后续批次接入常规结构 worker、查询、既有已同步数据页和 MCP，见 [Product Ad 核心交付](./amazon-ads-product-ad-delivery-2026-11-06.md)。官方 OAS SHA256 `9ce8a6b6bc8b33d34d04b7ee416fd78be787699e932075d101941176a215df2e`：`POST /sp/productAds/list` 使用 `application/vnd.spProductAd.v3+json`；`SponsoredProductsProductAd` 必需 `adId/adGroupId/campaignId/state`，`sku`（seller）与 `asin`（vendor）均可选，不要求两者同时存在。响应集合 `productAds` 上限 1000，`nextToken` 分页；请求 `maxResults` 无声明上下限，继续使用 API 默认值。未执行真实账号请求，不据此宣称实际账户可用或广告商品表现日报已实现。
+
 Reporting v1 通用合同核验日期：2026-11-06。使用官方 OAS JSON 核对 `POST /adsApi/v1/create/reports`、`POST /adsApi/v1/retrieve/reports` 和 schema。创建请求包含 1 个 report、1 个日期周期和至少 1 个 query field；retrieve 请求含单个 report ID。报告状态枚举为 `PENDING`、`PROCESSING`、`COMPLETED`、`FAILED`；完成结果可能包含 0 至 100 个分片、每片 URL/大小/到期时间，以及解释字段缺失/脱敏/日期覆盖的 warnings。响应外层为 `success[]` / `error[]` 多状态结构，即使 HTTP 请求成功也必须检查业务结果。OpenAPI 通用合同没有证明任何具体 Sponsored Products 日报的可用字段、维度组合、日期上限、迟到修订期限、下载地址主机白名单或压缩/分片校验规则；这些项目按报告类型逐项核实前，不实现通用 report reader，不把任何日报 stage 标成 ready。
 
 ## 已实现

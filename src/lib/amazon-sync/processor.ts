@@ -3,7 +3,7 @@ import { deduplicateFacts } from "./observation-parsers";
 import { advanceObservation, parseObservationState, observationOperation, type ObservationState } from "./observation-machine";
 import { observationReportSpec } from "./observation-policy";
 import { isObservationResource, parseObservationPolicy, assertObservationRoles, assertObservationClosed } from "./observation-policy";
-import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, parseReturnReport, returnPollDelay } from "./returns";
+import { reportTimestampMatches, parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, parseReturnReport, returnPollDelay } from "./returns";
 import { assertDomainReportRoles, domainReportRunWindow, domainReportTypes, parseDomainReport, parseGetReportsPage, type DomainReportResource } from "./domain-reports";
 import { assertExecutionWindow } from "./execution-window";
 import { automaticPlanKey, automaticMarketplaces, isAutomaticResource } from "./automatic-schedule";
@@ -44,7 +44,7 @@ export function inventoryNextToken(value: unknown) {
   return record.pagination.nextToken?.trim() || undefined;
 }
 export function sourceTimestamp(value: unknown): Date | null {
-  if (value === undefined || value === null) return null;
+  if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T/.test(value) || !Number.isFinite(Date.parse(value))) throw new Error("数据源更新时间无效。");
   return new Date(value);
 }
@@ -430,7 +430,7 @@ async function publishAllListings(run: AmazonSyncRun, text: string, reportId: st
     await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: 1, resource: "catalog", requestMetadata: { reportType: allListingsReportType, reportId, documentId, marketplaceId }, rawCiphertext: seal({ rawText: text }, scope, `${run.id}:1`, "amazon-catalog-report-raw.v1"), bodySha256, capturedAt } });
     await tx.amazonSyncPage.create({ data: { ...scope, taskId: run.id, tokenHash: digest([reportId, documentId]), page: 1, rowCount: rows.length } });
     for (let i = 0; i < rows.length; i += 500) {
-      await tx.amazonCatalogSnapshot.createMany({ data: rows.slice(i, i + 500).map(row => ({ ...scope, id: digest([run.id, row.sellerSku]), sellerAccountId, marketplaceId, sourceRunId: run.id, ...row, capturedAt, sourceUpdatedAt: null, fieldSources: { sellerSku: allListingsReportType, asin: allListingsReportType, listingStatus: allListingsReportType, fulfillmentType: allListingsReportType } })) });
+      await tx.amazonCatalogSnapshot.createMany({ data: rows.slice(i, i + 500).map(row => ({ ...scope, id: digest([run.id, row.sellerSku]), sellerAccountId, marketplaceId, sourceRunId: run.id, ...row, capturedAt, sourceUpdatedAt: null, fieldSources: { sellerSku: allListingsReportType, asin: allListingsReportType, listingStatus: allListingsReportType, fulfillmentType: allListingsReportType, ...(row.listingAttributes ? { listingAttributes: allListingsReportType } : {}) } })) });
     }
     await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { activeRunId: run.id, lastSuccessAt: capturedAt, rowCount: rows.length, coverage } });
     await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", stage: "COMPLETED", pagesCompleted: 1, paginationComplete: true, processedCount: rows.length, insertedCount: rows.length, finishedAt: capturedAt, leaseOwner: null, leaseExpiresAt: null, checkpointCiphertext: null, summary: { provider: "amazon_sp_api", executionVersion: 2, coverage, snapshotCount: rows.length } } });
@@ -1085,7 +1085,7 @@ export async function executeReturnSlice(run: AmazonSyncRun, client: AmazonSpApi
   }
   if (!state.documentId) {
     const r = response as { reportId?: string; reportType?: string; marketplaceIds?: string[]; dataStartTime?: string; dataEndTime?: string; processingStatus?: string; reportDocumentId?: string };
-    if (r.reportId !== state.reportId || r.reportType !== policy.reportType || !Array.isArray(r.marketplaceIds) || r.marketplaceIds.length !== 1 || r.marketplaceIds[0] !== source.marketplaceId || Date.parse(r.dataStartTime ?? "") !== Date.parse(window.from) || Date.parse(r.dataEndTime ?? "") !== Date.parse(window.to)) throw new SyncInputError("退货报告身份、站点或时间窗与审批不一致。");
+    if (r.reportId !== state.reportId || r.reportType !== policy.reportType || !Array.isArray(r.marketplaceIds) || r.marketplaceIds.length !== 1 || r.marketplaceIds[0] !== source.marketplaceId || !reportTimestampMatches(r.dataStartTime, window.from) || !reportTimestampMatches(r.dataEndTime, window.to)) throw new SyncInputError("退货报告身份、站点或时间窗与审批不一致。");
     if (r.processingStatus === "IN_QUEUE" || r.processingStatus === "IN_PROGRESS") { await commit("RETURN_REPORT_POLLING", undefined, false, wait()); return; }
     if (r.processingStatus !== "DONE" || !r.reportDocumentId || r.reportDocumentId.length > 200) throw new SyncInputError("退货报告失败、取消或文档身份缺失，未推断为空报告。");
     state.documentId = r.reportDocumentId; await commit("RETURN_REPORT_DOWNLOADING"); return;

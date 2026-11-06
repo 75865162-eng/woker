@@ -445,3 +445,122 @@ test("report freshness evidence keeps task permission independent and old envelo
   await expect(region).toContainText("接口未提供逐 Profile 新鲜度明细");
   await expect(region.getByRole("region", { name: "日报 Profile 新鲜度 profile-b", exact: true })).toHaveCount(0);
 });
+
+test("standalone Keywords uses scoped server filters, pagination and normalized parent links", async ({ page }) => {
+  const { requests, errors } = await setup(page, {}, "/amazon-ads/keywords?live=1");
+  const table = page.getByRole("table", { name: "本地关键词", exact: true });
+  await expect(table.locator("tbody tr")).toHaveCount(25);
+  await page.getByLabel("关键词 店铺", { exact: true }).selectOption("seller-b");
+  await page.getByLabel("关键词 站点", { exact: true }).selectOption("CA-SITE");
+  await page.getByLabel("关键词 Profile", { exact: true }).selectOption("profile-b");
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
+  await expect(table.locator("tbody tr")).toHaveCount(1);
+  await page.getByLabel("关键词 Campaign ID", { exact: true }).fill(" 100 ");
+  await page.getByLabel("关键词 Ad Group ID", { exact: true }).fill(" 900 ");
+  await page.getByLabel("关键词 搜索", { exact: true }).fill(" Child 2 ");
+  await page.getByRole("button", { name: "搜索", exact: true }).click();
+  await page.getByLabel("关键词 状态", { exact: true }).selectOption("ENABLED");
+  await page.getByLabel("关键词 排序", { exact: true }).selectOption("bid");
+  await page.getByLabel("关键词 排序方向", { exact: true }).selectOption("desc");
+  await expect(table).toContainText("Stored keyword 2");
+  await expect(table).toContainText("0.234567 CAD");
+  await expect(table).not.toContainText("stale payload keyword");
+  await expect.poll(() => requests.at(-1)?.searchParams.get("sortDirection")).toBe("desc");
+  for (const [key, value] of Object.entries({ entityType: "SP:keyword", internalProfileId: "profile-b", sellerAccountId: "seller-b", marketplaceId: "CA-SITE", campaignId: "100", adGroupId: "900", search: "Child 2", state: "ENABLED", page: "1", sortBy: "bid" })) expect(requests.at(-1)?.searchParams.get(key)).toBe(value);
+  await table.getByRole("button", { name: "Ad Group 900", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Group profile-b", exact: true })).toBeVisible();
+  expect(requests.findLast(url => url.searchParams.get("entityType") === "SP:ad-group")?.searchParams.get("internalProfileId")).toBe("profile-b");
+  expect(requests.every(url => url.searchParams.get("kind") !== "reports" && !url.searchParams.has("from") && !url.searchParams.has("to"))).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("standalone Targeting displays normalized expressions, provenance and scoped Campaign navigation", async ({ page }) => {
+  const { requests } = await setup(page, {}, "/amazon-ads/targets/sp?live=1");
+  const table = page.getByRole("table", { name: "本地商品投放", exact: true });
+  await page.getByLabel("商品投放 Profile", { exact: true }).selectOption("profile-b");
+  await expect(table).toContainText("B0FIXTURE");
+  await expect(table).toContainText("MANUAL");
+  await expect(table).toContainText("0.234567 CAD");
+  const row = table.locator("tbody tr").first();
+  await row.getByText("原始维度与来源", { exact: true }).click();
+  await row.getByRole("button", { name: "来源任务 task-fixture", exact: true }).click();
+  await expect(row.getByRole("region", { name: "来源任务详情" })).toContainText("SUCCEEDED");
+  expect(requests.at(-1)?.searchParams.get("profileId")).toBe("profile-b");
+  await row.getByRole("button", { name: "Campaign 100", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Stored Beta", exact: true })).toBeVisible();
+});
+
+test("standalone negatives separate all four domains and reset filters and pages on a domain change", async ({ page }) => {
+  const { requests } = await setup(page, {}, "/amazon-ads/negatives?live=1");
+  const domains = [
+    ["广告组否定关键词", "SP:negative-keyword"], ["广告组否定商品投放", "SP:negative-target"],
+    ["活动否定关键词", "SP:campaign-negative-keyword"], ["活动否定商品投放", "SP:campaign-negative-target"],
+  ];
+  for (const [label, type] of domains) {
+    await page.getByRole("navigation", { name: "否定投放层级与类型" }).getByRole("button", { name: label, exact: true }).click();
+    const table = page.getByRole("table", { name: `本地${label}`, exact: true });
+    await expect(table.locator("tbody tr")).toHaveCount(25);
+    await expect.poll(() => requests.at(-1)?.searchParams.get("entityType")).toBe(type);
+    expect(requests.at(-1)?.searchParams.get("page")).toBe("1");
+    expect(requests.at(-1)?.searchParams.has("search")).toBe(false);
+    await expect(table.getByRole("columnheader", { name: "竞价 / 币种", exact: true })).toHaveCount(0);
+    await expect(page.getByLabel(`${label} 排序`, { exact: true }).locator('option[value="bid"]')).toHaveCount(0);
+    if (type.includes("campaign-negative")) {
+      await expect(page.getByLabel(`${label} Ad Group ID`, { exact: true })).toHaveCount(0);
+      await expect(table.getByRole("button", { name: "Ad Group 900", exact: true })).toHaveCount(0);
+    }
+    await page.getByRole("button", { name: "下一页", exact: true }).click();
+    await expect.poll(() => requests.at(-1)?.searchParams.get("page")).toBe("2");
+    await page.getByLabel(`${label} 搜索`, { exact: true }).fill("Child 1");
+    await page.getByRole("button", { name: "搜索", exact: true }).click();
+    await expect.poll(() => requests.at(-1)?.searchParams.get("search")).toBe("Child 1");
+  }
+});
+
+for (const mode of [403, 500, "invalid", "empty"] as const) test(`standalone Keywords ${mode} is explicit and recoverable without Demo fallback`, async ({ page }) => {
+  const control: Control = {};
+  await setup(page, control, "/amazon-ads/keywords?live=1");
+  await expect(page.getByRole("table", { name: "本地关键词", exact: true })).toBeVisible();
+  control.mode = mode;
+  await page.getByRole("button", { name: "刷新关键词", exact: true }).click();
+  if (mode === "empty") await expect(page.getByText("没有已保存的记录", { exact: true })).toBeVisible();
+  else await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("table")).toHaveCount(0);
+  await expect(page.locator("main")).not.toContainText("private upstream details");
+  await expect(page.getByText("广告表现演示数据", { exact: true })).toHaveCount(0);
+  control.mode = undefined;
+  await page.getByRole("button", { name: mode === "empty" ? "刷新关键词" : "重试", exact: true }).click();
+  await expect(page.getByRole("table", { name: "本地关键词", exact: true })).toBeVisible();
+});
+
+test("local navigation reaches standalone structure domains and rejects unsupported structure detail paths", async ({ page }) => {
+  const { requests } = await setup(page);
+  const nav = page.getByRole("complementary", { name: "本地广告导航" });
+  for (const label of ["关键词", "商品投放", "否定投放"]) {
+    await nav.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("table")).toBeVisible();
+  }
+  await page.goto("http://127.0.0.1:43239/amazon-ads/keywords/profile-a/3000?live=1");
+  await expect(page.getByRole("alert")).toContainText("尚未接入");
+  const count = requests.length;
+  await expect(page.getByRole("table")).toHaveCount(0);
+  expect(requests).toHaveLength(count);
+});
+
+test("a late negative-keyword response cannot replace the newly selected targeting domain", async ({ page }) => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let entered!: () => void;
+  const pending = new Promise<void>(resolve => { entered = resolve; });
+  const { errors } = await setup(page, { wait: async url => {
+    if (url.searchParams.get("entityType") === "SP:negative-keyword") { entered(); await gate; }
+  } }, "/amazon-ads/negatives?live=1");
+  await pending;
+  await expect(page.getByRole("status")).toContainText("正在读取");
+  await page.getByRole("navigation", { name: "否定投放层级与类型" }).getByRole("button", { name: "活动否定商品投放", exact: true }).click();
+  await expect(page.getByRole("table", { name: "本地活动否定商品投放", exact: true })).toContainText("B0FIXTURE");
+  release();
+  await expect(page.getByRole("table")).toHaveCount(1);
+  await expect(page.getByRole("table", { name: "本地广告组否定关键词", exact: true })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

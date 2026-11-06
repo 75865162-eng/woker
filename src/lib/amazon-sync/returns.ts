@@ -49,6 +49,13 @@ export function assertReturnRoles(auth: { approvedRoles: string[]; rolesAttested
   if (!auth.rolesAttestedAt || !["Pricing", "Amazon Fulfillment"].some(r => auth.approvedRoles.includes(r))) throw new SyncInputError("FBA 退货需要已确认的 Pricing 或 Amazon Fulfillment 角色及 FBA 卖家资格。", 403);
 }
 export const returnWindowFromFrozen = financeWindowFromFrozen;
+/** Amazon metadata can truncate request milliseconds to whole seconds. */
+export function reportTimestampMatches(value: unknown, expected: string): boolean {
+  if (typeof value !== "string") return false;
+  const actual = Date.parse(value), requested = Date.parse(expected);
+  return Number.isFinite(actual) && Number.isFinite(requested) &&
+    (actual === requested || (actual % 1000 === 0 && actual === Math.floor(requested / 1000) * 1000));
+}
 export function nextReturnWindow(policy: ReturnPolicy, cursor: { watermarkFrom: Date; watermarkTo: Date; status: string } | null, now: Date): FinanceWindow {
   return nextFinanceWindow({ ...policy, requestsPerSecond: .0167, burst: 15, sellerWide: true, collectUnattributed: true, marketplaces: [], fx: null }, cursor, now);
 }

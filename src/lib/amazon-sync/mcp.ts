@@ -1,4 +1,4 @@
-import { mcpDatasets, datasetForTable, resolveMcpDataset, normalizeDatasetQuery, describeMcpDataset, enrichDatasetResult, presentMcpReport, McpDatasetError } from "./mcp-datasets";
+import { adsEntityTypes, mcpDatasets, datasetForTable, resolveMcpDataset, normalizeDatasetQuery, describeMcpDataset, enrichDatasetResult, presentMcpReport, McpDatasetError } from "./mcp-datasets";
 import { createToolGateway, GatewayInvocationError } from "@/lib/agent-platform/tool-gateway";
 import { amazonMcpTools, bindAmazonMcpHandlers, isCallableAmazonMcpTool, mcpDiscoveryDescriptor, type AmazonMcpToolName } from "./mcp-tool-registry";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -262,6 +262,9 @@ function adsEntityFields(entity: AmazonAdsEntityRecord) {
   const row = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
   const scalar = (value: Prisma.JsonValue | undefined) => typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
   const fields: Record<string, unknown> = Object.fromEntries(Object.entries(row).filter(([key, value]) => ["name", "campaignId", "adGroupId", "keywordText", "matchType", "bid", "defaultBid", "targetingType", "expressionType", "startDate", "endDate"].includes(key) && scalar(value)));
+  if (entity.entityType === "SP:product-ad") {
+    for (const key of ["adId", "sku", "asin", "globalAdId"]) if (typeof row[key] === "string") fields[key] = row[key];
+  }
   for (const key of ["name", "campaignId", "adGroupId", "keywordText", "matchType", "targetingType", "expressionType"] as const) if (entity[key] != null) fields[key] = entity[key];
   if (entity.bid != null) {
     fields.bid = entity.bid.toFixed();
@@ -309,7 +312,7 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
       if (!Number.isInteger(page) || page < 1 || page > 10000) throw new SyncInputError("分页无效。");
       let normalizedQuery: ReturnType<typeof normalizeDatasetQuery> | undefined;
       const readEntities = async (queryArgs: Record<string, unknown>) => {
-        if (queryArgs.entityType !== undefined && !["SP:campaign", "SP:ad-group", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"].includes(String(queryArgs.entityType))) throw new SyncInputError("Ads 实体类型无效。");
+        if (queryArgs.entityType !== undefined && !(adsEntityTypes as readonly string[]).includes(String(queryArgs.entityType))) throw new SyncInputError("Ads 实体类型无效。");
         const params = new URLSearchParams();
         for (const [key, value] of Object.entries(queryArgs)) if (!["sellerAccountIds", "marketplaceId"].includes(key)) params.set(key, String(value));
         const data = await queryAdsEntities(scope, actor, params, selected.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId })));
@@ -442,7 +445,7 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
         result = tool === "amazon.sales.export" ? { format: "jsonl", rowCount: rows.length, content: rows.map(r => JSON.stringify(r)).join("\n"), source: "amazon_sp_api_snapshot" } : { rows, pagination: data.pagination, source: "amazon_sp_api_snapshot", asOf: data.asOf };
         } else if (tool === "amazon.catalog.list") {
         const where = { ...scope, OR: published.filter(s => s.resource === "catalog" && s.activeRunId).map(s => ({ sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, sourceRunId: s.activeRunId! })) };
-        result = { rows: await prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, capturedAt: true, sourceRunId: true }, orderBy: { id: "asc" }, skip: (page - 1) * 50, take: 50 }), source: "amazon_sp_api_snapshot" };
+        result = { rows: await prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, listingAttributes: true, capturedAt: true, sourceRunId: true }, orderBy: { id: "asc" }, skip: (page - 1) * 50, take: 50 }), source: "amazon_sp_api_snapshot" };
         } else if (tool === "amazon.inventory.list" || tool === "amazon.inventory.summary") {
         const where = { ...common, OR: published.filter(s => s.resource === "inventory" && s.activeRunId).map(s => ({ sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, syncRunId: s.activeRunId! })) };
         result = tool === "amazon.inventory.summary" ? { summary: await prisma.amazonInventorySnapshot.aggregate({ where, _sum: { fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true }, _count: { _all: true } }), source: "amazon_sp_api_snapshot" } : { rows: await prisma.amazonInventorySnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fulfillableQuantity: true, capturedAt: true, syncRunId: true }, orderBy: { id: "asc" }, skip: (page - 1) * 50, take: 50 }), source: "amazon_sp_api_snapshot" };

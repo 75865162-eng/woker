@@ -32,7 +32,7 @@ export async function readTaskSnapshot(scope: SyncScope, params: URLSearchParams
       ])
       : await Promise.all([
         tx.amazonCatalogSnapshot.count({ where: { ...common, sourceRunId: taskId } }),
-        tx.amazonCatalogSnapshot.findMany({ where: { ...common, sourceRunId: taskId }, ...pagination, select: { sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, capturedAt: true, sourceUpdatedAt: true, dataVersion: true } }),
+        tx.amazonCatalogSnapshot.findMany({ where: { ...common, sourceRunId: taskId }, ...pagination, select: { sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, listingAttributes: true, capturedAt: true, sourceUpdatedAt: true, dataVersion: true } }),
       ]);
     return {
       snapshot: { taskId, sourceId: source.id, sellerAccountId: source.sellerAccountId, amazonSellerId: source.authorization.amazonSellerId, marketplaceId: source.marketplaceId, resource, sourceApi: resource === "inventory" ? "FBA Inventory v1 / getInventorySummaries" : "Listings Items 2021-08-01 / searchListingsItems", quality: "VALID", complete: true, batchId: task.id, dateField: params.get("dateField") ?? "capturedAt", dateTimeZone: "UTC", publishedAt: task.finishedAt, isCurrent: source.activeRunId === taskId },

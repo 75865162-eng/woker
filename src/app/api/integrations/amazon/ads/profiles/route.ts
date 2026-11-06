@@ -37,9 +37,10 @@ export async function POST(request: Request) {
   if (!permission.ok) return NextResponse.json({ error: "Forbidden." }, { status: permission.response.status, headers: jsonHeaders });
   try {
     const body = await boundedJsonObject(request, 2048);
-    if (!body || typeof body.profileId !== "string" || body.profileId.length > 30 || (body.sellerAccountId !== null && typeof body.sellerAccountId !== "string")) return NextResponse.json({ error: "绑定参数无效。" }, { status: 400, headers: jsonHeaders });
+    if (!body || (typeof body.profileId !== "string" && typeof body.profileRecordId !== "string") || (typeof body.profileId === "string" && body.profileId.length > 30) || (typeof body.profileRecordId === "string" && body.profileRecordId.length > 200) || (body.sellerAccountId !== undefined && body.sellerAccountId !== null && typeof body.sellerAccountId !== "string") || (body.advertiserAccountId !== undefined && body.advertiserAccountId !== null && (typeof body.advertiserAccountId !== "string" || body.advertiserAccountId.length > 512))) return NextResponse.json({ error: "绑定参数无效。" }, { status: 400, headers: jsonHeaders });
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request, body).workspaceId };
-    await bindAmazonAdsProfile(scope, permission.user.id, body.profileId, body.sellerAccountId as string | null);
+    if (body.advertiserAccountId !== undefined && (typeof body.profileRecordId !== "string" || !body.profileRecordId || (body.expectedAdvertiserAccountId !== null && (typeof body.expectedAdvertiserAccountId !== "string" || body.expectedAdvertiserAccountId.length > 512)) || !Number.isSafeInteger(body.expectedAdvertiserAccountRevision) || Number(body.expectedAdvertiserAccountRevision) < 0)) return NextResponse.json({ error: "账户绑定需要内部 Profile ID 和当前绑定值。" }, { status: 400, headers: jsonHeaders });
+    await bindAmazonAdsProfile(scope, permission.user.id, typeof body.profileId === "string" ? body.profileId : "", body.sellerAccountId as string | null | undefined, body.advertiserAccountId as string | null | undefined, typeof body.profileRecordId === "string" ? body.profileRecordId : undefined, body.expectedAdvertiserAccountId as string | null | undefined, body.expectedAdvertiserAccountRevision as number | undefined);
     return NextResponse.json({ ok: true }, { headers: jsonHeaders });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "无法绑定 Amazon Ads Profile。" }, { status: 400, headers: jsonHeaders });

@@ -312,7 +312,7 @@ export async function controlTask(scope: SyncScope, actorUserId: string, id: str
     if (!run) throw new SyncInputError("任务不存在。", 404);
     const targetSource = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: run.sourceId! }, select: { sellerAccountId: true, marketplaceId: true } });
     if (!targetSource) throw new SyncInputError("数据源不存在。", 404);
-    await assertSellerMarketplaceAccess(scope, actorUserId, targetSource.sellerAccountId, targetSource.marketplaceId, tx, "sync");
+    await assertSellerMarketplaceAccess(scope, actorUserId, targetSource.sellerAccountId, targetSource.marketplaceId, tx, "sync", run.trigger === "schedule");
     if (run.status === "SUCCEEDED" || run.status === "CANCELLED") throw new SyncInputError("该任务已结束。", 409);
     let data: Prisma.AmazonSyncRunUncheckedUpdateManyInput;
     if (action === "cancel" || action === "pause") {
@@ -335,7 +335,9 @@ export async function controlTask(scope: SyncScope, actorUserId: string, id: str
         await tx.amazonSalesTrafficSnapshot.deleteMany({ where: { ...scope, syncRunId: id } });
       }
       const renewedFrozen = { ...(run.frozenScope as Prisma.JsonObject ?? {}), executionExpiresAt: new Date(Date.now() + executionWindowMs).toISOString() };
-      data = { status: "WAITING", trigger: "manual", executionApprovalId: approval.approvalId, requestedByUserId: actorUserId, control: null, error: null, finishedAt: null, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: new Date(), dispatchVersion: { increment: 1 }, maxAttempts: run.attempts + 3,
+      // Retried automatic work retains its plan fence and token-scoped read policy.
+      // The processor still checks the current plan revision and administrator.
+      data = { status: "WAITING", trigger: run.trigger === "schedule" ? "schedule" : "manual", executionApprovalId: approval.approvalId, requestedByUserId: actorUserId, control: null, error: null, finishedAt: null, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: new Date(), dispatchVersion: { increment: 1 }, maxAttempts: run.attempts + 3,
         frozenScope: renewedFrozen, frozenScopeDigest: digest(renewedFrozen),
         ...(action === "retry" && !cursorResources.includes(run.resource) ? { checkpointCiphertext: null, stage: "WAITING", pagesCompleted: 0, paginationComplete: false, processedCount: 0, insertedCount: 0, updatedCount: 0, skippedCount: 0, summary: Prisma.DbNull, executionStartedAt: null } : {}) };
 

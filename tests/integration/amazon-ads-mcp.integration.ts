@@ -54,7 +54,7 @@ test("Ads MCP requires an explicit tool grant and advertises a bounded read-only
   const current = await (await protocol("tools/list")).json();
   const entry = current.result.tools.find((entry: { name: string }) => entry.name === tool);
   assert.equal(entry.annotations.readOnlyHint, true); assert.equal(entry.inputSchema.properties.pageSize.maximum, 100);
-  assert.equal(entry.inputSchema.properties.from, undefined); assert.equal(entry.inputSchema.properties.entityType.enum.length, 8);
+  assert.equal(entry.inputSchema.properties.from, undefined); assert.equal(entry.inputSchema.properties.entityType.enum.length, 9);
 });
 test("Ads settings stay within the personal credential even when ERP grants include another seller", async () => {
   const extra = await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId: actor, sellerAccountId: otherSeller, marketplaceIds: [site], actions: ["view"], mcpEnabled: true } });
@@ -236,4 +236,23 @@ test("Ads MCP rechecks grant and credential revocation even for an authenticated
   assert.ok(logs.some(log => log.action === "amazon.mcp.tool.succeeded"));
   assert.ok(logs.some(log => log.action === "amazon.mcp.tool.denied"));
   assert.ok(!JSON.stringify(logs).includes("SECRET_")); assert.ok(!JSON.stringify(logs).includes(token));
+});
+
+test("Product Ad MCP query exposes only stored advertising identifiers and keeps account isolation", async () => {
+  const productToken = (await manageMcpCredential(scope, actor, { action: "create", name: "product ad fixture", tools: [tool], scopes: [{ sellerAccountId: seller, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() })).token!;
+  const source = await prisma.amazonAdsEntityRecord.findFirstOrThrow({ where: { ...scope, profileId: profile } });
+  const id = randomUUID();
+  try {
+    await prisma.amazonAdsEntityRecord.create({ data: { ...scope, id, profileId: profile, sourceTaskId: source.sourceTaskId,
+      entityType: "SP:product-ad", externalId: "777", campaignId: "100", adGroupId: "101", parentExternalId: "101", state: "PAUSED",
+      payload: { adId: "777", sku: "fixture-sku", asin: "B000FIXTURE", globalAdId: "global-fixture", access_token: "SECRET_PRODUCT_AD" } } });
+    const result = await invoke({ entityType: "SP:product-ad", internalProfileId: profile, campaignId: "100", adGroupId: "101" }, productToken) as { data: { total: number; items: Array<{ fields: Record<string, unknown> }> } };
+    assert.equal(result.data.total, 1);
+    assert.equal(result.data.items[0].fields.sku, "fixture-sku");
+    assert.equal(result.data.items[0].fields.asin, "B000FIXTURE");
+    assert.equal(result.data.items[0].fields.adId, "777");
+    assert.doesNotMatch(JSON.stringify(result), /SECRET_|access_token/);
+    const denied = await invoke({ entityType: "SP:product-ad", internalProfileId: caProfile }, productToken) as { data: { total: number } };
+    assert.equal(denied.data.total, 0);
+  } finally { await prisma.amazonAdsEntityRecord.deleteMany({ where: { ...scope, id } }); }
 });

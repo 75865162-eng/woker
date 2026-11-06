@@ -30,6 +30,7 @@ test("dataset filter semantics reject unsupported dimensions and reconcile only 
   for (const field of ["from", "to", "keyword", "asin", "sellerSku"]) rejected(() => normalizeDatasetQuery(entities, { filters: { [field]: "2026-11-01" } }, now), "FIELD_NOT_MAPPED");
   const listings = normalizeDatasetQuery(datasetForTable("listings"), { filters: { status: "ACTIVE" }, state: "ACTIVE", listingStatus: "ACTIVE" }, now);
   assert.equal(listings.filters.listingStatus, "ACTIVE");
+  assert.equal(datasetForTable("listings").fields.find(field => field.name === "listingAttributes")?.type, "object");
   rejected(() => normalizeDatasetQuery(datasetForTable("listings"), { filters: { status: "ACTIVE" }, listingStatus: "INACTIVE" }, now), "FILTER_CONFLICT");
   const report = normalizeDatasetQuery(datasetForTable("ads_report_daily"), { asin: "B000FIXTURE", keyword: "exact term" }, now);
   assert.equal(report.filters.advertisedAsin, "B000FIXTURE");

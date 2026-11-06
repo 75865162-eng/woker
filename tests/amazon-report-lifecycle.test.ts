@@ -49,7 +49,7 @@ async function setup() {
   const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration({ AMAZON_SP_API_LWA_CLIENT_ID: "fixture-client", AMAZON_SP_API_LWA_CLIENT_SECRET: "fixture-secret", AMAZON_SP_API_REFRESH_TOKEN: "fixture-refresh" }), { onResponse: e => events.push(e), fetch: async (input, init) => {
     const url = new URL(String(input)); state.apiCalls.push(`${init?.method} ${url.pathname}`);
     if (url.hostname === "api.amazon.com") return Response.json({ access_token: "fixture-access", expires_in: 3600 });
-    if (url.pathname === "/reports/2021-06-30/reports") { assert.equal(JSON.parse(init!.body as string).dataStartTime, range.startAt); if (state.uncertain) throw new Error("private-signed-url"); return Response.json({ reportId: "report" }); }
+    if (url.pathname === "/reports/2021-06-30/reports") { assert.equal(JSON.parse(init!.body as string).dataStartTime, `${range.from}T00:00:00Z`); if (state.uncertain) throw new Error("private-signed-url"); return Response.json({ reportId: "report" }); }
     if (url.pathname === "/reports/2021-06-30/reports/report") return Response.json({ reportId: "report", reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [site], processingStatus: "DONE", reportDocumentId: "document" });
     if (url.pathname === "/reports/2021-06-30/documents/document") return Response.json({ reportDocumentId: "document", url: "https://fixture.s3.us-east-1.amazonaws.com/report" });
     assert.equal(url.hostname, "fixture.s3.us-east-1.amazonaws.com");

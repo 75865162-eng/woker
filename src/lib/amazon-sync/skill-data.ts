@@ -144,7 +144,7 @@ export async function querySkillTable(input: {
   };
   const [total, rows] = await Promise.all([
     prisma.amazonCatalogSnapshot.count({ where }),
-    prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, sourceUpdatedAt: true, capturedAt: true, sourceRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
+    prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, listingAttributes: true, sourceUpdatedAt: true, capturedAt: true, sourceRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
   ]);
   return { data: { items: rows, total }, meta: { ...meta, page: { page: input.page, pageSize: input.pageSize, hasNext: input.page * input.pageSize < total } } };
 }
