@@ -31,7 +31,13 @@ T08结构兼容子项已有代码：结构scheduler/processor路由白名单、�
 
 T09/T10另补离线checkpoint损坏保护：调用前校验持久预算、阶段和reservation，不修复或清零异常记录；单测4/4、报表隔离集成32/32通过。见[checkpoint保护交付](../../docs/amazon-ads-checkpoint-delivery-2026-11-06.md)，不据此勾选整体任务。
 
+T09/T10只读退避子项已有代码：poll/download 的429/5xx遵守Retry-After和持久预算指数退避，超总截止阻断，等待释放lease；create不重发。定向单测7/7、报表隔离集成36/36、类型与定向lint通过。见[只读退避交付](../../docs/amazon-ads-report-retry-delivery-2026-11-06.md)；正式合同、共享限流及完整故障矩阵仍未完成。
+
 T09–T11新增隔离运行子项：数据库到期扫描、注入式投递、短lease单步执行、pause/resume/cancel、只读重试与过期恢复；两个实际BullMQ Worker实例验证采集至发布，报告集成31/31通过。见[报告运行层交付](../../docs/amazon-ads-report-runtime-delivery-2026-11-06.md)。未接入常规生产Worker或真实transport，尚缺优先级/跨Worker限流及完整kill/restart矩阵，以下整体复选状态保持未完成。
+
+T11新增自动运行子项：显式fixture Worker服务、跨实例队列并发2、定时扫描锁、稳定jobId、容量背压及优雅关闭；新集成9/9通过，含真实子进程SIGKILL创建/下载恢复，报告回归36/36通过。见[Worker生命周期交付](../../docs/amazon-ads-report-worker-delivery-2026-11-06.md)。常规生产启动、正式transport、严格分布式准入和完整故障矩阵仍未完成，不勾选整体任务。
+
+T09–T11续批修复扫描阻塞：暂停计划不占等待候选、缺失lease恢复、单行锁/事务失败隔离、入队前坏checkpoint/截止/未知create阻断，以及同Profile忙碌/已知冷却的持久延后。Worker专项14/14、报告回归36/36、定向lint与全库类型检查通过。见[Worker交付续批](../../docs/amazon-ads-report-worker-delivery-2026-11-06.md)。这不是完整正式API共享配额或全租户公平性实现，整体状态保持未完成。
 
 - [ ] T08（FR03/04，依赖 T03）提交报告专用任务创建/调度设计及共享影响方案。验收：结构任务不隐式带报告请求，scope 不可被客户端扩大；审批/提交/启动分开。
 - [ ] T09（FR03/04，依赖 T08）实现持久预算、nextPollAt、总截止、短 lease、续租/fence 和取消。验收：等待不占 worker；重启保留预算；取消后不再开始外部操作。

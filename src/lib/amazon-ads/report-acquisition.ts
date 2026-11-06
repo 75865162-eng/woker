@@ -8,6 +8,7 @@ import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-acce
 import { encryptAmazonAdsCheckpoint } from "./credentials";
 import { AdsQueryError } from "./query-contract";
 import { readReportAcquisitionState } from "./report-checkpoint";
+import { ReportReadRetryError, reportReadRetryAt } from "./report-retry";
 import { assertReportDeadline } from "./report-deadline";
 import { assertReportScopeDigest, reportScopeDigest } from "./report-scope";
 import { campaignReportManifest, campaignReportRequest, parseCampaignReport, isolatedCampaignReportLimits, type CampaignReportSpec } from "./campaign-report-contract";
@@ -164,14 +165,14 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
         const profile = await prisma.amazonAdsProfile.findUniqueOrThrow({ where: { id: request.profileId }, select: { authorizationId: true } });
         const download = decryptAmazonAdsCheckpoint<{ url: string; expiresAt: string; size: number }>(state.urlCiphertext ?? null, { ...scope, authorizationId: profile.authorizationId }, fence.taskId);
         if (!download || Date.parse(download.expiresAt) <= Date.now()) throw new AdsQueryError("ADS_REPORT_DOWNLOAD_EXPIRED");
-        const bytes = await boundedBody(await transport.download(fixtureUrl(download.url), signal), isolatedCampaignReportLimits.compressedBytes);
+        const bytes = await boundedBody(await readResponse(await transport.download(fixtureUrl(download.url), signal)), isolatedCampaignReportLimits.compressedBytes);
         if (bytes.length !== download.size) throw new AdsQueryError("ADS_REPORT_BODY_SIZE_MISMATCH");
         const facts = parseCampaignReport(bytes, state.spec);
         await commit("STAGE", { bytes, rows: facts.length });
       } else {
         const operationRequest = request.operation === "create" ? campaignReportRequest(state.spec) : { reportId: request.remoteRequestId! };
         const response = request.operation === "create" ? await transport.create(operationRequest as ReturnType<typeof campaignReportRequest>, signal) : await transport.poll(request.remoteRequestId!, signal);
-        const bytes = await boundedBody(response, 64 * 1024);
+        const bytes = await boundedBody(await readResponse(response), 64 * 1024);
         let body: Record<string, unknown>;
         try { body = JSON.parse(bytes.toString("utf8")); } catch { throw new AdsQueryError("ADS_REPORT_ENVELOPE_INVALID"); }
         if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.reportId !== "string" || !/^[A-Za-z0-9-]{1,100}$/.test(body.reportId) || !["PENDING", "PROCESSING", "COMPLETED", "FAILED"].includes(String(body.status)) || body.startDate !== state.spec.from || body.endDate !== state.spec.to || !sameConfiguration(body.configuration, state.spec) || (request.remoteRequestId && body.reportId !== request.remoteRequestId)) throw new AdsQueryError("ADS_REPORT_ENVELOPE_CONTRACT_MISMATCH");
@@ -192,15 +193,30 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
       work().then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
     });
   } catch (error) {
+    const retryBeyondDeadline = error instanceof ReportReadRetryError && (!Number.isFinite(error.retryAt) || error.retryAt >= Date.parse(state.deadline));
     await prisma.$transaction(async tx => {
       await live(tx, scope, actor, fence);
       // Do not erase reservation after unknown create outcome; read-only retries consume budget.
       if (request.operation !== "create") delete state.reserved;
-      await tx.amazonAdsReportRequest.update({ where: { id: request.id }, data: { requestOptions: asJson(request.options), errorCode: request.operation === "create" ? "ADS_REPORT_CREATE_RESULT_UNKNOWN" : "ADS_REPORT_ACQUISITION_FAILED" } });
+      if (error instanceof ReportReadRetryError && !retryBeyondDeadline) {
+        state.nextPollAt = new Date(error.retryAt).toISOString();
+      }
+      await tx.amazonAdsReportRequest.update({ where: { id: request.id }, data: { requestOptions: asJson(request.options), errorCode: request.operation === "create" ? "ADS_REPORT_CREATE_RESULT_UNKNOWN" : retryBeyondDeadline ? "ADS_REPORT_RETRY_AFTER_DEADLINE" : error instanceof ReportReadRetryError ? error.message : "ADS_REPORT_ACQUISITION_FAILED" } });
     });
+    if (retryBeyondDeadline) throw new AdsQueryError("ADS_REPORT_RETRY_AFTER_DEADLINE");
     throw error instanceof AdsQueryError ? error : new AdsQueryError("ADS_REPORT_ACQUISITION_FAILED");
   }
   return { phase: state.phase };
+
+  async function readResponse(response: Response): Promise<Response> {
+    // Creation may have succeeded remotely even when its response is an error.
+    if (request.operation !== "create" && !response.redirected && (response.status === 429 || response.status >= 500 && response.status <= 599)) {
+      const retryAt = reportReadRetryAt(state.calls[request.operation === "poll" ? "poll" : "download"], response.headers.get("retry-after"));
+      await response.body?.cancel();
+      throw new ReportReadRetryError(response.status === 429 ? "ADS_REPORT_THROTTLED" : "ADS_REPORT_UPSTREAM_UNAVAILABLE", retryAt);
+    }
+    return response;
+  }
 
   async function commit(phase: Phase, input: { envelope?: Record<string, unknown>; requestEvidence?: Buffer; responseEvidence?: Buffer; bytes?: Buffer; rows?: number } = {}) {
     if (signal.aborted) throw new AdsQueryError("ADS_REPORT_OPERATION_TIMEOUT");

@@ -656,6 +656,90 @@ test("read-only transport retry retains call budget and releases worker until re
   await controlIsolatedReport(scope, actor, fixture.fence.taskId, "cancel");
 });
 
+test("poll and download honor throttling and transient server retry waits without reissuing create", async () => {
+  for (const phase of ["POLL", "DOWNLOAD"] as const) {
+    for (const status of [429, 503]) {
+      const fixture = await runtimeFixture("8100");
+      await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+      await fixture.due();
+      if (phase === "DOWNLOAD") {
+        await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+        await fixture.due();
+      }
+      let cancelled = false;
+      const operation = phase === "POLL" ? "poll" : "download";
+      const original = fixture.transport[operation];
+      fixture.transport[operation] = async () => {
+        fixture.calls[operation]++;
+        return new Response(new ReadableStream({ cancel() { cancelled = true; } }), { status, headers: { "Retry-After": "120" } });
+      };
+      const before = Date.now();
+      await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+      const retry = await fixture.row();
+      assert.equal(retry.status, "RETRY_WAIT");
+      assert.equal(retry.errorCode, status === 429 ? "ADS_REPORT_THROTTLED" : "ADS_REPORT_UPSTREAM_UNAVAILABLE");
+      assert.ok(retry.nextAttemptAt.getTime() >= before + 120000);
+      assert.equal(retry.leaseOwner, null); assert.equal(cancelled, true);
+      const request = await acquisitionRow(fixture.fence.taskId);
+      const state = (request.requestOptions as unknown as { acquisition: AcquisitionState }).acquisition;
+      assert.equal(state.phase, phase); assert.equal(state.reserved, undefined);
+      assert.ok(Date.parse(state.nextPollAt!) >= before + 120000);
+      const consumed = { ...fixture.calls };
+      await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+      assert.deepEqual(fixture.calls, consumed);
+      fixture.transport[operation] = original;
+      await fixture.due();
+      await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+      assert.equal(fixture.calls.create, 1);
+      assert.equal(((await acquisitionRow(fixture.fence.taskId)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.phase, phase === "POLL" ? "DOWNLOAD" : "STAGE");
+      await controlIsolatedReport(scope, actor, fixture.fence.taskId, "cancel");
+    }
+  }
+});
+
+test("retry waits beyond deadline and exhausted read budgets block without replenishment", async () => {
+  for (const exhausted of [false, true]) {
+    const fixture = await runtimeFixture("8101");
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    await fixture.due();
+    if (exhausted) await editAcquisition(fixture.fence.taskId, state => { state.calls.poll = 9; });
+    fixture.transport.poll = async () => { fixture.calls.poll++; return new Response(null, { status: 429, headers: { "Retry-After": exhausted ? "1" : "3600" } }); };
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    const row = await fixture.row();
+    assert.equal(row.status, "BLOCKED");
+    assert.equal(row.errorCode, exhausted ? "ADS_REPORT_THROTTLED" : "ADS_REPORT_RETRY_AFTER_DEADLINE");
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    assert.equal(fixture.calls.poll, 1); assert.equal(fixture.calls.create, 1);
+    const state = (await acquisitionRow(fixture.fence.taskId)).requestOptions as unknown as { acquisition: AcquisitionState };
+    assert.equal(state.acquisition.calls.poll, exhausted ? 10 : 1);
+  }
+});
+
+test("runtime finalizes a corrupt checkpoint as blocked instead of crashing during retry classification", async () => {
+  const fixture = await runtimeFixture("8103");
+  await editAcquisition(fixture.fence.taskId, state => { (state as unknown as { calls: unknown }).calls = null; });
+  const before = (await acquisitionRow(fixture.fence.taskId)).requestOptions;
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  const row = await fixture.row();
+  assert.equal(row.status, "BLOCKED"); assert.equal(row.errorCode, "ADS_REPORT_CHECKPOINT_INVALID");
+  assert.equal(row.leaseOwner, null);
+  assert.deepEqual(fixture.calls, { create: 0, poll: 0, download: 0 });
+  assert.deepEqual((await acquisitionRow(fixture.fence.taskId)).requestOptions, before);
+  assert.equal(await prisma.amazonAdsSyncAttempt.count({ where: { ...scope, taskId: row.id, status: "RUNNING" } }), 0);
+});
+
+test("throttled create remains unknown and is never retried as a read operation", async () => {
+  const fixture = await runtimeFixture("8102");
+  fixture.transport.create = async () => { fixture.calls.create++; return new Response(null, { status: 429, headers: { "Retry-After": "1" } }); };
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  assert.equal((await fixture.row()).status, "BLOCKED");
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  assert.equal(fixture.calls.create, 1);
+  const request = await acquisitionRow(fixture.fence.taskId);
+  assert.equal(request.errorCode, "ADS_REPORT_CREATE_RESULT_UNKNOWN");
+  assert.equal((request.requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.reserved?.operation, "create");
+});
+
 test("same Profile cannot run two report operations concurrently", async () => {
   const fixture = await runtimeFixture("8005");
   const planId = (await fixture.row()).planId;

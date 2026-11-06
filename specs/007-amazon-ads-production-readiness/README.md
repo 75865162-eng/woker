@@ -15,6 +15,7 @@
 | 处理版本/身份/最小模型 | [first-batch-design.md](first-batch-design.md)，CE01–CE10合同取证 |
 | 决定缺行/null/时区/版本语义 | [data-contract.md](data-contract.md)，DC01–DC15 |
 | 实现报告队列与恢复 | [report-runtime-design.md](report-runtime-design.md)，RT01–RT10 |
+| 核对自动Worker、关闭与进程崩溃证据 | [Worker生命周期交付](../../docs/amazon-ads-report-worker-delivery-2026-11-06.md)，仅隔离服务，正式启动未启用 |
 | 扩SP业务域与页面 | [sp-business-delivery.md](sp-business-delivery.md)，BS01–BS07 |
 | 设计草稿/审批/API/Bulk对账 | [change-lifecycle.md](change-lifecycle.md)，CL01–CL08 |
 | 验收、观测与交接 | [acceptance-and-handoff.md](acceptance-and-handoff.md)，R1–R4 |

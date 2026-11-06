@@ -70,13 +70,31 @@
 
 ## 4. 验证及性能
 
-结果在首批最终验证结束后补充。命令均使用现有离线 runner 或纯fixture；不读取真实dotenv、不继承真实数据库/服务密钥、不拉取Docker镜像。临时PG/Redis由runner创建和清理。
+命令均使用现有离线 runner 或纯fixture；不读取真实dotenv、不继承真实数据库/服务密钥、不拉取Docker镜像。临时PG/Redis由runner创建和清理。
+
+| 命令 | 本轮结果 |
+| --- | --- |
+| `node node_modules/tsx/dist/cli.mjs --test tests/amazon-mcp-registry.test.ts` | 4/4通过 |
+| `node scripts/test-amazon-sync-integration.mjs --mcp` | 最终35/35通过，包含读取目录时撤销grant/凭证的真实临时PG锁回归 |
+| `node scripts/test-amazon-ads-offline.mjs --mcp` | 最终11/11通过，包含跨凭证状态摘要防泄漏 |
+| `npm run check:fast` | 核心877/877通过；随后lint扫描既有`.next-amazon-live/`生成物失败（2688 errors），因此本命令整体未通过，类型检查未在该链内执行 |
+| `npm run lint -- --ignore-pattern '.next-amazon-live/**'` | 通过；现有源码12 warnings、0 errors；未修改eslint配置或删除生成目录 |
+| 仅本批7个TS文件的ESLint | 通过，0 warnings/errors |
+| `npm run typecheck` | 最终通过；注册handler与dispatcher的推断循环已以显式`Promise<unknown>`消除 |
+
+不将之前的核心测试计为本轮Gateway、Schema执行校验或生产验收通过。lint与类型检查采用上述等价拆分路线，未运行完整生产构建或页面E2E。
 
 - 注册表：21工具绑定、重复名/孤立或缺失handler、坏Schema根类型、坏别名、禁用谓词、审批申请标注与协议兼容。
 - 集成：当前授权变化、凭证工具/店铺站点收窄、目录读取中撤销grant/凭证、现有调用中撤权、跨租户/用户、Ads显式授权、发布边界与状态摘要防泄漏。
 - 生产构建、页面E2E和真实采集不在本批运行；本批没有UI变动。准备合码/上线才做完整check与发布闭环。
 
 20次串行临时库样本仅比较“旧内存工具过滤”与“新增实时发现”，不含共同认证/协议审计。它不能替代生产全请求、并发或P95/P99容量验收；SQL数尚未instrument，不填写虚构实测值。C11仍需完整矩阵。
+
+最终一次临时库样本（同一共享开发机，同次20次串行、13个凭证工具）：旧内存过滤P50/P95/P99为0.001/0.002/0.013 ms；新增实时发现为22.103/27.241/39.546 ms。早一次运行P95为47.764 ms，说明共享开发机样本有抖动，不能作为稳定生产门槛；未测并发、SQL数或增量内存。目录验证的安全开销已在首批审批中说明并获得批准。
+
+工作区说明：开始时已有Ads规划/spec文档和`.next-amazon-live/`；期间另出现Ads报告runtime/checkpoint/task-routing、发布脚本、相关测试及文档改动，并观察到其他操作将包含本批文件在内的工作区内容暂存。本聊天未执行git add/commit/push，也未撤销其他操作的暂存。本批文件归属以上述实际业务/测试文件清单为准，不把其他改动算作本批交付；任何后续GitHub同步仍须重新盘点完整改动区。
+
+随后只读检查观察到并行操作已创建本地提交`30f727b`（`fix: restart and verify deployed sync workers`），其文件清单包含本批代码和交接文档当时版本。提交名称不证明实际部署，本聊天未核验远端/服务器状态，也未执行该提交或其追溯操作。本交接文档最终验证补充仍在未提交改动区；不得将其当作已进入上述提交。
 
 ## 5. 回滚与剩余工作
 
