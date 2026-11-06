@@ -71,7 +71,7 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     const auth = await tx.amazonSpApiAuthorization.findFirst({ where: { ...scope, id: authorizationId }, select: authSelect });
     if (!auth) throw new SyncInputError("授权不属于当前范围。", 409);
     if (command.enabled !== false) {
-      if (!auth.amazonSellerId) throw new SyncInputError("基础连接未填写 Seller ID；绑定同步店铺前请补充真实卖家编号。", 409);
+      if (!auth.amazonSellerId && command.resource === "listing_details") throw new SyncInputError("Listing Items 详情需 OAuth 卖家身份；全量 Listing 请使用 catalog 报表。", 409);
       const conflict = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, marketplaceId, OR: [{ sellerAccountId, authorizationId: { not: authorizationId } }, { authorizationId, sellerAccountId: { not: sellerAccountId } }] }, select: { id: true } });
       const identity = await tx.amazonSellerIdentity.findFirst({ where: { ...scope, marketplaceId, OR: [{ sellerAccountId }, { authorizationId }] }, select: { authorizationId: true, sellerAccountId: true } });
       if (conflict || (identity && (identity.authorizationId !== authorizationId || identity.sellerAccountId !== sellerAccountId))) throw new SyncInputError("店铺站点授权绑定冲突，须先核查历史归属。", 409);

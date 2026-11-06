@@ -84,6 +84,51 @@ test("Ads MCP uses true totals, paging, entity filters and safe fields from stor
   assert.equal(filtered.data.total, 8);
   for (const args of [{ pageSize: 101 }, { sort: "payload" }, { from: "2026-01-01" }, { entityType: "unknown" }, { page: 0 }]) await assert.rejects(() => invoke(args));
 });
+test("generic structure datasets require their own explicit canonical grant and share the dedicated presenter", async () => {
+  const command = { action: "create", name: "dataset fixture", scopes: [{ sellerAccountId: seller, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() };
+  const denied = await manageMcpCredential(scope, actor, { ...command, tools: ["data_query", "ads_list_entities"] });
+  const deniedIdentity = await authenticateAmazonMcp(`Bearer ${denied.token}`);
+  await assert.rejects(() => invokeAmazonMcp(deniedIdentity, "data_query", { module: "amazon_ads", dataType: "entities" }), /结构工具未授权/);
+  const created = await manageMcpCredential(scope, actor, { ...command, tools: ["data_query", "data_describe_table", "data_list_tables", tool] });
+  const identity = await authenticateAmazonMcp(`Bearer ${created.token}`);
+  const generic = await invokeAmazonMcp(identity, "data_query", { module: "amazon_ads", dataType: "entities", pageSize: 2, filters: { sortBy: "externalId", sortDirection: "desc", state: "ENABLED" } }) as { data: unknown; meta: { scope: { pairs: unknown[] }; dataset: { id: string } } };
+  const dedicated = await invokeAmazonMcp(identity, tool, { pageSize: 2, sort: "externalId", direction: "desc", state: "ENABLED" }) as typeof generic;
+  assert.deepEqual(generic.data, dedicated.data);
+  assert.equal(generic.meta.dataset.id, "ads_entities");
+  assert.deepEqual(generic.meta.scope.pairs, [{ sellerAccountId: seller, marketplaceId: site }]);
+  assert.ok(!JSON.stringify(generic).includes("SECRET_"));
+  const described = await invokeAmazonMcp(identity, "data_describe_table", { module: "amazon_ads", dataType: "entities" }) as { data: { table: { maxPageSize: number; dateSemantics: string } } };
+  assert.equal(described.data.table.maxPageSize, 100); assert.equal(described.data.table.dateSemantics, "not_applicable");
+  await assert.rejects(() => invokeAmazonMcp(identity, "data_query", { module: "amazon_ads", dataType: "entities", filters: { from: "2026-11-01" } }), /FIELD_NOT_MAPPED/);
+  await assert.rejects(() => invokeAmazonMcp(identity, "data_query", { module: "amazon_ads", dataType: "entities", keyword: "fixture" }), /FIELD_NOT_MAPPED/);
+  await prisma.amazonMcpCredential.update({ where: { id: created.credential.id }, data: { tools: ["data_query"] } });
+  await assert.rejects(() => invokeAmazonMcp(identity, "data_query", { module: "amazon_ads", dataType: "entities" }), /结构工具未授权/);
+});
+test("revoking the additional structure grant during generic SQL withholds the result", async () => {
+  const made = await manageMcpCredential(scope, actor, { action: "create", name: "dataset revoke", scopes: [{ sellerAccountId: seller, marketplaceIds: [site] }], tools: ["data_query", tool], expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const identity = await authenticateAmazonMcp(`Bearer ${made.token}`);
+  let release = () => {}, acquired = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const ready = new Promise<void>(resolve => { acquired = resolve; });
+  const lock = prisma.$transaction(async tx => {
+    await tx.$executeRawUnsafe('LOCK TABLE "AmazonAdsEntityRecord" IN ACCESS EXCLUSIVE MODE');
+    acquired(); await gate;
+  }, { timeout: 10000 });
+  await ready;
+  const pending = invokeAmazonMcp(identity, "data_query", { module: "amazon_ads", dataType: "entities" }).then(value => ({ value, error: null }), error => ({ value: null, error }));
+  try {
+    let waiting = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const rows = await prisma.$queryRaw<Array<{ waiting: boolean }>>`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%AmazonAdsEntityRecord%' AND query LIKE 'SELECT%') AS waiting`;
+      if (rows[0].waiting) { waiting = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(waiting, "the generic dataset must reach the held SQL lock");
+    await prisma.amazonMcpCredential.update({ where: { id: made.credential.id }, data: { tools: ["data_query"] } });
+  } finally { release(); await lock; }
+  const result = await pending;
+  assert.equal(result.value, null); assert.ok(result.error);
+});
 test("Skill compatibility aliases use the same scoped ERP read boundary", async () => {
   const entity = await invokeAmazonMcp(await authenticateAmazonMcp(`Bearer ${aliasToken}`), "ads_list_entities", { pageSize: 1 }) as { data: { total: number; items: Array<{ fields: { name?: string } }> }; meta: { source: string } };
   assert.equal(entity.data.total, 8); assert.equal(entity.data.items[0].fields.name, "fixture entity"); assert.equal(entity.meta.source, "AmazonAdsEntityRecord");

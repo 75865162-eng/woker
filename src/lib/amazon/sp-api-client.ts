@@ -245,6 +245,9 @@ export class AmazonSpApiClient {
    * Their reviewed catalog entries do not define a date window; do not send one.
    * https://developer-docs.amazon.com/sp-api/reference/createreport
    */
+  async createAllListingsReport(marketplaceId: string): Promise<unknown> {
+    return this.request("POST", "/reports/2021-06-30/reports", { reportType: "GET_MERCHANT_LISTINGS_ALL_DATA", marketplaceIds: [marketplaceId], reportOptions: { preferredReportDocumentLocale: "en_US" } });
+  }
   async createSnapshotReport(input: { reportType: string; marketplaceId: string }): Promise<unknown> {
     return this.request("POST", "/reports/2021-06-30/reports", { reportType: input.reportType, marketplaceIds: [input.marketplaceId] });
   }
@@ -358,6 +361,7 @@ export class AmazonSpApiClient {
     if (!response.ok) {
       throw new AmazonSpApiError(safeAmazonErrorMessage(response.status, payload, this.secretValues(accessToken)), {
         status: response.status,
+        authorizationRejected: response.status === 401,
         retryable: response.status === 429 || response.status >= 500,
         retryAfterMs: readRetryAfter(response.headers.get("retry-after"), this.now()),
       });

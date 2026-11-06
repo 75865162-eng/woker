@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { before, after, test } from "node:test";
 import { prisma } from "@/lib/db/prisma";
 import { stageAdsReportBatch, publishAdsReportVersion, setAdsReportVersionVisibility, type AdsReportManifest, type AdsReportFence } from "@/lib/amazon-ads/report-publication";
@@ -410,6 +410,73 @@ test("large aggregates stay exact and do not block API or MCP paginated reads", 
   assert.deepEqual(response.data.items, api.rows); assert.equal(response.data.total, 110);
 });
 
+
+test("partially missing report metrics cannot become misleading totals or derived ratios across pages and MCP", async () => {
+  const fields = ["impressions", "clicks", "orders", "units", "spend", "sales"] as const;
+  const dependent = { impressions: ["ctr"], clicks: ["ctr", "cpc", "cvr"], orders: ["cvr"], units: [], spend: ["cpc", "acos", "roas"], sales: ["acos", "roas"] } as const;
+  for (const missing of fields) {
+    const reportType = `fixture_partial_${missing}`;
+    const fence = await runningReport();
+    const metrics = { impressions: "100", clicks: "10", orders: "2", units: "3", spend: "1.25", sales: "5" };
+    await stageAdsReportBatch(scope, actor, fence, { ...manifest, reportType }, [
+      { reportDate: manifest.from, dimensions: { campaignId: "complete-first" }, ...metrics },
+      { reportDate: manifest.from, dimensions: { campaignId: "partial-second" }, ...metrics, [missing]: null },
+    ]);
+    await publishAdsReportVersion(scope, actor, fence);
+    const params = { from: manifest.from, to: manifest.to, reportType, internalProfileId: profile, pageSize: "1", sortBy: "campaignId", sortDirection: "asc" };
+    const api = await queryPublishedAdsReports(scope, actor, parseAdsQuery(new URLSearchParams({ kind: "reports", ...params })));
+    assert.equal(api.rows.length, 1);
+    assert.equal(api.rows[0].campaignId, "complete-first");
+    assert.equal(api.rows[0][missing], metrics[missing], "complete visible row retains its metric");
+    assert.equal(api.total, 2);
+    assert.equal(api.totals[0][missing], null, "missing row on another page invalidates metric total");
+    assert.equal(api.totals[0].completeness.observedFactCount, "2");
+    assert.deepEqual(api.totals[0].completeness.metrics[missing], { providedFactCount: "1", missingFactCount: "1", status: "PARTIAL" });
+    for (const field of fields.filter(field => field !== missing)) assert.deepEqual(api.totals[0].completeness.metrics[field], { providedFactCount: "2", missingFactCount: "0", status: "COMPLETE" });
+    for (const metric of dependent[missing]) assert.equal(api.totals[0][metric], null);
+    for (const field of fields.filter(field => field !== missing)) assert.notEqual(api.totals[0][field], null);
+    const mcp = await invokeAmazonMcp(await authenticateAmazonMcp(`Bearer ${reportToken}`), "amazon.ads.reports.list", { ...params, pageSize: 1 }) as { totals: typeof api.totals };
+    assert.deepEqual(mcp.totals, api.totals);
+    const secondPage = await queryPublishedAdsReports(scope, actor, parseAdsQuery(new URLSearchParams({ kind: "reports", ...params, page: "2" })));
+    assert.deepEqual(secondPage.totals, api.totals);
+    const completeOnly = await queryPublishedAdsReports(scope, actor, parseAdsQuery(new URLSearchParams({ kind: "reports", ...params, campaignId: "complete-first" })));
+    assert.equal(completeOnly.totals[0][missing], metrics[missing], "filtered-out missing values do not contaminate another scope");
+  }
+});
+
+test("all-null metrics remain unavailable while real zero totals remain zero and revisions can restore completeness", async () => {
+  const reportType = "fixture_completeness_revision";
+  const first = await runningReport();
+  await stageAdsReportBatch(scope, actor, first, { ...manifest, reportType }, [
+    { reportDate: manifest.from, dimensions: { campaignId: "zero-a" }, impressions: "0", clicks: "0", spend: "0", orders: "0", sales: null, units: "0" },
+    { reportDate: manifest.from, dimensions: { campaignId: "zero-b" }, impressions: "0", clicks: "0", spend: null, orders: "0", sales: null, units: "0" },
+  ]);
+  await publishAdsReportVersion(scope, actor, first);
+  const input = parseAdsQuery(new URLSearchParams({ kind: "reports", from: manifest.from, to: manifest.to, reportType, internalProfileId: profile }));
+  const before = await queryPublishedAdsReports(scope, actor, input);
+  assert.equal(before.totals[0].spend, null);
+  assert.equal(before.totals[0].sales, null);
+  assert.deepEqual(before.totals[0].completeness.metrics.sales, { providedFactCount: "0", missingFactCount: "2", status: "MISSING" });
+  assert.deepEqual(before.totals[0].completeness.metrics.impressions, { providedFactCount: "2", missingFactCount: "0", status: "COMPLETE" });
+  for (const field of ["impressions", "clicks", "orders", "units"] as const) assert.equal(before.totals[0][field], "0");
+  const correction = await runningReport();
+  await stageAdsReportBatch(scope, actor, correction, { ...manifest, reportType }, [
+    { reportDate: manifest.from, dimensions: { campaignId: "zero-b" }, impressions: "0", clicks: "0", spend: "0", orders: "0", sales: null, units: "0" },
+  ]);
+  await publishAdsReportVersion(scope, actor, correction);
+  const after = await queryPublishedAdsReports(scope, actor, input);
+  assert.equal(after.total, 2);
+  assert.equal(after.totals[0].spend, "0", "superseded null does not poison corrected current facts");
+  assert.equal(after.totals[0].sales, null);
+  assert.deepEqual(after.totals[0].completeness.metrics.spend, { providedFactCount: "2", missingFactCount: "0", status: "COMPLETE" });
+  assert.deepEqual(after.totals[0].completeness.metrics.sales, { providedFactCount: "0", missingFactCount: "2", status: "MISSING" });
+  const empty = await queryPublishedAdsReports(scope, actor, { ...input, campaignId: "unobserved-campaign" });
+  assert.equal(empty.total, 0);
+  assert.deepEqual(empty.totals, [], "no facts must not invent a complete zero summary");
+  assert.equal(after.totals[0].acos, null);
+  assert.equal(after.totals[0].roas, null, "zero denominator remains unavailable");
+});
+
 test("revision selection and totals keep currency, API and attribution contracts separate", async () => {
   const reportType = "fixture_contract_partitions";
   const contracts = [
@@ -738,6 +805,141 @@ test("throttled create remains unknown and is never retried as a read operation"
   const request = await acquisitionRow(fixture.fence.taskId);
   assert.equal(request.errorCode, "ADS_REPORT_CREATE_RESULT_UNKNOWN");
   assert.equal((request.requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.reserved?.operation, "create");
+});
+
+test("stalled poll and download bodies time out, cancel readers and release runtime lease", { timeout: 20000 }, async () => {
+  for (const operation of ["poll", "download"] as const) {
+    const fixture = await runtimeFixture("8200");
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    await fixture.due();
+    if (operation === "download") {
+      await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+      await fixture.due();
+    }
+    let cancelled = 0;
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(stream) { stream.enqueue(new Uint8Array([1])); },
+      cancel() { cancelled++; return new Promise(() => {}); },
+    }));
+    fixture.transport[operation] = async () => { fixture.calls[operation]++; return response; };
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    const row = await fixture.row();
+    assert.equal(row.status, "RETRY_WAIT"); assert.equal(row.errorCode, "ADS_REPORT_OPERATION_TIMEOUT");
+    assert.equal(row.leaseOwner, null); assert.equal(cancelled, 1); assert.equal(response.body!.locked, false);
+    const state = ((await acquisitionRow(row.id)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition;
+    assert.equal(state.phase, operation.toUpperCase()); assert.equal(state.reserved, undefined);
+    assert.equal(await prisma.amazonAdsReportFact.count({ where: { ...scope, sourceTaskId: row.id } }), 0);
+    await controlIsolatedReport(scope, actor, row.id, "cancel");
+  }
+});
+
+test("response arriving after operation timeout is cancelled and cannot advance the report", { timeout: 10000 }, async () => {
+  const fixture = await runtimeFixture("8201");
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  await fixture.due();
+  let release!: (response: Response) => void;
+  fixture.transport.poll = async () => { fixture.calls.poll++; return new Promise<Response>(resolve => { release = resolve; }); };
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  const blockedPhase = (await acquisitionRow(fixture.fence.taskId)).requestOptions;
+  let cancelled!: () => void;
+  const cancellation = new Promise<void>(resolve => { cancelled = resolve; });
+  const response = new Response(new ReadableStream({ cancel() { cancelled(); } }));
+  release(response);
+  await cancellation;
+  assert.equal(response.body!.locked, false);
+  assert.deepEqual((await acquisitionRow(fixture.fence.taskId)).requestOptions, blockedPhase);
+  assert.equal((await fixture.row()).status, "RETRY_WAIT");
+  await controlIsolatedReport(scope, actor, fixture.fence.taskId, "cancel");
+});
+
+test("stored download survives failed FileObject or document transaction with audit evidence and bounded retry", async () => {
+  for (const table of ["FileObject", "AmazonAdsReportDocument"] as const) {
+    const fixture = await runtimeFixture("8300");
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    await fixture.due();
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    await fixture.due();
+    const before = await acquisitionRow(fixture.fence.taskId);
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION fixture_reject_ads_storage_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${table === "FileObject" ? 'IF NEW."mimeType" = \'application/gzip\' THEN' : ""} RAISE EXCEPTION 'fixture storage metadata failure'; ${table === "FileObject" ? "END IF;" : ""} RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER fixture_reject_ads_storage_commit BEFORE INSERT ON "${table}" FOR EACH ROW EXECUTE FUNCTION fixture_reject_ads_storage_commit()`);
+    try { await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport); }
+    finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER fixture_reject_ads_storage_commit ON "${table}"`);
+      await prisma.$executeRawUnsafe("DROP FUNCTION fixture_reject_ads_storage_commit()");
+    }
+    const row = await fixture.row(), failed = await acquisitionRow(row.id);
+    assert.equal(row.status, "RETRY_WAIT"); assert.equal(row.leaseOwner, null);
+    assert.equal(row.errorCode, "ADS_REPORT_ACQUISITION_FAILED");
+    assert.equal(failed.remoteRequestId, before.remoteRequestId); assert.equal(failed.versionId, before.versionId);
+    const state = (failed.requestOptions as unknown as { acquisition: AcquisitionState }).acquisition;
+    assert.equal(state.phase, "DOWNLOAD"); assert.equal(state.calls.download, 1); assert.equal(state.reserved, undefined);
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { organizationId: scope.organizationId, entityId: failed.id, action: "amazon.ads.report.storage_commit_unconfirmed" } });
+    const metadata = audit.metadata as unknown as { taskId: string; workspaceId: string; receipts: Array<{ storageKey: string; contentSha256: string; byteSize: number }> };
+    assert.equal(metadata.taskId, row.id); assert.equal(metadata.workspaceId, scope.workspaceId);
+    assert.equal(metadata.receipts.length, 1);
+    const receipt = metadata.receipts[0];
+    assert.match(receipt.storageKey, /^amazon-ads\/reports\/[a-f0-9]{64}\/[a-f0-9]{64}$/);
+    const stored = await getStorageDriver().getBuffer(receipt.storageKey);
+    assert.deepEqual(stored, fixture.bytes);
+    assert.equal(createHash("sha256").update(stored).digest("hex"), receipt.contentSha256);
+    assert.equal(stored.length, receipt.byteSize);
+    assert.equal(await prisma.fileObject.count({ where: { ...scope, storageKey: receipt.storageKey } }), 0);
+    assert.equal(await prisma.amazonAdsReportDocument.count({ where: { requestId: failed.id } }), 0);
+    assert.equal(await prisma.amazonAdsReportFact.count({ where: { ...scope, sourceTaskId: row.id } }), 0);
+    assert.equal(JSON.stringify(metadata).includes("signature="), false);
+    for (let step = 0; step < 3; step++) { await fixture.due(); await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport); }
+    assert.equal((await fixture.row()).status, "SUCCEEDED");
+    assert.deepEqual(fixture.calls, { create: 1, poll: 1, download: 2 });
+    assert.equal((await acquisitionRow(row.id)).versionId, before.versionId);
+    assert.equal(await prisma.amazonAdsReportVersion.count({ where: { sourceTaskId: row.id } }), 1);
+    assert.equal(await prisma.amazonAdsReportFact.count({ where: { ...scope, sourceTaskId: row.id } }), 1);
+    assert.equal(await prisma.fileObject.count({ where: { ...scope, storageKey: receipt.storageKey } }), 1);
+    assert.deepEqual(await getStorageDriver().getBuffer(receipt.storageKey), stored);
+  }
+});
+
+test("create evidence stored before metadata failure stays unknown and retains an auditable object reference", async () => {
+  const fixture = await runtimeFixture("8301");
+  await prisma.$executeRawUnsafe("CREATE FUNCTION fixture_reject_ads_evidence() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture evidence metadata failure'; END $$");
+  await prisma.$executeRawUnsafe('CREATE TRIGGER fixture_reject_ads_evidence BEFORE INSERT ON "FileObject" FOR EACH ROW EXECUTE FUNCTION fixture_reject_ads_evidence()');
+  try { await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport); }
+  finally {
+    await prisma.$executeRawUnsafe('DROP TRIGGER fixture_reject_ads_evidence ON "FileObject"');
+    await prisma.$executeRawUnsafe("DROP FUNCTION fixture_reject_ads_evidence()");
+  }
+  assert.equal((await fixture.row()).status, "BLOCKED");
+  const request = await acquisitionRow(fixture.fence.taskId);
+  assert.equal(request.errorCode, "ADS_REPORT_CREATE_RESULT_UNKNOWN"); assert.equal(request.remoteRequestId, null);
+  assert.equal((request.requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.reserved?.operation, "create");
+  const audit = await prisma.auditLog.findFirstOrThrow({ where: { entityId: request.id, action: "amazon.ads.report.storage_commit_unconfirmed" } });
+  const metadata = audit.metadata as unknown as { receipts: Array<{ storageKey: string }> };
+  const object = await getStorageDriver().getBuffer(metadata.receipts[0].storageKey);
+  assert.equal(object.toString().includes("signature="), false);
+  assert.equal(await prisma.fileObject.count({ where: { ...scope, storageKey: metadata.receipts[0].storageKey } }), 0);
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  assert.deepEqual(fixture.calls, { create: 1, poll: 0, download: 0 });
+});
+
+test("failed storage audit preserves the original acquisition failure and emits only a fixed diagnostic", async () => {
+  const fixture = await runtimeFixture("8302");
+  const warnings: unknown[][] = [], warn = console.warn;
+  await prisma.$executeRawUnsafe("CREATE FUNCTION fixture_reject_ads_audit_chain() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private fixture database failure'; END $$");
+  await prisma.$executeRawUnsafe('CREATE TRIGGER fixture_reject_ads_audit_chain BEFORE INSERT ON "FileObject" FOR EACH ROW EXECUTE FUNCTION fixture_reject_ads_audit_chain()');
+  await prisma.$executeRawUnsafe('CREATE TRIGGER fixture_reject_ads_audit_chain BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION fixture_reject_ads_audit_chain()');
+  console.warn = (...args) => { warnings.push(args); };
+  try { await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport); }
+  finally {
+    console.warn = warn;
+    await prisma.$executeRawUnsafe('DROP TRIGGER fixture_reject_ads_audit_chain ON "AuditLog"');
+    await prisma.$executeRawUnsafe('DROP TRIGGER fixture_reject_ads_audit_chain ON "FileObject"');
+    await prisma.$executeRawUnsafe("DROP FUNCTION fixture_reject_ads_audit_chain()");
+  }
+  const request = await acquisitionRow(fixture.fence.taskId);
+  assert.equal((await fixture.row()).status, "BLOCKED");
+  assert.equal(request.errorCode, "ADS_REPORT_CREATE_RESULT_UNKNOWN");
+  assert.deepEqual(warnings, [["ADS_REPORT_STORAGE_EVIDENCE_UNAVAILABLE", { taskId: fixture.fence.taskId, requestId: request.id }]]);
+  assert.equal(await prisma.amazonAdsSyncAttempt.count({ where: { ...scope, taskId: fixture.fence.taskId, status: "RUNNING" } }), 0);
+  assert.deepEqual(fixture.calls, { create: 1, poll: 0, download: 0 });
 });
 
 test("same Profile cannot run two report operations concurrently", async () => {

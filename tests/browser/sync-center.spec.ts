@@ -22,7 +22,7 @@ async function setup(page: Page, readOnly = false, entry = false) {
     if (url.pathname === "/styles.css") return route.fulfill({ contentType: "text/css", body: styles });
     if (url.pathname.startsWith("/api/") && url.pathname !== "/api/operations/sync-center") {
       if (url.pathname === "/api/operations/amazon-stores") return route.fulfill({ json: { stores: [] } });
-      if (url.pathname === "/api/operations/amazon-mcp") return route.fulfill({ json: { credentials: [], scopes: [], tools: [] } });
+      if (url.pathname === "/api/operations/amazon-mcp") return route.fulfill({ json: { credentials: [], scopes: [], tools: [], toolCatalog: [] } });
       if (url.pathname === "/api/operations/sync-center/exports") {
         const body = request.method() === "POST" ? request.postDataJSON() : undefined;
         calls.push({ section: "sales-export", params: url.searchParams, body });
@@ -81,7 +81,7 @@ test("sync views and merged business navigation remain reachable with real style
   for (const label of ["订单列表", "同步计划", "同步任务", "数据域管理", "数据质量", "店铺与授权", "同步设置", "数据总览"]) { await page.getByRole("button", { name: label, exact: true }).click(); await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible(); }
   await expect(page.getByRole("navigation", { name: "业务数据导航" }).getByRole("button", { name: "补货计划", exact: true })).toBeVisible();
   await expect(page.getByText("原有业务入口 · 保留", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "数据域管理", exact: true }).click(); await page.getByRole("button", { name: "订单 已接入", exact: true }).click(); await expect(page.getByText("Orders 2026-01-01 / searchOrders（P1 有界列表）", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "数据域管理", exact: true }).click(); await page.getByRole("button", { name: "订单 已接入", exact: true }).click(); await expect(page.getByText("Orders 2026-01-01 / searchOrders + getOrder（详情按审批选择）", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 test("plan creation, custom frequency, pause, copy and history use persisted contracts", async ({ page }) => {
@@ -209,7 +209,7 @@ test("overview follows the reviewed desktop layout and remains usable on narrow 
   await page.getByRole("button", { name: "刷新", exact: true }).click();
   await expect(page.getByRole("img", { name: "最近 24 小时成功与失败任务柱形图" })).toBeVisible();
   const metrics = page.getByTestId("sync-center-metrics");
-  expect(await metrics.locator(":scope > div").count()).toBe(6);
+  expect(await metrics.locator(":scope > div").count()).toBe(7);
   const boxes = await metrics.locator(":scope > div").evaluateAll(items => items.map(el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y }; }));
   expect(boxes[0].y).toBe(boxes[2].y); expect(boxes[3].y).toBeGreaterThan(boxes[0].y);
   const panels = page.getByTestId("sync-center-lower-panels").locator(":scope > section");
@@ -233,12 +233,12 @@ test("plan domain navigation selects real defaults, blocks planned domains and p
   await expect(page.getByLabel("周期分钟（15–10080）", { exact: true })).toHaveValue("1440");
   await picker.getByRole("button", { name: "订单 已接入", exact: true }).click();
   await expect(page.getByRole("button", { name: "新建计划", exact: true })).toBeDisabled();
-  await expect(page.getByRole("heading", { name: "订单仅支持逐次执行审批", exact: true })).toBeVisible();
+  await expect(page.getByText("后台自动分段回溯并每日增量；单次手动执行仍需审批。", { exact: true })).toBeVisible();
   await expect(page.getByLabel("计划名称", { exact: true })).toHaveCount(0);
   await picker.getByRole("button", { name: "FBA 库存 已接入", exact: true }).click();
   await page.getByRole("button", { name: "新建计划", exact: true }).click();
   await page.getByLabel("计划名称", { exact: true }).fill("FBA 库存每小时校准");
-  await expect(page.getByLabel("周期分钟（15–10080）", { exact: true })).toHaveValue("60");
+  await expect(page.getByLabel("周期分钟（15–10080）", { exact: true })).toHaveValue("1440");
   await page.getByRole("checkbox", { name: "店铺 A / US", exact: true }).check();
   const planLayout = page.getByTestId("sync-center-plan-layout");
   const columns = await planLayout.locator(":scope > *").evaluateAll(elements => elements.map(el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y }; }));

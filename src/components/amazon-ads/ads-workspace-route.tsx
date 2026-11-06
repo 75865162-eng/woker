@@ -1,8 +1,8 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { AdsWorkspace } from "./ads-workspace";
-// Mount in the layout so navigation between list/detail/tabs preserves the mock session.
+// Mount in the layout so local navigation and the explicitly selected Demo retain their state.
 export function AdsWorkspaceRoute() {
   const path = usePathname(), router = useRouter();
-  return <AdsWorkspace path={path} navigate={value => router.push(value)} />;
+  return <AdsWorkspace path={path} initialView={/^\/amazon-ads\/(?:campaigns|ad-groups)(?:\/|$)/.test(path) ? "campaigns" : "synced"} navigate={value => router.push(value)} />;
 }

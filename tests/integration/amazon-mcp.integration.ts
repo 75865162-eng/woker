@@ -5,8 +5,9 @@ import { POST as oauthStart } from "@/app/api/integrations/amazon/sp-api/oauth/s
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp, listMcpSkillTableOptions, listDiscoverableAmazonMcpTools } from "@/lib/amazon-sync/mcp";
+import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp, listMcpSkillTableOptions, listDiscoverableAmazonMcpTools, getMcpSettingsSnapshot } from "@/lib/amazon-sync/mcp";
 import { amazonDataAccess, assertSellerMarketplaceAccess } from "@/lib/amazon-sync/data-access";
 import { POST } from "@/app/api/mcp/amazon/route";
 import { requestChange, decideChange, applyChange } from "@/lib/amazon-sync/change-approval";
@@ -83,6 +84,54 @@ test("generic Skill table catalog and queries expose only published authorized f
   await assert.rejects(() => call("data_query", { table: "inventory", filters: { arbitraryColumn: "x" } }), /FIELD_NOT_MAPPED/);
   await assert.rejects(() => call("data_query", { table: "inventory", sellerAccountId: sellerB }), /数据范围不可访问/);
 });
+test("unified dataset locators preserve rows and expose bounded, scoped metadata", async () => {
+  for (const [table, module, dataType] of [["inventory", "amazon_sync", "inventory"], ["listings", "amazon_sync", "listings"], ["sales_traffic_daily", "amazon_sync", "sales_traffic_daily"]]) {
+    const legacy = await call("data_query", { table }) as { data: unknown; meta: { source: string } };
+    const current = await call("data_query", { module, dataType }) as { data: unknown; pagination: { total: number }; meta: { source: string; dataset: { id: string }; scope: { pairs: unknown[] }; requestId: string; toolVersion: string } };
+    assert.deepEqual(current.data, legacy.data);
+    assert.equal(current.meta.source, legacy.meta.source);
+    assert.equal(current.meta.dataset.id, table);
+    assert.deepEqual(current.meta.scope.pairs, [{ sellerAccountId: sellerA, marketplaceId: site }]);
+    assert.ok(current.meta.requestId);
+    assert.equal(current.meta.toolVersion, "1.1.0");
+    const described = await call("data_describe_table", { module, dataType }) as { data: { table: { maxPageSize: number; dateSemantics: string } } };
+    assert.equal(described.data.table.maxPageSize, 1000);
+    assert.ok(described.data.table.dateSemantics);
+  }
+  await assert.rejects(() => call("data_query", { table: "inventory", module: "amazon_sync", dataType: "listings" }), /定位参数冲突/);
+  await assert.rejects(() => call("data_query", { module: "amazon_sync" }), /完整module/);
+  await assert.rejects(() => call("data_query", { module: "amazon_sync", dataType: "sales_traffic_daily", filters: { asin: "B000FIXTURE" } }), /FIELD_NOT_MAPPED/);
+  await assert.rejects(() => call("data_query", { table: "inventory", sellerSku: "A", filters: { sellerSku: "B" } }), /筛选参数或别名冲突/);
+  await assert.rejects(() => call("data_query", { table: "inventory", sellerAccountId: "" }), /不可访问/);
+  const empty = await call("data_query", { table: "inventory", sellerSku: "MISSING" }) as { data: { total: number }; meta: { resultStatus: string } };
+  assert.equal(empty.data.total, 0); assert.equal(empty.meta.resultStatus, "EMPTY_RESULT");
+});
+test("snapshot sorting and page counts apply the same supported filters to rows and totals", async () => {
+  const original = await prisma.amazonInventorySnapshot.findFirstOrThrow({ where: { ...scope, syncRunId: runA } });
+  const extra = await prisma.amazonInventorySnapshot.create({ data: { ...scope, id: randomUUID(), sellerAccountId: sellerA, marketplaceId: site, sellerSku: "ZZZ-FIXTURE", fulfillableQuantity: 0, syncRunId: runA, capturedAt: original.capturedAt } });
+  try {
+    const first = await call("data_query", { module: "amazon_sync", dataType: "inventory", pageSize: 1, sortBy: "sellerSku", sortDirection: "desc" }) as { data: { total: number; items: Array<{ sellerSku: string }> }; pagination: { hasNext: boolean; pageCount: number } };
+    assert.equal(first.data.total, 2); assert.equal(first.data.items[0].sellerSku, "ZZZ-FIXTURE");
+    assert.equal(first.pagination.hasNext, true); assert.equal(first.pagination.pageCount, 2);
+    const second = await call("data_query", { table: "inventory", page: 2, pageSize: 1, filters: { sortBy: "sellerSku", sortDirection: "desc" } }) as typeof first;
+    assert.equal(second.data.total, 2); assert.equal(second.data.items[0].sellerSku, "SAME-SKU");
+    assert.equal(second.pagination.hasNext, false);
+  } finally { await prisma.amazonInventorySnapshot.delete({ where: { id: extra.id } }); }
+});
+test("sales exactMetrics preserves PostgreSQL JSON numeric text without replacing legacy metrics", async () => {
+  const row = await prisma.amazonSalesTrafficSnapshot.findFirstOrThrow({ where: { ...scope, sellerAccountId: sellerA } });
+  try {
+    await prisma.$executeRaw`UPDATE "AmazonSalesTrafficSnapshot" SET metrics = ${'{"unitsOrdered":9007199254740993,"totalOrderItems":0,"sessions":null,"orderedProductSales":{"amount":9007199254740993.123456,"currencyCode":"USD"}}'}::jsonb WHERE id = ${row.id}`;
+    const result = await call("data_query", { module: "amazon_sync", dataType: "sales_traffic_daily" }) as { data: { items: Array<{ metrics: { unitsOrdered: number }; exactMetrics: { unitsOrdered: string; totalOrderItems: string; sessions: null; orderedProductSales: { amount: string; currencyCode: string } } }> } };
+    const item = result.data.items[0];
+    assert.equal(typeof item.metrics.unitsOrdered, "number");
+    assert.equal(item.exactMetrics.unitsOrdered, "9007199254740993");
+    assert.equal(item.exactMetrics.totalOrderItems, "0");
+    assert.equal(item.exactMetrics.sessions, null);
+    assert.equal(item.exactMetrics.orderedProductSales.amount, "9007199254740993.123456");
+    assert.equal(item.exactMetrics.orderedProductSales.currencyCode, "USD");
+  } finally { await prisma.amazonSalesTrafficSnapshot.update({ where: { id: row.id }, data: { metrics: row.metrics as Prisma.InputJsonValue } }); }
+});
 test("ERP Skill setup reports live published availability within current seller grants", async () => {
   const tables = await listMcpSkillTableOptions(scope, actor);
   const inventory = tables.find(table => table.name === "inventory")!;
@@ -135,6 +184,14 @@ test("Ads Skill report table exposes only the latest successful published versio
   const incomplete = await adsCall("data_query", { table: "ads_report_daily", filters: { campaignId: "incomplete-campaign" } }) as { data: { items: Array<{ impressions: string | null; spend: string | null; sales: string | null }> } };
   assert.deepEqual(incomplete.data.items[0] && [incomplete.data.items[0].impressions, incomplete.data.items[0].spend, incomplete.data.items[0].sales], [null, null, null]);
   assert.ok(!JSON.stringify(result).includes(sellerB));
+  const filters = { from: "2026-11-01", to: "2026-11-01", campaignId: "current-campaign", sortBy: "spend", sortDirection: "desc" };
+  const generic = await adsCall("data_query", { module: "amazon_ads", dataType: "report_daily", filters, pageSize: 2 }) as { data: unknown; totals: unknown; meta: { publishedVersionIds: string[] } };
+  const dedicated = await adsCall("amazon.ads.reports.list", { ...filters, pageSize: 2 }) as typeof generic;
+  assert.deepEqual(generic.data, dedicated.data);
+  assert.deepEqual(generic.totals, dedicated.totals);
+  assert.equal(generic.totals, null, "unknown attribution windows must not be aggregated as comparable totals");
+  assert.deepEqual(generic.meta.publishedVersionIds, dedicated.meta.publishedVersionIds);
+  await assert.rejects(() => adsCall("data_query", { module: "amazon_ads", dataType: "report_daily", pageSize: 101 }), /分页参数/);
 });
 test("generic sync request remains pending approval and requires the MCP sync grant", async () => {
   await assert.rejects(() => call("data_sync_start", { resource: "inventory" }), /授权|不可访问/);
@@ -224,13 +281,56 @@ test("no permission cache crosses two operator credentials", async () => {
 test("real JSON-RPC Route authenticates bearer, rejects origin and hides failures", async () => {
   const request = (authorization: string, origin?: string) => new Request("http://localhost/api/mcp/amazon", { method: "POST", headers: { authorization, "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
   const listed = await POST(request(`Bearer ${token}`)); assert.equal(listed.status, 200);
-  const body = await listed.json() as { result: { tools: Array<{ name: string; inputSchema: { required?: string[] } }> } };
-  assert.ok(body.result.tools.some(tool => tool.name === "data_query" && tool.inputSchema.required?.includes("table")));
+  const body = await listed.json() as { result: { tools: Array<{ name: string; inputSchema: { anyOf?: Array<{ required: string[] }> } }> } };
+  assert.ok(body.result.tools.some(tool => tool.name === "data_query" && tool.inputSchema.anyOf?.some(option => option.required.includes("table"))));
   const unavailable = await POST(new Request("http://localhost/api/mcp/amazon", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "data_query", arguments: { table: "sales_traffic_asin" } } }) }));
   assert.equal(unavailable.status, 409);
   assert.equal((await unavailable.json() as { error: { code: string } }).error.code, "SCHEMA_UNVERIFIED");
   assert.equal((await POST(request("Bearer invalid"))).status, 401);
   assert.equal((await POST(request(`Bearer ${token}`, "https://evil.invalid"))).status, 403);
+});
+test("dataset errors preserve legacy codes while distinguishing unpublished, unverified and invalid queries", async () => {
+  const request = (args: Record<string, unknown>) => new Request("http://localhost/api/mcp/amazon", {
+    method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "data_query", arguments: args } }),
+  });
+  const invalid = await (await POST(request({ table: "inventory", sellerSku: "PRIVATE_FIXTURE", filters: { sellerSku: "OTHER" } }))).json();
+  assert.equal(invalid.error.data.businessCode, "FILTER_CONFLICT");
+  assert.equal(invalid.error.code, -32602);
+  assert.ok(invalid.error.data.requestId);
+  assert.ok(!JSON.stringify(invalid).includes("PRIVATE_FIXTURE"));
+  const unverified = await (await POST(request({ table: "sales_traffic_asin" }))).json();
+  assert.equal(unverified.error.code, "SCHEMA_UNVERIFIED");
+  assert.equal(unverified.error.data.businessCode, "SCHEMA_UNVERIFIED");
+  try {
+    await prisma.amazonSyncRun.update({ where: { id: runA }, data: { status: "FAILED" } });
+    const response = await POST(request({ module: "amazon_sync", dataType: "inventory" }));
+    const unpublished = await response.json();
+    assert.equal(response.status, 403);
+    assert.equal(unpublished.error.code, "TABLE_NOT_ALLOWED");
+    assert.equal(unpublished.error.data.businessCode, "DATASET_UNPUBLISHED");
+    assert.equal(unpublished.error.data.dataAvailability, "NO_PUBLISHED_SOURCE");
+  } finally { await prisma.amazonSyncRun.update({ where: { id: runA }, data: { status: "SUCCEEDED" } }); }
+});
+test("MCP audit captures safe Gateway classification, version, duration and supports failure filtering", async () => {
+  const request = new Request("http://localhost/api/mcp/amazon", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "amazon.inventory.list", arguments: { filters: {} } } }) });
+  const response = await POST(request);
+  assert.equal(response.status, 400);
+  const failure = await response.json();
+  assert.equal(failure.error.data.businessCode, "SCHEMA_VALIDATION");
+  await call("amazon.inventory.list");
+  const rejected = await getMcpSettingsSnapshot(scope, actor, { callLogFailureClass: "SCHEMA_VALIDATION", callLogTool: "amazon.inventory.list" });
+  assert.equal(rejected.callLogs.length, 1);
+  assert.equal(rejected.callLogs[0].failureClass, "SCHEMA_VALIDATION");
+  assert.equal(rejected.callLogs[0].toolVersion, "1.0.0");
+  assert.equal(rejected.callLogs[0].gatewayStatus, "FAILED");
+  assert.ok(typeof rejected.callLogs[0].durationMs === "number");
+  const succeeded = await getMcpSettingsSnapshot(scope, actor, { callLogStatus: "SUCCEEDED", callLogTool: "amazon.inventory.list" });
+  assert.equal(succeeded.callLogs[0].gatewayStatus, "SUCCEEDED");
+  assert.equal(succeeded.callLogs[0].failureClass, null);
+  assert.ok(typeof succeeded.callLogs[0].durationMs === "number");
+  assert.ok(!JSON.stringify([rejected.callLogs, succeeded.callLogs]).includes(token));
 });
 test("discovery refreshes action grants, personal tool scope and seller/site pairs", async () => {
   const identity = await authenticateAmazonMcp(`Bearer ${token}`);
@@ -269,7 +369,7 @@ test("newer protocol adds versioned object outputs while preserving legacy text 
   });
   const listed = await (await POST(request("tools/list"))).json();
   const query = listed.result.tools.find((tool: { name: string }) => tool.name === "data_query");
-  assert.equal(query._meta["erp/toolVersion"], "1.0.0");
+  assert.equal(query._meta["erp/toolVersion"], "1.1.0");
   assert.equal(query._meta["erp/dataAvailability"], "NOT_CHECKED");
   assert.equal(query.outputSchema.type, "object");
   assert.equal(listed.result.tools.find((tool: { name: string }) => tool.name === "amazon.stores.list").outputSchema, undefined);

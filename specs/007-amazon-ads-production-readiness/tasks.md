@@ -33,6 +33,10 @@ T09/T10另补离线checkpoint损坏保护：调用前校验持久预算、阶段
 
 T09/T10只读退避子项已有代码：poll/download 的429/5xx遵守Retry-After和持久预算指数退避，超总截止阻断，等待释放lease；create不重发。定向单测7/7、报表隔离集成36/36、类型与定向lint通过。见[只读退避交付](../../docs/amazon-ads-report-retry-delivery-2026-11-06.md)；正式合同、共享限流及完整故障矩阵仍未完成。
 
+T10/T11的RT10离线流子项补充有界读取响应abort、取消不阻塞、reader释放及晚到响应保护，见[流超时交付](../../docs/amazon-ads-report-stream-delivery-2026-11-06.md)。未据此完成进程级故障或正式HTTP连接验收。
+
+T06/T11补文件已保存但元数据事务失败的提交未确认审计、同任务/版本有界重试及审计自身失败保护，见[文件恢复交付](../../docs/amazon-ads-report-storage-recovery-delivery-2026-11-06.md)。复验已有进程SIGKILL专项14/14；不自动清理对象，不宣称完整RT矩阵完成。
+
 T09–T11新增隔离运行子项：数据库到期扫描、注入式投递、短lease单步执行、pause/resume/cancel、只读重试与过期恢复；两个实际BullMQ Worker实例验证采集至发布，报告集成31/31通过。见[报告运行层交付](../../docs/amazon-ads-report-runtime-delivery-2026-11-06.md)。未接入常规生产Worker或真实transport，尚缺优先级/跨Worker限流及完整kill/restart矩阵，以下整体复选状态保持未完成。
 
 T11新增自动运行子项：显式fixture Worker服务、跨实例队列并发2、定时扫描锁、稳定jobId、容量背压及优雅关闭；新集成9/9通过，含真实子进程SIGKILL创建/下载恢复，报告回归36/36通过。见[Worker生命周期交付](../../docs/amazon-ads-report-worker-delivery-2026-11-06.md)。常规生产启动、正式transport、严格分布式准入和完整故障矩阵仍未完成，不勾选整体任务。
@@ -45,6 +49,8 @@ T09–T11续批修复扫描阻塞：暂停计划不占等待候选、缺失lease
 - [ ] T11（FR04/05，依赖 T06/T07/T10）用真实 BullMQ + mock transport 串联 acquisition 至原子发布。验收：kill/restart、两个 worker、文件成功数据库失败、发布竞态均无重复或伪成功；仍关闭真实采集。
 
 ## 第四批：U1-D 可信查询与可见性
+
+T13/T19结构业务视图子项：生产Campaign路由已接本地列表/详情、所属Ad Group分页和独立权限的来源任务，保留Demo显式入口；31项隔离浏览器回归通过。见[Campaign视图交付](../../docs/amazon-ads-campaign-workbench-delivery-2026-11-06.md)。正式表现/时间质量合同及其他业务页面尚未完成，不勾选整体任务。 后续已接独立Ad Group列表/详情、父子导航及Keyword/Target/两级Negative只读子视图；最新41项隔离浏览器回归、TypeScript和定向ESLint通过。广告商品reader与正式报告采集/合同验收仍未完成；Campaign详情已增加只读已发布SP Campaign日报视图，日期范围/服务端汇总/口径分组均接入；详见同一交付记录追加段。 日报汇总现对部分null字段保守返回null，并逐指标暴露当前已观察事实提供数/缺失数，API/MCP及Campaign页面共用；日报行可按Profile与来源任务ID打开受现有权限控制的任务详情；报告集成43项、浏览器25项和类型检查通过，未将报告质量整体任务勾选完成。
 
 - [ ] T12（FR06/07，依赖 T02/T04/T11及D04–D06裁决）实现已评审的覆盖/时区/归因状态与版本选择；必要 schema 仅先生成迁移脚本并隔离验证。验收：零/null/空/未覆盖独立；新版本缺行按合同处理；历史版本可追溯。
 - [ ] T13（US1/US2，依赖 T12）在既有 Campaign、同步详情和 MCP 展示同一质量/来源口径。验收：相同筛选下行、总量、totals、版本一致；不同时区不误合并；实时撤权无结果泄露。

@@ -56,7 +56,7 @@ test("validation distinguishes redacted Amazon replies from network and local fa
     auditLog: { create: async () => ({}) },
   };
   try {
-    for (const mode of ["lwa", "sp-api", "network", "empty-sites", "basic-success"] as const) {
+    for (const mode of ["lwa", "unauthorized", "sp-api", "network", "empty-sites", "basic-success"] as const) {
       let calls = 0;
       globalThis.fetch = async (input, init) => {
         calls++;
@@ -72,6 +72,7 @@ test("validation distinguishes redacted Amazon replies from network and local fa
         if (mode === "network") throw new Error("fixture-secret network internals");
         if (mode === "lwa") return Response.json({ error: "invalid_grant", error_description: "Refresh token invalid: fixture-refresh fixture-secret" }, { status: 400 });
         if (calls === 1) return Response.json({ access_token: "fixture-access", expires_in: 3600 });
+        if (mode === "unauthorized" && calls === 2) return Response.json({ message: "Unauthorized fixture-access fixture-secret" }, { status: 401 });
         if (mode === "sp-api") return Response.json({ message: "Access denied fixture-access fixture-secret" }, { status: 403 });
         if (calls === 2) return Response.json({ payload: mode === "empty-sites" ? [] : [{ marketplace: { id: "ATVPDKIKX0DER", countryCode: "US" }, participation: { isParticipating: true } }] });
         throw new Error("Basic validation must never request Listings or other data");
@@ -83,14 +84,15 @@ test("validation distinguishes redacted Amazon replies from network and local fa
       }
       await assert.rejects(() => performAuthorizationValidation(scope, "actor", "auth", 1, "approval"), (error: unknown) => {
         assert.ok(error instanceof Error);
-        assert.equal(error.message.startsWith("亚马逊返回："), mode === "lwa" || mode === "sp-api");
+        assert.equal(error.message.startsWith("亚马逊返回："), mode === "lwa" || mode === "unauthorized" || mode === "sp-api");
         assert.ok(!error.message.includes("fixture-secret") && !error.message.includes("fixture-refresh") && !error.message.includes("fixture-access"));
         if (mode === "lwa") { assert.match(error.message, /400.*Refresh token invalid/); assert.match(error.message, /失败步骤：LWA/); }
+        if (mode === "unauthorized") { assert.match(error.message, /401.*Unauthorized/); assert.match(error.message, /失败步骤：Sellers.getMarketplaceParticipations/); }
         if (mode === "sp-api") { assert.match(error.message, /403.*Access denied/); assert.match(error.message, /失败步骤：Sellers.getMarketplaceParticipations/); }
         if (mode === "network") assert.match(error.message, /^连接异常：/);
         return true;
       });
-      assert.equal(latestCode, mode === "lwa" || mode === "sp-api" ? "AUTH_REJECTED" : mode === "empty-sites" ? "INVALID_PARTICIPATIONS" : "VALIDATION_FAILED");
+      assert.equal(latestCode, mode === "lwa" || mode === "unauthorized" ? "AUTH_REJECTED" : mode === "empty-sites" ? "INVALID_PARTICIPATIONS" : "VALIDATION_FAILED");
     }
   } finally {
     globals.prisma = priorDb; globalThis.fetch = priorFetch;

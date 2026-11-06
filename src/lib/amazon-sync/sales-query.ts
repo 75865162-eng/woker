@@ -43,15 +43,24 @@ export function salesVersionSql(scope: SyncScope, query: SalesQuery, cutoff: Dat
     ${query.keyword ? Prisma.sql`WHERE position(lower(${query.keyword}) in lower("sellerName" || ' ' || "amazonSellerId" || ' ' || "marketplaceId")) > 0` : Prisma.empty}
   )`;
 }
-export type SalesRow = { id: string; organizationId: string; workspaceId: string; sourceId: string; syncRunId: string; sellerAccountId: string; marketplaceId: string; businessDate: string; reportId: string; documentId: string; metrics: { unitsOrdered: number | null; totalOrderItems: number | null; sessions: number | null; pageViews: number | null; orderedProductSales: { amount: number; currencyCode: string } | null }; quality: string; capturedAt: Date; publishedAt: Date; amazonSellerId: string; sellerName: string; frozenScope: unknown; summary: unknown };
-export async function readSalesTraffic(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; pageSize?: number; actor?: string; sellerFence?: string[]; sourceFence?: string[]; action?: "view" | "export" } = {}) {
+export type SalesExactMetrics = { unitsOrdered: string | null; totalOrderItems: string | null; sessions: string | null; pageViews: string | null; orderedProductSales: { amount: string | null; currencyCode: string | null } | null };
+export type SalesRow = { id: string; organizationId: string; workspaceId: string; sourceId: string; syncRunId: string; sellerAccountId: string; marketplaceId: string; businessDate: string; reportId: string; documentId: string; metrics: { unitsOrdered: number | null; totalOrderItems: number | null; sessions: number | null; pageViews: number | null; orderedProductSales: { amount: number; currencyCode: string } | null }; exactMetrics?: SalesExactMetrics; quality: string; capturedAt: Date; publishedAt: Date; amazonSellerId: string; sellerName: string; frozenScope: unknown; summary: unknown };
+export async function readSalesTraffic(scope: SyncScope, p: URLSearchParams, options: { cutoff?: Date; pageSize?: number; actor?: string; sellerFence?: string[]; sourceFence?: string[]; action?: "view" | "export"; includeExactMetrics?: boolean } = {}) {
   let access = await amazonDataAccess(scope, options.actor, prisma, options.action ?? "view");
   if (options.sellerFence) access = { allSellers: false, sellerIds: access.allSellers ? options.sellerFence : options.sellerFence.filter(id => access.sellerIds.includes(id)), ...(access.scopes ? { scopes: access.scopes.filter(s => options.sellerFence!.includes(s.sellerAccountId)) } : {}) };
   const query = parseSalesQuery(p), cutoff = options.cutoff ?? new Date(), cte = salesVersionSql(scope, query, cutoff, access, options.sourceFence);
   const page = Math.min(10000, Math.max(1, Math.floor(Number(p.get("page")) || 1))), pageSize = options.pageSize ?? 50;
   return prisma.$transaction(async tx => {
     const total = await tx.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`${cte} SELECT count(*) FROM filtered`);
-    const rows = await tx.$queryRaw<SalesRow[]>(Prisma.sql`${cte} SELECT * FROM filtered ORDER BY "businessDate" ${query.direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`}, "sourceId", id OFFSET ${(page - 1) * pageSize} LIMIT ${pageSize}`);
+    // Opt-in, current-page projection only. PostgreSQL extracts JSON numeric text before JS parsing.
+    // Legacy ERP consumers retain the original metrics shape and default query.
+    const exactMetrics = options.includeExactMetrics ? Prisma.sql`, jsonb_build_object(
+      'unitsOrdered', metrics->>'unitsOrdered', 'totalOrderItems', metrics->>'totalOrderItems',
+      'sessions', metrics->>'sessions', 'pageViews', metrics->>'pageViews',
+      'orderedProductSales', CASE WHEN jsonb_typeof(metrics->'orderedProductSales') = 'object' THEN jsonb_build_object(
+        'amount', metrics#>>'{orderedProductSales,amount}', 'currencyCode', metrics#>>'{orderedProductSales,currencyCode}') ELSE NULL END
+    ) AS "exactMetrics"` : Prisma.empty;
+    const rows = await tx.$queryRaw<SalesRow[]>(Prisma.sql`${cte} SELECT * ${exactMetrics} FROM filtered ORDER BY "businessDate" ${query.direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`}, "sourceId", id OFFSET ${(page - 1) * pageSize} LIMIT ${pageSize}`);
     return { rows, pagination: { page, pageSize, total: Number(total[0].count), pageCount: Math.ceil(Number(total[0].count) / pageSize) }, query, asOf: cutoff.toISOString(), dateField: "report_business_date", granularity: "SELLER_DAY", versionPolicy: query.taskId ? "historical_task" : "latest_successful_per_source_day" };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }

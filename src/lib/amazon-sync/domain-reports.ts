@@ -81,7 +81,7 @@ const factHeaders: Record<DomainReportResource, readonly string[]> = {
 function invalid(): never { throw new SyncInputError("Amazon 报告格式无效或超出安全容量；原件已加密保留。", 422); }
 
 /** Bounded TSV reader with quoted tabs/newlines and escaped quotes. */
-function* readTsv(text: string): Generator<string[]> {
+export function* readTsv(text: string): Generator<string[]> {
   if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > maxReportBytes || text.includes("\0")) return invalid();
   let cells: string[] = [], cell = "", quoted = false, closed = false, touched = false;
   const start = text.charCodeAt(0) === 0xfeff ? 1 : 0;
@@ -190,7 +190,9 @@ export function reportDomainRoles(resource: DomainReportResource): string[] {
   return resource === "settlements" ? ["Finance and Accounting"] : resource === "reimbursements" ? ["Pricing", "Amazon Fulfillment"] : ["Amazon Fulfillment"];
 }
 
-export function assertDomainReportRoles(resource: DomainReportResource, auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }) {
+export function assertDomainReportRoles(resource: DomainReportResource, auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, automaticRead = false) {
+  // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
+  if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length)) return;
   const roles = reportDomainRoles(resource);
   const valid = resource === "reimbursements" ? roles.some(role => auth.approvedRoles.includes(role)) : roles.every(role => auth.approvedRoles.includes(role));
   if (!auth.rolesAttestedAt || !valid) throw new SyncInputError(`${resource} 数据域所需 Amazon 角色尚未由管理员核实。`, 403);

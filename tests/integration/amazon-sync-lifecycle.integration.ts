@@ -162,7 +162,7 @@ test("lease recovery rolls back run transition when cursor update fails", async 
   assert.equal(await prisma.amazonSyncTaskLog.count({ where: { taskId: f.run.id, event: "LEASE_EXPIRED" } }), 0); assert.equal(f.calls.length, 0);
 });
 
-test("bound US/CA sources automatically create bounded 730-day tasks without enabled or active-store gates", async () => {
+test("validated Seller ID must not gate bounded 730-day tasks for existing US/CA bindings", async () => {
   const scope = { organizationId: `automatic-fixture-${randomUUID()}`, workspaceId: "automatic-test" };
   scopes.push([scope.organizationId, scope.workspaceId]); process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify(scopes);
   const actor = randomUUID(), store = randomUUID(), authId = randomUUID();
@@ -236,4 +236,56 @@ test("bound US/CA sources automatically create bounded 730-day tasks without ena
   await setAutomaticPlanEnabled(true, paused.revision);
   assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: returnsPlan.id } })).enabled, true);
   }
+});
+
+test("a validated token without Seller ID auto-binds four North American sites and publishes current listings", async () => {
+  const scope = { organizationId: `token-account-${randomUUID()}`, workspaceId: "token-account-test" };
+  scopes.push([scope.organizationId, scope.workspaceId]); process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify(scopes);
+  const actor = randomUUID(), authId = randomUUID();
+  const sites = ["ATVPDKIKX0DER", "A2EUQ1WTGCTBG2", "A1AM78C64UM0Y8", "A2Q3Y263D00KWC"];
+  await prisma.organization.create({ data: { id: scope.organizationId, slug: scope.organizationId, name: "Token account fixture" } });
+  await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "Token account fixture" } });
+  await prisma.user.create({ data: { id: actor, email: `${actor}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
+  await prisma.amazonSpApiAuthorization.create({ data: {
+    ...scope, id: authId, name: "North America token", amazonSellerId: "", awsRegion: "us-east-1", endpoint: endpoints["us-east-1"], status: "CONFIGURED",
+    credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture-token-client", lwaClientSecret: "fixture-token-secret", refreshToken: "fixture-token-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId: authId }),
+    marketplaceParticipations: sites.map(marketplaceId => ({ marketplaceId, countryCode: "US" })), lastValidatedAt: new Date(), updatedByUserId: actor,
+  } });
+
+  const now = new Date(Date.now() - 60_000);
+  await tickSyncCenter(now);
+  const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId: authId } });
+  assert.equal(sources.length, 37);
+  assert.deepEqual([...new Set(sources.map(source => source.marketplaceId))].sort(), [...sites].sort());
+  assert.equal(new Set(sources.map(source => source.sellerAccountId)).size, 1);
+  const catalog = sources.find(source => source.resource === "catalog" && source.marketplaceId === sites[0])!;
+  const run = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...scope, sourceId: catalog.id } });
+  assert.equal((run.frozenScope as { requestedRange?: unknown }).requestedRange, undefined, "a current Listing snapshot must not claim historical coverage");
+
+  const fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.hostname === "api.amazon.com") return Response.json({ access_token: "fixture-token", expires_in: 3600 });
+    if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/reports/2021-06-30/reports" && init?.method === "POST") {
+      assert.deepEqual(JSON.parse(String(init.body)), { reportType: "GET_MERCHANT_LISTINGS_ALL_DATA", marketplaceIds: [sites[0]], reportOptions: { preferredReportDocumentLocale: "en_US" } });
+      return Response.json({ reportId: "fixture-listings-report" });
+    }
+    if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/reports/2021-06-30/reports/fixture-listings-report") return Response.json({ reportId: "fixture-listings-report", reportType: "GET_MERCHANT_LISTINGS_ALL_DATA", marketplaceIds: [sites[0]], processingStatus: "DONE", reportDocumentId: "fixture-listings-document" });
+    if (url.hostname === "sellingpartnerapi-na.amazon.com" && url.pathname === "/reports/2021-06-30/documents/fixture-listings-document") return Response.json({ reportDocumentId: "fixture-listings-document", url: "https://s3.amazonaws.com/fixture/report" });
+    if (url.hostname === "s3.amazonaws.com") return new Response("seller-sku\tasin1\tstatus\tfulfillment-channel\nSKU-1\tB012345678\tActive\tAMAZON_NA\n", { headers: { "content-type": "text/plain" } });
+    throw new Error(`Unexpected fixture URL ${url.hostname}${url.pathname}`);
+  };
+  for (let i = 0; i < 5; i++) {
+    const current = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+    if (current.status === "SUCCEEDED") break;
+    await prisma.amazonSyncRun.update({ where: { id: current.id }, data: { nextAttemptAt: new Date(0) } });
+    await prisma.amazonSyncApiBudget.updateMany({ where: { ...scope, authorizationId: authId }, data: { nextRequestAt: new Date(0) } });
+    await processSyncCenterTask(current.id, current.dispatchVersion, { clientOptions: { fetch } });
+  }
+  const completed = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+  assert.equal(completed.status, "SUCCEEDED");
+  assert.equal(await prisma.amazonCatalogSnapshot.count({ where: { ...scope, sourceRunId: run.id, sellerSku: "SKU-1", asin: "B012345678" } }), 1);
+  const published = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: catalog.id } });
+  assert.equal(published.activeRunId, run.id); assert.equal(published.rowCount, 1);
+  const coverage = published.coverage as { historicalSnapshot?: boolean; reportType?: string };
+  assert.equal(coverage.reportType, "GET_MERCHANT_LISTINGS_ALL_DATA"); assert.equal(coverage.historicalSnapshot, false);
 });

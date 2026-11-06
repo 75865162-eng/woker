@@ -2873,7 +2873,7 @@ model AmazonOrderRecord {
   detailWork          AmazonOrderDetailWork[]
 
   @@unique([organizationId, workspaceId, sourceId, id], map: "AmazonOrder_scope_record_key")
-  @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId, amazonOrderId], map: "AmazonOrder_scope_business_key")
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, amazonOrderId], map: "AmazonOrder_scope_business_key")
   @@index([organizationId, workspaceId, sourceId, sourceUpdatedAt], map: "AmazonOrder_source_updated_idx")
 }
 
@@ -2947,7 +2947,7 @@ model AmazonFinanceRecord {
   capturedAt DateTime @db.Timestamptz(3)
   quarantine AmazonFinanceQuarantine?
 
-  @@unique([organizationId, workspaceId, amazonSellerId, transactionId], map: "AmazonFinance_business_key")
+  @@unique([organizationId, workspaceId, sellerAccountId, transactionId], map: "AmazonFinance_business_key")
   @@unique([organizationId, workspaceId, id], map: "AmazonFinance_scope_id_key")
   @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, postedAt], map: "AmazonFinance_scope_posted_idx")
   @@index([organizationId, workspaceId, sourceId, attributionStatus, postedAt], map: "AmazonFinance_source_posted_idx")
@@ -3183,7 +3183,7 @@ model AmazonReturnRecord {
   reason AmazonReturnReason? @relation(fields: [organizationId, workspaceId, reasonId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonReturn_reason_fkey")
   rawStatus String?
   capturedAt DateTime @db.Timestamptz(3)
-  @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId, reportId, rowHash], map: "AmazonReturn_business_key")
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, reportId, rowHash], map: "AmazonReturn_business_key")
   @@index([organizationId, workspaceId, sourceId, reportId, returnAt], map: "AmazonReturn_report_idx")
 }
 

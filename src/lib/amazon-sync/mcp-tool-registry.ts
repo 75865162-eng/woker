@@ -1,3 +1,4 @@
+import { mcpDatasets, datasetInputSchema, datasetFilterProperties, datasetScopeProperties } from "./mcp-datasets";
 /** Server-owned catalog. No credentials, process configuration, or database imports. */
 export type McpSchema = Record<string, unknown>;
 export type McpOperationMode = "READ_ONLY" | "APPROVAL_REQUEST";
@@ -26,48 +27,24 @@ function legacyToolInputSchema(name: string) {
     sellerAccountId: { type: "string" }, sellerAccountIds: { type: "array", items: { type: "string" }, maxItems: 200 },
     marketplaceId: { type: "string" },
   };
-  if (name === "amazon.ads.reports.list") return {
-    type: "object", additionalProperties: false, properties: {
-      ...scopeProperties,
-      ...Object.fromEntries(["internalProfileId", "authorizationId", "reportType", "adProduct", "campaignId", "adGroupId", "targetingId", "advertisedAsin", "searchTerm", "placement", "search"].map(key => [key, { type: "string", maxLength: 200 }])),
-      from: { type: "string", format: "date" }, to: { type: "string", format: "date" },
-      page: { type: "integer", minimum: 1, maximum: 10000 }, pageSize: { type: "integer", minimum: 1, maximum: 100 },
-      sortBy: { type: "string", enum: ["reportDate", "campaignId", "adGroupId", "impressions", "clicks", "spend", "orders", "sales", "searchTerm"] },
-      sortDirection: { type: "string", enum: ["asc", "desc"] },
-    },
-  };
-  if (["amazon.ads.entities.list", "ads_list_entities", "ads_get_campaign_structure"].includes(name)) return {
-    type: "object", additionalProperties: false, properties: {
-      ...scopeProperties,
-      ...Object.fromEntries(["internalProfileId", "authorizationId", "campaignId", "adGroupId", "externalId", "state", "search"].map(key => [key, { type: "string", maxLength: 200 }])),
-      entityType: { type: "string", enum: ["SP:campaign", "SP:ad-group", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"] },
-      page: { type: "integer", minimum: 1, maximum: 10000, default: 1 },
-      pageSize: { type: "integer", minimum: 1, maximum: 100, default: 50 },
-      sort: { type: "string", enum: ["entityType", "externalId", "state", "syncedAt", "sourceUpdatedAt"] },
-      direction: { type: "string", enum: ["asc", "desc"] },
-    },
-  };
+  if (name === "amazon.ads.reports.list" || ["amazon.ads.entities.list", "ads_list_entities", "ads_get_campaign_structure"].includes(name)) {
+    const dataset = mcpDatasets.find(item => item.name === (name === "amazon.ads.reports.list" ? "ads_report_daily" : "ads_entities"))!;
+    return { type: "object", additionalProperties: false, properties: { ...datasetScopeProperties, ...datasetFilterProperties(dataset),
+      ...(name === "ads_get_campaign_structure" ? { entityType: { type: "string", const: "SP:campaign" } } : {}),
+      page: { type: "integer", minimum: 1, maximum: 10000 }, pageSize: { type: "integer", minimum: 1, maximum: dataset.maxPageSize } } };
+  }
+  if (name === "data_query" || name === "data_describe_table") return datasetInputSchema(name === "data_query");
   if (["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"].includes(name)) return {
     type: "object", additionalProperties: false, properties: scopeProperties,
   };
   if (["data_list_tables", "data_describe_table", "data_query", "data_sync_status", "data_sync_start"].includes(name)) {
     const properties = { ...scopeProperties };
-    if (name === "data_describe_table") properties.table = { type: "string", maxLength: 100 };
-    if (name === "data_query") {
-      properties.table = { type: "string", maxLength: 100 };
-      properties.page = { type: "integer", minimum: 1, maximum: 10000 };
-      properties.pageSize = { type: "integer", minimum: 1, maximum: 1000, default: 100 };
-        properties.filters = {
-        type: "object", additionalProperties: false,
-          properties: Object.fromEntries(["sellerSku", "asin", "condition", "listingStatus", "from", "to", "reportType", "adProduct", "campaignId", "adGroupId", "advertisedAsin", "searchTerm", "placement", "targetingId", "internalProfileId", "authorizationId", "sortBy", "sortDirection"].map(field => [field, { type: "string", maxLength: 200, ...(field === "from" || field === "to" ? { format: "date" } : {}) }])),
-      };
-    }
     if (name === "data_sync_start") {
       properties.resource = { type: "string", maxLength: 100 };
       properties.dateFrom = { type: "string", format: "date" };
       properties.dateTo = { type: "string", format: "date" };
     }
-    const required = name === "data_describe_table" || name === "data_query" ? ["table"] : name === "data_sync_start" ? ["resource"] : [];
+    const required = name === "data_sync_start" ? ["resource"] : [];
     return { type: "object", additionalProperties: false, properties, ...(required.length ? { required } : {}) };
   }
   const properties: Record<string, unknown> = {
@@ -98,14 +75,28 @@ const arrayTools = new Set<string>(["amazon.stores.list", "amazon.sync.status"])
 export const amazonMcpToolDefinitions: readonly AmazonMcpToolDefinition[] = legacyTools.map(([name, description]) => {
   const action: McpDataAction = name === "amazon.sales.export" ? "export" : name === "data_sync_start" ? "sync" : "view";
   const canonicalName = name === "ads_list_entities" || name === "ads_get_campaign_structure" ? "amazon.ads.entities.list" : name;
-  const outputSchema: McpSchema = arrayTools.has(name)
+  const rowQuery = ["data_query", "amazon.ads.reports.list", "amazon.ads.entities.list", "ads_list_entities", "ads_get_campaign_structure"].includes(name);
+  const outputSchema: McpSchema = name === "data_sync_start" ? {
+    type: "object", required: ["data", "meta"], properties: {
+      data: { type: "object", required: ["approvalRequired", "started", "changeRequest"], properties: {
+        approvalRequired: { const: true }, started: { const: false }, changeRequest: { type: "object", required: ["id", "status"], properties: { id: { type: "string", minLength: 1 }, status: { const: "REQUESTED" } } },
+      } }, meta: { type: "object" },
+    },
+  } : rowQuery ? {
+    type: "object", required: ["data", "meta", "pagination", "warnings"],
+    properties: {
+      data: { type: "object", required: ["items", "total"], properties: { items: { type: "array", items: { type: "object" } }, total: { type: "integer", minimum: 0 } } },
+      totals: { anyOf: [{ type: "array", items: { type: "object" } }, { type: "null" }] },
+      pagination: { type: "object", required: ["page", "pageSize", "total", "pageCount", "hasNext"], properties: { page: { type: "integer", minimum: 1 }, pageSize: { type: "integer", minimum: 1 }, total: { type: "integer", minimum: 0 }, pageCount: { type: "integer", minimum: 0 }, hasNext: { type: "boolean" } } },
+      warnings: { type: "array", items: { type: "string" } },
+      meta: { type: "object", required: ["requestId", "toolVersion", "dataset", "scope", "dateSemantics", "resultStatus", "schemaStatus"], properties: { requestId: { type: "string" }, toolVersion: { type: "string" }, resultStatus: { type: "string", enum: ["AVAILABLE", "EMPTY_RESULT"] } } },
+    },
+  } : arrayTools.has(name)
     ? { type: "array", items: { type: "object" } }
-    : name.startsWith("data_") || name.startsWith("ads_") || name.startsWith("amazon.ads.")
-      ? { type: "object", required: ["data", "meta"], properties: { data: { type: "object" }, meta: { type: "object" } } }
-      : { type: "object" };
+    : { type: "object" };
   return {
     name, canonicalName, description, module: name.startsWith("amazon.ads.") || name.startsWith("ads_") ? "amazon_ads" : "amazon_sync",
-    version: "1.0.0", inputSchema: legacyToolInputSchema(name), outputSchema,
+    version: ["data_query", "data_describe_table", "data_list_tables", "amazon.ads.reports.list", "amazon.ads.entities.list", "ads_list_entities", "ads_get_campaign_structure"].includes(name) ? "1.1.0" : "1.0.0", inputSchema: legacyToolInputSchema(name), outputSchema,
     operationMode: action === "sync" ? "APPROVAL_REQUEST" : "READ_ONLY",
     requiredPermissions: [`operations:${action === "sync" ? "create" : action}`, `amazon_data:${action}:mcp`],
     action, enabled: true, implementationStatus: "IMPLEMENTED",

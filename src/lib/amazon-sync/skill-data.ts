@@ -1,3 +1,4 @@
+import { skillDataTables, datasetForTable, describeMcpDataset, normalizeDatasetQuery, presentMcpReport, McpDatasetError } from "./mcp-datasets";
 import { queryPublishedAdsReports } from "@/lib/amazon-ads/report-query";
 import { parseAdsQuery } from "@/lib/amazon-ads/query-contract";
 import { Prisma } from "@prisma/client";
@@ -17,95 +18,7 @@ type DataSource = {
   publishedRun: { status: string; executionVersion: number; resource: string; sourceId: string | null; finishedAt: Date | null; stage: string } | null;
 };
 
-type SkillTable = {
-  name: string;
-  source: string;
-  resource: string;
-  grain: string[];
-  fields: Array<{ name: string; type: string; nullable?: boolean; description?: string }>;
-  warnings?: string[];
-};
-
-export const skillDataTables: SkillTable[] = [
-  {
-    name: "inventory",
-    source: "AmazonInventorySnapshot",
-    resource: "inventory",
-    grain: ["sellerAccountId", "marketplaceId", "sellerSku", "condition", "syncRunId"],
-    fields: [
-      { name: "sellerAccountId", type: "string" }, { name: "marketplaceId", type: "string" },
-      { name: "sellerSku", type: "string" }, { name: "asin", type: "string" },
-      { name: "fnSku", type: "string" }, { name: "condition", type: "string" },
-      { name: "fulfillableQuantity", type: "integer" }, { name: "inboundWorkingQuantity", type: "integer" },
-      { name: "inboundShippedQuantity", type: "integer" }, { name: "inboundReceivingQuantity", type: "integer" },
-      { name: "reservedQuantity", type: "integer" }, { name: "unfulfillableQuantity", type: "integer" },
-      { name: "researchingQuantity", type: "integer" }, { name: "sourceUpdatedAt", type: "datetime", nullable: true },
-      { name: "capturedAt", type: "datetime" }, { name: "syncRunId", type: "string" },
-    ],
-  },
-  {
-    name: "listings",
-    source: "AmazonCatalogSnapshot",
-    resource: "catalog",
-    grain: ["organizationId", "workspaceId", "sellerAccountId", "marketplaceId", "sellerSku", "sourceRunId"],
-    fields: [
-      { name: "sellerAccountId", type: "string" }, { name: "marketplaceId", type: "string" },
-      { name: "sellerSku", type: "string" }, { name: "asin", type: "string" },
-      { name: "listingStatus", type: "string", nullable: true }, { name: "fulfillmentType", type: "string", nullable: true },
-      { name: "sourceUpdatedAt", type: "datetime", nullable: true }, { name: "capturedAt", type: "datetime" },
-      { name: "sourceRunId", type: "string" },
-    ],
-  },
-  {
-    name: "sales_traffic_daily",
-    source: "AmazonSalesTrafficSnapshot",
-    resource: "sales_traffic",
-    grain: ["sellerAccountId", "marketplaceId", "businessDate", "syncRunId"],
-    fields: [
-      { name: "sellerAccountId", type: "string" }, { name: "marketplaceId", type: "string" },
-      { name: "businessDate", type: "date" }, { name: "metrics.unitsOrdered", type: "integer", nullable: true },
-      { name: "metrics.totalOrderItems", type: "integer", nullable: true }, { name: "metrics.sessions", type: "integer", nullable: true },
-      { name: "metrics.pageViews", type: "integer", nullable: true }, { name: "metrics.orderedProductSales.amount", type: "decimal", nullable: true },
-      { name: "metrics.orderedProductSales.currencyCode", type: "string", nullable: true },
-      { name: "quality", type: "string" }, { name: "capturedAt", type: "datetime" }, { name: "syncRunId", type: "string" },
-    ],
-    warnings: ["店铺逐日粒度，不含 ASIN/SKU 拆分。", "金额按行保留原币种，不得跨币种合计。"],
-  },
-  {
-    name: "ads_report_daily",
-    source: "AmazonAdsReportFact",
-    resource: "ads_reports",
-    grain: ["sellerAccountId", "marketplaceId", "reportType", "adProduct", "reportDate", "factKey", "versionId"],
-    fields: [
-      { name: "sellerAccountId", type: "string" }, { name: "marketplaceId", type: "string" },
-      { name: "profileId", type: "string" }, { name: "reportType", type: "string" },
-      { name: "adProduct", type: "string" }, { name: "reportDate", type: "date" },
-      { name: "campaignId", type: "string", nullable: true }, { name: "adGroupId", type: "string", nullable: true },
-      { name: "targetingId", type: "string", nullable: true }, { name: "advertisedAsin", type: "string", nullable: true },
-      { name: "searchTerm", type: "string", nullable: true }, { name: "placement", type: "string", nullable: true },
-      { name: "impressions", type: "integer", nullable: true }, { name: "clicks", type: "integer", nullable: true },
-      { name: "spend", type: "decimal", nullable: true }, { name: "orders", type: "integer", nullable: true },
-      { name: "sales", type: "decimal", nullable: true }, { name: "units", type: "integer", nullable: true },
-      { name: "ctr", type: "decimal", nullable: true, description: "clicks / impressions × 100；分母缺失或为 0 时为 null。" },
-      { name: "cpc", type: "decimal", nullable: true, description: "spend / clicks；分母缺失或为 0 时为 null。" },
-      { name: "cvr", type: "decimal", nullable: true, description: "orders / clicks × 100；分母缺失或为 0 时为 null。" },
-      { name: "acos", type: "decimal", nullable: true, description: "spend / sales × 100；分母缺失或为 0 时为 null。" },
-      { name: "roas", type: "decimal", nullable: true, description: "sales / spend；分母缺失或为 0 时为 null。" },
-      { name: "currencyCode", type: "string", nullable: true, description: "当前查询按 Ads Profile 提供；真实报表逐行币种仍待样本核验。" }, { name: "attributionWindow", type: "string", nullable: true },
-      { name: "apiVersion", type: "string" }, { name: "versionId", type: "string" },
-    ],
-    warnings: ["仅展示完整成功任务的已发布报表版本。", "广告金额币种来自 Profile 配置；按行返回，不跨币种汇总。", "Amazon 报表真实样本仍待核验。"],
-  },
-];
-
-const supportedByName = new Map(skillDataTables.map(table => [table.name, table]));
-const knownLogicalTables = new Set([
-  "ads_campaign_daily", "ads_advertised_product_daily", "ads_targeting_daily", "ads_search_term_daily", "ads_placement_daily", "ads_budget_usage",
-  "sales_traffic_asin", "sales_traffic_daily", "inventory", "inventory_age", "inventory_ledger_daily", "inbound_shipments", "sales_rank_daily", "sku_mapping",
-  "listings", "orders", "returns", "finance_events", "finance_transactions", "settlements_v2", "reimbursements", "storage_fees_monthly", "fee_preview",
-  "ads_report_daily",
-  "pricing_daily", "search_terms_weekly", "economics_daily", "economics_fees", "restock_plan", "restock_stockout", "restock_clearance",
-]);
+export { skillDataTables } from "./mcp-datasets";
 
 function validSources(sources: DataSource[], resource: string) {
   return sources.filter(source => source.resource === resource && source.activeRunId && source.publishedRun?.status === "SUCCEEDED"
@@ -115,9 +28,7 @@ function validSources(sources: DataSource[], resource: string) {
 
 export function availableSkillTables(sources: DataSource[]) {
   return skillDataTables.filter(table => validSources(sources, table.resource).length > 0).map(table => ({
-    name: table.name,
-    source: table.source,
-    grain: table.grain,
+    ...describeMcpDataset(datasetForTable(table.name)),
     schemaStatus: "application_schema_confirmed_source_sample_pending",
     warnings: table.warnings ?? [],
   }));
@@ -144,13 +55,9 @@ export function skillTableAvailability(sources: DataSource[]) {
 }
 
 export function describeSkillTable(name: string, sources: DataSource[]) {
-  const table = supportedByName.get(name);
-  if (!table) {
-    if (knownLogicalTables.has(name)) throw new SyncInputError("SCHEMA_UNVERIFIED: 该逻辑表尚无已验证的系统数据源。", 409);
-    throw new SyncInputError("TABLE_NOT_ALLOWED: 逻辑表不在允许清单中。", 403);
-  }
-  if (table.name !== "ads_report_daily" && !validSources(sources, table.resource).length) throw new SyncInputError("TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
-  return { name: table.name, source: table.source, grain: table.grain, fields: table.fields, warnings: table.warnings ?? [], schemaStatus: "application_schema_confirmed_source_sample_pending" };
+  const table = datasetForTable(name);
+  if (table.name !== "ads_report_daily" && !validSources(sources, table.resource).length) throw new McpDatasetError("DATASET_UNPUBLISHED", "TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
+  return { ...describeMcpDataset(table), fields: table.fields, warnings: table.warnings ?? [], schemaStatus: "application_schema_confirmed_source_sample_pending" };
 }
 
 export async function querySkillTable(input: {
@@ -164,27 +71,17 @@ export async function querySkillTable(input: {
   page: number;
   pageSize: number;
 }) {
-  const table = supportedByName.get(input.tableName);
-  if (!table) {
-    if (knownLogicalTables.has(input.tableName)) throw new SyncInputError("SCHEMA_UNVERIFIED: 该逻辑表尚无已验证的系统数据源。", 409);
-    throw new SyncInputError("TABLE_NOT_ALLOWED: 逻辑表不在允许清单中。", 403);
-  }
+  const table = datasetForTable(input.tableName);
+  const normalized = normalizeDatasetQuery(table, { filters: input.filters, page: input.page, pageSize: input.pageSize });
   const sources = (table.name === "ads_report_daily" ? input.sources : validSources(input.sources, table.resource)).filter(source => (!input.sellerAccountId || source.sellerAccountId === input.sellerAccountId)
     && (!input.marketplaceId || source.marketplaceId === input.marketplaceId));
-  if (!sources.length) throw new SyncInputError("TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
-  const filters = input.filters ?? {};
-  const allowedFilters: Record<string, string[]> = {
-    inventory: ["sellerSku", "asin", "condition", "from", "to"],
-    listings: ["sellerSku", "asin", "listingStatus", "from", "to"],
-    sales_traffic_daily: ["from", "to"],
-    ads_report_daily: ["from", "to", "reportType", "adProduct", "campaignId", "adGroupId", "targetingId", "advertisedAsin", "searchTerm", "placement", "internalProfileId", "authorizationId", "sortBy", "sortDirection"],
-  };
-  if (Object.keys(filters).some(key => !allowedFilters[table.name]?.includes(key))) throw new SyncInputError("FIELD_NOT_MAPPED: 筛选字段不属于此逻辑表。", 400);
+  if (!sources.length) throw new McpDatasetError("DATASET_UNPUBLISHED", "TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
+  const filters = normalized.filters;
 
   if (table.name === "ads_report_daily") {
     const params = new URLSearchParams({ ...filters, kind: "reports", page: String(input.page), pageSize: String(input.pageSize) });
     const result = await queryPublishedAdsReports(input.scope, input.actor, parseAdsQuery(params), sources.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId })));
-    return { data: { items: result.rows, total: result.total }, meta: { ...result.meta, warnings: result.warnings } };
+    return presentMcpReport(result);
   }
 
   const now = new Date();
@@ -201,20 +98,21 @@ export async function querySkillTable(input: {
     attributionWindow: null,
     warnings: table.warnings ?? [],
     page: { page: input.page, pageSize: input.pageSize, hasNext: false },
-    sources: sources.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, lastSyncAt: source.lastSuccessAt?.toISOString() ?? null })),
+    sources: sources.map(source => ({ sourceId: source.id, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, syncRunId: source.activeRunId, lastSyncAt: source.lastSuccessAt?.toISOString() ?? null })),
   };
 
   if (table.name === "sales_traffic_daily") {
     const from = filters.from;
     const to = filters.to;
-    validateDateRange(from, to);
     const result = await readSalesTraffic(input.scope, new URLSearchParams({
       ...(from ? { from } : {}), ...(to ? { to } : {}), ...(input.sellerAccountId ? { sellerAccountId: input.sellerAccountId } : {}),
-      ...(input.marketplaceId ? { marketplaceId: input.marketplaceId } : {}), page: String(input.page), direction: "desc",
-    }), { actor: input.actor, pageSize: input.pageSize, sourceFence: sources.map(source => source.id) });
+      ...(input.marketplaceId ? { marketplaceId: input.marketplaceId } : {}), page: String(input.page), direction: filters.sortDirection, sort: filters.sortBy,
+    }), { actor: input.actor, pageSize: input.pageSize, sourceFence: sources.map(source => source.id), includeExactMetrics: true });
     return {
-      data: { items: result.rows.map(row => ({ sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, businessDate: row.businessDate, metrics: row.metrics, quality: row.quality, capturedAt: row.capturedAt, syncRunId: row.syncRunId })), total: result.pagination.total },
+      data: { items: result.rows.map(row => ({ sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, businessDate: row.businessDate, metrics: row.metrics, exactMetrics: row.exactMetrics, quality: row.quality, capturedAt: row.capturedAt, syncRunId: row.syncRunId })), total: result.pagination.total },
       meta: { ...meta, lastSyncAt: oldestSyncAt ?? result.asOf, freshness: result.rows.length === 0 && !result.pagination.total ? "missing" : meta.freshness,
+        numericEncoding: "legacy_metrics_numbers_and_exactMetrics_strings_from_stored_json",
+        warnings: [...(table.warnings ?? []), "exactMetrics 为数据库已保存 JSON 数值的精确字符串；旧 metrics 保持兼容，不证明采集前的精度。"],
         page: { page: result.pagination.page, pageSize: result.pagination.pageSize, hasNext: result.pagination.page < result.pagination.pageCount } },
     };
   }
@@ -232,11 +130,12 @@ export async function querySkillTable(input: {
     };
     const [total, rows] = await Promise.all([
       prisma.amazonInventorySnapshot.count({ where }),
-      prisma.amazonInventorySnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fnSku: true, condition: true, fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true, reservedQuantity: true, unfulfillableQuantity: true, researchingQuantity: true, sourceUpdatedAt: true, capturedAt: true, syncRunId: true }, orderBy: [{ sellerSku: "asc" }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
+      prisma.amazonInventorySnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fnSku: true, condition: true, fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true, reservedQuantity: true, unfulfillableQuantity: true, researchingQuantity: true, sourceUpdatedAt: true, capturedAt: true, syncRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
     ]);
     return { data: { items: rows, total }, meta: { ...meta, page: { page: input.page, pageSize: input.pageSize, hasNext: input.page * input.pageSize < total } } };
   }
 
+  if (table.name !== "listings") throw new McpDatasetError("SCHEMA_UNVERIFIED", "SCHEMA_UNVERIFIED: 数据集没有已绑定的查询服务。", 409);
   const where: Prisma.AmazonCatalogSnapshotWhereInput = {
     ...input.scope,
     OR: sourceFilter,
@@ -245,14 +144,9 @@ export async function querySkillTable(input: {
   };
   const [total, rows] = await Promise.all([
     prisma.amazonCatalogSnapshot.count({ where }),
-    prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, sourceUpdatedAt: true, capturedAt: true, sourceRunId: true }, orderBy: [{ sellerSku: "asc" }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
+    prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, fulfillmentType: true, sourceUpdatedAt: true, capturedAt: true, sourceRunId: true }, orderBy: [{ [filters.sortBy]: filters.sortDirection as Prisma.SortOrder }, { id: "asc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
   ]);
   return { data: { items: rows, total }, meta: { ...meta, page: { page: input.page, pageSize: input.pageSize, hasNext: input.page * input.pageSize < total } } };
-}
-
-function validateDateRange(from?: string, to?: string) {
-  dateBounds(from, to);
-  if (from && to && (Date.parse(to) - Date.parse(from)) / 86_400_000 > 90) throw new SyncInputError("销售流量查询最多 90 天。");
 }
 
 function dateBounds(from?: string, to?: string) {

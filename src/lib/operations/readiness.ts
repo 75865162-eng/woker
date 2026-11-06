@@ -187,11 +187,14 @@ export function extractMarketplaceParticipations(value: unknown): AmazonMarketpl
   const participations: AmazonMarketplaceParticipation[] = [];
   for (const item of value.payload) {
     if (!isRecord(item)) continue;
+    const participation = isRecord(item.participation) ? item.participation : item;
+    if (participation.isParticipating === false) continue;
     const marketplace = isRecord(item.marketplace) ? item.marketplace : item;
     const marketplaceId = stringValue(marketplace.id ?? marketplace.marketplaceId);
     if (!marketplaceId || seen.has(marketplaceId)) continue;
     seen.add(marketplaceId);
     participations.push({
+      ...(typeof participation.isParticipating === "boolean" ? { isParticipating: participation.isParticipating } : {}),
       marketplaceId,
       countryCode: stringValue(marketplace.countryCode).toUpperCase(),
       name: stringValue(marketplace.name),

@@ -3,7 +3,7 @@ import { localDate, shiftDate, type RequestedRange, resolveRequestedRange } from
 import { nextReturnWindow, type ReturnPolicy } from "./returns";
 
 export const automaticResources = ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing"] as const;
-export const automaticMarketplaces = new Set(["ATVPDKIKX0DER", "A2EUQ1WTGCTBG2"]);
+export const automaticMarketplaces = new Set(["ATVPDKIKX0DER", "A2EUQ1WTGCTBG2", "A1AM78C64UM0Y8", "A2Q3Y263D00KWC"]);
 export const automaticIntervalMinutes = 1440;
 export const automaticBackfillDays = 730;
 export const automaticInventoryEventBackfillDays = 540;

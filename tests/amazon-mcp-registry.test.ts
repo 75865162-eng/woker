@@ -46,10 +46,10 @@ test("legacy discovery retains input contracts and newer discovery describes str
     assert.equal(legacy.outputSchema, undefined);
     assert.equal(legacy._meta, undefined);
     const modern = mcpDiscoveryDescriptor(tool, "2025-06-18");
-    assert.equal(modern._meta?.["erp/toolVersion"], "1.0.0");
+    assert.equal(modern._meta?.["erp/toolVersion"], tool.version);
     assert.equal(modern._meta?.["erp/dataAvailability"], "NOT_CHECKED");
     assert.equal(modern.outputSchema?.type, tool.outputSchema.type === "object" ? "object" : undefined);
   }
   const query = amazonMcpToolDefinitions.find(tool => tool.name === "data_query")!;
-  assert.deepEqual(query.inputSchema.required, ["table"]);
+  assert.deepEqual(query.inputSchema.anyOf, [{ required: ["table"] }, { required: ["module", "dataType"] }]);
 });

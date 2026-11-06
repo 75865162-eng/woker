@@ -142,7 +142,7 @@ export async function saveSource(scope: SyncScope, actorUserId: string, body: Re
     const auth = await tx.amazonSpApiAuthorization.findFirst({ where: { ...scope, id: authorizationId, status: "CONFIGURED" } });
     const seller = await tx.sellerAccount.findFirst({ where: { ...scope, id: sellerAccountId, status: "active" } });
     if (!auth || !seller) throw new SyncInputError("授权未验证，或店铺不属于当前范围／已停用。", 409);
-    if (!auth.amazonSellerId) throw new SyncInputError("基础连接未填写 Seller ID；绑定同步店铺前请补充真实卖家编号。", 409);
+    if (!auth.amazonSellerId && resource === "listing_details") throw new SyncInputError("Listing Items 详情需要通过 OAuth 自动取得卖家身份；全量商品可使用 catalog 报表。", 409);
     const orderPolicy = resource === "orders" ? parseOrderSyncPolicy(body.orderPolicy ?? existing?.orderPolicy) : undefined;
     if (orderPolicy) {
       officialEndpoint(auth.awsRegion, auth.endpoint); assertOrderRoles(auth, orderPolicy);
@@ -243,7 +243,7 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
   const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: sourceId, ...(!scheduled ? { enabled: true } : {}) }, include: { authorization: true, seller: true } });
   if (!source || source.authorization.status !== "CONFIGURED" || (!scheduled && source.seller.status !== "active")) throw new SyncInputError("数据源、授权或店铺不可用。", 409);
-  if (!source.authorization.amazonSellerId) throw new SyncInputError("基础连接未填写真实 Seller ID，不能启动店铺数据同步。", 409);
+  if (!source.authorization.amazonSellerId && source.resource === "listing_details") throw new SyncInputError("Listing Items 详情需要 OAuth 卖家身份；全量商品使用 catalog 报表。", 409);
   implementedDomain(source.resource);
   const schedule = scheduled && options.scheduleId ? await tx.amazonSyncSchedule.findFirst({ where: { ...scope, id: options.scheduleId, resource: source.resource, executionVersion: 2, enabled: true, revision: options.scheduleRevision, targets: { some: { sourceId } } } }) : null;
   if (scheduled && (!schedule || schedule.updatedByUserId !== actorUserId || schedule.planKey !== automaticPlanKey(source.id) || !automaticMarketplaces.has(source.marketplaceId) || !(automaticResources as readonly string[]).includes(source.resource))) throw new SyncInputError("自动计划已停用、已变更或不包含此数据源。", 409);
@@ -258,13 +258,13 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   if (!scheduled && !approval?.commandSourceIds?.includes(sourceId)) throw new SyncInputError("任务目标超出执行审批范围。", 403);
   if (source.resource === "sales_traffic") rangeFromFrozen({ requestedRange: options.requestedRange });
   const orderWindow = source.resource === "orders" ? orderWindowFromFrozen(options.orderWindow) : undefined;
-  if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy));
+  if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy), scheduled);
   const financeWindow = source.resource === "finance" ? financeWindowFromFrozen(options.financeWindow) : undefined;
   if (financeWindow) await assertFinanceScope(tx, scope, source, [actorUserId], scheduled);
   const returnWindow = source.resource === "returns" ? returnWindowFromFrozen(options.returnWindow) : undefined;
-  if (returnWindow) assertReturnRoles(source.authorization);
+  if (returnWindow) assertReturnRoles(source.authorization, scheduled);
   const reportWindow = ["settlements", "inventory_events"].includes(source.resource) ? domainReportRunWindow(source.resource as DomainReportResource, options.reportWindow) : undefined;
-  if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)) assertDomainReportRoles(source.resource as DomainReportResource, source.authorization);
+  if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)) assertDomainReportRoles(source.resource as DomainReportResource, source.authorization, scheduled);
   const domainPolicy = isObservationResource(source.resource) ? parseObservationPolicy(source.domainPolicy, source.resource) : undefined;
   if (domainPolicy) { assertObservationRoles(domainPolicy, source.authorization); assertObservationClosed(domainPolicy, new Date(), source.marketplaceId); }
   const freezesEndpoint = Boolean(domainPolicy || reportWindow || returnWindow || financeWindow || orderWindow) || ["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource);

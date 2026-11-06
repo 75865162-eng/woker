@@ -116,7 +116,9 @@ export function parseOrderPage(value: unknown, marketplaceId: string, policy: Or
 }
 
 /** Approved roles are admin-attested metadata, not inferred from marketplace participation. */
-export function assertOrderRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, policy: OrderSyncPolicy) {
+export function assertOrderRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, policy: OrderSyncPolicy, automaticRead = false) {
+  // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
+  if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length) && !policy.details) return;
   const required = [...policy.requiredRoles, ...(policy.details?.requiredRoles ?? [])];
   if (!auth.rolesAttestedAt || !required.every(role => auth.approvedRoles.includes(role))) throw new SyncInputError("订单所需 Amazon 角色未确认，请管理员核对 Developer Console 角色并提交审批。", 403);
 }

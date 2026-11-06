@@ -9,6 +9,7 @@ import { encryptAmazonAdsCheckpoint } from "./credentials";
 import { AdsQueryError } from "./query-contract";
 import { readReportAcquisitionState } from "./report-checkpoint";
 import { ReportReadRetryError, reportReadRetryAt } from "./report-retry";
+import { cancelReportBody, readBoundedReportBody } from "./report-body";
 import { assertReportDeadline } from "./report-deadline";
 import { assertReportScopeDigest, reportScopeDigest } from "./report-scope";
 import { campaignReportManifest, campaignReportRequest, parseCampaignReport, isolatedCampaignReportLimits, type CampaignReportSpec } from "./campaign-report-contract";
@@ -31,6 +32,7 @@ export type AcquisitionState = {
   urlCiphertext?: string; expectedRows?: number;
 };
 type Options = { manifest: ReturnType<typeof campaignReportManifest>; acquisition: AcquisitionState };
+type StoredReceipt = { storageKey: string; contentSha256: string; byteSize: number };
 const asJson = (value: unknown) => value as Prisma.InputJsonValue;
 const sha256 = (buffer: Buffer | string) => createHash("sha256").update(buffer).digest("hex");
 function sameConfiguration(value: unknown, spec: CampaignReportSpec) {
@@ -85,25 +87,6 @@ export async function initializeIsolatedCampaignReport(scope: SyncScope, actor: 
   });
 }
 
-async function boundedBody(response: Response, limit: number) {
-  if (!response.ok || response.status !== 200 || response.redirected) { await response.body?.cancel(); throw new AdsQueryError("ADS_REPORT_HTTP_OR_REDIRECT_REJECTED"); }
-  const announced = response.headers.get("content-length");
-  if (announced !== null && (!/^\d+$/.test(announced) || Number(announced) > limit)) { await response.body?.cancel(); throw new AdsQueryError("ADS_REPORT_BODY_LIMIT"); }
-  const reader = response.body?.getReader();
-  if (!reader) throw new AdsQueryError("ADS_REPORT_BODY_MISSING");
-  const chunks: Buffer[] = []; let size = 0;
-  try {
-    for (;;) {
-      const next = await reader.read();
-      if (next.done) break;
-      size += next.value.byteLength;
-      if (size > limit) throw new AdsQueryError("ADS_REPORT_BODY_LIMIT");
-      chunks.push(Buffer.from(next.value));
-    }
-  } finally { await reader.cancel(); reader.releaseLock(); }
-  if (announced !== null && size !== Number(announced)) throw new AdsQueryError("ADS_REPORT_BODY_SIZE_MISMATCH");
-  return Buffer.concat(chunks);
-}
 function fixtureUrl(value: unknown) {
   if (typeof value !== "string") throw new AdsQueryError("ADS_REPORT_DOWNLOAD_URL_REJECTED");
   const url = new URL(value);
@@ -165,14 +148,14 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
         const profile = await prisma.amazonAdsProfile.findUniqueOrThrow({ where: { id: request.profileId }, select: { authorizationId: true } });
         const download = decryptAmazonAdsCheckpoint<{ url: string; expiresAt: string; size: number }>(state.urlCiphertext ?? null, { ...scope, authorizationId: profile.authorizationId }, fence.taskId);
         if (!download || Date.parse(download.expiresAt) <= Date.now()) throw new AdsQueryError("ADS_REPORT_DOWNLOAD_EXPIRED");
-        const bytes = await boundedBody(await readResponse(await transport.download(fixtureUrl(download.url), signal)), isolatedCampaignReportLimits.compressedBytes);
+        const bytes = await readBoundedReportBody(await readResponse(await transport.download(fixtureUrl(download.url), signal)), isolatedCampaignReportLimits.compressedBytes, signal);
         if (bytes.length !== download.size) throw new AdsQueryError("ADS_REPORT_BODY_SIZE_MISMATCH");
         const facts = parseCampaignReport(bytes, state.spec);
         await commit("STAGE", { bytes, rows: facts.length });
       } else {
         const operationRequest = request.operation === "create" ? campaignReportRequest(state.spec) : { reportId: request.remoteRequestId! };
         const response = request.operation === "create" ? await transport.create(operationRequest as ReturnType<typeof campaignReportRequest>, signal) : await transport.poll(request.remoteRequestId!, signal);
-        const bytes = await boundedBody(await readResponse(response), 64 * 1024);
+        const bytes = await readBoundedReportBody(await readResponse(response), 64 * 1024, signal);
         let body: Record<string, unknown>;
         try { body = JSON.parse(bytes.toString("utf8")); } catch { throw new AdsQueryError("ADS_REPORT_ENVELOPE_INVALID"); }
         if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.reportId !== "string" || !/^[A-Za-z0-9-]{1,100}$/.test(body.reportId) || !["PENDING", "PROCESSING", "COMPLETED", "FAILED"].includes(String(body.status)) || body.startDate !== state.spec.from || body.endDate !== state.spec.to || !sameConfiguration(body.configuration, state.spec) || (request.remoteRequestId && body.reportId !== request.remoteRequestId)) throw new AdsQueryError("ADS_REPORT_ENVELOPE_CONTRACT_MISMATCH");
@@ -209,10 +192,11 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
   return { phase: state.phase };
 
   async function readResponse(response: Response): Promise<Response> {
+    if (signal.aborted) { cancelReportBody(response); throw new AdsQueryError("ADS_REPORT_OPERATION_TIMEOUT"); }
     // Creation may have succeeded remotely even when its response is an error.
     if (request.operation !== "create" && !response.redirected && (response.status === 429 || response.status >= 500 && response.status <= 599)) {
       const retryAt = reportReadRetryAt(state.calls[request.operation === "poll" ? "poll" : "download"], response.headers.get("retry-after"));
-      await response.body?.cancel();
+      cancelReportBody(response);
       throw new ReportReadRetryError(response.status === 429 ? "ADS_REPORT_THROTTLED" : "ADS_REPORT_UPSTREAM_UNAVAILABLE", retryAt);
     }
     return response;
@@ -222,6 +206,7 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
     if (signal.aborted) throw new AdsQueryError("ADS_REPORT_OPERATION_TIMEOUT");
     const options = structuredClone(request.options);
     const after = options.acquisition;
+    const receipts: StoredReceipt[] = [];
     await prisma.$transaction(async tx => {
       const { profile } = await live(tx, scope, actor, fence);
       const current = await tx.amazonAdsReportRequest.findUniqueOrThrow({ where: { id: request.id } });
@@ -236,14 +221,14 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
           contentType: "application/json",
           observedAt: new Date().toISOString(),
         }, { ...scope, authorizationId: profile.authorizationId }, fence.taskId);
-        const evidence = await saveFile(tx, scope, actor, request.id, Buffer.from(encrypted), "application/octet-stream", "response.encrypted");
+        const evidence = await saveFile(tx, scope, actor, request.id, Buffer.from(encrypted), "application/octet-stream", "response.encrypted", receipt => receipts.push(receipt));
         after.evidenceFileIds.push(evidence.id);
         if (phase === "DOWNLOAD") after.urlCiphertext = encryptAmazonAdsCheckpoint({ url: input.envelope.url, expiresAt: input.envelope.urlExpiresAt, size: input.envelope.fileSize }, { ...scope, authorizationId: profile.authorizationId }, fence.taskId);
         if (phase === "POLL") after.nextPollAt = new Date(Date.now()+60000).toISOString();
         else delete after.nextPollAt;
       }
       if (input.bytes) {
-        const file = await saveFile(tx, scope, actor, request.id, input.bytes, "application/gzip", "report.json.gz");
+        const file = await saveFile(tx, scope, actor, request.id, input.bytes, "application/gzip", "report.json.gz", receipt => receipts.push(receipt));
         await tx.amazonAdsReportDocument.upsert({ where: { organizationId_workspaceId_requestId_partIndex: { ...scope, requestId: request.id, partIndex: 0 } }, create: { id: randomUUID(), ...scope, profileId: request.profileId, requestId: request.id, partIndex: 0, format: "GZIP_JSON", compression: "GZIP", status: "VALIDATED", storageFileId: file.id, contentSha256: file.contentHash, byteSize: BigInt(input.bytes.length), rowCount: input.rows, downloadedAt: new Date() }, update: {} });
         after.expectedRows = input.rows;
         delete after.urlCiphertext;
@@ -252,18 +237,38 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
       await tx.amazonAdsReportRequest.update({ where: { id: request.id }, data: { requestOptions: asJson(options), remoteRequestId: input.envelope ? String(input.envelope.reportId) : current.remoteRequestId, status: `ISOLATED_${phase}`, lastPolledAt: request.operation === "poll" ? new Date() : current.lastPolledAt, errorCode: null } });
       if (signal.aborted) throw new AdsQueryError("ADS_REPORT_OPERATION_TIMEOUT");
       assertReportDeadline(after.deadline);
-    }, { timeout: 15000 });
+    }, { timeout: 15000 }).catch(async (error: unknown) => {
+      if (receipts.length) {
+        // File storage and PostgreSQL are not atomic. This is evidence for review,
+        // not proof of an orphan and never authorization to delete the object.
+        try {
+          await prisma.$transaction(async tx => {
+            await tx.$executeRaw`SELECT set_config('statement_timeout', '1000ms', true)`;
+            await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.report.storage_commit_unconfirmed", entityType: "AmazonAdsReportRequest", entityId: request.id, metadata: {
+              workspaceId: scope.workspaceId, taskId: fence.taskId, versionId: request.versionId,
+              dispatchVersion: fence.dispatchVersion, fenceVersion: fence.fenceVersion,
+              fromPhase: state.phase, toPhase: phase, storageType: "local", receipts,
+              evidence: "ISOLATED_FIXTURE_ONLY",
+            } } });
+          }, { maxWait: 500, timeout: 2000 });
+        } catch {
+          console.warn("ADS_REPORT_STORAGE_EVIDENCE_UNAVAILABLE", { taskId: fence.taskId, requestId: request.id });
+        }
+      }
+      throw error;
+    });
     Object.keys(state).forEach(key => { delete (state as unknown as Record<string, unknown>)[key]; });
     Object.assign(state, after);
   }
 }
 
-async function saveFile(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, requestId: string, buffer: Buffer, mimeType: string, originalName: string) {
+async function saveFile(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, requestId: string, buffer: Buffer, mimeType: string, originalName: string, onStored: (receipt: StoredReceipt) => void) {
   const contentHash = sha256(buffer);
   // Only identifiers/hashes in object keys. Signed URLs and raw tokens never become paths.
   const prefix = sha256(JSON.stringify([scope.organizationId, scope.workspaceId, requestId]));
   const key = `amazon-ads/reports/${prefix}/${contentHash}`;
   const stored = await getStorageDriver().putBuffer({ key, buffer, contentType: mimeType });
+  onStored({ storageKey: key, contentSha256: contentHash, byteSize: buffer.length });
   if (stored.key !== key || stored.size !== buffer.length) throw new AdsQueryError("ADS_REPORT_STORAGE_MISMATCH");
   return tx.fileObject.create({ data: { id: randomUUID(), ...scope, userId: actor, originalName, mimeType, size: buffer.length, storageKey: key, storageType: "local", status: "done", contentHash } });
 }

@@ -1,3 +1,4 @@
+import { ensureAutomaticConnections } from "./automatic-connection";
 import { assertExecutionWindow } from "./execution-window";
 import { dispatchSalesExports } from "./exports";
 import { randomUUID } from "node:crypto";
@@ -26,6 +27,7 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
   if (!scopes.length || !process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis") return;
   await dispatchSalesExports(scopes, only?.exportIds);
   if (!only) {
+    await ensureAutomaticConnections(scopes, now);
     await ensureAutomaticSchedules(scopes, now);
     await enqueueDueAutomaticPlans(scopes, now);
   }
@@ -62,7 +64,7 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
 
 async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date) {
   const sources = await prisma.amazonSyncDataSource.findMany({
-    where: { OR: scopes, resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED", amazonSellerId: { not: "" } } },
+    where: { OR: scopes, resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED" } },
     include: { authorization: { select: { updatedByUserId: true } }, resourceCursor: true }, take: 200,
   });
   for (const candidate of sources) {
@@ -70,7 +72,7 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date) {
     const scope = { organizationId: candidate.organizationId, workspaceId: candidate.workspaceId };
     try { await prisma.$transaction(async tx => {
       await scopeLock(tx, scope);
-      const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: candidate.id, authorization: { status: "CONFIGURED", amazonSellerId: { not: "" } } }, include: { authorization: { select: { updatedByUserId: true } } } });
+      const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: candidate.id, authorization: { status: "CONFIGURED" } }, include: { authorization: { select: { updatedByUserId: true } } } });
       if (!source) return;
       const key = automaticPlanKey(source.id);
       const exists = await tx.amazonSyncSchedule.findUnique({ where: { organizationId_workspaceId_resource_planKey: { ...scope, resource: source.resource, planKey: key } }, select: { id: true } });
@@ -107,7 +109,7 @@ async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date) {
   for (const plan of plans) {
     if (!isAutomaticResource(plan.resource)) continue;
     const target = plan.targets[0]?.source;
-    if (!target || plan.targets.length !== 1 || target.authorization.status !== "CONFIGURED" || !target.authorization.amazonSellerId || !automaticMarketplaces.has(target.marketplaceId)) continue;
+    if (!target || plan.targets.length !== 1 || target.authorization.status !== "CONFIGURED" || !automaticMarketplaces.has(target.marketplaceId)) continue;
     if (await prisma.amazonSyncRun.findFirst({ where: { organizationId: plan.organizationId, workspaceId: plan.workspaceId, sourceId: target.id, status: { in: activeTaskStatuses } }, select: { id: true } })) continue;
     const scope = { organizationId: plan.organizationId, workspaceId: plan.workspaceId };
     let options: Parameters<typeof createTask>[4];

@@ -1,3 +1,4 @@
+import { automaticMarketplaces } from "./automatic-schedule";
 import type { Prisma } from "@prisma/client";
 import { assertAmazonScopeAdmin, assertSellerMarketplaceAccess } from "./data-access";
 import { assertFinanceRoles, parseFinancePolicy } from "./finance";
@@ -13,10 +14,10 @@ export async function assertFinanceScope(tx: Prisma.TransactionClient, scope: Sy
   for (const actor of actors) await assertAmazonScopeAdmin(scope, actor, tx);
   const policy = parseFinancePolicy(source.financePolicy);
   const auth = await tx.amazonSpApiAuthorization.findFirst({ where: { ...scope, id: source.authorizationId, status: "CONFIGURED" } });
-  if (!auth?.amazonSellerId) throw new SyncInputError("财务卖家授权未验证。", 403);
-  officialEndpoint(auth.awsRegion, auth.endpoint); assertFinanceRoles(auth);
+  if (!auth) throw new SyncInputError("财务卖家授权未验证。", 403);
+  officialEndpoint(auth.awsRegion, auth.endpoint); assertFinanceRoles(auth, automatic);
   const approved = policy.marketplaces.map(m => m.marketplaceId).sort();
-  const verified = [...new Set(extractMarketplaceParticipations({ payload: auth.marketplaceParticipations }).map(m => m.marketplaceId))].sort();
+  const verified = [...new Set(extractMarketplaceParticipations({ payload: auth.marketplaceParticipations }).map(m => m.marketplaceId).filter(id => !automatic || automaticMarketplaces.has(id)))].sort();
   if (!approved.includes(source.marketplaceId) || JSON.stringify(approved) !== JSON.stringify(verified)) throw new SyncInputError("卖家级财务策略必须覆盖且仅覆盖所有已验证参与站点；请重新审阅范围。", 403);
   for (const marketplaceId of approved) {
     const binding = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, authorizationId: auth.id, sellerAccountId: source.sellerAccountId, marketplaceId, ...(!automatic ? { enabled: true, seller: { status: "active" } } : {}) }, select: { id: true } });

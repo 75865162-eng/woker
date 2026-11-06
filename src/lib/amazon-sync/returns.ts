@@ -43,7 +43,9 @@ export function parseReturnPolicy(value: unknown): ReturnPolicy {
   return { reportType: p.reportType, initialFrom, windowMinutes, overlapSeconds, safetyLagSeconds: integer(p.safetyLagSeconds, 86400, 2592000), marketplaceTimeZone: p.marketplaceTimeZone, applicationId: p.applicationId,
     batchSize: integer(p.batchSize, 1, 500), maxRows: integer(p.maxRows, 1, 50000), pollMaxAttempts: integer(p.pollMaxAttempts, 1, 100), pollDeadlineMinutes: integer(p.pollDeadlineMinutes, 1, 1440), pollBaseSeconds, pollMaxSeconds, budgets };
 }
-export function assertReturnRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }) {
+export function assertReturnRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, automaticRead = false) {
+  // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
+  if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length)) return;
   if (!auth.rolesAttestedAt || !["Pricing", "Amazon Fulfillment"].some(r => auth.approvedRoles.includes(r))) throw new SyncInputError("FBA 退货需要已确认的 Pricing 或 Amazon Fulfillment 角色及 FBA 卖家资格。", 403);
 }
 export const returnWindowFromFrozen = financeWindowFromFrozen;
