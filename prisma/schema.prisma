@@ -1255,6 +1255,8 @@ model SellfoxStore {
   SellfoxProductDailySnapshot SellfoxProductDailySnapshot[]
   SellfoxFbaInventorySnapshot SellfoxFbaInventorySnapshot[]
   SellfoxSalesDailySnapshot   SellfoxSalesDailySnapshot[]
+  SellfoxOrderSnapshot        SellfoxOrderSnapshot[]
+  SellfoxFbaShipmentSnapshot  SellfoxFbaShipmentSnapshot[]
   SellfoxSnapshotHead SellfoxSnapshotHead[]
   SellfoxListingSnapshot SellfoxListingSnapshot[]
   SellfoxAdsProductDaily SellfoxAdsProductDaily[]
@@ -1354,6 +1356,84 @@ model SellfoxSalesDailySnapshot {
   @@index([organizationId, workspaceId, reportDate])
   @@index([organizationId, workspaceId, asin])
   @@index([organizationId, workspaceId, msku])
+}
+
+// One row per order line. Upserted by store + order + line; historical lines stay.
+model SellfoxOrderSnapshot {
+  id                 String       @id
+  organizationId     String
+  workspaceId        String       @default("default")
+  storeId            String
+  shopExternalId     String
+  orderId            String
+  lineKey            String
+  sellerOrderId      String?
+  asin               String       @default("")
+  msku               String       @default("")
+  sku                String       @default("")
+  orderStatus        String
+  purchaseDate       String?
+  purchaseDateRaw    String?
+  payAt              String?
+  refundAt           String?
+  currency           String?
+  orderTotal         Float?
+  qty                Int?
+  refundQty          Int?
+  itemAmount         Float?
+  revenue            Float?
+  promo              String?
+  shipServiceLevel   String?
+  fulfillmentChannel String       @default("")
+  address            Json?
+  latestCapturedAt   DateTime
+  payload            Json
+  syncedAt           DateTime     @default(now())
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime
+  SellfoxStore       SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, orderId, lineKey])
+  @@index([organizationId, workspaceId, purchaseDate])
+  @@index([organizationId, workspaceId, orderStatus])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, msku])
+  @@index([organizationId, workspaceId, orderId])
+}
+
+// One row per shipment line. A finished store capture replaces lines from older captures.
+model SellfoxFbaShipmentSnapshot {
+  id               String       @id
+  organizationId   String
+  workspaceId      String       @default("default")
+  storeId          String
+  shopExternalId   String
+  shipmentId       String
+  shipmentName     String?
+  status           String
+  lineKey          String
+  asin             String       @default("")
+  msku             String       @default("")
+  sku              String       @default("")
+  declaredQty      Int?
+  shippedQty       Int?
+  receivedQty      Int?
+  sourceCreatedAt  String?
+  sourceUpdatedAt  String?
+  shippedAt        String?
+  fulfillmentCenterId String?
+  latestCapturedAt DateTime
+  payload          Json
+  syncedAt         DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime
+  SellfoxStore     SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, shipmentId, lineKey])
+  @@index([organizationId, workspaceId, status])
+  @@index([organizationId, workspaceId, storeId, latestCapturedAt])
+  @@index([organizationId, workspaceId, msku])
+  @@index([organizationId, workspaceId, asin])
 }
 
 model SellfoxSyncSchedule {

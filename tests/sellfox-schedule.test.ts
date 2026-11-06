@@ -34,6 +34,20 @@ test("execution rechecks active membership, current create permission and worksp
   assert.equal(await canExecuteSellfoxSync(scope, { ...deps, member: async () => ({ role: "viewer", user: { status: "active" } }) }), false);
 });
 
+test("orders and FBA shipments repeat every 12 hours instead of the 06:30 daily slot", async () => {
+  const { sellfoxScheduleIntervals } = await import("@/lib/sellfox/schedule-time");
+  const { normalizeSellfoxDates } = await import("@/lib/sellfox/sync-contract");
+  const now = new Date("2026-11-06T04:00:00Z");
+  for (const resource of ["orders", "fba_shipments"] as const) {
+    assert.equal(sellfoxScheduleIntervals[resource], 720);
+    const schedule = { resource, intervalMinutes: 720, lastEnqueuedAt: new Date("2026-11-06T00:00:00Z") };
+    assert.equal(isSellfoxScheduleDue(schedule, new Date("2026-11-06T11:59:59Z")), false);
+    assert.equal(isSellfoxScheduleDue(schedule, new Date("2026-11-06T12:00:00Z")), true);
+  }
+  assert.deepEqual(normalizeSellfoxDates("orders", {}, now), { startDate: "2026-10-31", endDate: "2026-11-06" });
+  assert.deepEqual(normalizeSellfoxDates("fba_shipments", {}, now), {});
+});
+
 test("targeting/search-term plans use daily 1440 and Shanghai 06:30 without an enabled resource gate", async () => {
   const { sellfoxScheduleIntervals } = await import("@/lib/sellfox/schedule-time");
   const { sellfoxSyncDisabledReason, normalizeSellfoxDates } = await import("@/lib/sellfox/sync-contract");

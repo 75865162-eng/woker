@@ -82,9 +82,9 @@ function numberOf(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
-function qty(value: unknown) {
+function qty(value: unknown, digits = 0) {
   const number = numberOf(value);
-  return number == null ? "-" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(number);
+  return number == null ? "-" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(number);
 }
 
 function money(value: unknown, currency: unknown) {
@@ -115,6 +115,7 @@ function cellText(column: ReplicaColumn, row: Row, metric: string) {
   if (column.kind === "salesWindow") return [qty(row.sales7), qty(row.sales14), qty(row.sales30)].join(" | ");
   if (column.kind === "tags" || column.kind === "people") return text(column.kind === "people" ? row.userNameList : row.productTags);
   if (column.kind === "qty") return qty(row[column.key]);
+  if (column.kind === "decimal") return qty(row[column.key], 2);
   if (column.kind === "money") return money(row[column.key], row.currency);
   if (column.kind === "rate") return rate(row[column.key]);
   if (column.kind === "metric") return metric === "revenue" ? money(row.subtotal, row.currency) : qty(row.subtotal);
@@ -151,6 +152,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
   const [draft, setDraft] = useState(() => initialFilters(page));
   const [applied, setApplied] = useState(() => initialFilters(page));
   const [rows, setRows] = useState<Row[]>([]);
+  const [failures, setFailures] = useState<{ shopExternalId: string; shopName: string; error: string }[]>([]);
   const [totals, setTotals] = useState<Row | null>(null);
   const [total, setTotal] = useState(0);
   const [stores, setStores] = useState<Store[]>([]);
@@ -239,12 +241,27 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
       if (applied.from) params.set("from", applied.from);
       if (applied.to) params.set("to", applied.to);
       if (applied.search) params.set("search", applied.search);
+    } else if (page.query === "snapshot") {
+      if (applied.dimension) params.set("dimension", applied.dimension);
+      if (applied.site) params.set("site", applied.site);
+      if (applied.shop) params.append("shopExternalId", applied.shop);
+      if (applied.fulfillment) params.set("fulfillment", applied.fulfillment);
+      if (applied.status) params.set("status", applied.status);
+      if (applied.currency) params.set("currency", applied.currency);
+      if (applied.salesperson) params.set("salesperson", applied.salesperson);
+      if (applied.from) params.set("from", applied.from);
+      if (applied.to) params.set("to", applied.to);
+      if (applied.search) {
+        params.set("search", applied.search);
+        if (applied.searchType) params.set("searchType", applied.searchType);
+        if (applied.exact) params.set("exactMatch", "1");
+      }
     }
     setLoading(true);
     setError("");
     fetch(`${page.endpoint}?${params}`, { headers, cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        const body = await response.json() as { rows?: Row[]; totals?: Row[]; pagination?: { total?: number }; facets?: { productTags?: string[]; salespersons?: string[] }; error?: string; message?: string };
+        const body = await response.json() as { rows?: Row[]; totals?: Row[]; pagination?: { total?: number }; facets?: { productTags?: string[]; salespersons?: string[] }; failures?: { shopExternalId: string; shopName: string; error: string }[]; error?: string; message?: string };
         if (!response.ok) throw new Error(body.error || "读取失败");
         return body;
       })
@@ -255,12 +272,14 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         setTotal(body.pagination?.total ?? 0);
         setTags(body.facets?.productTags ?? []);
         setPeople(body.facets?.salespersons ?? []);
+        setFailures(Array.isArray(body.failures) ? body.failures : []);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setRows([]);
         setTotals(null);
         setTotal(0);
+        setFailures([]);
         setError(reason instanceof Error ? reason.message : "读取失败");
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -370,6 +389,20 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
               <option value="Pending">Pending</option>
               <option value="Shipped">Shipped</option>
               <option value="Canceled">Canceled</option>
+            </> : page.id === "shipments" ? <>
+              <option value="WORKING">待配货</option>
+              <option value="READY_TO_SHIP">待发货</option>
+              <option value="SHIPPED">已发货</option>
+              <option value="IN_TRANSIT">在途</option>
+              <option value="DELIVERED">已送达</option>
+              <option value="CHECKED_IN">已登记</option>
+              <option value="RECEIVING">接收中</option>
+              <option value="CLOSED">已关闭</option>
+              <option value="CANCELLED">已取消</option>
+              <option value="DELETED">已删除</option>
+            </> : page.id === "restock" ? <>
+              <option value="needs">需要补货</option>
+              <option value="covered">无需补货</option>
             </> : <option value="" disabled>待接赛狐</option>}
           </select>
         ) : null}
@@ -437,6 +470,7 @@ export function ReplicaWorkbench({ page }: { page: ReplicaPage }) {
         ))}
       </div>
       {notice ? <p className="sf-notice" role="status">{notice}</p> : null}
+      {failures.length ? <div className="sf-notice" role="alert">{failures.map((failure) => <p key={`${failure.shopExternalId}-${failure.error}`}>{failure.shopName || failure.shopExternalId || "店铺"}同步失败：{failure.error}</p>)}</div> : null}
       <div className="sf-table-wrap">
         <table>
           <thead>

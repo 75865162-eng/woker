@@ -11,9 +11,10 @@ test("six sellfox replica routes keep data and stub split", () => {
   assert.equal(replicaPages.find((page) => page.id === "sales")?.stub, false);
   for (const id of ["orders", "shipments", "restock"]) {
     const page = replicaPages.find((item) => item.id === id);
-    assert.equal(page?.stub, true);
+    assert.equal(page?.stub, false);
+    assert.equal(page?.query, "snapshot");
     assert.equal(page?.emptyTitle, "暂无数据");
-    assert.equal(page?.emptyHint, "待接赛狐");
+    assert.notEqual(page?.emptyHint, "待接赛狐");
   }
   const sales = replicaPages.find((page) => page.id === "sales");
   assert.deepEqual(sales?.dimensions.filter((item) => !item.disabled).map((item) => item.label), ["ASIN", "父ASIN", "MSKU", "SKU", "SPU", "店铺", "开发员"]);

@@ -1,10 +1,10 @@
 export type ReplicaId = "sales" | "performance" | "listings" | "orders" | "shipments" | "restock";
-export type ReplicaColumnKind = "text" | "image" | "qty" | "money" | "rate" | "store" | "mskuPrice" | "skuName" | "titleAsin" | "asinMsku" | "salesWindow" | "tags" | "people" | "metric" | "missing" | "icon";
+export type ReplicaColumnKind = "text" | "image" | "qty" | "decimal" | "money" | "rate" | "store" | "mskuPrice" | "skuName" | "titleAsin" | "asinMsku" | "salesWindow" | "tags" | "people" | "metric" | "missing" | "icon";
 export type ReplicaColumn = { key: string; label: string; kind?: ReplicaColumnKind; defaultVisible?: boolean };
 export type ReplicaAction = { id: string; label: string; disabled?: boolean; reason?: string };
 export type ReplicaDimension = { id: string; label: string; disabled?: boolean; reason?: string };
 export type ReplicaCheck = { id: string; label: string; disabled?: boolean; reason?: string };
-export type ReplicaQuery = "workbench" | "agent" | "stub";
+export type ReplicaQuery = "workbench" | "agent" | "snapshot" | "stub";
 
 export type ReplicaPage = {
   id: ReplicaId;
@@ -230,10 +230,10 @@ export const replicaPages: ReplicaPage[] = [
     href: "/sellfox/orders",
     title: "全部订单",
     nav: "订单 → 全部订单",
-    subtitle: "赛狐订单表尚未接入。控件按全部订单页摆放，数据区保持空。",
+    subtitle: "读取 SellfoxOrderSnapshot。Worker 每 12 小时同步，此页不写库。",
     endpoint: "/api/sellfox/orders",
-    stub: true,
-    query: "stub",
+    stub: false,
+    query: "snapshot",
     dimensions: [
       { id: "current", label: "2025年至今" },
       { id: "history", label: "历史订单", disabled: true, reason: "没有订单快照，历史订单不单独造一份空表。" },
@@ -279,19 +279,19 @@ export const replicaPages: ReplicaPage[] = [
       { id: "columns", label: "自定义列" },
       { id: "export", label: "导出" },
     ],
-    checks: [{ id: "unlimited", label: "不限制时间", disabled: true, reason: "没有订单表，时间开关不会查出数据。" }],
+    checks: [{ id: "unlimited", label: "不限制时间", disabled: true, reason: "请用订购时间筛选；不提供无日期的全表扫描开关。" }],
     emptyTitle: "暂无数据",
-    emptyHint: "待接赛狐",
+    emptyHint: "当前店铺和订购时间范围内没有订单快照。",
   },
   {
     id: "shipments",
     href: "/sellfox/shipments",
     title: "货件",
     nav: "FBA → 货件",
-    subtitle: "没有 Sellfox 货件表。截图为无权限页，控件按货件列表摆放，不造行。",
+    subtitle: "读取 SellfoxFbaShipmentSnapshot 的最近一次完整采集。接口失败的店铺单独列出。",
     endpoint: "/api/sellfox/shipments",
-    stub: true,
-    query: "stub",
+    stub: false,
+    query: "snapshot",
     dimensions: [],
     metrics: [],
     searchTypes: [
@@ -328,18 +328,21 @@ export const replicaPages: ReplicaPage[] = [
     ],
     checks: [],
     emptyTitle: "暂无数据",
-    emptyHint: "待接赛狐",
+    emptyHint: "当前筛选下没有货件快照。",
   },
   {
     id: "restock",
     href: "/sellfox/restock",
     title: "补货建议",
     nav: "FBA → 补货建议",
-    subtitle: "没有 Sellfox 补货建议表。不从库存和销量推算建议量。",
+    subtitle: "按可售、在途和 7/14/30 日均实时计算。备货 30 天、安全 7 天，不另存建议表。",
     endpoint: "/api/sellfox/restock",
-    stub: true,
-    query: "stub",
-    dimensions: [],
+    stub: false,
+    query: "snapshot",
+    dimensions: [
+      { id: "asin", label: "ASIN" },
+      { id: "msku", label: "MSKU" },
+    ],
     metrics: [],
     searchTypes: searchAsin,
     showDate: false,
@@ -350,19 +353,27 @@ export const replicaPages: ReplicaPage[] = [
     tagFilter: false,
     salespersonFilter: false,
     columns: [
-      { key: "mainImage", label: "图片" },
-      { key: "asin", label: "ASIN/MSKU" },
-      { key: "sku", label: "品名/SKU" },
+      { key: "mainImage", label: "图片", kind: "image" },
+      { key: "asin", label: "ASIN/MSKU", kind: "asinMsku" },
+      { key: "sku", label: "品名/SKU", kind: "skuName" },
       { key: "store", label: "店铺/站点" },
-      { key: "fulfillable", label: "FBA可售" },
-      { key: "daily", label: "日均销量" },
-      { key: "cover", label: "可售天数" },
-      { key: "suggest", label: "建议补货量" },
-      { key: "local", label: "本地发FBA" },
-      { key: "salesperson", label: "业务员" },
+      { key: "fulfillable", label: "FBA可售", kind: "qty" },
+      { key: "reservedQty", label: "预留", kind: "qty" },
+      { key: "unsellable", label: "不可售", kind: "qty" },
+      { key: "warehousing", label: "在仓", kind: "qty" },
+      { key: "inTransit", label: "在途", kind: "qty" },
+      { key: "avg7", label: "7日均", kind: "decimal" },
+      { key: "avg14", label: "14日均", kind: "decimal" },
+      { key: "avg30", label: "30日均", kind: "decimal" },
+      { key: "daily", label: "加权日均", kind: "decimal" },
+      { key: "cover", label: "可售天数", kind: "decimal" },
+      { key: "suggest", label: "建议补货量", kind: "qty" },
+      { key: "suggestDate", label: "建议补货日" },
+      { key: "local", label: "本地发FBA", kind: "missing" },
+      { key: "salesperson", label: "业务员", kind: "missing" },
     ],
     actions: [
-      { id: "generate", label: "生成建议", disabled: true, reason: "不从本地库存和销量推算补货量。" },
+      { id: "generate", label: "生成建议", disabled: true, reason: "打开页面即按当前快照计算，不另存建议。" },
       { id: "sync", label: "同步", disabled: true, reason: noWrite },
       { id: "export", label: "导出" },
       { id: "columns", label: "自定义列" },
@@ -370,7 +381,7 @@ export const replicaPages: ReplicaPage[] = [
     ],
     checks: [],
     emptyTitle: "暂无数据",
-    emptyHint: "待接赛狐",
+    emptyHint: "当前筛选下没有可计算的在线产品。",
   },
 ];
 

@@ -1,3 +1,5 @@
+import { syncSellfoxOrders, type OrderCheckpoint } from "./order-sync";
+import { syncSellfoxFbaShipments, type FbaShipmentCheckpoint } from "./fba-shipment-sync";
 import { syncSellfoxListings, type ListingCheckpoint } from "./listing-sync";
 import { syncSellfoxAdsReports } from "./ads-report-sync";
 import { claimSellfoxRun, fenceSellfoxRun, finishSellfoxRun, SellfoxLeaseLostError, type SellfoxRunLease } from "@/lib/sellfox/run-lease";
@@ -185,7 +187,7 @@ export async function processSellfoxSyncRun(runId: string) {
       if (requested.length && stores.length !== new Set(requested).size) throw new SellfoxSyncInputError("所选店铺不属于当前工作区。");
       summary = { ...summary, shopExternalIds: stores.map((store) => store.externalId), storesFrozen: true };
     }
-    if ((run.resource === "inventory" || run.resource === "sales" || run.resource === "listings" || run.resource === "performance") && !summary.capturedAt) {
+    if ((run.resource === "inventory" || run.resource === "sales" || run.resource === "listings" || run.resource === "performance" || run.resource === "orders" || run.resource === "fba_shipments") && !summary.capturedAt) {
       const capturedAt = new Date();
       summary = { ...summary, capturedAt: capturedAt.toISOString(), ...(run.resource === "inventory" ? { reportDate: sellfoxDateAt(capturedAt) } : {}) };
     }
@@ -235,6 +237,8 @@ export async function processSellfoxSyncRun(runId: string) {
     }
     else if (input.resource === "inventory" || input.resource === "sales") result = await syncSnapshots(input);
     else if (input.resource === "listings") result = await syncSellfoxListings({ ...input, shopExternalIds: input.shopExternalIds!, capturedAt: input.capturedAt!, checkpoint: input.progress?.listings as ListingCheckpoint | undefined, onProgress: async (listings, tx) => saveProgress(input, { listings, count: Object.values(listings).reduce((n, item) => n + item.count, 0) }, tx) });
+    else if (input.resource === "orders") result = await syncSellfoxOrders({ ...input, shopExternalIds: input.shopExternalIds!, startDate: input.startDate!, endDate: input.endDate!, capturedAt: input.capturedAt!, checkpoint: input.progress?.orders as OrderCheckpoint | undefined, onProgress: async (orders, tx) => saveProgress(input, { orders, count: Object.values(orders).reduce((n, item) => n + item.count, 0) }, tx) });
+    else if (input.resource === "fba_shipments") result = await syncSellfoxFbaShipments({ ...input, shopExternalIds: input.shopExternalIds!, startDate: input.startDate, endDate: input.endDate, capturedAt: input.capturedAt!, checkpoint: input.progress?.fba_shipments as FbaShipmentCheckpoint | undefined, onProgress: async (fbaShipments, tx) => saveProgress(input, { fba_shipments: fbaShipments, count: Object.values(fbaShipments).reduce((n, item) => n + item.count, 0) }, tx) });
     else if (["ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"].includes(input.resource)) result = await syncSellfoxAdsReports({ ...input, reportTypeCode: input.resource === "ads_campaign" ? "adCampaignReport" : input.resource === "ads_ad_group" ? "adGroupReport" : input.resource === "ads_placement" ? "adSpaceReport" : input.resource === "ads_targeting" ? "adTargeringReport" : input.resource === "ads_search_term" ? "adSearchTermReport" : "adProductReport", startDate: input.startDate!, endDate: input.endDate!, shopExternalIds: input.shopExternalIds!, adTypes: request.adTypes, onProgress: async (progress, tx) => saveProgress(input, progress, tx) });
     else if (input.resource === "hourly") result = await syncHourly(input);
     else throw new SellfoxSyncInputError("此赛狐数据域暂未接入 Open API。");

@@ -457,6 +457,7 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - Sellfox 计划与手动提交按组织/工作区/资源共用事务防重锁；执行开始重新检查 active 用户和 sellfox:create。`/settings?tab=operations` 赛狐面板显示 Worker 心跳及当前工作区计划，schedules API 返回 lastEnqueuedAt/nextRunAt；时间为 Asia/Shanghai，计划默认关闭，页面不启动 Worker。创建防重不等于多副本执行租约，生产接管验证见 `docs/sellfox-sync-workbench-plan.md` §10。
 - 库存、销量、表现、店铺和运行记录按 organization/workspace 隔离；详细接口契约与验证步骤见 `docs/sellfox-sync-workbench-plan.md`。
 - `npm run test:sellfox:browser`：隔离模拟接口验证多店/日期/站点、URL 导航、导出链接、按需详情、日志轮询与切工作区迟到响应；不访问真实赛狐或生产库。浏览器不持有 token；列表与导出复用 browse-query，导出超过 10,000 条明确拒绝，不能静默截断。
+- 订单与 FBA 货件走 Worker 资源 `orders`、`fba_shipments`，默认每 720 分钟，计划仍默认关闭。订单读 `POST /api/order/pageList.json` 写入 `SellfoxOrderSnapshot`（订单一行一项）；货件读 `POST /api/fba/shippingOrder/pageList.json` 写入 `SellfoxFbaShipmentSnapshot`。契约字段对不上时该店失败并在页面列出，不补行。补货建议不建表，按 `sellfox_listing_current` 可售、货件在途和 `SellfoxSalesDailySnapshot` 近 30 个可观察日（去掉最近 2 天，断货日不进分母）实时计算。路径、公式和回滚见 `docs/sellfox-orders-shipments-restock.md`。
 
 ### 本地 Amazon US 选品 CLI
 
