@@ -318,18 +318,20 @@ test("MCP audit captures safe Gateway classification, version, duration and supp
   const response = await POST(request);
   assert.equal(response.status, 400);
   const failure = await response.json();
-  assert.equal(failure.error.data.businessCode, "SCHEMA_VALIDATION");
+  assert.equal(failure.error.data.businessCode, "INVALID_INPUT");
   await call("amazon.inventory.list");
   const rejected = await getMcpSettingsSnapshot(scope, actor, { callLogFailureClass: "SCHEMA_VALIDATION", callLogTool: "amazon.inventory.list" });
+  const rejectedLog = rejected.callLogs[0] as Record<string, unknown>;
   assert.equal(rejected.callLogs.length, 1);
-  assert.equal(rejected.callLogs[0].failureClass, "SCHEMA_VALIDATION");
-  assert.equal(rejected.callLogs[0].toolVersion, "1.0.0");
-  assert.equal(rejected.callLogs[0].gatewayStatus, "FAILED");
-  assert.ok(typeof rejected.callLogs[0].durationMs === "number");
+  assert.equal(rejectedLog.failureClass, "SCHEMA_VALIDATION");
+  assert.equal(rejectedLog.toolVersion, "1.0.0");
+  assert.equal(rejectedLog.gatewayStatus, "FAILED");
+  assert.ok(typeof rejectedLog.durationMs === "number");
   const succeeded = await getMcpSettingsSnapshot(scope, actor, { callLogStatus: "SUCCEEDED", callLogTool: "amazon.inventory.list" });
-  assert.equal(succeeded.callLogs[0].gatewayStatus, "SUCCEEDED");
-  assert.equal(succeeded.callLogs[0].failureClass, null);
-  assert.ok(typeof succeeded.callLogs[0].durationMs === "number");
+  const succeededLog = succeeded.callLogs[0] as Record<string, unknown>;
+  assert.equal(succeededLog.gatewayStatus, "SUCCEEDED");
+  assert.equal(succeededLog.failureClass, null);
+  assert.ok(typeof succeededLog.durationMs === "number");
   assert.ok(!JSON.stringify([rejected.callLogs, succeeded.callLogs]).includes(token));
 });
 test("discovery refreshes action grants, personal tool scope and seller/site pairs", async () => {
