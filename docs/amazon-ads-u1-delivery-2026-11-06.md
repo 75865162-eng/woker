@@ -38,13 +38,13 @@ V3 文档提示 2027-06-30 停用，因此本批只把核实的 V3 子集作为�
 
 | 验证 | 结果 |
 | --- | --- |
-| 清空继承环境并加载网络保护的 `tests/*.test.ts` | 867/867，通过；包含 Campaign parser 4 项 |
+| `npm test`（本轮工作区核心测试） | 872/872，通过；包含 Campaign parser 4 项 |
 | `node scripts/test-amazon-ads-offline.mjs --reports` | 23/23，通过，含同 revision 授权换绑与超大对象拒绝 |
 | `node scripts/test-amazon-ads-offline.mjs --mcp` | Ads MCP 10/10，通过 |
 | `node scripts/test-amazon-ads-migrations.mjs` | 通过；一次性 PostgreSQL，未触碰持久数据库 |
 | `npx playwright test --config tests/browser/amazon-ads.config.ts` | 21 项通过，1 项历史列表计数定位失败；修正定位后仅重跑该项，通过；未机械重复其他 21 项 |
 | 定向能力、Campaign parser、scope digest 和 bounded buffer 单测 | 11/11，通过 |
-| `npm run typecheck` / 全仓 `npx tsc --noEmit` | 最近一次新增 scope/storage/evidence 后需重跑；此前本地通过 |
+| `npm run typecheck` | 本轮全仓 TypeScript 检查通过 |
 | 相关源文件/测试定向 ESLint | 通过 |
 
 集成运行器只创建并清理一次性 PG/Redis 和临时 uploads，使用预装镜像，不拉取镜像、不继承 dotenv/真实凭证；网络保护拒绝外部连接。测试覆盖未知创建结果、预算/截止、过期和非法下载、截断及存储损坏、替换 fence、处理中撤权、暂存后计划变更、版本修订、API/MCP 同源读取和精度。
@@ -72,6 +72,7 @@ V3 文档提示 2027-06-30 停用，因此本批只把核实的 V3 子集作为�
 - StorageDriver 的可选 `getBoundedBuffer` 为 local/S3(R2) 提供 stream 上限，旧 `getBuffer` 保持不变；Ads parser 不接受不支持 bounded read 的 driver。
 - 成功 create/poll 的 request/response body 以加密证据保留原字节；文件通过 FileObject 引用，正常 API/MCP 不返回正文或签名 URL。
 - 最新验证：报表隔离 PG/Redis 23/23；能力/解析/scope/storage 单测 11/11；TypeScript、定向 ESLint 通过。迁移无 schema 改动；当前用户工作区另有 migration 变更，不将其混入本任务迁移结论。
-- 仍未完成：官方合同重核、正式 live adapter、报告专用 BullMQ scheduler/worker、跨 Profile 时区 totals 语义、真实 Profile 数据验收。真实 API、配置和任务保持关闭。
+- 本轮复核：`npm test` 872/872、报表隔离回归 23/23、Ads MCP 隔离回归 10/10、`npm run typecheck` 和 `git diff --check` 均通过。Amazon 官方页面本轮只读请求返回客户端渲染壳，未能提取合同正文；此前记载的公开文档证据未变更为本轮新证据。
+- 仍未完成：T02 官方合同及身份映射重核、T07 正式下载目标策略、T08–T11 报告专用队列/worker、T12–T14 覆盖/时区/性能矩阵、真实 Profile 数据验收。T02/D03 未决前下载只保留 `.invalid` fixture host 限制，不能宣称生产 SSRF/DNS 防护已验收。真实 API、配置和任务保持关闭。
 
 回滚仅回退新增日报入口、采集与发布扩展，保留历史事实和文件。无 schema 变更，不需要数据库回滚。没有执行真实 API、配置更改、持久数据库迁移、同步任务、commit/push 或部署；桌面 commit/push 追溯规则本次未触发。

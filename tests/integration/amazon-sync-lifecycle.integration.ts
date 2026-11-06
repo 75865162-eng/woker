@@ -222,7 +222,8 @@ test("bound US/CA sources automatically create bounded 730-day tasks without ena
   assert.equal(calls, 0); assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: next.id } })).status, "BLOCKED");
   await tickSyncCenter(new Date(now.getTime() + 240_000));
   assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: automaticPlanId(orders.id) } })).enabled, false);
-  const returns = sources.find(s => s.resource === "returns")!;
+  for (const resource of ["returns", "finance"]) {
+  const returns: { id: string } = sources.find(s => s.resource === resource)!;
   const returnsPlan = await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: automaticPlanId(returns.id) } });
   async function setAutomaticPlanEnabled(enabled: boolean, revision: number) {
     const request = await requestChange(scope, actor, { action: "save-plan", id: returnsPlan.id, revision, name: returnsPlan.name, resource: returnsPlan.resource, enabled, sourceIds: [returns.id], intervalMinutes: returnsPlan.intervalMinutes, priority: returnsPlan.priority, maxAttempts: returnsPlan.maxAttempts, retentionDays: returnsPlan.retentionDays });
@@ -234,4 +235,5 @@ test("bound US/CA sources automatically create bounded 730-day tasks without ena
   const paused = await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: returnsPlan.id } });
   await setAutomaticPlanEnabled(true, paused.revision);
   assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: returnsPlan.id } })).enabled, true);
+  }
 });
