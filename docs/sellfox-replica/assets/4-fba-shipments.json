@@ -1,0 +1,13 @@
+{
+  "page": "4-fba-shipments",
+  "url": "https://www.sellfox.com/amzup-web-main/web/fba/shipment/index.html",
+  "resolvedUrl": "https://www.sellfox.com/amzup-web-main/permissionNot.html",
+  "status": "MISSING",
+  "reason": "permission_denied",
+  "message": "抱歉：您没有权限访问此页面，请联系管理员",
+  "triedUrls": [
+    "https://www.sellfox.com/amzup-web-main/web/fba/inbound-shipment/index.html",
+    "https://www.sellfox.com/amzup-web-main/web/fba/shipment/index.html"
+  ],
+  "ariaSnapshot": "- generic: 抱歉：您没有权限访问此页面，请联系管理员"
+}

@@ -1,0 +1,120 @@
+{
+  "page": "1-sales-stats",
+  "url": "https://www.sellfox.com/amzup-web-main/web/profitStats/productStat/index.html",
+  "title": "赛狐ERP - 跨境电商精细化管理系统",
+  "dimensionOrSubTabs": [
+    "系统消息 25",
+    "预警消息",
+    "买家消息 0",
+    "ASIN",
+    "父ASIN",
+    "MSKU",
+    "SKU",
+    "SPU",
+    "店铺",
+    "开发员",
+    "业务员",
+    "MSKU标签",
+    "ASIN标签",
+    "父ASIN标签"
+  ],
+  "subNav": [
+    "ASIN",
+    "父ASIN",
+    "MSKU",
+    "SKU",
+    "SPU",
+    "店铺",
+    "开发员",
+    "业务员",
+    "MSKU标签",
+    "ASIN标签",
+    "父ASIN标签"
+  ],
+  "dateRangeTabs": [
+    "日期范围 2026-10-28 ~ 2026-11-06"
+  ],
+  "filterLabels": [
+    "销量",
+    "订单量",
+    "销售额",
+    "全部站点",
+    "全部店铺",
+    "发货方式",
+    "产品标签",
+    "业务员",
+    "业绩归属人",
+    "原币种",
+    "按日",
+    "ASIN"
+  ],
+  "buttonLabels": [
+    "取消",
+    "确定",
+    "仅筛选此项",
+    "搜索",
+    "重置",
+    "关闭",
+    "导出"
+  ],
+  "columnHeaders": [
+    "分析",
+    "运营",
+    "销量洞察",
+    "父ASIN",
+    "MSKU/售价",
+    "品名/SKU",
+    "款名/SPU",
+    "产品标签",
+    "标题",
+    "业务员",
+    "业绩归属人",
+    "分类",
+    "商品品牌",
+    "FBA可售",
+    "图片",
+    "ASIN",
+    "店铺/站点"
+  ],
+  "icons": {
+    "columnPicker": true,
+    "export": true,
+    "refresh": true,
+    "help": true
+  },
+  "filterRowTextPreview": "",
+  "metricRadios": [
+    "销量",
+    "订单量",
+    "销售额"
+  ],
+  "dimensionTabs": [
+    "ASIN",
+    "父ASIN",
+    "MSKU",
+    "SKU",
+    "SPU",
+    "店铺",
+    "开发员",
+    "业务员"
+  ],
+  "pageTabs": [
+    "销量统计",
+    "销售利润",
+    "在线产品",
+    "商品列表"
+  ],
+  "toolbarIcons": [
+    "自定义列设置",
+    "刷新数据",
+    "导出数据",
+    "帮助"
+  ],
+  "checkboxes": [
+    "按ASIN汇总",
+    "实时统计",
+    "隐藏销量为0的产品",
+    "测评产品",
+    "去除换货销量"
+  ]
+}
