@@ -32,7 +32,7 @@ await writeFile(ambient, `/// <reference path=${JSON.stringify(path.relative(typ
 `);
 await writeFile(typeConfig, JSON.stringify({
   extends: path.relative(typeDirectory, path.join(process.cwd(), "tsconfig.json")),
-  compilerOptions: { incremental: false },
+  compilerOptions: { incremental: false, baseUrl: process.cwd() },
   include: [ambient, ...["*.ts", "*.mts", "src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "scripts/**/*.mts", "tests/**/*.ts", "tests/**/*.tsx", `${distDir}/types/**/*.ts`].map(p => path.resolve(p))],
   exclude: [path.join(process.cwd(), "node_modules"), path.join(process.cwd(), "next-env.d.ts")],
 }, null, 2));
