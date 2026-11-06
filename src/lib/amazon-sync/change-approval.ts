@@ -190,7 +190,7 @@ export async function requestChange(scope: SyncScope, actor: string, input: Reco
     }
     const ciphertext = seal(command, scope, id, environment), payloadDigest = digest(ciphertext);
     const evidence = await inspect(tx, scope, command); evidence.targetId ||= String(command.proposedId ?? id);
-    await checkTargetAccess(tx, scope, actor, evidence.sourceIds);
+    await checkTargetAccess(tx, scope, actor, evidence.sourceIds, action === "save-plan" && await isAutomaticPlan(tx, evidence.targetId));
     const row = await tx.amazonDataCenterChangeRequest.create({ data: { ...scope, id, targetEnvironment: environment, changeType: operationTypes[action], operation: action, ...evidence, beforeSummary: json(safeState(evidence.beforeSummary)), afterSummary: json(safeState(evidence.afterSummary)), changeDigest: evidenceDigest(scope, { targetEnvironment: environment, operation: action, payloadDigest }, evidence), payloadDigest, requestedByUserId: actor, expiresAt: new Date(Date.now() + 60 * 60_000) } });
     await tx.amazonDataCenterSealedCommand.create({ data: { ...scope, id, ciphertext } });
     await audit(tx, scope, actor, id, "requested", { digest: row.changeDigest, operation: action, environment });
@@ -212,7 +212,7 @@ export async function decideChange(scope: SyncScope, actor: string, id: string, 
     if (decision === "REVOKED") {
       if (!["REQUESTED", "APPROVED"].includes(row.status) && !(row.status === "APPLIED" && row.changeType === "SyncExecutionRequest")) throw new SyncInputError("已应用配置不能撤销；须另行提交反向变更。", 409);
     } else assertDecision(row, actor, new Date(), isAmazonScopeAdmin(approver.role));
-    if (row.sourceIds.length) await checkTargetAccess(tx, scope, actor, row.sourceIds);
+    if (row.sourceIds.length) await checkTargetAccess(tx, scope, actor, row.sourceIds, row.operation === "save-plan" && await isAutomaticPlan(tx, row.targetId));
     if (row.targetEnvironment !== targetEnvironment()) throw new SyncInputError("目标环境不匹配。", 409);
     if (decision === "APPROVED") {
       const envelope = await tx.amazonDataCenterSealedCommand.findFirst({ where: { ...scope, id } });
@@ -233,13 +233,17 @@ export async function decideChange(scope: SyncScope, actor: string, id: string, 
     await audit(tx, scope, actor, id, decision.toLowerCase(), { digest: row.changeDigest, ...(decision === "APPROVED" ? { selfApproved: row.requestedByUserId === actor, approverRole: approver.role } : {}) }); return changeView(updated);
   });
 }
-async function checkTargetAccess(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, sourceIds: string[]) {
+async function isAutomaticPlan(tx: Prisma.TransactionClient, id: string) {
+  if (!id) return false;
+  return Boolean(await tx.amazonSyncSchedule.findFirst({ where: { id, executionVersion: 2, planKey: { startsWith: "auto-v1:" } }, select: { id: true } }));
+}
+async function checkTargetAccess(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, sourceIds: string[], allowInactiveAutomaticPlan = false) {
   if (!sourceIds.length) return;
   const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: sourceIds } }, });
   if (sources.length !== sourceIds.length) throw new SyncInputError("审批数据源范围无效。", 403);
   for (const source of sources) {
     if (source.resource === "finance") await assertFinanceScope(tx, scope, source, [actor]);
-    else await assertSellerMarketplaceAccess(scope, actor, source.sellerAccountId, source.marketplaceId, tx, "sync");
+    else await assertSellerMarketplaceAccess(scope, actor, source.sellerAccountId, source.marketplaceId, tx, "sync", allowInactiveAutomaticPlan);
   }
 }
 async function dispatch(scope: SyncScope, actor: string, command: Record<string, unknown>) {
@@ -325,8 +329,9 @@ export async function applyChange(scope: SyncScope, actor: string, id: string) {
       await assertChangePermission(scope, actor, action, tx);
       await assertChangePermission(scope, row.approvedByUserId ?? "", "approve", tx);
       if (["save-access-grant", "save-authorization", "disable-authorization", "save-source", "validate-authorization"].includes(action)) await assertAmazonScopeAdmin(scope, row.approvedByUserId ?? "", tx);
-      await checkTargetAccess(tx, scope, actor, row.sourceIds);
-      await checkTargetAccess(tx, scope, row.approvedByUserId ?? "", row.sourceIds);
+      const allowInactiveAutomaticPlan = action === "save-plan" && await isAutomaticPlan(tx, row.targetId);
+      await checkTargetAccess(tx, scope, actor, row.sourceIds, allowInactiveAutomaticPlan);
+      await checkTargetAccess(tx, scope, row.approvedByUserId ?? "", row.sourceIds, allowInactiveAutomaticPlan);
       const envelope = await tx.amazonDataCenterSealedCommand.findFirst({ where: { ...scope, id } });
       if (!envelope || digest(envelope.ciphertext) !== row.payloadDigest) throw new SyncInputError("待应用配置完整性校验失败。", 409);
       const command = unseal(envelope.ciphertext, scope, id, row.targetEnvironment);

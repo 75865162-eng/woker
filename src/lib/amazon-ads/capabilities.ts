@@ -8,6 +8,8 @@ export const adsCapabilityDomains = [
 
 export type AdsCapabilityDomain = typeof adsCapabilityDomains[number];
 export type AdsCapabilityProduct = "SP" | "SB" | "SD";
+/** Acquisition status is separate from read/query and live account acceptance. */
+export type AdsCapabilityAcquisition = "NONE" | "ISOLATED_FIXTURE_ONLY" | "FORMAL_LIVE_ADAPTER";
 export type AdsCapability = Readonly<{
   product: AdsCapabilityProduct;
   domain: AdsCapabilityDomain;
@@ -22,6 +24,7 @@ export type AdsCapability = Readonly<{
   query: "PROFILE_MANAGEMENT" | "ENTITY_QUERY" | "PUBLISHED_REPORT_QUERY_ONLY" | "NOT_IMPLEMENTED";
   ui: "ACCOUNT_MANAGEMENT" | "SYNCED_DATA" | "NOT_IMPLEMENTED";
   mcpTool: "amazon.ads.entities.list" | "amazon.ads.reports.list" | null;
+  acquisition: AdsCapabilityAcquisition;
   // Neither source code nor account connection proves that this domain was accepted live.
   liveAcceptance: "NOT_VERIFIED";
   accountPermission: "REQUIRES_PROFILE_CHECK";
@@ -52,6 +55,7 @@ function capability(product: AdsCapabilityProduct, domain: AdsCapabilityDomain):
     read: "NOT_IMPLEMENTED", write: "NOT_IMPLEMENTED", contract: "UNVERIFIED",
     apiVersion: null, endpoints: [], entityType: null, storage: "NOT_IMPLEMENTED",
     query: "NOT_IMPLEMENTED", ui: "NOT_IMPLEMENTED", mcpTool: null,
+    acquisition: "NONE",
     liveAcceptance: "NOT_VERIFIED", accountPermission: "REQUIRES_PROFILE_CHECK", historyLimitDays: null,
     evidence: [], limitations: ["No verified domain contract or live account acceptance."],
   };
@@ -75,9 +79,14 @@ function capability(product: AdsCapabilityProduct, domain: AdsCapabilityDomain):
   }
   if (reports.has(domain)) return {
     ...base, storage: "REPORT_VERSION_FOUNDATION", query: "PUBLISHED_REPORT_QUERY_ONLY",
+    acquisition: domain === "campaign-performance" ? "ISOLATED_FIXTURE_ONLY" : "NONE",
     ui: "SYNCED_DATA", mcpTool: "amazon.ads.reports.list",
-    evidence: ["src/lib/amazon-ads/report-query.ts", "src/lib/amazon-ads/report-publication.ts"],
-    limitations: ["Generic published-fact query is not a domain-specific report contract.", "Report acquisition is not implemented; publication is isolated-fixture-only."],
+    evidence: domain === "campaign-performance"
+      ? ["src/lib/amazon-ads/campaign-report-contract.ts", "src/lib/amazon-ads/report-acquisition.ts", "src/lib/amazon-ads/report-publication.ts"]
+      : ["src/lib/amazon-ads/report-query.ts", "src/lib/amazon-ads/report-publication.ts"],
+    limitations: domain === "campaign-performance"
+      ? ["Acquisition is isolated-fixture-only; no formal live adapter or worker is enabled.", "Live Profile permission and account acceptance are not verified."]
+      : ["Generic published-fact query is not a domain-specific report contract.", "Report acquisition is not implemented for this report domain."],
   };
   return base;
 }
@@ -92,6 +101,7 @@ export function adsCapabilityBlockers(row: AdsCapability): readonly string[] {
   return [
     ...(row.contract === "UNVERIFIED" ? ["DOMAIN_CONTRACT_UNVERIFIED"] : []),
     ...(row.read === "NOT_IMPLEMENTED" ? ["READ_ADAPTER_NOT_IMPLEMENTED"] : []),
+    ...(row.acquisition === "ISOLATED_FIXTURE_ONLY" ? ["ISOLATED_FIXTURE_ONLY"] : []),
     "LIVE_ACCEPTANCE_NOT_VERIFIED", "PROFILE_PERMISSION_REQUIRES_CHECK", "WRITE_NOT_IMPLEMENTED",
   ];
 }

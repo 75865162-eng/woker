@@ -179,7 +179,7 @@ test("client retains exact raw response for encrypted archive; normalized facts 
   assert.ok(!JSON.stringify(parseInboundShipment(result.body, { inboundPlanId: "plan-1", shipmentId: "shipment-1" })).includes("private"));
 });
 
-test("read-side implementation does not silently enable real tasks or automatic plans", () => {
+test("explicitly scoped fulfillment plans can be refreshed automatically after binding", () => {
   assert.equal(implementedDomain("fulfillment"), "fulfillment");
-  assert.ok(!(automaticResources as readonly string[]).includes("fulfillment"));
+  assert.ok((automaticResources as readonly string[]).includes("fulfillment"));
 });

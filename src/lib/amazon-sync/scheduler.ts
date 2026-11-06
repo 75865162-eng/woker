@@ -8,7 +8,10 @@ import { createTask, scopeLock, syncIncrementalCursorStatus } from "./service";
 import { activeTaskStatuses, isIncrementalResource, SyncInputError, type SyncScope } from "./policy";
 import { financeWindowFromFrozen, nextFinanceWindow, parseFinancePolicy } from "./finance";
 import { nextOrderWindow, orderWindowFromFrozen, parseOrderSyncPolicy } from "./orders";
-import { nextSalesTrafficRange, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource } from "./automatic-schedule";
+import { parseReturnPolicy, returnWindowFromFrozen } from "./returns";
+import { domainReportRunWindow } from "./domain-reports";
+import { isObservationResource, parseObservationPolicy } from "./observation-policy";
+import { nextAutomaticInventoryEventWindow, nextAutomaticReturnWindow, nextAutomaticSettlementDiscovery, nextSalesTrafficRange, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource } from "./automatic-schedule";
 import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
 
 export function enabledSyncScopes(value = process.env.AMAZON_SYNC_CENTER_SCOPES): SyncScope[] {
@@ -63,7 +66,7 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date) {
     include: { authorization: { select: { updatedByUserId: true } }, resourceCursor: true }, take: 200,
   });
   for (const candidate of sources) {
-    if ((candidate.resource === "orders" && !candidate.orderPolicy) || (candidate.resource === "finance" && !candidate.financePolicy)) continue;
+    if ((candidate.resource === "orders" && !candidate.orderPolicy) || (candidate.resource === "finance" && !candidate.financePolicy) || (candidate.resource === "returns" && !candidate.returnsPolicy) || (isObservationResource(candidate.resource) && !candidate.domainPolicy)) continue;
     const scope = { organizationId: candidate.organizationId, workspaceId: candidate.workspaceId };
     try { await prisma.$transaction(async tx => {
       await scopeLock(tx, scope);
@@ -87,10 +90,14 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date) {
         const policy = { ...parseFinancePolicy(source.financePolicy), initialFrom: backfillStart, windowMinutes: 43200 };
         await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { financePolicy: policy as Prisma.InputJsonValue, revision: { increment: 1 } } });
       }
+      if (source.resource === "returns" && source.returnsPolicy) {
+        const policy = { ...parseReturnPolicy(source.returnsPolicy), initialFrom: backfillStart, windowMinutes: 43200 };
+        await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { returnsPolicy: policy as Prisma.InputJsonValue, revision: { increment: 1 } } });
+      }
       const id = automaticPlanId(source.id);
       const plan = await tx.amazonSyncSchedule.create({ data: { ...scope, id, resource: source.resource, executionVersion: 2, planKey: key, name: `自动同步 · ${source.resource}`, revision: 1, mode: source.resource === "sales_traffic" ? "date_range" : isIncrementalResource(source.resource) ? "incremental" : "snapshot", priority: 1, maxAttempts: 3, retentionDays: 30, nextRunAt: now, intervalMinutes: automaticIntervalMinutes, enabled: true, updatedByUserId: source.authorization.updatedByUserId } });
       await tx.amazonSyncPlanTarget.create({ data: { ...scope, scheduleId: plan.id, sourceId: source.id } });
-      await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: source.authorization.updatedByUserId, action: "amazon.sync.plan.automatic_created", entityType: "AmazonSyncSchedule", entityId: plan.id, metadata: { workspaceId: scope.workspaceId, sourceId: source.id, resource: source.resource, marketplaceId: source.marketplaceId, ...(source.resource === "orders" || source.resource === "finance" ? { initialFrom: backfillStart } : {}) } } });
+      await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: source.authorization.updatedByUserId, action: "amazon.sync.plan.automatic_created", entityType: "AmazonSyncSchedule", entityId: plan.id, metadata: { workspaceId: scope.workspaceId, sourceId: source.id, resource: source.resource, marketplaceId: source.marketplaceId, ...(source.resource === "orders" || source.resource === "finance" || source.resource === "returns" ? { initialFrom: backfillStart } : {}), ...(source.resource === "inventory_events" ? { initialFrom: new Date(now.getTime() - 540 * 86_400_000).toISOString() } : {}) } } });
     }); } catch { console.error(`[amazon-sync-center] automatic plan discovery deferred for source ${candidate.id}`); }
   }
 }
@@ -118,13 +125,38 @@ async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date) {
         const window = nextFinanceWindow(policy, plan.lastEnqueuedAt ? target.resourceCursor : null, now);
         options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, financeWindow: financeWindowFromFrozen(window) };
         backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
+      } else if (plan.resource === "returns") {
+        if (!target.returnsPolicy) continue;
+        const policy = parseReturnPolicy(target.returnsPolicy);
+        const window = nextAutomaticReturnWindow(policy, target.resourceCursor, now);
+        options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, returnWindow: returnWindowFromFrozen(window) };
+        backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
       } else if (plan.resource === "sales_traffic") {
         const history = await prisma.amazonSyncRun.findMany({ where: { ...scope, sourceId: target.id, resource: "sales_traffic", status: "SUCCEEDED", stage: "COMPLETED" }, select: { frozenScope: true }, orderBy: { finishedAt: "desc" }, take: 1000 });
         const coverage = history.flatMap(run => { const range = (run.frozenScope as { requestedRange?: { from?: unknown; to?: unknown } } | null)?.requestedRange; return typeof range?.from === "string" && typeof range?.to === "string" ? [{ from: range.from, to: range.to }] : []; });
         const next = nextSalesTrafficRange(target.marketplaceId, now, coverage);
         options = { key: scheduledKey(plan.id, next.range.from, next.range.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, requestedRange: next.range };
         backfill = next.backfill;
+      } else if (plan.resource === "inventory_events") {
+        const window = nextAutomaticInventoryEventWindow(target.resourceCursor, now);
+        if (!window) {
+          await prisma.amazonSyncSchedule.updateMany({ where: { ...scope, id: plan.id, revision: plan.revision, enabled: true }, data: { nextRunAt: new Date(now.getTime() + automaticIntervalMinutes * 60_000) } });
+          continue;
+        }
+        const checked = domainReportRunWindow("inventory_events", window);
+        options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: checked! };
+        backfill = window.to < new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+      } else if (plan.resource === "settlements") {
+        const window = nextAutomaticSettlementDiscovery(now);
+        options = { key: scheduledKey(plan.id, window.createdSince.slice(0, 10), window.createdUntil.slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: domainReportRunWindow("settlements", window)! };
+      } else if (plan.resource === "reimbursements" || plan.resource === "inventory_age") {
+        options = { key: scheduledKey(plan.id, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
+      } else if (plan.resource === "catalog" || plan.resource === "inventory") {
+        options = { key: scheduledKey(plan.id, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
       } else {
+        if (!isObservationResource(plan.resource) || !target.domainPolicy) continue;
+        const policy = parseObservationPolicy(target.domainPolicy, plan.resource);
+        if (["brand_analytics", "buy_box_history"].includes(policy.resource)) continue;
         options = { key: scheduledKey(plan.id, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
       }
     } catch (error) {

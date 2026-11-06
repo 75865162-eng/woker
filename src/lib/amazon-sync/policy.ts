@@ -74,8 +74,7 @@ export function optionalAmazonSellerId(value: unknown): string {
 }
 export function parseSyncPlan(value: Record<string, unknown>) {
   const resource = implementedDomain(value.resource);
-  if (["returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(resource)) throw new SyncInputError("该数据域仅支持逐次审批任务，不支持自动计划。");
-  const expectedMode = resource === "orders" || resource === "finance" ? "incremental" : resource === "sales_traffic" ? "date_range" : "snapshot";
+  const expectedMode = isIncrementalResource(resource) ? "incremental" : resource === "sales_traffic" ? "date_range" : "snapshot";
   if (value.mode !== undefined && value.mode !== expectedMode) throw new SyncInputError("同步计划模式与数据域不匹配。");
   if (typeof value.enabled !== "boolean") throw new SyncInputError("请选择是否启用计划。");
   if (!Array.isArray(value.sourceIds) || !value.sourceIds.length || value.sourceIds.length > 100 || value.sourceIds.some(v => typeof v !== "string" || !v || v.length > 200) || new Set(value.sourceIds).size !== value.sourceIds.length) throw new SyncInputError("请选择 1–100 个不重复的店铺／站点数据源。");

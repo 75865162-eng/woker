@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
 import type { SyncScope } from "@/lib/amazon-sync/policy";
 import { AdsQueryError } from "./query-contract";
+import type { AcquisitionState } from "./report-acquisition";
+import { assertReportScopeDigest, reportScopeDigest } from "./report-scope";
 
 /** Offline-only manifest. No specific live Amazon report contract is enabled by this module. */
 export type AdsReportManifest = { evidence: "ISOLATED_FIXTURE_ONLY"; reportType: string; adProduct: string; apiVersion: string; currencyCode: string; attributionWindow: string; timezone: string; from: string; to: string; dimensions: Array<"campaignId" | "adGroupId" | "targetingId" | "advertisedAsin" | "searchTerm" | "placement">; metrics: Array<"impressions" | "clicks" | "orders" | "units" | "spend" | "sales"> };
@@ -57,6 +59,16 @@ async function liveTask(tx: Prisma.TransactionClient, scope: SyncScope, actor: s
   const task = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, id: fence.taskId, dispatchVersion: fence.dispatchVersion, fenceVersion: fence.fenceVersion, leaseOwner: fence.leaseOwner, leaseExpiresAt: { gt: new Date() }, status: "RUNNING" } });
   if (!task) throw new AdsQueryError("ADS_REPORT_FENCE_LOST", 409);
   const profile = await assertProfile(tx, scope, actor, task.profileId);
+  if (task.trigger === "isolated-report") {
+    if (task.requestedByUserId !== actor) throw new AdsQueryError("ADS_REPORT_PROFILE_FORBIDDEN", 403);
+    const access = await amazonDataAccess(scope, actor, tx, "sync");
+    const plan = await tx.amazonAdsSyncPlan.findFirst({ where: { ...scope, id: task.planId, revision: task.planRevision, profileId: task.profileId, status: "ACTIVE", profile: { ...sellerAccessWhere(access) } }, include: { profile: { include: { authorization: true } } } });
+    if (!plan || plan.sellerAccountId !== plan.profile.sellerAccountId || plan.authorizationRevision !== plan.profile.authorization.revision || (plan.profile.authorization.refreshTokenExpiresAt && plan.profile.authorization.refreshTokenExpiresAt <= new Date())) throw new AdsQueryError("ADS_REPORT_PLAN_CHANGED", 409);
+    const request = await tx.amazonAdsReportRequest.findUnique({ where: { organizationId_workspaceId_idempotencyKey: { ...scope, idempotencyKey: `publication:${task.id}` } } });
+    const options = request?.requestOptions as unknown as { manifest?: AdsReportManifest; acquisition?: AcquisitionState } | undefined;
+    if (!options?.manifest) throw new AdsQueryError("ADS_REPORT_MANIFEST_MISSING");
+    assertReportScopeDigest(options.acquisition?.scopeDigest, reportScopeDigest(task, plan.profile, plan.authorizationRevision, options.manifest));
+  }
   return { ...task, profile };
 }
 
@@ -92,7 +104,7 @@ export async function stageAdsReportBatch(scope: SyncScope, actor: string, fence
 }
 
 async function validateStored(tx: Prisma.TransactionClient, scope: SyncScope, versionId: string, profileId: string, sourceTaskId: string) {
-  const request = await tx.amazonAdsReportRequest.findFirst({ where: { ...scope, versionId, profileId, sourceTaskId }, select: { requestOptions: true, requestedFrom: true, requestedTo: true, apiVersion: true, reportType: true, adProduct: true } });
+  const request = await tx.amazonAdsReportRequest.findFirst({ where: { ...scope, versionId, profileId, sourceTaskId }, select: { id: true, requestOptions: true, requestedFrom: true, requestedTo: true, apiVersion: true, reportType: true, adProduct: true } });
   const manifest = (request?.requestOptions as { manifest?: AdsReportManifest } | undefined)?.manifest;
   if (!manifest) throw new AdsQueryError("ADS_REPORT_MANIFEST_MISSING");
   validateManifest(manifest);
@@ -100,6 +112,14 @@ async function validateStored(tx: Prisma.TransactionClient, scope: SyncScope, ve
   if (!profile || profile.currencyCode !== manifest.currencyCode || profile.timezone !== manifest.timezone || request!.requestedFrom.toISOString().slice(0,10) !== manifest.from || request!.requestedTo.toISOString().slice(0,10) !== manifest.to || request!.apiVersion !== manifest.apiVersion || request!.reportType !== manifest.reportType || request!.adProduct !== manifest.adProduct) throw new AdsQueryError("ADS_REPORT_MANIFEST_DRIFT");
   const count = await tx.amazonAdsReportFact.count({ where: { ...scope, versionId } });
   if (!count || count > 100000) throw new AdsQueryError("ADS_REPORT_EMPTY_OR_EXCESSIVE_VERSION");
+  const acquisition = (request!.requestOptions as unknown as { acquisition?: AcquisitionState }).acquisition;
+  if (acquisition) {
+    if (acquisition.version !== 1 || !["PUBLISH", "COMPLETE"].includes(acquisition.phase) || acquisition.reserved || acquisition.expectedRows !== count) throw new AdsQueryError("ADS_REPORT_ACQUISITION_INCOMPLETE");
+    const docs = await tx.amazonAdsReportDocument.findMany({ where: { ...scope, requestId: request!.id, profileId } });
+    if (docs.length !== 1 || docs[0].status !== "VALIDATED" || docs[0].rowCount !== count || !docs[0].contentSha256 || !docs[0].byteSize || !docs[0].storageFileId) throw new AdsQueryError("ADS_REPORT_DOCUMENT_NOT_READY");
+    if (!await tx.fileObject.findFirst({ where: { ...scope, id: docs[0].storageFileId, contentHash: docs[0].contentSha256, size: Number(docs[0].byteSize), status: "done" } })) throw new AdsQueryError("ADS_REPORT_FILE_SCOPE_OR_HASH_MISMATCH");
+    if (!acquisition.evidenceFileIds.length || await tx.fileObject.count({ where: { ...scope, id: { in: acquisition.evidenceFileIds }, status: "done", mimeType: "application/octet-stream" } }) !== acquisition.evidenceFileIds.length) throw new AdsQueryError("ADS_REPORT_EVIDENCE_MISSING");
+  }
   let cursor: string | undefined;
   for (;;) {
     const rows = await tx.amazonAdsReportFact.findMany({ where: { ...scope, versionId }, orderBy: { id: "asc" }, take: 1000, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
@@ -130,6 +150,12 @@ export async function publishAdsReportVersion(scope: SyncScope, actor: string, f
     const changed = await tx.amazonAdsSyncTask.updateMany({ where: { ...scope, id: task.id, status: "RUNNING", dispatchVersion: fence.dispatchVersion, fenceVersion: fence.fenceVersion, leaseOwner: fence.leaseOwner, leaseExpiresAt: { gt: new Date() } }, data: { status: "SUCCEEDED", stage: "COMPLETED_ISOLATED_REPORT", finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null } });
     if (changed.count !== 1) throw new AdsQueryError("ADS_REPORT_FENCE_LOST", 409);
     await tx.amazonAdsReportVersion.update({ where: { id: prior.id }, data: { status: "PUBLISHED", rowCount: count, publishedAt: new Date() } });
+    const request = await tx.amazonAdsReportRequest.findFirst({ where: { ...scope, versionId: prior.id, profileId: task.profileId, sourceTaskId: task.id } });
+    const options = request?.requestOptions as unknown as { acquisition?: AcquisitionState };
+    if (options?.acquisition) {
+      options.acquisition.phase = "COMPLETE";
+      await tx.amazonAdsReportRequest.update({ where: { id: request!.id }, data: { status: "ISOLATED_COMPLETE", completedAt: new Date(), requestOptions: options as unknown as Prisma.InputJsonObject } });
+    }
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.report.publish", entityType: "AmazonAdsReportVersion", entityId: prior.id, metadata: { workspaceId: scope.workspaceId, profileId: prior.profileId, rowCount: count, evidence: "ISOLATED_FIXTURE_ONLY" } } });
     return { versionId: prior.id, rowCount: count, status: "PUBLISHED" };
   }, { timeout: 20000 });

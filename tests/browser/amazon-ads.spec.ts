@@ -88,6 +88,7 @@ test("sync task history filters every authorized Profile, paginates server resul
   const errors = await setup(page, true);
   let activeStatus = "RUNNING";
   const requests: URL[] = [];
+  const detailRequests: URL[] = [];
   await page.route("**/api/integrations/amazon/ads/profiles", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({
     oauthConfigured: false, autoSyncConfigured: false,
     sellers: [{ id: "seller-us", displayName: "Northstar US", marketplaceCode: "US" }],
@@ -109,6 +110,22 @@ test("sync task history filters every authorized Profile, paginates server resul
       const taskStatus = isActive ? activeStatus : "SUCCEEDED";
       return { id: isActive ? "task-active" : `task-${index + 1}`, planId: "plan-one", profileId: "profile-one", status: taskStatus, stage: taskStatus === "SUCCEEDED" ? "COMPLETED_SP_STRUCTURE" : "campaigns", trigger: "manual-structure", attempts: isActive ? 1 : 0, maxAttempts: 5, processedCount: index, apiRequests: index, errorCode: null, requestedFrom: null, requestedTo: null, startedAt: "2026-11-06T01:00:00.000Z", finishedAt: taskStatus === "RUNNING" ? null : "2026-11-06T01:02:00.000Z", createdAt: `2026-11-06T01:${String(index).padStart(2, "0")}:00.000Z`, profile: { profileId: "189000123456789", region: "NA", countryCode: "US", marketplaceId: "ATVPDKIKX0DER", sellerAccountId: "seller-us" }, attemptRuns: [{ attemptNumber: 1, stage: "campaigns", status: taskStatus, startedAt: "2026-11-06T01:00:00.000Z", finishedAt: taskStatus === "RUNNING" ? null : "2026-11-06T01:02:00.000Z", retryAt: null, errorCode: null, safeErrorSummary: null, apiRequests: 1, processedCount: index }] };
     }).filter(task => (!status || task.status === status) && (!profileId || task.profileId === profileId));
+    if (url.searchParams.has("taskId")) {
+      detailRequests.push(url);
+      const attemptPage = Number(url.searchParams.get("attemptPage") ?? 1);
+      const allAttempts = Array.from({ length: 12 }, (_, index) => ({ attemptNumber: index + 1, stage: `stage-${index + 1}`, status: "SUCCEEDED", startedAt: "2026-11-06T01:00:00.000Z", finishedAt: "2026-11-06T01:02:00.000Z", retryAt: null, errorCode: null, safeErrorSummary: null, apiRequests: 1, processedCount: 1 }));
+      const task = allTasks.find(candidate => candidate.id === url.searchParams.get("taskId")) ?? allTasks[0];
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ taskDetail: {
+        ...task, insertedCount: 1, updatedCount: 0, failedCount: 0, throttles: 0,
+        profile: { ...task.profile, currencyCode: "USD", timezone: "America/Los_Angeles", authorization: { name: "Northstar Ads", status: "CONNECTED" } },
+        plan: { id: "plan-one", status: "ACTIVE", intervalMinutes: 1440, reportLookbackDays: 14, attributionLagDays: 14 },
+        attemptRuns: allAttempts.slice((attemptPage - 1) * 10, attemptPage * 10),
+        attemptPagination: { page: attemptPage, pageSize: 10, total: allAttempts.length, pageCount: 2, hasMore: attemptPage < 2 },
+        reportRequests: [{ id: "report-request-1", versionId: "report-version-1", reportType: "spCampaigns", adProduct: "SPONSORED_PRODUCTS", apiVersion: "v3", requestedFrom: "2026-11-01", requestedTo: "2026-11-01", status: "COMPLETED", warningCodes: [], errorCode: null, requestedAt: "2026-11-06T01:00:00.000Z", lastPolledAt: "2026-11-06T01:01:00.000Z", completedAt: "2026-11-06T01:02:00.000Z", documents: [{ id: "document-1", partIndex: 0, format: "GZIP_JSON", compression: "GZIP", status: "DOWNLOADED", byteSize: "1024", rowCount: 18, downloadedAt: "2026-11-06T01:02:00.000Z" }], documentsTotal: 1, documentsTruncated: false }], reportRequestTotal: 1, reportRequestsTruncated: false,
+        reportVersions: [{ id: "report-version-1", status: "PUBLISHED", requestedFrom: "2026-11-01", requestedTo: "2026-11-01", rowCount: 18, publishedAt: "2026-11-06T01:02:00.000Z", createdAt: "2026-11-06T01:01:00.000Z", updatedAt: "2026-11-06T01:02:00.000Z" }], reportVersionTotal: 1, reportVersionsTruncated: false,
+        freshness: [{ profileId: "profile-one", dataDomain: "reports", reportType: "spCampaigns", status: "CURRENT", coveredFrom: "2026-11-01", coveredTo: "2026-11-01", lastAttemptAt: "2026-11-06T01:00:00.000Z", lastSuccessAt: "2026-11-06T01:02:00.000Z", lastTaskId: "task-active", warningCodes: [] }],
+      } }) });
+    }
     const pageNumber = Number(url.searchParams.get("page") ?? 1);
     const pageSize = Number(url.searchParams.get("pageSize") ?? 20);
     const plan = { id: "plan-one", profileId: "profile-one", status: "ACTIVE", nextRunAt: "2026-11-07T01:02:00.000Z", lastSuccessAt: "2026-11-06T01:02:00.000Z", lastErrorCode: null, profile: { profileId: "189000123456789", region: "NA", countryCode: "US", marketplaceId: "ATVPDKIKX0DER", sellerAccountId: "seller-us", authorization: { name: "Northstar Ads", status: "CONNECTED" } }, tasks: [] };
@@ -122,13 +139,22 @@ test("sync task history filters every authorized Profile, paginates server resul
   await expect(page.locator(".ads-sync-history-panel .ads-simple-table tbody tr")).toHaveCount(5);
   await page.locator(".ads-sync-history-panel").getByRole("button", { name: "上一页", exact: true }).click();
   const row = page.locator(".ads-sync-history-panel tbody tr").filter({ hasText: "task-active" });
+  await row.getByRole("button", { name: "详情", exact: true }).click();
+  const detail = page.getByRole("region", { name: "同步任务详情" });
+  await expect(detail).toContainText("Attempt 明细");
+  await expect(detail).toContainText("spCampaigns · SPONSORED_PRODUCTS");
+  await expect(detail).toContainText("PUBLISHED");
+  await expect(detail.locator(".ads-table-scroll").first().locator("tbody tr")).toHaveCount(10);
+  await detail.locator(".ads-task-detail-pagination").getByRole("button", { name: "下一页", exact: true }).click();
+  await expect.poll(() => detailRequests.at(-1)?.searchParams.get("attemptPage")).toBe("2");
+  await expect(detail.locator(".ads-table-scroll").first().locator("tbody tr")).toHaveCount(2);
   await page.once("dialog", dialog => dialog.accept());
   await row.getByRole("button", { name: "取消", exact: true }).click();
   await expect(page.locator(".ads-account-message")).toContainText("已取消");
   await expect(row).toContainText("CANCELLED");
   await page.getByLabel("同步任务状态筛选").selectOption("CANCELLED");
   await expect.poll(() => requests.at(-1)?.searchParams.get("status")).toBe("CANCELLED");
-  await expect(page.locator(".ads-sync-history-panel tbody tr")).toHaveCount(1);
+  await expect(page.locator(".ads-sync-history-panel:not([aria-label]) > .ads-table-scroll tbody tr")).toHaveCount(1);
   await page.getByLabel("同步任务 Profile 筛选").selectOption("profile-two");
   await expect.poll(() => requests.at(-1)?.searchParams.get("profileId")).toBe("profile-two");
   await expect(page.locator(".ads-sync-history-panel .ads-empty")).toContainText("没有同步任务");
@@ -530,6 +556,40 @@ test("published reports show versions, nulls and server-side scope filters", asy
   await expect.poll(() => requests.at(-1)?.searchParams.get("internalProfileId")).toBe("internal-profile");
   await page.getByLabel("日报排序字段").selectOption("spend");
   await expect.poll(() => requests.at(-1)?.searchParams.get("sortBy")).toBe("spend");
+  await expect(page.locator(".ads-metric-grid")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("Campaign detail opens its published daily reports with internal Profile and exact contract", async ({ page }) => {
+  const errors = await setup(page);
+  const requests: URL[] = [];
+  await page.route("**/api/integrations/amazon/ads/data?*", route => {
+    const url = new URL(route.request().url()); requests.push(url);
+    const reports = url.searchParams.get("kind") === "reports";
+    const profiles = [{ id: "internal-profile", amazonProfileId: "amazon-profile", syncPlans: [] }];
+    const entity = { id: "campaign-record", profileId: "internal-profile", amazonProfileId: "amazon-profile", entityType: "SP:campaign", externalId: "campaign-100", name: "Stored Campaign", payload: {}, sourceTaskId: "structure-task", syncedAt: "2026-11-06T00:00:00Z" };
+    const fact = { id: "daily-fact", profileId: "internal-profile", reportType: "spCampaigns", adProduct: "SPONSORED_PRODUCTS", reportDate: "2026-11-01", campaignId: "campaign-100", clicks: "0", spend: null, sourceTaskId: "report-task", apiVersion: "reporting-v3", versionId: "published-version", versionStatus: "PUBLISHED" };
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ rows: [reports ? fact : entity], total: 1, page: 1, pageSize: 100, meta: { profiles, source: reports ? "AmazonAdsReportFact" : "AmazonAdsEntityRecord" } }) });
+  });
+  await page.goto("http://127.0.0.1:43239/amazon-ads/campaigns?real=1");
+  await page.getByRole("button", { name: "查看实体 campaign-100", exact: true }).click();
+  await page.getByRole("button", { name: "查看 Campaign 已发布日报", exact: true }).click();
+  await expect(page.getByLabel("日报 Profile 筛选")).toHaveValue("internal-profile");
+  await expect(page.getByLabel("日报 Campaign 筛选")).toHaveValue("campaign-100");
+  await expect(page.getByLabel("报告类型筛选")).toHaveValue("spCampaigns");
+  await expect.poll(() => requests.at(-1)?.searchParams.get("kind")).toBe("reports");
+  const query = requests.at(-1)!.searchParams;
+  expect(query.get("internalProfileId")).toBe("internal-profile");
+  expect(query.get("campaignId")).toBe("campaign-100");
+  expect(query.get("reportType")).toBe("spCampaigns");
+  expect(query.get("adProduct")).toBe("SPONSORED_PRODUCTS");
+  expect(query.get("adGroupId")).toBeNull();
+  const row = page.locator(".ads-synced-table tbody tr");
+  await expect(row).toContainText("published-version");
+  await expect(row).toContainText("report-task");
+  await expect(row.locator("td").nth(6)).toHaveText("0");
+  await expect(row.locator("td").nth(7)).toHaveText("—");
+  await expect(page.getByRole("region", { name: "广告实体详情" })).toHaveCount(0);
   await expect(page.locator(".ads-metric-grid")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

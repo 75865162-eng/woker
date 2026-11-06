@@ -4,9 +4,9 @@ import { automaticBackfillDays, automaticBackfillStart, automaticIntervalMinutes
 
 const now = new Date("2026-11-05T12:00:00.000Z");
 
-test("automatic plan scope is limited to the requested US and Canada domains", () => {
+test("automatic plan scope is limited to the requested US and Canada domains and executable source policies", () => {
   assert.deepEqual([...automaticMarketplaces].sort(), ["A2EUQ1WTGCTBG2", "ATVPDKIKX0DER"]);
-  assert.deepEqual(["catalog", "inventory", "orders", "sales_traffic", "finance", "returns"].filter(isAutomaticResource), ["catalog", "inventory", "orders", "sales_traffic", "finance"]);
+  assert.deepEqual(["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"].filter(isAutomaticResource), ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing"]);
   assert.equal(automaticIntervalMinutes, 1440);
   assert.equal(automaticBackfillDays, 730);
   assert.equal(automaticBackfillStart(now), "2024-11-05T12:00:00.000Z");

@@ -9,8 +9,8 @@ const product = args.find(arg => arg.startsWith("--product="))?.slice(10) as Ads
 const rows = listAdsCapabilities(product);
 if (args.includes("--markdown")) {
   console.log("Code inventory only; NOT a live readiness or authorization decision.\n");
-  console.log("| Product | Domain | Read | Contract | Storage | Query | Live acceptance | Blockers |\n| --- | --- | --- | --- | --- | --- | --- | --- |");
-  for (const row of rows) console.log(`| ${row.product} | ${row.domain} | ${row.read} | ${row.contract} | ${row.storage} | ${row.query} | ${row.liveAcceptance} | ${adsCapabilityBlockers(row).join(", ")} |`);
+  console.log("| Product | Domain | Read | Acquisition | Contract | Storage | Query | Live acceptance | Blockers |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+  for (const row of rows) console.log(`| ${row.product} | ${row.domain} | ${row.read} | ${row.acquisition} | ${row.contract} | ${row.storage} | ${row.query} | ${row.liveAcceptance} | ${adsCapabilityBlockers(row).join(", ")} |`);
 } else {
   console.log(JSON.stringify({ kind: "CODE_INVENTORY_ONLY", capabilities: rows.map(row => ({ ...row, blockers: adsCapabilityBlockers(row) })) }, null, 2));
 }

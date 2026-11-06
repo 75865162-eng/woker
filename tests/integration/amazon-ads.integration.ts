@@ -200,6 +200,39 @@ test("authenticated data API returns server totals, bounded filters and denies m
   assert.equal((await syncStatus(new Request("http://localhost/api/integrations/amazon/ads/sync?pageSize=101", { headers: viewerHeaders }))).status, 400);
 });
 
+test("task detail API paginates attempts and exposes only scoped report provenance fields", async () => {
+  const { GET } = await import("../../src/app/api/integrations/amazon/ads/sync/route");
+  const { createSession } = await import("../../src/lib/auth/session");
+  const session = await createSession(siteViewer);
+  const headers = { cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}`, "x-workspace-id": scope.workspaceId };
+  const task = await newTask(plan, profile);
+  await prisma.amazonAdsSyncTask.update({ where: { id: task.id }, data: { status: "FAILED", finishedAt: new Date(), checkpointCiphertext: "checkpoint-secret-marker", leaseOwner: "worker-secret-marker", errorMessage: "raw-error-secret-marker" } });
+  await prisma.amazonAdsSyncAttempt.createMany({ data: [1, 2, 3].map(attemptNumber => ({ id: randomUUID(), ...scope, profileId: profile, taskId: task.id, attemptNumber, stage: `stage-${attemptNumber}`, status: attemptNumber === 3 ? "FAILED" : "SUCCEEDED", safeErrorSummary: "Ads 同步未完成；已保留检查点。", apiRequests: attemptNumber, processedCount: attemptNumber })) });
+  const versionId = randomUUID();
+  await prisma.amazonAdsReportVersion.create({ data: { id: versionId, ...scope, profileId: profile, sourceTaskId: task.id, status: "PUBLISHED", requestedFrom: new Date("2026-11-01T00:00:00.000Z"), requestedTo: new Date("2026-11-01T00:00:00.000Z"), rowCount: 1, publishedAt: new Date() } });
+  const reportRequest = await prisma.amazonAdsReportRequest.create({ data: { id: randomUUID(), ...scope, profileId: profile, sourceTaskId: task.id, versionId, idempotencyKey: randomUUID(), apiVersion: "v3", reportType: "spCampaigns", adProduct: "SPONSORED_PRODUCTS", requestedFrom: new Date("2026-11-01T00:00:00.000Z"), requestedTo: new Date("2026-11-01T00:00:00.000Z"), requestOptions: { privateMarker: "request-options-secret-marker" }, remoteRequestId: "remote-id-secret-marker", status: "COMPLETED" } });
+  await prisma.amazonAdsReportDocument.create({ data: { id: randomUUID(), ...scope, profileId: profile, requestId: reportRequest.id, partIndex: 0, format: "GZIP_JSON", compression: "GZIP", status: "DOWNLOADED", storageFileId: "storage-file-secret-marker", contentSha256: "hash-secret-marker", byteSize: BigInt(1024), rowCount: 1, downloadedAt: new Date() } });
+  const request = (page: number, pageSize = 2) => GET(new Request(`http://localhost/api/integrations/amazon/ads/sync?taskId=${task.id}&attemptPage=${page}&attemptPageSize=${pageSize}`, { headers }));
+  const first = await request(1);
+  assert.equal(first.status, 200);
+  const firstText = await first.text();
+  const firstPayload = JSON.parse(firstText) as { taskDetail: { attemptRuns: Array<{ attemptNumber: number }>; attemptPagination: { total: number; hasMore: boolean }; reportRequests: Array<{ status: string; documents: Array<{ status: string; byteSize: string | null }> }>; reportVersions: Array<{ status: string }> } };
+  assert.deepEqual(firstPayload.taskDetail.attemptRuns.map(attempt => attempt.attemptNumber), [1, 2]);
+  assert.equal(firstPayload.taskDetail.attemptPagination.total, 3); assert.equal(firstPayload.taskDetail.attemptPagination.hasMore, true);
+  assert.equal(firstPayload.taskDetail.reportRequests[0].status, "COMPLETED");
+  assert.deepEqual(firstPayload.taskDetail.reportRequests[0].documents.map(document => [document.status, document.byteSize]), [["DOWNLOADED", "1024"]]);
+  assert.deepEqual(firstPayload.taskDetail.reportVersions.map(version => version.status), ["PUBLISHED"]);
+  for (const secret of ["checkpoint-secret-marker", "worker-secret-marker", "raw-error-secret-marker", "request-options-secret-marker", "remote-id-secret-marker", "storage-file-secret-marker", "hash-secret-marker"]) assert.ok(!firstText.includes(secret), `detail response must omit ${secret}`);
+  const second = await request(2);
+  const secondPayload = await second.json() as { taskDetail: { attemptRuns: Array<{ attemptNumber: number }>; attemptPagination: { hasMore: boolean } } };
+  assert.equal(second.status, 200); assert.deepEqual(secondPayload.taskDetail.attemptRuns.map(attempt => attempt.attemptNumber), [3]); assert.equal(secondPayload.taskDetail.attemptPagination.hasMore, false);
+  assert.equal((await request(1, 51)).status, 400);
+  const hiddenTask = await newTask(secondPlan, otherProfile);
+  await prisma.amazonAdsSyncTask.update({ where: { id: hiddenTask.id }, data: { status: "FAILED", finishedAt: new Date() } });
+  const hidden = await GET(new Request(`http://localhost/api/integrations/amazon/ads/sync?taskId=${hiddenTask.id}`, { headers }));
+  assert.equal(hidden.status, 404, "Profile outside the viewer's Marketplace grant is hidden");
+});
+
 test("cancellation closes only the latest attempt and fences a stale dispatch", async () => {
   const { POST: controlSync } = await import("../../src/app/api/integrations/amazon/ads/sync/route");
   const { createSession } = await import("../../src/lib/auth/session");

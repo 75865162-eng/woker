@@ -34,7 +34,16 @@ Phase C 在现有 Amazon sync worker、任务表和同步队列上补齐本地�
 
 ## 尚未完成与风险边界
 
-- 尚无独立任务详情/审计事件抽屉或 task ID 到详情页的链接；历史列表显示最近 Attempt 的安全摘要，不是完整 Attempt 时间线。
+- 尚无独立审计事件时间线；任务详情与分页 Attempt 时间线已在下方补充记录。
 - 当前 freshness 只展示结构域。报表 freshness 必须依赖完整发布版本和日期覆盖，不能借用结构状态。
 - 页面和 fixture 不能证明授权 Amazon Profile 已产生真实数据、完成历史覆盖或实体删除；真实 API、正式同步、运行配置、migration 和凭证仍按目标环境另行审查。
 - 数据库事实与同步记录未删除。代码回滚可恢复同步/Profile API 原有范围和账户页任务中心行为；回滚不应清理事实数据或任务历史。
+
+## 后续补充：任务详情与 Attempt 时间线（2026-11-06）
+
+- 详情读取先在当前组织、工作区及可见 Profile 范围内定位任务；越权与不存在统一返回 404。任务详情请求不再先读取账户页计划列表。
+- Attempt 时间线支持服务端分页，接口页大小上限 50、账户页默认 10。报告请求和版本各最多显示 20 条、每个请求文档最多 10 份，并返回总数及截断提示。
+- 任务详情继续使用字段白名单：不包含 checkpoint、lease/fence/dispatch、错误原文、报告请求选项、Amazon 远端请求 ID、存储文件 ID、内容哈希或下载地址。错误摘要限长 300 字；文档 BigInt 字节数按十进制字符串返回。
+- 账户页在既有任务历史下展示任务范围和计数、Attempt、报告请求/文档/发布版本状态及 Profile freshness；未新增布局、Schema 或迁移。
+- 验证：`npm run test:amazon-ads:offline` 中结构/查询/权限/取消18/18、MCP只读10/10；Ads浏览器22/22；TypeScript、定向ESLint与 `git diff --check` 通过。使用隔离数据库、模拟 API 和浏览器 fixture。
+- 审计事件独立时间线尚未实现。Reporting freshness 仍需基于发布版本和日期覆盖另行收口；fixture 不能证明授权 Profile 的真实 Amazon 数据采集。

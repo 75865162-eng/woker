@@ -6,6 +6,7 @@ import { encryptAmazonSpApiCredentials, decryptAmazonSpApiCredentials } from "@/
 import { inventoryPublishedWhere, catalogPublishedWhere, taskSummary, incrementalOperatorAction, taskFilters, sourceHealth } from "@/lib/amazon-sync/read";
 import { validateInventoryPage, validateCatalogCompletion, classifySyncFailure, sourceTimestamp } from "@/lib/amazon-sync/processor";
 import { AmazonSpApiError, readRetryAfter } from "@/lib/amazon/sp-api-client";
+import { automaticResources, automaticBackfillDays, automaticInventoryEventBackfillDays, automaticReportDiscoveryDays, nextAutomaticInventoryEventWindow, nextAutomaticSettlementDiscovery } from "@/lib/amazon-sync/automatic-schedule";
 const scope = { organizationId: "org", workspaceId: "ws" };
 test("sync center defaults off and requires an exact organization/workspace pair", () => {
   assert.equal(syncCenterEnabled(scope, "[]"), false); assert.equal(syncCenterEnabled(scope, "*"), false);
@@ -29,7 +30,26 @@ test("plans reject unimplemented domains, incremental modes and invalid scope/fr
   assert.equal(parseSyncPlan({ ...p, resource: "orders", mode: "incremental" }).mode, "incremental");
   assert.equal(parseSyncPlan({ ...p, resource: "finance", mode: "incremental" }).mode, "incremental");
   assert.equal(parseSyncPlan({ ...p, resource: "sales_traffic", mode: "date_range" }).mode, "date_range");
-  for (const patch of [{ intervalMinutes: 0 }, { resource: "returns" }, { mode: "incremental" }, { sourceIds: [] }, { sourceIds: ["one", "one"] }, { maxAttempts: 11 }, { retentionDays: -1 }]) assert.throws(() => parseSyncPlan({ ...p, ...patch }), SyncInputError);
+  for (const patch of [{ intervalMinutes: 0 }, { mode: "incremental" }, { sourceIds: [] }, { sourceIds: ["one", "one"] }, { maxAttempts: 11 }, { retentionDays: -1 }]) assert.throws(() => parseSyncPlan({ ...p, ...patch }), SyncInputError);
+  assert.equal(parseSyncPlan({ ...p, resource: "returns" }).mode, "incremental");
+  assert.equal(parseSyncPlan({ ...p, resource: "inventory_events" }).mode, "incremental");
+});
+test("automatic sync covers only executable resources and keeps each API's historical limits", () => {
+  assert.equal(automaticBackfillDays, 730);
+  assert.equal(automaticInventoryEventBackfillDays, 540);
+  assert.equal(automaticReportDiscoveryDays, 90);
+  for (const resource of ["returns", "inventory_events", "settlements", "reimbursements", "inventory_age", "fulfillment", "listing_details", "catalog_items", "pricing"]) assert.ok((automaticResources as readonly string[]).includes(resource));
+  for (const resource of ["brand_analytics", "buy_box_history"]) assert.ok(!(automaticResources as readonly string[]).includes(resource));
+  const now = new Date("2026-11-06T12:00:00.000Z");
+  const first = nextAutomaticInventoryEventWindow(null, now)!;
+  assert.equal(first.from, "2025-05-15");
+  assert.equal(first.to, "2025-06-14");
+  assert.equal(Date.parse(`${first.to}T00:00:00Z`) - Date.parse(`${first.from}T00:00:00Z`), 30 * 86400000);
+  const next = nextAutomaticInventoryEventWindow({ watermarkFrom: new Date("2025-05-16T00:00:00Z"), watermarkTo: new Date("2025-06-15T23:59:59Z"), status: "SUCCEEDED" }, now)!;
+  assert.equal(next.from, "2025-06-16"); assert.equal(next.to, "2025-07-16");
+  assert.equal(nextAutomaticInventoryEventWindow({ watermarkFrom: new Date("2026-11-05T00:00:00Z"), watermarkTo: new Date("2026-11-05T23:59:59Z"), status: "SUCCEEDED" }, now), null);
+  const report = nextAutomaticSettlementDiscovery(now);
+  assert.equal(Date.parse(report.createdUntil) - Date.parse(report.createdSince), 90 * 86400000);
 });
 test("authorization endpoints are restricted to matching official regions", () => {
   officialEndpoint("us-east-1", "https://sellingpartnerapi-na.amazon.com");

@@ -292,3 +292,14 @@ Reporting v1 通用合同核验日期：2026-11-06。使用官方 OAS JSON 核�
 - **验证阻塞**：全仓TypeScript因其他任务正在修改的src/lib/amazon-sync/mcp.ts:279语法错误失败，本轮未覆盖其新增状态工具。组件限定检查使用临时tsconfig extends仓库配置、incremental=false，检查后临时目录自动移除；不将限定检查冒充全仓通过。本轮UI切片未重复PG/核心全套或check/build。
 - 本轮仅ads-synced-data.tsx、浏览器回归及规划/API文档。**已实现但未启用**：报表发布仍为离线fixture；**被依赖阻塞／尚未实现**：真实报表合同/adapter、明确授权Profile真实采集验收。汇总接本地存储API，不代表已采集真实Amazon经营数据，测试未访问真实API。
 - 未执行真实请求、配置、任务、migration/Client生成、提交推送或部署；广告写入关闭。回滚本轮UI与测试即可，保留数据和并行任务修改。
+
+
+### 2026-11-06：U1 报表采集与 Skill MCP 监控交付更新
+
+- **已完成并验证（隔离环境）**：Campaign 日报 acquisition 状态机完成 CREATE → POLL → DOWNLOAD → STORAGE → PARSE → STAGING → PUBLISH；请求阶段、预算、deadline、远端 request id、证据文件和下载文档均持久化。未知 create 结果不会自动重复创建；失败、取消、合同/存储校验失败或 fence 失效不会污染当前已发布版本。
+- **已完成并验证（隔离环境）**：报表查询、API、`amazon.ads.reports.list` 和 Skill `ads_report_daily` 共用已发布版本边界，按事实口径选择最新成功版本后再筛选；响应包含来源任务、发布版本、店铺/站点、日期、粒度、币种、归因、同步时间和完整性状态。MCP 与 Skill 不能读取 staging、failed、canceled 或 legacy 事实。
+- **已完成并验证**：同步任务详情 API/账户页显示 Attempt、请求/文档、发布版本、freshness 和错误摘要；Skill/ERP MCP 设置页支持调用记录服务端分页及成功/拒绝、工具筛选。现有 Skill 正文未重写，未新增数据库直读路径。
+- **迁移链验证通过**：`node scripts/test-amazon-ads-migrations.mjs` 在一次性 PostgreSQL 中覆盖空库安装、旧行升级、nullable metrics、Profile/task 约束、事实幂等和历史 Profile 错配阻断；没有对持久数据库执行迁移。
+- 本次回归：`npm test` 867/867、`node scripts/test-amazon-ads-offline.mjs --reports` 22/22、`node scripts/test-amazon-ads-offline.mjs --mcp` 10/10、`npm run typecheck`、相关文件定向 ESLint 和 `git diff --check` 均通过。
+- **仍未启用**：当前合同实现明确 `ISOLATED_FIXTURE_ONLY`/`liveEnabled=false`，无默认 live HTTP transport、正常 worker/scheduler 或真实测试 Profile。没有真实 Amazon API/凭证/生产数据验收，不宣称真实数据已同步。
+- **边界保持**：优化建议第一阶段只允许读取、分析和生成草稿；竞价、预算、状态、关键词、否定词和商品投放写操作仍须 Agent Gateway 审批，未开放 Ads 写 transport 或自动执行。

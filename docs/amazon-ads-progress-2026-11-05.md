@@ -1,14 +1,16 @@
 # Amazon Ads 广告管理与优化进度总报告
 
-更新日期：2026-11-05
+更新日期：2026-11-06
 
 范围：本地仓库 `/amazon-ads/campaigns` 广告管理工作台、Amazon Ads 授权/同步后端，以及已实现的优化建议演示。
 
 证据边界：本报告依据代码、规格/交付文档、隔离测试和本地页面 HTTP 状态。当前访问 `http://localhost:3017/amazon-ads/campaigns` 会重定向到登录页，因此没有登录态页面检查；没有连接真实 Amazon Ads 账号、调用真实 Ads API、读取生产数据、操作数据库或服务器。
 
+本报告原始盘点已由 2026-11-06 的 U1 第一批交付补充：Campaign 日报 acquisition、staging/原子发布、已发布版本查询、任务详情和 Skill/ERP MCP 只读监控已在隔离环境完成。详见 [`amazon-ads-u1-delivery-2026-11-06.md`](./amazon-ads-u1-delivery-2026-11-06.md)。真实 Amazon 报表 adapter、worker/scheduler、测试 Profile 和生产数据验收仍未完成。
+
 ## 1. 当前结论
 
-当前属于“可交互 UI 原型 + 安全的授权与同步基础设施 + 优化流程演示”，还不是已接入真实广告账户的生产工作台。Campaign、Ad Group、Keyword、Target、Search Term、Placement 等表现数据来自本地 fixture/mock provider。广告实体/报表读取 adapter 明确未实现并 fail-closed，因此现有 KPI、图表和导出都不能作为真实广告绩效或实际优化效果。
+当前属于“可交互 UI 原型 + 安全的授权/同步基础设施 + Campaign 日报离线只读闭环 + 优化流程演示”，还不是已接入真实广告账户的生产工作台。Campaign、Ad Group、Keyword、Target、Search Term、Placement 等旧表现视图仍可能来自本地 fixture/mock provider；U1 报表只读链路只消费已发布事实，并明确保持 `ISOLATED_FIXTURE_ONLY`/`liveEnabled=false`。因此任何真实绩效或优化效果仍需真实 Profile 和报告采集验收，不能用隔离数据替代。
 
 后端基础已经较完整：Ads OAuth 独立于 SP-API；支持 Profile 发现与店铺绑定；具备加密凭证、同步计划/任务、队列、租约与 fencing、检查点、限流预算、审计及分页读取已存事实的 API。真实请求链路在读 adapter 完成前不会进入 Amazon Ads 读取阶段。自动同步默认为关闭，且受组织/工作区 allowlist 限制。
 
@@ -21,10 +23,10 @@
 | 广告管理 UI | 导航、Campaign 列表与详情、广告组/关键词/投放/否定项/搜索词/广告位、筛选、排序、分页、列配置、CSV、KPI/图表、报告、偏好设置 | Mock 演示可交互 | 页面尚未接真实实体和报表事实；需登录态体验确认 |
 | 会话内编辑 | 创建 Campaign/Ad Group 演示记录；编辑预算/竞价；批量启停；Placement 出价、预算规则、状态和事件记录 | 仅当前页面会话/浏览器状态 | 不持久化到服务端，不改变 Amazon，也不是审批记录 |
 | Ads 账户 | 独立 OAuth 起始/回调、Profile 发现、refresh token 加密、区域 Profile 元数据、ERP 店铺绑定 | 服务端代码已实现，浏览器测试以 mock API 验证 | 用户真实授权、跨区域/重连/撤权隔离验收未做；真实 OAuth 会访问 Amazon |
-| Ads 同步 | 计划/任务模型、队列恢复、检查点、租约/fence、API budget、任务控制与审计 | 框架已接通，读 adapter 未实现 | 逐实体/报表官方契约、adapter、隔离集成及真实账号小范围验收 |
-| 数据读取 | 分页读取已存实体/日报事实 API，组织/工作区/卖家范围与读取审计 | 读取“已有记录”的接口存在 | 数据源仍无真实 Ads 同步产物；UI 也未消费此 API |
+| Ads 同步 | 计划/任务模型、队列恢复、检查点、租约/fence、API budget、任务控制与审计；Campaign 日报离线 acquisition/staging/publish | 真实 worker/adapter 仍关闭；隔离切片已通过 | 真实报告合同、测试 Profile、生产重试/调度及小范围采集验收 |
+| 数据读取 | 分页读取已存实体/日报事实 API、已发布版本选择、来源/freshness、组织/工作区/卖家范围与读取审计 | 日报 API/MCP/Skill 已接已发布本地事实；旧工作台视图尚未全部切换 | 真实 Ads 同步产物、全工作台生产只读接线和容量 benchmark |
 | 优化建议 S5–S9 | 关键词/定向草稿、规则提示、经营上下文护栏、dry-run、模拟审批、事件与逆向草稿 | Mock 演示已交付 | 应复用 PPC 审批和 Agent Gateway；持久化、真实政策、执行、审计、回滚契约未完成 |
-| 报告/数仓 | 演示报告本地生成与 CSV 下载 | Mock | 官方 Reporting/Exports 真实链路、口径/归因/新鲜度和仓储验证未完成 |
+| 报告/数仓 | Campaign 日报隔离采集、版本化发布、服务端 totals、API/MCP/Skill 只读 | 真实采集未启用；其他报告类型仍未完成 | 官方 Reporting/Exports 真实链路、口径/归因/新鲜度和仓储验证 |
 | 实时与高级洞察 | 导航占位（营销组合模型、品牌提升研究等） | 规划中 | 数据合同、流式来源、实验设计与真实业务证据均缺少 |
 
 ## 3. `/amazon-ads/campaigns` 页面能力细目

@@ -15,19 +15,19 @@ const taskStatuses = new Set(["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT", "SUC
 function syncTaskQuery(request: Request) {
   const params = new URL(request.url).searchParams;
   const profileId = params.get("profileId")?.trim() || undefined;
-  if (profileId && profileId.length > 100) throw new Error("Profile 筛选参数无效。");
   const taskId = params.get("taskId")?.trim() || undefined;
-  if (taskId && taskId.length > 100) throw new Error("任务筛选参数无效。");
+  if (profileId && profileId.length > 100) throw new SyncInputError("Profile 筛选参数无效。");
+  if (taskId && taskId.length > 100) throw new SyncInputError("任务筛选参数无效。");
   const status = params.get("status")?.trim().toUpperCase() || undefined;
-  if (status && !taskStatuses.has(status)) throw new Error("同步任务状态筛选无效。");
+  if (status && !taskStatuses.has(status)) throw new SyncInputError("同步任务状态筛选无效。");
   const parse = (name: string, fallback: number, max: number) => {
     const raw = params.get(name);
     if (raw === null) return fallback;
     const value = Number(raw);
-    if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1 || value > max) throw new Error("同步任务分页参数无效。");
+    if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1 || value > max) throw new SyncInputError("同步任务分页参数无效。");
     return value;
   };
-  return { profileId, taskId, status, page: parse("page", 1, 10000), pageSize: parse("pageSize", 20, 100) };
+  return { profileId, taskId, status, page: parse("page", 1, 10000), pageSize: parse("pageSize", 20, 100), attemptPage: parse("attemptPage", 1, 10000), attemptPageSize: parse("attemptPageSize", 10, 50) };
 }
 export async function GET(request: Request) {
   const permission = await requireApiPermission("settings", "view", request);
@@ -37,8 +37,6 @@ export async function GET(request: Request) {
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId };
     const access = await amazonDataAccess(scope, permission.user.id);
     const visibleProfile = buildAdsProfileWhere(scope, access, { profileRecordId: query.profileId });
-    const planWhere = { ...scope, profile: { is: visibleProfile } };
-    const plans = await prisma.amazonAdsSyncPlan.findMany({ where: planWhere, include: { profile: { select: { profileId: true, region: true, countryCode: true, marketplaceId: true, sellerAccountId: true, authorization: { select: { name: true, status: true } } } }, tasks: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, status: true, stage: true, trigger: true, attempts: true, maxAttempts: true, processedCount: true, apiRequests: true, errorCode: true, requestedFrom: true, requestedTo: true, startedAt: true, finishedAt: true, createdAt: true, attemptRuns: { orderBy: { attemptNumber: "desc" }, take: 1, select: { attemptNumber: true, stage: true, status: true, startedAt: true, finishedAt: true, retryAt: true, errorCode: true, safeErrorSummary: true, apiRequests: true, processedCount: true } } } } }, orderBy: [{ updatedAt: "desc" }], take: 200 });
     if (query.taskId) {
       const task = await prisma.amazonAdsSyncTask.findFirst({
         where: { ...scope, id: query.taskId, profile: { is: visibleProfile } },
@@ -48,16 +46,26 @@ export async function GET(request: Request) {
           errorCode: true, requestedFrom: true, requestedTo: true, startedAt: true, finishedAt: true, createdAt: true,
           profile: { select: { profileId: true, region: true, countryCode: true, marketplaceId: true, sellerAccountId: true, currencyCode: true, timezone: true, authorization: { select: { name: true, status: true } } } },
           plan: { select: { id: true, status: true, intervalMinutes: true, reportLookbackDays: true, attributionLagDays: true } },
-          attemptRuns: { orderBy: { attemptNumber: "asc" }, take: 100, select: { id: true, attemptNumber: true, stage: true, status: true, startedAt: true, finishedAt: true, retryAt: true, errorCode: true, safeErrorSummary: true, apiRequests: true, processedCount: true } },
-          reportRequests: { orderBy: { createdAt: "asc" }, take: 100, select: { id: true, versionId: true, reportType: true, adProduct: true, apiVersion: true, requestedFrom: true, requestedTo: true, status: true, warningCodes: true, errorCode: true, requestedAt: true, lastPolledAt: true, completedAt: true, documents: { orderBy: { partIndex: "asc" }, take: 100, select: { id: true, partIndex: true, format: true, compression: true, status: true, contentSha256: true, byteSize: true, rowCount: true, downloadedAt: true } } } },
-          reportVersions: { orderBy: { createdAt: "asc" }, take: 100, select: { id: true, status: true, requestedFrom: true, requestedTo: true, rowCount: true, publishedAt: true, createdAt: true, updatedAt: true } },
         },
       });
       if (!task) return NextResponse.json({ error: "同步任务不存在或不可访问。" }, { status: 404, headers });
-      const freshness = await prisma.amazonAdsSyncDomainState.findMany({ where: { ...scope, profileId: task.profileId }, orderBy: [{ dataDomain: "asc" }, { reportType: "asc" }], select: { dataDomain: true, reportType: true, status: true, coveredFrom: true, coveredTo: true, lastAttemptAt: true, lastSuccessAt: true, lastTaskId: true, warningCodes: true } });
+      const attemptWhere = { ...scope, profileId: task.profileId, taskId: task.id };
+      const sourceWhere = { ...scope, profileId: task.profileId, sourceTaskId: task.id };
+      const [attemptTotal, attemptRuns, reportRequestTotal, reportRequestsRaw, reportVersionTotal, reportVersions, freshness] = await Promise.all([
+        prisma.amazonAdsSyncAttempt.count({ where: attemptWhere }),
+        prisma.amazonAdsSyncAttempt.findMany({ where: attemptWhere, orderBy: [{ attemptNumber: "asc" }, { id: "asc" }], skip: (query.attemptPage - 1) * query.attemptPageSize, take: query.attemptPageSize, select: { attemptNumber: true, stage: true, status: true, startedAt: true, finishedAt: true, retryAt: true, errorCode: true, safeErrorSummary: true, apiRequests: true, processedCount: true } }),
+        prisma.amazonAdsReportRequest.count({ where: sourceWhere }),
+        prisma.amazonAdsReportRequest.findMany({ where: sourceWhere, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 20, select: { id: true, versionId: true, reportType: true, adProduct: true, apiVersion: true, requestedFrom: true, requestedTo: true, status: true, warningCodes: true, errorCode: true, requestedAt: true, lastPolledAt: true, completedAt: true, documents: { orderBy: [{ partIndex: "asc" }], take: 10, select: { id: true, partIndex: true, format: true, compression: true, status: true, byteSize: true, rowCount: true, downloadedAt: true } }, _count: { select: { documents: true } } } }),
+        prisma.amazonAdsReportVersion.count({ where: sourceWhere }),
+        prisma.amazonAdsReportVersion.findMany({ where: sourceWhere, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 20, select: { id: true, status: true, requestedFrom: true, requestedTo: true, rowCount: true, publishedAt: true, createdAt: true, updatedAt: true } }),
+        prisma.amazonAdsSyncDomainState.findMany({ where: { ...scope, profileId: task.profileId }, orderBy: [{ dataDomain: "asc" }, { reportType: "asc" }], select: { dataDomain: true, reportType: true, status: true, coveredFrom: true, coveredTo: true, lastAttemptAt: true, lastSuccessAt: true, lastTaskId: true, warningCodes: true } }),
+      ]);
+      const reportRequests = reportRequestsRaw.map(({ _count, ...row }) => ({ ...row, documents: row.documents.map(document => ({ ...document, byteSize: document.byteSize?.toString() ?? null })), documentsTotal: _count.documents, documentsTruncated: _count.documents > row.documents.length }));
       await auditAmazonDataRead(scope, permission.user.id, "amazon-ads-sync-task-detail", permission.user.role);
-      return NextResponse.json({ taskDetail: { ...task, freshness }, taskFilters: { taskId: query.taskId, profileId: query.profileId ?? null, status: query.status ?? null } }, { headers });
+      return NextResponse.json({ taskDetail: { ...task, attemptRuns: attemptRuns.map(attempt => ({ ...attempt, safeErrorSummary: attempt.safeErrorSummary?.slice(0, 300) ?? null })), attemptPagination: { page: query.attemptPage, pageSize: query.attemptPageSize, total: attemptTotal, pageCount: Math.ceil(attemptTotal / query.attemptPageSize), hasMore: query.attemptPage * query.attemptPageSize < attemptTotal }, reportRequests, reportRequestTotal, reportRequestsTruncated: reportRequestTotal > reportRequests.length, reportVersions, reportVersionTotal, reportVersionsTruncated: reportVersionTotal > reportVersions.length, freshness }, taskFilters: { taskId: query.taskId, profileId: query.profileId ?? null, status: query.status ?? null } }, { headers });
     }
+    const planWhere = { ...scope, profile: { is: visibleProfile } };
+    const plans = await prisma.amazonAdsSyncPlan.findMany({ where: planWhere, include: { profile: { select: { profileId: true, region: true, countryCode: true, marketplaceId: true, sellerAccountId: true, authorization: { select: { name: true, status: true } } } }, tasks: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, status: true, stage: true, trigger: true, attempts: true, maxAttempts: true, processedCount: true, apiRequests: true, errorCode: true, requestedFrom: true, requestedTo: true, startedAt: true, finishedAt: true, createdAt: true, attemptRuns: { orderBy: { attemptNumber: "desc" }, take: 1, select: { attemptNumber: true, stage: true, status: true, startedAt: true, finishedAt: true, retryAt: true, errorCode: true, safeErrorSummary: true, apiRequests: true, processedCount: true } } } } }, orderBy: [{ updatedAt: "desc" }], take: 200 });
     const taskWhere = { ...scope, ...(query.status ? { status: query.status } : {}), profile: { is: visibleProfile } };
     const [taskTotal, taskHistory] = await Promise.all([
       prisma.amazonAdsSyncTask.count({ where: taskWhere }),

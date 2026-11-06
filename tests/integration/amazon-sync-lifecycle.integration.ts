@@ -171,12 +171,18 @@ test("bound US/CA sources automatically create bounded 730-day tasks without ena
   await prisma.workspaceScope.create({ data: { organizationId: scope.organizationId, id: scope.workspaceId, name: "Automatic fixture" } });
   await prisma.user.create({ data: { id: actor, email: `${actor}@fixture.invalid`, name: "Fixture", passwordHash: "not-login", memberships: { create: { organizationId: scope.organizationId, role: "owner" } } } });
   await prisma.sellerAccount.create({ data: { ...scope, id: store, accountKey: store, marketplaceCode: "US", status: "inactive" } });
-  await prisma.amazonSpApiAuthorization.create({ data: { ...scope, id: authId, name: "Automatic fixture", amazonSellerId: "automatic-fixture-seller", awsRegion: region, endpoint: endpoints[region], status: "NOT_CONFIGURED", approvedRoles: ["Fixture Order Read", "Finance and Accounting"], rolesAttestedAt: new Date(), marketplaceParticipations: sites.map(marketplaceId => ({ marketplaceId, countryCode: "US" })), updatedByUserId: actor, credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture-auto-client", lwaClientSecret: "fixture-auto-secret", refreshToken: "fixture-auto-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId: authId }) } });
+  await prisma.amazonSpApiAuthorization.create({ data: { ...scope, id: authId, name: "Automatic fixture", amazonSellerId: "automatic-fixture-seller", awsRegion: region, endpoint: endpoints[region], status: "NOT_CONFIGURED", approvedRoles: ["Fixture Order Read", "Finance and Accounting", "Amazon Fulfillment", "Pricing", "Product Listing"], rolesAttestedAt: new Date(), marketplaceParticipations: sites.map(marketplaceId => ({ marketplaceId, countryCode: "US" })), updatedByUserId: actor, credentialsCiphertext: encryptAmazonSpApiCredentials({ lwaClientId: "fixture-auto-client", lwaClientSecret: "fixture-auto-secret", refreshToken: "fixture-auto-refresh", awsAccessKeyId: "", awsSecretAccessKey: "" }, { ...scope, authorizationId: authId }) } });
   const sources = [];
   for (const site of sites) for (const resource of ["inventory", "catalog", "orders", "sales_traffic"]) {
     sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: site, resource, freshnessMinutes: 2880, enabled: false, ...(resource === "orders" ? { orderPolicy: { ...JSON.parse(raw("orders", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaceTimeZone: "America/Los_Angeles" } } : {}) } }));
   }
   sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: sites[0], resource: "finance", freshnessMinutes: 2880, enabled: false, financePolicy: { ...JSON.parse(raw("finance", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaces: sites.map(marketplaceId => ({ marketplaceId, marketplaceTimeZone: "America/Los_Angeles" })), fx: null } } }));
+  const appId = `fixture-auto-${authId}`;
+  for (const resource of ["returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing"] as const) {
+    const data = resource === "returns" ? { returnsPolicy: { ...JSON.parse(raw("returns", "policy.json")), applicationId: appId, marketplaceTimeZone: "America/Los_Angeles" } }
+      : ["fulfillment", "listing_details", "catalog_items", "pricing"].includes(resource) ? { domainPolicy: { resource, applicationId: appId, maxRequests: 30, maxRows: 1000, requestsPerSecond: resource === "pricing" ? .01 : resource === "fulfillment" ? .1 : .5, ...(resource === "fulfillment" ? { planIds: ["A".repeat(38)] } : resource === "listing_details" ? { sellerSkus: ["fixture-sku"] } : { asins: ["B123456789"] }) } } : {};
+    sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: sites[0], resource, freshnessMinutes: 2880, enabled: false, ...data } }));
+  }
   await tickSyncCenter();
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 0);
   await prisma.amazonSpApiAuthorization.update({ where: { id: authId }, data: { status: "CONFIGURED" } });
@@ -184,10 +190,10 @@ test("bound US/CA sources automatically create bounded 730-day tasks without ena
   await tickSyncCenter(now, { taskIds: [], exportIds: [] });
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 0, "approved-only mode cannot create future tasks");
   await tickSyncCenter(now);
-  assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 9);
-  assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 9);
+  assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 18);
+  assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 18);
   await tickSyncCenter(now);
-  assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 9, "duplicate ticks cannot create duplicate tasks");
+  assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 18, "duplicate ticks cannot create duplicate tasks");
   for (const source of sources) {
     const run = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...scope, sourceId: source.id } });
     assert.equal(run.scheduleId, automaticPlanId(source.id)); assert.equal(run.trigger, "schedule"); assert.equal(run.executionApprovalId, null);
@@ -198,6 +204,9 @@ test("bound US/CA sources automatically create bounded 730-day tasks without ena
       assert.ok(Date.parse(window.to) - Date.parse(window.from) <= (source.resource === "orders" ? 1 : 30) * 86400_000);
     }
     if (frozen.requestedRange) assert.equal(Date.parse(frozen.requestedRange.to) - Date.parse(frozen.requestedRange.from), 30 * 86400_000);
+    if (source.resource === "returns") { assert.equal(Date.parse((frozen as { returnWindow: { from: string } }).returnWindow.from), now.getTime() - 730 * 86400_000); assert.ok(Date.parse((frozen as { returnWindow: { to: string } }).returnWindow.to) - Date.parse((frozen as { returnWindow: { from: string } }).returnWindow.from) <= 30 * 86400_000); }
+    if (source.resource === "inventory_events") { const w = (frozen as { reportWindow: { from: string; to: string } }).reportWindow; assert.ok(Date.parse(w.to) - Date.parse(w.from) <= 30 * 86400_000); assert.equal((frozen as { endpoint?: string }).endpoint, endpoints[region]); }
+    if (source.resource === "settlements") { const w = (frozen as { reportWindow: { createdSince: string; createdUntil: string } }).reportWindow; assert.ok(Date.parse(w.createdUntil) - Date.parse(w.createdSince) <= 90 * 86400_000); }
   }
   const orders = sources.find(s => s.resource === "orders")!;
   const run = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...scope, sourceId: orders.id } });
@@ -213,4 +222,16 @@ test("bound US/CA sources automatically create bounded 730-day tasks without ena
   assert.equal(calls, 0); assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: next.id } })).status, "BLOCKED");
   await tickSyncCenter(new Date(now.getTime() + 240_000));
   assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: automaticPlanId(orders.id) } })).enabled, false);
+  const returns = sources.find(s => s.resource === "returns")!;
+  const returnsPlan = await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: automaticPlanId(returns.id) } });
+  async function setAutomaticPlanEnabled(enabled: boolean, revision: number) {
+    const request = await requestChange(scope, actor, { action: "save-plan", id: returnsPlan.id, revision, name: returnsPlan.name, resource: returnsPlan.resource, enabled, sourceIds: [returns.id], intervalMinutes: returnsPlan.intervalMinutes, priority: returnsPlan.priority, maxAttempts: returnsPlan.maxAttempts, retentionDays: returnsPlan.retentionDays });
+    const requestId = String(request.id);
+    await decideChange(scope, actor, requestId, "APPROVED", "offline lifecycle fixture");
+    await applyChange(scope, actor, requestId);
+  }
+  await setAutomaticPlanEnabled(false, returnsPlan.revision);
+  const paused = await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: returnsPlan.id } });
+  await setAutomaticPlanEnabled(true, paused.revision);
+  assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: returnsPlan.id } })).enabled, true);
 });

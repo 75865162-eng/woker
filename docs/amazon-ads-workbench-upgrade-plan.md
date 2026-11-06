@@ -336,9 +336,9 @@ Marketing Stream/SNS/SQS、AMC、ClickHouse、全量导出/无限历史回补、
 
 - **Phase B 已完成（离线）**：Sponsored Products 八类结构数据接入既有 worker 与数据库快照；每次 dispatch 写 Attempt，成功时更新结构域 freshness；429/可重试失败保留此前成功时间；过期 lease 在事务中 fence、结束 Attempt 并从 checkpoint 恢复。真实 API 与自动同步运行配置仍关闭。
 - **Phase C 本地任务中心已扩展并验证**：同步状态 API 支持 Profile/状态筛选和服务端分页；Profile 与 Marketplace 权限通过统一 scope helper 过滤，Profile 列表也按相同 grant 收窄。账户页显示完整授权 Profile 选项、任务/Attempt 历史、取消确认及刷新。取消在服务端递增 fencing、结束最新活动 Attempt、保留已提交事实与历史 Attempt，并使旧 dispatch 在外部请求前失效。
-- Phase C 尚缺独立任务详情/审计时间线抽屉和 Reporting freshness；后者必须绑定成功发布版本与报告日期覆盖，不复用结构 freshness。完整范围、回滚和限制见 [Phase C 交付记录](./amazon-ads-phase-c-delivery-2026-11-06.md)。
+- Phase C 已有任务详情、受限来源记录和按页 Attempt 时间线，任务访问先经过组织/工作区/Profile 授权过滤；仍缺独立审计事件时间线。Reporting freshness 必须绑定成功发布版本与报告日期覆盖，不复用结构 freshness。完整范围、回滚和限制见 [Phase C 交付记录](./amazon-ads-phase-c-delivery-2026-11-06.md)。
 - 本轮验证：核心测试860/860、Amazon Ads 结构/权限/取消与 MCP 隔离集成27/27、报表隔离集成15/15、Ads工作台浏览器21/21、TypeScript通过、定向ESLint无错误（1条既有React依赖warning）、`git diff --check`通过。未运行完整 `check:fast`/生产 build；未执行真实 API、持久数据库迁移、真实任务、凭证/配置修改或部署。
-- 下一步：继续补任务详情/Attempt 时间线与来源关联，并为 reporting 域定义有发布版本依据的 freshness 查询；真实授权测试 Profile 的数据采集仍需另外完成目标环境审查，不把离线 fixture 结果当真实账户验收。
+- 下一步：定义 reporting freshness 的发布版本/日期覆盖语义和独立审计事件呈现；真实授权测试 Profile 的数据采集仍需另外完成目标环境审查，不把离线 fixture 结果当真实账户验收。
 
 
 ### 2026-11-06：真实实体页面标准字段接线
