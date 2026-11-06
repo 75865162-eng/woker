@@ -1,3 +1,4 @@
+import { getSellfoxCredentialStatus } from "@/lib/sellfox/credential-store";
 import { sellfoxSyncScopeLock } from "@/lib/sellfox/schedule-time";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -12,8 +13,8 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const permission = await requireApiPermission("sellfox", "create", request);
   if (!permission.ok) return permission.response;
-  if (!process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET) {
-    return NextResponse.json({ error: "服务端未配置赛狐凭据。请联系管理员检查服务端环境变量。" }, { status: 503 });
+  if (!(await getSellfoxCredentialStatus({ organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId })).configured) {
+    return NextResponse.json({ error: "服务端未配置赛狐凭据或已保存配置不可用，请在设置的集成页检查。" }, { status: 503 });
   }
   if (process.env.QUEUE_DRIVER !== "redis") {
     return NextResponse.json({ error: "赛狐异步同步 Worker 未启用，请联系管理员。" }, { status: 503 });

@@ -15,10 +15,11 @@ export async function readObservations(scope: SyncScope, params: URLSearchParams
   if (params.get("runId") && !run) throw new SyncInputError("已发布观察版本不可访问。", 403);
   const page = Math.min(1000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = 50;
   const where = { task: { id: { in: run ? [run.id] : [] } }, ...scope, sourceId: source?.id ?? "__none__", sourceRunId: run?.id ?? "__none__", ...Object.fromEntries(["asin", "sellerSku", "searchTerm", "kind"].filter(key => params.get(key)).map(key => [key, params.get(key)!])) };
-  const [rows, total, versions] = await Promise.all([
+  const [rows, total, versions, latestTask] = await Promise.all([
     prisma.amazonDomainObservation.findMany({ where, select: { id: true, sourceRunId: true, kind: true, asin: true, sellerSku: true, searchTerm: true, facts: true, capturedAt: true }, orderBy: [{ kind: "asc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize }),
     prisma.amazonDomainObservation.count({ where }),
     source ? prisma.amazonSyncRun.findMany({ where: { ...scope, sourceId: source.id, resource, status: "SUCCEEDED", stage: { not: "PURGED" }, finishedAt: { not: null }, executionVersion: 2 }, select: { id: true, finishedAt: true, summary: true }, orderBy: [{ finishedAt: "desc" }, { id: "desc" }], take: 100 }) : [],
+    source ? prisma.amazonSyncRun.findFirst({ where: { ...scope, sourceId: source.id, resource, executionVersion: 2 }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], select: { id: true, status: true, stage: true, processedCount: true, failedCount: true, updatedAt: true, nextAttemptAt: true, error: true } }) : null,
   ]);
-  return { resource, sources, source: source ?? null, run, versions, rows, pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) } };
+  return { resource, latestTask, sources, source: source ?? null, run, versions, rows, pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) } };
 }

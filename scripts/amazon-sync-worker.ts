@@ -1,7 +1,9 @@
+import "./runtime/worker-bootstrap.mjs";
+import { createHeartbeatWriter } from "@/lib/runtime/heartbeat-writer";
+import { observeWorker, runtimeHeartbeatMetadata } from "@/lib/runtime/worker-diagnostics";
 import { amazonWorkerPolicy, workerAllows } from "@/lib/amazon-sync/worker-policy";
-import "dotenv/config";
 import { processSalesExport } from "@/lib/amazon-sync/exports";
-import { tickSyncCenter } from "@/lib/amazon-sync/scheduler";
+import { enabledSyncScopes, tickSyncCenter } from "@/lib/amazon-sync/scheduler";
 import { processSyncCenterTask } from "@/lib/amazon-sync/processor";
 import { Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
@@ -41,7 +43,9 @@ async function recoverQueuedRuns() {
   } finally { recovering = false; }
 }
 
-async function writeHeartbeat(status: "online" | "stopping" = "online") {
+observeWorker(worker, "amazon-sync-worker");
+
+async function persistHeartbeat(status: "online" | "stopping") {
   if (!process.env.DATABASE_URL) return;
   await prisma.workerHeartbeat.upsert({
     where: { id: workerId },
@@ -52,17 +56,19 @@ async function writeHeartbeat(status: "online" | "stopping" = "online") {
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
+      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
     },
     update: {
       queueName: amazonSyncQueueName,
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
+      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
     },
   });
 }
+
+const writeHeartbeat = createHeartbeatWriter(persistHeartbeat);
 
 void recoverQueuedRuns().catch(() => console.error("[amazon-sync-worker] recovery failed; retrying next tick"));
 const recoveryTimer = setInterval(() => {
@@ -74,6 +80,7 @@ const heartbeatTimer = setInterval(() => {
 }, 30_000);
 
 worker.on("completed", (job) => console.log(`[amazon-sync-worker] completed ${job.data.runId}`));
+// BullMQ reconnects after Redis loss; keep error details (URLs/credentials) out of logs.
 worker.on("failed", (job) => console.error(`[amazon-sync-worker] failed ${job?.data.runId ?? "unknown"}; inspect persisted task state`));
 
 async function shutdown() {
@@ -88,3 +95,4 @@ process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());
 
 console.log(`[amazon-sync-worker] listening on ${amazonSyncQueueName}`);
+if (!enabledSyncScopes().length) console.warn("[amazon-sync-worker] SP-API automatic sync disabled: configure exact AMAZON_SYNC_CENTER_SCOPES organization/workspace pairs");

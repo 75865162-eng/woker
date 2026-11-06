@@ -5,7 +5,7 @@ export const metadata = { title: "全部订单" };
 
 export default function AllOrdersPage() {
   return (
-    <AppShell title="全部订单" subtitle="订单 → 全部订单。尚无赛狐订单表，只显示空态。">
+    <AppShell title="全部订单" subtitle="订单 → 全部订单。按订单行读取已同步的赛狐订单快照。">
       <AllOrdersWorkbench />
     </AppShell>
   );

@@ -7,6 +7,7 @@ import type { ImageKind, NoiseLevel, ImageUpscaleScale } from "@/lib/image-upsca
 import { prisma } from "@/lib/db/prisma";
 import { enqueueImageUpscaleJob } from "@/lib/queue";
 import { getStorageDriver } from "@/lib/storage";
+import { dispatchPersistedJob } from "@/lib/runtime/dispatch-persisted-job";
 
 export const runtime = "nodejs";
 
@@ -74,14 +75,14 @@ export async function POST(request: Request) {
           },
         }));
       }
-      await Promise.all(jobs.map((job) => enqueueImageUpscaleJob(job.id)));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "图片任务入队失败。";
+      const message = error instanceof Error ? error.message : "图片任务保存失败。";
       await prisma.imageUpscaleJob.updateMany({ where: { batchId, organizationId: user.organizationId }, data: { status: "failed", error: message } });
       await Promise.all(storedKeys.map((key) => storage.delete(key).catch(() => undefined)));
       return NextResponse.json({ error: message }, { status: 503 });
     }
-    return NextResponse.json({ batchId, jobs }, { status: 202 });
+    const dispatches = await Promise.all(jobs.map(job => dispatchPersistedJob(() => enqueueImageUpscaleJob(job.id))));
+    return NextResponse.json({ batchId, jobs, dispatchDeferred: dispatches.some(result => result.dispatchDeferred) }, { status: 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "图片任务创建失败。";
     return NextResponse.json({ error: message }, { status: 400 });

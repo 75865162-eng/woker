@@ -1,3 +1,5 @@
+import { sellerArchivePolicy, parseSellerArchivePolicy } from "./seller-archive-policy";
+import { parseSettlementPolicy } from "./settlements";
 import { parseObservationPolicy } from "./observation-policy";
 import { parseReturnPolicy } from "./returns";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
@@ -10,6 +12,9 @@ export const operationTypes = {
   "save-source": "ScopeBindingChange", "save-plan": "SyncPolicyChange",
   "run": "SyncExecutionRequest", "control-task": "SyncExecutionRequest",
   "validate-authorization": "SyncExecutionRequest",
+  "adopt-identity": "CredentialChange",
+  "recover-finance-window": "SyncPolicyChange",
+  "recover-report": "SyncPolicyChange",
 } as const;
 export type ChangeOperation = keyof typeof operationTypes;
 export type ChangeType = typeof operationTypes[ChangeOperation];
@@ -34,7 +39,10 @@ const allowed: Record<ChangeOperation, string[]> = {
   "save-access-grant": ["id", "proposedId", "revision", "userId", "roleId", "sellerAccountId", "enabled", "marketplaceIds", "actions", "mcpEnabled"],
   "save-authorization": ["id", "proposedId", "revision", "name", "amazonSellerId", "region", "endpoint", "lwaClientId", "lwaClientSecret", "refreshToken", "awsAccessKeyId", "awsSecretAccessKey", "awsSessionToken", "approvedRoles"],
   "disable-authorization": ["id", "revision"], "validate-authorization": ["id", "revision"],
-  "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy", "domainPolicy"],
+  "adopt-identity": ["id", "revision", "amazonSellerId", "reviewedAt", "manifestDigest"],
+  "recover-finance-window": ["id", "revision", "reviewedAt", "recoveryDigest", "sameWindowReplay"],
+  "recover-report": ["id", "revision", "recoveryDigest", "reportWindow", "settlementPolicy", "attributionOnly"],
+  "save-source": ["id", "proposedId", "revision", "authorizationId", "sellerAccountId", "marketplaceId", "resource", "freshnessMinutes", "enabled", "orderPolicy", "financePolicy", "returnsPolicy", "domainPolicy", "settlementPolicy"],
   "save-plan": ["id", "proposedId", "revision", "name", "resource", "enabled", "mode", "intervalMinutes", "priority", "maxAttempts", "retentionDays", "sourceIds"],
   "run": ["sourceIds", "planId", "datePreset", "dateFrom", "dateTo", "eventType", "reportWindows"], "control-task": ["id", "control"],
 };
@@ -43,7 +51,10 @@ export function normalizeCommand(body: Record<string, unknown>) {
   if (body.importLegacy) throw new SyncInputError("旧凭证导入入口已关闭。", 410);
   const command: Record<string, unknown> = { action };
   for (const field of allowed[action]) if (body[field] !== undefined && body[field] !== "") command[field] = body[field];
-  if (command.domainPolicy !== undefined) command.domainPolicy = parseObservationPolicy(command.domainPolicy, typeof command.resource === "string" ? command.resource : undefined);
+  if (command.sameWindowReplay !== undefined && typeof command.sameWindowReplay !== "boolean") throw new SyncInputError("财务重放标识无效。");
+  if (command.attributionOnly !== undefined && (typeof command.attributionOnly !== "boolean" || command.attributionOnly && (command.reportWindow !== undefined || command.settlementPolicy !== undefined))) throw new SyncInputError("归属复核不得同时改写报告窗口或结算策略。");
+  if (command.settlementPolicy !== undefined) { if (command.resource !== "settlements" && action !== "recover-report") throw new SyncInputError("结算采集策略仅适用于结算域。"); command.settlementPolicy = parseSettlementPolicy(command.settlementPolicy); }
+  if (command.domainPolicy !== undefined) command.domainPolicy = sellerArchivePolicy(String(command.resource), command.domainPolicy) ?? parseObservationPolicy(command.domainPolicy, typeof command.resource === "string" ? command.resource : undefined);
   if (command.returnsPolicy !== undefined) command.returnsPolicy = parseReturnPolicy(command.returnsPolicy);
   if (command.financePolicy !== undefined) command.financePolicy = parseFinancePolicy(command.financePolicy);
   if (command.orderPolicy !== undefined) command.orderPolicy = parseOrderSyncPolicy(command.orderPolicy);
@@ -67,8 +78,9 @@ export function summary(command: Record<string, unknown>) {
     // Never accept arbitrary nested objects in summaries, even under a benign key.
     if (typeof v === "string") { if (v.length > 200) throw new SyncInputError("配置字段过长。"); result[k] = v; }
     else if (typeof v === "boolean" || typeof v === "number" || v === null) result[k] = v;
-    else if (["requestedRanges", "orderWindows", "financeWindows", "returnWindows", "reportWindows"].includes(k) && v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
-    else if (k === "domainPolicy") result[k] = parseObservationPolicy(v);
+    else if (["requestedRanges", "orderWindows", "financeWindows", "returnWindows", "reportWindows", "reportWindow"].includes(k) && v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
+    else if (k === "settlementPolicy") result[k] = parseSettlementPolicy(v);
+    else if (k === "domainPolicy") result[k] = v && typeof v === "object" && "mode" in v && v.mode === "seller-archive-only" ? parseSellerArchivePolicy(v) : parseObservationPolicy(v);
     else if (k === "returnsPolicy") result[k] = parseReturnPolicy(v);
     else if (k === "financePolicy") result[k] = parseFinancePolicy(v);
     else if (k === "orderPolicy") result[k] = parseOrderSyncPolicy(v);
@@ -82,6 +94,7 @@ export function safeState(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
   const result: Record<string, unknown> = {};
   for (const [name, item] of Object.entries(value)) {
+    if (name === "accessEvidence") { result[name] = "API_ACCESS_EVIDENCE_REDACTED"; continue; }
     if (/(cipher|token|secret|password|authorizationheader|cookie|session)/i.test(name)) {
       result[name] = item ? "已配置" : "未配置";
     } else result[name] = safeState(item);

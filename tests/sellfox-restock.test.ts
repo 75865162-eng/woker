@@ -46,6 +46,8 @@ test("restock rows group by ASIN and keep listing identity beside the suggestion
   const rows = buildRestockRows({
     today,
     groupBy: "asin",
+    inventory: [],
+    shipmentCapturedStoreIds: ["store"],
     listings: [{
       id: "listing", storeId: "store", asin: "B000", msku: "MSKU", sku: "SKU", parentAsin: null, title: "标题", mainImage: "https://example.test/a.jpg",
       fulfillable: 10, reservedQty: 1, unsellable: 2, warehousing: 3, fulfillment: "AFN", shopExternalId: "shop", name: "店铺", marketplace: "US",
@@ -63,4 +65,50 @@ test("restock rows group by ASIN and keep listing identity beside the suggestion
   assert.equal(rows[0].daily, 2);
   assert.equal(rows[0].suggest, 60);
   assert.equal(rows[0].mainImage, "https://example.test/a.jpg");
+});
+
+test("historical inventory excludes only explicit stockouts and keeps zero-sale and unknown-stock days", () => {
+  const base = {
+    today, groupBy: "msku" as const,
+    listings: [{ id: "listing", storeId: "store", asin: "B000", msku: "MSKU", sku: null, parentAsin: null, title: null, mainImage: null,
+      fulfillable: 0, reservedQty: null, unsellable: null, warehousing: null, fulfillment: "AFN", shopExternalId: "shop", name: "店铺", marketplace: "US" }],
+    sales: [
+      { storeId: "store", msku: "MSKU", asin: "B000", reportDate: "2026-11-04", quantity: 100 },
+      { storeId: "store", msku: "MSKU", asin: "B000", reportDate: "2026-11-03", quantity: 0 },
+      { storeId: "store", msku: "MSKU", asin: "B000", reportDate: "2026-11-02", quantity: 6 },
+      { storeId: "store", msku: "MSKU", asin: "B000", reportDate: "2026-11-01", quantity: 3 },
+      // Same ASIN in a different MSKU must not enter this MSKU's average.
+      { storeId: "store", msku: "OTHER", asin: "B000", reportDate: "2026-11-01", quantity: 900 },
+      { storeId: "store", msku: "MSKU", asin: "B000", reportDate: "2026-11-05", quantity: 900 },
+      { storeId: "store", msku: "MSKU", asin: "B000", reportDate: today, quantity: 900 },
+    ],
+    inventory: [
+      { storeId: "store", msku: "MSKU", reportDate: "2026-11-04", quantity: 0 },
+      { storeId: "store", msku: "MSKU", reportDate: "2026-11-03", quantity: 2 },
+      { storeId: "store", msku: "MSKU", reportDate: "2026-11-02", quantity: null },
+      { storeId: "foreign-store", msku: "MSKU", reportDate: "2026-11-01", quantity: 0 },
+    ],
+    shipments: [], shipmentCapturedStoreIds: ["store"],
+  };
+  const [row] = buildRestockRows(base);
+  assert.equal(row.avg7, 3);
+  assert.equal(row.daily, 3);
+  assert.equal(row.inTransit, 0);
+  assert.equal(row.suggest, 111);
+  const [uncollected] = buildRestockRows({ ...base, shipmentCapturedStoreIds: [] });
+  assert.equal(uncollected.inTransit, null);
+  assert.equal(uncollected.suggest, null);
+  assert.equal(uncollected.suggestDate, null);
+});
+
+test("daily rates use distinct 7/14/30 averages with 50/30/20 weights", () => {
+  const rates = restockDailyRates([
+    { date: "2026-11-04", quantity: 10 },
+    { date: "2026-10-25", quantity: 4 },
+    { date: "2026-10-10", quantity: 1 },
+  ], today);
+  assert.equal(rates.avg7, 10);
+  assert.equal(rates.avg14, 7);
+  assert.equal(rates.avg30, 5);
+  assert.equal(rates.weighted, 10 * 0.5 + 7 * 0.3 + 5 * 0.2);
 });

@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+
+test("text report decoding honors declared Cp1252 and refuses unsupported encodings", async () => {
+  const client = new AmazonSpApiClient(config, { fetch: async () => new Response(new Uint8Array([99, 97, 102, 233]), { headers: { "content-type": "text/plain; charset=Cp1252" } }) });
+  assert.equal(await client.downloadReportText({ url: "https://s3.amazonaws.com/fixture" }), "café");
+  const unsupported = new AmazonSpApiClient(config, { fetch: async () => new Response("fixture", { headers: { "content-type": "text/plain; charset=unknown" } }) });
+  await assert.rejects(unsupported.downloadReportText({ url: "https://s3.amazonaws.com/fixture" }), /字符编码不支持/);
+});
 import { gzipSync } from "node:zlib";
 import { AmazonSpApiClient } from "@/lib/amazon/sp-api-client";
 import { getAmazonSpApiServerConfiguration } from "@/lib/amazon/sp-api-config";

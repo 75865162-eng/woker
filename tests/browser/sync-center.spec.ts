@@ -652,3 +652,97 @@ test("Catalog source configuration submits only the selected bounded ASINs", asy
   await page.getByRole("button", { name: "保存数据源", exact: true }).click();
   await expect.poll(() => calls.find(c => c.body && (c.body as { resource?: string }).resource === "catalog_items")?.body).toMatchObject({ resource: "catalog_items", domainPolicy: { asins: ["B123456789", "B987654321"] } });
 });
+
+test("operations organizes existing readers into eight sections and keeps capability gaps explicit", async ({ page }) => {
+  const { calls, businessCalls } = await setup(page);
+  const cards = page.getByRole("region", { name: "经营中台八大板块", exact: true });
+  await expect(cards.locator(":scope > article")).toHaveCount(8);
+  const navigation = page.getByRole("navigation", { name: "业务数据导航", exact: true });
+  for (const label of ["商品与 Listing", "订单与销售", "库存与仓储", "物流与履约", "价格与竞争报价", "财务、结算与税务", "经营与品牌分析", "退货、售后与账户健康"]) {
+    await expect(navigation.getByRole("region", { name: label, exact: true })).toBeVisible();
+  }
+  await cards.getByRole("button", { name: "进入库存与仓储 →", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Amazon 库存快照", exact: true })).toBeVisible();
+  await expect.poll(() => businessCalls.includes("/api/operations/inventory/snapshots") && businessCalls.includes("/api/operations/freshness")).toBe(true);
+  const beforeBusiness = businessCalls.length;
+  for (const label of ["商品类型与属性定义", "A+ 内容与关联 ASIN", "AWD 库存", "自配送运费与面单", "MCF 履约单与包裹", "佣金与 FBA 费用预估", "报价变动通知", "税务与发票", "复购分析", "Data Kiosk 查询", "买家消息与邀评", "账户健康与卖家绩效"]) {
+    await navigation.getByRole("button", { name: `${label}· 待接入`, exact: true }).click();
+    await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "板块字段与来源" })).toContainText("当前没有此能力的已接入查询或采集操作");
+    await expect(page.getByText("读取同步状态…", { exact: true })).toHaveCount(0);
+  }
+  expect(calls.some(call => call.body)).toBe(false);
+  expect(businessCalls.length).toBe(beforeBusiness);
+  expect(calls.every(call => ["overview", "sources"].includes(call.section))).toBe(true);
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("capability URLs restore on reload and browser history without inventing backend sections", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.goto("http://127.0.0.1:43224/?view=a-plus");
+  await expect(page.getByRole("heading", { name: "A+ 内容与关联 ASIN", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "订单列表", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "订单列表", exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "A+ 内容与关联 ASIN", exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "订单列表", exact: true })).toBeVisible();
+  expect(calls.some(call => call.section === "a-plus" || call.body)).toBe(false);
+});
+
+test("Listing and Catalog navigation use the existing sources contract alongside observation queries", async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.route("**/api/operations/sync-center?*", route => {
+    if (new URL(route.request().url()).searchParams.get("section") !== "observations") return route.fallback();
+    return route.fulfill({ json: { sources: [], source: null, versions: [], rows: [], pagination: { total: 0, pageCount: 0 } } });
+  });
+  for (const [label, resource] of [["Listing 完整信息", "listing_details"], ["商品目录", "catalog_items"]]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByTestId(`amazon-${resource}-observations`)).toContainText("暂无已发布数据");
+  }
+  expect(calls.every(call => ["overview", "sources"].includes(call.section))).toBe(true);
+  expect(calls.some(call => call.body)).toBe(false);
+});
+
+test("Listing empty version shows active progress and failure without exposing staged rows", async ({ page }) => {
+  await setup(page);
+  let error: string | null = null;
+  await page.route("**/api/operations/sync-center?*", route => {
+    if (new URL(route.request().url()).searchParams.get("section") !== "observations") return route.fallback();
+    return route.fulfill({ json: { sources: [{ id: "listing-source", marketplaceId: "US", seller: { displayName: "店铺 A" } }], source: { id: "listing-source", lastSuccessAt: null }, latestTask: { id: "listing-task", status: error ? "BLOCKED" : "WAITING", stage: "FETCHING", processedCount: 153, failedCount: 0, updatedAt: "2026-11-06T09:20:00Z", error }, versions: [], rows: [], pagination: { total: 0, pageCount: 0 } } });
+  });
+  await page.getByRole("button", { name: "Listing 完整信息", exact: true }).click();
+  const panel = page.getByTestId("amazon-listing_details-observations");
+  await expect(panel).toContainText("已处理 153 个对象");
+  await expect(panel).toContainText("无需重复提供商品清单");
+  error = "详情接口能力证据已过期";
+  await panel.getByRole("button", { name: "刷新列表", exact: true }).click();
+  await expect(panel).toContainText(error);
+});
+
+test("Order items distinguishes disabled detail collection from pending collection", async ({ page }) => {
+  await setup(page);
+  let enabled = false;
+  await page.route("**/api/operations/sync-center?*", route => {
+    if (new URL(route.request().url()).searchParams.get("section") !== "orders") return route.fallback();
+    return route.fulfill({ json: { rows: [], sources: [{ id: "orders-source", marketplaceId: "US", detailsEnabled: enabled, detailsComplete: false }], pagination: { total: 0, pageCount: 0 } } });
+  });
+  await page.getByRole("button", { name: "订单商品", exact: true }).click();
+  const panel = page.getByTestId("amazon-order-items-workbench");
+  await expect(panel).toContainText("订单商品详情采集尚未启用");
+  enabled = true;
+  await panel.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(panel).toContainText("详情采集已启用");
+});
+
+test("Inventory age displays the selected marketplace report failure", async ({ page }) => {
+  await setup(page);
+  await page.route("**/api/operations/sync-center?*", route => {
+    if (new URL(route.request().url()).searchParams.get("section") !== "domain-reports") return route.fallback();
+    const source = { id: "age-source", marketplaceId: "MX", seller: { displayName: "店铺 A" }, lastSuccessAt: null, resourceCursor: { status: "FAILED" } };
+    return route.fulfill({ json: { source, sources: [source], latestTask: { id: "age-task", status: "FAILED", error: "REPORT_CANCELLED：Amazon 已取消报告" }, documents: [], rows: [], pagination: { total: 0, pageCount: 0 }, dateMeaning: "snapshot", amountMeaning: "original" } });
+  });
+  await page.getByRole("button", { name: "库龄", exact: true }).click();
+  await expect(page.getByTestId("amazon-inventory_age-workbench").getByRole("alert")).toContainText("REPORT_CANCELLED");
+});

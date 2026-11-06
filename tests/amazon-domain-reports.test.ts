@@ -68,6 +68,26 @@ test("inventory ledger rows preserve signed units and safe adjustment fields onl
   assert.throws(() => parseDomainReport("inventory_events", raw, { inventoryEventWindow: inventoryEventRunWindow({ from: "2026-11-04", to: "2026-11-04", eventType: "Adjustments" }, new Date("2026-11-05T12:00:00Z")) }));
 });
 
+test("ledger all-events default omits empty reportOptions and preserves explicit filters", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const client = new AmazonSpApiClient({ lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh", awsAccessKeyId: "", awsSecretAccessKey: "", region: "fixture-region", endpoint: "https://spapi.fixture.invalid" }, {
+    tokenEndpoint: "https://lwa.fixture.invalid/token",
+    fetch: async (input, init) => {
+      if (new URL(String(input)).hostname === "lwa.fixture.invalid") return Response.json({ access_token: "fixture-access", expires_in: 3600 });
+      bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({ reportId: "fixture-report" });
+    },
+  });
+  const range = { marketplaceId: "fixture-marketplace", from: "2026-11-01T00:00:00Z", to: "2026-11-02T23:59:59Z" };
+  await client.createInventoryLedgerReport({ ...range, eventType: "" });
+  await client.createInventoryLedgerReport({ ...range, eventType: "Adjustments" });
+  assert.equal(Object.hasOwn(bodies[0], "reportOptions"), false);
+  assert.deepEqual(bodies[1].reportOptions, { eventType: "Adjustments" });
+  assert.equal(bodies[0].dataStartTime, range.from);
+  assert.equal(bodies[0].dataEndTime, range.to);
+  assert.deepEqual(bodies[0].marketplaceIds, [range.marketplaceId]);
+});
+
 test("getReports first page applies frozen filters and continuation sends only nextToken", async () => {
   const urls: URL[] = [];
   const client = new AmazonSpApiClient({ lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh", awsAccessKeyId: "", awsSecretAccessKey: "", region: "fixture-region", endpoint: "https://spapi.fixture.invalid" }, {

@@ -55,9 +55,16 @@ export async function ensureWorkspaceScope(user: CurrentUser, scope?: Partial<Wo
   return normalized;
 }
 
-export async function recordDataChangeVersion(input: RecordVersionInput) {
-  const scope = await ensureWorkspaceScope(input.user, input.scope);
-  return prisma.$transaction(async (tx) => {
+export async function recordDataChangeVersion(input: RecordVersionInput, transaction?: Prisma.TransactionClient) {
+  const scope = transaction ? normalizeWorkspaceScope(input.scope) : await ensureWorkspaceScope(input.user, input.scope);
+  const record = async (tx: Prisma.TransactionClient) => {
+    if (transaction) {
+      await tx.workspaceScope.upsert({
+        where: { organizationId_id: { organizationId: input.user.organizationId, id: scope.workspaceId } },
+        create: { organizationId: input.user.organizationId, id: scope.workspaceId, name: scope.workspaceId === "default" ? "默认工作区" : scope.workspaceId, accountId: scope.accountId, marketplace: scope.marketplace, isDefault: scope.workspaceId === "default" },
+        update: { accountId: scope.accountId, marketplace: scope.marketplace },
+      });
+    }
     if (input.idempotencyKey) {
       const existing = await tx.dataChangeVersion.findUnique({
         where: { idempotencyKey: input.idempotencyKey },
@@ -141,5 +148,6 @@ export async function recordDataChangeVersion(input: RecordVersionInput) {
     }
 
     return version;
-  });
+  };
+  return transaction ? record(transaction) : prisma.$transaction(record);
 }

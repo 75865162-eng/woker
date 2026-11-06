@@ -49,7 +49,8 @@ test("automatic sync covers only executable resources and keeps each API's histo
   assert.equal(next.from, "2025-06-16"); assert.equal(next.to, "2025-07-16");
   assert.equal(nextAutomaticInventoryEventWindow({ watermarkFrom: new Date("2026-11-05T00:00:00Z"), watermarkTo: new Date("2026-11-05T23:59:59Z"), status: "SUCCEEDED" }, now), null);
   const report = nextAutomaticSettlementDiscovery(now);
-  assert.equal(Date.parse(report.createdUntil) - Date.parse(report.createdSince), 90 * 86400000);
+  assert.equal(Date.parse(report.createdUntil) - Date.parse(report.createdSince), 89 * 86400000);
+  assert.deepEqual(report.retentionGap, { from: new Date(now.getTime() - 90 * 86400000).toISOString(), to: report.createdSince, reason: "QUEUE_MARGIN", complete: false });
 });
 test("authorization endpoints are restricted to matching official regions", () => {
   officialEndpoint("us-east-1", "https://sellingpartnerapi-na.amazon.com");

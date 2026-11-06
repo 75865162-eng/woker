@@ -310,3 +310,27 @@ test("P2 detail commit failure rolls back items/encrypted payload/work; retry co
   }
   const restart = await f.request(); await f.slice(restart.id); await f.slice(restart.id); assert.equal((await f.slice(restart.id)).status, "SUCCEEDED");
 });
+
+test("approved core detail transition backfills existing orders without rewriting completed list cursors", async () => {
+  const f = await fresh(); fault = 0; detailFault = 0; failCommit = false; failDetailCommit = false; calls.length = 0;
+  const first = await f.request(); await f.slice(first.id);
+  await prisma.amazonSyncTokenBucket.updateMany({ data: { tokens: 20, replenishedAt: new Date(0) } });
+  const completed = await f.slice(first.id); assert.equal(completed.status, "SUCCEEDED");
+  const oldCursor = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+  assert.equal(await prisma.amazonOrderItemRecord.count({ where: f.scope }), 0);
+  const { orderAccessEvidence } = await import("@/lib/amazon-sync/order-access-evidence");
+  const proof = orderAccessEvidence({ ...f.scope, authorizationId: f.authId, authorizationRevision: 1, marketplaceId: site }, { status: 200, parsed: true, requestId: "fixture-proof" });
+  const details = { includedData: [], requiredRoles: ["Inventory and Order Tracking"], purpose: "order_items", requestsPerSecond: .2, burst: 1, maxOrders: 5000, backfillExisting: true, accessEvidence: proof };
+  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [], rolesAttestedAt: null } });
+  await f.approved({ action: "save-source", revision: 1, authorizationId: f.authId, sellerAccountId: f.store, marketplaceId: site, resource: "orders", enabled: true, freshnessMinutes: 60, orderPolicy: { ...(f.source.orderPolicy as Prisma.JsonObject), details } });
+  const second = await f.request();
+  // First slice handles old records before fetching the new list window.
+  const progress = await f.slice(second.id);
+  assert.equal(progress.detailsCompletedCount, 1);
+  assert.equal(calls.at(-1)?.path.startsWith("/orders/2026-01-01/orders/"), true);
+  assert.ok(await prisma.amazonOrderItemRecord.count({ where: f.scope }) > 0);
+  const cursor = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+  assert.equal(cursor.watermarkFrom.toISOString(), new Date(oldCursor.watermarkTo.getTime() - policy.overlapSeconds * 1000).toISOString());
+  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: first.id } })).status, "SUCCEEDED");
+  assert.equal((await readOrders(f.scope, new URLSearchParams(), f.actor)).sources[0].detailsEnabled, true);
+});

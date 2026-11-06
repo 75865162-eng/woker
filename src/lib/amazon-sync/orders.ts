@@ -1,3 +1,4 @@
+import { assertOrderAccessEvidence, type OrderAccessContext } from "./order-access-evidence";
 import { SyncInputError } from "./policy";
 
 /** Orders v2026-01-01 dataset/role contracts. P2 deliberately supports only
@@ -6,7 +7,7 @@ import { SyncInputError } from "./policy";
  * https://developer-docs.amazon.com/sp-api/docs/access-orders-pii
  */
 export const orderDetailDatasets = ["FULFILLMENT", "PROCEEDS", "BUYER", "RECIPIENT"] as const;
-export type OrderDetailPolicy = { includedData: Array<typeof orderDetailDatasets[number]>; requiredRoles: string[]; purpose: string; requestsPerSecond: number; burst: number; maxOrders: number };
+export type OrderDetailPolicy = { includedData: Array<typeof orderDetailDatasets[number]>; requiredRoles: string[]; purpose: string; requestsPerSecond: number; burst: number; maxOrders: number; accessEvidence?: string; backfillExisting?: boolean };
 const orderOperationRoles = ["Amazon Fulfillment", "Buyer Communication", "Buyer Solicitation", "Finance and Accounting", "Inventory and Order Tracking", "Pricing", "Product Listing", "Professional Services (Restricted)", "Selling Partner Insights", "Direct-to-Consumer Shipping (Restricted)", "Tax Invoicing (Restricted)", "Tax Remittance (Restricted)"];
 const orderPiiRoles = ["Direct-to-Consumer Shipping (Restricted)", "Tax Invoicing (Restricted)", "Tax Remittance (Restricted)"];
 
@@ -64,7 +65,9 @@ function parseDetailPolicy(value: unknown): OrderDetailPolicy {
   if (p.includedData.some(d => d !== "PROCEEDS") && !p.requiredRoles.some(r => orderPiiRoles.includes(r))) throw new SyncInputError("可能返回 PII 的详情数据集须声明 restricted role；字段仍受履约方式、站点和订单状态规则约束。");
   if (typeof p.purpose !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.:-]{0,99}$/.test(p.purpose)) throw new SyncInputError("订单详情须填写非敏感业务用途代码。");
   if (typeof p.requestsPerSecond !== "number" || !Number.isFinite(p.requestsPerSecond) || p.requestsPerSecond <= 0 || p.requestsPerSecond > 0.5) throw new SyncInputError("getOrder 预算不得超过 0.5 请求/秒。");
-  return { includedData: [...new Set(p.includedData)].sort(), requiredRoles: [...new Set(p.requiredRoles)].sort(), purpose: p.purpose, requestsPerSecond: p.requestsPerSecond, burst: integer(p.burst, 1, 30), maxOrders: integer(p.maxOrders, 1, 5000) };
+  if (p.accessEvidence !== undefined && (typeof p.accessEvidence !== "string" || !p.accessEvidence || p.accessEvidence.length > 12000)) throw new SyncInputError("订单接口能力证据格式无效。");
+  if (p.backfillExisting !== undefined && typeof p.backfillExisting !== "boolean") throw new SyncInputError("订单补齐范围无效。");
+  return { ...(p.accessEvidence ? { accessEvidence: p.accessEvidence as string } : {}), ...(p.backfillExisting === true ? { backfillExisting: true } : {}), includedData: [...new Set(p.includedData)].sort(), requiredRoles: [...new Set(p.requiredRoles)].sort(), purpose: p.purpose, requestsPerSecond: p.requestsPerSecond, burst: integer(p.burst, 1, 30), maxOrders: integer(p.maxOrders, 1, 5000) };
 }
 
 /** Freeze one bounded window per execution approval; an incomplete cursor wins. */
@@ -116,9 +119,13 @@ export function parseOrderPage(value: unknown, marketplaceId: string, policy: Or
 }
 
 /** Approved roles are admin-attested metadata, not inferred from marketplace participation. */
-export function assertOrderRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, policy: OrderSyncPolicy, automaticRead = false) {
+export function assertOrderRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, policy: OrderSyncPolicy, automaticRead = false, context?: OrderAccessContext) {
   // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
   if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length) && !policy.details) return;
+  if (context && policy.details?.accessEvidence && policy.details.includedData.length === 0) {
+    assertOrderAccessEvidence(policy.details.accessEvidence, context);
+    return;
+  }
   const required = [...policy.requiredRoles, ...(policy.details?.requiredRoles ?? [])];
   if (!auth.rolesAttestedAt || !required.every(role => auth.approvedRoles.includes(role))) throw new SyncInputError("订单所需 Amazon 角色未确认，请管理员核对 Developer Console 角色并提交审批。", 403);
 }

@@ -10,6 +10,8 @@ import { endpoints } from "@/lib/amazon-sync/policy";
 import { decryptCheckpoint } from "@/lib/amazon-sync/checkpoint";
 import { digest, unseal } from "@/lib/amazon-sync/approval-policy";
 import { readFinance } from "@/lib/amazon-sync/finance-query";
+import { previewFinanceReplay } from "@/lib/amazon-sync/finance-recovery";
+import { automaticMarketplaces, automaticPlanKey } from "@/lib/amazon-sync/automatic-schedule";
 import { listSources, readTasks } from "@/lib/amazon-sync/read";
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline database required");
 const raw = (name: string) => readFileSync(new URL(`../fixtures/amazon/finance/${name}.json`, import.meta.url), "utf8");
@@ -51,6 +53,72 @@ async function fresh() {
   async function slice(id: string, fetcher = transport) { const run = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id } }); await processSyncCenterTask(id, run.dispatchVersion, { clientOptions: { fetch: fetcher, tokenEndpoint: "https://lwa.fixture.invalid/token" } }); return prisma.amazonSyncRun.findUniqueOrThrow({ where: { id } }); }
   return { scope, actor, approver, store, authId, source, financePolicy, calls, approved, request, slice, setFault: (status: number, page: string | null = "fixture-page-2") => { fault = status; faultPage = page; }, setBody: (body: string | null) => { override = body; } };
 }
+
+test("confirmed rejected pagination can replay the same window through approval without deleting evidence", async t => {
+  for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.add(marketplaceId);
+  t.after(() => { for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.delete(marketplaceId); });
+  const f = await fresh(), first = await f.request();
+  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { identityVerifiedAt: new Date() } });
+  await f.slice(first.id);
+  const rejected = await f.slice(first.id, async input => new URL(String(input)).hostname === "lwa.fixture.invalid" ? Response.json({ access_token: "fixture-access", expires_in: 3600 }) : Response.json({ errors: [{ code: "InvalidInput", message: "NextToken expired" }] }, { status: 400 }));
+  assert.equal(rejected.status, "FAILED");
+  const original = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+  const preview = await prisma.$transaction(tx => previewFinanceReplay(tx, f.scope, f.source.id));
+  await f.approved({ action: "recover-finance-window", id: f.source.id, revision: preview.source.revision, recoveryDigest: preview.recoveryDigest, sameWindowReplay: true });
+  const reset = await prisma.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: f.source.id } });
+  assert.equal(reset.nextTokenCiphertext, null);
+  assert.equal(reset.watermarkFrom.getTime(), original.watermarkFrom.getTime());
+  assert.equal(reset.watermarkTo.getTime(), original.watermarkTo.getTime());
+  assert.equal(reset.captureSequence, original.captureSequence);
+  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: first.id } })).checkpointCiphertext, rejected.checkpointCiphertext);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: first.id } }), 1);
+  const replay = await f.request();
+  const page = await f.slice(replay.id); assert.equal(page.status, "WAITING", page.error ?? ""); assert.equal(page.skippedCount, 1);
+  const done = await f.slice(replay.id); assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  assert.equal(await prisma.amazonFinanceRecord.count({ where: f.scope }), 3);
+  assert.equal(await prisma.amazonSyncPage.count({ where: f.scope }), 3);
+  assert.equal(await prisma.auditLog.count({ where: { organizationId: f.scope.organizationId, action: "amazon.sync.finance.same_window_replay" } }), 1);
+});
+
+test("generic finance 400 never authorizes resetting a committed cursor", async () => {
+  const f = await fresh(), task = await f.request();
+  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { identityVerifiedAt: new Date() } });
+  await f.slice(task.id); f.setFault(400); await f.slice(task.id);
+  await assert.rejects(prisma.$transaction(tx => previewFinanceReplay(tx, f.scope, f.source.id)), /未确认分页/);
+});
+
+test("automatic finance retry uses the intact original plan without inventing role attestation", async t => {
+  for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.add(marketplaceId);
+  t.after(() => { for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.delete(marketplaceId); });
+  const f = await fresh(), task = await f.request();
+  await f.slice(task.id); f.setFault(400); await f.slice(task.id);
+  const plan = await prisma.amazonSyncSchedule.create({ data: { ...f.scope, id: randomUUID(), resource: "finance", executionVersion: 2, planKey: automaticPlanKey(f.source.id), mode: "incremental", enabled: true, updatedByUserId: f.actor } });
+  await prisma.amazonSyncPlanTarget.create({ data: { ...f.scope, scheduleId: plan.id, sourceId: f.source.id } });
+  const frozen = { ...(task.frozenScope as Record<string, unknown>), scheduleId: plan.id, scheduleRevision: plan.revision };
+  await prisma.amazonSyncRun.update({ where: { id: task.id }, data: { trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, frozenScope: frozen, frozenScopeDigest: digest(frozen) } });
+  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [], rolesAttestedAt: null } });
+  const before = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: task.id } });
+  await f.approved({ action: "control-task", id: task.id, control: "retry" });
+  const after = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: task.id } });
+  assert.equal(after.trigger, "schedule"); assert.equal(after.scheduleRevision, plan.revision);
+  assert.equal(after.checkpointCiphertext, before.checkpointCiphertext); assert.equal(after.pagesCompleted, before.pagesCompleted);
+  assert.deepEqual((await prisma.amazonSpApiAuthorization.findUniqueOrThrow({ where: { id: f.authId } })).approvedRoles, []);
+  f.setFault(0); assert.equal((await f.slice(task.id)).status, "SUCCEEDED");
+});
+
+test("stale scheduled finance scope cannot enter automatic retry role handling", async t => {
+  for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.add(marketplaceId);
+  t.after(() => { for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.delete(marketplaceId); });
+  const f = await fresh(), task = await f.request(); await f.slice(task.id); f.setFault(400); await f.slice(task.id);
+  const plan = await prisma.amazonSyncSchedule.create({ data: { ...f.scope, id: randomUUID(), resource: "finance", executionVersion: 2, planKey: automaticPlanKey(f.source.id), mode: "incremental", enabled: true, updatedByUserId: f.actor } });
+  await prisma.amazonSyncPlanTarget.create({ data: { ...f.scope, scheduleId: plan.id, sourceId: f.source.id } });
+  const frozen = { ...(task.frozenScope as Record<string, unknown>), scheduleId: plan.id, scheduleRevision: plan.revision };
+  await prisma.amazonSyncRun.update({ where: { id: task.id }, data: { trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, frozenScope: frozen, frozenScopeDigest: digest(frozen) } });
+  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [], rolesAttestedAt: null } });
+  await prisma.amazonSyncSchedule.update({ where: { id: plan.id }, data: { revision: { increment: 1 } } });
+  await assert.rejects(f.approved({ action: "control-task", id: task.id, control: "retry" }), /Finance and Accounting/);
+  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: task.id } })).status, "FAILED");
+});
 
 test("seller-wide approval, actual sites, exact money, quarantine and encrypted raw", async () => {
   const f = await fresh(), task = await f.request();

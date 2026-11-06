@@ -1,11 +1,17 @@
 import { createHash, createHmac } from "node:crypto";
 import { gunzipSync } from "node:zlib";
+import { reportRangeHeaders, validateReportRange, reportDownloadPartSize, type ReportDownloadPosition, type ReportDownloadPart } from "./report-download-range";
 import type { AmazonSpApiServerConfiguration } from "./sp-api-config";
 
 const lwaTokenUrl = "https://api.amazon.com/auth/o2/token";
 const signingService = "execute-api";
 const tokenRefreshSkewMs = 5 * 60_000;
 const userAgent = "amazon-ad-bulk-operation/1.0 (Language=TypeScript/5)";
+export function financePaginationRejected(error: unknown, hasNextToken: boolean) {
+  if (!hasNextToken || !(error instanceof AmazonSpApiError) || error.status !== 400 || error.upstreamCode !== "InvalidInput") return false;
+  const message = error.message.toLowerCase();
+  return ["nexttoken", "next token", "pagination token"].some(term => message.includes(term)) && ["expired", "invalid", "not valid"].some(term => message.includes(term));
+}
 
 const inboundReadPath = "/inbound/fba/2024-03-20/inboundPlans";
 function inboundPathId(value: string): string {
@@ -56,14 +62,20 @@ export class AmazonSpApiError extends Error {
   readonly retryable: boolean;
   readonly retryAfterMs: number;
   readonly authorizationRejected: boolean;
+  readonly upstreamCode: string | null;
+  readonly requestId: string | null;
+  readonly downloadedBytes: number | null;
 
-  constructor(message: string, options: { status?: number | null; retryable?: boolean; retryAfterMs?: number; authorizationRejected?: boolean } = {}) {
+  constructor(message: string, options: { status?: number | null; retryable?: boolean; retryAfterMs?: number; authorizationRejected?: boolean; upstreamCode?: string | null; requestId?: string | null; downloadedBytes?: number } = {}) {
     super(message);
     this.name = "AmazonSpApiError";
     this.status = options.status ?? null;
     this.retryable = options.retryable ?? false;
     this.retryAfterMs = options.retryAfterMs ?? 0;
     this.authorizationRejected = options.authorizationRejected ?? (this.status === 401 || this.status === 403);
+    this.upstreamCode = options.upstreamCode ?? null;
+    this.requestId = options.requestId ?? null;
+    this.downloadedBytes = Number.isInteger(options.downloadedBytes) && options.downloadedBytes! >= 0 && options.downloadedBytes! <= 16 * 1024 * 1024 ? options.downloadedBytes! : null;
   }
 }
 
@@ -214,7 +226,12 @@ export class AmazonSpApiClient {
     const query = new URLSearchParams({ postedAfter: input.postedAfter, postedBefore: input.postedBefore });
     if (input.nextToken) query.set("nextToken", input.nextToken);
     let rawBody = "";
-    await this.request("GET", `/finances/2024-06-19/transactions?${query}`, undefined, text => { rawBody = text; }, true);
+    try {
+      await this.request("GET", `/finances/2024-06-19/transactions?${query}`, undefined, text => { rawBody = text; }, true);
+    } catch (error) {
+      if (financePaginationRejected(error, !!input.nextToken)) throw new AmazonSpApiError("财务分页令牌失效，已保留原窗口、提交页和游标；须审阅同窗口重放。", { status: 400, upstreamCode: "FINANCE_NEXT_TOKEN_REJECTED", requestId: (error as AmazonSpApiError).requestId });
+      throw error;
+    }
     return { rawBody };
   }
 
@@ -259,9 +276,15 @@ export class AmazonSpApiClient {
   async createInventoryLedgerReport(input: { marketplaceId: string; from: string; to: string; eventType: string }): Promise<unknown> {
     const allowed = ["", "Adjustments", "CustomerReturns", "Receipts", "Shipments", "VendorReturns", "WhseTransfers"];
     if (!allowed.includes(input.eventType) || !/^\d{4}-\d{2}-\d{2}T00:00:00Z$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}T23:59:59Z$/.test(input.to)) throw new AmazonSpApiError("库存事件报告范围无效。");
+    if (!input.marketplaceId || input.marketplaceId.trim() !== input.marketplaceId || input.marketplaceId.length > 200 || /[,\s\x00-\x1f\x7f]/.test(input.marketplaceId)) throw new AmazonSpApiError("库存事件报告站点无效。");
+    const start = Date.parse(input.from), end = Date.parse(input.to);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || new Date(start).toISOString().slice(0, 10) !== input.from.slice(0, 10) || new Date(end).toISOString().slice(0, 10) !== input.to.slice(0, 10) || end <= start || end - start >= 31 * 86_400_000) throw new AmazonSpApiError("库存事件报告日期无效或超过 31 天。");
     return this.request("POST", "/reports/2021-06-30/reports", {
       reportType: "GET_LEDGER_DETAIL_VIEW_DATA", marketplaceIds: [input.marketplaceId],
-      dataStartTime: input.from, dataEndTime: input.to, reportOptions: { eventType: input.eventType },
+      dataStartTime: input.from, dataEndTime: input.to,
+      // Omit the optional filter for all events. The official catalog also
+      // documents an explicit empty string; omission alone is not a proven 400 fix.
+      ...(input.eventType ? { reportOptions: { eventType: input.eventType } } : {}),
     });
   }
   /** Reports v2021-06-30 getReports. Amazon requires a nextToken follow-up to
@@ -292,34 +315,67 @@ export class AmazonSpApiClient {
   async downloadReportDocument(value: unknown): Promise<unknown> { return this.downloadReport(value, false); }
   /** Reports v2021-06-30 TSV path; identical URL/auth/size safeguards to JSON.
    * https://developer-docs.amazon.com/sp-api/docs/retrieve-a-report */
-  async downloadReportText(value: unknown): Promise<string> { return this.downloadReport(value, true) as Promise<string>; }
-  private async downloadReport(value: unknown, textOnly: boolean): Promise<unknown> {
+  async downloadReportText(value: unknown, options: { timeoutMs?: number } = {}): Promise<string> { return this.downloadReport(value, true, options.timeoutMs) as Promise<string>; }
+  /** Opt-in caller only. One S3 byte range; never a new Reports request. */
+  async downloadReportPart(value: unknown, position: ReportDownloadPosition): Promise<ReportDownloadPart> {
+    const document = value as { url?: unknown; compressionAlgorithm?: unknown } | null;
+    if (!document || typeof document.url !== "string") throw new AmazonSpApiError("报告下载地址缺失。");
+    const url = new URL(document.url);
+    if (url.protocol !== "https:" || url.port || url.username || url.password || url.hash || (url.hostname !== this.reportDownloadTestHost && !/^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(url.hostname))) throw new AmazonSpApiError("报告下载地址不在允许的 S3 HTTPS 范围。");
+    if (document.compressionAlgorithm !== undefined && document.compressionAlgorithm !== "GZIP") throw new AmazonSpApiError("报告压缩格式不支持。");
+    let received = 0;
+    try {
+      const headers = reportRangeHeaders(position);
+      const response = await this.fetcher(url.toString(), { method: "GET", headers, redirect: "error", cache: "no-store", signal: AbortSignal.timeout(90_000) });
+      this.onResponse?.({ operation: "downloadReportDocument", status: response.status, requestId: null, rateLimit: null });
+      if ([429, 500, 502, 503, 504].includes(response.status)) { await response.body?.cancel(); throw new AmazonSpApiError("报告分段暂时不可用。", { status: response.status, retryable: true }); }
+      let range: ReturnType<typeof validateReportRange>;
+      try { range = validateReportRange(response, position); } catch { await response.body?.cancel(); throw new AmazonSpApiError("报告不支持安全续传或对象已变化；保留分段证据并停止。", { upstreamCode: "REPORT_RANGE_MISMATCH" }); }
+      if (!response.body) throw new AmazonSpApiError("报告分段响应体缺失。");
+      const reader = response.body.getReader(), chunks: Uint8Array[] = [];
+      try { while (true) { const part = await reader.read(); if (part.done) break; received += part.value.byteLength; if (received > reportDownloadPartSize || received > range.end - range.offset + 1) { await reader.cancel(); throw new AmazonSpApiError("报告分段超过有界大小。"); } chunks.push(part.value); } } finally { reader.releaseLock(); }
+      if (received !== range.end - range.offset + 1) throw new AmazonSpApiError("报告分段不完整。", { retryable: true, upstreamCode: "REPORT_RANGE_INCOMPLETE" });
+      return { bytes: Buffer.concat(chunks), offset: range.offset, total: range.total, etag: range.etag, charset: range.charset, compressionAlgorithm: document.compressionAlgorithm === "GZIP" ? "GZIP" : null };
+    } catch (error) {
+      if (error instanceof AmazonSpApiError) throw error;
+      const timeout = error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name);
+      throw new AmazonSpApiError("报告分段下载失败，保留已完成分段。", { retryable: true, upstreamCode: timeout ? "REPORT_DOWNLOAD_TIMEOUT" : "REPORT_DOWNLOAD_TRANSPORT", downloadedBytes: received });
+    }
+  }
+  private async downloadReport(value: unknown, textOnly: boolean, timeoutMs?: number): Promise<unknown> {
     const document = value as { url?: unknown; compressionAlgorithm?: unknown } | null;
     if (!document || typeof document.url !== "string") throw new AmazonSpApiError("报告下载地址缺失。");
     const url = new URL(document.url);
     if (url.protocol !== "https:" || url.port || url.username || url.password || url.hash || (url.hostname !== this.reportDownloadTestHost && !/^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(url.hostname))) throw new AmazonSpApiError("报告下载地址不在允许的 S3 HTTPS 范围。");
     if (document.compressionAlgorithm !== undefined && document.compressionAlgorithm !== "GZIP") throw new AmazonSpApiError("报告压缩格式不支持。");
     const limit = 16 * 1024 * 1024;
+    let downloadedBytes = 0;
     try {
-      const response = await this.fetcher(url.toString(), { method: "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(this.requestTimeoutMs) });
+      const downloadTimeoutMs = timeoutMs !== undefined && Number.isFinite(timeoutMs) ? Math.min(90_000, Math.max(5_000, timeoutMs)) : this.requestTimeoutMs;
+      const response = await this.fetcher(url.toString(), { method: "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(downloadTimeoutMs) });
       this.onResponse?.({ operation: "downloadReportDocument", status: response.status, requestId: null, rateLimit: null });
       if (!response.ok) { await response.body?.cancel(); throw new AmazonSpApiError("报告下载失败。", { status: response.status, retryable: response.status === 429 || response.status >= 500 }); }
       if (!response.body || Number(response.headers.get("content-length") ?? 0) > limit) { await response.body?.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); }
       const reader = response.body.getReader(), chunks: Uint8Array[] = []; let length = 0;
       try {
-        while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > limit) { await reader.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); } chunks.push(part.value); }
+        while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > limit) { await reader.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); } downloadedBytes = length; chunks.push(part.value); }
       } finally { reader.releaseLock(); }
       const data = Buffer.concat(chunks);
       const decoded = document.compressionAlgorithm === "GZIP" ? gunzipSync(data, { maxOutputLength: limit }) : data;
       if (textOnly) {
-        try { return new TextDecoder("utf-8", { fatal: true }).decode(decoded); }
-        catch { throw new AmazonSpApiError("退货报告不是有效 UTF-8。"); }
+        const declared = /charset\s*=\s*["']?([^;\s"']+)/i.exec(response.headers.get("content-type") ?? "")?.[1].toLowerCase();
+        const encoding = !declared || ["utf-8", "utf8"].includes(declared) ? "utf-8"
+          : ["cp1252", "windows-1252"].includes(declared) ? "windows-1252" : null;
+        if (!encoding) throw new AmazonSpApiError("报告声明的字符编码不支持。");
+        try { return new TextDecoder(encoding, { fatal: true }).decode(decoded); }
+        catch { throw new AmazonSpApiError("报告内容不符合声明的字符编码。"); }
       }
       try { return JSON.parse(decoded.toString("utf8")); } catch { throw new AmazonSpApiError("报告不是有效 JSON。"); }
     } catch (error) {
       if (error instanceof AmazonSpApiError) throw error;
       // Signed URLs and upstream exception text must never reach logs or responses.
-      throw new AmazonSpApiError("报告下载或解压失败。", { retryable: true });
+      const timedOut = error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name);
+      throw new AmazonSpApiError(timedOut ? "报告下载超时，原检查点保留。" : "报告下载或解压失败。", { retryable: true, upstreamCode: timedOut ? "REPORT_DOWNLOAD_TIMEOUT" : "REPORT_DOWNLOAD_TRANSPORT", downloadedBytes });
     }
   }
 
@@ -359,13 +415,17 @@ export class AmazonSpApiClient {
       redirect: "error",
     });
     const text = captureRaw ? await readBoundedOrderResponse(response) : await response.text();
-    const payload = rawOnly ? undefined : parseResponseBody(text);
+    // Finance preserves successful JSON number lexemes. Error bodies still need
+    // parsing, otherwise InvalidInput loses its actual retention diagnostic.
+    const payload = rawOnly && response.ok ? undefined : parseResponseBody(text);
     if (!response.ok) {
       throw new AmazonSpApiError(safeAmazonErrorMessage(response.status, payload, this.secretValues(accessToken)), {
         status: response.status,
         authorizationRejected: response.status === 401,
         retryable: response.status === 429 || response.status >= 500,
         retryAfterMs: readRetryAfter(response.headers.get("retry-after"), this.now()),
+        upstreamCode: safeAmazonErrorCode(payload),
+        requestId: /^[A-Za-z0-9-]{1,100}$/.test(response.headers.get("x-amzn-requestid") ?? "") ? response.headers.get("x-amzn-requestid") : null,
       });
     }
     captureRaw?.(text);
@@ -522,6 +582,12 @@ function isAccessTokenPayload(value: unknown): value is { access_token: string; 
     && typeof (value as Record<string, unknown>).expires_in === "number"
     && Number.isFinite((value as Record<string, unknown>).expires_in)
     && ((value as Record<string, unknown>).expires_in as number) > 0;
+}
+
+function safeAmazonErrorCode(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || !Array.isArray((payload as { errors?: unknown }).errors)) return null;
+  const code = (payload as { errors: Array<{ code?: unknown }> }).errors[0]?.code;
+  return typeof code === "string" && ["InvalidInput", "InvalidParameterValue", "InvalidRequest", "Unauthorized", "AccessDenied", "Forbidden", "QuotaExceeded", "TooManyRequests", "InternalFailure", "InternalError", "ServiceUnavailable", "NotFound"].includes(code) ? code : null;
 }
 
 function safeAmazonErrorMessage(status: number, payload: unknown, secretValues: string[]): string {

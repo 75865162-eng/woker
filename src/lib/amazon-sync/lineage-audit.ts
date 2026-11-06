@@ -17,6 +17,7 @@ export async function auditAmazonLineage(tx: Prisma.TransactionClient, scope: Sy
       WHEN t.resource <> r.domain OR t.status <> 'SUCCEEDED' OR t."finishedAt" IS NULL OR t.stage = 'PURGED' THEN 'UNPUBLISHED_OR_MISMATCHED_RUN'
       WHEN t."executionVersion" <> 2 THEN 'LEGACY_UNVERIFIED'
       WHEN a."identityVerifiedAt" IS NULL OR i.id IS NULL THEN 'IDENTITY_UNVERIFIED'
+      WHEN t."frozenScope"->>'amazonSellerId' IS DISTINCT FROM a."amazonSellerId" THEN 'HISTORICAL_IDENTITY_UNVERIFIED'
       ELSE 'VERIFIED' END AS reason
     FROM rows r LEFT JOIN "AmazonSyncRun" t ON t.id = r.run AND t."organizationId" = r."organizationId" AND t."workspaceId" = r."workspaceId"
     LEFT JOIN "AmazonSyncDataSource" s ON s.id = t."sourceId" AND s."organizationId" = r."organizationId" AND s."workspaceId" = r."workspaceId"

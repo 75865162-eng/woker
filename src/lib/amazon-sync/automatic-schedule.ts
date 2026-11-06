@@ -2,6 +2,14 @@ import { createHash } from "node:crypto";
 import { localDate, shiftDate, type RequestedRange, resolveRequestedRange } from "./date-range";
 import { nextReturnWindow, type ReturnPolicy } from "./returns";
 
+/** Resume using current revisions rather than an old frozen terminal task. */
+export function automaticTaskKey(plan: { id: string; revision: number }, source: { revision: number; authorization: { revision: number } }, from: string, to?: string) {
+  return "auto-v2:" + createHash("sha256").update(JSON.stringify([plan.id, plan.revision, source.revision, source.authorization.revision, from, to ?? ""])).digest("hex");
+}
+export function nextPlanRunAt(enabled: boolean, automatic: boolean, intervalMinutes: number, now = new Date()) {
+  return enabled ? new Date(now.getTime() + (automatic ? 0 : intervalMinutes * 60_000)) : null;
+}
+
 export const automaticResources = ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing"] as const;
 export const automaticMarketplaces = new Set(["ATVPDKIKX0DER", "A2EUQ1WTGCTBG2", "A1AM78C64UM0Y8", "A2Q3Y263D00KWC"]);
 export const automaticIntervalMinutes = 1440;
@@ -41,10 +49,39 @@ export function nextAutomaticInventoryEventWindow(cursor: { watermarkFrom: Date;
   return { from, to, dataStartTime: `${from}T00:00:00Z`, dataEndTime: `${to}T23:59:59Z`, eventType: "" };
 }
 
-export function nextAutomaticSettlementDiscovery(now: Date) {
+export function nextAutomaticSettlementDiscovery(now: Date, cursor?: { watermarkFrom: Date; watermarkTo: Date; status: string } | null) {
+  if (cursor && cursor.status !== "SUCCEEDED") {
+    const createdSince = cursor.watermarkFrom.toISOString(), createdUntil = cursor.watermarkTo.toISOString();
+    const retentionFrom = new Date(cursor.watermarkTo.getTime() - automaticReportDiscoveryDays * 86_400_000).toISOString();
+    return { createdSince, createdUntil, ...(retentionFrom < createdSince ? { retentionGap: { from: retentionFrom, to: createdSince, reason: "QUEUE_MARGIN" as const, complete: false as const } } : {}) };
+  }
   const createdUntil = now.toISOString();
-  const createdSince = new Date(now.getTime() - automaticReportDiscoveryDays * 86_400_000).toISOString();
-  return { createdSince, createdUntil };
+  // Leave one day for queueing. Expose the excluded interval as coverage;
+  // it must not be mistaken for successfully discovered history.
+  const retentionFrom = new Date(now.getTime() - automaticReportDiscoveryDays * 86_400_000).toISOString();
+  const createdSince = new Date(now.getTime() - (automaticReportDiscoveryDays - 1) * 86_400_000).toISOString();
+  return { createdSince, createdUntil, retentionGap: { from: retentionFrom, to: createdSince, reason: "QUEUE_MARGIN" as const, complete: false as const } };
+}
+
+export function nextAutomaticReimbursementWindow(now: Date, cursor?: { watermarkFrom: Date; watermarkTo: Date; status: string } | null) {
+  const yesterday = shiftDate(now.toISOString().slice(0, 10), -1);
+  const initial = shiftDate(now.toISOString().slice(0, 10), -automaticBackfillDays);
+  if (cursor && cursor.status !== "SUCCEEDED") {
+    if (cursor.watermarkFrom.getTime() === cursor.watermarkTo.getTime()) throw new Error("赔偿旧快照须经过批准恢复，不能覆盖原检查点。");
+    const from = cursor.watermarkFrom.toISOString().slice(0, 10), to = cursor.watermarkTo.toISOString().slice(0, 10);
+    return { from, to, dataStartTime: `${from}T00:00:00Z`, dataEndTime: `${to}T23:59:59Z` };
+  }
+  const from = cursor ? [shiftDate(cursor.watermarkTo.toISOString().slice(0, 10), 1), yesterday].sort()[0] : initial;
+  const to = [shiftDate(from, 29), yesterday].sort()[0];
+  return { from, to, dataStartTime: `${from}T00:00:00Z`, dataEndTime: `${to}T23:59:59Z` };
+}
+
+/** Initial validation scope approved for new sources; historic cursors retain
+ * their explicit window rather than being silently moved to recent history. */
+export function latestClosedReimbursementWindow(now: Date) {
+  const to = shiftDate(now.toISOString().slice(0, 10), -1);
+  const from = shiftDate(to, -29);
+  return { from, to, dataStartTime: `${from}T00:00:00Z`, dataEndTime: `${to}T23:59:59Z` };
 }
 
 export function nextSalesTrafficRange(marketplaceId: string, now: Date, coverage: Array<{ from: string; to: string }>): { range: RequestedRange; backfill: boolean } {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
+import { AmazonSpApiClient, AmazonSpApiError, financePaginationRejected } from "@/lib/amazon/sp-api-client";
 import { assertAmazonSpApiScopeAllowed, getAmazonSpApiServerConfiguration } from "@/lib/amazon/sp-api-config";
 
 const environment = {
@@ -10,6 +10,48 @@ const environment = {
   AMAZON_SP_API_AWS_ACCESS_KEY_ID: "AKIDEXAMPLE",
   AMAZON_SP_API_AWS_SECRET_ACCESS_KEY: "aws-secret",
 };
+test("finance pagination diagnosis requires explicit token rejection rather than any InvalidInput", () => {
+  const error = (message: string) => new AmazonSpApiError(message, { status: 400, upstreamCode: "InvalidInput" });
+  assert.equal(financePaginationRejected(error("NextToken expired"), true), true);
+  assert.equal(financePaginationRejected(error("NextToken invalid"), false), false);
+  assert.equal(financePaginationRejected(error("Start date cannot be before 2 years"), true), false);
+  assert.equal(financePaginationRejected(error("Invalid input"), true), false);
+});
+test("bounded report ranges send no credentials and reject unsafe server fallback", async () => {
+  const url = "https://fixture.s3.amazonaws.com/report?signature=private";
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async (_url, init) => {
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("range"), "bytes=0-262143");
+    assert.equal(headers.has("authorization"), false); assert.equal(headers.has("x-amz-access-token"), false);
+    return new Response("abc", { status: 206, headers: { "content-range": "bytes 0-2/3", "content-length": "3", etag: '"fixture"' } });
+  } });
+  assert.equal(Buffer.from((await client.downloadReportPart({ url }, { offset: 0 })).bytes).toString(), "abc");
+  const unsupported = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response("abc") });
+  await assert.rejects(unsupported.downloadReportPart({ url }, { offset: 0 }), (error: unknown) => error instanceof AmazonSpApiError && error.upstreamCode === "REPORT_RANGE_MISMATCH" && !error.message.includes("private"));
+  await assert.rejects(client.downloadReportPart({ url: "https://evil.invalid/report" }, { offset: 0 }));
+});
+
+test("report download supports a bounded override and redacts timeout details", async () => {
+  const original = AbortSignal.timeout;
+  const timeouts: number[] = [];
+  AbortSignal.timeout = ((ms: number) => { timeouts.push(ms); return new AbortController().signal; }) as typeof AbortSignal.timeout;
+  try {
+    const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response("fixture") });
+    const document = { url: "https://fixture.s3.amazonaws.com/report?signature=private" };
+    assert.equal(await client.downloadReportText(document), "fixture");
+    assert.equal(await client.downloadReportText(document, { timeoutMs: 90_000 }), "fixture");
+    assert.equal(await client.downloadReportText(document, { timeoutMs: 999_000 }), "fixture");
+    assert.deepEqual(timeouts, [30_000, 90_000, 90_000]);
+    const failed = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => { throw new DOMException("private signed URL", "TimeoutError"); } });
+    await assert.rejects(failed.downloadReportText(document), (e: unknown) => e instanceof AmazonSpApiError && e.retryable && e.upstreamCode === "REPORT_DOWNLOAD_TIMEOUT" && !e.message.includes("private"));
+  } finally { AbortSignal.timeout = original; }
+});
+
+test("download diagnostics retain only received byte count after a partial body timeout", async () => {
+  let reads = 0;
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response(new ReadableStream({ pull(controller) { if (reads++ === 0) controller.enqueue(new Uint8Array([1, 2, 3])); else controller.error(new DOMException("private-signed-url", "TimeoutError")); } })) });
+  await assert.rejects(client.downloadReportText({ url: "https://fixture.s3.amazonaws.com/report?private=secret" }), (e: unknown) => e instanceof AmazonSpApiError && e.downloadedBytes === 3 && e.upstreamCode === "REPORT_DOWNLOAD_TIMEOUT" && !e.message.includes("private"));
+});
 
 test("SP-API client obtains LWA token and signs the marketplace request without exposing secrets", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];

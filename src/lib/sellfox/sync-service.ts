@@ -11,6 +11,7 @@ import { sellfoxPost } from "@/lib/sellfox/client";
 import { isSellfoxSyncResource, normalizeSellfoxDates, sellfoxReportDates, sellfoxDateAt, SellfoxSyncInputError, nextSellfoxPage, sellfoxSyncResources, sellfoxSyncDisabledReason, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
 import { syncSellfoxSnapshotStores, type SnapshotCheckpoint } from "@/lib/sellfox/snapshot-sync";
+import { withSellfoxCredentialScope } from "./credential-context";
 
 export const sellfoxResources = sellfoxSyncResources;
 export type SyncResource = SellfoxSyncResource;
@@ -204,6 +205,8 @@ export async function processSellfoxSyncRun(runId: string) {
       shopExternalIds: request.shopExternalIds, reportDate: request.reportDate, startDate: request.startDate,
       endDate: request.endDate, backfillFrom: request.backfillFrom, backfillTo: request.backfillTo, progress: request.progress, capturedAt: request.capturedAt,
     };
+    const executingRun = run;
+    await withSellfoxCredentialScope({ organizationId: run.organizationId, workspaceId: run.workspaceId }, async () => {
     let result: unknown;
     if (input.resource === "stores") result = { count: await syncStores(input) };
     else if (input.resource === "performance") {
@@ -217,7 +220,7 @@ export async function processSellfoxSyncRun(runId: string) {
           const progress = asRecord(asRecord(latest?.summary)?.progress);
           const states = asRecord(progress?.[progressKey]) ?? {};
           const resultForDate = await syncSellfoxProductDailySnapshots({
-            organizationId: run.organizationId, workspaceId: run.workspaceId, storeExternalIds: request.shopExternalIds, reportDate: date, onlySettle, capturedAt: request.capturedAt,
+            organizationId: executingRun.organizationId, workspaceId: executingRun.workspaceId, storeExternalIds: request.shopExternalIds, reportDate: date, onlySettle, capturedAt: request.capturedAt,
             checkpoint: states[date] as PerformanceCheckpoint | undefined,
             cursor: !onlySettle && !states[date] && dateIndex === Number(request.progress?.dateIndex ?? 0) ? asRecord(request.progress?.cursor) as { storeIndex?: number; pageNo?: number } | null ?? undefined : undefined,
             onProgress: async (update, tx) => {
@@ -251,6 +254,7 @@ export async function processSellfoxSyncRun(runId: string) {
         await tx.sellfoxSyncSchedule.updateMany({ where: { id: request.scheduleId, organizationId: input.organizationId, workspaceId: input.workspaceId, backfillNextDate: request.backfillFrom }, data: { backfillNextDate: next } });
       }
       await finishSellfoxRun(lease, { status: "done", summary: { ...asRecord(current?.summary), result } as Prisma.InputJsonValue }, tx);
+    });
     });
   } catch (error) {
     if (error instanceof SellfoxLeaseLostError) throw error;

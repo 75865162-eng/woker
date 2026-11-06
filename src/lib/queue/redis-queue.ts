@@ -23,6 +23,12 @@ export function createRedisConnectionOptions() {
   };
 }
 
+// Producers fail promptly during outages; the database retains queued intent.
+// Blocking Worker connections keep their separate reconnect policy above.
+export function createRedisProducerConnectionOptions() {
+  return { ...createRedisConnectionOptions(), maxRetriesPerRequest: 1, enableOfflineQueue: false };
+}
+
 let importJobQueue: Queue<{ jobId: string }> | undefined;
 let imageUpscaleJobQueue: Queue<{ jobId: string }> | undefined;
 let productOutboxQueue: Queue<{ eventId: string }> | undefined;
@@ -32,7 +38,7 @@ let sellfoxSyncQueue: Queue<{ runId: string }> | undefined;
 
 export function getImportJobQueue() {
   importJobQueue ??= new Queue<{ jobId: string }>(importJobQueueName, {
-    connection: createRedisConnectionOptions(),
+    connection: createRedisProducerConnectionOptions(),
   });
 
   return importJobQueue;
@@ -40,7 +46,7 @@ export function getImportJobQueue() {
 
 export function getImageUpscaleJobQueue() {
   imageUpscaleJobQueue ??= new Queue<{ jobId: string }>(imageUpscaleJobQueueName, {
-    connection: createRedisConnectionOptions(),
+    connection: createRedisProducerConnectionOptions(),
   });
 
   return imageUpscaleJobQueue;
@@ -48,7 +54,7 @@ export function getImageUpscaleJobQueue() {
 
 export function getProductOutboxQueue() {
   productOutboxQueue ??= new Queue<{ eventId: string }>(productOutboxQueueName, {
-    connection: createRedisConnectionOptions(),
+    connection: createRedisProducerConnectionOptions(),
   });
 
   return productOutboxQueue;
@@ -56,14 +62,14 @@ export function getProductOutboxQueue() {
 
 export function getAmazonSyncQueue() {
   amazonSyncQueue ??= new Queue<AmazonSyncQueueJob>(getAmazonSyncQueueName(), {
-    connection: createRedisConnectionOptions(),
+    connection: createRedisProducerConnectionOptions(),
   });
   return amazonSyncQueue;
 }
 
 export function getSellfoxSyncQueue() {
   sellfoxSyncQueue ??= new Queue<{ runId: string }>(sellfoxSyncQueueName, {
-    connection: createRedisConnectionOptions(),
+    connection: createRedisProducerConnectionOptions(),
     defaultJobOptions: { attempts: 4, backoff: { type: "exponential", delay: 5_000 }, removeOnComplete: true, removeOnFail: 200 },
   });
   return sellfoxSyncQueue;

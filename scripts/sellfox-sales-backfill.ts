@@ -1,3 +1,4 @@
+import { getSellfoxCredentialStatus } from "@/lib/sellfox/credential-store";
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -39,7 +40,7 @@ async function main() {
   const missingDays = units.reduce((sum, unit) => sum + unit.days, 0);
   console.log(JSON.stringify({ mode: args.includes("--apply") ? "apply" : "dry-run", batchKey, startDate, endDate, stores: stores.length, missingStoreDays: missingDays, plannedRuns: units.length, minimumRequests: missingDays * 2, minimumHours: Number((missingDays * 2 * 1.2 / 3600).toFixed(2)) }));
   if (!args.includes("--apply")) return;
-  if (process.env.QUEUE_DRIVER !== "redis" || !process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET) throw new Error("需要现有Redis队列与服务端赛狐凭据。");
+  if (process.env.QUEUE_DRIVER !== "redis" || !(await getSellfoxCredentialStatus(scope)).configured) throw new Error("需要现有Redis队列与服务端赛狐凭据。");
   const queue = backfillQueue = getSellfoxSyncQueue();
   // Fail before creating durable runs if Redis is unavailable.
   await Promise.race([queue.waitUntilReady(), new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("Redis连接超时，未创建补数任务。")), 5000); timer.unref(); })]);

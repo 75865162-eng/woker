@@ -62,3 +62,18 @@ test("an active worker on an old release cannot pass deployment verification", (
 test("a failed service restart cannot become a successful release", () => {
   assert.throws(() => run(false, true));
 });
+
+test("SP-API service boots from persistent server configuration and survives delayed dependencies", () => {
+  const unit = readFileSync(new URL("../deploy/systemd/amazon-sync-worker.service", import.meta.url), "utf8");
+  const section = (name: string) => unit.split(`[${name}]`)[1]?.split(/\n\[/)[0] ?? "";
+  assert.match(section("Unit"), /^StartLimitIntervalSec=0$/m, "dependency outages must not exhaust the systemd startup limit");
+  for (const directive of [
+    "WorkingDirectory=/opt/amazon-ad-bulk-current",
+    "EnvironmentFile=/opt/amazon-ad-bulk-operation/.env",
+    "Environment=AMAZON_SYNC_WORKER_CONCURRENCY=1",
+    "ExecStart=/usr/bin/npm run worker:amazon-sync",
+    "Restart=always", "RestartSec=5",
+  ]) assert.ok(section("Service").split("\n").includes(directive), directive);
+  assert.match(section("Install"), /^WantedBy=multi-user.target$/m);
+  assert.ok(!unit.includes(".env.amazon-live.local"));
+});

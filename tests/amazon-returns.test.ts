@@ -22,6 +22,9 @@ test("FBA TSV retains keys, reason/null/unknown/UTC, hashes private content with
   const final = parseReturnReport(file("report.tsv"), window, policy, 2); assert.equal(final.complete, true); assert.equal(final.rows[0].reasonCode, "FUTURE_REASON"); assert.equal(final.rows[0].rawStatus, null);
   assert.ok(!JSON.stringify([first, final]).includes("fixture-private-comment")); assert.ok(!JSON.stringify(first).includes("fixture private product"));
   assert.equal(parseReturnReport(file("empty.tsv"), window, policy).total, 0);
+  const inchQuote = parseReturnReport(file("report.tsv").replace("fixture private product", 'Fixture 12" product'), window, policy);
+  assert.equal(inchQuote.total, 3);
+  assert.ok(!JSON.stringify(inchQuote).includes('Fixture 12" product'));
 });
 for (const [name, transform] of Object.entries({
   "bad quantity": (s: string) => s.replace('\t2\t', '\t1.5\t'),
@@ -33,6 +36,17 @@ for (const [name, transform] of Object.entries({
   "invalid quoting": (s: string) => s + '"private',
 })) test(`FBA rejects ${name} without leaking source`, () => {
   assert.throws(() => parseReturnReport(transform(file("report.tsv")), window, policy), e => e instanceof Error && !e.message.includes("fixture-private"));
+});
+test("FBA report without optional status preserves null without inventing a status", () => {
+  const header = ["return-date", "order-id", "sku", "asin", "fnsku", "product-name", "quantity", "fulfillment-center-id", "detailed-disposition", "reason", "license-plate-number", "customer-comments"];
+  const fields = ["2026-11-01T03:00:00+02:00", "fixture-order", "fixture-sku", "fixture-asin", "", "fixture private title", "1", "", "SELLABLE", "OTHER", "", "fixture-private-comment"];
+  const report = header.join("\t") + "\n" + fields.join("\t") + "\n";
+  const result = parseReturnReport(report, window, policy);
+  assert.equal(result.total, 1); assert.equal(result.complete, true);
+  assert.equal(result.rows[0].rawStatus, null);
+  assert.equal(result.rows[0].reasonCode, "OTHER");
+  assert.ok(!JSON.stringify(result).includes("fixture-private-comment"));
+  assert.throws(() => parseReturnReport(report.replace("quantity", "unknown"), window, policy));
 });
 test("return scope policy and window are explicit and bounded", () => {
   assert.throws(() => parseReturnPolicy({ ...policy, reportType: "UNVERIFIED" }));
@@ -67,4 +81,15 @@ test("return report labels retain unknown values including spaces", () => {
   const report = file("report.tsv").replaceAll("FUTURE_REASON", "Future reason value").replaceAll("SELLABLE", "Future disposition");
   const rows = parseReturnReport(report, window, { ...policy, batchSize: 500 }).rows;
   assert.equal(rows[0].disposition, "Future disposition"); assert.equal(rows[2].reasonCode, "Future reason value");
+});
+
+test('returns history window does not inherit finance rolling retention rejection', () => {
+  const now=new Date('2026-11-06T13:00:00Z');
+  const policy=parseReturnPolicy(JSON.parse(readFileSync(new URL('./fixtures/amazon/returns/policy.json',import.meta.url),'utf8')));
+  const initialFrom=new Date(now.getTime()-730*86400000).toISOString();
+  const window=nextReturnWindow({...policy,initialFrom,windowMinutes:43200},null,now);
+  assert.equal(window.from,initialFrom);
+  assert.equal(Date.parse(window.to)-Date.parse(window.from),30*86400000);
+  const cursor={watermarkFrom:new Date(initialFrom),watermarkTo:new Date(window.to),status:'BLOCKED'};
+  assert.deepEqual(nextReturnWindow(policy,cursor,now),window);
 });

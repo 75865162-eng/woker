@@ -1,10 +1,11 @@
-import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
+import { amazonDataAccess, sellerAccessWhere, sourceAccessWhere } from "@/lib/amazon-sync/data-access";
 import { publishedSnapshotScopes, catalogPublishedWhere, inventoryPublishedWhere } from "@/lib/amazon-sync/read";
 import { prisma } from "@/lib/db/prisma";
 import { inventorySnapshotStatus } from "./readiness";
 
 export type AmazonProductReadRow = {
   sellerAccountId: string; marketplaceId: string; sellerSku: string; asin: string | null;
+  title?: string | null; thumbnailUrl?: string | null;
   listingStatus: string | null; available: number | null; inbound: number | null;
   reserved: number | null; unfulfillable: number | null;
   catalogUpdatedAt: string | null; inventoryUpdatedAt: string | null;
@@ -15,7 +16,7 @@ export type AmazonProductReadRow = {
 export const amazonProductKey = (row: { sellerAccountId: string; marketplaceId: string; sellerSku: string }) => JSON.stringify([row.sellerAccountId, row.marketplaceId, row.sellerSku]);
 
 /** Page-bounded database projection. No Amazon requests, no ProductRecord writes. */
-export async function readAmazonProductsForSkus(organizationId: string, workspaceId: string, skus: string[], actor?: string, target?: { sellerAccountId: string; marketplaceId: string }): Promise<AmazonProductReadRow[]> {
+export async function readAmazonProductsForSkus(organizationId: string, workspaceId: string, skus: string[], actor?: string, target?: { sellerAccountId: string; marketplaceId: string }, includeCatalogDetails = false): Promise<AmazonProductReadRow[]> {
   if (!skus.length) return [];
   if (skus.length > 200) throw new Error("一次最多关联 200 个 SKU。");
   const scope = { organizationId, workspaceId };
@@ -54,6 +55,51 @@ export async function readAmazonProductsForSkus(organizationId: string, workspac
     const head = inventoryHeads.find(h => h.runId === row.syncRunId);
     result.freshness = inventorySnapshotStatus(head?.capturedAt ?? row.capturedAt, new Date(), head?.freshnessMinutes);
     result.fieldSources = { ...result.fieldSources, available: "Amazon SP-API FBA Inventory Summaries", inbound: "Amazon SP-API FBA Inventory Summaries", reserved: "Amazon SP-API FBA Inventory Summaries", unfulfillable: "Amazon SP-API FBA Inventory Summaries" };
+  }
+  if (includeCatalogDetails) {
+    const asins = [...new Set([...rows.values()].map(row => row.asin).filter((asin): asin is string => !!asin))];
+    if (asins.length) {
+      const catalogRows = [...rows.values()];
+      const catalogSources = await prisma.amazonSyncDataSource.findMany({
+        where: {
+          ...scope,
+          ...sourceAccessWhere(await amazonDataAccess(scope, actor)),
+          resource: "catalog_items",
+          enabled: true,
+          activeRunId: { not: null },
+          sellerAccountId: { in: [...new Set(catalogRows.map(row => row.sellerAccountId))] },
+          marketplaceId: { in: [...new Set(catalogRows.map(row => row.marketplaceId))] },
+          publishedRun: { status: "SUCCEEDED", resource: "catalog_items", executionVersion: 2, finishedAt: { not: null }, stage: { not: "PURGED" } },
+        },
+        select: { id: true, activeRunId: true, sellerAccountId: true, marketplaceId: true },
+        take: 200,
+      });
+      if (catalogSources.length) {
+        const observations = await prisma.amazonDomainObservation.findMany({
+          where: { ...scope, sourceId: { in: catalogSources.map(source => source.id) }, sourceRunId: { in: catalogSources.map(source => source.activeRunId!) }, kind: "CATALOG_DETAIL", asin: { in: asins } },
+          select: { sourceId: true, asin: true, facts: true },
+          take: 400,
+        });
+        for (const observation of observations) {
+          const source = catalogSources.find(candidate => candidate.id === observation.sourceId);
+          if (!source || !observation.asin) continue;
+          const facts = observation.facts as { summaries?: Array<{ marketplaceId?: string; itemName?: string }>; images?: Array<{ marketplaceId?: string; images?: Array<{ variant?: string; link?: string; width?: number; height?: number }> }> };
+          const summary = facts.summaries?.find(item => item.marketplaceId === source.marketplaceId);
+          const images = facts.images?.find(item => item.marketplaceId === source.marketplaceId)?.images ?? [];
+          const mainImage = images.filter(image => image.variant === "MAIN" && typeof image.link === "string").sort((a, b) => (a.width ?? Infinity) * (a.height ?? Infinity) - (b.width ?? Infinity) * (b.height ?? Infinity))[0];
+          let thumbnailUrl: string | null = null;
+          try {
+            const url = new URL(mainImage?.link ?? "");
+            if (url.protocol === "https:" && url.hostname === "m.media-amazon.com") thumbnailUrl = url.toString();
+          } catch { /* Missing or invalid image metadata stays empty. */ }
+          for (const row of catalogRows.filter(candidate => candidate.asin === observation.asin && candidate.sellerAccountId === source.sellerAccountId && candidate.marketplaceId === source.marketplaceId)) {
+            row.title = summary?.itemName ?? null;
+            row.thumbnailUrl = thumbnailUrl;
+            row.fieldSources = { ...row.fieldSources, ...(row.title ? { title: "Amazon Catalog Items API" } : {}), ...(row.thumbnailUrl ? { thumbnailUrl: "Amazon Catalog Items API" } : {}) };
+          }
+        }
+      }
+    }
   }
   return [...rows.values()];
 }

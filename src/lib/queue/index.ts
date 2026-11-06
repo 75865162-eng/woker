@@ -13,11 +13,12 @@ export async function enqueueImportJob(jobId: string) {
   }
 
   if (driver === "redis") {
+    const intent = await prisma.importJob.findUniqueOrThrow({ where: { id: jobId }, select: { executionAttempts: true } });
     await getImportJobQueue().add(
       "process-import-job",
       { jobId },
       {
-        jobId: `import-job-${jobId}`,
+        jobId: `import-job-${jobId}-attempt-${intent.executionAttempts}`,
         attempts: 3,
         backoff: {
           type: "exponential",

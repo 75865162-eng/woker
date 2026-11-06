@@ -1,3 +1,4 @@
+import { automaticTaskKey } from "./automatic-schedule";
 import { ensureAutomaticConnections } from "./automatic-connection";
 import { assertExecutionWindow } from "./execution-window";
 import { dispatchSalesExports } from "./exports";
@@ -12,7 +13,7 @@ import { nextOrderWindow, orderWindowFromFrozen, parseOrderSyncPolicy } from "./
 import { parseReturnPolicy, returnWindowFromFrozen } from "./returns";
 import { domainReportRunWindow } from "./domain-reports";
 import { isObservationResource, parseObservationPolicy } from "./observation-policy";
-import { nextAutomaticInventoryEventWindow, nextAutomaticReturnWindow, nextAutomaticSettlementDiscovery, nextSalesTrafficRange, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource } from "./automatic-schedule";
+import { nextAutomaticInventoryEventWindow, nextAutomaticReimbursementWindow, latestClosedReimbursementWindow, nextAutomaticReturnWindow, nextAutomaticSettlementDiscovery, nextSalesTrafficRange, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource } from "./automatic-schedule";
 import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
 
 export function enabledSyncScopes(value = process.env.AMAZON_SYNC_CENTER_SCOPES): SyncScope[] {
@@ -92,7 +93,7 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
 
 async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceIds?: string[]) {
   const sources = await prisma.amazonSyncDataSource.findMany({
-    where: { OR: scopes, ...(sourceIds ? { id: { in: sourceIds } } : {}), resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED" } },
+    where: { OR: scopes, ...(sourceIds ? { id: { in: sourceIds } } : {}), enabled: true, resource: { in: [...automaticResources] }, marketplaceId: { in: [...automaticMarketplaces] }, authorization: { status: "CONFIGURED" } },
     include: { authorization: { select: { updatedByUserId: true } }, resourceCursor: true }, take: 200,
   });
   for (const candidate of sources) {
@@ -101,7 +102,7 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceId
     try { await prisma.$transaction(async tx => {
       await scopeLock(tx, scope);
       const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: candidate.id, authorization: { status: "CONFIGURED" } }, include: { authorization: { select: { updatedByUserId: true } } } });
-      if (!source) return;
+      if (!source || !source.enabled) return;
       const key = automaticPlanKey(source.id);
       const exists = await tx.amazonSyncSchedule.findUnique({ where: { organizationId_workspaceId_resource_planKey: { ...scope, resource: source.resource, planKey: key } }, select: { id: true } });
       if (exists) return;
@@ -109,13 +110,15 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceId
       await assertAmazonAction(scope, source.authorization.updatedByUserId, "create", tx);
       await assertAmazonAction(scope, source.authorization.updatedByUserId, "approve", tx);
       if (await tx.amazonSyncRun.findFirst({ where: { ...scope, sourceId: source.id, status: { in: activeTaskStatuses } }, select: { id: true } })) return;
-      const backfillStart = automaticBackfillStart(now);
+      const backfillStart = source.resource === "finance" && source.financePolicy ? parseFinancePolicy(source.financePolicy).initialFrom : automaticBackfillStart(now);
       if (source.resource === "orders" && source.orderPolicy) {
         const policy = { ...parseOrderSyncPolicy(source.orderPolicy), initialFrom: backfillStart, windowMinutes: 1440 };
         await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { orderPolicy: policy as Prisma.InputJsonValue, revision: { increment: 1 } } });
       }
       if (source.resource === "finance" && source.financePolicy) {
-        const policy = { ...parseFinancePolicy(source.financePolicy), initialFrom: backfillStart, windowMinutes: 43200 };
+        // The source already records its chosen retention start and gap. Do not
+        // erase them when creating a plan or move an existing cursor implicitly.
+        const policy = { ...parseFinancePolicy(source.financePolicy), windowMinutes: 43200 };
         await tx.amazonSyncDataSource.update({ where: { id: source.id }, data: { financePolicy: policy as Prisma.InputJsonValue, revision: { increment: 1 } } });
       }
       if (source.resource === "returns" && source.returnsPolicy) {
@@ -135,7 +138,7 @@ async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceId
   for (const plan of plans) {
     if (!isAutomaticResource(plan.resource)) continue;
     const target = plan.targets[0]?.source;
-    if (!target || plan.targets.length !== 1 || target.authorization.status !== "CONFIGURED" || !automaticMarketplaces.has(target.marketplaceId)) continue;
+    if (!target || !target.enabled || plan.targets.length !== 1 || target.authorization.status !== "CONFIGURED" || !automaticMarketplaces.has(target.marketplaceId)) continue;
     if (await prisma.amazonSyncRun.findFirst({ where: { organizationId: plan.organizationId, workspaceId: plan.workspaceId, sourceId: target.id, status: { in: activeTaskStatuses } }, select: { id: true } })) continue;
     const scope = { organizationId: plan.organizationId, workspaceId: plan.workspaceId };
     let options: Parameters<typeof createTask>[4];
@@ -146,26 +149,26 @@ async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceId
         const policy = parseOrderSyncPolicy(target.orderPolicy);
         const cursor = target.resourceCursor;
         const window = nextOrderWindow(policy, cursor && cursor.status !== "SUCCEEDED" ? cursor : plan.lastEnqueuedAt ? cursor : null, now);
-        options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, orderWindow: orderWindowFromFrozen(window) };
+        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, orderWindow: orderWindowFromFrozen(window) };
         backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
       } else if (plan.resource === "finance") {
         if (!target.financePolicy) continue;
         const policy = parseFinancePolicy(target.financePolicy);
         const cursor = target.resourceCursor;
         const window = nextFinanceWindow(policy, cursor && cursor.status !== "SUCCEEDED" ? cursor : plan.lastEnqueuedAt ? cursor : null, now);
-        options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, financeWindow: financeWindowFromFrozen(window) };
+        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, financeWindow: financeWindowFromFrozen(window) };
         backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
       } else if (plan.resource === "returns") {
         if (!target.returnsPolicy) continue;
         const policy = parseReturnPolicy(target.returnsPolicy);
         const window = nextAutomaticReturnWindow(policy, target.resourceCursor, now);
-        options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, returnWindow: returnWindowFromFrozen(window) };
+        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, returnWindow: returnWindowFromFrozen(window) };
         backfill = Date.parse(window.to) < now.getTime() - policy.safetyLagSeconds * 1000;
       } else if (plan.resource === "sales_traffic") {
         const history = await prisma.amazonSyncRun.findMany({ where: { ...scope, sourceId: target.id, resource: "sales_traffic", status: "SUCCEEDED", stage: "COMPLETED" }, select: { frozenScope: true }, orderBy: { finishedAt: "desc" }, take: 1000 });
         const coverage = history.flatMap(run => { const range = (run.frozenScope as { requestedRange?: { from?: unknown; to?: unknown } } | null)?.requestedRange; return typeof range?.from === "string" && typeof range?.to === "string" ? [{ from: range.from, to: range.to }] : []; });
         const next = nextSalesTrafficRange(target.marketplaceId, now, coverage);
-        options = { key: scheduledKey(plan.id, next.range.from, next.range.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, requestedRange: next.range };
+        options = { key: automaticTaskKey(plan, target, next.range.from, next.range.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, requestedRange: next.range };
         backfill = next.backfill;
       } else if (plan.resource === "inventory_events") {
         const window = nextAutomaticInventoryEventWindow(target.resourceCursor, now);
@@ -174,20 +177,24 @@ async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceId
           continue;
         }
         const checked = domainReportRunWindow("inventory_events", window);
-        options = { key: scheduledKey(plan.id, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: checked! };
+        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: checked! };
         backfill = window.to < new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
       } else if (plan.resource === "settlements") {
-        const window = nextAutomaticSettlementDiscovery(now);
-        options = { key: scheduledKey(plan.id, window.createdSince.slice(0, 10), window.createdUntil.slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: domainReportRunWindow("settlements", window)! };
-      } else if (plan.resource === "reimbursements" || plan.resource === "inventory_age") {
-        options = { key: scheduledKey(plan.id, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
+        const window = nextAutomaticSettlementDiscovery(now, target.resourceCursor);
+        options = { key: automaticTaskKey(plan, target, window.createdSince.slice(0, 10), window.createdUntil.slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: domainReportRunWindow("settlements", window)! };
+      } else if (plan.resource === "reimbursements") {
+        const window = target.resourceCursor ? nextAutomaticReimbursementWindow(now, target.resourceCursor) : latestClosedReimbursementWindow(now);
+        options = { key: automaticTaskKey(plan, target, window.from, window.to), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, reportWindow: window };
+        backfill = window.to < new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+      } else if (plan.resource === "inventory_age") {
+        options = { key: automaticTaskKey(plan, target, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
       } else if (plan.resource === "catalog" || plan.resource === "inventory") {
-        options = { key: scheduledKey(plan.id, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
+        options = { key: automaticTaskKey(plan, target, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
       } else {
         if (!isObservationResource(plan.resource) || !target.domainPolicy) continue;
         const policy = parseObservationPolicy(target.domainPolicy, plan.resource);
         if (["brand_analytics", "buy_box_history"].includes(policy.resource)) continue;
-        options = { key: scheduledKey(plan.id, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
+        options = { key: automaticTaskKey(plan, target, now.toISOString().slice(0, 10)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority };
       }
     } catch (error) {
       if (error instanceof SyncInputError && error.status === 409) {
@@ -208,10 +215,6 @@ async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceId
       if (run?.status === "WAITING") await getAmazonSyncQueue().add("process-amazon-sync-run", { runId: run.id, dispatchVersion: run.dispatchVersion }, { jobId: `adc-${run.id}-${run.dispatchVersion}`, priority: run.priority, attempts: 1, removeOnComplete: true, removeOnFail: true });
     } catch { console.error(`[amazon-sync-center] automatic plan ${plan.id} could not enqueue; plan intent retained`); }
   }
-}
-
-function scheduledKey(planId: string, from: string, to?: string) {
-  return `auto:${planId}:${from}:${to ?? ""}`.slice(0, 160);
 }
 
 /** Block only this dispatch generation; a concurrently renewed run wins. */

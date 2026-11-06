@@ -88,8 +88,22 @@ model WorkspaceScope {
   amazonDataExports AmazonDataExport[]
   amazonDataCenterChanges AmazonDataCenterChangeRequest[]
   amazonDataAccessGrants AmazonDataAccessGrant[]
+  sellfoxCredential SellfoxIntegrationCredential?
 
   @@id([organizationId, id])
+}
+
+model SellfoxIntegrationCredential {
+  organizationId       String
+  workspaceId          String
+  credentialsCiphertext String
+  revision             Int      @default(1)
+  updatedByUserId       String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  workspace            WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Cascade, map: "SellfoxIntegrationCredential_workspace_fkey")
+
+  @@id([organizationId, workspaceId])
 }
 
 model OrganizationMember {
@@ -246,6 +260,10 @@ model FileObject {
 }
 
 model ImportJob {
+  executionToken String?
+  leaseExpiresAt DateTime?
+  executionAttempts Int @default(0)
+  maxAttempts Int @default(3)
   id               String            @id @default(cuid())
   organizationId   String
   userId           String
@@ -264,6 +282,7 @@ model ImportJob {
   exportRecords    ExportRecord[]
   file             FileObject        @relation(fields: [fileId], references: [id], onDelete: Cascade)
   WorkspaceDataset WorkspaceDataset?
+  @@index([status, leaseExpiresAt])
 
   @@index([organizationId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
@@ -281,6 +300,11 @@ enum ImageUpscaleJobStatus {
 }
 
 model ImageUpscaleJob {
+  executionToken String?
+  leaseExpiresAt DateTime?
+  executionAttempts Int @default(0)
+  maxAttempts Int @default(3)
+  @@index([status, leaseExpiresAt])
   id             String                @id @default(cuid())
   organizationId String
   userId         String
@@ -2012,6 +2036,8 @@ model AmazonSyncRun {
   frozenScopeDigest String?
 
   observations AmazonDomainObservation[]
+  settlementReports AmazonSettlementReport[] @relation("SettlementOwner")
+  settlementRawReports AmazonSettlementReport[] @relation("SettlementRawRun")
 
 }
 
@@ -2824,12 +2850,14 @@ model AmazonSpApiAuthorization {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   sources               AmazonSyncDataSource[]
+  settlementReports     AmazonSettlementReport[]
 
   @@unique([organizationId, workspaceId, id], map: "AmazonAuth_scope_id_key")
   @@unique([organizationId, workspaceId, amazonSellerId, awsRegion], map: "AmazonAuth_seller_region_key")
 }
 
 model AmazonSyncDataSource {
+  settlementPolicy Json?
   id                    String @id
   organizationId        String
   workspaceId           String @default("default")
@@ -2855,6 +2883,7 @@ model AmazonSyncDataSource {
   returnsPolicy         Json?
   domainPolicy          Json?
   observations          AmazonDomainObservation[]
+  settlementRows        AmazonSettlementRow[]
   returnRows            AmazonReturnRecord[]
   reportDocuments       AmazonSyncReportDocument[]
   reportRows            AmazonSyncReportRow[]
@@ -3088,6 +3117,7 @@ model AmazonSyncRawPage {
   capturedAt      DateTime @db.Timestamptz(3)
 
   @@id([taskId, page])
+  settlementReports AmazonSettlementReport[]
 }
 
 // Shared seller/application bucket across marketplaces; operation has its own quota.
@@ -3351,4 +3381,63 @@ model AmazonDomainObservation {
   @@unique([sourceRunId, kind, businessKey], map: "AmazonObservation_run_key")
   @@index([organizationId, workspaceId, sourceId, sourceRunId, kind], map: "AmazonObservation_scope_idx")
   @@index([organizationId, workspaceId, sourceId, asin], map: "AmazonObservation_asin_idx")
+}
+
+// Seller-level settlement originals; rows are published only with explicit site attribution.
+model AmazonSettlementReport {
+  id String @id
+  organizationId String
+  workspaceId String
+  amazonSellerId String
+  region String
+  reportType String
+  reportId String
+  authorizationId String
+  authorizationRevision Int
+  sourceRunId String
+  reportMarketplaceIds Json
+  collectionMarketplaceIds Json
+  siteBindings Json
+  rawTaskId String?
+  rawPage Int?
+  contentSha256 String?
+  status String @default("DISCOVERED")
+  createdTime DateTime? @db.Timestamptz(3)
+  capturedAt DateTime? @db.Timestamptz(3)
+  publishedAt DateTime? @db.Timestamptz(3)
+  authorization AmazonSpApiAuthorization @relation(fields: [organizationId, workspaceId, authorizationId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_auth_fkey")
+  task AmazonSyncRun @relation("SettlementOwner", fields: [organizationId, workspaceId, sourceRunId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_run_fkey")
+  rawTask AmazonSyncRun? @relation("SettlementRawRun", fields: [organizationId, workspaceId, rawTaskId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_raw_scope_fkey")
+  rawArchive AmazonSyncRawPage? @relation(fields: [rawTaskId, rawPage], references: [taskId, page], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_raw_fkey")
+  rows AmazonSettlementRow[]
+  @@unique([organizationId, workspaceId, amazonSellerId, region, reportType, reportId], map: "AmazonSettlementReport_business_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonSettlementReport_scope_key")
+  @@index([organizationId, workspaceId, status, createdTime], map: "AmazonSettlementReport_scope_status_idx")
+}
+model AmazonSettlementRow {
+  id String @id
+  organizationId String
+  workspaceId String
+  reportDocumentId String
+  rowNumber Int
+  rowHash String
+  sourceId String?
+  marketplaceId String?
+  sellerAccountId String?
+  attributionStatus String
+  businessDate String? @db.VarChar(10)
+  businessDateRaw String?
+  orderId String?
+  sellerSku String?
+  asin String?
+  amountOriginal String?
+  currencyCode String?
+  transactionType String?
+  amountType String?
+  amountDescription String?
+  fields Json?
+  document AmazonSettlementReport @relation(fields: [organizationId, workspaceId, reportDocumentId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementRow_report_fkey")
+  source AmazonSyncDataSource? @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementRow_source_fkey")
+  @@unique([reportDocumentId, rowNumber], map: "AmazonSettlementRow_document_row_key")
+  @@index([organizationId, workspaceId, sourceId, businessDate], map: "AmazonSettlementRow_source_date_idx")
 }

@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Exclude the old documentation placeholder retained by incremental scans. */
+@source not inline("text-[length:var(--sf-*)]");
 
 :root {
   --background: #f6f7f9;

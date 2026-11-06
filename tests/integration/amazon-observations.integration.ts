@@ -51,14 +51,14 @@ async function fresh(resource: string, extra: Record<string, unknown> = {}) {
     const url = new URL(String(input)); assert.ok(["observations.fixture.invalid", "lwa.fixture.invalid", "download.fixture.invalid"].includes(url.hostname)); calls.push(url.pathname);
     if (url.hostname === "lwa.fixture.invalid") return Response.json({ access_token: "fixture", expires_in: 3600 });
     if (url.hostname === "download.fixture.invalid") return new Response(JSON.stringify(report));
-    if (url.pathname === "/listings/2021-08-01/items/fixture-seller/fixture-sku") {
+    if (url.pathname.startsWith("/listings/2021-08-01/items/fixture-seller/")) {
       const raw = officialExample("src/data/amazon-contracts/listings-detail-model.json", "/listings/2021-08-01/items/{sellerId}/{sku}", "getListingsItem");
-      raw.sku = "fixture-sku"; raw.attributes = {}; (raw.attributes as Record<string, unknown>).bullet_point = [{ marketplace_id: site, language_tag: "en_US", value: "Fixture bullet" }]; raw.secret_contact = "DO_NOT_EXPOSE";
+      raw.sku = decodeURIComponent(url.pathname.split("/").at(-1)!); raw.attributes = {}; (raw.attributes as Record<string, unknown>).bullet_point = [{ marketplace_id: site, language_tag: "en_US", value: "Fixture bullet" }]; raw.secret_contact = "DO_NOT_EXPOSE";
       return Response.json(raw);
     }
-    if (url.pathname === `/catalog/2022-04-01/items/${asin}`) {
+    if (url.pathname.startsWith("/catalog/2022-04-01/items/")) {
       const raw = officialExample("src/data/amazon-contracts/catalog-detail-model.json", "/catalog/2022-04-01/items/{asin}", "getCatalogItem");
-      raw.asin = asin; raw.attributes = {}; (raw.attributes as Record<string, unknown>).brand = [{ marketplace_id: site, value: "Fixture Brand" }]; raw.secret_contact = "DO_NOT_EXPOSE";
+      raw.asin = url.pathname.split("/").at(-1)!; raw.attributes = {}; (raw.attributes as Record<string, unknown>).brand = [{ marketplace_id: site, value: "Fixture Brand" }]; raw.secret_contact = "DO_NOT_EXPOSE";
       return Response.json(raw);
     }
     if (url.pathname === "/products/pricing/v0/price") {
@@ -84,9 +84,9 @@ async function fresh(resource: string, extra: Record<string, unknown> = {}) {
     await processSyncCenterTask(id, run.dispatchVersion, { clientOptions: { fetch: fetcher, tokenEndpoint: "https://lwa.fixture.invalid/token", reportDownloadTestHost: "download.fixture.invalid" } });
     return prisma.amazonSyncRun.findUniqueOrThrow({ where: { id } });
   }
-  async function finish(id: string) { for (let i = 0; i < 40; i++) { const run = await slice(id); if (!["WAITING", "QUEUED", "RETRY_WAIT"].includes(run.status)) return run; } throw new Error("Fixture exceeded bounded slices"); }
+  async function finish(id: string) { for (let i = 0; i < 260; i++) { const run = await slice(id); if (!["WAITING", "QUEUED", "RETRY_WAIT"].includes(run.status)) return run; } throw new Error("Fixture exceeded bounded slices"); }
   const read = (params: Record<string, string> = {}) => readObservations(scope, new URLSearchParams({ resource, sourceId, ...params }), actor);
-  return { scope, actor, approver, authorizationId, sourceId, start, slice, finish, read, approved, calls, setMode: (v: string) => { mode = v; }, getCreateCalls: () => createCalls };
+  return { scope, actor, approver, authorizationId, sellerAccountId, sourceId, start, slice, finish, read, approved, calls, setMode: (v: string) => { mode = v; }, getCreateCalls: () => createCalls };
 }
 
 test("inbound approval → staged slices → publication; scope and quantity semantics remain separate", async () => {
@@ -111,6 +111,25 @@ for (const resource of ["listing_details", "catalog_items"]) test(`${resource} d
   const rows = (await f.read()).rows; assert.equal(rows.length, 1); assert.equal(rows[0].kind, resource === "listing_details" ? "LISTING_DETAIL" : "CATALOG_DETAIL");
   const json = JSON.stringify(rows[0].facts); assert.ok(!json.includes("DO_NOT_EXPOSE")); assert.ok(!json.includes("PRIVATE_ADDRESS"));
   if (resource === "listing_details") assert.ok(json.includes("Fixture bullet")); else assert.ok(json.includes("Fixture Brand"));
+});
+for (const resource of ["listing_details", "catalog_items"]) test(`${resource} discovers 224 objects and publishes all batches as one version`, async () => {
+  const f = await fresh(resource), upstreamId = randomUUID(), headId = randomUUID();
+  await prisma.amazonSyncDataSource.create({ data: { ...f.scope, id: upstreamId, authorizationId: f.authorizationId, sellerAccountId: f.sellerAccountId, marketplaceId: site, resource: "catalog", enabled: true, freshnessMinutes: 1440 } });
+  await prisma.amazonSyncRun.create({ data: { ...f.scope, id: headId, sourceId: upstreamId, requestedByUserId: f.actor, resource: "catalog", executionVersion: 2, authorizationRevision: 1, status: "SUCCEEDED", stage: "COMPLETED", finishedAt: new Date(), paginationComplete: true, idempotencyKey: headId, mode: "snapshot", frozenScope: { authorizationId: f.authorizationId, authorizationRevision: 1, amazonSellerId: "fixture-seller" } } });
+  await prisma.amazonSyncDataSource.update({ where: { id: upstreamId }, data: { activeRunId: headId, rowCount: 224, coverage: { type: "complete_snapshot", paginationComplete: true } } });
+  await prisma.amazonCatalogSnapshot.createMany({ data: Array.from({ length: 224 }, (_, i) => ({ ...f.scope, id: randomUUID(), sellerAccountId: f.sellerAccountId, marketplaceId: site, sellerSku: `sku-${String(i).padStart(4, "0")}`, asin: `B${String(i).padStart(9, "0")}`, sourceRunId: headId, fieldSources: {}, capturedAt: new Date() })) });
+  const domainPolicy = { resource, applicationId: "fixture-app", maxRows: 1000, maxRequests: 500, requestsPerSecond: .2, discovery: { mode: "catalog_snapshot", sourceId: upstreamId, maxObjects: 1000, batchSize: 100 }, ...(resource === "listing_details" ? { sellerSkus: [] } : { asins: [] }) };
+  await f.approved({ action: "save-source", revision: 1, authorizationId: f.authorizationId, sellerAccountId: f.sellerAccountId, marketplaceId: site, resource, domainPolicy, enabled: true, freshnessMinutes: 1440 });
+  const run = await f.start();
+  for (let i = 0; i < 101; i++) await f.slice(run.id);
+  assert.equal((await f.read()).rows.length, 0);
+  const done = await f.finish(run.id); assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  const result = await f.read(); assert.equal(result.pagination.total, 224); assert.equal(result.versions.length, 1);
+  assert.equal((await f.read({ page: "5" })).rows.length, 24);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: run.id, requestMetadata: { path: ["batchIndex"], equals: 2 } } }), 24);
+  const changed = await f.start(); await f.slice(changed.id);
+  await prisma.amazonSyncDataSource.update({ where: { id: upstreamId }, data: { revision: { increment: 1 } } });
+  const stopped = await f.slice(changed.id); assert.equal(stopped.status, "BLOCKED"); assert.equal((await f.read()).run?.id, run.id);
 });
 test("pricing incomplete batch never replaces complete snapshot", async () => {
   const f = await fresh("pricing"), run = await f.start(); assert.equal((await f.finish(run.id)).status, "SUCCEEDED");

@@ -239,12 +239,60 @@ export function parseFinancePolicy(value: unknown): FinancePolicy {
   }
   return { initialFrom: utcConfig(p.initialFrom), windowMinutes, overlapSeconds, safetyLagSeconds: bounded(p.safetyLagSeconds, 121, 2592000), applicationId: label(p.applicationId), requestsPerSecond: p.requestsPerSecond, burst: bounded(p.burst, 1, 10), sellerWide: true, collectUnattributed: true, marketplaces, fx };
 }
+/** Amazon's live service rejects starts older than its rolling two-year limit.
+ * Use calendar years (including leap-day clamping), never a fixed 730 days.
+ * This is a validation boundary, not permission to advance a business cursor. */
+export function financeRetentionFloor(now: Date): Date {
+  if (!Number.isFinite(now.getTime())) throw new SyncInputError("财务保留期检查时间无效。");
+  const floor = new Date(now);
+  const month = floor.getUTCMonth();
+  floor.setUTCFullYear(floor.getUTCFullYear() - 2);
+  if (floor.getUTCMonth() !== month) floor.setUTCDate(0);
+  return floor;
+}
+export function assertFinanceRequestWindow(window: FinanceWindow, now: Date) {
+  const checked = financeWindowFromFrozen(window);
+  if (Date.parse(checked.from) <= financeRetentionFloor(now).getTime()) throw new SyncInputError("FINANCE_RETENTION_EXPIRED：财务起点已超出 Amazon 滚动两年保留期，须审批恢复窗口并记录缺口；原游标未推进。", 409);
+  if (Date.parse(checked.to) >= now.getTime() - 120000) throw new SyncInputError("财务窗口须早于请求至少两分钟。");
+}
+/** Only for creating a new source. Existing policies/cursors use the separately
+ * approved recovery path, so history is never silently advanced. */
+export function newFinanceRetentionStart(requestedFrom: string, now: Date) {
+  const from = utcConfig(requestedFrom);
+  const original = { from, to: new Date(Date.parse(from) + 30 * 86_400_000).toISOString() };
+  const preview = previewFinanceRetentionRecovery(original, now, { hasNextToken: false, pages: 0, records: 0, hasCheckpoint: false });
+  if (!preview.proposed) throw new SyncInputError("新财务数据源的起始窗口已经全部过期。", 409);
+  return { initialFrom: preview.proposed.from, retentionGap: preview.gap };
+}
+/** Preview only. Explicitly retains the excluded interval and never mutates a
+ * frozen task, advances a cursor, or carries a token into a different window. */
+export function previewFinanceRetentionRecovery(window: FinanceWindow, now: Date, progress: { hasNextToken: boolean; pages: number; records: number; hasCheckpoint: boolean }, queueMarginSeconds = 86400) {
+  const original = financeWindowFromFrozen(window);
+  if (!Number.isInteger(queueMarginSeconds) || queueMarginSeconds < 300 || queueMarginSeconds > 7 * 86400) throw new SyncInputError("财务排队余量须为 5 分钟至 7 天。");
+  if (!Number.isSafeInteger(progress.pages) || progress.pages < 0 || !Number.isSafeInteger(progress.records) || progress.records < 0) throw new SyncInputError("财务恢复进度证据无效。");
+  const floor = financeRetentionFloor(now).getTime();
+  const from = Math.max(Date.parse(original.from), floor + queueMarginSeconds * 1000);
+  const gapTo = Math.min(from, Date.parse(original.to));
+  const gap = gapTo > Date.parse(original.from) ? { from: original.from, to: new Date(gapTo).toISOString(), reason: "AMAZON_ROLLING_RETENTION_AND_QUEUE_MARGIN" as const, unavailableThrough: new Date(Math.max(Date.parse(original.from), Math.min(floor, gapTo))).toISOString(), deferredFrom: new Date(Math.min(gapTo, Math.max(floor, Date.parse(original.from)))).toISOString() } : null;
+  const blockers: string[] = [];
+  if (progress.hasNextToken || progress.pages || progress.records || progress.hasCheckpoint) blockers.push("EXISTING_PROGRESS_REQUIRES_SEPARATE_RECONCILIATION");
+  if (from >= Date.parse(original.to)) blockers.push("ORIGINAL_WINDOW_FULLY_EXPIRED");
+  const proposed = blockers.length ? null : { from: new Date(from).toISOString(), to: original.to };
+  if (proposed) assertFinanceRequestWindow(proposed, now);
+  return { original, proposed, gap, queueMarginSeconds, blockers, requiresApproval: true as const, advancesCursor: false as const };
+}
 export function nextFinanceWindow(policy: FinancePolicy, cursor: { watermarkFrom: Date; watermarkTo: Date; status: string } | null, now: Date): FinanceWindow {
-  if (cursor && cursor.status !== "SUCCEEDED") return { from: cursor.watermarkFrom.toISOString(), to: cursor.watermarkTo.toISOString() };
+  if (cursor && cursor.status !== "SUCCEEDED") {
+    const window = { from: cursor.watermarkFrom.toISOString(), to: cursor.watermarkTo.toISOString() };
+    assertFinanceRequestWindow(window, now);
+    return window;
+  }
   const from = cursor ? Math.max(Date.parse(policy.initialFrom), cursor.watermarkTo.getTime() - policy.overlapSeconds * 1000) : Date.parse(policy.initialFrom);
   const to = Math.min(from + policy.windowMinutes * 60000, now.getTime() - policy.safetyLagSeconds * 1000);
   if (to <= from || (cursor && to <= cursor.watermarkTo.getTime())) throw new SyncInputError("财务窗口尚无可推进的新入账时间。", 409);
-  return { from: new Date(from).toISOString(), to: new Date(to).toISOString() };
+  const window = { from: new Date(from).toISOString(), to: new Date(to).toISOString() };
+  assertFinanceRequestWindow(window, now);
+  return window;
 }
 export function financeWindowFromFrozen(value: unknown): FinanceWindow {
   const w = configObject(value), from = utcConfig(w.from), to = utcConfig(w.to);

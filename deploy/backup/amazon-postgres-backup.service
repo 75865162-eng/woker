@@ -1,0 +1,16 @@
+[Unit]
+Description=ERP PostgreSQL verified backup (requires separate activation approval)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/amazon-ad-bulk-current
+EnvironmentFile=/opt/amazon-ad-bulk-operation/.env
+Environment=ERP_RUNTIME_MODE=production
+ExecStart=/usr/bin/node scripts/runtime/backup-postgres.mjs --apply --directory=/var/backups/amazon-erp
+User=root
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

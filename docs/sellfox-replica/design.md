@@ -134,7 +134,7 @@ Await user Sellfox typography JSON. Apply once under `.sellfox-ui` in `src/app/s
 }
 ```
 
-Map Tailwind utilities used in sellfox components → CSS vars (or replace `text-xs`/`text-[11px]` with `text-[length:var(--sf-*)]`). **Do not** change global AppShell fonts. Until JSON arrives, keep current sizes but wire the vars so drop-in is one file edit: `src/styles/sellfox-tokens.css` (add) imported by sellfox layout.
+Map Tailwind utilities used in sellfox components → CSS vars (or replace `text-xs`/`text-[11px]` with a concrete variable, for example `text-[length:var(--sf-filter-label)]`). Tailwind scans this document too, so examples must use valid CSS variable names rather than wildcard placeholders. **Do not** change global AppShell fonts. Until JSON arrives, keep current sizes but wire the vars so drop-in is one file edit: `src/styles/sellfox-tokens.css` (add) imported by sellfox layout.
 
 ## 6. Risk / blockers (no invented data)
 

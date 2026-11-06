@@ -21,6 +21,7 @@
 /.next-dev */
 /.next-build/
 /.next-build*/
+/.next-amazon-live/
 /.next-auth-check/
 /out/
 

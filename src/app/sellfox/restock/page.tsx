@@ -5,7 +5,7 @@ export const metadata = { title: "补货建议" };
 
 export default function ReplenishmentPage() {
   return (
-    <AppShell title="补货建议" subtitle="FBA → 补货建议。尚无赛狐补货表，只显示空态。">
+    <AppShell title="补货建议" subtitle="FBA → 补货建议。基于本地商品、销量与货件快照计算，不写入补货表。">
       <ReplenishmentWorkbench />
     </AppShell>
   );

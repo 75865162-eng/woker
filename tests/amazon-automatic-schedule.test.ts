@@ -1,8 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { automaticBackfillDays, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticPlanId, automaticPlanKey, isAutomaticResource, nextSalesTrafficRange } from "@/lib/amazon-sync/automatic-schedule";
+import { automaticBackfillDays, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticPlanId, automaticPlanKey, isAutomaticResource, nextSalesTrafficRange, nextAutomaticReimbursementWindow } from "@/lib/amazon-sync/automatic-schedule";
 
 const now = new Date("2026-11-05T12:00:00.000Z");
+
+test("reimbursement history advances in 30 closed days and never overwrites a pending window", () => {
+  const first = nextAutomaticReimbursementWindow(now);
+  assert.equal(first.from, "2024-11-05");
+  assert.equal(first.to, "2024-12-04");
+  const cursor = { watermarkFrom: new Date(first.dataStartTime), watermarkTo: new Date(first.dataEndTime), status: "FAILED" };
+  assert.deepEqual(nextAutomaticReimbursementWindow(now, cursor), first);
+  assert.equal(nextAutomaticReimbursementWindow(now, { ...cursor, status: "SUCCEEDED" }).from, "2024-12-05");
+  assert.throws(() => nextAutomaticReimbursementWindow(now, { ...cursor, watermarkTo: cursor.watermarkFrom }));
+});
 
 test("automatic plan scope includes the requested North American sales marketplaces and executable source policies", () => {
   assert.deepEqual([...automaticMarketplaces].sort(), ["A1AM78C64UM0Y8", "A2EUQ1WTGCTBG2", "A2Q3Y263D00KWC", "ATVPDKIKX0DER"]);
@@ -32,4 +42,19 @@ test("sales traffic daily schedule returns yesterday after the 730-day history i
   assert.equal(covered.range.from, "2026-11-04");
   assert.equal(covered.range.to, "2026-11-04");
   assert.equal(covered.backfill, false);
+});
+
+test("automatic resume is immediate and task keys isolate configuration revisions", async () => {
+  const { automaticTaskKey, nextPlanRunAt } = await import('@/lib/amazon-sync/automatic-schedule');
+  assert.equal(nextPlanRunAt(true, true, 1440, now)?.toISOString(), now.toISOString());
+  assert.equal(nextPlanRunAt(false, true, 1440, now), null);
+  assert.equal(nextPlanRunAt(true, false, 60, now)?.getTime(), now.getTime()+3600000);
+  const plan={id:'plan',revision:1}, source={revision:1,authorization:{revision:2}};
+  const key=automaticTaskKey(plan,source,'from','to');
+  assert.equal(key,automaticTaskKey(plan,source,'from','to'));
+  assert.notEqual(key,automaticTaskKey({...plan,revision:2},source,'from','to'));
+  assert.notEqual(key,automaticTaskKey(plan,{...source,revision:2},'from','to'));
+  assert.notEqual(key,automaticTaskKey(plan,{...source,authorization:{revision:3}},'from','to'));
+  assert.notEqual(key,automaticTaskKey(plan,source,'from','other'));
+  assert.ok(key.length<=160);
 });

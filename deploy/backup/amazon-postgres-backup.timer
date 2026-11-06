@@ -1,0 +1,11 @@
+[Unit]
+Description=ERP daily PostgreSQL backup (not enabled by deployment)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=10m
+Unit=amazon-postgres-backup.service
+
+[Install]
+WantedBy=timers.target

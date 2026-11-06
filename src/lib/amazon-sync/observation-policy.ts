@@ -1,3 +1,4 @@
+import { assertProductAccessEvidence, type ProductAccessContext } from "./product-access-evidence";
 import { reportTimeZone } from "./date-range";
 import { SyncInputError } from "./policy";
 
@@ -16,8 +17,10 @@ export type InboundPolicy = CommonPolicy & { resource: "fulfillment"; planIds: s
 export type PricingPolicy = CommonPolicy & { resource: "pricing"; asins: string[] };
 export type AnalyticsPolicy = CommonPolicy & { resource: "brand_analytics"; reportKind: BrandReportKind; reportPeriod: ReportPeriod; from: string; to: string; marketplaceTimeZone: string; asins: string[]; brandEligibilityAttested: true };
 export type BuyBoxHistoryPolicy = CommonPolicy & { resource: "buy_box_history"; from: string; to: string; marketplaceTimeZone: string; asins: string[] };
-export type ListingDetailPolicy = CommonPolicy & { resource: "listing_details"; sellerSkus: string[] };
-export type CatalogDetailPolicy = CommonPolicy & { resource: "catalog_items"; asins: string[] };
+export type ProductDiscovery = { mode: "catalog_snapshot"; sourceId: string; maxObjects: number; batchSize: 100 };
+type ProductOptions = { discovery?: ProductDiscovery; accessEvidence?: string };
+export type ListingDetailPolicy = CommonPolicy & ProductOptions & { resource: "listing_details"; sellerSkus: string[] };
+export type CatalogDetailPolicy = CommonPolicy & ProductOptions & { resource: "catalog_items"; asins: string[] };
 export type ObservationPolicy = ListingDetailPolicy | CatalogDetailPolicy | InboundPolicy | PricingPolicy | AnalyticsPolicy | BuyBoxHistoryPolicy;
 export const isObservationResource = (value: string): value is ObservationResource => (observationResources as readonly string[]).includes(value);
 export function observationInvalid(message = "数据域策略、响应或范围校验失败；未发布新版本。"): never { throw new SyncInputError(message, 422); }
@@ -43,8 +46,18 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
   if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0 || rate > ceiling) return observationInvalid();
   const base: CommonPolicy = { resource: p.resource, applicationId, maxRequests: integer(p.maxRequests, 1000), maxRows: integer(p.maxRows, 50_000), requestsPerSecond: rate };
   if (p.resource === "fulfillment") return { ...base, resource: p.resource, planIds: list(p.planIds, /^[A-Za-z0-9-]{38}$/, 100) };
-  if (p.resource === "listing_details") return { ...base, resource: p.resource, sellerSkus: list(p.sellerSkus, /^[^\u0000-\u001f\u007f]{1,255}$/, 100) };
-  if (p.resource === "catalog_items") return { ...base, resource: p.resource, asins: list(p.asins, /^[A-Z0-9]{10}$/, 100) };
+  if (p.resource === "listing_details" || p.resource === "catalog_items") {
+    const extra: ProductOptions = {};
+    if (p.discovery !== undefined) {
+      const d = observationObject(p.discovery);
+      if (d.mode !== "catalog_snapshot" || d.batchSize !== 100 || base.requestsPerSecond > .2 || base.maxRequests > 500) return observationInvalid();
+      extra.discovery = { mode: "catalog_snapshot", sourceId: observationText(d.sourceId, 200), maxObjects: integer(d.maxObjects, 1000), batchSize: 100 };
+    }
+    if (p.accessEvidence !== undefined) extra.accessEvidence = observationText(p.accessEvidence, 6000);
+    const ids = p.resource === "listing_details" ? list(p.sellerSkus, /^[^\u0000-\u001f\u007f]{1,255}$/, 100, !!extra.discovery) : list(p.asins, /^[A-Z0-9]{10}$/, 100, !!extra.discovery);
+    if (extra.discovery && ids.length) return observationInvalid("自动发现不能同时配置静态对象。");
+    return p.resource === "listing_details" ? { ...base, ...extra, resource: p.resource, sellerSkus: ids } : { ...base, ...extra, resource: p.resource, asins: ids };
+  }
   const asins = list(p.asins, /^[A-Z0-9]{10}$/, p.resource === "pricing" ? 20 : 18, p.resource === "brand_analytics" && ["search_terms", "market_basket"].includes(String(p.reportKind)));
   if (p.resource === "pricing") return { ...base, resource: p.resource, asins };
   const from = observationDate(p.from), to = observationDate(p.to), marketplaceTimeZone = observationText(p.marketplaceTimeZone, 100);
@@ -65,7 +78,8 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
   if (end.toISOString().slice(0, 10) !== to) return observationInvalid("必须选择一个完整报告周期；不支持跨周期任务。");
   return { ...base, resource: p.resource, reportKind, reportPeriod, asins, from, to, marketplaceTimeZone, brandEligibilityAttested: true };
 }
-export function assertObservationRoles(policy: ObservationPolicy, auth: { approvedRoles: readonly string[]; rolesAttestedAt: Date | null }): void {
+export function assertObservationRoles(policy: ObservationPolicy, auth: { approvedRoles: readonly string[]; rolesAttestedAt: Date | null }, context?: Omit<ProductAccessContext, "resource">): void {
+  if ((policy.resource === "listing_details" || policy.resource === "catalog_items") && policy.accessEvidence && context) { assertProductAccessEvidence(policy.accessEvidence, { ...context, resource: policy.resource }); return; }
   const role = ["listing_details", "catalog_items"].includes(policy.resource) ? "Product Listing" : policy.resource === "fulfillment" ? "Amazon Fulfillment" : policy.resource === "pricing" ? "Pricing" : policy.resource === "brand_analytics" ? "Brand Analytics" : "Brand Analytics";
   if (!(auth.rolesAttestedAt instanceof Date) || !Number.isFinite(auth.rolesAttestedAt.getTime()) || !auth.approvedRoles.includes(role)) throw new SyncInputError(`该域需要已确认的 ${role} 角色；参与站点不证明业务权限。`, 403);
 }

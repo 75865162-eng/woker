@@ -5,6 +5,8 @@ import { GET as orders } from "@/app/api/sellfox/orders/route";
 import { GET as shipments } from "@/app/api/sellfox/shipments/route";
 import { GET as restock } from "@/app/api/sellfox/restock/route";
 import { createLocalSession } from "@/lib/auth/session";
+import { readSellfoxRestock } from "@/lib/sellfox/restock-read";
+import { sellfoxBrowseQuery } from "@/lib/sellfox/browse-query";
 
 const scope = { organizationId: "org-a", workspaceId: "workspace-a" };
 const capturedAt = new Date("2026-11-06T00:00:00.000Z");
@@ -15,6 +17,8 @@ test("order, shipment and restock routes return replica rows, pagination and fac
   const env = { DATABASE_URL: process.env.DATABASE_URL, AUTH_DRIVER: process.env.AUTH_DRIVER };
   delete process.env.DATABASE_URL;
   process.env.AUTH_DRIVER = "local";
+  let inventoryQuantity: number | null = 0;
+  let shipmentCollected = true;
   const orderLine = {
     id: "order-line", shopExternalId: "shop-a", orderId: "111-1", sellerOrderId: null, asin: "B000", msku: "MSKU", sku: "SKU", orderStatus: "Shipped",
     purchaseDate: "2026-11-01", purchaseDateRaw: "2026-11-01 08:00:00", payAt: null, refundAt: null, currency: "USD", orderTotal: 19.99, qty: 2, refundQty: null,
@@ -35,8 +39,15 @@ test("order, shipment and restock routes return replica rows, pagination and fac
       SellfoxStore: { name: "店铺", marketplace: "US", SellfoxSnapshotHead: [{ capturedAt }] },
     }] },
     sellfoxSalesDailySnapshot: { findMany: async () => [{ storeId: "store", msku: "MSKU", asin: "B000", reportDate: "2026-11-01", quantity: 2 }] },
+    sellfoxSnapshotHead: { findMany: async ({ where }: { where: { resource: string; storeId: { in: string[] }; SellfoxStore: typeof scope } }) => {
+      assert.equal(where.resource, "fba_shipments");
+      assert.deepEqual(where.storeId.in, ["store"]);
+      assert.deepEqual(where.SellfoxStore, scope);
+      return shipmentCollected ? [{ storeId: "store" }] : [];
+    } },
     $queryRaw: async (sql: { text: string }) => sql.text.includes("sellfox_listing_current")
       ? [{ id: "listing", storeId: "store", asin: "B000", msku: "MSKU", sku: "SKU", parentAsin: null, title: "标题", mainImage: "https://example.test/a.jpg", fulfillable: 10, reservedQty: 1, unsellable: 0, warehousing: 0, fulfillment: "AFN", shopExternalId: "shop-a", name: "店铺", marketplace: "US" }]
+      : sql.text.includes("SellfoxFbaInventorySnapshot") ? [{ storeId: "store", msku: "MSKU", reportDate: "2026-11-01", quantity: inventoryQuantity }]
       : [{ storeId: "store", msku: "MSKU", asin: "B000", status: "SHIPPED", declaredQty: 4, receivedQty: 0 }],
   } as unknown as PrismaClient;
   async function request(path: string, params = "") {
@@ -83,6 +94,22 @@ test("order, shipment and restock routes return replica rows, pagination and fac
     assert.deepEqual(restockBody.facets.salespersons, []);
     assert.equal(restockBody.formula.prepDays, 30);
     assert.equal(restockBody.formula.safetyDays, 7);
+
+    const query = sellfoxBrowseQuery(new URL("http://localhost?dimension=msku"));
+    const stockout = await readSellfoxRestock(query, scope, ["store"], "2026-11-06");
+    assert.equal(stockout.rows[0].daily, null);
+    assert.equal(stockout.rows[0].suggest, null);
+    inventoryQuantity = 5;
+    const stocked = await readSellfoxRestock(query, scope, ["store"], "2026-11-06");
+    assert.equal(stocked.rows[0].daily, 2);
+    assert.equal(stocked.rows[0].suggest, 60);
+    inventoryQuantity = null;
+    const unknownStock = await readSellfoxRestock(query, scope, ["store"], "2026-11-06");
+    assert.equal(unknownStock.rows[0].daily, 2);
+    shipmentCollected = false;
+    const uncollected = await readSellfoxRestock(query, scope, ["store"], "2026-11-06");
+    assert.equal(uncollected.rows[0].inTransit, null);
+    assert.equal(uncollected.rows[0].suggest, null);
   } finally {
     globals.prisma = previous;
     if (env.DATABASE_URL === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = env.DATABASE_URL;

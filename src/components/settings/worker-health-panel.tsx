@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, RefreshCw, ServerCog } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type WorkerHealthPayload = {
+  registeredWorkers?: Array<{ id: string; label: string; online: boolean; instances: number; queueReady: boolean | null; version: string | null; versionMatches: boolean; mismatchedInstances?: number; connectionMatches?: boolean | null; lastSeenAt: string | null }>;
   driver: string;
   queueName: string;
+  queueAvailable?: boolean;
   queueCounts: Record<string, number>;
   imageQueueCounts?: Record<string, number>;
   workers: Array<{
@@ -84,8 +86,10 @@ export function WorkerHealthPanel() {
   const [data, setData] = useState<WorkerHealthPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const loadSequence = useRef(0);
 
   async function loadHealth() {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
 
@@ -97,16 +101,21 @@ export function WorkerHealthPanel() {
         throw new Error(payload.error || "Worker 状态读取失败。");
       }
 
+      if (sequence !== loadSequence.current) return;
       setData(payload);
     } catch (loadError) {
+      if (sequence !== loadSequence.current) return;
+      setData(null);
       setError(loadError instanceof Error ? loadError.message : "Worker 状态读取失败。");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }
 
   useEffect(() => {
+    const sequenceState = loadSequence;
     void loadHealth();
+    return () => { sequenceState.current++; };
   }, []);
 
   const counts = data?.queueCounts ?? {};
@@ -142,11 +151,22 @@ export function WorkerHealthPanel() {
       <CardContent className="space-y-3 p-3">
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div> : null}
         {loading ? <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm font-semibold text-muted">正在读取 worker 状态...</div> : null}
-        {!loading && data?.driver !== "redis" ? (
+        {!loading && data && data.driver !== "redis" ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
             当前未启用 Redis 队列，导入与导出任务将按同步模式执行，不适合 30 人并发场景。
           </div>
         ) : null}
+
+        {data?.queueAvailable === false ? <p role="status" className="text-xs text-red-700">Redis 队列不可用，任务数量暂不可确认；下方显示数据库中最近的 Worker 心跳。</p> : null}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {data?.registeredWorkers?.map(worker => <div key={worker.id} className="rounded-md border border-border p-3 text-xs">
+            <div className="flex items-center justify-between gap-2"><strong>{worker.label}</strong><Badge tone={worker.online ? "green" : "red"}>{worker.online ? "心跳在线" : "离线 / 未启动"}</Badge></div>
+            <p className="mt-2 text-muted">队列连接：{worker.queueReady === null ? "未知" : worker.queueReady ? "已连接" : "不可用"} · 在线实例 {worker.instances}</p>
+            <p className={worker.connectionMatches === false ? "mt-1 text-red-700" : "mt-1 text-muted"}>与网页连接目标：{worker.connectionMatches === true ? "一致" : worker.connectionMatches === false ? "不一致，请检查配置与认证密钥" : "尚未确认"}</p>
+            <p className="mt-1 text-muted">版本：{worker.version ?? "未知"}{worker.online && !worker.versionMatches ? `（${worker.mismatchedInstances ?? 1} 个实例与网页版本不一致）` : ""}</p>
+            <p className="mt-1 text-muted">最近心跳：{worker.lastSeenAt ? formatDate(worker.lastSeenAt) : "尚无记录"}</p>
+          </div>)}
+        </div>
 
         <div className="grid grid-cols-[repeat(auto-fit,104px)] justify-start gap-2">
           {["waiting", "active", "delayed", "failed", "completed", "paused"].map((key) => (

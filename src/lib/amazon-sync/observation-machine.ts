@@ -18,6 +18,10 @@ export function parseObservationState(value: unknown, policy: ObservationPolicy)
   if (s.version !== 1 || !["PRODUCT_DETAIL", "PLAN", "PLAN_ITEMS", "SHIPMENT", "SHIPMENT_ITEMS", "VERIFY_PLAN", "PRICE", "OWN_PRICE", "CREATE", "CREATING", "POLL", "DOCUMENT", "DOWNLOAD", "COMPLETE"].includes(String(s.stage))) return invalid();
   for (const key of ["requests", "planIndex", "shipmentIndex"]) if (!Number.isSafeInteger(s[key]) || Number(s[key]) < 0) return invalid();
   if (!Array.isArray(s.shipmentIds) || s.shipmentIds.length > 1000 || !Array.isArray(s.priorTokens) || s.priorTokens.length > 1000 || s.shipmentIds.some(v => typeof v !== "string") || s.priorTokens.some(v => typeof v !== "string") || Number(s.requests) > policy.maxRequests) return invalid();
+  if (policy.resource === "listing_details" || policy.resource === "catalog_items") {
+    const count = policy.resource === "listing_details" ? policy.sellerSkus.length : policy.asins.length;
+    if (!["PRODUCT_DETAIL", "COMPLETE"].includes(String(s.stage)) || Number(s.planIndex) > count || (s.stage === "COMPLETE") !== (s.planIndex === count)) return invalid();
+  }
   return s as unknown as ObservationState;
 }
 function signature(value: unknown): string { return JSON.stringify(value); }

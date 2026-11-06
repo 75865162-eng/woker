@@ -161,3 +161,22 @@ test("orders query intersects tenant, seller/site grants and explicit filters", 
   assert.ok(JSON.stringify(updatedDate).includes('"sourceUpdatedAt"'));
   for (const from of ["2026-02-30", "invalid", "2026-11-04"]) assert.throws(() => orderReadWhere({ organizationId: "fixture-org", workspaceId: "fixture-ws" }, new URLSearchParams({ from, to: "2026-11-01" }), access));
 });
+
+test("core item access evidence is operation/site/revision bound and cannot authorize optional datasets", async () => {
+  const { orderAccessEvidence, assertOrderAccessEvidence } = await import("../src/lib/amazon-sync/order-access-evidence");
+  const { safeState } = await import("../src/lib/amazon-sync/approval-policy");
+  const prior = process.env.AMAZON_SP_API_ENCRYPTION_KEY;
+  process.env.AMAZON_SP_API_ENCRYPTION_KEY = Buffer.alloc(32, 47).toString("base64");
+  try {
+    const c = { organizationId: "fixture", workspaceId: "default", authorizationId: "auth", authorizationRevision: 3, marketplaceId: "site" };
+    const at = new Date(), proof = orderAccessEvidence(c, { status: 200, parsed: true, requestId: "fixture-request" }, at);
+    const p = parseOrderSyncPolicy({ ...policy, details: { includedData: [], requiredRoles: ["Inventory and Order Tracking"], purpose: "order_items", requestsPerSecond: .2, burst: 1, maxOrders: 5000, backfillExisting: true, accessEvidence: proof } });
+    assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p, false, c));
+    assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p));
+    for (const change of [{ organizationId: "foreign" }, { workspaceId: "foreign" }, { authorizationId: "other" }, { authorizationRevision: 4 }, { marketplaceId: "other" }]) assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p, false, { ...c, ...change }));
+    assert.throws(() => assertOrderAccessEvidence(proof, c, new Date(at.getTime() + 86400000)));
+    assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, { ...p, details: { ...p.details!, includedData: ["PROCEEDS"] } }, false, c));
+    assert.ok(!JSON.stringify(safeState(p)).includes(proof));
+    assert.throws(() => parseOrderSyncPolicy({ ...p, details: { ...p.details, backfillExisting: "all" } }));
+  } finally { if (prior === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = prior; }
+});

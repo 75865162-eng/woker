@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       ) rows WHERE (${sku ?? ""} = '' OR strpos(lower("sellerSku"), lower(${sku ?? ""})) > 0)
       ORDER BY "sellerSku" LIMIT 51 OFFSET ${(page - 1) * 50}
     `;
-    const rows = await readAmazonProductsForSkus(scope.organizationId, scope.workspaceId, keys.slice(0, 50).map((row) => row.sellerSku), permission.user.id);
+    const rows = await readAmazonProductsForSkus(scope.organizationId, scope.workspaceId, keys.slice(0, 50).map((row) => row.sellerSku), permission.user.id, undefined, true);
     return NextResponse.json({ rows, page, hasNextPage: keys.length > 50, status: rows.length ? "AVAILABLE" : "NOT_SYNCED" }, { headers: { "Cache-Control": "no-store" } });
   } catch { return NextResponse.json({ error: "Amazon 商品快照读取失败。" }, { status: 500 }); }
 }

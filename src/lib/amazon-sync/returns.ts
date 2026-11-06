@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { SyncInputError } from "./policy";
-import { financeWindowFromFrozen, nextFinanceWindow, type FinanceWindow } from "./finance";
+import { financeWindowFromFrozen, type FinanceWindow } from "./finance";
 
 /** Reports v2021-06-30. This allowlist covers FBA warehouse-received returns only.
  * https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-returns-report
@@ -57,7 +57,11 @@ export function reportTimestampMatches(value: unknown, expected: string): boolea
     (actual === requested || (actual % 1000 === 0 && actual === Math.floor(requested / 1000) * 1000));
 }
 export function nextReturnWindow(policy: ReturnPolicy, cursor: { watermarkFrom: Date; watermarkTo: Date; status: string } | null, now: Date): FinanceWindow {
-  return nextFinanceWindow({ ...policy, requestsPerSecond: .0167, burst: 15, sellerWide: true, collectUnattributed: true, marketplaces: [], fx: null }, cursor, now);
+  if (cursor && cursor.status !== "SUCCEEDED") return returnWindowFromFrozen({ from: cursor.watermarkFrom.toISOString(), to: cursor.watermarkTo.toISOString() });
+  const from = cursor ? Math.max(Date.parse(policy.initialFrom), cursor.watermarkTo.getTime() - policy.overlapSeconds * 1000) : Date.parse(policy.initialFrom);
+  const to = Math.min(from + policy.windowMinutes * 60_000, now.getTime() - policy.safetyLagSeconds * 1000);
+  if (to <= from || (cursor && to <= cursor.watermarkTo.getTime())) throw new SyncInputError("退货窗口尚无可推进的新时间。", 409);
+  return returnWindowFromFrozen({ from: new Date(from).toISOString(), to: new Date(to).toISOString() });
 }
 export type ReturnState = { creating?: boolean; reportId?: string; documentId?: string; requestedAt?: string; polls: number; archiveTaskId?: string; offset: number };
 export function parseReturnState(text?: string): ReturnState {
@@ -86,7 +90,7 @@ function* tsv(text: string): Generator<string[]> {
       row.push(cell); cell = ""; closed = false;
       if (row.length > 100) return bad();
       if (c !== "\t") { if (c === "\r" && text[i + 1] === "\n") i++; yield row; row = []; touched = false; }
-    } else { if (closed || c === '"') return bad(); cell += c; }
+    } else { if (closed) return bad(); cell += c; }
     if (cell.length > 65536) return bad();
   }
   if (quoted) return bad();
@@ -95,7 +99,8 @@ function* tsv(text: string): Generator<string[]> {
 export type ReturnRow = { rowHash: string; returnAt: Date; amazonOrderId: string; sellerSku: string; asin: string; fnsku: string | null; quantity: number; fulfillmentCenterId: string | null; disposition: string | null; reasonCode: string | null; rawStatus: string | null };
 export function parseReturnReport(text: string, window: FinanceWindow, policy: ReturnPolicy, offset = 0): { rows: ReturnRow[]; total: number; nextOffset: number; complete: boolean } {
   const iter = tsv(text), header = iter.next().value as string[] | undefined;
-  const required = ["return-date", "order-id", "sku", "asin", "quantity", "detailed-disposition", "reason", "status"];
+  // Some marketplace reports omit status; retain unknown as null, never infer it.
+  const required = ["return-date", "order-id", "sku", "asin", "quantity", "detailed-disposition", "reason"];
   if (!header || header.length > 100 || new Set(header).size !== header.length || required.some(k => !header.includes(k)) || header.some(k => !/^[a-z][a-z0-9-]{0,99}$/.test(k))) return bad();
   const rows: ReturnRow[] = []; let total = 0;
   for (const fields of iter) {
@@ -105,7 +110,7 @@ export function parseReturnReport(text: string, window: FinanceWindow, policy: R
     if (date < new Date(window.from) || date >= new Date(window.to) || !/^[1-9]\d{0,8}$/.test(r.quantity)) return bad();
     const row: ReturnRow = { rowHash: createHash("sha256").update(JSON.stringify(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)))).digest("hex"), returnAt: date,
       amazonOrderId: identifier(r["order-id"])!, sellerSku: typeof r.sku === "string" && r.sku.trim() && r.sku.length <= 500 && !/[\x00-\x1f\x7f]/.test(r.sku) ? r.sku : bad(), asin: identifier(r.asin)!, fnsku: identifier(r.fnsku ?? "", true), quantity: Number(r.quantity),
-      fulfillmentCenterId: identifier(r["fulfillment-center-id"] ?? "", true), disposition: reportLabel(r["detailed-disposition"]), reasonCode: reportLabel(r.reason), rawStatus: reportLabel(r.status) };
+      fulfillmentCenterId: identifier(r["fulfillment-center-id"] ?? "", true), disposition: reportLabel(r["detailed-disposition"]), reasonCode: reportLabel(r.reason), rawStatus: reportLabel(r.status ?? "") };
     if (total > offset && rows.length < policy.batchSize) rows.push(row);
   }
   if (offset > total) return bad();

@@ -45,8 +45,9 @@ export function SettingsTabs({
   }, []);
 
   useEffect(() => {
-    if (activeTab === "integrations" && window.location.hash === "#amazon-sp-api") {
-      requestAnimationFrame(() => document.getElementById("amazon-sp-api")?.scrollIntoView({ block: "start" }));
+    const target = window.location.hash.slice(1);
+    if (activeTab === "integrations" && ["amazon-sp-api", "sellfox-credentials"].includes(target)) {
+      requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: "start" }));
     }
   }, [activeTab]);
 

@@ -1,5 +1,5 @@
 import { auditAmazonDataRead } from "../src/lib/amazon-sync/read-audit";
-import { loadEnvConfig } from "@next/env";
+import { applyRuntimeEnvironment } from "./runtime/environment.mjs";
 import { prisma } from "../src/lib/db/prisma";
 import { PpcReadError } from "../src/lib/operations/ppc-read";
 import { OpsError, opsHelp, parseOpsArgs, opsIdentity, runOpsCommand, formatOpsOutput } from "../src/lib/operations/cli";
@@ -7,8 +7,8 @@ import { OpsError, opsHelp, parseOpsArgs, opsIdentity, runOpsCommand, formatOpsO
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help") || !args.length) { console.log(opsHelp); return; }
-  // Same server-side env loading as Next; never prints configuration or credentials.
-  loadEnvConfig(process.cwd());
+  // Reuse the same configuration and conflict checks as web and Workers.
+  applyRuntimeEnvironment();
   const input = parseOpsArgs(args);
   const identity = opsIdentity(input, process.env);
   if (!process.env.DATABASE_URL) throw new OpsError("DATABASE_REQUIRED", "DATABASE_URL is required.", 4);

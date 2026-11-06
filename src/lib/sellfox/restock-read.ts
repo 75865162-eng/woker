@@ -13,6 +13,7 @@ export type RestockListing = {
 };
 export type RestockSale = { storeId: string; msku: string; asin: string; reportDate: string; quantity: number | null; stockout?: boolean };
 export type RestockShipmentLine = { storeId: string; msku: string; asin: string; status: string; declaredQty: number | null; receivedQty: number | null };
+export type RestockInventoryDay = { storeId: string; msku: string; reportDate: string; quantity: number | null };
 
 function addDays(iso: string, days: number) {
   const [year, month, day] = iso.split("-").map(Number);
@@ -28,11 +29,15 @@ export function buildRestockRows(input: {
   listings: RestockListing[];
   sales: RestockSale[];
   shipments: RestockShipmentLine[];
+  inventory: RestockInventoryDay[];
+  shipmentCapturedStoreIds: string[];
   today: string;
   groupBy: "asin" | "msku";
   prepDays?: number;
   safetyDays?: number;
 }) {
+  const inventory = new Map(input.inventory.map((day) => [JSON.stringify([day.storeId, day.msku, day.reportDate]), day.quantity]));
+  const capturedStores = new Set(input.shipmentCapturedStoreIds);
   const groups = new Map<string, RestockListing[]>();
   for (const listing of input.listings) {
     const identity = input.groupBy === "msku" ? listing.msku || listing.asin : listing.asin || listing.msku;
@@ -43,11 +48,15 @@ export function buildRestockRows(input: {
   return [...groups.entries()].map(([key, listings]) => {
     const [storeId, identity] = key.split("\u0000");
     const members = new Set(listings.flatMap((listing) => [listing.msku, listing.asin].filter((value): value is string => Boolean(value))));
-    const sales = mergeRestockDays(input.sales.filter((sale) => sale.storeId === storeId && (members.has(sale.msku) || members.has(sale.asin))).map((sale): RestockDay => ({ date: sale.reportDate, quantity: sale.quantity, stockout: sale.stockout })));
+    const belongs = (line: { storeId: string; msku: string; asin: string }) => line.storeId === storeId && (input.groupBy === "msku" ? line.msku === identity : members.has(line.msku) || members.has(line.asin));
+    const sales = mergeRestockDays(input.sales.filter(belongs).map((sale): RestockDay => {
+      const quantity = inventory.get(JSON.stringify([sale.storeId, sale.msku, sale.reportDate]));
+      return { date: sale.reportDate, quantity: sale.quantity, stockout: quantity == null ? undefined : quantity === 0 };
+    }));
     const rates = restockDailyRates(sales, input.today);
-    const shipmentLines = input.shipments.filter((line) => line.storeId === storeId && (members.has(line.msku) || members.has(line.asin)));
+    const shipmentLines = input.shipments.filter(belongs);
     const fulfillable = sumKnown(listings.map((listing) => listing.fulfillable));
-    const inTransit = inboundUnits(shipmentLines);
+    const inTransit = capturedStores.has(storeId) ? inboundUnits(shipmentLines) : null;
     const suggest = suggestRestockQuantity({ fulfillable, inTransit, daily: rates.weighted, prepDays: input.prepDays, safetyDays: input.safetyDays });
     const first = listings.find((listing) => listing.mainImage) ?? listings[0];
     return {
@@ -98,9 +107,10 @@ export async function readSellfoxRestock(query: SellfoxBrowseQuery, scope: Scope
     return values.some((value) => matches(value, query.search, query.exactMatch));
   }) : listings;
   const storeSet = [...new Set(searched.map((listing) => listing.storeId))];
-  const from = addDays(today, -36);
+  const from = addDays(today, -31);
   const to = addDays(today, -2);
-  const [sales, shipmentLines, failures] = await Promise.all([
+  const mskus = [...new Set(searched.map((listing) => listing.msku).filter((msku): msku is string => Boolean(msku)))];
+  const [sales, shipmentLines, failures, inventory, shipmentHeads] = await Promise.all([
     storeSet.length ? prisma.sellfoxSalesDailySnapshot.findMany({
       where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, storeId: { in: storeSet }, reportDate: { gte: from, lte: to } },
       select: { storeId: true, msku: true, asin: true, reportDate: true, quantity: true },
@@ -111,9 +121,28 @@ export async function readSellfoxRestock(query: SellfoxBrowseQuery, scope: Scope
       JOIN "SellfoxSnapshotHead" h ON h."storeId"=s."storeId" AND h.resource='fba_shipments' AND h."capturedAt"=s."latestCapturedAt"
       WHERE s."organizationId"=${scope.organizationId} AND s."workspaceId"=${scope.workspaceId} AND s."storeId" IN (${Prisma.join(storeSet)})`) : [],
     sellfoxStoreSyncFailures("fba_shipments", scope),
+    storeSet.length && mskus.length ? prisma.$queryRaw<RestockInventoryDay[]>(Prisma.sql`
+      WITH latest AS (
+        SELECT "storeId", "reportDate", MAX("capturedAt") AS "capturedAt"
+        FROM "SellfoxFbaInventorySnapshot"
+        WHERE "organizationId"=${scope.organizationId} AND "workspaceId"=${scope.workspaceId}
+          AND "storeId" IN (${Prisma.join(storeSet)}) AND "reportDate" BETWEEN ${from} AND ${to}
+        GROUP BY "storeId", "reportDate"
+      )
+      SELECT i."storeId", i.msku, i."reportDate",
+        CASE WHEN COUNT(i.quantity)=COUNT(*) THEN SUM(i.quantity)::double precision ELSE NULL END AS quantity
+      FROM "SellfoxFbaInventorySnapshot" i
+      JOIN latest l ON l."storeId"=i."storeId" AND l."reportDate"=i."reportDate" AND l."capturedAt"=i."capturedAt"
+      WHERE i."organizationId"=${scope.organizationId} AND i."workspaceId"=${scope.workspaceId}
+        AND i.msku IN (${Prisma.join(mskus)})
+      GROUP BY i."storeId", i.msku, i."reportDate"`) : [],
+    storeSet.length ? prisma.sellfoxSnapshotHead.findMany({
+      where: { resource: "fba_shipments", storeId: { in: storeSet }, SellfoxStore: { organizationId: scope.organizationId, workspaceId: scope.workspaceId } },
+      select: { storeId: true },
+    }) : [],
   ]);
   const groupBy = query.dimension === "msku" ? "msku" : "asin";
-  let rows = buildRestockRows({ listings: searched, sales, shipments: shipmentLines, today, groupBy });
+  let rows = buildRestockRows({ listings: searched, sales, shipments: shipmentLines, inventory, shipmentCapturedStoreIds: shipmentHeads.map((head) => head.storeId), today, groupBy });
   if (query.status === "needs") rows = rows.filter((row) => (row.suggest ?? 0) > 0);
   if (query.status === "covered") rows = rows.filter((row) => row.suggest === 0);
   const start = (query.page - 1) * query.pageSize;

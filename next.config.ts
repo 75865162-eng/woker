@@ -15,6 +15,7 @@ const localOnlyTraceExcludes = [
 ];
 
 const nextConfig: NextConfig = {
+  typescript: { tsconfigPath: process.env.ERP_NEXT_TYPESCRIPT_CONFIG || "tsconfig.json" },
   distDir,
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname),

@@ -1,42 +1,41 @@
 import { prisma } from "@/lib/db/prisma";
 import { processImageUpscale } from "@/lib/image-upscale/engine";
+import { claimExecution, ExecutionLostError } from "@/lib/runtime/job-execution";
 
-export async function processImageUpscaleJob(jobId: string) {
-  const claimed = await prisma.imageUpscaleJob.updateMany({
-    where: {
-      id: jobId,
-      status: { in: ["queued", "failed"] },
-    },
-    data: { status: "running", progress: 10, startedAt: new Date(), error: null },
-  });
-  if (!claimed.count) return;
-
-  const job = await prisma.imageUpscaleJob.findUnique({ where: { id: jobId } });
-  if (!job) throw new Error("Image upscale job not found.");
+export async function processImageUpscaleJob(jobId: string, engine = processImageUpscale) {
+  const execution = await claimExecution("image-upscale", jobId);
+  if (!execution) return;
 
   try {
-    const result = await processImageUpscale({
+    await execution.write(tx => tx.imageUpscaleJob.update({ where: { id: jobId }, data: { progress: 10, startedAt: new Date(), error: null } }));
+    const job = await prisma.imageUpscaleJob.findUniqueOrThrow({ where: { id: jobId } });
+    const outputKey = `image-upscale/results/${job.id}/${execution.token}.png`;
+    const result = await engine({
       inputKey: job.inputKey,
-      outputKey: `image-upscale/results/${job.id}.png`,
+      outputKey,
       scale: job.scale as 2 | 4,
       model: job.model,
     });
-    await prisma.imageUpscaleJob.update({
+    await execution.write(tx => tx.imageUpscaleJob.update({
       where: { id: jobId },
       data: {
         status: "completed",
         progress: 100,
-        outputKey: `image-upscale/results/${job.id}.png`,
+        outputKey,
+        leaseExpiresAt: null,
         ...result,
         completedAt: new Date(),
       },
-    });
+    }));
   } catch (error) {
+    if (error instanceof ExecutionLostError) return;
     const message = error instanceof Error ? error.message : "图片放大失败。";
-    await prisma.imageUpscaleJob.update({
+    await execution.write(tx => tx.imageUpscaleJob.update({
       where: { id: jobId },
-      data: { status: "failed", progress: 0, error: message },
-    });
+      data: { status: "failed", progress: 0, error: message, leaseExpiresAt: null },
+    })).catch(failure => { if (!(failure instanceof ExecutionLostError)) throw failure; });
     throw error;
+  } finally {
+    execution.dispose();
   }
 }

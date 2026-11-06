@@ -93,6 +93,7 @@ test("applying a successful authorization validation persists the first automati
     const tasks = await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, sourceId: { in: sources.map(source => source.id) }, trigger: "schedule" } });
     assert.ok(sources.length > 0);
     assert.equal(plans.length, tasks.length);
+    assert.deepEqual(sources.filter(source=>!tasks.some(task=>task.sourceId===source.id)).map(source=>source.resource), []);
     assert.ok(tasks.length > 0);
     assert.ok(tasks.every(task => ["WAITING", "QUEUED"].includes(task.status)));
   } finally { globalThis.fetch = previousFetch; }
@@ -256,7 +257,7 @@ test("validated Seller ID must not gate bounded 730-day tasks for existing US/CA
   for (const site of sites) for (const resource of ["inventory", "catalog", "orders", "sales_traffic"]) {
     sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: site, resource, freshnessMinutes: 2880, enabled: false, ...(resource === "orders" ? { orderPolicy: { ...JSON.parse(raw("orders", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaceTimeZone: "America/Los_Angeles" } } : {}) } }));
   }
-  sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: sites[0], resource: "finance", freshnessMinutes: 2880, enabled: false, financePolicy: { ...JSON.parse(raw("finance", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaces: sites.map(marketplaceId => ({ marketplaceId, marketplaceTimeZone: "America/Los_Angeles" })), fx: null } } }));
+  sources.push(await prisma.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: authId, sellerAccountId: store, marketplaceId: sites[0], resource: "finance", freshnessMinutes: 2880, enabled: false, financePolicy: { ...JSON.parse(raw("finance", "policy.json")), applicationId: `fixture-auto-${authId}`, marketplaces: sites.map(marketplaceId => ({ marketplaceId, marketplaceTimeZone: "America/Los_Angeles" })), initialFrom: new Date(Date.now() - 729 * 86400_000).toISOString(), fx: null } } }));
   const appId = `fixture-auto-${authId}`;
   for (const resource of ["returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing"] as const) {
     const data = resource === "returns" ? { returnsPolicy: { ...JSON.parse(raw("returns", "policy.json")), applicationId: appId, marketplaceTimeZone: "America/Los_Angeles" } }
@@ -279,7 +280,7 @@ test("validated Seller ID must not gate bounded 730-day tasks for existing US/CA
   const initialized = await ensureAmazonSyncInitialized(scope, authId, now);
   assert.equal(initialized.status, "initialized");
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 18);
-  assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 18);
+  const enqueuedIds = (await prisma.amazonSyncRun.findMany({where:scope,select:{sourceId:true}})).map(r=>r.sourceId); assert.deepEqual(sources.filter(s=>!enqueuedIds.includes(s.id)).map(s=>s.resource), [], "every original source should enqueue");
   await ensureAmazonSyncInitialized(scope, authId, now);
   await tickSyncCenter(now);
   assert.equal(await prisma.amazonSyncRun.count({ where: scope }), 18, "duplicate ticks cannot create duplicate tasks");
@@ -292,7 +293,7 @@ test("validated Seller ID must not gate bounded 730-day tasks for existing US/CA
       if (source.id === failedOrdersSource.id) {
         assert.equal(window.from, failedWindowFrom.toISOString());
         assert.equal(window.to, failedWindowTo.toISOString(), "failed cursor window is resumed after automatic schedule recreation");
-      } else assert.equal(Date.parse(window.from), now.getTime() - 730 * 86400_000);
+      } else if (source.resource === "finance") { assert.ok(Date.parse(window.from) >= now.getTime() - 730 * 86400_000); assert.ok(Date.parse(window.from) < now.getTime() - 728 * 86400_000); } else assert.equal(Date.parse(window.from), now.getTime() - 730 * 86400_000);
       assert.ok(Date.parse(window.to) - Date.parse(window.from) <= (source.resource === "orders" ? 1 : 30) * 86400_000);
     }
     if (frozen.requestedRange) assert.equal(Date.parse(frozen.requestedRange.to) - Date.parse(frozen.requestedRange.from), 30 * 86400_000);

@@ -1,11 +1,14 @@
-import "dotenv/config";
+import "./runtime/worker-bootstrap.mjs";
+import { createHeartbeatWriter } from "@/lib/runtime/heartbeat-writer";
+import { recoverExpiredExecutions } from "@/lib/runtime/job-execution";
+import { observeWorker, runtimeHeartbeatMetadata } from "@/lib/runtime/worker-diagnostics";
 import { Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { processImportJob } from "@/lib/jobs/processor";
-import { enqueueProductOutboxEvent } from "@/lib/queue";
+import { enqueueImportJob, enqueueProductOutboxEvent } from "@/lib/queue";
 import { enqueuePendingProductOutboxEvents, markExpiredProductAttachmentsOrphaned, processProductOutboxEvent, recoverStaleProductOutboxEvents, scanOverdueProductWorkflowNotifications } from "@/lib/products/product-outbox";
 import { prisma } from "@/lib/db/prisma";
-import { createRedisConnectionOptions, getImportJobQueue, importJobQueueName, productOutboxQueueName } from "@/lib/queue/redis-queue";
+import { createRedisConnectionOptions, importJobQueueName, productOutboxQueueName } from "@/lib/queue/redis-queue";
 
 const workerName = process.env.WORKER_NAME?.trim() || `${importJobQueueName}-${process.pid}`;
 const workerId = process.env.WORKER_ID?.trim() || `${workerName}-${process.pid}`;
@@ -23,6 +26,7 @@ const worker = new Worker<{ jobId: string }>(
 );
 
 async function enqueuePendingImportJobs(limit = 50) {
+  await recoverExpiredExecutions("import", limit);
   const jobs = await prisma.importJob.findMany({
     where: {
       status: "queued",
@@ -36,24 +40,7 @@ async function enqueuePendingImportJobs(limit = 50) {
     take: limit,
   });
 
-  await Promise.all(jobs.map((job) => enqueueImportJobMessage(job.id)));
-}
-
-async function enqueueImportJobMessage(jobId: string) {
-  await getImportJobQueue().add(
-    "process-import-job",
-    { jobId },
-    {
-      jobId: `import-job-${jobId}`,
-      attempts: 3,
-      backoff: {
-        type: "exponential",
-        delay: 3000,
-      },
-      removeOnComplete: 100,
-      removeOnFail: 200,
-    },
-  );
+  await Promise.all(jobs.map((job) => enqueueImportJob(job.id)));
 }
 
 const productOutboxWorker = new Worker<{ eventId: string }>(
@@ -74,7 +61,10 @@ async function enqueuePendingOutboxEvents() {
   await Promise.all(events.map((event) => enqueueProductOutboxEvent(event.id)));
 }
 
-async function writeHeartbeat(status: "online" | "stopping" = "online") {
+observeWorker(productOutboxWorker, "product-outbox-worker");
+observeWorker(worker, "import-worker");
+
+async function persistHeartbeat(status: "online" | "stopping") {
   if (!process.env.DATABASE_URL) return;
 
   await prisma.workerHeartbeat.upsert({
@@ -89,7 +79,7 @@ async function writeHeartbeat(status: "online" | "stopping" = "online") {
       concurrency,
       lastSeenAt: new Date(),
       metadata: {
-        pid: process.pid,
+        ...runtimeHeartbeatMetadata(), pid: process.pid,
         hostname: process.env.HOSTNAME,
       } satisfies Prisma.InputJsonValue,
     },
@@ -98,54 +88,56 @@ async function writeHeartbeat(status: "online" | "stopping" = "online") {
       concurrency,
       lastSeenAt: new Date(),
       metadata: {
-        pid: process.pid,
+        ...runtimeHeartbeatMetadata(), pid: process.pid,
         hostname: process.env.HOSTNAME,
       } satisfies Prisma.InputJsonValue,
     },
   });
 }
 
-void writeHeartbeat();
-void enqueuePendingImportJobs().catch((error) => {
-  console.error("[worker] queued import job recovery failed:", error);
+const writeHeartbeat = createHeartbeatWriter(persistHeartbeat);
+
+void writeHeartbeat().catch(() => console.error("[worker] heartbeat unavailable; retrying"));
+void enqueuePendingImportJobs().catch(() => {
+  console.error("[worker] queued import job recovery failed:");
 });
-void enqueuePendingOutboxEvents().catch((error) => {
-  console.error("[worker] product outbox recovery failed:", error);
+void enqueuePendingOutboxEvents().catch(() => {
+  console.error("[worker] product outbox recovery failed:");
 });
-void markExpiredProductAttachmentsOrphaned().catch((error) => {
-  console.error("[worker] product attachment cleanup failed:", error);
+void markExpiredProductAttachmentsOrphaned().catch(() => {
+  console.error("[worker] product attachment cleanup failed:");
 });
-void scanOverdueProductWorkflowNotifications().catch((error) => console.error("[worker] overdue workflow notification scan failed:", error));
+void scanOverdueProductWorkflowNotifications().catch(() => console.error("[worker] overdue workflow notification scan failed:"));
 const heartbeatTimer = setInterval(() => {
-  void writeHeartbeat().catch((error) => {
-    console.error("[worker] heartbeat failed:", error);
+  void writeHeartbeat().catch(() => {
+    console.error("[worker] heartbeat failed:");
   });
 }, 30_000);
 const outboxRecoveryTimer = setInterval(() => {
-  void enqueuePendingOutboxEvents().catch((error) => {
-    console.error("[worker] product outbox recovery failed:", error);
+  void enqueuePendingOutboxEvents().catch(() => {
+    console.error("[worker] product outbox recovery failed:");
   });
 }, 15_000);
 const importJobRecoveryTimer = setInterval(() => {
-  void enqueuePendingImportJobs().catch((error) => {
-    console.error("[worker] queued import job recovery failed:", error);
+  void enqueuePendingImportJobs().catch(() => {
+    console.error("[worker] queued import job recovery failed:");
   });
 }, 15_000);
 const attachmentCleanupTimer = setInterval(() => {
-  void markExpiredProductAttachmentsOrphaned().catch((error) => {
-    console.error("[worker] product attachment cleanup failed:", error);
+  void markExpiredProductAttachmentsOrphaned().catch(() => {
+    console.error("[worker] product attachment cleanup failed:");
   });
 }, 5 * 60_000);
 const overdueWorkflowTimer = setInterval(() => {
-  void scanOverdueProductWorkflowNotifications().catch((error) => console.error("[worker] overdue workflow notification scan failed:", error));
+  void scanOverdueProductWorkflowNotifications().catch(() => console.error("[worker] overdue workflow notification scan failed:"));
 }, 60_000);
 
 worker.on("completed", (job) => {
   console.log(`[worker] completed ${job.data.jobId}`);
 });
 
-worker.on("failed", (job, error) => {
-  console.error(`[worker] failed ${job?.data.jobId ?? "unknown"}:`, error);
+worker.on("failed", (job) => {
+  console.error(`[worker] failed ${job?.data.jobId ?? "unknown"}; inspect persisted task state`);
 });
 
 process.on("SIGINT", async () => {

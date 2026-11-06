@@ -3,7 +3,7 @@ import { OperationsSyncEntry } from "@/components/operations/sync-center-workben
 
 export default function OperationsPage() {
   return (
-    <AppShell title="经营中台" subtitle="Amazon 数据连接、同步状态与后续经营决策的统一入口">
+    <AppShell title="经营中台" subtitle="商品、订单、库存、履约、价格、财务、品牌与售后的八大经营板块">
       <OperationsSyncEntry />
     </AppShell>
   );

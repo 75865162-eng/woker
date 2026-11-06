@@ -5,6 +5,11 @@ import { getImageUpscaleJobQueue, getImportJobQueue, imageUpscaleJobQueueName, i
 import { getProductOutboxHealth } from "@/lib/products/product-outbox";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 
+import registry from "@/lib/runtime/worker-registry.json";
+import { queueHealth } from "@/lib/runtime/queue-health";
+import { registeredWorkerHealth } from "@/lib/runtime/worker-health";
+import { publicHeartbeatMetadata } from "@/lib/runtime/connection-identity";
+
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
@@ -18,33 +23,16 @@ export async function GET(request: Request) {
     const workspaceId = workspaceScopeFromRequest(request).workspaceId;
 
     const driver = process.env.QUEUE_DRIVER ?? "inline";
-    const queueCounts =
-      driver === "redis"
-        ? await getImportJobQueue().getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused")
-        : { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
-    const imageQueueCounts =
-      driver === "redis"
-        ? await getImageUpscaleJobQueue().getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused")
-        : { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
+    const [importQueueHealth, imageQueueHealth] = await Promise.all([
+      queueHealth(async () => driver === "redis" ? await getImportJobQueue().getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused") : {}),
+      queueHealth(async () => driver === "redis" ? await getImageUpscaleJobQueue().getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused") : {}),
+    ]);
     const heartbeatCutoff = new Date(Date.now() - 90_000);
-    const [heartbeats, imageWorkers, recentImageJobs, recentJobs, productHealth] = await Promise.all([
+    const [allHeartbeats, recentImageJobs, recentJobs, productHealth] = await Promise.all([
       process.env.DATABASE_URL
-        ? prisma.workerHeartbeat.findMany({
-            where: {
-              queueName: importJobQueueName,
-            },
-            orderBy: {
-              lastSeenAt: "desc",
-            },
-            take: 20,
-          })
-        : [],
-      process.env.DATABASE_URL
-        ? prisma.workerHeartbeat.findMany({
-            where: { queueName: imageUpscaleJobQueueName },
-            orderBy: { lastSeenAt: "desc" },
-            take: 20,
-          })
+        ? Promise.all(registry.map(item => prisma.workerHeartbeat.findMany({
+            where: { queueName: item.heartbeatQueue }, orderBy: { lastSeenAt: "desc" }, take: 20,
+          }))).then(groups => groups.flat())
         : [],
       process.env.DATABASE_URL
         ? prisma.imageUpscaleJob.findMany({
@@ -76,17 +64,23 @@ export async function GET(request: Request) {
         : null,
     ]);
 
+    const heartbeats = allHeartbeats.filter(h => h.queueName === importJobQueueName);
+    const imageWorkers = allHeartbeats.filter(h => h.queueName === imageUpscaleJobQueueName);
     return NextResponse.json({
+      registeredWorkers: registeredWorkerHealth(allHeartbeats),
       driver,
       queueName: importJobQueueName,
-      queueCounts,
-      imageQueueCounts,
+      queueCounts: importQueueHealth.counts,
+      imageQueueCounts: imageQueueHealth.counts,
+      queueAvailable: importQueueHealth.available && imageQueueHealth.available,
       workers: heartbeats.map((heartbeat) => ({
         ...heartbeat,
+        metadata: publicHeartbeatMetadata(heartbeat.metadata),
         online: heartbeat.status === "online" && heartbeat.lastSeenAt > heartbeatCutoff,
       })),
       imageWorkers: imageWorkers.map((heartbeat) => ({
         ...heartbeat,
+        metadata: publicHeartbeatMetadata(heartbeat.metadata),
         online: heartbeat.status === "online" && heartbeat.lastSeenAt > heartbeatCutoff,
       })),
       recentJobs,

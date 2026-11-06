@@ -1,6 +1,10 @@
+import { discoverProductObjects } from "./product-discovery";
+import { sellerArchivePolicy, assertSellerArchiveTarget } from "./seller-archive-policy";
+import { parseSettlementPolicy } from "./settlements";
+import { settlementScope } from "./settlement-scope";
 import { isObservationResource, parseObservationPolicy, assertObservationRoles, assertObservationClosed } from "./observation-policy";
 import { parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen } from "./returns";
-import { assertDomainReportRoles, domainReportRunWindow, type DomainReportResource } from "./domain-reports";
+import { assertDomainReportRoles, domainReportRunWindow, type DomainReportResource, type DomainReportWindow } from "./domain-reports";
 import { assertSellerMarketplaceAccess, assertAmazonScopeAdmin } from "./data-access";
 import { executionWindowMs } from "./execution-window";
 import { parseFinancePolicy, financeWindowFromFrozen, type FinanceWindow } from "./finance";
@@ -18,7 +22,7 @@ import { approvedContext } from "./approved-context";
 import { digest } from "./approval-policy";
 import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
-import { automaticMarketplaces, automaticPlanKey, automaticResources } from "./automatic-schedule";
+import { automaticMarketplaces, automaticPlanKey, automaticResources, nextPlanRunAt } from "./automatic-schedule";
 import { activeTaskStatuses, isIncrementalResource, boundedInteger, implementedDomain, officialEndpoint, optionalAmazonSellerId, parseSyncPlan, requiredText, requireSyncCenter, SyncInputError, type SyncScope } from "./policy";
 
 /** Caller holds the run's scope lock and updates its run in this transaction.
@@ -145,7 +149,7 @@ export async function saveSource(scope: SyncScope, actorUserId: string, body: Re
     if (!auth.amazonSellerId && resource === "listing_details") throw new SyncInputError("Listing Items 详情需要通过 OAuth 自动取得卖家身份；全量商品可使用 catalog 报表。", 409);
     const orderPolicy = resource === "orders" ? parseOrderSyncPolicy(body.orderPolicy ?? existing?.orderPolicy) : undefined;
     if (orderPolicy) {
-      officialEndpoint(auth.awsRegion, auth.endpoint); assertOrderRoles(auth, orderPolicy);
+      officialEndpoint(auth.awsRegion, auth.endpoint); assertOrderRoles(auth, orderPolicy, false, { ...scope, authorizationId: auth.id, authorizationRevision: auth.revision, marketplaceId });
       if (existing?.orderPolicy && parseOrderSyncPolicy(existing.orderPolicy).applicationId !== orderPolicy.applicationId) throw new SyncInputError("订单应用标识不可原地更换；真实应用迁移须单独评审限流与历史游标。");
       if (existing?.orderPolicy) {
         const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: existing.id } });
@@ -186,22 +190,35 @@ export async function saveSource(scope: SyncScope, actorUserId: string, body: Re
       const siblings = await tx.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId, resource: "returns" }, select: { returnsPolicy: true } });
       if (siblings.some(s => { const p = parseReturnPolicy(s.returnsPolicy); return p.applicationId !== returnsPolicy.applicationId || digest(p.budgets) !== digest(returnsPolicy.budgets); })) throw new SyncInputError("同一授权退货源必须共享应用与预算。", 409);
     }
-    if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(resource)) { officialEndpoint(auth.awsRegion, auth.endpoint); assertDomainReportRoles(resource as DomainReportResource, auth); }
+    const archivePolicy = sellerArchivePolicy(resource, body.domainPolicy ?? existing?.domainPolicy);
+    if (archivePolicy) {
+      assertSellerArchiveTarget(scope, marketplaceId);
+      const sibling = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, authorizationId, resource, domainPolicy: { path: ["mode"], equals: "seller-archive-only" }, ...(existing ? { id: { not: existing.id } } : {}) }, select: { id: true } });
+      if (sibling) throw new SyncInputError("同卖家同域仅允许一个卖家归档入口。", 409);
+    }
+    if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(resource)) { officialEndpoint(auth.awsRegion, auth.endpoint); assertDomainReportRoles(resource as DomainReportResource, auth, !!archivePolicy); }
     const domainPolicy = isObservationResource(resource) ? parseObservationPolicy(body.domainPolicy ?? existing?.domainPolicy, resource) : undefined;
     if (domainPolicy) {
-      officialEndpoint(auth.awsRegion, auth.endpoint); assertObservationRoles(domainPolicy, auth); assertObservationClosed(domainPolicy, new Date(), marketplaceId);
+      officialEndpoint(auth.awsRegion, auth.endpoint); assertObservationRoles(domainPolicy, auth, { ...scope, authorizationId: auth.id, authorizationRevision: auth.revision, marketplaceId }); assertObservationClosed(domainPolicy, new Date(), marketplaceId);
       if (existing?.domainPolicy && parseObservationPolicy(existing.domainPolicy).applicationId !== domainPolicy.applicationId) throw new SyncInputError("应用标识不可原地更换。", 409);
     }
     const applicationId = domainPolicy?.applicationId ?? orderPolicy?.applicationId ?? financePolicy?.applicationId ?? returnsPolicy?.applicationId;
     if (applicationId) {
       const peers = await tx.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId }, select: { resource: true, domainPolicy: true, orderPolicy: true, financePolicy: true, returnsPolicy: true } });
-      if (peers.some(peer => [peer.domainPolicy, peer.orderPolicy, peer.financePolicy, peer.returnsPolicy].some(value => value && typeof value === "object" && !Array.isArray(value) && value.applicationId !== applicationId) || (peer.domainPolicy == null && peer.resource === "returns" && applicationId !== returnsPolicy?.applicationId))) throw new SyncInputError("同一授权各域必须使用相同应用标识，避免拆分配额。", 409);
+      if (peers.some(peer => [peer.domainPolicy, peer.orderPolicy, peer.financePolicy, peer.returnsPolicy].some(value => value && typeof value === "object" && !Array.isArray(value) && !("mode" in value && value.mode === "seller-archive-only") && value.applicationId !== applicationId) || (peer.returnsPolicy == null && peer.resource === "returns" && applicationId !== returnsPolicy?.applicationId))) throw new SyncInputError("同一授权各域必须使用相同应用标识，避免拆分配额。", 409);
     }
-    const domainData = domainPolicy ? { domainPolicy: domainPolicy as Prisma.InputJsonValue } : {};
+    const settlementPolicy = resource === "settlements" && (body.settlementPolicy ?? existing?.settlementPolicy) ? parseSettlementPolicy(body.settlementPolicy ?? existing?.settlementPolicy) : undefined;
+    if (settlementPolicy) {
+      await settlementScope(tx, scope, { authorizationId, marketplaceId, settlementPolicy }, [actorUserId]);
+      const cursor = existing ? await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: existing.id } }) : null;
+      if (cursor && cursor.status !== "SUCCEEDED" && digest(existing?.settlementPolicy) !== digest(settlementPolicy)) throw new SyncInputError("结算未完成游标的采集策略不可改变；须先审阅原进度。", 409);
+    }
+    const settlementData = settlementPolicy ? { settlementPolicy: settlementPolicy as Prisma.InputJsonValue } : {};
+    const domainData = domainPolicy || archivePolicy ? { domainPolicy: (domainPolicy ?? archivePolicy) as Prisma.InputJsonValue } : {};
     const returnData = returnsPolicy ? { returnsPolicy: returnsPolicy as Prisma.InputJsonValue } : {};
     const financeData = financePolicy ? { financePolicy: financePolicy as Prisma.InputJsonValue } : {};
     const orderData = orderPolicy ? { orderPolicy: orderPolicy as Prisma.InputJsonValue } : {};
-    const row = await tx.amazonSyncDataSource.upsert({ where: { organizationId_workspaceId_sellerAccountId_marketplaceId_resource: { ...scope, sellerAccountId, marketplaceId, resource } }, create: { ...scope, id: requiredText(body.proposedId, "新数据源 ID"), authorizationId, sellerAccountId, marketplaceId, resource, freshnessMinutes, enabled: body.enabled as boolean, ...orderData, ...financeData, ...returnData, ...domainData }, update: { freshnessMinutes, enabled: body.enabled as boolean, revision: { increment: 1 }, ...orderData, ...financeData, ...returnData, ...domainData } });
+    const row = await tx.amazonSyncDataSource.upsert({ where: { organizationId_workspaceId_sellerAccountId_marketplaceId_resource: { ...scope, sellerAccountId, marketplaceId, resource } }, create: { ...scope, id: existing?.id ?? requiredText(body.proposedId, "新数据源 ID"), authorizationId, sellerAccountId, marketplaceId, resource, freshnessMinutes, enabled: body.enabled as boolean, ...orderData, ...financeData, ...returnData, ...domainData, ...settlementData }, update: { freshnessMinutes, enabled: body.enabled as boolean, revision: { increment: 1 }, ...orderData, ...financeData, ...returnData, ...domainData, ...settlementData } });
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actorUserId, action: "amazon.sync.source.saved", entityType: "AmazonSyncDataSource", entityId: row.id, metadata: { workspaceId: scope.workspaceId, enabled: row.enabled } } });
     return row;
   })(db);
@@ -229,7 +246,7 @@ export async function savePlan(scope: SyncScope, actorUserId: string, body: Reco
       const conflict = await tx.amazonSyncPlanTarget.findFirst({ where: { ...scope, sourceId: { in: sourceIds }, schedule: { enabled: true, executionVersion: 2, NOT: { id } } } });
       if (conflict) throw new SyncInputError("相同数据源已有启用的快照计划；请先暂停原计划。", 409);
     }
-    const data = { ...fields, nextRunAt: plan.enabled ? new Date(Date.now() + plan.intervalMinutes * 60000) : null, updatedByUserId: actorUserId };
+    const data = { ...fields, nextRunAt: nextPlanRunAt(plan.enabled, automatic, plan.intervalMinutes), updatedByUserId: actorUserId };
     const row = existing ? await tx.amazonSyncSchedule.update({ where: { id }, data: { ...data, revision: { increment: 1 } } }) : await tx.amazonSyncSchedule.create({ data: { ...scope, id, planKey: id, executionVersion: 2, ...data } });
     await tx.amazonSyncPlanTarget.deleteMany({ where: { ...scope, scheduleId: id } });
     await tx.amazonSyncPlanTarget.createMany({ data: sourceIds.map(sourceId => ({ ...scope, scheduleId: id, sourceId })) });
@@ -237,12 +254,12 @@ export async function savePlan(scope: SyncScope, actorUserId: string, body: Reco
     return row;
   })(db);
 }
-export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope, actorUserId: string, sourceId: string, options: { key: string; trigger: string; scheduleId?: string; scheduleRevision?: number; maxAttempts?: number; priority?: number; requestedRange?: RequestedRange; orderWindow?: OrderWindow; financeWindow?: FinanceWindow; returnWindow?: FinanceWindow; reportWindow?: { createdSince: string; createdUntil: string } | { from: string; to: string; dataStartTime: string; dataEndTime: string; eventType: string } }) {
+export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope, actorUserId: string, sourceId: string, options: { key: string; trigger: string; scheduleId?: string; scheduleRevision?: number; maxAttempts?: number; priority?: number; requestedRange?: RequestedRange; orderWindow?: OrderWindow; financeWindow?: FinanceWindow; returnWindow?: FinanceWindow; reportWindow?: DomainReportWindow }) {
   const scheduled = options.trigger === "schedule";
   const approval = scheduled ? null : approvedContext(scope, "run");
   scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
   const source = await tx.amazonSyncDataSource.findFirst({ where: { ...scope, id: sourceId, ...(!scheduled ? { enabled: true } : {}) }, include: { authorization: true, seller: true } });
-  if (!source || source.authorization.status !== "CONFIGURED" || (!scheduled && source.seller.status !== "active")) throw new SyncInputError("数据源、授权或店铺不可用。", 409);
+  if (!source || !source.enabled || source.authorization.status !== "CONFIGURED" || (!scheduled && source.seller.status !== "active")) throw new SyncInputError("数据源、授权或店铺不可用。", 409);
   if (!source.authorization.amazonSellerId && source.resource === "listing_details") throw new SyncInputError("Listing Items 详情需要 OAuth 卖家身份；全量商品使用 catalog 报表。", 409);
   implementedDomain(source.resource);
   const schedule = scheduled && options.scheduleId ? await tx.amazonSyncSchedule.findFirst({ where: { ...scope, id: options.scheduleId, resource: source.resource, executionVersion: 2, enabled: true, revision: options.scheduleRevision, targets: { some: { sourceId } } } }) : null;
@@ -258,17 +275,25 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   if (!scheduled && !approval?.commandSourceIds?.includes(sourceId)) throw new SyncInputError("任务目标超出执行审批范围。", 403);
   if (source.resource === "sales_traffic") rangeFromFrozen({ requestedRange: options.requestedRange });
   const orderWindow = source.resource === "orders" ? orderWindowFromFrozen(options.orderWindow) : undefined;
-  if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy), scheduled);
+  if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy), scheduled, { ...scope, authorizationId: source.authorizationId, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId });
   const financeWindow = source.resource === "finance" ? financeWindowFromFrozen(options.financeWindow) : undefined;
   if (financeWindow) await assertFinanceScope(tx, scope, source, [actorUserId], scheduled);
   const returnWindow = source.resource === "returns" ? returnWindowFromFrozen(options.returnWindow) : undefined;
   if (returnWindow) assertReturnRoles(source.authorization, scheduled);
-  const reportWindow = ["settlements", "inventory_events"].includes(source.resource) ? domainReportRunWindow(source.resource as DomainReportResource, options.reportWindow) : undefined;
-  if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)) assertDomainReportRoles(source.resource as DomainReportResource, source.authorization, scheduled);
+  const reportWindow = ["settlements", "inventory_events", "reimbursements"].includes(source.resource) ? domainReportRunWindow(source.resource as DomainReportResource, options.reportWindow) : undefined;
+  if (source.resource === "reimbursements" && !reportWindow) throw new SyncInputError("新赔偿任务须冻结最多 30 天的日期窗口。");
+  const archivePolicy = sellerArchivePolicy(source.resource, source.domainPolicy);
+  if (archivePolicy) {
+    assertSellerArchiveTarget(scope, source.marketplaceId); await assertAmazonScopeAdmin(scope, actorUserId, tx);
+    if (!source.authorization.amazonSellerId || !source.authorization.identityVerifiedAt) throw new SyncInputError("卖家归档须先核验真实卖家身份。", 409);
+  }
+  if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)) assertDomainReportRoles(source.resource as DomainReportResource, source.authorization, scheduled || !!archivePolicy);
   const domainPolicy = isObservationResource(source.resource) ? parseObservationPolicy(source.domainPolicy, source.resource) : undefined;
-  if (domainPolicy) { assertObservationRoles(domainPolicy, source.authorization); assertObservationClosed(domainPolicy, new Date(), source.marketplaceId); }
+  if (domainPolicy) { assertObservationRoles(domainPolicy, source.authorization, { ...scope, authorizationId: source.authorization.id, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId }); assertObservationClosed(domainPolicy, new Date(), source.marketplaceId); }
   const freezesEndpoint = Boolean(domainPolicy || reportWindow || returnWindow || financeWindow || orderWindow) || ["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource);
-  const frozenScope = { ...(domainPolicy ? { domainPolicy } : {}), ...(freezesEndpoint ? { region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}), executionExpiresAt: new Date(Date.now() + executionWindowMs).toISOString(), sourceId: source.id, sourceRevision: source.revision, authorizationId: source.authorization.id, authorizationRevision: source.authorization.revision, amazonSellerId: source.authorization.amazonSellerId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, ...(scheduled ? { scheduleId: schedule!.id, scheduleRevision: schedule!.revision } : {}), ...(options.requestedRange ? { requestedRange: options.requestedRange } : {}), ...(reportWindow ? { reportWindow } : {}), ...(returnWindow ? { returnWindow, returnsPolicy: parseReturnPolicy(source.returnsPolicy) } : {}), ...(financeWindow ? { financeWindow, financePolicy: parseFinancePolicy(source.financePolicy) } : {}), ...(orderWindow ? { orderWindow, orderPolicy: parseOrderSyncPolicy(source.orderPolicy) } : {}) };
+  const settlement = source.resource === "settlements" && source.settlementPolicy ? await settlementScope(tx, scope, source, [actorUserId]) : undefined;
+  const productManifest = domainPolicy ? await discoverProductObjects(tx, scope, source, domainPolicy) : undefined;
+  const frozenScope = { ...(archivePolicy ? { sellerArchivePolicy: archivePolicy } : {}), ...(productManifest ? { productManifest } : {}), ...(settlement ? { settlement } : {}), ...(domainPolicy ? { domainPolicy } : {}), ...(freezesEndpoint ? { region: source.authorization.awsRegion, endpoint: source.authorization.endpoint } : {}), executionExpiresAt: new Date(Date.now() + executionWindowMs).toISOString(), sourceId: source.id, sourceRevision: source.revision, authorizationId: source.authorization.id, authorizationRevision: source.authorization.revision, amazonSellerId: source.authorization.amazonSellerId, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, resource: source.resource, ...(scheduled ? { scheduleId: schedule!.id, scheduleRevision: schedule!.revision } : {}), ...(options.requestedRange ? { requestedRange: options.requestedRange } : {}), ...(reportWindow ? { reportWindow } : {}), ...(returnWindow ? { returnWindow, returnsPolicy: parseReturnPolicy(source.returnsPolicy) } : {}), ...(financeWindow ? { financeWindow, financePolicy: parseFinancePolicy(source.financePolicy) } : {}), ...(orderWindow ? { orderWindow, orderPolicy: parseOrderSyncPolicy(source.orderPolicy) } : {}) };
   return tx.amazonSyncRun.create({ data: { ...scope, id: randomUUID(), executionVersion: 2, sourceId, requestedByUserId: actorUserId, resource: source.resource, authorizationRevision: source.authorization.revision, idempotencyKey: options.key,
     executionApprovalId: approval?.approvalId ?? null, frozenScope, frozenScopeDigest: digest(frozenScope),
     mode: ["orders", "finance", "returns"].includes(source.resource) ? "incremental" : ["settlements", "reimbursements", "inventory_age", "inventory_events", "brand_analytics", "buy_box_history"].includes(source.resource) ? "report" : source.resource === "sales_traffic" ? "date_range" : "snapshot", status: "WAITING", trigger: options.trigger, scheduleId: options.scheduleId, scheduleRevision: options.scheduleRevision, maxAttempts: options.maxAttempts ?? 3, priority: options.priority ?? 1 } });

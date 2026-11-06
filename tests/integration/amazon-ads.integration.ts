@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { before, after, test } from "node:test";
 import { prisma } from "@/lib/db/prisma";
@@ -14,7 +14,7 @@ import { queryAmazonAdsData, withAdsQueryReadSnapshot } from "@/lib/amazon-ads/q
 import { parseAdsQuery } from "@/lib/amazon-ads/query-contract";
 import { createAmazonAdsRepository } from "@/lib/amazon-ads/repository";
 import { amazonDataAccess } from "@/lib/amazon-sync/data-access";
-import { bindAmazonAdsProfile } from "@/lib/amazon-ads/authorization";
+import { bindAmazonAdsProfile, finishAmazonAdsOAuth } from "@/lib/amazon-ads/authorization";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1") throw new Error("Disposable runner required");
 const scope = { organizationId: randomUUID(), workspaceId: "main" };
@@ -348,6 +348,7 @@ test("binding a ready Profile persists an initial task and the existing worker c
       });
     });
     await prisma.amazonAdsApiBudget.updateMany({ data: { nextRequestAt: new Date(0), leaseOwner: null, leaseExpiresAt: null } });
+    await prisma.amazonAdsSyncPlan.updateMany({ where: { ...scope, status: "ACTIVE" }, data: { nextRunAt: new Date(Date.now() + 86400000) } });
     await tickAmazonAds();
     await done;
     const persisted = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: initialTask.id } });
@@ -356,6 +357,14 @@ test("binding a ready Profile persists an initial task and the existing worker c
     assert.equal(await prisma.amazonAdsEntityRecord.count({ where: { ...scope, profileId: boundProfile.id } }), 9);
     await tickAmazonAds(new Date(Date.now() + 1000));
     assert.equal(await prisma.amazonAdsSyncTask.count({ where: { ...scope, planId: boundPlan.id } }), 1, "a completed initial pass must not immediately enqueue a duplicate daily pass");
+    await prisma.amazonAdsSyncPlan.updateMany({ where: { ...scope, id: { not: boundPlan.id }, status: "ACTIVE" }, data: { nextRunAt: new Date(Date.now() + 4 * 86400000) } });
+    const currentPlan = await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { id: boundPlan.id } });
+    const dueAt = new Date(currentPlan.nextRunAt.getTime() + 1000);
+    await tickAmazonAds(dueAt);
+    const dailyTask = await prisma.amazonAdsSyncTask.findFirstOrThrow({ where: { ...scope, planId: boundPlan.id, trigger: "scheduled-structure" } });
+    assert.ok(["WAITING", "QUEUED", "RUNNING", "SUCCEEDED"].includes(dailyTask.status));
+    await tickAmazonAds(dueAt);
+    assert.equal(await prisma.amazonAdsSyncTask.count({ where: { ...scope, planId: boundPlan.id } }), 2, "repeated scheduler ticks must not create duplicate daily tasks");
   } finally {
     await closeWorker?.();
     const boundPlan = await prisma.amazonAdsSyncPlan.findFirst({ where: { ...scope, profileId: boundProfile.id } });
@@ -367,6 +376,55 @@ test("binding a ready Profile persists an initial task and the existing worker c
       await prisma.amazonAdsSyncPlan.delete({ where: { id: boundPlan.id } });
     }
     await prisma.amazonAdsProfile.delete({ where: { id: boundProfile.id } });
+  }
+});
+
+test("OAuth Profile discovery followed by ERP binding creates one persisted initial sync task", async () => {
+  const externalProfileId = "555";
+  const attemptId = randomUUID();
+  const state = randomUUID();
+  const stateHash = createHash("sha256").update(state).digest("hex");
+  const redirectUri = "http://127.0.0.1/api/integrations/amazon/ads/oauth/callback";
+  const previousRedirectUri = process.env.AMAZON_ADS_OAUTH_REDIRECT_URI;
+  process.env.AMAZON_ADS_OAUTH_REDIRECT_URI = redirectUri;
+  await prisma.amazonAdsOAuthAttempt.create({ data: {
+    ...scope, id: attemptId, userId: owner, region: "EU", stateHash, redirectUri,
+    expiresAt: new Date(Date.now() + 60000),
+  } });
+  let discoveredAuthorizationId: string | undefined;
+  let discoveredProfileId: string | undefined;
+  try {
+    const result = await finishAmazonAdsOAuth({ scope, actor: owner, params: new URLSearchParams({ state, code: "fixture-code" }), transport: {
+      async exchangeAuthorizationCode() { return { refreshToken: "fixture-refresh-token", accessToken: "fixture-access-token" }; },
+      async refreshAccessToken() { return "fixture-access-token"; },
+      async listProfiles({ region }) { return region === "EU" ? [{ profileId: externalProfileId, countryCode: "US", currencyCode: "USD", timezone: "America/Los_Angeles", accountInfo: { marketplaceStringId: site, type: "seller", name: "Fixture discovered account" } }] : []; },
+    } });
+    discoveredAuthorizationId = result.authorizationId;
+    assert.equal(result.profileCount, 1);
+    const discovered = await prisma.amazonAdsProfile.findFirstOrThrow({ where: { ...scope, authorizationId: result.authorizationId, region: "EU", profileId: externalProfileId } });
+    discoveredProfileId = discovered.id;
+    assert.equal(discovered.sellerAccountId, null, "discovery does not guess an ERP seller binding");
+
+    await bindAmazonAdsProfile(scope, owner, externalProfileId, seller, undefined, discovered.id);
+    const plan = await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { organizationId_workspaceId_profileId: { ...scope, profileId: discovered.id } } });
+    assert.equal(plan.status, "ACTIVE");
+    const tasks = await prisma.amazonAdsSyncTask.findMany({ where: { ...scope, planId: plan.id } });
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].status, "WAITING");
+    assert.equal(tasks[0].idempotencyKey, `initial-structure:${plan.id}:${plan.revision}`);
+  } finally {
+    if (discoveredProfileId) {
+      const plan = await prisma.amazonAdsSyncPlan.findFirst({ where: { ...scope, profileId: discoveredProfileId } });
+      if (plan) {
+        await prisma.amazonAdsSyncTask.deleteMany({ where: { ...scope, planId: plan.id } });
+        await prisma.amazonAdsSyncPlan.delete({ where: { id: plan.id } });
+      }
+      await prisma.amazonAdsProfile.delete({ where: { id: discoveredProfileId } });
+    }
+    if (discoveredAuthorizationId) await prisma.amazonAdsAuthorization.delete({ where: { id: discoveredAuthorizationId } });
+    await prisma.amazonAdsOAuthAttempt.deleteMany({ where: { ...scope, id: attemptId } });
+    if (previousRedirectUri === undefined) delete process.env.AMAZON_ADS_OAUTH_REDIRECT_URI;
+    else process.env.AMAZON_ADS_OAUTH_REDIRECT_URI = previousRedirectUri;
   }
 });
 

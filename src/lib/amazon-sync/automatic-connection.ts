@@ -7,7 +7,7 @@ import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
 import { automaticBackfillStart, automaticMarketplaces } from "./automatic-schedule";
 import { reportTimeZone } from "./date-range";
 import { parseOrderSyncPolicy } from "./orders";
-import { parseFinancePolicy } from "./finance";
+import { newFinanceRetentionStart, parseFinancePolicy } from "./finance";
 import { parseReturnPolicy, returnReportTypes } from "./returns";
 import { scopeLock } from "./service";
 import { SyncInputError, type SyncScope } from "./policy";
@@ -70,8 +70,9 @@ export async function ensureAutomaticConnections(scopes: SyncScope[], now: Date,
         const allSites = extractMarketplaceParticipations({ payload: auth.marketplaceParticipations }).filter(s => automaticMarketplaces.has(s.marketplaceId));
         if (needsFinance && bindings.length === allSites.length && bindings.length && new Set(bindings.map(s => s.sellerAccountId)).size === 1) {
           if (++count > 200) throw new SyncInputError("自动数据源超过当前工作区200个容量上限。", 409);
-          const policy = parseFinancePolicy({ initialFrom: automaticBackfillStart(now), applicationId, windowMinutes: 43200, overlapSeconds: 60, safetyLagSeconds: 180, requestsPerSecond: .5, burst: 1, sellerWide: true, collectUnattributed: true, marketplaces: bindings.map(s => ({ marketplaceId: s.marketplaceId, marketplaceTimeZone: reportTimeZone(s.marketplaceId) })) });
-          await tx.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: auth.id, sellerAccountId: bindings[0].sellerAccountId, marketplaceId: bindings[0].marketplaceId, resource: "finance", enabled: true, freshnessMinutes: 2880, financePolicy: json(policy) } });
+          const start = newFinanceRetentionStart(automaticBackfillStart(now), now);
+          const policy = parseFinancePolicy({ initialFrom: start.initialFrom, applicationId, windowMinutes: 43200, overlapSeconds: 60, safetyLagSeconds: 180, requestsPerSecond: .5, burst: 1, sellerWide: true, collectUnattributed: true, marketplaces: bindings.map(s => ({ marketplaceId: s.marketplaceId, marketplaceTimeZone: reportTimeZone(s.marketplaceId) })) });
+          await tx.amazonSyncDataSource.create({ data: { ...scope, id: randomUUID(), authorizationId: auth.id, sellerAccountId: bindings[0].sellerAccountId, marketplaceId: bindings[0].marketplaceId, resource: "finance", enabled: true, freshnessMinutes: 2880, financePolicy: json(policy), ...(start.retentionGap ? { coverage: json({ retentionGaps: [start.retentionGap], historicalComplete: false }) } : {}) } });
           created++;
         }
         if (created) await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: auth.updatedByUserId, action: "amazon.sync.connection.automatic_bound", entityType: "AmazonSpApiAuthorization", entityId: auth.id, metadata: { workspaceId: scope.workspaceId, sourceCount: created, marketplaceIds: bindings.map(s => s.marketplaceId), sellerIdentityKnown: !!auth.amazonSellerId, roleEvidence: "UPSTREAM_ENFORCED_READ_ONLY", initialFrom: automaticBackfillStart(now) } } });

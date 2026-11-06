@@ -201,5 +201,6 @@ test("oversized and redirected downloads never escape the bounded reader", async
 
 test("regular worker route stays closed regardless of environment flags or configured account IDs", () => {
   assert.equal(reportingV1DispatchReadiness.liveEnabled, false);
+  assert.deepEqual(reportingV1DispatchReadiness.blockers, ["DOWNLOADED_JSON_ROW_ENCODING_UNVERIFIED", "ACCOUNT_BINDING_UNVERIFIED", "DOWNLOAD_HOSTS_UNVERIFIED", "PERSISTENT_V1_RUNTIME_NOT_IMPLEMENTED"]);
   assert.throws(rejectUnverifiedReportingV1Dispatch, { message: "ADS_REPORT_V1_LIVE_DISPATCH_DISABLED" });
 });
