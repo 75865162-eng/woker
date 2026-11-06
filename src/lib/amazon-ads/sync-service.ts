@@ -47,6 +47,7 @@ export async function ensureAdsPlan(tx: Prisma.TransactionClient, scope: AdsAuth
     ...scope, id: randomUUID(), planId: currentPlan.id, profileId: currentPlan.profileId,
     requestedByUserId: actor, idempotencyKey, planRevision: currentPlan.revision, trigger: "schedule",
   } });
+  await tx.amazonAdsSyncPlan.update({ where: { id: currentPlan.id }, data: { nextRunAt: new Date(Date.now() + currentPlan.intervalMinutes * 60_000) } });
 }
 export async function assertAdsLivePlan(tx: Prisma.TransactionClient, scope: AdsAuthScope, planId: string, revision: number) {
   if (!adsScopeEnabled(scope)) throw new AdsSyncError("ADS_SYNC_DISABLED");

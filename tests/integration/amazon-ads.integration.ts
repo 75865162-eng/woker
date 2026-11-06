@@ -323,6 +323,7 @@ test("binding a ready Profile persists an initial task and the existing worker c
     assert.equal(initialTask.trigger, "schedule");
     assert.equal(initialTask.requestedFrom, null);
     assert.equal(initialTask.requestedTo, null);
+    assert.ok(boundPlan.nextRunAt.getTime() > Date.now(), "the first task reserves the next daily structure run");
 
     await getAmazonSyncQueue().drain();
     const worker = new Worker<AmazonSyncQueueJob>(getAmazonSyncQueueName(), async job => {
@@ -353,6 +354,8 @@ test("binding a ready Profile persists an initial task and the existing worker c
     assert.equal(persisted.stage, "COMPLETED_SP_STRUCTURE");
     assert.equal(persisted.apiRequests, 9);
     assert.equal(await prisma.amazonAdsEntityRecord.count({ where: { ...scope, profileId: boundProfile.id } }), 9);
+    await tickAmazonAds(new Date(Date.now() + 1000));
+    assert.equal(await prisma.amazonAdsSyncTask.count({ where: { ...scope, planId: boundPlan.id } }), 1, "a completed initial pass must not immediately enqueue a duplicate daily pass");
   } finally {
     await closeWorker?.();
     const boundPlan = await prisma.amazonAdsSyncPlan.findFirst({ where: { ...scope, profileId: boundProfile.id } });
