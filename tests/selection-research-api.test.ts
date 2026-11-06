@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
 import { createLocalSession } from "@/lib/auth/session";
 import { GET, POST } from "@/app/api/selection-research/[id]/route";
@@ -11,6 +14,9 @@ import { SKILLS, type Run } from "@/lib/selection-research/types";
 
 test("real Next handlers enforce session/scope, reject unconfigured live, serialize decisions and retain both gates using a mock Prisma client", async () => {
   const previousUrl = process.env.DATABASE_URL;
+  const previousSkillRoot = process.env.SELECTION_SKILL_ROOT;
+  const isolatedSkillDirectory = await mkdtemp(path.join(tmpdir(), "selection-api-skills-"));
+  process.env.SELECTION_SKILL_ROOT = path.join(isolatedSkillDirectory, "missing");
   const globals = globalThis as unknown as { prisma?: PrismaClient };
   const previousClient = globals.prisma;
   const previousStorage = process.env.STORAGE_DRIVER;
@@ -48,7 +54,10 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
     assert.equal((await GET(request(undefined, { anonymous: true }), context)).status, 401);
     assert.equal((await GET(request(undefined, { other: true }), context)).status, 404);
     assert.equal((await GET(request(undefined, { workspace: "forbidden" }), context)).status, 403);
-    assert.equal((await create(request({ mode: "live", requirement: "fixture", marketplace: "US", approved: true }))).status, 409);
+    const unconfigured = await create(request({ mode: "live", requirement: "fixture", marketplace: "US", approved: true }));
+    assert.equal(unconfigured.status, 409);
+    assert.equal((await unconfigured.json()).error, "SELLERSPRITE_MCP_NOT_CONFIGURED");
+    assert.equal(writes, 0);
     assert.equal((await report(request(), context)).status, 409);
     assert.equal((await POST(request({ operation: "step", approved: true, status: "COMPLETED" }), context)).status, 200);
     assert.equal(row.output.status, "WAITING_FOR_USER"); assert.equal(row.output.stage, 1);
@@ -73,6 +82,8 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
     assert.equal((await savedReport(request(), { params: Promise.resolve({ id: run.id, fileId: "different-file" }) })).status, 404);
     assert.equal(fileReads, 1);
   } finally {
+    if (previousSkillRoot === undefined) delete process.env.SELECTION_SKILL_ROOT; else process.env.SELECTION_SKILL_ROOT = previousSkillRoot;
+    await rm(isolatedSkillDirectory, { recursive: true, force: true });
     globals.prisma = previousClient;
     localStorageDriver.getBuffer = previousReadBuffer;
     if (previousStorage === undefined) delete process.env.STORAGE_DRIVER; else process.env.STORAGE_DRIVER = previousStorage;

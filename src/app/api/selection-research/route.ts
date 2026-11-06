@@ -22,9 +22,9 @@ export async function POST(request: Request) {
     const mode = body.mode === "live" ? "live" : "fixture";
     const access = await researchAccess(request, "create", { ...body, mode }); if (!access.ok) return access.response;
     if (typeof body.requirement !== "string" || typeof body.marketplace !== "string") return NextResponse.json({ error: "INVALID_RESEARCH_REQUEST" }, { status: 400 });
-    const skills = await installedResearchSkills();
     if (mode === "fixture") {
       if (!access.fixture) throw new Error("RESEARCH_MODE_MISMATCH");
+      const skills = await installedResearchSkills();
       const run = await access.engine.create({ requirement: body.requirement, marketplace: body.marketplace, skills, policies: access.fixture.policies, limits: {} });
       return NextResponse.json({ run }, { status: 201, headers: { "Cache-Control": "no-store" } });
     }
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     if (!access.aiSettings?.apiKey) throw new Error("AI_MODEL_NOT_CONFIGURED");
     const maxCalls = Number(body.maxMarketCalls);
     if (!Number.isSafeInteger(maxCalls) || maxCalls < 1 || maxCalls > 30) throw new Error("MISSING_MARKET_CALL_BUDGET");
+    const skills = await installedResearchSkills();
     const discovery = await discoverResearchTools(access.transport);
     if (!discovery.registry.length) throw new Error("NO_SUPPORTED_LIVE_TOOLS");
     const run = await access.engine.create({ requirement: body.requirement, marketplace: body.marketplace, skills, policies: discovery.policies, limits: { sellersprite: maxCalls }, registry: discovery.registry });
