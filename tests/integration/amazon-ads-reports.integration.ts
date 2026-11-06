@@ -13,6 +13,9 @@ import { campaignReportRequest, type CampaignReportSpec } from "@/lib/amazon-ads
 import { getStorageDriver } from "@/lib/storage";
 import { decryptAmazonAdsCheckpoint } from "@/lib/amazon-ads/credentials";
 import { Prisma } from "@prisma/client";
+import { Queue, QueueEvents, Worker } from "bullmq";
+import { createRedisConnectionOptions } from "@/lib/queue/redis-queue";
+import { tickIsolatedReports, runIsolatedReportDispatch, controlIsolatedReport, type ReportDispatch } from "@/lib/amazon-ads/report-runtime";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1") throw new Error("Disposable runner required");
 const scope = { organizationId: randomUUID(), workspaceId: "report-audit" }, actor = randomUUID(), seller = randomUUID();
@@ -175,6 +178,23 @@ test("durable budgets, deadline, scope and fixture guard stop before any transpo
   assert.deepEqual(fixture.calls, { create: 0, poll: 0, download: 0 });
 });
 
+test("corrupt durable checkpoint cannot consume transport, reset budgets or advance report state", async () => {
+  const fence = await runningReport(true), fixture = acquisitionTransport("checkpoint-invalid");
+  await initializeIsolatedCampaignReport(scope, actor, fence, acquisitionSpec);
+  const original = await acquisitionRow(fence.taskId);
+  const options = original.requestOptions as unknown as { acquisition: AcquisitionState };
+  for (const patch of [{ calls: { create: -1, poll: 0, download: 0 } }, { calls: { create: "0", poll: 0, download: 0 } }, { phase: "UNKNOWN" }, { nextPollAt: "invalid" }, { reserved: { operation: "create", fence: 1, owner: "" } }]) {
+    const corrupt = { ...options, acquisition: { ...options.acquisition, ...patch } };
+    await prisma.amazonAdsReportRequest.update({ where: { id: original.id }, data: { requestOptions: corrupt as unknown as Prisma.InputJsonValue } });
+    await assert.rejects(() => processIsolatedCampaignReport(scope, actor, fence, fixture.transport), /ADS_REPORT_CHECKPOINT_INVALID/);
+    assert.deepEqual((await acquisitionRow(fence.taskId)).requestOptions, corrupt);
+  }
+  assert.deepEqual(fixture.calls, { create: 0, poll: 0, download: 0 });
+  const task = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: fence.taskId } });
+  assert.equal(task.apiRequests, 0);
+  assert.equal(await prisma.amazonAdsReportFact.count({ where: { ...scope, sourceTaskId: fence.taskId } }), 0);
+});
+
 test("unapproved download host, expired URL and mismatched response contract never advance", async () => {
   for (const patch of [
     { url: "https://s3.amazonaws.com/not-approved" }, { url: "https://fixture.invalid@127.0.0.1/private" },
@@ -261,9 +281,9 @@ test("equal-revision authorization rebind blocks transport and direct publicatio
   } finally { await prisma.amazonAdsProfile.update({ where: { id: profile }, data: { authorizationId: auth } }); }
 });
 
-async function runningReport(isolated = false): Promise<AdsReportFence> {
+async function runningReport(isolated = false, profileId: string = profile, planId: string = plan): Promise<AdsReportFence> {
   const taskId = randomUUID(), leaseOwner = randomUUID();
-  await prisma.amazonAdsSyncTask.create({ data: { ...scope, id: taskId, planId: plan, profileId: profile, requestedByUserId: actor, planRevision: 1, idempotencyKey: taskId, trigger: isolated ? "isolated-report" : "schedule", status: "RUNNING", stage: "REPORTS_ISOLATED", requestedFrom: new Date("2026-11-01T00:00:00Z"), requestedTo: new Date("2026-11-01T00:00:00Z"), leaseOwner, leaseExpiresAt: new Date(Date.now()+60000) } });
+  await prisma.amazonAdsSyncTask.create({ data: { ...scope, id: taskId, planId, profileId, requestedByUserId: actor, planRevision: 1, idempotencyKey: taskId, trigger: isolated ? "isolated-report" : "schedule", status: "RUNNING", stage: "REPORTS_ISOLATED", requestedFrom: new Date("2026-11-01T00:00:00Z"), requestedTo: new Date("2026-11-01T00:00:00Z"), leaseOwner, leaseExpiresAt: new Date(Date.now()+60000) } });
   return { taskId, leaseOwner, dispatchVersion: 1, fenceVersion: 0 };
 }
 test("staging stays hidden; duplicate facts, atomic publish, revisions and rollback preserve history", async () => {
@@ -467,4 +487,197 @@ test("authenticated report API shares the published boundary and denies unauthen
   const body = await response.json();
   assert.equal(body.total, 1); assert.equal(body.rows[0].spend, "2.5"); assert.equal(body.rows[0].versionStatus, "PUBLISHED");
   assert.equal(body.rows[0].rawDimensions, undefined); assert.equal(body.rows[0].sales, null);
+});
+
+
+async function runtimeFixture(campaignId: string) {
+  const profileId = randomUUID(), planId = randomUUID();
+  await prisma.amazonAdsProfile.create({ data: { ...scope, id: profileId, authorizationId: auth, region: "NA", profileId, countryCode: "US", marketplaceId: site, sellerAccountId: seller, currencyCode: "USD", timezone: acquisitionSpec.timezone, accountInfo: {} } });
+  await prisma.amazonAdsSyncPlan.create({ data: { ...scope, id: planId, profileId, sellerAccountId: seller, actorUserId: actor, authorizationRevision: 1 } });
+  const fence = await runningReport(true, profileId, planId);
+  await initializeIsolatedCampaignReport(scope, actor, fence, acquisitionSpec);
+  await controlIsolatedReport(scope, actor, fence.taskId, "pause");
+  await controlIsolatedReport(scope, actor, fence.taskId, "resume");
+  const fixture = acquisitionTransport(campaignId);
+  const row = () => prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: fence.taskId } });
+  const dispatch = async () => ({ taskId: fence.taskId, dispatchVersion: (await row()).dispatchVersion });
+  const due = async () => {
+    await editAcquisition(fence.taskId, state => { delete state.nextPollAt; });
+    await prisma.amazonAdsSyncTask.update({ where: { id: fence.taskId }, data: { nextAttemptAt: new Date(0) } });
+  };
+  return { ...fixture, fence, row, dispatch, due, profileId };
+}
+
+test("report runtime uses real BullMQ messages: duplicate delivery publishes once and remote wait releases lease", async () => {
+  const fixture = await runtimeFixture("8001");
+  const name = `ads-report-fixture-${randomUUID()}`, connection = createRedisConnectionOptions();
+  const queue = new Queue<ReportDispatch>(name, { connection });
+  const events = new QueueEvents(name, { connection });
+  const workers = [1, 2].map(() => new Worker<ReportDispatch>(name, job => runIsolatedReportDispatch(scope, job.data, fixture.transport), { connection, concurrency: 1 }));
+  try {
+    await events.waitUntilReady();
+    for (const phase of ["POLL", "DOWNLOAD", "STAGE", "PUBLISH", "COMPLETE"]) {
+      await fixture.due();
+      const dispatch = await fixture.dispatch();
+      const jobs = await Promise.all([queue.add("step", dispatch), queue.add("duplicate", dispatch)]);
+      await Promise.all(jobs.map(job => job.waitUntilFinished(events, 15000)));
+      const task = await fixture.row();
+      assert.equal(((await acquisitionRow(task.id)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.phase, phase, JSON.stringify({ status: task.status, errorCode: task.errorCode, stage: task.stage, calls: fixture.calls, dispatchVersion: task.dispatchVersion }));
+      assert.equal(task.leaseOwner, null);
+      if (phase === "POLL") {
+        assert.equal(task.status, "WAITING");
+        assert.ok(task.nextAttemptAt > new Date());
+        await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+        assert.equal(fixture.calls.poll, 0, "not yet due: worker must not poll early");
+      }
+    }
+    assert.deepEqual(fixture.calls, { create: 1, poll: 1, download: 1 });
+    assert.equal((await fixture.row()).status, "SUCCEEDED");
+    assert.equal(await prisma.amazonAdsReportFact.count({ where: { ...scope, sourceTaskId: fixture.fence.taskId } }), 1);
+    assert.equal(await prisma.amazonAdsSyncAttempt.count({ where: { taskId: fixture.fence.taskId, status: "RUNNING" } }), 0);
+  } finally { await Promise.all(workers.map(worker => worker.close())); await events.close(); await queue.obliterate({ force: true }); await queue.close(); }
+});
+
+test("pause/resume keeps report identity and budget; cancelled in-flight response cannot advance", async () => {
+  const fixture = await runtimeFixture("runtime-cancel");
+  const stale = await fixture.dispatch();
+  await controlIsolatedReport(scope, actor, stale.taskId, "pause");
+  await runIsolatedReportDispatch(scope, stale, fixture.transport);
+  assert.equal(fixture.calls.create, 0);
+  await controlIsolatedReport(scope, actor, stale.taskId, "resume");
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  const before = (await acquisitionRow(stale.taskId)).requestOptions;
+  await controlIsolatedReport(scope, actor, stale.taskId, "pause");
+  await controlIsolatedReport(scope, actor, stale.taskId, "resume");
+  assert.deepEqual((await acquisitionRow(stale.taskId)).requestOptions, before);
+  await fixture.due();
+  let started!: () => void, release!: () => void;
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const poll = fixture.transport.poll;
+  fixture.transport.poll = async (...args) => { started(); await gate; return poll(...args); };
+  const running = runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  try {
+    await Promise.race([ready, running.then(() => { throw new Error("runtime stopped before transport"); })]);
+    await controlIsolatedReport(scope, actor, stale.taskId, "cancel");
+  } finally { release(); await running; }
+  assert.equal((await fixture.row()).status, "CANCELLED");
+  assert.equal(((await acquisitionRow(stale.taskId)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.phase, "POLL");
+  assert.equal(await prisma.amazonAdsReportFact.count({ where: { sourceTaskId: stale.taskId } }), 0);
+});
+
+test("expired read lease resumes from report id; lost enqueue and repeated scheduler ticks do not lose work", async () => {
+  const fixture = await runtimeFixture("runtime-recovery");
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  await fixture.due();
+  await editAcquisition(fixture.fence.taskId, state => { state.calls.poll = 1; state.reserved = { operation: "poll", fence: 998, owner: "dead-worker" }; });
+  await prisma.amazonAdsSyncTask.update({ where: { id: fixture.fence.taskId }, data: { status: "RUNNING", leaseOwner: "dead-worker", leaseExpiresAt: new Date(0) } });
+  const oldVersion = (await fixture.row()).dispatchVersion;
+  const failed = await tickIsolatedReports(scope, async job => { if (job.taskId === fixture.fence.taskId) throw new Error("fixture enqueue lost"); });
+  assert.ok(failed.enqueueFailures >= 1);
+  assert.equal((await fixture.row()).dispatchVersion, oldVersion + 1);
+  const messages: ReportDispatch[] = [];
+  const collect = async (job: ReportDispatch) => { if (job.taskId === fixture.fence.taskId) messages.push(job); };
+  await Promise.all([tickIsolatedReports(scope, collect), tickIsolatedReports(scope, collect)]);
+  assert.equal(messages.length, 2);
+  await Promise.all(messages.map(job => runIsolatedReportDispatch(scope, job, fixture.transport)));
+  assert.deepEqual(fixture.calls, { create: 1, poll: 1, download: 0 });
+  assert.equal(((await acquisitionRow(fixture.fence.taskId)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.calls.poll, 2);
+  await controlIsolatedReport(scope, actor, fixture.fence.taskId, "cancel");
+});
+
+test("unknown create outcome and expired deadline block runtime without another network call", async () => {
+  for (const expired of [false, true]) {
+    const fixture = await runtimeFixture(`runtime-block-${expired}`);
+    if (expired) await editAcquisition(fixture.fence.taskId, state => { state.deadline = new Date(0).toISOString(); });
+    else fixture.transport.create = async () => { fixture.calls.create++; throw new Error("fixture socket lost"); };
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    assert.equal((await fixture.row()).status, "BLOCKED");
+    await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+    assert.equal(fixture.calls.create, expired ? 0 : 1);
+    assert.equal(fixture.calls.poll, 0);
+  }
+});
+
+test("revoked profile blocks before transport and publication crash recovery closes stranded attempts", async () => {
+  const fixture = await runtimeFixture("runtime-revoke");
+  await prisma.amazonAdsProfile.update({ where: { id: fixture.profileId }, data: { sellerAccountId: null } });
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  assert.equal((await fixture.row()).status, "BLOCKED");
+  assert.equal(fixture.calls.create, 0);
+  const success = await runtimeFixture("runtime-close");
+  await prisma.amazonAdsSyncTask.update({ where: { id: success.fence.taskId }, data: { status: "SUCCEEDED", finishedAt: new Date() } });
+  await prisma.amazonAdsSyncAttempt.create({ data: { ...scope, id: randomUUID(), taskId: success.fence.taskId, profileId: success.profileId, attemptNumber: 999, stage: "REPORT_PUBLISH", status: "RUNNING" } });
+  await tickIsolatedReports(scope, async job => { assert.notEqual(job.taskId, success.fence.taskId); });
+  assert.equal(await prisma.amazonAdsSyncAttempt.count({ where: { taskId: success.fence.taskId, status: "RUNNING" } }), 0);
+});
+
+test("deadline reached during remote response or before direct publication prevents advancement", async () => {
+  const fixture = await runtimeFixture("8002");
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  await fixture.due();
+  const poll = fixture.transport.poll;
+  fixture.transport.poll = async (...args) => {
+    const response = await poll(...args);
+    await editAcquisition(fixture.fence.taskId, state => { state.deadline = new Date(0).toISOString(); });
+    return response;
+  };
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  assert.equal((await fixture.row()).status, "BLOCKED");
+  assert.equal((await fixture.row()).errorCode, "ADS_REPORT_DEADLINE_EXCEEDED");
+  assert.equal(((await acquisitionRow(fixture.fence.taskId)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.phase, "POLL");
+  const direct = await runningReport(true), transport = acquisitionTransport("8003").transport;
+  await initializeIsolatedCampaignReport(scope, actor, direct, acquisitionSpec);
+  await processIsolatedCampaignReport(scope, actor, direct, transport);
+  await editAcquisition(direct.taskId, state => { delete state.nextPollAt; });
+  for (let step = 0; step < 3; step++) await processIsolatedCampaignReport(scope, actor, direct, transport);
+  await editAcquisition(direct.taskId, state => { state.deadline = "invalid"; });
+  await assert.rejects(() => publishAdsReportVersion(scope, actor, direct), /DEADLINE_EXCEEDED/);
+  assert.equal((await read("8003")).total, 0);
+});
+
+test("read-only transport retry retains call budget and releases worker until retry time", async () => {
+  const fixture = await runtimeFixture("8004");
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  await fixture.due();
+  let failures = 1;
+  const poll = fixture.transport.poll;
+  fixture.transport.poll = async (...args) => { if (failures--) { fixture.calls.poll++; throw new Error("fixture read failure"); } return poll(...args); };
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  const retry = await fixture.row();
+  assert.equal(retry.status, "RETRY_WAIT"); assert.equal(retry.leaseOwner, null);
+  assert.ok(retry.nextAttemptAt > new Date());
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  assert.equal(fixture.calls.poll, 1);
+  await fixture.due();
+  await runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  assert.equal(((await acquisitionRow(fixture.fence.taskId)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.phase, "DOWNLOAD");
+  assert.deepEqual(fixture.calls, { create: 1, poll: 2, download: 0 });
+  await controlIsolatedReport(scope, actor, fixture.fence.taskId, "cancel");
+});
+
+test("same Profile cannot run two report operations concurrently", async () => {
+  const fixture = await runtimeFixture("8005");
+  const planId = (await fixture.row()).planId;
+  const second = await runningReport(true, fixture.profileId, planId);
+  await initializeIsolatedCampaignReport(scope, actor, second, acquisitionSpec);
+  await controlIsolatedReport(scope, actor, second.taskId, "pause");
+  await controlIsolatedReport(scope, actor, second.taskId, "resume");
+  let started!: () => void, release!: () => void;
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const create = fixture.transport.create;
+  fixture.transport.create = async (...args) => { started(); await gate; return create(...args); };
+  const running = runIsolatedReportDispatch(scope, await fixture.dispatch(), fixture.transport);
+  try {
+    await Promise.race([ready, running.then(() => { throw new Error("runtime stopped before create"); })]);
+    const row = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: second.taskId } });
+    await runIsolatedReportDispatch(scope, { taskId: second.taskId, dispatchVersion: row.dispatchVersion }, acquisitionTransport("8006").transport);
+    assert.equal((await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: second.taskId } })).status, "WAITING");
+    assert.equal(((await acquisitionRow(second.taskId)).requestOptions as unknown as { acquisition: AcquisitionState }).acquisition.calls.create, 0);
+  } finally {
+    release(); await running;
+    await controlIsolatedReport(scope, actor, fixture.fence.taskId, "cancel");
+    await controlIsolatedReport(scope, actor, second.taskId, "cancel");
+  }
 });

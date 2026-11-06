@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp, listMcpSkillTableOptions } from "@/lib/amazon-sync/mcp";
+import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp, listMcpSkillTableOptions, listDiscoverableAmazonMcpTools } from "@/lib/amazon-sync/mcp";
 import { amazonDataAccess, assertSellerMarketplaceAccess } from "@/lib/amazon-sync/data-access";
 import { POST } from "@/app/api/mcp/amazon/route";
 import { requestChange, decideChange, applyChange } from "@/lib/amazon-sync/change-approval";
@@ -231,6 +231,106 @@ test("real JSON-RPC Route authenticates bearer, rejects origin and hides failure
   assert.equal((await unavailable.json() as { error: { code: string } }).error.code, "SCHEMA_UNVERIFIED");
   assert.equal((await POST(request("Bearer invalid"))).status, 401);
   assert.equal((await POST(request(`Bearer ${token}`, "https://evil.invalid"))).status, 403);
+});
+test("discovery refreshes action grants, personal tool scope and seller/site pairs", async () => {
+  const identity = await authenticateAmazonMcp(`Bearer ${token}`);
+  const names = async () => (await listDiscoverableAmazonMcpTools(identity, "2025-06-18")).map(tool => tool.name);
+  const credential = await prisma.amazonMcpCredential.findUniqueOrThrow({ where: { id: credentialId } });
+  const grant = await prisma.amazonDataAccessGrant.findUniqueOrThrow({ where: { id: grantId } });
+  try {
+    const original = await names();
+    assert.ok(original.includes("data_query"));
+    assert.ok(original.includes("amazon.sales.export"));
+    assert.ok(!original.includes("data_sync_start"));
+    assert.ok(!original.includes("amazon.ads.reports.list"));
+    await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { actions: ["view", "sync"] } });
+    const withSync = await names();
+    assert.ok(withSync.includes("data_sync_start"));
+    assert.ok(!withSync.includes("amazon.sales.export"));
+    await prisma.amazonMcpCredential.update({ where: { id: credentialId }, data: { tools: ["data_query"] } });
+    assert.deepEqual(await names(), ["data_query"]);
+    await assert.rejects(() => invokeAmazonMcp(identity, "amazon.inventory.list", {}), /不可访问/);
+    await prisma.amazonMcpCredential.update({ where: { id: credentialId }, data: { scopes: [{ sellerAccountId: sellerA, marketplaceIds: [ca] }] } });
+    assert.deepEqual(await names(), []);
+    await prisma.amazonMcpCredential.update({ where: { id: credentialId }, data: { tools: credential.tools, scopes: credential.scopes! } });
+    await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { mcpEnabled: false } });
+    assert.deepEqual(await names(), []);
+    await prisma.amazonMcpCredential.update({ where: { id: credentialId }, data: { status: "REVOKED" } });
+    await assert.rejects(names, /不可访问/);
+  } finally {
+    await prisma.amazonMcpCredential.update({ where: { id: credentialId }, data: { tools: credential.tools, scopes: credential.scopes!, status: credential.status } });
+    await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { actions: grant.actions, mcpEnabled: grant.mcpEnabled } });
+  }
+});
+test("newer protocol adds versioned object outputs while preserving legacy text and array contracts", async () => {
+  const request = (method: string, params = {}) => new Request("http://localhost/api/mcp/amazon", {
+    method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "mcp-protocol-version": "2025-06-18" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const listed = await (await POST(request("tools/list"))).json();
+  const query = listed.result.tools.find((tool: { name: string }) => tool.name === "data_query");
+  assert.equal(query._meta["erp/toolVersion"], "1.0.0");
+  assert.equal(query._meta["erp/dataAvailability"], "NOT_CHECKED");
+  assert.equal(query.outputSchema.type, "object");
+  assert.equal(listed.result.tools.find((tool: { name: string }) => tool.name === "amazon.stores.list").outputSchema, undefined);
+  const response = await (await POST(request("tools/call", { name: "data_query", arguments: { table: "inventory" } }))).json();
+  assert.deepEqual(response.result.structuredContent, JSON.parse(response.result.content[0].text));
+  const array = await (await POST(request("tools/call", { name: "amazon.stores.list" }))).json();
+  assert.ok(Array.isArray(JSON.parse(array.result.content[0].text)));
+  assert.equal(array.result.structuredContent, undefined);
+});
+test("discovery withholds capabilities when grants or credentials are revoked during source SQL", async () => {
+  const identity = await authenticateAmazonMcp(`Bearer ${token}`);
+  for (const target of ["grant", "credential"]) {
+    let release = () => {}, acquired = () => {};
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { acquired = resolve; });
+    const lock = prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('LOCK TABLE "AmazonSyncDataSource" IN ACCESS EXCLUSIVE MODE');
+      acquired(); await gate;
+    }, { timeout: 10000 });
+    await ready;
+    const pending = listDiscoverableAmazonMcpTools(identity).then(value => ({ value, error: null }), error => ({ value: null, error }));
+    try {
+      try {
+        let waiting = false;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const rows = await prisma.$queryRaw<Array<{ waiting: boolean }>>`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%AmazonSyncDataSource%' AND query LIKE 'SELECT%') AS waiting`;
+          if (rows[0].waiting) { waiting = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.ok(waiting, "discovery must reach the disposable source-table lock");
+        if (target === "grant") await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: false } });
+        else await prisma.amazonMcpCredential.update({ where: { id: credentialId }, data: { status: "REVOKED" } });
+      } finally { release(); await lock; }
+      const result = await pending;
+      if (target === "grant") assert.deepEqual(result.value, []);
+      else { assert.ok(result.error); assert.equal(result.value, null); }
+    } finally {
+      await prisma.amazonDataAccessGrant.update({ where: { id: grantId }, data: { enabled: true } });
+      await prisma.amazonMcpCredential.update({ where: { id: credentialId }, data: { status: "ACTIVE" } });
+    }
+  }
+});
+test("discovery records an isolated serial latency sample without weakening authorization", async () => {
+  const identity = await authenticateAmazonMcp(`Bearer ${token}`);
+  const samples: number[] = [];
+  const legacySamples: number[] = [];
+  await listDiscoverableAmazonMcpTools(identity);
+  for (let index = 0; index < 20; index++) {
+    const beforeLegacy = performance.now();
+    tools.filter(name => identity.tools.includes(name));
+    legacySamples.push(performance.now() - beforeLegacy);
+    const start = performance.now();
+    const result = await listDiscoverableAmazonMcpTools(identity);
+    samples.push(performance.now() - start);
+    assert.ok(!result.some(tool => tool.name === "data_sync_start"));
+  }
+  const percentiles = (values: number[]) => {
+    values.sort((a, b) => a - b);
+    return Object.fromEntries([50, 95, 99].map(percentile => [`p${percentile}Ms`, Number(values[Math.ceil(values.length * percentile / 100) - 1].toFixed(3))]));
+  };
+  console.log("MCP_DISCOVERY_FIXTURE_BENCHMARK", JSON.stringify({ samples: samples.length, concurrency: 1, toolCount: tools.length, legacyFilterOnly: percentiles(legacySamples), liveDiscoveryOnly: percentiles(samples), authenticationAndProtocolAuditIncluded: false, sqlCount: "not_instrumented", productionBenchmark: false }));
 });
 test("rotation, disable and expiry reject former credentials; audit excludes secrets", async () => {
   const old = await prisma.amazonMcpCredential.findUniqueOrThrow({ where: { id: credentialId } });

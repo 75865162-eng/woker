@@ -6,6 +6,7 @@ import { adsScopeEnabled } from "./sync-policy";
 import { adsReadAdapterReady } from "./sync-adapter";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import { AdsSyncError } from "./sync-policy";
+import { adsTaskRoutingSelect, isAdsStructureTask } from "./task-routing";
 
 export async function adsSyncLock(tx: Prisma.TransactionClient, profileId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-sync:${profileId}`}, 0))`;
@@ -48,15 +49,16 @@ export async function controlAdsPlan(scope: AdsAuthScope, actor: string, planId:
     await adsSyncLock(tx, plan.profileId);
     if (action === "retry") {
       if (!adsScopeEnabled(scope) || !adsReadAdapterReady()) throw new Error("Ads 同步配置或读取 adapter 尚未就绪，当前不能重试。");
-      const task = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, planId, status: { in: ["FAILED", "BLOCKED"] } }, orderBy: { createdAt: "desc" } });
+      const task = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, planId, status: { in: ["FAILED", "BLOCKED"] } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { _count: adsTaskRoutingSelect._count } });
       if (!task) throw new Error("没有可重试的失败任务。");
+      if (!isAdsStructureTask(task)) throw new Error("此任务不属于结构同步，不能通过结构计划重试；报告阶段和预算保持不变。");
       await tx.amazonAdsSyncPlan.update({ where: { id: plan.id }, data: { status: "ACTIVE", actorUserId: actor, nextRunAt: new Date(), lastErrorCode: null } });
       await tx.amazonAdsSyncTask.update({ where: { id: task.id }, data: { status: "WAITING", trigger: "manual-retry", planRevision: plan.revision, attempts: 0, dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, nextAttemptAt: new Date(), finishedAt: null, errorCode: null, errorMessage: null, leaseOwner: null, leaseExpiresAt: null } });
     } else {
       const status = action === "pause" ? "PAUSED" : !adsScopeEnabled(scope) ? "WAITING_FOR_CONFIG" : !adsReadAdapterReady() ? "WAITING_FOR_ADAPTER" : "ACTIVE";
       await tx.amazonAdsSyncPlan.update({ where: { id: plan.id }, data: { status, revision: { increment: 1 }, actorUserId: actor, nextRunAt: new Date(), lastErrorCode: null } });
       if (action === "pause") {
-        const activeTasks = await tx.amazonAdsSyncTask.findMany({ where: { ...scope, planId, status: { in: ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"] } }, select: { id: true, attemptRuns: { orderBy: { attemptNumber: "desc" }, take: 1, select: { id: true, status: true } } } });
+        const activeTasks = await tx.amazonAdsSyncTask.findMany({ where: { ...scope, planId, status: { in: ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"] } }, select: { id: true, ...adsTaskRoutingSelect, attemptRuns: { orderBy: { attemptNumber: "desc" }, take: 1, select: { id: true, status: true } } } });
         const now = new Date();
         await tx.amazonAdsSyncTask.updateMany({ where: { ...scope, planId, status: { in: ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"] } }, data: { status: "CANCELLED", fenceVersion: { increment: 1 }, dispatchVersion: { increment: 1 }, finishedAt: now, leaseOwner: null, leaseExpiresAt: null, errorCode: "ADS_TASK_CANCELLED", errorMessage: "同步计划已暂停，未完成任务已取消。" } });
         if (activeTasks.length) {
@@ -64,12 +66,15 @@ export async function controlAdsPlan(scope: AdsAuthScope, actor: string, planId:
             const attempt = task.attemptRuns[0];
             if (attempt && ["RUNNING", "RETRY_WAIT"].includes(attempt.status)) await tx.amazonAdsSyncAttempt.updateMany({ where: { ...scope, id: attempt.id, status: attempt.status }, data: { status: "CANCELLED", finishedAt: now, retryAt: null, errorCode: "ADS_TASK_CANCELLED", safeErrorSummary: "同步计划已暂停；已提交的页面保持不变。" } });
           }
-          const domain = await tx.amazonAdsSyncDomainState.findUnique({ where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: plan.profileId, dataDomain: "entities", reportType: "" } }, select: { lastSuccessAt: true, warningCodes: true } });
-          await tx.amazonAdsSyncDomainState.upsert({
-            where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: plan.profileId, dataDomain: "entities", reportType: "" } },
-            create: { id: randomUUID(), ...scope, profileId: plan.profileId, dataDomain: "entities", reportType: "", status: "CANCELLED", lastAttemptAt: now, lastSuccessAt: null, lastTaskId: activeTasks[0].id, warningCodes: ["ADS_TASK_CANCELLED"] },
-            update: { status: domain?.lastSuccessAt ? "STALE" : "CANCELLED", lastAttemptAt: now, lastTaskId: activeTasks[0].id, warningCodes: [...new Set([...(domain?.warningCodes ?? []), "ADS_TASK_CANCELLED"])] },
-          });
+          const structureTask = activeTasks.find(isAdsStructureTask);
+          if (structureTask) {
+            const domain = await tx.amazonAdsSyncDomainState.findUnique({ where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: plan.profileId, dataDomain: "entities", reportType: "" } }, select: { lastSuccessAt: true, warningCodes: true } });
+            await tx.amazonAdsSyncDomainState.upsert({
+              where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: plan.profileId, dataDomain: "entities", reportType: "" } },
+              create: { id: randomUUID(), ...scope, profileId: plan.profileId, dataDomain: "entities", reportType: "", status: "CANCELLED", lastAttemptAt: now, lastSuccessAt: null, lastTaskId: structureTask.id, warningCodes: ["ADS_TASK_CANCELLED"] },
+              update: { status: domain?.lastSuccessAt ? "STALE" : "CANCELLED", lastAttemptAt: now, lastTaskId: structureTask.id, warningCodes: [...new Set([...(domain?.warningCodes ?? []), "ADS_TASK_CANCELLED"])] },
+            });
+          }
         }
       }
     }
@@ -85,7 +90,7 @@ export async function cancelAdsTask(scope: AdsAuthScope, actor: string, taskId: 
     const initial = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, id: taskId }, select: { id: true, profileId: true, planId: true, status: true, dispatchVersion: true } });
     if (!initial) throw new Error("Ads 同步任务不存在。");
     await adsSyncLock(tx, initial.profileId);
-    const task = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, id: taskId }, select: { id: true, profileId: true, planId: true, status: true, dispatchVersion: true, attemptRuns: { orderBy: { attemptNumber: "desc" }, take: 1, select: { id: true, status: true } } } });
+    const task = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, id: taskId }, select: { id: true, profileId: true, planId: true, status: true, dispatchVersion: true, ...adsTaskRoutingSelect, attemptRuns: { orderBy: { attemptNumber: "desc" }, take: 1, select: { id: true, status: true } } } });
     if (!task) throw new Error("Ads 同步任务不存在。");
     if (!["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"].includes(task.status)) return { ok: true, taskId, status: task.status, alreadyFinished: true };
     const now = new Date();
@@ -99,13 +104,15 @@ export async function cancelAdsTask(scope: AdsAuthScope, actor: string, taskId: 
     }
     const latestAttempt = task.attemptRuns[0];
     if (latestAttempt && ["RUNNING", "RETRY_WAIT"].includes(latestAttempt.status)) await tx.amazonAdsSyncAttempt.updateMany({ where: { ...scope, id: latestAttempt.id, status: latestAttempt.status }, data: { status: "CANCELLED", finishedAt: now, retryAt: null, errorCode: "ADS_TASK_CANCELLED", safeErrorSummary: "任务已取消；已提交的页面保持不变。" } });
-    const currentDomain = await tx.amazonAdsSyncDomainState.findUnique({ where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: task.profileId, dataDomain: "entities", reportType: "" } }, select: { lastSuccessAt: true, warningCodes: true } });
-    const warningCodes = [...new Set([...(currentDomain?.warningCodes ?? []), "ADS_TASK_CANCELLED"])];
-    await tx.amazonAdsSyncDomainState.upsert({
-      where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: task.profileId, dataDomain: "entities", reportType: "" } },
-      create: { id: randomUUID(), ...scope, profileId: task.profileId, dataDomain: "entities", reportType: "", status: "CANCELLED", lastAttemptAt: now, lastSuccessAt: null, lastTaskId: taskId, warningCodes },
-      update: { status: currentDomain?.lastSuccessAt ? "STALE" : "CANCELLED", lastAttemptAt: now, lastTaskId: taskId, warningCodes },
-    });
+    if (isAdsStructureTask(task)) {
+      const currentDomain = await tx.amazonAdsSyncDomainState.findUnique({ where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: task.profileId, dataDomain: "entities", reportType: "" } }, select: { lastSuccessAt: true, warningCodes: true } });
+      const warningCodes = [...new Set([...(currentDomain?.warningCodes ?? []), "ADS_TASK_CANCELLED"])];
+      await tx.amazonAdsSyncDomainState.upsert({
+        where: { organizationId_workspaceId_profileId_dataDomain_reportType: { ...scope, profileId: task.profileId, dataDomain: "entities", reportType: "" } },
+        create: { id: randomUUID(), ...scope, profileId: task.profileId, dataDomain: "entities", reportType: "", status: "CANCELLED", lastAttemptAt: now, lastSuccessAt: null, lastTaskId: taskId, warningCodes },
+        update: { status: currentDomain?.lastSuccessAt ? "STALE" : "CANCELLED", lastAttemptAt: now, lastTaskId: taskId, warningCodes },
+      });
+    }
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.sync.task.cancelled", entityType: "AmazonAdsSyncTask", entityId: taskId, metadata: { workspaceId: scope.workspaceId, profileId: task.profileId, planId: task.planId, previousStatus: task.status } } });
     return { ok: true, taskId, status: "CANCELLED", alreadyFinished: false };
   });

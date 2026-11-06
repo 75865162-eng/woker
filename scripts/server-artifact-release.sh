@@ -155,6 +155,30 @@ wait_for_health() {
   return 1
 }
 
+assert_service_release() {
+  local service="$1" expected_release="$2" pid actual attempt
+  expected_release="$(readlink -f "$expected_release")"
+  for ((attempt = 1; attempt <= 10; attempt += 1)); do
+    pid="$(systemctl show "$service" --property=MainPID --value)"
+    actual=""
+    if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
+      actual="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+    fi
+    if [ -n "$expected_release" ] && [ "$actual" = "$expected_release" ] && systemctl is-active --quiet "$service"; then
+      return 0
+    fi
+    if [ "$attempt" -lt 10 ]; then sleep 1; fi
+  done
+  echo "Runtime release verification failed for $service: process is not running the expected release." >&2
+  return 1
+}
+
+restart_runtime_service() {
+  local service="$1" runtime_release="$2"
+  systemctl restart "$service" || return 1
+  assert_service_release "$service" "$runtime_release" || return 1
+}
+
 install_runtime_from_release() {
   local runtime_release="$1"
   if [ "$runtime_config" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then
@@ -177,11 +201,17 @@ install_runtime_from_release() {
     fi
     systemctl daemon-reload
   fi
-  if [ "$restart_web" = "true" ]; then systemctl restart amazon-web; fi
-  if [ "$restart_worker" = "true" ]; then systemctl restart amazon-worker; fi
-  if [ "$restart_image_worker" = "true" ]; then systemctl restart amazon-image-upscale-worker; fi
-  if [ "$restart_amazon_sync_worker" = "true" ]; then systemctl enable --now amazon-sync-worker; fi
-  if [ "$restart_sellfox_sync_worker" = "true" ]; then systemctl enable --now amazon-sellfox-sync-worker; fi
+  if [ "$restart_web" = "true" ]; then restart_runtime_service amazon-web "$runtime_release" || return 1; fi
+  if [ "$restart_worker" = "true" ]; then restart_runtime_service amazon-worker "$runtime_release" || return 1; fi
+  if [ "$restart_image_worker" = "true" ]; then restart_runtime_service amazon-image-upscale-worker "$runtime_release" || return 1; fi
+  if [ "$restart_amazon_sync_worker" = "true" ]; then
+    systemctl enable amazon-sync-worker || return 1
+    restart_runtime_service amazon-sync-worker "$runtime_release" || return 1
+  fi
+  if [ "$restart_sellfox_sync_worker" = "true" ]; then
+    systemctl enable amazon-sellfox-sync-worker || return 1
+    restart_runtime_service amazon-sellfox-sync-worker "$runtime_release" || return 1
+  fi
   if [ "$caddy_reload" = "true" ] || [ "$INITIAL_DEPLOYMENT" = "true" ]; then sh "$runtime_release/deploy/caddy/run-caddy.sh"; fi
 }
 
@@ -438,6 +468,7 @@ cat > "$result_path" <<JSON
   "healthUrl": "$(json_escape "$health_url")",
   "health": "passed",
   "migration": "$migration_status",
+  "runtimeReleaseVerified": true,
     "restarted": { "web": $restart_web, "worker": $restart_worker, "imageWorker": $restart_image_worker, "amazonSyncWorker": $restart_amazon_sync_worker, "sellfoxSyncWorker": $restart_sellfox_sync_worker },
   "rollback": {
     "status": "not_needed",

@@ -1,3 +1,4 @@
+import { amazonMcpTools, bindAmazonMcpHandlers, isCallableAmazonMcpTool, mcpDiscoveryDescriptor, type AmazonMcpToolName } from "./mcp-tool-registry";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma, type AmazonAdsEntityRecord } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -14,26 +15,8 @@ import { adsReadAdapterReady } from "@/lib/amazon-ads/sync-adapter";
 import { adsScopeEnabled } from "@/lib/amazon-ads/sync-policy";
 import { requestChange } from "./change-approval";
 
-export const amazonMcpTools = [
-  ["amazon.ads.reports.list", "只读查询本地最新已发布广告日报；需要独立显式授权"],
-  ["amazon.ads.entities.list", "只读分页查询已同步的 SP 广告结构；无报告日期维度"],
-  ["ads_list_entities", "Skill 兼容别名：只读查询已同步的 SP 广告结构"],
-  ["ads_get_campaign_structure", "Skill 兼容别名：只读查询活动结构"],
-  ["ads_get_sync_status", "Skill 兼容别名：读取 Ads 同步和发布状态"],
-  ["ads_get_data_health", "Skill 兼容别名：读取 Ads 数据完整性和 Schema 状态"],
-  ["ads_get_connection_status", "Skill 兼容别名：读取 Ads 连接状态"],
-  ["ads_get_settings", "Skill 兼容别名：读取 Ads Profile、合同和同步配置摘要"],
-  ["amazon.stores.list", "查询当前授权店铺和站点"], ["amazon.inventory.list", "查询最近已同步的库存"],
-  ["amazon.inventory.summary", "汇总授权库存"], ["amazon.catalog.list", "查询最近已同步的刊登"],
-  ["amazon.sales.list", "查询店铺逐日销售流量快照"], ["amazon.sync.status", "查询同步状态"],
-  ["amazon.history.read", "查询成功同步的历史库存或刊登快照"], ["amazon.sales.export", "导出最多 1000 条授权销售快照"],
-  ["data_list_tables", "列出当前授权范围内有已发布数据的 Skill 逻辑表"],
-  ["data_describe_table", "查看已接入 Skill 逻辑表的字段、粒度和限制"],
-  ["data_query", "分页查询已接入 Skill 逻辑表的已发布数据"],
-  ["data_sync_status", "查询当前授权数据源和同步状态"],
-  ["data_sync_start", "提交同步申请；审批并应用后才会创建同步任务"],
-] as const;
-const canonicalMcpTool = (tool: string) => tool === "ads_list_entities" || tool === "ads_get_campaign_structure" ? "amazon.ads.entities.list" : tool;
+export { amazonMcpTools, amazonMcpToolCatalog } from "./mcp-tool-registry";
+const canonicalMcpTool = (tool: string) => registeredAmazonMcpTools.find(item => item.name === tool)?.canonicalName ?? tool;
 const adsStatusTools = new Set(["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"]);
 export const mcpTokenHash = (value: string) => createHash("sha256").update(value).digest("hex");
 const credentialSelect = { id: true, name: true, userId: true, tokenPrefix: true, tools: true, scopes: true, status: true, revision: true, expiresAt: true, createdAt: true, lastUsedAt: true } satisfies Prisma.AmazonMcpCredentialSelect;
@@ -120,7 +103,12 @@ function safeCallLogMetadata(value: Prisma.JsonValue | null) {
  * the server.
  */
 export type McpCallLogStatus = "SUCCEEDED" | "DENIED";
-export type McpSettingsSnapshotOptions = { callLogPage?: number; callLogPageSize?: number; callLogStatus?: McpCallLogStatus; callLogTool?: string };
+export type McpSettingsSnapshotOptions = {
+  callLogPage?: number; callLogPageSize?: number; callLogStatus?: McpCallLogStatus; callLogTool?: string;
+  /** Server-resolved MCP pairs only; never accept as an authorization grant. */
+  sourceFence?: Array<{ sellerAccountId: string; marketplaceId: string }>;
+  omitCallLogs?: boolean;
+};
 
 export async function getMcpSettingsSnapshot(scope: SyncScope, actor: string, options: McpSettingsSnapshotOptions = {}) {
   try {
@@ -141,7 +129,7 @@ export async function getMcpSettingsSnapshot(scope: SyncScope, actor: string, op
     const allowed = sellerAccessWhere(access);
     const sellers = await prisma.sellerAccount.findMany({ where: { ...scope, status: "active" }, select: { id: true } });
     const profiles = await prisma.amazonAdsProfile.findMany({
-      where: { ...scope, ...allowed, sellerAccountId: { in: sellers.map(seller => seller.id) } },
+      where: { ...scope, ...allowed, sellerAccountId: { in: sellers.map(seller => seller.id) }, ...(options.sourceFence ? { AND: [{ OR: options.sourceFence }] } : {}) },
       orderBy: { updatedAt: "desc" }, take: 500,
       select: { id: true, profileId: true, sellerAccountId: true, marketplaceId: true, currencyCode: true, timezone: true, region: true, authorizationId: true, authorization: { select: { name: true, status: true, lastValidatedAt: true, validationErrorCode: true } } },
     });
@@ -155,8 +143,8 @@ export async function getMcpSettingsSnapshot(scope: SyncScope, actor: string, op
         orderBy: [{ publishedAt: "desc" }, { id: "desc" }], take: 100,
         select: { id: true, profileId: true, sourceTaskId: true, status: true, requestedFrom: true, requestedTo: true, rowCount: true, publishedAt: true, sourceTask: { select: { status: true, finishedAt: true, errorCode: true } }, profile: { select: { profileId: true, sellerAccountId: true, marketplaceId: true, currencyCode: true, timezone: true } }, requests: { orderBy: { createdAt: "desc" }, take: 1, select: { reportType: true, adProduct: true, apiVersion: true, status: true, requestedFrom: true, requestedTo: true, completedAt: true, warningCodes: true } } },
       }),
-      prisma.auditLog.count({ where: callLogWhere }),
-      prisma.auditLog.findMany({ where: callLogWhere, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (callLogPage - 1) * callLogPageSize, take: callLogPageSize, select: { id: true, action: true, createdAt: true, metadata: true } }),
+      options.omitCallLogs ? Promise.resolve(0) : prisma.auditLog.count({ where: callLogWhere }),
+      options.omitCallLogs ? Promise.resolve([]) : prisma.auditLog.findMany({ where: callLogWhere, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (callLogPage - 1) * callLogPageSize, take: callLogPageSize, select: { id: true, action: true, createdAt: true, metadata: true } }),
     ]);
     const profilePlan = new Map(plans.map(plan => [plan.profileId, plan]));
     const now = Date.now();
@@ -282,9 +270,9 @@ function adsEntityFields(entity: AmazonAdsEntityRecord) {
   }
   return fields;
 }
-export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: unknown, requestId = randomUUID()) {
+async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpToolName, raw: unknown, requestId: string = randomUUID()): Promise<unknown> {
   const scope = { organizationId: identity.organizationId, workspaceId: identity.workspaceId }, actor = identity.userId;
-  const action: AmazonDataAction = tool === "amazon.sales.export" ? "export" : tool === "data_sync_start" ? "sync" : "view";
+  const action: AmazonDataAction = registeredAmazonMcpTools.find(item => item.name === tool)!.action;
   let requested: AmazonAccessScope[] = [];
   try {
     if (!identity.tools.includes(tool) || !amazonMcpTools.some(([name]) => name === tool)) throw new SyncInputError("工具不可访问。", 403);
@@ -307,7 +295,10 @@ export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: 
       if (!Number.isInteger(page) || page < 1 || page > 10000) throw new SyncInputError("分页无效。");
       let result: unknown;
       if (adsStatusTools.has(tool)) {
-        const snapshot = await getMcpSettingsSnapshot(scope, actor);
+        const snapshot = await getMcpSettingsSnapshot(scope, actor, {
+          sourceFence: selected.map(source => ({ sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId })),
+          omitCallLogs: true,
+        });
         const statusData = tool === "ads_get_connection_status"
           ? { connection: snapshot.ads }
           : tool === "ads_get_data_health"
@@ -408,11 +399,12 @@ export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: 
         } else if (tool === "amazon.catalog.list") {
         const where = { ...scope, OR: published.filter(s => s.resource === "catalog" && s.activeRunId).map(s => ({ sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, sourceRunId: s.activeRunId! })) };
         result = { rows: await prisma.amazonCatalogSnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, listingStatus: true, capturedAt: true, sourceRunId: true }, orderBy: { id: "asc" }, skip: (page - 1) * 50, take: 50 }), source: "amazon_sp_api_snapshot" };
-        } else {
+        } else if (tool === "amazon.inventory.list" || tool === "amazon.inventory.summary") {
         const where = { ...common, OR: published.filter(s => s.resource === "inventory" && s.activeRunId).map(s => ({ sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, syncRunId: s.activeRunId! })) };
         result = tool === "amazon.inventory.summary" ? { summary: await prisma.amazonInventorySnapshot.aggregate({ where, _sum: { fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true }, _count: { _all: true } }), source: "amazon_sp_api_snapshot" } : { rows: await prisma.amazonInventorySnapshot.findMany({ where, select: { sellerAccountId: true, marketplaceId: true, sellerSku: true, asin: true, fulfillableQuantity: true, capturedAt: true, syncRunId: true }, orderBy: { id: "asc" }, skip: (page - 1) * 50, take: 50 }), source: "amazon_sp_api_snapshot" };
         }
       }
+      if (result === undefined) throw new SyncInputError("工具不可访问。", 403);
       if (tool === "amazon.ads.reports.list" || args.table === "ads_report_daily") await requireAdsReports();
       const live = await resolve();
       // The source ID alone is not a fence against an in-flight binding change.
@@ -432,4 +424,87 @@ export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: 
     await audit(scope, actor, "amazon.mcp.tool.denied", { requestId, credentialId: identity.id, tool: amazonMcpTools.some(([name]) => name === tool) ? tool : "UNKNOWN", scopes: requested, reason: error instanceof SyncInputError ? `REQUEST_REJECTED_${error.status}` : "INTERNAL_FAILURE" });
     throw error;
   }
+}
+
+
+type McpInvocationContext = { identity: McpIdentity; raw: unknown; requestId: string };
+const registeredAmazonMcpTools = bindAmazonMcpHandlers<McpInvocationContext, unknown>({
+  "amazon.ads.reports.list": context => invokeRegisteredAmazonMcp(context.identity, "amazon.ads.reports.list", context.raw, context.requestId),
+  "amazon.ads.entities.list": context => invokeRegisteredAmazonMcp(context.identity, "amazon.ads.entities.list", context.raw, context.requestId),
+  "ads_list_entities": context => invokeRegisteredAmazonMcp(context.identity, "ads_list_entities", context.raw, context.requestId),
+  "ads_get_campaign_structure": context => invokeRegisteredAmazonMcp(context.identity, "ads_get_campaign_structure", context.raw, context.requestId),
+  "ads_get_sync_status": context => invokeRegisteredAmazonMcp(context.identity, "ads_get_sync_status", context.raw, context.requestId),
+  "ads_get_data_health": context => invokeRegisteredAmazonMcp(context.identity, "ads_get_data_health", context.raw, context.requestId),
+  "ads_get_connection_status": context => invokeRegisteredAmazonMcp(context.identity, "ads_get_connection_status", context.raw, context.requestId),
+  "ads_get_settings": context => invokeRegisteredAmazonMcp(context.identity, "ads_get_settings", context.raw, context.requestId),
+  "amazon.stores.list": context => invokeRegisteredAmazonMcp(context.identity, "amazon.stores.list", context.raw, context.requestId),
+  "amazon.inventory.list": context => invokeRegisteredAmazonMcp(context.identity, "amazon.inventory.list", context.raw, context.requestId),
+  "amazon.inventory.summary": context => invokeRegisteredAmazonMcp(context.identity, "amazon.inventory.summary", context.raw, context.requestId),
+  "amazon.catalog.list": context => invokeRegisteredAmazonMcp(context.identity, "amazon.catalog.list", context.raw, context.requestId),
+  "amazon.sales.list": context => invokeRegisteredAmazonMcp(context.identity, "amazon.sales.list", context.raw, context.requestId),
+  "amazon.sync.status": context => invokeRegisteredAmazonMcp(context.identity, "amazon.sync.status", context.raw, context.requestId),
+  "amazon.history.read": context => invokeRegisteredAmazonMcp(context.identity, "amazon.history.read", context.raw, context.requestId),
+  "amazon.sales.export": context => invokeRegisteredAmazonMcp(context.identity, "amazon.sales.export", context.raw, context.requestId),
+  "data_list_tables": context => invokeRegisteredAmazonMcp(context.identity, "data_list_tables", context.raw, context.requestId),
+  "data_describe_table": context => invokeRegisteredAmazonMcp(context.identity, "data_describe_table", context.raw, context.requestId),
+  "data_query": context => invokeRegisteredAmazonMcp(context.identity, "data_query", context.raw, context.requestId),
+  "data_sync_status": context => invokeRegisteredAmazonMcp(context.identity, "data_sync_status", context.raw, context.requestId),
+  "data_sync_start": context => invokeRegisteredAmazonMcp(context.identity, "data_sync_start", context.raw, context.requestId),
+});
+
+/** Refresh on every discovery. At most three action groups, never one DB traversal per tool. */
+export async function listDiscoverableAmazonMcpTools(identity: McpIdentity, protocolVersion: string | null = null) {
+  const scope = { organizationId: identity.organizationId, workspaceId: identity.workspaceId };
+  const credential = await prisma.amazonMcpCredential.findFirst({
+    where: { ...scope, id: identity.id, userId: identity.userId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+    select: { tools: true, scopes: true, revision: true, expiresAt: true },
+  });
+  if (!credential) throw new SyncInputError("工具不可访问。", 403);
+  const candidates = registeredAmazonMcpTools.filter(tool => isCallableAmazonMcpTool(tool)
+    && identity.tools.includes(tool.name) && credential.tools.includes(tool.name));
+  const actions = [...new Set(candidates.map(tool => tool.action))];
+  const resolveAction = async (action: AmazonDataAction) => {
+    const tool = candidates.find(tool => tool.action === action)!;
+    try {
+      return await withAmazonMcpBoundary({ ...scope, userId: identity.userId, credentialId: identity.id, tool: tool.name, action }, async () => {
+        const access = await amazonDataAccess(scope, identity.userId);
+        return verifiedSources(prisma, scope, sellerAccessWhere(access));
+      });
+    } catch (error) {
+      if (error instanceof SyncInputError && error.status === 403) return [];
+      throw error;
+    }
+  };
+  const before = new Map<AmazonDataAction, Awaited<ReturnType<typeof verifiedSources>>>();
+  for (const action of actions) before.set(action, await resolveAction(action));
+  const allowed = new Set<AmazonDataAction>();
+  for (const action of actions) {
+    const previous = before.get(action)!;
+    const current = await resolveAction(action);
+    // Do not release discovery after an in-flight binding change, even if source IDs survive.
+    const unchanged = previous.length > 0 && previous.every(source => current.some(live => live.id === source.id
+      && live.revision === source.revision && live.authorizationId === source.authorizationId
+      && live.sellerAccountId === source.sellerAccountId && live.marketplaceId === source.marketplaceId
+      && live.resource === source.resource && live.authorization.amazonSellerId === source.authorization.amazonSellerId
+      && live.authorization.awsRegion === source.authorization.awsRegion));
+    if (unchanged && (action !== "sync" || current.some(source => ["inventory", "catalog", "sales_traffic"].includes(source.resource)))) allowed.add(action);
+  }
+  const latest = await prisma.amazonMcpCredential.findFirst({
+    where: { ...scope, id: identity.id, userId: identity.userId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+    select: { tools: true, scopes: true, revision: true, expiresAt: true },
+  });
+  if (!latest || latest.revision !== credential.revision || latest.expiresAt.getTime() !== credential.expiresAt.getTime()
+    || JSON.stringify(latest.scopes) !== JSON.stringify(credential.scopes) || JSON.stringify(latest.tools) !== JSON.stringify(credential.tools)) {
+    throw new SyncInputError("工具不可访问。", 403);
+  }
+  return candidates.filter(tool => allowed.has(tool.action)).map(tool => mcpDiscoveryDescriptor(tool, protocolVersion));
+}
+
+export async function invokeAmazonMcp(identity: McpIdentity, tool: string, raw: unknown, requestId: string = randomUUID()) {
+  const registered = registeredAmazonMcpTools.find(item => item.name === tool);
+  if (!registered || !isCallableAmazonMcpTool(registered)) {
+    await audit(identity, identity.userId, "amazon.mcp.tool.denied", { requestId, credentialId: identity.id, tool: "UNKNOWN", reason: "TOOL_UNAVAILABLE" });
+    throw new SyncInputError("工具不可访问。", 403);
+  }
+  return registered.handler({ identity, raw, requestId });
 }

@@ -14,3 +14,13 @@
 `tests/release-version.test.ts` 纳入默认 `npm test`，使用临时 mock 文件，只提取版本函数，不执行发布流程。覆盖 JSON 空白、异常状态、当前版本恢复、递增和上海时区日期显示。配合 TypeScript、lint 和 `bash -n scripts/server-artifact-release.sh` 检查。
 
 本地修复不代表已上线。后续发布涉及发布脚本变更，按 AGENTS.md 经人工审核与明确授权后使用 CI artifact 链路；不手工改写生产版本状态。回滚可恢复上述代码，现有元数据结构兼容旧代码，但旧的 JSON 解析问题也会重新出现。
+
+## 运行进程与 release 一致性（2026-11-06）
+
+`systemctl enable --now` 不会重启已经运行的服务，不能作为更新代码后的重启操作。发布脚本对清单指定的 Amazon/Sellfox 同步服务分别执行 enable 和 restart；web、普通 worker、图片 worker 也只按清单重启。
+
+每个被重启服务必须同时满足 active、有效 MainPID，以及 `/proc/<MainPID>/cwd` 的真实目录等于本次目标 release。最多等待 10 次，每次 1 秒；目录仍旧或 restart 失败时发布终止并使用既有应用回滚流程，数据库不自动回滚。回滚启动旧 release 时同样核对进程目录。未要求重启的 worker 可以继续运行旧 release，不强制切换。
+
+成功的 `RELEASE-RESULT.json` 增加 `runtimeReleaseVerified: true`，表示清单指定服务的进程目录校验通过；它不表示所有未重启服务均运行新代码，也不证明远端 API 或业务同步已成功。旧版本摘要中的 `restarted: true` 仅记录意图，排查旧部署时必须另外核对真实进程。
+
+`tests/release-runtime.test.ts` 仅提取发布函数并 mock systemctl、进程目录和等待操作，覆盖真正重启、旧代码 active 误报和重启失败；不会运行真实发布、重启服务或读取生产进程。

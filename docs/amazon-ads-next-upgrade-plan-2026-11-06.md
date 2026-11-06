@@ -1,5 +1,7 @@
 # Amazon Ads 下一阶段升级计划（代码核对版）
 
+**最新需求重排：[当前待优化清单](../specs/007-amazon-ads-production-readiness/current-optimization-backlog.md)。** 后续采用U2正式同步Worker、U3本地数据页面、U4 MCP/AI、U5真实只读试点与写执行；下方原阶段编号保留历史，具体映射见新清单。代码核对确认已有SP结构常规worker与调度，报告采集仍仅离线；真实数据是否已进入任何目标库本轮未验证。
+
 统一阅读入口：[规划索引、任务与未决问题](../specs/007-amazon-ads-production-readiness/README.md)。
 
 日期：2026-11-06。当前状态：U0 与 U1 第一批离线切片已交付；U1 剩余工作及 U2–U6 为后续规划，尚未真实启用。原审计与验收记录保留在下文。

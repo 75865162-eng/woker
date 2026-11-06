@@ -56,6 +56,18 @@ test("Ads MCP requires an explicit tool grant and advertises a bounded read-only
   assert.equal(entry.annotations.readOnlyHint, true); assert.equal(entry.inputSchema.properties.pageSize.maximum, 100);
   assert.equal(entry.inputSchema.properties.from, undefined); assert.equal(entry.inputSchema.properties.entityType.enum.length, 8);
 });
+test("Ads settings stay within the personal credential even when ERP grants include another seller", async () => {
+  const extra = await prisma.amazonDataAccessGrant.create({ data: { ...scope, id: randomUUID(), userId: actor, sellerAccountId: otherSeller, marketplaceIds: [site], actions: ["view"], mcpEnabled: true } });
+  try {
+    const created = await manageMcpCredential(scope, actor, { action: "create", name: "settings scope", scopes: [{ sellerAccountId: seller, marketplaceIds: [site] }], tools: ["ads_get_settings"], expiresAt: new Date(Date.now() + 60000).toISOString() });
+    await prisma.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.mcp.tool.succeeded", entityType: "AmazonMcpCredential", metadata: { workspaceId: scope.workspaceId, tool: "amazon.inventory.list", scopes: [{ sellerAccountId: otherSeller, marketplaceIds: [site] }] } } });
+    const result = await invokeAmazonMcp(await authenticateAmazonMcp(`Bearer ${created.token}`), "ads_get_settings", {}) as { data: { ads: { profileCount: number }; callLogs: unknown[] } };
+    assert.equal(result.data.ads.profileCount, 1);
+    assert.deepEqual(result.data.callLogs, []);
+    assert.ok(!JSON.stringify(result).includes(otherSeller));
+    assert.ok(!JSON.stringify(result).includes(caProfile));
+  } finally { await prisma.amazonDataAccessGrant.delete({ where: { id: extra.id } }); }
+});
 test("Ads MCP uses true totals, paging, entity filters and safe fields from stored rows", async () => {
   const response = await protocol("tools/call", token, { name: tool, arguments: { pageSize: 3, page: 2, sort: "externalId", direction: "asc" } });
   assert.equal(response.status, 200);

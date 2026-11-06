@@ -321,6 +321,57 @@ test("scheduler recovers expired leases with a new fence and pause cancels pendi
   await processAmazonAdsSyncTask(task.id, recovered.dispatchVersion, { oauth, adapter }); assert.equal(refreshes, before);
 });
 
+test("structure dispatch, recovery, retry and cancellation preserve report task boundaries", async () => {
+  const { tickAmazonAds } = await import("../../src/lib/amazon-ads/sync-scheduler");
+  const { cancelAdsTask, controlAdsPlan } = await import("../../src/lib/amazon-ads/sync-service");
+  const priorPlan = await prisma.amazonAdsSyncPlan.findUniqueOrThrow({ where: { id: plan } });
+  await prisma.amazonAdsSyncPlan.update({ where: { id: plan }, data: { status: "ACTIVE", nextRunAt: new Date(Date.now() + 86400000) } });
+  const domainWhere = { ...scope, profileId: profile, dataDomain: "entities", reportType: "" };
+  const beforeDomain = await prisma.amazonAdsSyncDomainState.findFirstOrThrow({ where: domainWhere });
+  const ids: string[] = [];
+  const beforeRequests = http, beforeRefreshes = refreshes;
+  try {
+    for (const [trigger, stage, status, dated, evidence] of [
+      ["isolated-report", "REPORTS_ISOLATED", "RUNNING", true, false],
+      ["isolated-report", "REPORTS_ISOLATED", "RETRY_WAIT", true, false],
+      ["future-report", "DISCOVER", "WAITING", false, false],
+      ["manual-retry", "DISCOVER", "WAITING", false, true],
+      ["schedule", "DISCOVER", "WAITING", true, false],
+    ] as const) {
+      const task = await newTask(); ids.push(task.id);
+      await prisma.amazonAdsSyncTask.update({ where: { id: task.id }, data: { trigger, stage, status, leaseOwner: status === "RUNNING" ? "report-fixture" : null, leaseExpiresAt: status === "RUNNING" ? new Date(0) : null, nextAttemptAt: new Date(0), ...(dated ? { requestedFrom: new Date("2026-11-01"), requestedTo: new Date("2026-11-01") } : {}) } });
+      if (evidence) await prisma.amazonAdsReportRequest.create({ data: { id: randomUUID(), ...scope, profileId: profile, sourceTaskId: task.id, idempotencyKey: task.id, apiVersion: "fixture-only", reportType: "fixture_campaign", adProduct: "SPONSORED_PRODUCTS", requestedFrom: new Date("2026-11-01"), requestedTo: new Date("2026-11-01"), requestOptions: { acquisition: { calls: { create: 1 }, phase: "POLL" } } } });
+      const before = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: task.id } });
+      await processAmazonAdsSyncTask(task.id, task.dispatchVersion, { oauth, adapter });
+      await tickAmazonAds();
+      assert.deepEqual(await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: task.id } }), before);
+      assert.equal(await getAmazonSyncQueue().getJob(`ads-${task.id}-${task.dispatchVersion}`), undefined);
+    }
+    assert.equal(http, beforeRequests); assert.equal(refreshes, beforeRefreshes);
+    assert.deepEqual(await prisma.amazonAdsSyncDomainState.findFirstOrThrow({ where: domainWhere }), beforeDomain);
+    const report = ids[0];
+    await prisma.amazonAdsSyncTask.update({ where: { id: report }, data: { status: "FAILED", createdAt: new Date(Date.now() + 100000) } });
+    const failed = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: report } });
+    await assert.rejects(() => controlAdsPlan(scope, owner, plan, "retry"), /不属于结构同步/);
+    assert.deepEqual(await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: report } }), failed);
+    await prisma.amazonAdsSyncTask.update({ where: { id: ids[3] }, data: { status: "FAILED", createdAt: new Date(Date.now() + 200000) } });
+    const mislabeled = await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: ids[3] } });
+    await assert.rejects(() => controlAdsPlan(scope, owner, plan, "retry"), /不属于结构同步/);
+    assert.deepEqual(await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: ids[3] } }), mislabeled);
+    // Cancellation may fence any task, but a report must not alter entity freshness.
+    await cancelAdsTask(scope, owner, ids[1]);
+    assert.equal((await prisma.amazonAdsSyncTask.findUniqueOrThrow({ where: { id: ids[1] } })).status, "CANCELLED");
+    assert.deepEqual(await prisma.amazonAdsSyncDomainState.findFirstOrThrow({ where: domainWhere }), beforeDomain);
+    await controlAdsPlan(scope, owner, plan, "pause");
+    assert.deepEqual(await prisma.amazonAdsSyncDomainState.findFirstOrThrow({ where: domainWhere }), beforeDomain);
+    const request = await prisma.amazonAdsReportRequest.findFirstOrThrow({ where: { sourceTaskId: ids[3] } });
+    assert.deepEqual(request.requestOptions, { acquisition: { calls: { create: 1 }, phase: "POLL" } });
+  } finally {
+    await prisma.amazonAdsSyncTask.updateMany({ where: { id: { in: ids } }, data: { status: "CANCELLED" } });
+    await prisma.amazonAdsSyncPlan.update({ where: { id: plan }, data: { status: priorPlan.status, revision: priorPlan.revision, nextRunAt: priorPlan.nextRunAt } });
+  }
+});
+
 test("structure query withholds rows, totals and metadata after grant revocation", async () => {
   await assertEntityResponseWithheld(
     () => prisma.amazonDataAccessGrant.updateMany({ where: { ...scope, userId: member }, data: { enabled: false } }),

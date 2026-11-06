@@ -2,6 +2,8 @@
 
 日期：2026-11-06。对应T07–T11；状态：候选设计，尚未接入常规worker。所列状态和字段为语义设计，须按现有模型提交最小diff后实施。
 
+后续实施：已增加隔离运行层与实际BullMQ双Worker测试，详见[报告运行层交付](../../docs/amazon-ads-report-runtime-delivery-2026-11-06.md)。仅已初始化fixture任务可用，正式调度/transport与完整故障矩阵仍未完成；下文是完整目标设计，不代表全部实现。
+
 ## 当前边界与改动范围
 
 现有`report-acquisition.ts`仅处理显式`isolated-report`任务，通过注入transport逐步推进；已有scopeDigest、持久预算/reservation与文件校验。`sync-scheduler.ts`当前为结构同步调度，包含通用RUNNING任务lease恢复逻辑。正式报告接线前必须盘点其任务选择条件，防止结构scheduler接管报告等待任务；不能仅新增一个报告processor便视为完成隔离。

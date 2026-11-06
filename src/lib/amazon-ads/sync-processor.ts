@@ -8,6 +8,7 @@ import { adsReadAdapterReady, amazonAdsReadAdapter, isAdsRegion, validateAdsPage
 import { adsSyncStages, adsStructureStageCount, parseAdsCheckpoint, AdsSyncError, adsSyncFailureStatus } from "./sync-policy";
 import { assertAdsLivePlan } from "./sync-service";
 import { withAmazonAdsClientLease } from "./api-budget";
+import { adsStructureTaskWhere } from "./task-routing";
 
 const leaseMs = 5 * 60_000;
 const workerId = `ads-${process.pid}-${randomUUID()}`;
@@ -38,7 +39,7 @@ function normalizeAdsEntity(payload: Record<string, unknown>) {
 
 export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: number, transport: { adapter?: AdsReadAdapter; oauth?: AmazonAdsOAuthTransport } = {}) {
   const adapter = transport.adapter ?? amazonAdsReadAdapter;
-  const initial = await prisma.amazonAdsSyncTask.findFirst({ where: { id: taskId, dispatchVersion }, include: { plan: true, profile: { include: { authorization: true } } } });
+  const initial = await prisma.amazonAdsSyncTask.findFirst({ where: { ...adsStructureTaskWhere(), id: taskId, dispatchVersion }, include: { plan: true, profile: { include: { authorization: true } } } });
   if (!initial || !["WAITING", "QUEUED", "RETRY_WAIT"].includes(initial.status) || initial.nextAttemptAt > new Date()) return;
   const scope = { organizationId: initial.organizationId, workspaceId: initial.workspaceId };
   const fenceVersion = initial.fenceVersion + 1;
@@ -48,7 +49,7 @@ export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-sync:${initial.profileId}`}, 0))`;
     const plan = await tx.amazonAdsSyncPlan.findFirst({ where: { ...scope, id: initial.planId, revision: initial.planRevision, status: "ACTIVE" } });
     if (!plan) return false;
-    const update = await tx.amazonAdsSyncTask.updateMany({ where: { ...scope, id: taskId, dispatchVersion, fenceVersion: initial.fenceVersion, status: { in: ["WAITING", "QUEUED", "RETRY_WAIT"] }, nextAttemptAt: { lte: new Date() } }, data: { status: "RUNNING", fenceVersion, leaseOwner, leaseExpiresAt: new Date(Date.now() + leaseMs), startedAt: initial.startedAt ?? new Date(), errorCode: null, errorMessage: null } });
+    const update = await tx.amazonAdsSyncTask.updateMany({ where: { ...adsStructureTaskWhere(), ...scope, id: taskId, dispatchVersion, fenceVersion: initial.fenceVersion, status: { in: ["WAITING", "QUEUED", "RETRY_WAIT"] }, nextAttemptAt: { lte: new Date() } }, data: { status: "RUNNING", fenceVersion, leaseOwner, leaseExpiresAt: new Date(Date.now() + leaseMs), startedAt: initial.startedAt ?? new Date(), errorCode: null, errorMessage: null } });
     if (update.count !== 1) return false;
     await tx.amazonAdsSyncAttempt.upsert({
       where: { organizationId_workspaceId_taskId_attemptNumber: { ...scope, taskId, attemptNumber } },

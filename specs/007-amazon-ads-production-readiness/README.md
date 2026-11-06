@@ -1,11 +1,14 @@
 # Amazon Ads 升级规划索引
 
+**最新阶段定义与待优化事项以[当前清单](current-optimization-backlog.md)为准：U2正式同步Worker、U3本地数据页面、U4 MCP/AI、U5真实只读试点与写执行。** 旧文件阶段编号保留历史，T01–T24保持不变；旧“U2真实试点”现映射为U5-A，不能仅凭编号判断范围。
+
 日期：2026-11-06。用途：阅读入口与决策导航。任务状态只在[tasks.md](tasks.md)维护，完成依据指向专门交付记录；本索引不复制测试计数、不授予操作权限。
 
 ## 当前应看什么
 
 | 目的 | 文档 |
 | --- | --- |
+| 按用户最新要求确定待优化事项/先后顺序 | [current-optimization-backlog.md](current-optimization-backlog.md) |
 | 了解业务目标与范围 | [spec.md](spec.md)与[升级总计划](../../docs/amazon-ads-next-upgrade-plan-2026-11-06.md) |
 | 查看下一批与依赖 | [plan.md](plan.md)中的PK01–PK09、[24项任务](tasks.md) |
 | 核对已有离线成果 | [U1交付](../../docs/amazon-ads-u1-delivery-2026-11-06.md)、[U1-A/U1-B决策记录](../../docs/amazon-ads-u1a-contract-and-data-semantics-2026-11-06.md)及任务对应证据 |

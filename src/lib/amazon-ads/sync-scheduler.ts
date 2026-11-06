@@ -3,13 +3,14 @@ import { prisma } from "@/lib/db/prisma";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import { adsReadAdapterReady } from "./sync-adapter";
 import { adsScopeEnabled, adsSyncKey, adsSyncScopes } from "./sync-policy";
+import { adsStructureTaskWhere } from "./task-routing";
 
 const dueStatuses = ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"];
 export async function tickAmazonAds(now = new Date()) {
   const scopes = adsSyncScopes();
   if (!scopes.length || !process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis" || !adsReadAdapterReady()) return;
   await prisma.amazonAdsSyncPlan.updateMany({ where: { OR: scopes, status: { in: ["WAITING_FOR_CONFIG", "WAITING_FOR_ADAPTER"] } }, data: { status: "ACTIVE", lastErrorCode: null, nextRunAt: now } });
-  const expired = await prisma.amazonAdsSyncTask.findMany({ where: { OR: scopes, status: "RUNNING", leaseExpiresAt: { lt: now } }, take: 100 });
+  const expired = await prisma.amazonAdsSyncTask.findMany({ where: { ...adsStructureTaskWhere(), OR: scopes, status: "RUNNING", leaseExpiresAt: { lt: now } }, take: 100 });
   for (const task of expired) {
     const exhausted = task.attempts + 1 >= task.maxAttempts;
     // A lease expiry is evidence the worker vanished after a bounded page; resume
@@ -17,7 +18,7 @@ export async function tickAmazonAds(now = new Date()) {
     // the client-wide request budget.
     const retryAt = now;
     await prisma.$transaction(async tx => {
-      const changed = await tx.amazonAdsSyncTask.updateMany({ where: { organizationId: task.organizationId, workspaceId: task.workspaceId, id: task.id, status: "RUNNING", fenceVersion: task.fenceVersion, leaseExpiresAt: { lt: now } }, data: { status: exhausted ? "FAILED" : "RETRY_WAIT", attempts: { increment: 1 }, dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: retryAt, finishedAt: exhausted ? now : null, errorCode: "ADS_TASK_LEASE_EXPIRED", errorMessage: "Worker lease expired; resume from committed checkpoint." } });
+      const changed = await tx.amazonAdsSyncTask.updateMany({ where: { ...adsStructureTaskWhere(), organizationId: task.organizationId, workspaceId: task.workspaceId, id: task.id, status: "RUNNING", fenceVersion: task.fenceVersion, leaseExpiresAt: { lt: now } }, data: { status: exhausted ? "FAILED" : "RETRY_WAIT", attempts: { increment: 1 }, dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, leaseOwner: null, leaseExpiresAt: null, nextAttemptAt: retryAt, finishedAt: exhausted ? now : null, errorCode: "ADS_TASK_LEASE_EXPIRED", errorMessage: "Worker lease expired; resume from committed checkpoint." } });
       if (!changed.count) return;
       await tx.amazonAdsSyncAttempt.updateMany({ where: { organizationId: task.organizationId, workspaceId: task.workspaceId, taskId: task.id, attemptNumber: task.dispatchVersion, status: "RUNNING" }, data: { status: exhausted ? "FAILED" : "RETRY_WAIT", finishedAt: now, retryAt: exhausted ? null : retryAt, errorCode: "ADS_TASK_LEASE_EXPIRED", safeErrorSummary: "Worker lease expired; will resume from the committed checkpoint." } });
       await tx.amazonAdsSyncDomainState.upsert({
@@ -27,7 +28,7 @@ export async function tickAmazonAds(now = new Date()) {
       });
     });
   }
-  const pending = await prisma.amazonAdsSyncTask.findMany({ where: { OR: scopes, status: { in: ["WAITING", "RETRY_WAIT"] }, nextAttemptAt: { lte: now } }, orderBy: { nextAttemptAt: "asc" }, take: 100 });
+  const pending = await prisma.amazonAdsSyncTask.findMany({ where: { ...adsStructureTaskWhere(), OR: scopes, status: { in: ["WAITING", "RETRY_WAIT"] }, nextAttemptAt: { lte: now } }, orderBy: { nextAttemptAt: "asc" }, take: 100 });
   for (const task of pending) {
     try {
       await getAmazonSyncQueue().add("process-amazon-ads-sync-task", { runId: task.id, adsTaskId: task.id, adsDispatchVersion: task.dispatchVersion }, { jobId: `ads-${task.id}-${task.dispatchVersion}`, attempts: 1, removeOnComplete: true, removeOnFail: true });

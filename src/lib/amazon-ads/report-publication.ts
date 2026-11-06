@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
 import type { SyncScope } from "@/lib/amazon-sync/policy";
 import { AdsQueryError } from "./query-contract";
+import { assertReportDeadline } from "./report-deadline";
 import type { AcquisitionState } from "./report-acquisition";
 import { assertReportScopeDigest, reportScopeDigest } from "./report-scope";
 
@@ -67,6 +68,7 @@ async function liveTask(tx: Prisma.TransactionClient, scope: SyncScope, actor: s
     const request = await tx.amazonAdsReportRequest.findUnique({ where: { organizationId_workspaceId_idempotencyKey: { ...scope, idempotencyKey: `publication:${task.id}` } } });
     const options = request?.requestOptions as unknown as { manifest?: AdsReportManifest; acquisition?: AcquisitionState } | undefined;
     if (!options?.manifest) throw new AdsQueryError("ADS_REPORT_MANIFEST_MISSING");
+    assertReportDeadline(options.acquisition?.deadline);
     assertReportScopeDigest(options.acquisition?.scopeDigest, reportScopeDigest(task, plan.profile, plan.authorizationRevision, options.manifest));
   }
   return { ...task, profile };
@@ -153,6 +155,7 @@ export async function publishAdsReportVersion(scope: SyncScope, actor: string, f
     const request = await tx.amazonAdsReportRequest.findFirst({ where: { ...scope, versionId: prior.id, profileId: task.profileId, sourceTaskId: task.id } });
     const options = request?.requestOptions as unknown as { acquisition?: AcquisitionState };
     if (options?.acquisition) {
+      assertReportDeadline(options.acquisition.deadline);
       options.acquisition.phase = "COMPLETE";
       await tx.amazonAdsReportRequest.update({ where: { id: request!.id }, data: { status: "ISOLATED_COMPLETE", completedAt: new Date(), requestOptions: options as unknown as Prisma.InputJsonObject } });
     }

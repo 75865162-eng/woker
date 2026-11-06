@@ -1,5 +1,7 @@
 # 实施计划：Amazon Ads 剩余升级
 
+阶段重排说明：用户最新要求采用U2同步、U3页面、U4 MCP/AI、U5真实验收与执行，详见[当前待优化清单](current-optimization-backlog.md)。下文原阶段/PK/T编号保留作为历史分包与追踪，不代表优先于最新要求。真实只读试点可在最小页面/MCP读取链路完成后独立审批，不等待所有优化功能完成。
+
 日期：2026-11-06。输入：[spec.md](spec.md)。状态：方案，不表示各批实施或真实操作获批。任务：[tasks.md](tasks.md)。
 
 统一入口：[规划索引与决策清单](README.md)。T07–T11的状态转换、scheduler兼容、失败恢复与RT01–RT10案例见[报告运行设计](report-runtime-design.md)。

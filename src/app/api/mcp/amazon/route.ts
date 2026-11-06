@@ -1,66 +1,10 @@
 import { boundedRequestText } from "@/lib/amazon-sync/request-body";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { auditAmazonMcpProtocol, amazonMcpTools, authenticateAmazonMcp, invokeAmazonMcp } from "@/lib/amazon-sync/mcp";
+import { auditAmazonMcpProtocol, listDiscoverableAmazonMcpTools, authenticateAmazonMcp, invokeAmazonMcp } from "@/lib/amazon-sync/mcp";
 import { SyncInputError } from "@/lib/amazon-sync/policy";
 export const runtime = "nodejs";
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
-function toolInputSchema(name: string) {
-  const scopeProperties: Record<string, unknown> = {
-    sellerAccountId: { type: "string" }, sellerAccountIds: { type: "array", items: { type: "string" }, maxItems: 200 },
-    marketplaceId: { type: "string" },
-  };
-  if (name === "amazon.ads.reports.list") return {
-    type: "object", additionalProperties: false, properties: {
-      ...scopeProperties,
-      ...Object.fromEntries(["internalProfileId", "authorizationId", "reportType", "adProduct", "campaignId", "adGroupId", "targetingId", "advertisedAsin", "searchTerm", "placement", "search"].map(key => [key, { type: "string", maxLength: 200 }])),
-      from: { type: "string", format: "date" }, to: { type: "string", format: "date" },
-      page: { type: "integer", minimum: 1, maximum: 10000 }, pageSize: { type: "integer", minimum: 1, maximum: 100 },
-      sortBy: { type: "string", enum: ["reportDate", "campaignId", "adGroupId", "impressions", "clicks", "spend", "orders", "sales", "searchTerm"] },
-      sortDirection: { type: "string", enum: ["asc", "desc"] },
-    },
-  };
-  if (["amazon.ads.entities.list", "ads_list_entities", "ads_get_campaign_structure"].includes(name)) return {
-    type: "object", additionalProperties: false, properties: {
-      ...scopeProperties,
-      ...Object.fromEntries(["internalProfileId", "authorizationId", "campaignId", "adGroupId", "externalId", "state", "search"].map(key => [key, { type: "string", maxLength: 200 }])),
-      entityType: { type: "string", enum: ["SP:campaign", "SP:ad-group", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"] },
-      page: { type: "integer", minimum: 1, maximum: 10000, default: 1 },
-      pageSize: { type: "integer", minimum: 1, maximum: 100, default: 50 },
-      sort: { type: "string", enum: ["entityType", "externalId", "state", "syncedAt", "sourceUpdatedAt"] },
-      direction: { type: "string", enum: ["asc", "desc"] },
-    },
-  };
-  if (["ads_get_sync_status", "ads_get_data_health", "ads_get_connection_status", "ads_get_settings"].includes(name)) return {
-    type: "object", additionalProperties: false, properties: scopeProperties,
-  };
-  if (["data_list_tables", "data_describe_table", "data_query", "data_sync_status", "data_sync_start"].includes(name)) {
-    const properties = { ...scopeProperties };
-    if (name === "data_describe_table") properties.table = { type: "string", maxLength: 100 };
-    if (name === "data_query") {
-      properties.table = { type: "string", maxLength: 100 };
-      properties.page = { type: "integer", minimum: 1, maximum: 10000 };
-      properties.pageSize = { type: "integer", minimum: 1, maximum: 1000, default: 100 };
-        properties.filters = {
-        type: "object", additionalProperties: false,
-          properties: Object.fromEntries(["sellerSku", "asin", "condition", "listingStatus", "from", "to", "reportType", "adProduct", "campaignId", "adGroupId", "advertisedAsin", "searchTerm", "placement", "targetingId", "internalProfileId", "authorizationId", "sortBy", "sortDirection"].map(field => [field, { type: "string", maxLength: 200, ...(field === "from" || field === "to" ? { format: "date" } : {}) }])),
-      };
-    }
-    if (name === "data_sync_start") {
-      properties.resource = { type: "string", maxLength: 100 };
-      properties.dateFrom = { type: "string", format: "date" };
-      properties.dateTo = { type: "string", format: "date" };
-    }
-    const required = name === "data_describe_table" || name === "data_query" ? ["table"] : name === "data_sync_start" ? ["resource"] : [];
-    return { type: "object", additionalProperties: false, properties, ...(required.length ? { required } : {}) };
-  }
-  const properties: Record<string, unknown> = {
-    ...scopeProperties,
-    from: { type: "string", format: "date" }, to: { type: "string", format: "date" },
-    keyword: { type: "string", maxLength: 200 }, page: { type: "integer", minimum: 1, maximum: 10000 }, taskId: { type: "string" },
-  };
-  return { type: "object", additionalProperties: false, properties };
-}
 export async function POST(request: Request) {
   let id: unknown = null;
   try {
@@ -84,10 +28,10 @@ export async function POST(request: Request) {
       if (!["2024-11-05", "2025-03-26", "2025-06-18"].includes(String(version))) throw new SyncInputError("Unsupported protocol version.");
       result = { protocolVersion: version, capabilities: { tools: {} }, serverInfo: { name: "erp-amazon", version: "1.0.0" } };
     } else if (input.method === "ping") result = {};
-    else if (input.method === "tools/list") result = { tools: amazonMcpTools.filter(([name]) => identity.tools.includes(name)).map(([name, description]) => ({ name, description, inputSchema: toolInputSchema(name), annotations: { readOnlyHint: name !== "data_sync_start", destructiveHint: false } })) };
+    else if (input.method === "tools/list") result = { tools: await listDiscoverableAmazonMcpTools(identity, request.headers.get("mcp-protocol-version")) };
     else if (input.method === "tools/call") {
       const output = await invokeAmazonMcp(identity, typeof params.name === "string" ? params.name : "", params.arguments ?? {}, requestId);
-      result = { content: [{ type: "text", text: JSON.stringify(output) }], isError: false };
+      result = { content: [{ type: "text", text: JSON.stringify(output) }], isError: false, ...(request.headers.get("mcp-protocol-version") === "2025-06-18" && output && typeof output === "object" && !Array.isArray(output) ? { structuredContent: output } : {}) };
     } else return json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found." } });
     return json({ jsonrpc: "2.0", id, result });
   } catch (error) {

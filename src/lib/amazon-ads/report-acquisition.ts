@@ -7,6 +7,8 @@ import type { SyncScope } from "@/lib/amazon-sync/policy";
 import { amazonDataAccess, sellerAccessWhere } from "@/lib/amazon-sync/data-access";
 import { encryptAmazonAdsCheckpoint } from "./credentials";
 import { AdsQueryError } from "./query-contract";
+import { readReportAcquisitionState } from "./report-checkpoint";
+import { assertReportDeadline } from "./report-deadline";
 import { assertReportScopeDigest, reportScopeDigest } from "./report-scope";
 import { campaignReportManifest, campaignReportRequest, parseCampaignReport, isolatedCampaignReportLimits, type CampaignReportSpec } from "./campaign-report-contract";
 import { stageAdsReportBatch, publishAdsReportVersion, type AdsReportFence } from "./report-publication";
@@ -36,11 +38,12 @@ function sameConfiguration(value: unknown, spec: CampaignReportSpec) {
   const actual = value as Record<string, unknown>;
   return Object.keys(actual).length === Object.keys(expected).length && Object.entries(expected).every(([key, field]) => JSON.stringify(actual[key]) === JSON.stringify(field));
 }
-function offline(transport?: IsolatedReportTransport) {
+export function assertIsolatedReportEnvironment(transport?: IsolatedReportTransport) {
   const database = new URL(process.env.DATABASE_URL ?? "http://fixture.invalid");
   const root = process.env.UPLOAD_DIR;
   if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || database.hostname !== "127.0.0.1" || database.pathname !== "/amazon_sync_test" || process.env.STORAGE_DRIVER !== "local" || !root || !root.startsWith("/") || (transport && transport.evidence !== "ISOLATED_FIXTURE_ONLY")) throw new AdsQueryError("ADS_REPORT_ACQUISITION_OFFLINE_ONLY", 403);
 }
+const offline = assertIsolatedReportEnvironment;
 async function live(tx: Prisma.TransactionClient, scope: SyncScope, actor: string, fence: AdsReportFence) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ads-report:${fence.taskId}`}, 0))`;
   const task = await tx.amazonAdsSyncTask.findFirst({ where: { ...scope, id: fence.taskId, requestedByUserId: actor, trigger: "isolated-report", status: "RUNNING", dispatchVersion: fence.dispatchVersion, fenceVersion: fence.fenceVersion, leaseOwner: fence.leaseOwner, leaseExpiresAt: { gt: new Date() }, plan: { status: "ACTIVE" } } });
@@ -54,7 +57,9 @@ async function live(tx: Prisma.TransactionClient, scope: SyncScope, actor: strin
   const request = await tx.amazonAdsReportRequest.findUnique({ where: { organizationId_workspaceId_idempotencyKey: { ...scope, idempotencyKey: `publication:${task.id}` } } });
   if (request) {
     const options = request.requestOptions as unknown as Options;
-    assertReportScopeDigest(options.acquisition?.scopeDigest, reportScopeDigest(task, profile, plan.authorizationRevision, options.manifest));
+    assertReportDeadline(options.acquisition?.deadline);
+    const acquisition = readReportAcquisitionState(options?.acquisition);
+    assertReportScopeDigest(acquisition.scopeDigest, reportScopeDigest(task, profile, plan.authorizationRevision, options.manifest));
   }
   return { task, profile, authorizationRevision: plan.authorizationRevision };
 }
@@ -116,7 +121,7 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
     const options = row.requestOptions as unknown as Options;
     const state = options.acquisition;
     if (!state || state.version !== 1) throw new AdsQueryError("ADS_REPORT_ACQUISITION_NOT_INITIALIZED");
-    if (Date.parse(state.deadline) <= Date.now()) throw new AdsQueryError("ADS_REPORT_DEADLINE_EXCEEDED");
+    assertReportDeadline(state.deadline);
     if (state.reserved) {
       // A crash after create might have created a report. Never reissue the create request.
       if (state.reserved.operation === "create") throw new AdsQueryError("ADS_REPORT_CREATE_RESULT_UNKNOWN", 409);
@@ -205,6 +210,7 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
       const { profile } = await live(tx, scope, actor, fence);
       const current = await tx.amazonAdsReportRequest.findUniqueOrThrow({ where: { id: request.id } });
       const persisted = (current.requestOptions as unknown as Options).acquisition;
+      assertReportDeadline(persisted.deadline);
       if (persisted.phase !== state.phase || (request.operation && (persisted.reserved?.operation !== state.reserved?.operation || persisted.reserved?.fence !== state.reserved?.fence || persisted.reserved?.owner !== state.reserved?.owner))) throw new AdsQueryError("ADS_REPORT_OPERATION_CONFLICT", 409);
       if (input.envelope) {
         // Preserve exact request/response body bytes while keeping signed URLs encrypted at rest.
@@ -229,6 +235,7 @@ export async function processIsolatedCampaignReport(scope: SyncScope, actor: str
       after.phase = phase; delete after.reserved;
       await tx.amazonAdsReportRequest.update({ where: { id: request.id }, data: { requestOptions: asJson(options), remoteRequestId: input.envelope ? String(input.envelope.reportId) : current.remoteRequestId, status: `ISOLATED_${phase}`, lastPolledAt: request.operation === "poll" ? new Date() : current.lastPolledAt, errorCode: null } });
       if (signal.aborted) throw new AdsQueryError("ADS_REPORT_OPERATION_TIMEOUT");
+      assertReportDeadline(after.deadline);
     }, { timeout: 15000 });
     Object.keys(state).forEach(key => { delete (state as unknown as Record<string, unknown>)[key]; });
     Object.assign(state, after);
