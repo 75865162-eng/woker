@@ -180,3 +180,11 @@ test("core item access evidence is operation/site/revision bound and cannot auth
     assert.throws(() => parseOrderSyncPolicy({ ...p, details: { ...p.details, backfillExisting: "all" } }));
   } finally { if (prior === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = prior; }
 });
+
+test("item browser pagination excludes base orders without items and preserves tenant scope", async () => {
+  const { orderReadWhere } = await import("../src/lib/amazon-sync/orders-query");
+  const where = orderReadWhere({ organizationId: "fixture", workspaceId: "default" }, new URLSearchParams({ itemsOnly: "true" }), { allSellers: true, sellerIds: [] });
+  const text = JSON.stringify(where);
+  assert.ok(text.includes('"items":{"some":{}}'));
+  assert.ok(text.includes('"organizationId":"fixture"'));
+});

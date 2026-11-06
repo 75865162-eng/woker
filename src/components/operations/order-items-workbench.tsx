@@ -17,7 +17,7 @@ export function OrderItemsWorkbench({ sellerAccountId = "", marketplaceId = "", 
   const toggleColumn = (id: string) => setVisible(current => { const next = current.includes(id) ? current.filter(value => value !== id) : [...current, id]; localStorage.setItem("amazon-order-item-columns-v1", JSON.stringify(next)); return next; });
   useEffect(() => {
     let active = true; setLoading(true); setError("");
-    const params = new URLSearchParams({ section: "orders", sellerAccountId, marketplaceId, amazonOrderId: orderId, sellerSku, asin, rawStatus: status, dateField, from, to, page: String(page) });
+    const params = new URLSearchParams({ section: "orders", itemsOnly: "true", sellerAccountId, marketplaceId, amazonOrderId: orderId, sellerSku, asin, rawStatus: status, dateField, from, to, page: String(page) });
     void fetch(`/api/operations/sync-center?${params}`, { headers: getHeaders(), cache: "no-store" }).then(async response => { const value = await response.json(); if (!response.ok) throw new Error(value.error ?? "订单商品读取失败。"); if (active) setResult(value); }).catch(e => { if (active) setError(e instanceof Error ? e.message : "订单商品读取失败。"); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [sellerAccountId, marketplaceId, orderId, sellerSku, asin, status, dateField, from, to, page, refresh, getHeaders]);

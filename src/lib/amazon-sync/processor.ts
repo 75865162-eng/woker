@@ -610,7 +610,8 @@ async function executeOrderDetailSlice(run: AmazonSyncRun, source: Awaited<Retur
     if (currentCursor.activeRunId !== run.id || currentCursor.detailPolicyDigest !== policyDigest || currentCursor.watermarkFrom.toISOString() !== window.from || currentCursor.watermarkTo.toISOString() !== window.to || currentCursor.nextTokenCiphertext !== cursor.nextTokenCiphertext) throw new SyncFenceLost();
     if (work && parsed && response) {
       const currentWork = await tx.amazonOrderDetailWork.findFirstOrThrow({ where: { ...scope, id: work.id, sourceId: source.id, policyDigest, status: "PENDING" } });
-      const current = await tx.amazonOrderRecord.findFirstOrThrow({ where: { ...scope, id: currentWork.orderRecordId, sourceId: source.id, amazonSellerId: source.authorization.amazonSellerId, marketplaceId: source.marketplaceId, amazonOrderId: work.amazonOrderId } });
+      const current = await tx.amazonOrderRecord.findFirstOrThrow({ where: { ...scope, id: currentWork.orderRecordId, sourceId: source.id, marketplaceId: source.marketplaceId, amazonOrderId: work.amazonOrderId } });
+      if (current.amazonSellerId && current.amazonSellerId !== source.authorization.amazonSellerId) throw new SyncInputError("订单已绑定其他卖家，禁止详情接管。", 409);
       const detailHash = digest(response.body);
       if (current.sourceUpdatedAt > parsed.sourceUpdatedAt || current.createdTime.getTime() !== parsed.createdTime.getTime()) throw new SyncInputError("订单详情版本落后或创建时间冲突，未覆盖现有事实。");
       if (current.detailsUpdatedAt?.getTime() === parsed.sourceUpdatedAt.getTime() && current.detailPolicyDigest === policyDigest && current.detailHash !== detailHash) throw new SyncInputError("同一订单详情版本出现冲突，未覆盖已提交详情。");

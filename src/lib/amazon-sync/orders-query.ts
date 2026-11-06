@@ -20,7 +20,7 @@ export function orderReadWhere(scope: SyncScope, params: URLSearchParams, access
   if (dates.gte && dates.lt && dates.gte >= dates.lt) throw new SyncInputError("订单日期范围无效。");
   if (Object.keys(dates).length) filters[dateField] = dates;
   const sellerSku = params.get("sellerSku"), asin = params.get("asin");
-  if (sellerSku || asin) {
+  if (sellerSku || asin || params.get("itemsOnly") === "true") {
     if ((sellerSku?.length ?? 0) > 500 || (asin?.length ?? 0) > 500) throw new SyncInputError("订单商品筛选长度超限。");
     filters.items = { some: { ...(sellerSku ? { sellerSku } : {}), ...(asin ? { asin } : {}) } };
   }

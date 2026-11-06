@@ -323,6 +323,7 @@ test("approved core detail transition backfills existing orders without rewritin
   const details = { includedData: [], requiredRoles: ["Inventory and Order Tracking"], purpose: "order_items", requestsPerSecond: .2, burst: 1, maxOrders: 5000, backfillExisting: true, accessEvidence: proof };
   await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [], rolesAttestedAt: null } });
   await f.approved({ action: "save-source", revision: 1, authorizationId: f.authId, sellerAccountId: f.store, marketplaceId: site, resource: "orders", enabled: true, freshnessMinutes: 60, orderPolicy: { ...(f.source.orderPolicy as Prisma.JsonObject), details } });
+  await prisma.amazonOrderRecord.updateMany({ where: f.scope, data: { amazonSellerId: "" } });
   const second = await f.request();
   // First slice handles old records before fetching the new list window.
   const progress = await f.slice(second.id);
