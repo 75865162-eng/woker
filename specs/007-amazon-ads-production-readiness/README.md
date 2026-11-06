@@ -7,9 +7,9 @@
 | 目的 | 文档 |
 | --- | --- |
 | 了解业务目标与范围 | [spec.md](spec.md)与[升级总计划](../../docs/amazon-ads-next-upgrade-plan-2026-11-06.md) |
-| 查看下一批与依赖 | [plan.md](plan.md)、[24项任务](tasks.md) |
+| 查看下一批与依赖 | [plan.md](plan.md)中的PK01–PK09、[24项任务](tasks.md) |
 | 核对已有离线成果 | [U1交付](../../docs/amazon-ads-u1-delivery-2026-11-06.md)、[U1-A/U1-B决策记录](../../docs/amazon-ads-u1a-contract-and-data-semantics-2026-11-06.md)及任务对应证据 |
-| 处理版本/身份/最小模型 | [first-batch-design.md](first-batch-design.md) |
+| 处理版本/身份/最小模型 | [first-batch-design.md](first-batch-design.md)，CE01–CE10合同取证 |
 | 决定缺行/null/时区/版本语义 | [data-contract.md](data-contract.md)，DC01–DC15 |
 | 实现报告队列与恢复 | [report-runtime-design.md](report-runtime-design.md)，RT01–RT10 |
 | 扩SP业务域与页面 | [sp-business-delivery.md](sp-business-delivery.md)，BS01–BS07 |

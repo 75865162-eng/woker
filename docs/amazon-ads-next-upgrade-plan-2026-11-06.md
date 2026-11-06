@@ -223,3 +223,10 @@
 新增[报告运行设计](../specs/007-amazon-ads-production-readiness/report-runtime-design.md)，细化T07–T11状态/事务边界、队列与数据库投递恢复、总截止、lease、取消和RT01–RT10故障注入。结构scheduler现有通用RUNNING恢复选择必须在接入报告前评审，避免等待远端任务被当作失联结构任务处理。
 
 工作区T06已记录成功响应原始body加密证据的限定交付，失败正文策略与文件/数据库非原子边界仍保留为风险；本轮不重跑其验证、不把剩余项掩盖为全量完成。新增[统一索引](../specs/007-amazon-ads-production-readiness/README.md)集中D01–D08关键决策，任务清单继续作为唯一任务状态索引，避免重复规划与状态漂移。
+
+
+## 13. 从规划到实施的取证与分包
+
+在既有文件中补齐[CE01–CE10合同取证清单](../specs/007-amazon-ads-production-readiness/first-batch-design.md)及[PK01–PK09交付切分](../specs/007-amazon-ads-production-readiness/plan.md)，未新增同义规划文件。明确每项合同问题的公开来源核验方法、成果和不可推断结论；本轮未重新联网核验，不将清单填写视为证据完成。
+
+依赖修正已反映在任务索引：T12须正式合同与DC裁决；T20须可信查询与场景结构；T23试点/执行最低运维子集前置；Bulk渠道执行另依赖T21，API不等待未使用的Bulk功能。隔离性能候选预算先形成，真实试点再校准，避免以需要真实数据为由形成审批循环。已有任务完成状态保持不变。
