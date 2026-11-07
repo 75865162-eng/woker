@@ -21,6 +21,9 @@ function text(value: unknown, max = 500): string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value) ? value : invalid();
 }
 function optionalText(value: unknown): string | null { return value === undefined || value === null ? null : text(value); }
+// Live Amazon plans use an empty optional name; retain the empty value in the
+// normalized observation while keeping identifiers/status and other text strict.
+function optionalName(value: unknown): string | null { return value === "" ? "" : optionalText(value); }
 export function inboundPaginationToken(value: unknown): string | undefined {
   return value === undefined ? undefined : typeof value === "string" && value.trim().length > 0 && value.length <= 1024 && !/[\u0000-\u001f\u007f]/.test(value) ? value : invalid();
 }
@@ -69,7 +72,7 @@ function planObservation(value: unknown): InboundPlanObservation {
   if (sourceUpdatedAt < sourceCreatedAt) return invalid();
   const marketplaceIds = rows(row.marketplaceIds, 30).map(inboundIdentifier);
   if (!marketplaceIds.length || new Set(marketplaceIds).size !== marketplaceIds.length) return invalid();
-  return { inboundPlanId: inboundIdentifier(row.inboundPlanId), name: optionalText(row.name), sourceStatus: text(row.status, 100), sourceCreatedAt, sourceUpdatedAt, marketplaceIds };
+  return { inboundPlanId: inboundIdentifier(row.inboundPlanId), name: optionalName(row.name), sourceStatus: text(row.status, 100), sourceCreatedAt, sourceUpdatedAt, marketplaceIds };
 }
 
 /** Identical overlap is idempotent; contradictory rows never silently win. */
@@ -106,7 +109,7 @@ export function parseInboundShipment(value: unknown, context: InboundShipmentRef
   if (root.shipmentId !== shipmentId || root.inboundPlanId !== undefined && root.inboundPlanId !== inboundPlanId) return invalid();
   // Do not project source/destination addresses, contacts or tracking payloads.
   const destination = root.destination === undefined ? null : object(root.destination);
-  return { inboundPlanId, shipmentId, name: optionalText(root.name), shipmentConfirmationId: optionalText(root.shipmentConfirmationId), amazonReferenceId: optionalText(root.amazonReferenceId),
+  return { inboundPlanId, shipmentId, name: optionalName(root.name), shipmentConfirmationId: optionalText(root.shipmentConfirmationId), amazonReferenceId: optionalText(root.amazonReferenceId),
     sourceStatus: optionalText(root.status), destinationType: destination ? optionalText(destination.destinationType) : null, destinationWarehouseId: destination ? optionalText(destination.warehouseId) : null };
 }
 

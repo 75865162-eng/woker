@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { AmazonSpApiClient } from "@/lib/amazon/sp-api-client";
+import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
 import { encryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
 import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
@@ -63,10 +63,18 @@ export async function finishAmazonOAuth(actor: string, params: URLSearchParams) 
     const sites = extractMarketplaceParticipations(await client.getMarketplaceParticipations());
     if (!sites.length || sites.length > 30) throw new SyncInputError("Amazon 未返回可用站点。", 409);
     // A valid token plus an arbitrary typed Seller ID must not pass identity validation.
+    let sellerProbeMarketplaceId: string | null = null;
     for (const site of sites) {
-      const listing = await client.searchListingsItems({ sellerId, marketplaceId: site.marketplaceId });
-      if (!listing || typeof listing !== "object" || !Array.isArray((listing as { items?: unknown }).items)) throw new SyncInputError("无法验证卖家范围。", 409);
+      try {
+        const listing = await client.searchListingsItems({ sellerId, marketplaceId: site.marketplaceId });
+        if (listing && typeof listing === "object" && Array.isArray((listing as { items?: unknown }).items)) { sellerProbeMarketplaceId = site.marketplaceId; break; }
+      } catch (error) {
+        // An unavailable operation on one participating site is not a failed
+        // OAuth grant for every other site. Invalid/expired credentials still stop.
+        if (!(error instanceof AmazonSpApiError) || ![400, 403, 404].includes(error.status ?? 0)) throw error;
+      }
     }
+    if (!sellerProbeMarketplaceId) throw new SyncInputError("当前授权尚未提供可验证的卖家范围，保留旧授权后重试。", 409);
     const completed = await prisma.$transaction(async tx => {
       await scopeLock(tx, scope); await assertManager(scope, actor, tx);
       if (!await tx.amazonOAuthAttempt.findFirst({ where: { id: attempt.id, status: "EXCHANGING", expiresAt: { gt: new Date() } }, select: { id: true } })) throw new SyncInputError("授权会话已过期。", 403);

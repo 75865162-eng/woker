@@ -8,6 +8,7 @@ const zones: Record<string, string> = {
   A1805IZSGTT6HS: "Europe/Amsterdam", A2NODRKZP88ZB9: "Europe/Stockholm", A33AVAJ2PDY3EV: "Europe/Istanbul", A17E79C6D8DWNP: "Asia/Riyadh", A2VIGQ35RCS4UG: "Asia/Dubai",
   A39IBJ37TRP1C6: "Australia/Sydney", A19VAU5U5O7RUS: "Asia/Singapore", A21TJRUUN4KGV: "Asia/Kolkata",
 };
+export const reportingMarketplaceIds = Object.freeze(Object.keys(zones));
 export function reportTimeZone(marketplaceId: string): string { const zone = zones[marketplaceId]; if (!zone) throw new SyncInputError("该站点业务时区尚未核验。"); return zone; }
 export type RequestedRange = { from: string; to: string; timeZone: string; startAt: string; endExclusive: string; dateField: "report_business_date"; endInclusive: true; reportEndAt: string; periodClosed: boolean };
 export function businessDate(value: unknown): string {

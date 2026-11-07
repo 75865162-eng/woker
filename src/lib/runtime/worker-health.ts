@@ -17,6 +17,15 @@ export function registeredWorkerHealth(heartbeats: Heartbeat[], now = new Date()
       : expectedConnection && metadata.length && metadata.every(value => value.connectionIdentity === expectedConnection) ? true : null;
     const queueReady = metadata.some(value => value.queueReady === false) ? false
       : metadata.length && metadata.every(value => value.queueReady === true) ? true : null;
+    const recovery = meta.recovery && typeof meta.recovery === "object" ? meta.recovery as Record<string, unknown> : null;
+    const lastRecovery = typeof recovery?.lastSuccessAt === "string" ? Date.parse(recovery.lastSuccessAt) : NaN;
+    const spApi = recovery?.spApi && typeof recovery.spApi === "object" ? recovery.spApi as Record<string, unknown> : null;
+    const lastRecoveryError = typeof recovery?.lastErrorAt === "string" ? Date.parse(recovery.lastErrorAt) : NaN;
+    const recoveryReady = item.id !== "amazon-sync" ? null : !Number.isFinite(lastRecovery) || !spApi ? null
+      : online.length > 0 && queueReady === true && mismatchedInstances === 0 && connectionMatches === true
+        && now.getTime() - lastRecovery <= 120_000 && lastRecovery <= now.getTime() + 5000
+        && (!Number.isFinite(lastRecoveryError) || lastRecoveryError < lastRecovery)
+        && spApi.dispatchFailures === 0 && spApi.maintenanceFailures === 0;
     return {
       id: item.id, label: item.label, queues: item.queues,
       online: online.length > 0, instances: online.length,
@@ -25,6 +34,9 @@ export function registeredWorkerHealth(heartbeats: Heartbeat[], now = new Date()
       version, versionMatches: online.length > 0 && mismatchedInstances === 0,
       mismatchedInstances,
       connectionMatches, mismatchedConnections,
+      recoveryReady,
+      recovery: item.id === "amazon-sync" && recovery ? { lastSuccessAt: recovery.lastSuccessAt ?? null, lastErrorAt: recovery.lastErrorAt ?? null, inProgress: recovery.inProgress === true, adsHealthy: recovery.adsHealthy ?? null,
+        examined: spApi?.examined ?? null, dispatched: spApi?.dispatched ?? null, dispatchFailures: spApi?.dispatchFailures ?? null, expiredLeases: spApi?.expiredLeases ?? null, maintenanceFailures: spApi?.maintenanceFailures ?? null } : null,
     };
   });
 }

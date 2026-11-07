@@ -45,6 +45,10 @@ export type AmazonSpApiClientOptions = {
   now?: () => Date;
   requestTimeoutMs?: number;
   onResponse?: (event: AmazonRequestEvent) => void;
+  /** Sync callers revalidate live authorization and task controls before every HTTP. */
+  beforeRequest?: () => Promise<void>;
+  /** SP-API error originals only; LWA token responses are never forwarded. */
+  onErrorResponse?: (event: { status: number; requestId: string | null; rawBody: string }) => Promise<void>;
   /** Local mock transport only; production always uses the registered LWA URL. */
   tokenEndpoint?: string;
   /** Tenant/authorization/revision namespace; shared only by trusted server callers. */
@@ -84,6 +88,8 @@ export class AmazonSpApiClient {
   private readonly now: () => Date;
   private readonly requestTimeoutMs: number;
   private readonly onResponse?: (event: AmazonRequestEvent) => void;
+  private readonly beforeRequest?: () => Promise<void>;
+  private readonly onErrorResponse?: AmazonSpApiClientOptions["onErrorResponse"];
   private readonly tokenState: AccessTokenState;
   private readonly tokenEndpoint: string;
   private readonly reportDownloadTestHost?: string;
@@ -98,6 +104,8 @@ export class AmazonSpApiClient {
     if (options.reportDownloadTestHost && (!options.fetch || !/^[a-z0-9.-]+\.invalid$/.test(options.reportDownloadTestHost))) throw new Error("测试报告下载主机须为隔离 transport 和 .invalid 域名。");
     this.reportDownloadTestHost = options.reportDownloadTestHost;
     this.onResponse = options.onResponse;
+    this.beforeRequest = options.beforeRequest;
+    this.onErrorResponse = options.onErrorResponse;
     this.now = options.now ?? (() => new Date());
     this.tokenState = { token: null, refreshInFlight: null };
     if (options.cacheScope) {
@@ -127,6 +135,16 @@ export class AmazonSpApiClient {
     const body = await this.request("GET", `/listings/2021-08-01/items/${encodeURIComponent(input.sellerId)}/${encodeURIComponent(input.sellerSku)}?${query}`, undefined, text => { rawBody = text; });
     return { body, rawBody };
   }
+  /** Seller-authorized read only; destination management needs a separate grant. */
+  async getNotificationSubscriptions(input: { notificationType: string; nextToken?: string }): Promise<{ body: unknown; rawBody: string }> {
+    if (!/^[A-Z][A-Z0-9_]{1,100}$/.test(input.notificationType) || (input.nextToken?.length ?? 0) > 32000) throw new AmazonSpApiError("通知订阅请求范围无效。");
+    const query = new URLSearchParams({ notificationTypes: input.notificationType, pageSize: "100" });
+    if (input.nextToken) query.set("nextToken", input.nextToken);
+    let rawBody = "";
+    const body = await this.request("GET", `/notifications/v1/subscriptions?${query}`, undefined, text => { rawBody = text; });
+    return { body, rawBody };
+  }
+
   async getCatalogDetail(input: { asin: string; marketplaceId: string }): Promise<{ body: unknown; rawBody: string }> {
     if (!/^[A-Z0-9]{10}$/.test(input.asin)) throw new AmazonSpApiError("目录详情 ASIN 无效。");
     const query = new URLSearchParams({ marketplaceIds: input.marketplaceId, includedData: "summaries,attributes,classifications,images,identifiers,productTypes,relationships,dimensions" });
@@ -135,10 +153,10 @@ export class AmazonSpApiClient {
     return { body, rawBody };
   }
 
-  async searchListingsItems(input: { sellerId: string; marketplaceId: string; nextToken?: string }): Promise<unknown> {
+  async searchListingsItems(input: { sellerId: string; marketplaceId: string; nextToken?: string }, captureRaw?: (text: string) => void): Promise<unknown> {
     const query = new URLSearchParams({ marketplaceIds: input.marketplaceId, includedData: "summaries,fulfillmentAvailability", pageSize: "20" });
     if (input.nextToken) query.set("pageToken", input.nextToken);
-    return this.request("GET", `/listings/2021-08-01/items/${encodeURIComponent(input.sellerId)}?${query}`);
+    return this.request("GET", `/listings/2021-08-01/items/${encodeURIComponent(input.sellerId)}?${query}`, undefined, captureRaw);
   }
 
   /** Read-only inbound candidates; adding client methods does not enable the
@@ -235,7 +253,7 @@ export class AmazonSpApiClient {
     return { rawBody };
   }
 
-  async getInventorySummaries(input: { marketplaceId: string; nextToken?: string }): Promise<unknown> {
+  async getInventorySummaries(input: { marketplaceId: string; nextToken?: string }, captureRaw?: (text: string) => void): Promise<unknown> {
     const query = new URLSearchParams({
       granularityType: "Marketplace",
       granularityId: input.marketplaceId,
@@ -243,7 +261,7 @@ export class AmazonSpApiClient {
       details: "true",
     });
     if (input.nextToken) query.set("nextToken", input.nextToken);
-    return this.request("GET", `/fba/inventory/v1/summaries?${query.toString()}`);
+    return this.request("GET", `/fba/inventory/v1/summaries?${query.toString()}`, undefined, captureRaw);
   }
 
   async createSalesTrafficReport(input: { marketplaceId: string; startAt: string; endExclusive: string; reportEndAt?: string; from?: string; to?: string }): Promise<unknown> {
@@ -324,6 +342,7 @@ export class AmazonSpApiClient {
     if (url.protocol !== "https:" || url.port || url.username || url.password || url.hash || (url.hostname !== this.reportDownloadTestHost && !/^(?:[a-z0-9.-]+\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(url.hostname))) throw new AmazonSpApiError("报告下载地址不在允许的 S3 HTTPS 范围。");
     if (document.compressionAlgorithm !== undefined && document.compressionAlgorithm !== "GZIP") throw new AmazonSpApiError("报告压缩格式不支持。");
     let received = 0;
+    await this.beforeRequest?.();
     try {
       const headers = reportRangeHeaders(position);
       const response = await this.fetcher(url.toString(), { method: "GET", headers, redirect: "error", cache: "no-store", signal: AbortSignal.timeout(90_000) });
@@ -350,6 +369,7 @@ export class AmazonSpApiClient {
     if (document.compressionAlgorithm !== undefined && document.compressionAlgorithm !== "GZIP") throw new AmazonSpApiError("报告压缩格式不支持。");
     const limit = 16 * 1024 * 1024;
     let downloadedBytes = 0;
+    await this.beforeRequest?.();
     try {
       const downloadTimeoutMs = timeoutMs !== undefined && Number.isFinite(timeoutMs) ? Math.min(90_000, Math.max(5_000, timeoutMs)) : this.requestTimeoutMs;
       const response = await this.fetcher(url.toString(), { method: "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(downloadTimeoutMs) });
@@ -418,11 +438,12 @@ export class AmazonSpApiClient {
       cache: "no-store",
       redirect: "error",
     });
-    const text = captureRaw ? await readBoundedOrderResponse(response) : await response.text();
+    const text = captureRaw || this.onErrorResponse && !response.ok ? await readBoundedOrderResponse(response) : await response.text();
     // Finance preserves successful JSON number lexemes. Error bodies still need
     // parsing, otherwise InvalidInput loses its actual retention diagnostic.
     const payload = rawOnly && response.ok ? undefined : parseResponseBody(text);
     if (!response.ok) {
+      await this.onErrorResponse?.({ status: response.status, requestId: /^[A-Za-z0-9-]{1,100}$/.test(response.headers.get("x-amzn-requestid") ?? "") ? response.headers.get("x-amzn-requestid") : null, rawBody: text });
       throw new AmazonSpApiError(safeAmazonErrorMessage(response.status, payload, this.secretValues(accessToken)), {
         status: response.status,
         authorizationRejected: response.status === 401,
@@ -477,11 +498,12 @@ export class AmazonSpApiClient {
   }
 
   private async fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+    await this.beforeRequest?.();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     try {
       const response = await this.fetcher(input, { ...init, signal: controller.signal });
-      this.onResponse?.({ operation: input === this.tokenEndpoint ? "LWA" : inboundRequestOperation(input) ?? (input.includes("/products/pricing/v0/price") ? "getPricing" : input.includes("/products/pricing/2022-05-01/") ? "getCompetitiveSummary" : new URL(input).pathname === "/finances/2024-06-19/transactions" ? "listTransactions" : new URL(input).pathname.startsWith("/orders/2026-01-01/orders/") ? "getOrder" : input.includes("/orders/2026-01-01/orders") ? "searchOrders" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/catalog/2022-04-01/items/") ? "getCatalogItem" : input.includes("/listings/") ? (new URL(input).pathname.split("/").length > 5 ? "getListingsItem" : "searchListingsItems") : input.includes("/reports/2021-06-30/documents/") ? "getReportDocument" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("nextToken") ? "getReports" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("reportTypes") ? "getReports" : input.includes("/reports/2021-06-30/reports/") ? "getReport" : input.includes("/reports/2021-06-30/reports") ? "createReport" : "getMarketplaceParticipations"), status: response.status,
+      this.onResponse?.({ operation: input === this.tokenEndpoint ? "LWA" : inboundRequestOperation(input) ?? (input.includes("/notifications/v1/subscriptions") ? "getSubscriptions" : input.includes("/products/pricing/v0/price") ? "getPricing" : input.includes("/products/pricing/2022-05-01/") ? "getCompetitiveSummary" : new URL(input).pathname === "/finances/2024-06-19/transactions" ? "listTransactions" : new URL(input).pathname.startsWith("/orders/2026-01-01/orders/") ? "getOrder" : input.includes("/orders/2026-01-01/orders") ? "searchOrders" : input.includes("/fba/inventory/") ? "getInventorySummaries" : input.includes("/catalog/2022-04-01/items/") ? "getCatalogItem" : input.includes("/listings/") ? (new URL(input).pathname.split("/").length > 5 ? "getListingsItem" : "searchListingsItems") : input.includes("/reports/2021-06-30/documents/") ? "getReportDocument" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("nextToken") ? "getReports" : new URL(input).pathname === "/reports/2021-06-30/reports" && new URL(input).searchParams.has("reportTypes") ? "getReports" : input.includes("/reports/2021-06-30/reports/") ? "getReport" : input.includes("/reports/2021-06-30/reports") ? "createReport" : "getMarketplaceParticipations"), status: response.status,
         requestId: safeRequestId(response.headers.get("x-amzn-requestid")), rateLimit: safeRateLimit(response.headers.get("x-amzn-ratelimit-limit")) });
       return response;
     } catch (error) {

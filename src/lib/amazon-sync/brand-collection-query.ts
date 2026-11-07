@@ -1,3 +1,4 @@
+import { nextAutomaticBrandPolicy } from "./automatic-brand";
 import type { Prisma } from "@prisma/client";
 import { brandCollectionWindows, brandTaskPolicy, brandWindowKey } from "./brand-collection";
 import { parseObservationPolicy, type AnalyticsPolicy } from "./observation-policy";
@@ -35,14 +36,17 @@ export async function readBrandCollection(tx: Prisma.TransactionClient, scope: S
   });
   const completed = items.filter(i => ["SUCCEEDED", "EMPTY"].includes(i.status)).length;
   return { policy, items, total: items.length, completed, complete: completed === items.length,
-    // A failed/uncertain task is a hard stop. User retries its checkpoint; the
-    // scheduler never creates a second report for it under a new key.
-    next: items.find(i => !["SUCCEEDED", "EMPTY"].includes(i.status)) ?? null };
+    // Keep failed/uncertain windows uncovered and preserve their task IDs.
+    // Other report kinds and periods can proceed without replaying their creates.
+    next: items.find(i => i.status === "MISSING") ?? null };
 }
 export async function nextBrandCollectionPolicy(tx: Prisma.TransactionClient, scope: SyncScope, source: Parameters<typeof readBrandCollection>[2]): Promise<AnalyticsPolicy> {
   const collection = await readBrandCollection(tx, scope, source);
-  if (!collection) return parseObservationPolicy(source.domainPolicy, "brand_analytics") as AnalyticsPolicy;
-  if (!collection.next) throw new SyncInputError("品牌回补清单已全部完成。", 409);
+  if (!collection) {
+    const policy = parseObservationPolicy(source.domainPolicy, "brand_analytics") as AnalyticsPolicy;
+    return policy.automaticDiscovery ? nextAutomaticBrandPolicy(tx, scope, source.id, policy) : policy;
+  }
+  if (!collection.next) throw new SyncInputError(collection.complete ? "品牌回补清单已全部完成。" : "品牌清单其余窗口尚未完成，等待原任务恢复；没有新的可执行窗口。", 409);
   if (collection.next.status !== "MISSING") throw new SyncInputError("品牌回补已有未完成或失败任务，请从原任务检查点恢复。", 409);
   return brandTaskPolicy(collection.policy, collection.next);
 }

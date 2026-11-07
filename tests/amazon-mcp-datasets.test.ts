@@ -62,8 +62,11 @@ test("filter schemas and runtime share paging and sort allowlists, including the
     assert.ok(datasetFilterProperties(dataset).sortBy.enum?.includes(normalized.filters.sortBy));
   }
   const schema = datasetInputSchema(true);
-  assert.equal(schema.allOf?.length, 5);
+  assert.equal(schema.allOf?.length, mcpDatasets.length);
   assert.equal(schema.properties.pageSize?.maximum, 1000);
+  const ads = mcpDatasets.find(dataset => dataset.module === "amazon_ads")!;
+  const adsConstraint = schema.allOf?.find(rule => JSON.stringify(rule.if).includes(ads.dataType));
+  assert.equal(adsConstraint?.then.properties.pageSize.maximum, ads.maxPageSize);
 });
 
 test("metadata retains zero/null and exact values, uses true total for empty deep pages, and never invents currency", () => {

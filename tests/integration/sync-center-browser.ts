@@ -90,6 +90,7 @@ export async function exerciseSyncCenterBrowser(input: { organizationId: string;
     await applyApproval(await verified);
     await page.getByRole("button", { name: "刷新", exact: true }).click();
     await expect(authPanel.getByText("US (ATVPDKIKX0DER)", { exact: false })).toBeVisible();
+    await page.getByText("高级维护：现有来源策略", { exact: true }).click();
     await page.getByLabel("已验证授权", { exact: true }).selectOption({ label: "Browser Seller C / BROWSER_SELLER_C" });
     await page.getByLabel("ERP 店铺", { exact: true }).selectOption(input.storeId);
     await page.getByLabel("已验证 Marketplace", { exact: true }).selectOption("ATVPDKIKX0DER");

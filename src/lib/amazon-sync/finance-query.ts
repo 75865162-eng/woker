@@ -1,3 +1,4 @@
+import { queryPageSize } from "./query-page";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { assertAmazonScopeAdmin, assertAmazonAction } from "./data-access";
@@ -25,7 +26,7 @@ export async function readFinance(scope: SyncScope, params: URLSearchParams, act
     if (Object.keys(postedAt).length) filters.postedAt = postedAt;
     const base = { ...scope, source: { resource: "finance" }, ...filters };
     const where = { ...base, attributionStatus: "ATTRIBUTED" };
-    const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = 50;
+    const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = queryPageSize(params);
     const [total, rows, quarantinedCount, unconvertedCount, sources] = await Promise.all([
       tx.amazonFinanceRecord.count({ where }),
       tx.amazonFinanceRecord.findMany({ where, orderBy: [{ postedAt: "desc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: { transactionId: true, sourceId: true, sellerAccountId: true, marketplaceId: true, marketplaceTimeZone: true, postedAt: true, transactionType: true, rawStatus: true, orderId: true, classification: true, originalAmount: true, currency: true, convertedAmount: true, convertedCurrency: true, conversionStatus: true, capturedAt: true } }),

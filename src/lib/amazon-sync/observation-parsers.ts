@@ -28,6 +28,12 @@ function decimal(v: unknown, min = 0, max = Number.MAX_VALUE) {
   return v.source;
 }
 function money(v: unknown) { const row = object(v); return { amount: decimal(row.amount), currencyCode: /^[A-Z]{3}$/.test(text(row.currencyCode, 3)) ? row.currencyCode as string : invalid() }; }
+function sampleLocation(v: unknown) {
+  const location = object(v), postal = object(location.postalCode);
+  const countryCode = text(postal.countryCode, 2);
+  if (!/^[A-Z]{2}$/.test(countryCode)) return invalid();
+  return { postalCode: { countryCode, value: text(postal.value, 20) } };
+}
 
 /** Every segment stays explicit; own price is unknown unless the own offer is returned.
  * Decimal lexemes survive without a binary floating-point round trip.
@@ -47,7 +53,7 @@ export function parseCompetitivePrices(raw: string, policy: PricingPolicy, marke
         return { sellerId: text(offer.sellerId, 100), isOwnOffer: offer.sellerId === sellerId, condition: text(offer.condition, 50), fulfillmentType: text(offer.fulfillmentType, 50), listingPrice: money(offer.listingPrice),
           shippingOptions: array(offer.shippingOptions ?? [], 100).map(v => { const shipping = object(v); return { shippingOptionType: text(shipping.shippingOptionType, 100), price: money(shipping.price) }; }),
           featuredOfferSegments: array(offer.featuredOfferSegments ?? [], 100).map(v => { const segment = object(v); const details = object(segment.segmentDetails);
-            return { customerMembership: text(segment.customerMembership, 50), segmentDetails: { ...(details.glanceViewWeightPercentage === undefined ? {} : { glanceViewWeightPercentage: decimal(details.glanceViewWeightPercentage, 0, 100) }), ...(details.sampleLocation === undefined ? {} : { sampleLocation: { postalCode: text(object(details.sampleLocation).postalCode, 20) } }) } }; }) };
+            return { customerMembership: text(segment.customerMembership, 50), segmentDetails: { ...(details.glanceViewWeightPercentage === undefined ? {} : { glanceViewWeightPercentage: decimal(details.glanceViewWeightPercentage, 0, 100) }), ...(details.sampleLocation === undefined ? {} : { sampleLocation: sampleLocation(details.sampleLocation) }) } }; }) };
       }) };
     });
     const referencePrices = array(body.referencePrices ?? [], 50).map(v => { const row = object(v); return { name: text(row.name, 100), price: money(row.price) }; });
@@ -137,7 +143,7 @@ export function parseObservationReport(raw: string, policy: AnalyticsPolicy | Bu
     const row = object(v);
     if (policy.resource === "buy_box_history") {
       const id = asin(row.childAsin);
-      if (!policy.asins.includes(id)) return null;
+      if (!policy.allAsins && !policy.asins.includes(id)) return null;
       const traffic = object(row.trafficByAsin);
       if (traffic.buyBoxPercentage !== undefined && (!Number.isFinite(Number(traffic.buyBoxPercentage)) || Number(traffic.buyBoxPercentage) < 0 || Number(traffic.buyBoxPercentage) > 100)) return invalid();
       return observationFact("BUY_BOX_DAY", [policy.from, id], { businessDate: policy.from, asin: id, buyBoxPercentage: traffic.buyBoxPercentage ?? null, sessions: traffic.sessions ?? null, pageViews: traffic.pageViews ?? null, unit: "PERCENT_0_100", meaning: "ONE_DAY_CHILD_ASIN_TRAFFIC_REPORT" }, { asin: id });
@@ -180,7 +186,9 @@ export function parseOwnPrices(raw: string, policy: PricingPolicy, marketplaceId
       const sku = object(identifiers.SKUIdentifier);
       if (sku.SellerId && sku.SellerId !== sellerId || sku.MarketplaceId && sku.MarketplaceId !== marketplaceId) return invalid();
     }
-    const offers = array(product.Offers, 100).map(v => {
+    // Amazon omits Offers for successful ASIN results without an own offer.
+    // This means no offer returned, never a zero price or an upstream failure.
+    const offers = array(product.Offers === undefined ? [] : product.Offers, 100).map(v => {
       const offer = object(v), buying = object(offer.BuyingPrice);
       if (offer.ItemCondition !== "New" || offer.offerType !== undefined && offer.offerType !== "B2C") return invalid();
       return { sellerSku: text(offer.SellerSKU, 255), offerType: "B2C", condition: "New", subCondition: text(offer.ItemSubCondition, 50), fulfillmentChannel: text(offer.FulfillmentChannel, 50), regularPrice: legacyMoney(offer.RegularPrice), listingPrice: legacyMoney(buying.ListingPrice), landedPrice: buying.LandedPrice === undefined ? null : legacyMoney(buying.LandedPrice), shipping: buying.Shipping === undefined ? null : legacyMoney(buying.Shipping) };

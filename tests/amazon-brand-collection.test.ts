@@ -69,10 +69,10 @@ test("repeat purchase full official fields survive as exact values; invalid perc
   const state = { ...initialObservationState(p), stage: "POLL" as const, reportId: "fixture" };
   assert.equal(advanceObservation(p, state, { reportId: "fixture", reportType: brandReportTypes.repeat_purchase, marketplaceIds: [site], processingStatus: "DONE", reportDocumentId: "doc" }, { marketplaceId: site, sellerId: "fixture", rawBody: "" }).state.stage, "DOCUMENT");
 });
-test("brand opt-in supports eighteen documented sites without broadening other automatic domains", () => {
+test("brand and automatic domains share verified reporting sites", () => {
   assert.equal(brandMarketplaces.size, 18);
   for (const id of brandMarketplaces) { assert.ok(reportTimeZone(id)); assert.equal(automaticMarketplaceAllowed("brand_analytics", id), true); }
-  assert.equal(automaticMarketplaceAllowed("orders", "A1PA6795UKMFR9"), false); assert.equal(automaticMarketplaces.size, 4);
+  assert.equal(automaticMarketplaceAllowed("orders", "A1PA6795UKMFR9"), true); assert.equal(automaticMarketplaces.size, 18);
 });
 
 test("repeat purchase preserves upstream null metrics while keeping identity and non-null contracts strict", () => {

@@ -1,3 +1,4 @@
+import { queryPageSize } from "./query-page";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, sellerAccessWhere, type AmazonDataAccess } from "./data-access";
@@ -33,7 +34,7 @@ export function orderReadWhere(scope: SyncScope, params: URLSearchParams, access
 export async function readOrders(scope: SyncScope, params: URLSearchParams, actor?: string) {
   const access = await amazonDataAccess(scope, actor);
   const where = orderReadWhere(scope, params, access);
-  const page = Math.max(1, Math.min(10000, Math.floor(Number(params.get("page")) || 1))), pageSize = 50;
+  const page = Math.max(1, Math.min(10000, Math.floor(Number(params.get("page")) || 1))), pageSize = queryPageSize(params);
   return prisma.$transaction(async tx => {
     const [total, rows, sources] = await Promise.all([
       tx.amazonOrderRecord.count({ where }),

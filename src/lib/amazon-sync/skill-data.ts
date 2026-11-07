@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { SyncInputError, type SyncScope } from "./policy";
 import { readSalesTraffic } from "./sales-query";
+import { isSpApiDataset, querySpApiDataset } from "./sp-api-data-query";
 
 type DataSource = {
   id: string;
@@ -56,7 +57,7 @@ export function skillTableAvailability(sources: DataSource[]) {
 
 export function describeSkillTable(name: string, sources: DataSource[]) {
   const table = datasetForTable(name);
-  if (table.name !== "ads_report_daily" && !validSources(sources, table.resource).length) throw new McpDatasetError("DATASET_UNPUBLISHED", "TABLE_NOT_ALLOWED: 当前授权范围没有该表的已发布数据源。", 403);
+  if (table.name !== "ads_report_daily" && !sources.some(source => source.resource === table.resource)) throw new McpDatasetError("DATASET_UNPUBLISHED", "TABLE_NOT_ALLOWED: 当前授权范围没有该表的数据源。", 403);
   return { ...describeMcpDataset(table), fields: table.fields, warnings: table.warnings ?? [], schemaStatus: "application_schema_confirmed_source_sample_pending" };
 }
 
@@ -100,6 +101,16 @@ export async function querySkillTable(input: {
     page: { page: input.page, pageSize: input.pageSize, hasNext: false },
     sources: sources.map(source => ({ sourceId: source.id, sellerAccountId: source.sellerAccountId, marketplaceId: source.marketplaceId, syncRunId: source.activeRunId, lastSyncAt: source.lastSuccessAt?.toISOString() ?? null })),
   };
+
+  if (isSpApiDataset(table.name)) {
+    const result = await querySpApiDataset({ ...input, resource: table.resource, sources, filters });
+    const actual = sources.filter(source => source.id === result.source.id);
+    return { data: { items: result.rows, total: result.pagination.total }, meta: { ...meta,
+      sources: meta.sources.filter(source => source.sourceId === result.source.id),
+      lastSyncAt: actual[0]?.lastSuccessAt?.toISOString() ?? null,
+      completeness: result.completeness,
+      page: { page: result.pagination.page, pageSize: result.pagination.pageSize, hasNext: result.pagination.page < result.pagination.pageCount } } };
+  }
 
   if (table.name === "sales_traffic_daily") {
     const from = filters.from;

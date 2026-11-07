@@ -71,7 +71,8 @@ test("confirmed rejected pagination can replay the same window through approval 
   assert.equal(reset.watermarkTo.getTime(), original.watermarkTo.getTime());
   assert.equal(reset.captureSequence, original.captureSequence);
   assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: first.id } })).checkpointCiphertext, rejected.checkpointCiphertext);
-  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: first.id } }), 1);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: first.id } }), 2);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: first.id, page: { lt: 0 } } }), 1, "rejected token response remains encrypted evidence");
   const replay = await f.request();
   const page = await f.slice(replay.id); assert.equal(page.status, "WAITING", page.error ?? ""); assert.equal(page.skippedCount, 1);
   const done = await f.slice(replay.id); assert.equal(done.status, "SUCCEEDED", done.error ?? "");
@@ -198,7 +199,9 @@ for (const mismatch of ["seller", "site"]) test(`response ${mismatch} overflow f
   f.setBody(raw("page-1").replace(mismatch === "seller" ? "fixture-seller" : "fixture-site-b", "fixture-outside"));
   assert.equal((await f.slice(task.id)).status, "FAILED");
   assert.equal(await prisma.amazonFinanceRecord.count({ where: f.scope }), 0);
-  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: task.id } }), 0);
+  const rejected = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { taskId: task.id, page: 1 } });
+  const original = unseal(rejected.rawCiphertext, f.scope, `${task.id}:1`, "amazon-finance-raw.v1").rawBody;
+  assert.ok(typeof original === "string" && original.includes("fixture-outside"), "rejected response retained only in encrypted raw evidence");
 });
 test("finance page rollback preserves facts, archive and checkpoint atomically", async () => {
   const f = await fresh(), task = await f.request();

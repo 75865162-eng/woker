@@ -14,8 +14,9 @@ test("reimbursement history advances in 30 closed days and never overwrites a pe
   assert.throws(() => nextAutomaticReimbursementWindow(now, { ...cursor, watermarkTo: cursor.watermarkFrom }));
 });
 
-test("automatic plan scope includes the requested North American sales marketplaces and executable source policies", () => {
-  assert.deepEqual([...automaticMarketplaces].sort(), ["A1AM78C64UM0Y8", "A2EUQ1WTGCTBG2", "A2Q3Y263D00KWC", "ATVPDKIKX0DER"]);
+test("automatic plan scope includes verified reporting marketplaces and executable source policies", () => {
+  for (const site of ["A1AM78C64UM0Y8", "A2EUQ1WTGCTBG2", "A2Q3Y263D00KWC", "ATVPDKIKX0DER", "A1PA6795UKMFR9", "A1VC38T7YXB528"]) assert.equal(automaticMarketplaces.has(site), true);
+  assert.equal(automaticMarketplaces.has("AHRY1CZE9ZY4H"), false);
   assert.deepEqual(["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"].filter(isAutomaticResource), ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"]);
   assert.equal(automaticIntervalMinutes, 1440);
   assert.equal(automaticBackfillDays, 730);
@@ -57,4 +58,13 @@ test("automatic resume is immediate and task keys isolate configuration revision
   assert.notEqual(key,automaticTaskKey(plan,{...source,authorization:{revision:3}},'from','to'));
   assert.notEqual(key,automaticTaskKey(plan,source,'from','other'));
   assert.ok(key.length<=160);
+});
+
+
+test("completed incremental cursors survive automatic plan adoption and reimbursement starts at retention", async () => {
+  const { nextOrderWindow, parseOrderSyncPolicy } = await import("@/lib/amazon-sync/orders");
+  const policy = parseOrderSyncPolicy({ initialFrom: automaticBackfillStart(now), windowMinutes: 1440, overlapSeconds: 60, safetyLagSeconds: 180, marketplaceTimeZone: "America/Los_Angeles", applicationId: "fixture", requestsPerSecond: .0056, burst: 1, statusMapping: {} });
+  const cursor = { watermarkFrom: new Date("2026-10-01T00:00:00Z"), watermarkTo: new Date("2026-10-02T00:00:00Z"), status: "SUCCEEDED" };
+  assert.equal(nextOrderWindow(policy, cursor, now).from, "2026-10-01T23:59:00.000Z");
+  assert.equal(nextAutomaticReimbursementWindow(now).from, "2024-11-05");
 });

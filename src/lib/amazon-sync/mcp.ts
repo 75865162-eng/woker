@@ -1,4 +1,5 @@
 import { adsEntityTypes, mcpDatasets, datasetForTable, resolveMcpDataset, normalizeDatasetQuery, describeMcpDataset, enrichDatasetResult, presentMcpReport, McpDatasetError } from "./mcp-datasets";
+import { readSyncCoverage } from "./coverage";
 import { createToolGateway, GatewayInvocationError } from "@/lib/agent-platform/tool-gateway";
 import { amazonMcpTools, bindAmazonMcpHandlers, isCallableAmazonMcpTool, mcpDiscoveryDescriptor, type AmazonMcpToolName } from "./mcp-tool-registry";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -402,7 +403,7 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
           datasets.push(describeMcpDataset(mcpDatasets.find(item => item.name === "ads_entities")!));
           requiredDatasetTools.add("amazon.ads.entities.list");
         }
-        const resources = new Set<string>(tables.filter(table => table.name !== "ads_report_daily").map(table => table.name === "inventory" ? "inventory" : table.name === "listings" ? "catalog" : "sales_traffic"));
+        const resources = new Set<string>(tables.filter(table => table.name !== "ads_report_daily").map(table => datasetForTable(table.name).resource));
         const tableSources = selected.filter(source => resources.has(source.resource));
         result = { data: { items: tables, total: tables.length, datasets }, meta: dataMeta(tableSources, "AmazonSyncDataSource", ["sellerAccountId", "marketplaceId", "resource"]) };
       } else if (tool === "data_describe_table" || tool === "data_query") {
@@ -449,7 +450,22 @@ async function invokeRegisteredAmazonMcp(identity: McpIdentity, tool: AmazonMcpT
       } else {
         const published = selected.filter(s => s.activeRunId && s.publishedRun?.status === "SUCCEEDED" && s.publishedRun.finishedAt && s.publishedRun.stage !== "PURGED" && s.publishedRun.executionVersion === 2 && s.publishedRun.resource === s.resource && s.publishedRun.sourceId === s.id);
         const common = { ...scope, OR: published.filter(s => s.activeRunId).map(s => ({ sellerAccountId: s.sellerAccountId, marketplaceId: s.marketplaceId, syncRunId: s.activeRunId! })) };
-        if (tool === "data_sync_status") result = { data: { items: selected.map(s => ({ sellerAccountId: s.sellerAccountId, displayName: s.seller.displayName, amazonSellerId: s.authorization.amazonSellerId, marketplaceId: s.marketplaceId, region: s.authorization.awsRegion, resource: s.resource, enabled: s.enabled, lastSyncedAt: s.lastSuccessAt, syncRunId: s.activeRunId, rowCount: s.rowCount })), total: selected.length }, meta: dataMeta(selected, "AmazonSyncDataSource", ["sellerAccountId", "marketplaceId", "resource"]) };
+        if (tool === "data_sync_status") {
+          const states = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: selected.map(s => s.id) } }, select: { id: true, coverage: true, runs: { where: { executionVersion: 2 }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, status: true, stage: true, processedCount: true, pagesCompleted: true, nextAttemptAt: true } }, targets: { where: { schedule: { enabled: true } }, select: { schedule: { select: { nextRunAt: true } } } } } });
+          const items = selected.map(s => {
+            const state = states.find(row => row.id === s.id);
+            const rawCoverage = state?.coverage && typeof state.coverage === "object" && !Array.isArray(state.coverage) ? state.coverage : {};
+            // Never expose raw payloads, discovery object IDs or cross-site manifests.
+            const coverage = Object.fromEntries(["type", "complete", "historicalComplete", "paginationComplete", "accountUniverseComplete", "from", "to"].flatMap(key => {
+              const value = (rawCoverage as Record<string, unknown>)[key];
+              return typeof value === "boolean" || typeof value === "string" ? [[key, value]] : [];
+            }));
+            const dates = state?.targets.map(t => t.schedule.nextRunAt).filter((d): d is Date => !!d).sort((a, b) => a.getTime() - b.getTime());
+            return { sellerAccountId: s.sellerAccountId, displayName: s.seller.displayName, amazonSellerId: s.authorization.amazonSellerId, marketplaceId: s.marketplaceId, region: s.authorization.awsRegion, resource: s.resource, enabled: s.enabled, lastSyncedAt: s.lastSuccessAt, syncRunId: s.activeRunId, rowCount: s.rowCount, coverage, latestTask: state?.runs[0] ?? null, nextScheduledAt: dates?.[0] ?? null };
+          });
+          const coverage = await readSyncCoverage(scope, new URLSearchParams({ ...(args.marketplaceId ? { marketplaceId: String(args.marketplaceId) } : {}), ...(args.sellerAccountId ? { sellerAccountId: String(args.sellerAccountId) } : {}) }), actor, selected.map(s => s.id));
+          result = { data: { items, total: selected.length, coverage }, meta: dataMeta(selected, "AmazonSyncDataSource", ["sellerAccountId", "marketplaceId", "resource"], ["成功快照不等于全部 API 或全部历史已完成；未报告的覆盖范围为未知。"]) };
+        }
         else if (tool === "amazon.stores.list" || tool === "amazon.sync.status") result = selected.map(s => ({ sellerAccountId: s.sellerAccountId, displayName: s.seller.displayName, amazonSellerId: s.authorization.amazonSellerId, marketplaceId: s.marketplaceId, region: s.authorization.awsRegion, resource: s.resource, enabled: s.enabled, lastSyncedAt: s.lastSuccessAt, source: "amazon_sp_api_snapshot", syncRunId: s.activeRunId, rowCount: s.rowCount }));
         else if (tool === "amazon.history.read") {
         const taskId = requiredText(args.taskId, "任务");

@@ -304,14 +304,18 @@ test("P2 detail commit failure rolls back items/encrypted payload/work; retry co
     const row = await prisma.amazonOrderRecord.findFirstOrThrow({ where: f.scope });
     assert.equal(row.detailCiphertext, null); assert.equal(row.detailsUpdatedAt, null);
     assert.equal(await prisma.amazonOrderItemRecord.count({ where: f.scope }), 0);
-    assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: task.id } }), 1);
+    assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: task.id } }), 2, "detail original survives a rolled-back fact transaction");
     assert.equal(await prisma.amazonOrderDetailWork.count({ where: { ...f.scope, status: "PENDING" } }), 1);
   } finally {
     failDetailCommit = false;
     await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS fixture_reject_detail ON "AmazonOrderDetailWork"');
     await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS fixture_reject_detail()");
   }
-  const restart = await f.request(); await f.slice(restart.id); await f.slice(restart.id); assert.equal((await f.slice(restart.id)).status, "SUCCEEDED");
+  const beforeRetry = calls.filter(c => c.path.endsWith("fixture-order-1")).length;
+  await f.approved({ action: "control-task", id: task.id, control: "retry" });
+  await f.slice(task.id);
+  assert.equal(calls.filter(c => c.path.endsWith("fixture-order-1")).length, beforeRetry, "retry reuses the authenticated detail original without HTTP");
+  await f.slice(task.id); assert.equal((await f.slice(task.id)).status, "SUCCEEDED");
 });
 
 test("approved core detail transition backfills existing orders without rewriting completed list cursors", async () => {

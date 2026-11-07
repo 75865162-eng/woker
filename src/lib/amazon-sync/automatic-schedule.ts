@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { localDate, shiftDate, type RequestedRange, resolveRequestedRange } from "./date-range";
+import { localDate, reportingMarketplaceIds, reportTimeZone, shiftDate, type RequestedRange, resolveRequestedRange } from "./date-range";
 import { nextReturnWindow, type ReturnPolicy } from "./returns";
 
 /** Resume using current revisions rather than an old frozen terminal task. */
@@ -10,11 +10,19 @@ export function nextPlanRunAt(enabled: boolean, automatic: boolean, intervalMinu
   return enabled ? new Date(now.getTime() + (automatic ? 0 : intervalMinutes * 60_000)) : null;
 }
 
-export const automaticResources = ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"] as const;
-export const automaticMarketplaces = new Set(["ATVPDKIKX0DER", "A2EUQ1WTGCTBG2", "A1AM78C64UM0Y8", "A2Q3Y263D00KWC"]);
+export const automaticResources = ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics", "buy_box_history", "notifications"] as const;
+// Regional participation and authorization are checked separately. This table
+// describes executable business time zones, never seller access or API roles.
+export const automaticMarketplaces = new Set(reportingMarketplaceIds);
 export const brandMarketplaces = new Set([...automaticMarketplaces, "A1RKKUPIHCS9HS", "A1F83G8C2ARO7P", "A13V1IB3VIYZZH", "A1805IZSGTT6HS", "A1PA6795UKMFR9", "APJ6JRA9NG5V4", "A2NODRKZP88ZB9", "A33AVAJ2PDY3EV", "A17E79C6D8DWNP", "A2VIGQ35RCS4UG", "A21TJRUUN4KGV", "A19VAU5U5O7RUS", "A39IBJ37TRP1C6", "A1VC38T7YXB528"]);
 export function automaticMarketplaceAllowed(resource: string, marketplaceId: string) { return (resource === "brand_analytics" ? brandMarketplaces : automaticMarketplaces).has(marketplaceId); }
 export const automaticIntervalMinutes = 1440;
+export function automaticResourceIntervalMinutes(resource: string) {
+  return resource === "inventory" || resource === "orders" || resource === "pricing" ? 60 : resource === "fulfillment" ? 120 : automaticIntervalMinutes;
+}
+export function automaticSnapshotSlot(now: Date, intervalMinutes: number) {
+  return String(Math.floor(now.getTime() / (intervalMinutes * 60_000)));
+}
 export const automaticBackfillDays = 730;
 export const automaticInventoryEventBackfillDays = 540;
 export const automaticReportDiscoveryDays = 90;
@@ -87,7 +95,7 @@ export function latestClosedReimbursementWindow(now: Date) {
 }
 
 export function nextSalesTrafficRange(marketplaceId: string, now: Date, coverage: Array<{ from: string; to: string }>): { range: RequestedRange; backfill: boolean } {
-  const today = localDate(now, "America/Los_Angeles");
+  const today = localDate(now, reportTimeZone(marketplaceId));
   const latestClosed = shiftDate(today, -1);
   const initial = shiftDate(today, -730);
   let coveredThrough = shiftDate(initial, -1);

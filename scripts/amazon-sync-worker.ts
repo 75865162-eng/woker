@@ -44,13 +44,23 @@ const worker = new Worker<AmazonSyncQueueJob>(
 );
 
 let recovering = false;
+let recoveryState: { lastSuccessAt: string | null; lastErrorAt: string | null; spApi: Awaited<ReturnType<typeof tickSyncCenter>> | null; adsHealthy: boolean | null } = { lastSuccessAt: null, lastErrorAt: null, spApi: null, adsHealthy: null };
 async function recoverQueuedRuns() {
   if (recovering) return;
   recovering = true;
   try {
-    await tickSyncCenter(new Date(), policy.mode === "approved-only" ? { taskIds: policy.taskIds!, exportIds: policy.exportIds! } : undefined);
-    if (policy.mode === "standard") await tickAmazonAds();
-    if (policy.runReplenishment) await refreshDueReplenishmentPlans();
+    try {
+      const result = await tickSyncCenter(new Date(), policy.mode === "approved-only" ? { taskIds: policy.taskIds!, exportIds: policy.exportIds! } : undefined);
+      recoveryState = { ...recoveryState, spApi: result, lastSuccessAt: new Date().toISOString() };
+    } catch { recoveryState.lastErrorAt = new Date().toISOString(); console.error("[amazon-sync-worker] SP-API recovery deferred; retrying next tick"); }
+    if (policy.mode === "standard") {
+      try { await tickAmazonAds(); recoveryState.adsHealthy = true; }
+      catch { recoveryState.adsHealthy = false; console.error("[amazon-sync-worker] Ads recovery deferred; SP-API remains independent"); }
+    }
+    if (policy.runReplenishment) {
+      try { await refreshDueReplenishmentPlans(); }
+      catch { console.error("[amazon-sync-worker] replenishment refresh deferred; sync recovery remains independent"); }
+    }
   } finally { recovering = false; }
 }
 
@@ -67,14 +77,14 @@ async function persistHeartbeat(status: "online" | "stopping") {
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
+      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode, recovery: { ...recoveryState, spApi: recoveryState.spApi ?? null, inProgress: recovering } } satisfies Prisma.InputJsonValue,
     },
     update: {
       queueName: amazonSyncQueueName,
       status,
       concurrency,
       lastSeenAt: new Date(),
-      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode } satisfies Prisma.InputJsonValue,
+      metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME, mode: policy.mode, recovery: { ...recoveryState, spApi: recoveryState.spApi ?? null, inProgress: recovering } } satisfies Prisma.InputJsonValue,
     },
   });
 }
@@ -99,6 +109,9 @@ async function shutdown() {
   clearInterval(heartbeatTimer);
   await writeHeartbeat("stopping").catch(() => undefined);
   await worker.close();
+  // A manager/systemd restart must not leave the recovery scan writing after exit.
+  const deadline = Date.now() + 20_000;
+  while (recovering && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
   process.exit(0);
 }
 
@@ -106,4 +119,4 @@ process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());
 
 console.log(`[amazon-sync-worker] listening on ${amazonSyncQueueName}`);
-if (!enabledSyncScopes().length) console.warn("[amazon-sync-worker] SP-API automatic sync disabled: configure exact AMAZON_SYNC_CENTER_SCOPES organization/workspace pairs");
+if (process.env.AMAZON_SYNC_CENTER_SCOPES !== undefined && !enabledSyncScopes().length) console.warn("[amazon-sync-worker] SP-API automatic sync disabled by explicit scope configuration");

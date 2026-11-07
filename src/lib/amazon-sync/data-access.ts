@@ -63,8 +63,8 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
   return explicitAmazonDataAccess(scope, actor, db, action);
 }
 export function sellerAccessWhere(access: AmazonDataAccess) { return access.allSellers ? {} : { sellerAccountId: { in: access.sellerIds }, ...(access.scopes ? { OR: access.scopes.map(s => ({ sellerAccountId: s.sellerAccountId, ...(s.marketplaceIds.length ? { marketplaceId: { in: s.marketplaceIds } } : {}) })) } : {}) }; }
-/** Seller-wide finance evidence cannot be exposed by a site-only grant or MCP scope. */
-export function sourceAccessWhere(access: AmazonDataAccess) { return { ...sellerAccessWhere(access), ...(access.allSellers ? {} : { resource: { not: "finance" } }) }; }
+/** Seller-wide finance and notification evidence cannot be exposed by a site-only grant or MCP scope. */
+export function sourceAccessWhere(access: AmazonDataAccess) { return { ...sellerAccessWhere(access), ...(access.allSellers ? {} : { resource: { notIn: ["finance", "notifications"] } }) }; }
 export async function assertSellerAccess(scope: SyncScope, actor: string, sellers: string[], db: Prisma.TransactionClient = prisma, action: AmazonDataAction = "view") {
   const access = await amazonDataAccess(scope, actor, db, action);
   if (!access.allSellers && (!sellers.length || sellers.some(id => !access.sellerIds.includes(id)))) throw new SyncInputError("操作超出成员的 Seller 数据授权。", 403);

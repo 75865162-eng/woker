@@ -27,7 +27,7 @@ test("finance uses actual site, quarantines missing/conflicting sites, rejects s
   assert.equal(attributeFinanceTransaction({ ...row, metadataMarketplaceId: null, detailsMarketplaceId: null }, "fixture-seller", policy).reason, "MISSING_MARKETPLACE");
   assert.equal(attributeFinanceTransaction({ ...row, metadataMarketplaceId: "fixture-site-a" }, "fixture-seller", policy).reason, "CONFLICTING_MARKETPLACE");
   for (const patch of [{ sellingPartnerId: null }, { sellingPartnerId: "other" }, { metadataMarketplaceId: "outside" }]) assert.throws(() => attributeFinanceTransaction({ ...row, ...patch }, "fixture-seller", policy), /批准|卖家/);
-  assert.deepEqual(sourceAccessWhere({ allSellers: false, sellerIds: ["fixture"] }).resource, { not: "finance" });
+  assert.deepEqual(sourceAccessWhere({ allSellers: false, sellerIds: ["fixture"] }).resource, { notIn: ["finance", "notifications"] });
 });
 for (const [name, transform] of Object.entries({
   "missing transaction ID": (s: string) => s.replace('"fixture-tx-1"', 'null'),

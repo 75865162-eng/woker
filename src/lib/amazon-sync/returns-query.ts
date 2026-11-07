@@ -1,3 +1,4 @@
+import { queryPageSize } from "./query-page";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, sellerAccessWhere } from "./data-access";
@@ -18,7 +19,7 @@ export async function readReturns(scope: SyncScope, params: URLSearchParams, act
     const requestedSource = params.get("sourceId");
     const source = requestedSource ? sources.find(s => s.id === requestedSource) : sources[0];
     if (requestedSource && !source) throw new SyncInputError("退货数据源不可访问。", 403);
-    const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = 50;
+    const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = queryPageSize(params);
     const coverage = source?.coverage as { reportId?: string } | null;
     const reportId = params.get("reportId") || coverage?.reportId;
     let published = false;
