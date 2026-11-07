@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Run } from "@/lib/selection-research/types";
 import type { ResearchReadiness } from "@/lib/selection-research/preflight";
+import type { ResearchAiSource } from "@/lib/selection-research/ai-settings";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
 import { ResearchResults } from "./research-results";
 import { ResearchAudit } from "./research-audit";
@@ -39,12 +40,13 @@ export function ResearchWorkbench() {
   const [error, setError] = useState("");
   const [savedFileId, setSavedFileId] = useState("");
   const [mode, setMode] = useState<"fixture" | "live">("live");
+  const [aiConfigSource, setAiConfigSource] = useState<ResearchAiSource>("workspace");
   const [availability, setAvailability] = useState<{ sellerSprite: string; ai: string; xiyou: string; erp?: string }>();
   const [maxMarketCalls, setMaxMarketCalls] = useState(3);
   const [billingReceipt, setBillingReceipt] = useState("");
   const [billingUnits, setBillingUnits] = useState(1);
   const [budgetLimit, setBudgetLimit] = useState(4);
-  const [discovery, setDiscovery] = useState<{ providers?: { provider: string; status: string; toolCount: number; reason?: string }[]; tools?: unknown[]; readiness?: ResearchReadiness }>();
+  const [discovery, setDiscovery] = useState<{ providers?: { provider: string; status: string; toolCount: number; reason?: string }[]; tools?: unknown[]; readiness?: ResearchReadiness; aiModel?: { provider: string; model: string } }>();
   const reconciliationCall = run?.gate?.kind === "BILLING" ? run.calls.find(call => call.billing === "UNKNOWN" || !call.paid && ["UNKNOWN", "IN_FLIGHT"].includes(call.status)) : undefined;
   useEffect(() => {
     setBillingReceipt("");
@@ -128,18 +130,19 @@ export function ResearchWorkbench() {
   }
   const control = "rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50";
   return <div className="space-y-5">
-    <button className={control} disabled={busy} onClick={() => void perform(async () => { const generation = scopeGeneration.current; const result = await request("/api/selection-research/discover", { erpCredentialId, asin, requirement, marketplace, maxMarketCalls }); if (generation === scopeGeneration.current) setDiscovery(result); })}>检查工具与启动条件（不创建任务、不取市场数据）</button>
+    <button className={control} disabled={busy} onClick={() => void perform(async () => { const generation = scopeGeneration.current; const result = await request("/api/selection-research/discover", { erpCredentialId, asin, requirement, marketplace, maxMarketCalls, aiConfigSource }); if (generation === scopeGeneration.current) setDiscovery(result); })}>检查工具与启动条件（不创建任务、不取市场数据）</button>
     {discovery?.providers && <div className="rounded border p-3 text-sm" role="status">{discovery.providers.map(provider => <p key={provider.provider}>{provider.provider}：{provider.status} · {provider.toolCount} 个真实工具 {provider.reason ? `· ${provider.reason}` : ""}</p>)}</div>}
     {discovery?.readiness && <section className="space-y-2 rounded border p-3 text-sm" aria-label="真实研究启动检查">
       <h2 className="font-semibold">{discovery.readiness.ready ? "连接配置与输入检查通过" : "真实研究尚有阻塞项"}</h2>
       <p>这是本次检查结果，修改输入后请重新检查。配置存在不代表模型调用已成功；检查不会创建任务、请求模型或调用市场业务数据。</p>
       <ul>{discovery.readiness.checks.map(check => <li key={check.id} className={check.status === "blocked" ? "text-red-700" : "text-slate-700"}>{check.id} · {check.status === "ready" ? "通过" : "未就绪"}：{check.message}</li>)}</ul>
+      {discovery.aiModel && <p>所选模型：{discovery.aiModel.provider} / {discovery.aiModel.model}</p>}
     </section>}
     {discovery !== undefined && <details><summary>在线目录发现结果</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(discovery, null, 2)}</pre></details>}
     <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm">Lili 已并入本系统，沿用当前 ERP 账号，无需单独注册或登录。ERP：{availability?.erp ?? "请发现在线目录"}；SellerSprite：{availability?.sellerSprite ?? "读取中"}；AI：{availability?.ai ?? "读取中"}；西柚：{availability?.xiyou ?? "读取中"}。真实模式会先读取在线工具目录；每个市场工具调用均需审批，市场服务实际费用须逐次核对。</div>
     <form className="space-y-3 rounded border p-4" onSubmit={(event) => { event.preventDefault(); void perform(async () => {
       const generation = scopeGeneration.current;
-      const data = await request("/api/selection-research", { requirement, marketplace, mode, asin: asin.trim().toUpperCase() || undefined, erpCredentialId: erpCredentialId || undefined, ...(mode === "live" ? { maxMarketCalls } : {}) });
+      const data = await request("/api/selection-research", { requirement, marketplace, mode, asin: asin.trim().toUpperCase() || undefined, erpCredentialId: erpCredentialId || undefined, ...(mode === "live" ? { maxMarketCalls, aiConfigSource } : {}) });
       if (generation === scopeGeneration.current) { showRun(data.run); if (data.discovery) setAvailability((current) => current && ({ ...current, sellerSprite: `在线目录已读取，支持 ${data.discovery.registeredReadTools.length} 个只读工具；缺失 ${data.discovery.missingCanonicalTools.join(", ") || "无"}` })); }
     }); }}>
       <label className="block">目标 ASIN（指定商品研究时填写）<input aria-label="目标 ASIN" className={control} value={asin} maxLength={10} pattern="[A-Za-z0-9]{10}" onChange={event => setAsin(event.target.value.toUpperCase())} placeholder="B0XXXXXXXX" /></label>
@@ -148,6 +151,7 @@ export function ResearchWorkbench() {
       <textarea id="research-requirement" className="min-h-28 w-full rounded border p-3" required maxLength={20000} value={requirement} onChange={(event) => setRequirement(event.target.value)} placeholder="输入产品方向、目标市场、价格带及选品要求" />
       <label className="mr-3">市场 <input aria-label="目标市场" className={control} value={marketplace} onChange={(event) => setMarketplace(event.target.value)} required maxLength={16} /></label>
       <label className="mr-3">运行模式 <select aria-label="运行模式" className={control} value={mode} onChange={(event) => setMode(event.target.value as "fixture" | "live")}><option value="fixture">隔离样本</option><option value="live">真实数据</option></select></label>
+      {mode === "live" && <label className="mr-3">AI 模型来源 <select aria-label="AI 模型来源" className={control} value={aiConfigSource} onChange={event => { setAiConfigSource(event.target.value as ResearchAiSource); setDiscovery(undefined); }}><option value="workspace">当前工作区已有配置</option><option value="server_runtime">已有服务端模型（需设置编辑权限）</option></select></label>}
       {mode === "live" && <label className="mr-3">每个外部来源最大调用次数 <input aria-label="最大市场调用次数" className={control} type="number" min={1} max={30} value={maxMarketCalls} onChange={(event) => setMaxMarketCalls(Number(event.target.value))} /></label>}
       <button className={control} disabled={busy || !requirement.trim()} type="submit">{mode === "live" ? "读取在线工具目录并创建真实任务" : "创建隔离样本任务"}</button>
     </form>
@@ -159,6 +163,7 @@ export function ResearchWorkbench() {
     })}>{item.input.requirement?.slice(0, 30)} · {item.status}</button>)}</div></section>
     {run && <section className="space-y-4 rounded border p-4">
       <h2 className="font-semibold">第 {run.stage} / 5 阶段 · {run.status}</h2><p className="break-all text-sm">任务：{run.id} · 模式：{run.mode} · 调用记录：{run.calls.length} · 修订：{run.revision}</p>
+      {run.aiModel && <p className="text-sm">任务保存的模型：{run.aiModel.provider} / {run.aiModel.model} · 来源：{run.aiConfigSource === "server_runtime" ? "已有服务端模型" : "当前工作区配置"}</p>}
       {run.status === "FAILED" && <p role="alert" className="rounded border border-red-300 p-3 text-red-700">{failureMessages[run.failure ?? ""] ?? "本步骤失败，已保留现有证据。请检查执行记录后手动恢复。"}</p>}
       {run.calls.some((call) => call.dispatch === "NOT_SENT") && <p className="text-sm">已保留发送前拦截记录：{run.calls.filter((call) => call.dispatch === "NOT_SENT").length} 条；这些业务请求未发送，不占用调用预算。恢复后仍须重新批准付费请求。</p>}
       {run.mode === "live" && <p className="text-sm">SellerSprite 请求次数：{run.calls.filter((call) => call.provider === "sellersprite" && call.dispatch !== "NOT_SENT").length} / {run.limits.sellersprite ?? 0}；西柚请求次数：{run.calls.filter((call) => call.provider === "xiyou" && call.dispatch !== "NOT_SENT").length} / {run.limits.xiyou ?? 0}。次数上限不代表费用金额上限；AI 模型也可能按其服务商规则计费。继续或批准后最多推进30步，遇到审批立即停止；可以暂停后续步骤。关闭页面后不会继续请求，可重新打开任务恢复。</p>}

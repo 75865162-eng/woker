@@ -96,6 +96,28 @@ test("Xiyou-compatible transport consumes a matching SSE response without waitin
   assert.equal(cancelled, 2);
 });
 
+test("the first research gate requires cited successful evidence from every required source", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lili-source-citations-"));
+  try {
+    const tool: ToolDefinition = { name: "erp__read_product", inputSchema: { type: "object" } };
+    const other: ToolDefinition = { name: "xiyou__read_product", inputSchema: { type: "object" } };
+    const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "isolated", workspaceId: "isolated", ownerId: "isolated" }, {
+      async listTools() { return [tool, other]; }, async callTool() { return { records: [], requestId: "isolated-response" }; },
+    }, { async next({ run }) {
+      if (run.calls.length < 2) return { type: "call", tool: run.calls.length ? other.name : tool.name, arguments: {} };
+      return { type: "complete", result: { summary: "Isolated source citation verification", claims: [{ text: "No business facts asserted", kind: "observed", evidenceIds: [run.calls[1].id] }], candidates: [{ id: "B000000001", name: "Isolated" }] } };
+    } }, { mode: "live", authorizeLive: async () => true });
+    let run = await engine.create({ asin: "B000000001", requirement: "Isolated evidence citation verification", marketplace: "US", skills: await loadBundledResearchSkills(), requiredProviders: ["erp"], limits: {}, policies: Object.fromEntries([tool, other].map(entry => [entry.name, { provider: entry.name === tool.name ? "erp" : "xiyou", paid: false, units: 0, unit: "calls", pricingSource: "isolated", maxCalls: 1, stages: [1] }])) });
+    run = await engine.step(run.id);
+    assert.equal(run.calls[0].status, "SUCCEEDED");
+    run = await engine.step(run.id);
+    assert.equal(run.calls[1].status, "SUCCEEDED");
+    run = await engine.step(run.id);
+    assert.equal(run.status, "FAILED"); assert.equal(run.failure, "REQUIRED_PROVIDER_EVIDENCE_MISSING");
+    assert.equal(run.gate, undefined); assert.equal(run.results.length, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("gateway attests pre-dispatch revocation or schema drift, releases budget and requires fresh approval on recovery", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "lili-not-sent-isolated-"));
   try {

@@ -42,7 +42,7 @@ export async function runtimeToolsForUser(user: { id: string; organizationId: st
     const settings = await getSellerSpriteMcpSettings(user, settingsScope);
     providers.push({ id: "sellersprite", isReadOnly: tool => tool.annotations?.readOnlyHint !== false && Boolean(sellerSpritePolicy(tool)),
       ...(settings.enabled && settings.apiKey ? { transport: {
-        async listTools() { return await listSellerSpriteRemoteTools(settings) as never; },
+        async listTools(signal) { return await listSellerSpriteRemoteTools(settings, signal) as never; },
         async callTool(name, args, signal, schema) { return await callSellerSpriteRemoteTool(settings, name, args, signal, schema) as never; },
       } as Transport } : { reason: "SELLERSPRITE_MCP_NOT_CONFIGURED" }) });
   } catch { providers.push({ id: "sellersprite", reason: "SELLERSPRITE_CONFIGURATION_UNAVAILABLE", isReadOnly: () => false }); }

@@ -4,6 +4,21 @@ import { createRuntimeTools } from "@/lib/lili/runtime-tools";
 import type { ToolDefinition } from "@/lib/selection-research/types";
 const schema = { type: "object", properties: { asin: { type: "string" } }, required: ["asin"] };
 
+test("a stalled provider cannot prevent discovery of connected ERP tools or Skill loading", async () => {
+  let aborted = false;
+  const runtime = createRuntimeTools([
+    { id: "erp", isReadOnly: () => true, transport: { async listTools() { return [{ name: "data_query", inputSchema: schema }]; }, async callTool() { return {}; } } },
+    { id: "xiyou", isReadOnly: () => true, transport: { async listTools(signal) { signal?.addEventListener("abort", () => { aborted = true; }); return new Promise(() => undefined); }, async callTool() { throw new Error("unreachable"); } } },
+  ], { discoveryTimeoutMs: 10 });
+  const result = await runtime.discover();
+  assert.equal(result.providers.find(provider => provider.provider === "erp")?.status, "connected");
+  assert.equal(result.providers.find(provider => provider.provider === "xiyou")?.status, "unavailable");
+  assert.equal(aborted, true);
+  assert.ok(result.tools.some(tool => tool.name === "erp__data_query"));
+  const skill = await runtime.call("meta_load_skill", { skill_name: "amazon-product-research" }, new AbortController().signal) as { markdown: string };
+  assert.ok(skill.markdown.length > 500);
+});
+
 test("runtime discovery exposes actual schemas and permissions, isolates disconnected sources and never substitutes shipped business tools", async () => {
   let dispatched = 0;
   const tool: ToolDefinition = { name: "actual_read", description: "live definition", inputSchema: schema, annotations: { readOnlyHint: true } };
@@ -34,6 +49,8 @@ test("dispatch rechecks revocation and schema drift; real skill bodies load with
   await assert.rejects(runtime.call("erp__read", { asin: "B000000001" }, new AbortController().signal), /FORBIDDEN/);
   const skill = await runtime.call("meta_load_skill", { skill_name: "amazon-product-research" }, new AbortController().signal) as { markdown: string };
   assert.ok(skill.markdown.length > 500); assert.equal(calls, 0);
+  await assert.rejects(runtime.call("meta_load_skill", { skill_name: "missing-skill" }, new AbortController().signal), /INVALID_TOOL_ARGUMENTS/);
+  await assert.rejects(runtime.call("meta_search_skills", { query: " " }, new AbortController().signal), /INVALID_TOOL_ARGUMENTS/);
 });
 
 test("runtime schema approval ignores object key order but blocks changed constraints before dispatch", async () => {

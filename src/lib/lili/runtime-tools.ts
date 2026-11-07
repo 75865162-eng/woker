@@ -14,7 +14,16 @@ export const xiyouResearchReadTools = new Set(["get_asin_info", "get_asin_traffi
 export const runtimeName = (provider: ProviderId, name: string) => `${provider}__${name}`;
 
 /** Request-scoped registry. Only actual adapter definitions are exposed; shipped business catalog is never used. */
-export function createRuntimeTools(providers: RuntimeProvider[]) {
+export function createRuntimeTools(providers: RuntimeProvider[], options: { discoveryTimeoutMs?: number } = {}) {
+  async function registryFor(provider: RuntimeProvider) {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([provider.transport!.listTools(controller.signal), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new Error("REGISTRY_TIMEOUT")); }, options.discoveryTimeoutMs ?? 30_000);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
+  }
   async function discover(selected?: ProviderId | "skills") {
     const tools: RuntimeTool[] = listTools().filter(tool => skillNames.has(tool.name)).map(tool => ({
       name: tool.name, description: tool.name === "meta_list_workflows" ? "List shipped workflow templates only. Does not list saved workflows or schedules." : tool.description, inputSchema: tool.inputSchema as ObjectJson,
@@ -25,11 +34,11 @@ export function createRuntimeTools(providers: RuntimeProvider[]) {
     const results = await Promise.all(providers.filter(provider => !selected || provider.id === selected).map(async provider => {
       if (!provider.transport) return { status: { provider: provider.id, status: "not_connected", toolCount: 0, reason: provider.reason ?? "PROVIDER_NOT_CONFIGURED" } as ProviderStatus, tools: [] };
       try {
-        const registry = await provider.transport.listTools();
+        const registry = await registryFor(provider);
         rejectCredentials(registry);
-        if (registry.length > 1000 || new Set(registry.map(tool => tool.name)).size !== registry.length) throw new Error("INVALID_REGISTRY");
+        if (!Array.isArray(registry) || registry.length > 1000 || new Set(registry.map(tool => tool?.name)).size !== registry.length) throw new Error("INVALID_REGISTRY");
         const entries = registry.map(tool => {
-          if (!/^[A-Za-z0-9_.-]{1,100}$/.test(tool.name) || !tool.inputSchema || tool.inputSchema.type !== "object") throw new Error("INVALID_REGISTRY");
+          if (!tool || typeof tool.name !== "string" || !/^[A-Za-z0-9_.-]{1,100}$/.test(tool.name) || !tool.inputSchema || tool.inputSchema.type !== "object") throw new Error("INVALID_REGISTRY");
           const readOnly = provider.isReadOnly(tool);
           return { ...tool, name: runtimeName(provider.id, tool.name), provider: provider.id, remoteName: tool.name,
             permission: readOnly && provider.id === "erp" ? "read" : "approval_required", availability: readOnly ? "available" : "blocked" } as RuntimeTool;
@@ -55,6 +64,7 @@ export function createRuntimeTools(providers: RuntimeProvider[]) {
     let result: Json;
     if (tool.provider === "skills") {
       const response = await runCatalogTool(name, args);
+      if (response.status !== 200 || response.body.ok !== true) throw new RuntimeToolError("INVALID_TOOL_ARGUMENTS");
       result = response.body as unknown as Json;
     } else {
       const provider = providers.find(provider => provider.id === tool.provider)!;

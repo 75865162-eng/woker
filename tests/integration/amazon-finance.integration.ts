@@ -106,7 +106,7 @@ test("automatic finance retry uses the intact original plan without inventing ro
   f.setFault(0); assert.equal((await f.slice(task.id)).status, "SUCCEEDED");
 });
 
-test("stale scheduled finance scope cannot enter automatic retry role handling", async t => {
+test("stale scheduled finance scope blocks execution after an approved retry", async t => {
   for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.add(marketplaceId);
   t.after(() => { for (const { marketplaceId } of policy.marketplaces) automaticMarketplaces.delete(marketplaceId); });
   const f = await fresh(), task = await f.request(); await f.slice(task.id); f.setFault(400); await f.slice(task.id);
@@ -116,8 +116,10 @@ test("stale scheduled finance scope cannot enter automatic retry role handling",
   await prisma.amazonSyncRun.update({ where: { id: task.id }, data: { trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, frozenScope: frozen, frozenScopeDigest: digest(frozen) } });
   await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [], rolesAttestedAt: null } });
   await prisma.amazonSyncSchedule.update({ where: { id: plan.id }, data: { revision: { increment: 1 } } });
-  await assert.rejects(f.approved({ action: "control-task", id: task.id, control: "retry" }), /Finance and Accounting/);
-  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: task.id } })).status, "FAILED");
+  await f.approved({ action: "control-task", id: task.id, control: "retry" });
+  const callsBefore = f.calls.length;
+  assert.equal((await f.slice(task.id)).status, "BLOCKED");
+  assert.equal(f.calls.length, callsBefore);
 });
 
 test("seller-wide approval, actual sites, exact money, quarantine and encrypted raw", async () => {
@@ -254,7 +256,7 @@ test("scope revocation during HTTP prevents any business commit", async () => {
   const result = await f.slice(task.id, async input => {
     const url = new URL(String(input));
     if (url.hostname === "lwa.fixture.invalid") return Response.json({ access_token: "fixture-access", expires_in: 3600 });
-    await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [] } });
+    await prisma.organizationMember.update({ where: { organizationId_userId: { organizationId: f.scope.organizationId, userId: f.actor } }, data: { role: "viewer" } });
     return new Response(raw("page-1"));
   });
   assert.equal(result.status, "FAILED");

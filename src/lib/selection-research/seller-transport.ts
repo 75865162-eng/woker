@@ -21,8 +21,8 @@ export function sellerSpritePolicy(tool: { name: string; description?: string })
 /** Current user's existing SellerSprite setting; keys remain inside this transport. */
 export function createSellerSpriteResearchTransport(settings: SellerSpriteMcpSettings): Transport {
   return {
-    async listTools() {
-      const remote = await listSellerSpriteRemoteTools(settings);
+    async listTools(signal) {
+      const remote = await listSellerSpriteRemoteTools(settings, signal);
       return remote.filter((tool) => sellerSpritePolicy(tool) && tool.annotations?.readOnlyHint !== false).map((tool) => ({
         name: tool.name, description: tool.description,
         inputSchema: tool.inputSchema as never, annotations: { readOnlyHint: true },

@@ -7,7 +7,7 @@ import { callSellerSpriteRemoteTool, listSellerSpriteRemoteTools, defaultSellerS
 import { ResearchEngine, budgetSummary } from "../src/lib/selection-research/engine";
 import { LocalResearchStore } from "../src/lib/selection-research/file-store";
 import { sellerSpritePolicy, createSellerSpriteResearchTransport } from "../src/lib/selection-research/seller-transport";
-import { SKILLS, type Agent, type ToolDefinition, type ObjectJson } from "../src/lib/selection-research/types";
+import { SKILLS, ToolNotDispatchedError, type Agent, type ToolDefinition, type ObjectJson } from "../src/lib/selection-research/types";
 import { createResearchAiAgent } from "../src/lib/selection-research/ai-agent";
 import { defaultAiModelSettings } from "../src/lib/ai-settings";
 
@@ -69,6 +69,31 @@ test("SellerSprite runtime discovery follows sessions/pages, exact schema and fu
     await assert.rejects(listSellerSpriteRemoteTools({ ...settings, serverUrl: "http://seller.invalid/mcp" }), /ENDPOINT_UNSAFE/);
     globalThis.fetch = async () => Response.json({ result: settings.apiKey });
     await assert.rejects(listSellerSpriteRemoteTools(settings), /SECRET_ECHO/);
+  } finally { globalThis.fetch = original; }
+});
+
+test("SellerSprite stops on the matching SSE event, tolerates schema key order and attests pre-dispatch failures", async () => {
+  const original = globalThis.fetch;
+  let dispatched = 0, cancelled = 0, drifted = false;
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(String(init?.body));
+    if (body.method === "notifications/initialized") return new Response(null, { status: 202 });
+    if (body.method === "tools/call") dispatched++;
+    const result = body.method === "initialize" ? { protocolVersion: "2025-06-18" }
+      : body.method === "tools/list" ? { tools: [{ ...tool, inputSchema: drifted ? { type: "object" } : { required: ["market"], additionalProperties: false, properties: { market: { type: "string" } }, type: "object" } }] }
+      : { content: [{ type: "text", text: "isolated response" }] };
+    return new Response(new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode(`: keepalive\n\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: "unrelated", result: {} })}\n\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: body.id, result })}\n\n`));
+    }, cancel() { cancelled++; } }), { headers: { "content-type": "text/event-stream" } });
+  };
+  try {
+    assert.equal((await listSellerSpriteRemoteTools(settings))[0].name, tool.name);
+    await callSellerSpriteRemoteTool(settings, tool.name, { market: "US" }, new AbortController().signal, tool.inputSchema);
+    assert.equal(dispatched, 1); assert.equal(cancelled, 5);
+    await assert.rejects(callSellerSpriteRemoteTool(settings, tool.name, {}, new AbortController().signal, tool.inputSchema), error => error instanceof ToolNotDispatchedError && error.code === "INVALID_TOOL_ARGUMENTS");
+    drifted = true;
+    await assert.rejects(callSellerSpriteRemoteTool(settings, tool.name, {}, new AbortController().signal, tool.inputSchema), error => error instanceof ToolNotDispatchedError && error.code === "APPROVED_SCHEMA_CHANGED");
+    assert.equal(dispatched, 1);
   } finally { globalThis.fetch = original; }
 });
 

@@ -1,3 +1,6 @@
+import { stableJson, validate } from "@/lib/selection-research/schema";
+import { ToolNotDispatchedError, type ObjectJson } from "@/lib/selection-research/types";
+
 export const sellerSpriteIntegrationProvider = "sellersprite-mcp";
 
 export interface SellerSpriteMcpSettings {
@@ -110,7 +113,7 @@ export async function listSellerSpriteRemoteTools(settings: SellerSpriteMcpSetti
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(settings.timeoutSeconds * 1000)]) : AbortSignal.timeout(settings.timeoutSeconds * 1000),
       body: JSON.stringify({ jsonrpc: "2.0", ...(id ? { id } : {}), method, ...(params ? { params } : {}) }) });
     if (method === "initialize") session = response.headers.get("mcp-session-id");
-    const text = await boundedSellerSpriteBody(response);
+    const text = id ? await boundedSellerSpriteBody(response, id) : (await response.body?.cancel(), "");
     if (text.includes(settings.apiKey)) throw new Error("SELLERSPRITE_MCP_SECRET_ECHO_REJECTED");
     if (!response.ok) throw new Error("SELLERSPRITE_MCP_HTTP_ERROR");
     if (!id) return null;
@@ -125,10 +128,12 @@ export async function listSellerSpriteRemoteTools(settings: SellerSpriteMcpSetti
   return readSellerSpriteRegistry((params) => request("tools-list", "tools/list", params));
 }
 
-async function boundedSellerSpriteBody(response: Response) {
+async function boundedSellerSpriteBody(response: Response, rpcId: string) {
   const reader = response.body?.getReader();
   if (!reader) return "";
-  const chunks: Uint8Array[] = [];
+  const decoder = new TextDecoder();
+  const sse = response.headers.get("content-type")?.includes("text/event-stream");
+  let text = "";
   let size = 0;
   try {
     for (;;) {
@@ -136,10 +141,15 @@ async function boundedSellerSpriteBody(response: Response) {
       if (part.done) break;
       size += part.value.byteLength;
       if (size > 8_000_000) { await reader.cancel(); throw new Error("SELLERSPRITE_MCP_RESPONSE_TOO_LARGE"); }
-      chunks.push(part.value);
+      text += decoder.decode(part.value, { stream: true });
+      if (sse && /\r?\n\r?\n/.test(text)) {
+        try { parseSellerSpriteRpc(text, rpcId); return text; }
+        catch { /* Keep reading until the matching response, not a keepalive or another request. */ }
+      }
     }
-  } finally { reader.releaseLock(); }
-  return Buffer.concat(chunks).toString("utf8");
+    text += decoder.decode();
+  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+  return text;
 }
 
 function parseSellerSpriteRpc(text: string, id: string): Record<string, unknown> {
@@ -163,6 +173,7 @@ async function readSellerSpriteRegistry(request: (params: Record<string, unknown
     for (const tool of result.tools) {
       if (!isRecord(tool) || typeof tool.name !== "string" || !isRecord(tool.inputSchema) || tools.some((entry) => entry.name === tool.name)) throw new Error("SELLERSPRITE_MCP_REGISTRY_INVALID");
       tools.push(tool as SellerSpriteRemoteTool);
+      if (tools.length > 1000) throw new Error("SELLERSPRITE_MCP_REGISTRY_INVALID");
     }
     cursor = typeof result.nextCursor === "string" && result.nextCursor ? result.nextCursor : undefined;
     if (cursor) {
@@ -186,7 +197,7 @@ export async function callSellerSpriteRemoteTool(settings: SellerSpriteMcpSettin
     const response = await fetch(url, { method: "POST", redirect: "error", headers: { ...headers, ...(session ? { "Mcp-Session-Id": session } : {}), ...(protocol ? { "Mcp-Protocol-Version": protocol } : {}) }, cache: "no-store",
       signal: AbortSignal.any([signal, AbortSignal.timeout(settings.timeoutSeconds * 1000)]), body: JSON.stringify({ jsonrpc: "2.0", ...(requestId ? { id: requestId } : {}), method, params }) });
     if (method === "initialize") session = response.headers.get("mcp-session-id");
-    const text = await boundedSellerSpriteBody(response);
+    const text = requestId ? await boundedSellerSpriteBody(response, requestId) : (await response.body?.cancel(), "");
     if (text.includes(settings.apiKey)) throw new Error("SELLERSPRITE_MCP_SECRET_ECHO_REJECTED");
     if (!response.ok) throw new Error("SELLERSPRITE_MCP_HTTP_ERROR");
     if (!requestId) return null;
@@ -204,9 +215,10 @@ export async function callSellerSpriteRemoteTool(settings: SellerSpriteMcpSettin
   await request("notifications/initialized", {});
   const registry = await readSellerSpriteRegistry((params) => request("tools/list", params, String(++id)));
   const registered = registry.find((item) => item.name === name);
-  if (!registered) throw new Error("SELLERSPRITE_MCP_TOOL_NOT_FOUND");
-  if (registered.annotations?.readOnlyHint === false) throw new Error("SELLERSPRITE_MCP_TOOL_NOT_READ_ONLY");
-  if (expectedSchema && JSON.stringify(registered.inputSchema) !== JSON.stringify(expectedSchema)) throw new Error("SELLERSPRITE_MCP_SCHEMA_CHANGED");
+  if (!registered || registered.annotations?.readOnlyHint === false) throw new ToolNotDispatchedError("RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN");
+  if (expectedSchema && stableJson(registered.inputSchema as ObjectJson) !== stableJson(expectedSchema as ObjectJson)) throw new ToolNotDispatchedError("APPROVED_SCHEMA_CHANGED");
+  try { validate(registered.inputSchema as ObjectJson, args as ObjectJson); }
+  catch (error) { throw new ToolNotDispatchedError(error instanceof Error && /SCHEMA_.*UNSUPPORTED/.test(error.message) ? "UNSUPPORTED_TOOL_SCHEMA" : "INVALID_TOOL_ARGUMENTS"); }
   return request("tools/call", { name, arguments: args }, String(++id));
 }
 

@@ -33,7 +33,13 @@ async function approved(target: SyncScope, user: string, command: Record<string,
   return prisma.amazonDataCenterChangeRequest.findUniqueOrThrow({ where: { id } });
 }
 async function saveAuthorization(target: SyncScope, user: string, body: Record<string, unknown>) { const change = await approved(target, user, { ...body, action: "save-authorization" }); return prisma.amazonSpApiAuthorization.findUniqueOrThrow({ where: { id: change.targetId } }); }
-async function validateAuthorization(target: SyncScope, user: string, id: string) { return approved(target, user, { action: "validate-authorization", id }); }
+async function validateAuthorization(target: SyncScope, user: string, id: string) {
+  // This suite tests manual bindings; automatic initialization has its own fixture.
+  const enabled = process.env.AMAZON_SYNC_CENTER_SCOPES;
+  process.env.AMAZON_SYNC_CENTER_SCOPES = "[]";
+  try { return await approved(target, user, { action: "validate-authorization", id }); }
+  finally { process.env.AMAZON_SYNC_CENTER_SCOPES = enabled; }
+}
 async function saveSource(target: SyncScope, user: string, body: Record<string, unknown>) { const change = await approved(target, user, { ...body, action: "save-source" }); return prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: change.targetId } }); }
 async function savePlan(target: SyncScope, user: string, body: Record<string, unknown>) { const change = await approved(target, user, { ...body, action: "save-plan" }); return prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: change.targetId } }); }
 async function requestTasks(target: SyncScope, user: string, body: Record<string, unknown>) { const change = await approved(target, user, { ...body, action: "run" }); return prisma.amazonSyncRun.findMany({ where: { ...target, executionApprovalId: change.id } }); }
@@ -233,7 +239,11 @@ test("authenticated API to real queue/worker to seller-bound snapshot completes 
     assert.ok(!JSON.stringify(changeRequest).includes("fixture-b-secret"));
     const decision = await approvalPost(new Request("http://localhost/api/operations/sync-center/approvals", { method: "POST", headers: { ...headers, cookie: `${approverSession.sessionCookie.name}=${approverSession.sessionCookie.value}` }, body: JSON.stringify({ id: changeRequest.id, decision: "APPROVED" }) }));
     assert.equal(decision.status, 200);
-    const applied = await approvalPost(new Request("http://localhost/api/operations/sync-center/approvals", { method: "POST", headers, body: JSON.stringify({ id: changeRequest.id, decision: "APPLY" }) }));
+    const enabledScopes = process.env.AMAZON_SYNC_CENTER_SCOPES;
+    if (body.action === "validate-authorization") process.env.AMAZON_SYNC_CENTER_SCOPES = "[]";
+    let applied: Response;
+    try { applied = await approvalPost(new Request("http://localhost/api/operations/sync-center/approvals", { method: "POST", headers, body: JSON.stringify({ id: changeRequest.id, decision: "APPLY" }) })); }
+    finally { process.env.AMAZON_SYNC_CENTER_SCOPES = enabledScopes; }
     assert.equal(applied.status, expectedStatus);
     return changeRequest as { id: string; targetId: string };
   };

@@ -19,6 +19,6 @@ export async function POST(request: Request) {
     if (availability && !availability.ok) return availability.response;
     rejectCredentials(result);
     const readiness = researchReadiness({ ...result, ai: availability?.ok ? availability.ai : "model_configuration_unavailable", skills, request: body });
-    return NextResponse.json({ ...result, readiness, scope: { workspaceId: access.scope.workspaceId }, toolsCallCount: 0, aiRequestCount: 0, persisted: false }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ...result, readiness, aiModel: availability?.ok ? availability.aiModel : undefined, scope: { workspaceId: access.scope.workspaceId }, toolsCallCount: 0, aiRequestCount: 0, persisted: false }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return researchError(error); }
 }

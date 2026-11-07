@@ -13,7 +13,7 @@ const window = { from: policy.initialFrom, to: "2026-11-01T01:00:00.000Z" };
 const config = { lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh", awsAccessKeyId: "", awsSecretAccessKey: "", region: "fixture-region", endpoint: "https://spapi.fixture.invalid" };
 
 test("orders policy is explicit, bounded and rejects nonadvancing overlap", () => {
-  for (const patch of [{ initialFrom: "2026-02-30T00:00:00Z" }, { windowMinutes: 0 }, { marketplaceTimeZone: "invented" }, { requestsPerSecond: 1 }, { burst: 21 }, { requiredRoles: [] }, { overlapSeconds: 3600 }, { statusMapping: { SHIPPED: 1 } }]) assert.throws(() => parseOrderSyncPolicy({ ...policy, ...patch }));
+  for (const patch of [{ initialFrom: "2026-02-30T00:00:00Z" }, { windowMinutes: 0 }, { marketplaceTimeZone: "invented" }, { requestsPerSecond: 1 }, { burst: 21 }, { overlapSeconds: 3600 }, { statusMapping: { SHIPPED: 1 } }]) assert.throws(() => parseOrderSyncPolicy({ ...policy, ...patch }));
   assert.throws(() => orderWindowFromFrozen({ ...window, to: window.from }));
 });
 test("orders freeze one window, resume incomplete cursor and overlap only after completion", () => {
@@ -66,13 +66,16 @@ test("searchOrders uses new-version pagination; FULFILLMENT raw may contain PII"
   assert.deepEqual(JSON.parse(result.rawBody), result.body);
 });
 
-test("detail policy is opt-in, freezes a bounded budget and requires reviewed datasets and roles", () => {
+test("detail policy is opt-in, freezes a bounded budget and requires reviewed datasets without manual role registration", () => {
   const detailed = parseOrderSyncPolicy(fixture("policy-details"));
   assert.equal(policy.details, undefined);
   assert.ok(detailed.details?.includedData.includes("BUYER"));
-  for (const patch of [{ requestsPerSecond: 1 }, { burst: 31 }, { maxOrders: 0 }, { purpose: "free text or PII" }, { includedData: ["invented"] }, { requiredRoles: ["Fixture Role"] }, { requiredRoles: ["Inventory and Order Tracking"] }]) assert.throws(() => parseOrderSyncPolicy({ ...detailed, details: { ...detailed.details, ...patch } }));
+  for (const patch of [{ requestsPerSecond: 1 }, { burst: 31 }, { maxOrders: 0 }, { purpose: "free text or PII" }, { includedData: ["invented"] }, { requiredRoles: ["Fixture Role"] }]) assert.throws(() => parseOrderSyncPolicy({ ...detailed, details: { ...detailed.details, ...patch } }));
   assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: policy.requiredRoles, rolesAttestedAt: new Date() }, detailed));
-  assert.throws(() => parseOrderSyncPolicy({ ...detailed, details: { ...detailed.details, requiredRoles: ["Finance and Accounting"] } }));
+  const withoutRoles = parseOrderSyncPolicy({ ...detailed, requiredRoles: undefined, details: { ...detailed.details, requiredRoles: undefined } });
+  assert.deepEqual(withoutRoles.requiredRoles, []);
+  assert.deepEqual(withoutRoles.details?.requiredRoles, []);
+  assert.doesNotThrow(() => parseOrderSyncPolicy({ ...detailed, details: { ...detailed.details, requiredRoles: [] } }));
   assert.notEqual(orderBucketKey("fixture-seller", "fixture-app"), orderBucketKey("fixture-seller", "fixture-app", "getOrder"));
   let bucket = null;
   for (let i = 0; i < 30; i++) { const r = reserveOrderToken(bucket, detailed.details!, new Date(window.to)); assert.equal(r.allowed, true); bucket = { tokens: r.tokens, replenishedAt: r.replenishedAt, blockedUntil: null, observedLimit: null }; }

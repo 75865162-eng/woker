@@ -17,6 +17,19 @@ import type { ToolPolicy, ToolDefinition } from "./types";
 import { SyncInputError } from "@/lib/amazon-sync/policy";
 import { NextResponse } from "next/server";
 import { storedResearchEngine } from "./http";
+import { selectResearchAiSettings } from "./ai-settings";
+import { resolveAiSettings } from "@/lib/server/ai-runtime";
+
+async function selectedAiSettings(request: Request, user: { id: string; organizationId: string }, workspaceId: string, source: unknown) {
+  return selectResearchAiSettings(source, {
+    workspace: () => resolveUserAiTextSettings(user, { workspaceId, accountId: "", marketplace: "" }),
+    runtime: () => resolveAiSettings(undefined, "text"),
+    authorizeRuntime: async () => {
+      const permission = await requireApiPermission("settings", "edit", request);
+      return permission.ok && permission.user.id === user.id && permission.user.organizationId === user.organizationId;
+    },
+  });
+}
 
 export const researchNamespace = "selection-research-v1";
 export async function researchAccess(request: Request, action: PermissionAction, body: Record<string, unknown> = {}) {
@@ -29,7 +42,7 @@ export async function researchAccess(request: Request, action: PermissionAction,
   const repository = prismaResearchRepository();
   let mode = body.mode === "live" ? "live" as const : "fixture" as const;
   if (typeof body.runId === "string") {
-    try { const existing = (await repository.read(body.runId, scope)).run; mode = existing.mode; body = { ...body, erpCredentialId: existing.erpCredentialId }; }
+    try { const existing = (await repository.read(body.runId, scope)).run; mode = existing.mode; body = { ...body, erpCredentialId: existing.erpCredentialId, aiConfigSource: existing.aiConfigSource }; }
     catch { return { ok: false as const, response: NextResponse.json({ error: "Research not found." }, { status: 404 }) }; }
     if (body.operation !== "step") return { ok: true as const, scope, engine: storedResearchEngine(new LeaseResearchStore(repository, scope), scope, mode) };
   }
@@ -39,7 +52,7 @@ export async function researchAccess(request: Request, action: PermissionAction,
   }
   const sellerSettings = await getSellerSpriteMcpSettings(permission.user, { workspaceId, accountId: "", marketplace: "" });
   if (!sellerSettings.enabled || !sellerSettings.apiKey || !sellerSettings.serverUrl) throw new Error("SELLERSPRITE_MCP_NOT_CONFIGURED");
-  const aiSettings = await resolveUserAiTextSettings(permission.user, { workspaceId, accountId: "", marketplace: "" });
+  const aiSettings = await selectedAiSettings(request, permission.user, workspaceId, body.aiConfigSource);
   if (!aiSettings.apiKey) throw new Error("AI_MODEL_NOT_CONFIGURED");
   const runtimeTools = await runtimeToolsForUser(permission.user, request, body);
   const transport = runtimeTools.transport;
@@ -58,11 +71,13 @@ export async function getResearchAvailability(request: Request, body: Record<str
   const workspaceId = access.scope.workspaceId;
   const [seller, ai] = await Promise.allSettled([
     getSellerSpriteMcpSettings(user.user, { workspaceId, accountId: "", marketplace: "" }),
-    resolveUserAiTextSettings(user.user, { workspaceId, accountId: "", marketplace: "" }),
+    selectedAiSettings(request, user.user, workspaceId, body.aiConfigSource),
   ]);
   return { ok: true as const, scope: access.scope,
     sellerSprite: seller.status === "rejected" ? "provider_configuration_unavailable" : seller.value.enabled && Boolean(seller.value.apiKey && seller.value.serverUrl) ? "configured_runtime_registry_not_yet_checked" : "missing_existing_provider_configuration",
-    ai: ai.status === "rejected" ? "model_configuration_unavailable" : ai.value.apiKey ? "configured" : "missing_existing_model_configuration", xiyou: "check_runtime_discovery", erp: "check_runtime_discovery" };
+    ai: ai.status === "rejected" ? ai.reason instanceof Error && ai.reason.message === "RESEARCH_RUNTIME_AI_PERMISSION_REQUIRED" ? "runtime_model_permission_required" : "model_configuration_unavailable" : ai.value.apiKey ? "configured" : "missing_existing_model_configuration",
+    aiModel: ai.status === "fulfilled" ? { provider: ai.value.provider, model: ai.value.model } : undefined,
+    xiyou: "check_runtime_discovery", erp: "check_runtime_discovery" };
 }
 export async function discoverResearchTools(transport: { listTools(): Promise<ToolDefinition[]> }, snapshot?: ToolDefinition[]) {
   const registered = snapshot ?? await transport.listTools();
@@ -85,6 +100,7 @@ export function researchError(error: unknown) {
   if (error instanceof SyncInputError) return NextResponse.json({ error: "INVALID_RESEARCH_REQUEST" }, { status: error.status });
   const code = error instanceof Error ? error.message : "";
   const known = new Set(["RESEARCH_NOT_FOUND", "RESEARCH_SCOPE_DENIED", "RESEARCH_BUSY", "STALE_OR_MISSING_GATE", "INVALID_CANDIDATE", "DECISION_DOES_NOT_MATCH_GATE", "REPORT_REQUIRES_BOTH_HUMAN_GATES", "RESEARCH_MODE_MISMATCH", "BUDGET_MUST_INCREASE", "INVALID_BILLING_RECONCILIATION", "TERMINAL_RUN", "EXPLICIT_RECOVERY_REQUIRED", "RECOVERY_NOT_APPLICABLE", "SELLERSPRITE_MCP_NOT_CONFIGURED", "SELLERSPRITE_MCP_TOOL_NOT_FOUND", "SELLERSPRITE_MCP_REGISTRY_INVALID", "NO_SUPPORTED_LIVE_TOOLS", "AI_MODEL_NOT_CONFIGURED", "PROVIDER_NOT_CONFIGURED", "MISSING_MARKET_CALL_BUDGET", "APPROVED_SCHEMA_CHANGED", "PENDING_TOOL_CALL_MISMATCH", "INVALID_ASIN", "REQUIRED_PROVIDER_NOT_CONNECTED", "RESEARCH_REPORT_METADATA_FAILED", "RESEARCH_REPORT_UNAVAILABLE", "RESEARCH_REPORT_INTEGRITY_FAILED", "EXPLICIT_RESEARCH_MODE_REQUIRED", "INVALID_RESEARCH_REQUEST", "INVALID_ERP_CREDENTIAL_ID"]);
-  const invalidInput = new Set(["EXPLICIT_RESEARCH_MODE_REQUIRED", "INVALID_RESEARCH_REQUEST", "INVALID_ERP_CREDENTIAL_ID", "INVALID_ASIN", "MISSING_MARKET_CALL_BUDGET"]);
-  return NextResponse.json({ error: known.has(code) ? code : "RESEARCH_UNAVAILABLE_OR_INVALID_REQUEST" }, { status: invalidInput.has(code) ? 400 : code === "RESEARCH_NOT_FOUND" ? 404 : code === "RESEARCH_SCOPE_DENIED" ? 403 : known.has(code) ? 409 : 400 });
+  known.add("RESEARCH_RUNTIME_AI_PERMISSION_REQUIRED"); known.add("INVALID_RESEARCH_AI_SOURCE");
+  const invalidInput = new Set(["EXPLICIT_RESEARCH_MODE_REQUIRED", "INVALID_RESEARCH_REQUEST", "INVALID_ERP_CREDENTIAL_ID", "INVALID_ASIN", "MISSING_MARKET_CALL_BUDGET", "INVALID_RESEARCH_AI_SOURCE"]);
+  return NextResponse.json({ error: known.has(code) ? code : "RESEARCH_UNAVAILABLE_OR_INVALID_REQUEST" }, { status: invalidInput.has(code) ? 400 : code === "RESEARCH_NOT_FOUND" ? 404 : ["RESEARCH_SCOPE_DENIED", "RESEARCH_RUNTIME_AI_PERMISSION_REQUIRED"].includes(code) ? 403 : known.has(code) ? 409 : 400 });
 }

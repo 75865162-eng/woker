@@ -52,7 +52,7 @@ export class ResearchEngine {
     if (run.scope.organizationId !== this.principal.organizationId || run.scope.workspaceId !== this.principal.workspaceId || run.scope.ownerId !== this.principal.ownerId) throw new Error("RESEARCH_SCOPE_DENIED");
     if (run.mode !== this.options.mode) throw new Error("RESEARCH_MODE_MISMATCH");
   }
-  async create(input: { asin?: string; erpCredentialId?: string; requiredProviders?: string[]; requirement: string; marketplace: string; skills: SkillSnapshot[]; policies: Record<string, ToolPolicy>; limits: Record<string, number>; registry?: Run["registry"] }): Promise<Run> {
+  async create(input: { aiConfigSource?: Run["aiConfigSource"]; aiModel?: Run["aiModel"]; asin?: string; erpCredentialId?: string; requiredProviders?: string[]; requirement: string; marketplace: string; skills: SkillSnapshot[]; policies: Record<string, ToolPolicy>; limits: Record<string, number>; registry?: Run["registry"] }): Promise<Run> {
     rejectCredentials(input);
     if (!input.requirement.trim() || input.requirement.length > 20_000 || !input.marketplace.trim()) throw new Error("INVALID_RESEARCH_REQUEST");
     if (input.skills.length !== 5 || input.skills.some((skill, i) => skill.name !== SKILLS[i] || !skill.markdown || !skill.sha256)) throw new Error("INVALID_SKILL_SNAPSHOTS");
@@ -233,7 +233,10 @@ export class ResearchEngine {
     }
     if (run.asin && run.stage === 1 && (result.candidates?.length !== 1 || result.candidates[0].id !== run.asin)) throw new Error("ASIN_CANDIDATE_REQUIRED");
     if (!run.asin && run.stage === 1 && (!Array.isArray(result.candidates) || result.candidates.length < 3 || result.candidates.length > 5 || result.candidates.some((candidate) => !candidate.id || !candidate.name) || new Set(result.candidates.map((candidate) => candidate.id)).size !== result.candidates.length)) throw new Error("THREE_TO_FIVE_NICHES_REQUIRED");
-    if ([1, 5].includes(run.stage) && run.mode === "live" && run.requiredProviders?.some(provider => !run.calls.some(call => call.provider === provider && call.status === "SUCCEEDED"))) throw new Error("REQUIRED_PROVIDER_EVIDENCE_MISSING");
+    if ([1, 5].includes(run.stage) && run.mode === "live" && run.requiredProviders?.length) {
+      const cited = new Set([...run.results, result].flatMap(stage => stage.claims.flatMap(claim => claim.evidenceIds)));
+      if (run.requiredProviders.some(provider => !run.calls.some(call => call.provider === provider && call.status === "SUCCEEDED" && cited.has(call.id)))) throw new Error("REQUIRED_PROVIDER_EVIDENCE_MISSING");
+    }
     if (run.stage <= 2 && !result.claims.some((claim) => claim.kind === "observed")) throw new Error("MARKET_EVIDENCE_REQUIRED");
     if (run.stage === 3) {
       for (const [stars, values] of [["1,2,3", [1, 2, 3]], ["4,5", [4, 5]]] as const) {

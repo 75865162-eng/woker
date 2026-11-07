@@ -77,7 +77,7 @@ test("Reports lifecycle publishes a single report with UTC, reason dimension, en
   const plain = JSON.stringify(view) + JSON.stringify(records) + JSON.stringify(await prisma.amazonSyncTaskLog.findMany({ where: { taskId: run.id } }));
   for (const value of ["fixture-secret", "fixture-access", "fixture-private-comment", "fixture private product", "fixture-signed-value"]) assert.ok(!plain.includes(value));
   assert.equal(f.calls.filter(u => u.hostname === "lwa.fixture.invalid").length, 1);
-  const orderPolicy = JSON.parse(readFileSync(new URL("../fixtures/amazon/orders/policy.json", import.meta.url), "utf8"));
+  const orderPolicy = { ...JSON.parse(readFileSync(new URL("../fixtures/amazon/orders/policy.json", import.meta.url), "utf8")), applicationId: `fixture-${f.authId}` };
   await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: ["Amazon Fulfillment", ...orderPolicy.requiredRoles] } });
   const orderSource = await f.approved({ action: "save-source", authorizationId: f.authId, sellerAccountId: f.store, marketplaceId: site, resource: "orders", freshnessMinutes: 60, enabled: true, orderPolicy });
   const execution = await f.approved({ action: "run", sourceIds: [orderSource.targetId] });
@@ -179,14 +179,14 @@ test("returns reads enforce live membership and exact seller/site grants", async
   await prisma.amazonDataAccessGrant.update({ where: { id: grant.id }, data: { enabled: false } });
   await assert.rejects(readReturns(f.scope, new URLSearchParams(), f.actor), /授权/);
 });
-test("role revoked during download prevents raw archive and facts from committing", async () => {
+test("account permissions revoked during download prevent raw archive and facts from committing", async () => {
   const f = await fresh(), run = await f.request(); await f.slice(run.id); await f.slice(run.id);
   const result = await f.slice(run.id, async (input) => {
     const url = new URL(String(input));
     if (url.hostname === "lwa.fixture.invalid") return Response.json({ access_token: "fixture-access", expires_in: 3600 });
     if (url.hostname === "returns.fixture.invalid") return Response.json({ reportDocumentId: "fixture-document", url: "https://download.fixture.invalid/document" });
     assert.equal(url.hostname, "download.fixture.invalid");
-    await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [] } });
+    await prisma.organizationMember.update({ where: { organizationId_userId: { organizationId: f.scope.organizationId, userId: f.actor } }, data: { role: "viewer" } });
     return new Response(raw("report.tsv"));
   });
   assert.equal(result.status, "FAILED");

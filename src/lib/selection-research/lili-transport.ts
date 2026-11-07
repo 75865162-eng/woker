@@ -62,22 +62,22 @@ export function createLiliTransport(config: { endpoint: string; authorization?: 
     return parse();
   }
 
-  async function initialize() {
+  async function initialize(signal?: AbortSignal) {
     if (initialized) return;
-    const envelope = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "erp-selection-research", version: "1" } });
+    const envelope = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "erp-selection-research", version: "1" } }, signal);
     if (envelope.error || !object(envelope.result) || !["2024-11-05", "2025-03-26", "2025-06-18"].includes(String(envelope.result.protocolVersion))) throw new Error("LILI_INITIALIZE_FAILED");
     protocol = String(envelope.result.protocolVersion);
-    await request("notifications/initialized", {}, undefined, true);
+    await request("notifications/initialized", {}, signal, true);
     initialized = true;
   }
   return {
-    async listTools() {
-      await initialize();
+    async listTools(signal) {
+      await initialize(signal);
       const tools: ToolDefinition[] = [];
       const cursors = new Set<string>();
       let cursor: string | undefined;
       do {
-        const envelope = await request("tools/list", cursor ? { cursor } : {});
+        const envelope = await request("tools/list", cursor ? { cursor } : {}, signal);
         if (envelope.error || !object(envelope.result) || !Array.isArray(envelope.result.tools)) throw new Error("LILI_REGISTRY_UNAVAILABLE");
         for (const value of envelope.result.tools) {
           if (!object(value) || typeof value.name !== "string" || !object(value.inputSchema)) throw new Error("LILI_INVALID_TOOL_DEFINITION");
@@ -91,7 +91,7 @@ export function createLiliTransport(config: { endpoint: string; authorization?: 
       return tools;
     },
     async callTool(name, args, signal): Promise<Json> {
-      await initialize();
+      await initialize(signal);
       // Preserve matching full JSON-RPC envelope, not just AI-normalized content.
       return request("tools/call", { name, arguments: args }, signal);
     },

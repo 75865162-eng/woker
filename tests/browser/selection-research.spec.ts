@@ -258,6 +258,39 @@ test("startup checks show exact missing prerequisites and never create a task or
   await expect(panel).toHaveCount(0);
 });
 
+test("explicit server model choice reaches discovery and creation and is retained by a restored run", async ({ page }) => {
+  const sources: string[] = [];
+  const restored = { id: "isolated-selected-model", version: 1, revision: 0, scope: { organizationId: "mock-org", workspaceId: "default", ownerId: "mock-owner" },
+    requirement: "Isolated model selection", asin: "B000000001", marketplace: "US", mode: "live", status: "CREATED", stage: 1,
+    aiConfigSource: "server_runtime", aiModel: { provider: "isolated", model: "isolated-model" }, calls: [], decisions: [], actions: [], results: [], policies: {}, limits: {}, skills: [], registry: [] };
+  await page.route("**/*", async route => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== "selection.invalid") throw new Error("UNEXPECTED_NETWORK_REQUEST");
+    if (url.pathname === "/api/selection-research/discover") {
+      sources.push(route.request().postDataJSON().aiConfigSource);
+      return route.fulfill({ json: { providers: [], tools: [], aiModel: restored.aiModel, readiness: { ready: true, checks: [] } } });
+    }
+    if (url.pathname === "/api/selection-research") {
+      if (route.request().method() === "POST") { sources.push(route.request().postDataJSON().aiConfigSource); return route.fulfill({ json: { run: restored } }); }
+      return route.fulfill({ json: { runs: [] } });
+    }
+    if (url.pathname.endsWith(restored.id)) return route.fulfill({ json: { run: restored } });
+    return route.fulfill({ contentType: "text/html", body: `<div id="root"></div><script>${bundle}</script>` });
+  });
+  await page.goto("http://selection.invalid/");
+  await page.getByLabel("目标 ASIN", { exact: true }).fill("B000000001");
+  await page.getByLabel("自然语言选品要求").fill(restored.requirement);
+  await page.getByLabel("AI 模型来源", { exact: true }).selectOption("server_runtime");
+  await page.getByRole("button", { name: "检查工具与启动条件（不创建任务、不取市场数据）", exact: true }).click();
+  await expect(page.getByRole("region", { name: "真实研究启动检查", exact: true })).toContainText("isolated / isolated-model");
+  await page.getByRole("button", { name: "读取在线工具目录并创建真实任务", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "第 1 / 5 阶段 · CREATED", exact: true })).toBeVisible();
+  expect(sources).toEqual(["server_runtime", "server_runtime"]);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "第 1 / 5 阶段 · CREATED", exact: true })).toBeVisible();
+  await expect(page.locator("body")).toContainText("任务保存的模型：isolated / isolated-model · 来源：已有服务端模型");
+});
+
 test("pre-dispatch failure survives reload with zero requests and recovery requires a new approval", async ({ page }) => {
   const root = await mkdtemp(path.join(tmpdir(), "research-not-sent-browser-"));
   try {

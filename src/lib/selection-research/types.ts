@@ -29,6 +29,8 @@ export type Action = { type: "call"; tool: string; arguments: ObjectJson } | { t
 export interface Gate { id: string; kind: "NICHE" | "FINAL" | "BUDGET" | "BILLING" | "MCP_CALL"; reason: string }
 export interface Decision { gateId: string; kind: "SELECT" | "CONFIRM" | "INCREASE_BUDGET" | "RECONCILE" | "AUTHORIZE_TOOL"; candidateId?: string; limits?: Record<string, number>; toolMaxCalls?: Record<string, number>; callId?: string; units?: number; receipt?: string }
 export interface Run {
+  aiConfigSource?: "workspace" | "server_runtime";
+  aiModel?: { provider: string; model: string };
   asin?: string; erpCredentialId?: string; requiredProviders?: string[];
   version: 1; id: string; revision: number; scope: Scope; requirement: string; marketplace: string; mode: "live" | "fixture";
   createdAt: string; updatedAt: string; status: Status; stage: number; skills: SkillSnapshot[];
@@ -41,5 +43,5 @@ export interface Run {
 }
 export interface ResearchContext { run: Run; skill: SkillSnapshot; tools: ToolDefinition[]; instructions: string }
 export interface Agent { next(context: ResearchContext): Promise<Action> }
-export interface Transport { listTools(): Promise<ToolDefinition[]>; callTool(name: string, args: ObjectJson, signal: AbortSignal, expectedSchema?: ObjectJson): Promise<Json> }
+export interface Transport { listTools(signal?: AbortSignal): Promise<ToolDefinition[]>; callTool(name: string, args: ObjectJson, signal: AbortSignal, expectedSchema?: ObjectJson): Promise<Json> }
 export interface Store { transaction<T>(id: string, work: (run: Run, save: () => Promise<void>) => Promise<T>): Promise<T>; create(run: Run): Promise<void>; read(id: string): Promise<Run> }

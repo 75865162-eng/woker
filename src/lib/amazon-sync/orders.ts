@@ -9,7 +9,6 @@ import { SyncInputError } from "./policy";
 export const orderDetailDatasets = ["FULFILLMENT", "PROCEEDS", "BUYER", "RECIPIENT"] as const;
 export type OrderDetailPolicy = { includedData: Array<typeof orderDetailDatasets[number]>; requiredRoles: string[]; purpose: string; requestsPerSecond: number; burst: number; maxOrders: number; accessEvidence?: string; backfillExisting?: boolean };
 const orderOperationRoles = ["Amazon Fulfillment", "Buyer Communication", "Buyer Solicitation", "Finance and Accounting", "Inventory and Order Tracking", "Pricing", "Product Listing", "Professional Services (Restricted)", "Selling Partner Insights", "Direct-to-Consumer Shipping (Restricted)", "Tax Invoicing (Restricted)", "Tax Remittance (Restricted)"];
-const orderPiiRoles = ["Direct-to-Consumer Shipping (Restricted)", "Tax Invoicing (Restricted)", "Tax Remittance (Restricted)"];
 
 /** Orders API 2026-01-01. Official operation/schema (no v0 parameters):
  * https://developer-docs.amazon.com/sp-api/reference/searchorders
@@ -51,23 +50,24 @@ export function parseOrderSyncPolicy(value: unknown): OrderSyncPolicy {
   if (typeof p.requestsPerSecond !== "number" || !Number.isFinite(p.requestsPerSecond) || p.requestsPerSecond <= 0 || p.requestsPerSecond > 0.0056) throw new SyncInputError("订单 searchOrders 预算不能超过 0.0056 请求/秒。");
   const mapping = p.statusMapping;
   if (!mapping || typeof mapping !== "object" || Array.isArray(mapping) || Object.keys(mapping).length > 100 || Object.entries(mapping).some(([k, v]) => !/^[A-Z][A-Z0-9_]{0,99}$/.test(k) || typeof v !== "string" || !/^[a-zA-Z][a-zA-Z0-9_]{0,99}$/.test(v))) throw new SyncInputError("订单状态映射须为状态代码映射，未知状态保留原值。");
-  if (!Array.isArray(p.requiredRoles) || !p.requiredRoles.length || p.requiredRoles.length > 20 || p.requiredRoles.some(r => typeof r !== "string" || !/^[A-Za-z][A-Za-z0-9 ()&/-]{0,99}$/.test(r))) throw new SyncInputError("请按官方操作角色要求配置订单角色集合。");
+  const requiredRoles = p.requiredRoles ?? [];
+  if (!Array.isArray(requiredRoles) || requiredRoles.length > 20 || requiredRoles.some(r => typeof r !== "string" || !/^[A-Za-z][A-Za-z0-9 ()&/-]{0,99}$/.test(r))) throw new SyncInputError("历史订单角色元数据格式无效。");
   const windowMinutes = integer(p.windowMinutes, 1, 1440), overlapSeconds = integer(p.overlapSeconds, 1, 3600);
   if (overlapSeconds >= windowMinutes * 60) throw new SyncInputError("订单回查重叠必须小于窗口长度。");
-  return { initialFrom, windowMinutes, overlapSeconds, safetyLagSeconds: integer(p.safetyLagSeconds, 120, 86400), marketplaceTimeZone: p.marketplaceTimeZone, applicationId: p.applicationId, requestsPerSecond: p.requestsPerSecond, burst: integer(p.burst, 1, 20), statusMapping: { ...mapping } as Record<string, string>, requiredRoles: [...new Set(p.requiredRoles as string[])], ...(p.details === undefined ? {} : { details: parseDetailPolicy(p.details) }) };
+  return { initialFrom, windowMinutes, overlapSeconds, safetyLagSeconds: integer(p.safetyLagSeconds, 120, 86400), marketplaceTimeZone: p.marketplaceTimeZone, applicationId: p.applicationId, requestsPerSecond: p.requestsPerSecond, burst: integer(p.burst, 1, 20), statusMapping: { ...mapping } as Record<string, string>, requiredRoles: [...new Set(requiredRoles as string[])], ...(p.details === undefined ? {} : { details: parseDetailPolicy(p.details) }) };
 }
 
 function parseDetailPolicy(value: unknown): OrderDetailPolicy {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new SyncInputError("订单详情策略无效；不启用时请省略 details。");
   const p = value as Record<string, unknown>;
   if (!Array.isArray(p.includedData) || p.includedData.length > orderDetailDatasets.length || p.includedData.some(d => !orderDetailDatasets.includes(d))) throw new SyncInputError("订单详情数据集不在本阶段已核验范围内。");
-  if (!Array.isArray(p.requiredRoles) || !p.requiredRoles.length || p.requiredRoles.some(r => !orderOperationRoles.includes(r))) throw new SyncInputError("订单详情须配置官方操作支持的角色。");
-  if (p.includedData.some(d => d !== "PROCEEDS") && !p.requiredRoles.some(r => orderPiiRoles.includes(r))) throw new SyncInputError("可能返回 PII 的详情数据集须声明 restricted role；字段仍受履约方式、站点和订单状态规则约束。");
+  const requiredRoles = p.requiredRoles ?? [];
+  if (!Array.isArray(requiredRoles) || requiredRoles.length > 20 || requiredRoles.some(r => !orderOperationRoles.includes(r))) throw new SyncInputError("历史订单详情角色元数据格式无效。");
   if (typeof p.purpose !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.:-]{0,99}$/.test(p.purpose)) throw new SyncInputError("订单详情须填写非敏感业务用途代码。");
   if (typeof p.requestsPerSecond !== "number" || !Number.isFinite(p.requestsPerSecond) || p.requestsPerSecond <= 0 || p.requestsPerSecond > 0.5) throw new SyncInputError("getOrder 预算不得超过 0.5 请求/秒。");
   if (p.accessEvidence !== undefined && (typeof p.accessEvidence !== "string" || !p.accessEvidence || p.accessEvidence.length > 12000)) throw new SyncInputError("订单接口能力证据格式无效。");
   if (p.backfillExisting !== undefined && typeof p.backfillExisting !== "boolean") throw new SyncInputError("订单补齐范围无效。");
-  return { ...(p.accessEvidence ? { accessEvidence: p.accessEvidence as string } : {}), ...(p.backfillExisting === true ? { backfillExisting: true } : {}), includedData: [...new Set(p.includedData)].sort(), requiredRoles: [...new Set(p.requiredRoles)].sort(), purpose: p.purpose, requestsPerSecond: p.requestsPerSecond, burst: integer(p.burst, 1, 30), maxOrders: integer(p.maxOrders, 1, 5000) };
+  return { ...(p.accessEvidence ? { accessEvidence: p.accessEvidence as string } : {}), ...(p.backfillExisting === true ? { backfillExisting: true } : {}), includedData: [...new Set(p.includedData)].sort(), requiredRoles: [...new Set(requiredRoles)].sort(), purpose: p.purpose, requestsPerSecond: p.requestsPerSecond, burst: integer(p.burst, 1, 30), maxOrders: integer(p.maxOrders, 1, 5000) };
 }
 
 /** Freeze one bounded window per execution approval; an incomplete cursor wins. */

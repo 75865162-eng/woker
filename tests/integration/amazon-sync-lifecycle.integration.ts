@@ -277,6 +277,11 @@ test("validated Seller ID must not gate bounded 730-day tasks for existing US/CA
   await prisma.amazonSpApiAuthorization.update({ where: { id: authId }, data: { status: "CONFIGURED" } });
   await tickSyncCenter(now, { taskIds: [], exportIds: [] });
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 0, "approved-only mode cannot create future tasks");
+  assert.equal((await ensureAmazonSyncInitialized(scope, authId, now)).status, "deferred", "validation must not re-enable paused sources");
+  assert.equal(await prisma.amazonSyncDataSource.count({ where: { ...scope, enabled: true } }), 0);
+  // Fixture-only simulation of explicitly enabling the previously paused bindings.
+  await prisma.sellerAccount.update({ where: { id: store }, data: { status: "active" } });
+  await prisma.amazonSyncDataSource.updateMany({ where: scope, data: { enabled: true } });
   const initialized = await ensureAmazonSyncInitialized(scope, authId, now);
   assert.equal(initialized.status, "initialized");
   assert.equal(await prisma.amazonSyncSchedule.count({ where: scope }), 18);

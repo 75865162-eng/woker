@@ -91,18 +91,22 @@ before(async () => {
     if (url.hostname === "sellingpartnerapi-na.amazon.com") {
       if (url.pathname.includes("marketplaceParticipations")) return Response.json({ payload: [{ marketplace: { id: site, countryCode: "US" }, participation: { isParticipating: true } }] });
       if (url.pathname.startsWith("/listings/2021-08-01/items/")) return Response.json({ items: [] });
-      if (url.pathname === "/reports/2021-06-30/reports" && init?.method === "POST") { const body = JSON.parse(String(init.body)); assert.equal(body.dataStartTime, range.startAt); assert.equal(body.dataEndTime, range.reportEndAt); reportRequests.push(body); return Response.json({ reportId: `report-${++reportCount}` }); }
+      if (url.pathname === "/reports/2021-06-30/reports" && init?.method === "POST") { const body = JSON.parse(String(init.body)); assert.equal(body.dataStartTime, `${range.from}T00:00:00Z`); assert.equal(body.dataEndTime, `${range.to}T23:59:59Z`); reportRequests.push(body); return Response.json({ reportId: `report-${++reportCount}` }); }
       if (url.pathname.startsWith("/reports/2021-06-30/reports/")) return Response.json({ reportId: `report-${reportCount}`, reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [site], processingStatus: "DONE", reportDocumentId: "fixture-document" });
       if (url.pathname === "/reports/2021-06-30/documents/fixture-document") return Response.json({ reportDocumentId: "fixture-document", url: "https://fixture.s3.us-east-1.amazonaws.com/report" });
     }
     if (url.hostname === "fixture.s3.us-east-1.amazonaws.com" && url.pathname === "/report") {
       assert.equal(new Headers(init?.headers).has("authorization"), false);
-      return Response.json({ reportSpecification: { reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [site], dataStartTime: range.startAt, dataEndTime: range.reportEndAt, reportOptions: { dateGranularity: "DAY", asinGranularity: "CHILD" } }, salesAndTrafficByDate: partial ? [] : [{ date: range.from, salesByDate: { unitsOrdered: 2, totalOrderItems: 1, orderedProductSales: { amount: 20, currencyCode: "USD" } }, trafficByDate: { sessions: 10, pageViews: 15 } }] });
+      return Response.json({ reportSpecification: { reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [site], dataStartTime: `${range.from}T00:00:00Z`, dataEndTime: `${range.to}T23:59:59Z`, reportOptions: { dateGranularity: "DAY", asinGranularity: "CHILD" } }, salesAndTrafficByDate: partial ? [] : [{ date: range.from, salesByDate: { unitsOrdered: 2, totalOrderItems: 1, orderedProductSales: { amount: 20, currencyCode: "USD" } }, trafficByDate: { sessions: 10, pageViews: 15 } }] });
     }
     throw new Error("Unmocked external HTTP forbidden");
   };
   const auth = await configure({ action: "save-authorization", name: "Fixture", amazonSellerId: "fixture-seller", region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", lwaClientId: "fixture-client", lwaClientSecret: "fixture-secret", refreshToken: "fixture-refresh" });
-  await configure({ action: "validate-authorization", id: auth.targetId });
+  // Keep automatic connection creation out of this manually scoped pipeline fixture.
+  const enabledScopes = process.env.AMAZON_SYNC_CENTER_SCOPES;
+  process.env.AMAZON_SYNC_CENTER_SCOPES = "[]";
+  try { await configure({ action: "validate-authorization", id: auth.targetId }); }
+  finally { process.env.AMAZON_SYNC_CENTER_SCOPES = enabledScopes; }
   const src = await configure({ action: "save-source", authorizationId: auth.targetId, sellerAccountId: sellerId, marketplaceId: site, resource: "sales_traffic", enabled: true }); sourceId = src.targetId;
   worker = new Worker<Payload>(amazonSyncQueueName, async job => {
     if (job.name === "export-amazon-sales") { assert.ok(job.data.exportId); assert.ok(Number.isInteger(job.data.fence)); await processSalesExport(job.data.exportId, job.data.fence!); }
@@ -114,7 +118,8 @@ after(async () => { await worker?.close(); await getAmazonSyncQueue().close(); a
 
 test("approval to real BullMQ report worker to filtered API and stored export retains version and ownership", { timeout: 30000 }, async () => {
   const task = await requestedTask();
-  assert.equal((await finishReport(task.id)).status, "SUCCEEDED"); assert.equal(reportRequests.length, 1);
+  const completedReport = await finishReport(task.id);
+  assert.equal(completedReport.status, "SUCCEEDED", completedReport.error ?? ""); assert.equal(reportRequests.length, 1);
   assert.equal(await prisma.amazonSalesTrafficSnapshot.count({ where: { ...scope, syncRunId: task.id } }), 1);
   const params = new URLSearchParams({ section: "sales-traffic", from: range.from, to: range.to, sellerAccountId: sellerId, marketplaceId: site, direction: "asc" });
   const response = await GET(request(`/api/operations/sync-center?${params}`)); assert.equal(response.status, 200);

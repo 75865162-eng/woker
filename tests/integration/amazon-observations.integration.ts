@@ -209,7 +209,8 @@ test("brand ASIN association preserves metrics across multiple SKUs and isolates
   const analysis = await readBrandAsinAnalysis(f.scope, p, f.actor);
   assert.equal(analysis.reports.length, 5); assert.equal(analysis.reports.find(r => r.reportKind === "repeat_purchase")!.result!.pagination.total, 1);
   assert.deepEqual(analysis.products[id].skus, ["sku-a", "sku-b"]);
-  assert.ok(analysis.productWarnings.some(w => w.includes("主图存储尚未就绪")));
+  assert.equal(analysis.products[id].thumbnailUrl, null);
+  assert.ok(!analysis.productWarnings.some(w => w.includes("主图存储尚未就绪")));
   const reader = randomUUID(), role = "viewer";
   await prisma.organizationRosterRole.upsert({ where: { organizationId_id: { organizationId: f.scope.organizationId, id: role } }, create: { organizationId: f.scope.organizationId, id: role, name: "Fixture reader", description: "Fixture", permissions: { operations: ["view"] } }, update: { permissions: { operations: ["view"] } } });
   await prisma.user.create({ data: { id: reader, email: `${reader}@fixture.invalid`, name: "Fixture reader", passwordHash: "not-login", memberships: { create: { organizationId: f.scope.organizationId, role } } } });

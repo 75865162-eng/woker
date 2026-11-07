@@ -1,6 +1,7 @@
 import type { ProviderStatus, RuntimeTool } from "@/lib/lili/runtime-tools";
 import { rejectCredentials } from "./schema";
 import { SKILLS, type SkillSnapshot } from "./types";
+import { parseResearchAiSource } from "./ai-settings";
 
 export function parseResearchInput(body: Record<string, unknown>) {
   // A missing/typoed live mode must never silently create a sample-data task.
@@ -12,6 +13,7 @@ export function parseResearchInput(body: Record<string, unknown>) {
   if (body.erpCredentialId !== undefined && (typeof body.erpCredentialId !== "string" || body.erpCredentialId.length > 100)) throw new Error("INVALID_ERP_CREDENTIAL_ID");
   if (body.mode === "live" && (typeof body.maxMarketCalls !== "number" || !Number.isSafeInteger(body.maxMarketCalls) || body.maxMarketCalls < 1 || body.maxMarketCalls > 30)) throw new Error("MISSING_MARKET_CALL_BUDGET");
   const input = { mode: body.mode, requirement: body.requirement.trim(), marketplace: body.marketplace.trim().toUpperCase(), asin: asin || undefined,
+    aiConfigSource: parseResearchAiSource(body.aiConfigSource),
     erpCredentialId: typeof body.erpCredentialId === "string" ? body.erpCredentialId.trim() || undefined : undefined, maxMarketCalls: body.maxMarketCalls as number | undefined };
   rejectCredentials(input);
   return input;
@@ -27,7 +29,7 @@ export function researchReadiness(input: { providers: ProviderStatus[]; tools: R
     const ready = source?.status === "connected" && callable > 0;
     checks.push({ id, status: ready ? "ready" : "blocked", message: ready ? `在线目录已读取，${callable} 个审核过的只读工具；业务数据尚未调用。` : source?.reason ?? "来源未连接或没有可用的只读工具。" });
   }
-  checks.push({ id: "ai", status: input.ai === "configured" ? "ready" : "blocked", message: input.ai === "configured" ? "已有模型配置；尚未发起模型请求验证。" : "当前工作区模型未配置或配置不可用，请在 ERP 设置中选择已有模型。" });
+  checks.push({ id: "ai", status: input.ai === "configured" ? "ready" : "blocked", message: input.ai === "configured" ? "已有模型配置；尚未发起模型请求验证。" : input.ai === "runtime_model_permission_required" ? "选用服务端模型需要当前账号已有的系统设置编辑权限。" : "所选模型未配置或配置不可用；可在 ERP 设置中配置工作区模型，或显式选用已有服务端模型。" });
   const skillsReady = input.skills?.length === SKILLS.length && input.skills.every((skill, i) => skill.name === SKILLS[i] && skill.markdown && skill.sha256);
   checks.push({ id: "skills", status: skillsReady ? "ready" : "blocked", message: skillsReady ? "五个现有 Skill 原文及哈希已加载。" : "现有研究 Skill 加载失败或不完整；未替换为样本。" });
   try {

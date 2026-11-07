@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = await boundedJsonObject(request, 64_000);
     const input = parseResearchInput(body);
-    const { mode, asin, requirement, marketplace, erpCredentialId } = input;
+    const { mode, asin, requirement, marketplace, erpCredentialId, aiConfigSource } = input;
     const access = await researchAccess(request, "create", { ...body, mode, erpCredentialId }); if (!access.ok) return access.response;
     if (mode === "fixture") {
       if (!access.fixture) throw new Error("RESEARCH_MODE_MISMATCH");
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const skills = await installedResearchSkills();
     const discovery = await discoverResearchTools(access.transport, providers.tools.filter(tool => tool.availability === "available"));
     if (!discovery.registry.length) throw new Error("NO_SUPPORTED_LIVE_TOOLS");
-    const run = await access.engine.create({ requirement, marketplace, skills, asin, erpCredentialId: access.runtimeTools?.erpCredentialId, requiredProviders: ["erp", "sellersprite", "xiyou"], policies: discovery.policies, limits: { sellersprite: maxCalls, xiyou: maxCalls }, registry: discovery.registry });
+    const run = await access.engine.create({ requirement, marketplace, skills, asin, aiConfigSource, aiModel: { provider: access.aiSettings.provider, model: access.aiSettings.model }, erpCredentialId: access.runtimeTools?.erpCredentialId, requiredProviders: ["erp", "sellersprite", "xiyou"], policies: discovery.policies, limits: { sellersprite: maxCalls, xiyou: maxCalls }, registry: discovery.registry });
     return NextResponse.json({ run, discovery: {
       registeredReadTools: discovery.registry.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
       missingCanonicalTools: discovery.missing, providers: providers.providers,
