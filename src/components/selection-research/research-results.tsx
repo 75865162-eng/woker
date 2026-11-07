@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { calculateLandedCostScenario, landedCostEvidenceIds } from "@/lib/selection-research/landed-cost";
+import { evaluateResearchEconomics, evaluateProductScorecard } from "@/lib/selection-research/economics";
 import type { Claim, Run } from "@/lib/selection-research/types";
 
 const claimLabels: Record<Claim["kind"], string> = { observed: "数据观察", calculated: "计算结论", estimated: "估算，待验证", assumption: "假设，待验证" };
@@ -10,7 +12,9 @@ const verdictLabels = { GO: "建议推进", NO_GO: "不建议推进", NEEDS_VALI
 export function ResearchResults({ run }: { run: Run }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const successfulCalls = useMemo(() => new Map(run.calls.filter(call => call.status === "SUCCEEDED").map(call => [call.id, call])), [run.calls]);
-  const evidenceIds = useMemo(() => [...new Set(run.results.flatMap(result => result.claims.flatMap(claim => claim.evidenceIds)))], [run.results]);
+  const evidenceIds = useMemo(() => [...new Set(run.results.flatMap(result => [...landedCostEvidenceIds(result.landedCostScenarios), ...result.claims.flatMap(claim => claim.evidenceIds), ...(result.reviewEvidence ?? []).map(row => row.evidenceId),
+    ...(result.decisionAnalysis?.scenarios ?? []).flatMap(scenario => Object.values(scenario.basis).flatMap(basis => basis?.evidenceIds ?? [])),
+    ...(result.decisionAnalysis?.scorecards ?? []).flatMap(card => card.dimensions.flatMap(row => row.evidenceIds))]))], [run.results]);
   if (!run.results.length) return null;
   const selected = run.results[0]?.candidates?.find(candidate => candidate.id === run.selectedCandidateId);
   return <section className="space-y-3 rounded border p-3" aria-label="研究结论与证据">
@@ -20,6 +24,12 @@ export function ResearchResults({ run }: { run: Run }) {
     {run.results.map((result, index) => <article key={index} className="space-y-2 border-t pt-3" aria-label={`阶段 ${index + 1} 研究结果`}>
       <h4 className="font-semibold">阶段 {index + 1}{result.verdict ? ` · ${verdictLabels[result.verdict]}（${result.verdict}）` : ""}</h4>
       <p className="whitespace-pre-wrap break-words text-sm">{result.summary}</p>
+      <a className="text-sm underline" href={`/api/selection-research/${encodeURIComponent(run.id)}/report?stage=${index + 1}&workspaceId=${encodeURIComponent(run.scope.workspaceId)}`}>下载第 {index + 1} 阶段 HTML 报告（待审阅）</a>
+      {result.landedCostScenarios && <details><summary>关税与到岸成本情景（代码重算）</summary><p className="text-sm">候选税目、待确认税率及压力测试保持独立标记；计算成功不表示税率已核实。</p><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(result.landedCostScenarios.map(scenario => ({ ...scenario, result: calculateLandedCostScenario(scenario) })), null, 2)}</pre></details>}
+      {result.decisionAnalysis && <details><summary>评分与利润计算（代码重算）</summary><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify({
+        scenarios: result.decisionAnalysis.scenarios.map(scenario => ({ ...scenario, result: evaluateResearchEconomics(scenario) })),
+        scorecards: result.decisionAnalysis.scorecards.map(card => ({ ...card, result: evaluateProductScorecard(card) })),
+      }, null, 2)}</pre></details>}
       <ul className="space-y-2">{result.claims.map((claim, claimIndex) => <li key={claimIndex} className="space-y-1 rounded bg-slate-50 p-2 text-sm">
         <p className={claim.kind === "assumption" || claim.kind === "estimated" ? "font-medium text-amber-900" : "font-medium"}>{claimLabels[claim.kind]}</p>
         <p className="whitespace-pre-wrap break-words">{claim.text}</p>

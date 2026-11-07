@@ -1,0 +1,24 @@
+{
+  "client": "Codex app-server native MCP",
+  "threadId": "01a1b5d7-667e-78e3-bdf1-74d1a928d2e9",
+  "temporaryCacheRemoved": true,
+  "checks": [
+    {
+      "attempt": 1,
+      "status": "downloaded",
+      "sha256": "3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef",
+      "nativeToolsCalled": [
+        "meta_get_skill_manifest",
+        "meta_load_skill"
+      ]
+    },
+    {
+      "attempt": 2,
+      "status": "local-hit",
+      "sha256": "3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef",
+      "nativeToolsCalled": [
+        "meta_get_skill_manifest"
+      ]
+    }
+  ]
+}

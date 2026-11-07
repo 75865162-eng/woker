@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     if (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin) throw new SyncInputError("Forbidden.", 403);
     if (!request.headers.get("content-type")?.includes("application/json")) return json({ error: "JSON required." }, 415);
     if (Number(request.headers.get("content-length")) > 64_000) return json({ error: "Request too large." }, 413);
-    const identity = await authenticateAmazonMcp(request.headers.get("authorization"));
+    const identity = await authenticateAmazonMcp(request.headers.get("authorization"), new URL(request.url).origin + "/api/mcp/amazon");
     const text = await boundedRequestText(request, 64000);
     if (Buffer.byteLength(text) > 64_000) return json({ error: "Request too large." }, 413);
     const input = JSON.parse(text) as Record<string, unknown>;

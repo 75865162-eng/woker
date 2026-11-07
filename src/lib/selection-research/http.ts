@@ -13,6 +13,8 @@ export function requireOwnedRun(run: Run, scope: Scope) {
 }
 export async function executeResearchCommand(engine: ResearchEngine, id: string, body: Record<string, unknown>, approvalAuthorized: boolean) {
   if (body.operation === "step") return engine.step(id);
+  if (body.operation === "pause") return engine.pause(id);
+  if (body.operation === "resume") return engine.resume(id);
   if (body.operation === "cancel") return engine.cancel(id);
   if (body.operation === "recover") return engine.recover(id);
   if (body.operation === "decide") {

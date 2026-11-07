@@ -100,6 +100,7 @@ const nullableRepeatPurchase = { ...repeatPurchase, definitions: { ...repeatPurc
 // Live catalog reports omit unavailable prices/conversion as explicit nulls.
 // Override only observed metric fields; keep the frozen official contract intact.
 const catalogNullableMetrics: Record<string, string[]> = {
+  SearchCatalogPerformanceImpressionData: ["impressionMedianPrice"],
   SearchCatalogPerformanceClickData: ["clickedMedianPrice"],
   SearchCatalogPerformanceCartAddData: ["cartAddedMedianPrice"],
   SearchCatalogPerformancePurchaseData: ["conversionRate", "purchaseMedianPrice"],
@@ -110,7 +111,20 @@ const nullableSearchCatalog: Schema = { ...searchCatalog, definitions: Object.fr
       [key, catalogNullableMetrics[name]?.includes(key) ? { ...child, nullable: true } : child])),
   }]),
 ) };
-const schemas = { search_terms: searchTerms, search_query: searchQuery, search_catalog: nullableSearchCatalog, market_basket: marketBasket, repeat_purchase: nullableRepeatPurchase };
+// Observed live SQP reports also use null for unavailable cart/purchase shares
+// and median prices. Keep counts, query identity and all non-null values strict.
+const queryNullableMetrics: Record<string, string[]> = {
+  SearchQueryPerformanceClickData: ["asinMedianClickPrice"],
+  SearchQueryPerformanceCartAddData: ["asinCartAddShare", "totalMedianCartAddPrice", "asinMedianCartAddPrice"],
+  SearchQueryPerformancePurchaseData: ["asinPurchaseShare", "totalMedianPurchasePrice", "asinMedianPurchasePrice"],
+};
+const nullableSearchQuery: Schema = { ...searchQuery, definitions: Object.fromEntries(
+  Object.entries(searchQuery.definitions).map(([name, definition]) => [name, {
+    ...definition, properties: Object.fromEntries(Object.entries(definition.properties).map(([key, child]) =>
+      [key, queryNullableMetrics[name]?.includes(key) ? { ...child, nullable: true } : child])),
+  }]),
+) };
+const schemas = { search_terms: searchTerms, search_query: nullableSearchQuery, search_catalog: nullableSearchCatalog, market_basket: marketBasket, repeat_purchase: nullableRepeatPurchase };
 export function parseObservationReport(raw: string, policy: AnalyticsPolicy | BuyBoxHistoryPolicy, marketplaceId: string): SafeFact[] {
   const schema = (policy.resource === "buy_box_history" ? salesTraffic : schemas[policy.reportKind]) as Schema;
   const projected = object(project(readFinanceJson(raw), schema, schema)), expected = observationReportSpec(policy, marketplaceId), spec = object(projected.reportSpecification);
@@ -131,7 +145,12 @@ export function parseObservationReport(raw: string, policy: AnalyticsPolicy | Bu
     const validateShares = (value: unknown): void => {
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       for (const [key, v] of Object.entries(value)) {
-        if (v !== null && /(Share|Rate|combinationPct)$/.test(key) && (typeof v !== "string" || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > 1)) return invalid();
+        // SQP total action rates count actions per search, so repeated actions
+        // can exceed 100%. ASIN shares remain bounded percentages.
+        const maximum = policy.reportKind === "search_query"
+          ? ["totalClickRate", "totalCartAddRate", "totalPurchaseRate"].includes(key) ? Number.MAX_VALUE : 100
+          : 1;
+        if (v !== null && /(Share|Rate|combinationPct)$/.test(key) && (typeof v !== "string" || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > maximum)) return invalid();
         if (v && typeof v === "object") validateShares(v);
       }
     };
@@ -140,7 +159,7 @@ export function parseObservationReport(raw: string, policy: AnalyticsPolicy | Bu
     if (!isTerms && (row.startDate !== policy.from || row.endDate !== policy.to)) return invalid();
     if (["search_query", "search_catalog"].includes(policy.reportKind) && !policy.asins.includes(id)) return invalid();
     const query = isTerms ? text(row.searchTerm, 5000) : policy.reportKind === "search_query" ? text(object(row.searchQueryData).searchQuery, 5000) : null;
-    return observationFact("BRAND_" + policy.reportKind.toUpperCase(), [policy.from, policy.to, row.departmentName ?? null, id, query, row.purchasedWithAsin ?? null], { ...row, reportPeriod: policy.reportPeriod, from: policy.from, to: policy.to, shareUnit: "FRACTION_0_1", ...(isTerms ? { volumeAvailable: false } : {}) }, { asin: id, searchTerm: query });
+    return observationFact("BRAND_" + policy.reportKind.toUpperCase(), [policy.from, policy.to, row.departmentName ?? null, id, query, row.purchasedWithAsin ?? null], { ...row, reportPeriod: policy.reportPeriod, from: policy.from, to: policy.to, shareUnit: policy.reportKind === "search_query" ? "AMAZON_NATIVE_SQP" : "FRACTION_0_1", ...(isTerms ? { volumeAvailable: false } : {}) }, { asin: id, searchTerm: query });
   }).filter((row): row is SafeFact => row !== null);
   return deduplicateFacts(rows, policy.maxRows);
 }

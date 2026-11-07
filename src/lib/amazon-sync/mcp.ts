@@ -4,7 +4,8 @@ import { amazonMcpTools, bindAmazonMcpHandlers, isCallableAmazonMcpTool, mcpDisc
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma, type AmazonAdsEntityRecord } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { amazonDataAccess, assertAmazonScopeAdmin, explicitAmazonDataAccess, parseAccessScopes, sellerAccessWhere, withAmazonMcpBoundary, type AmazonAccessScope, type AmazonDataAction } from "./data-access";
+import { amazonDataAccess, assertAmazonAction, assertAmazonScopeAdmin, explicitAmazonDataAccess, parseAccessScopes, sellerAccessWhere, withAmazonMcpBoundary, type AmazonAccessScope, type AmazonDataAction } from "./data-access";
+import { isResearchTool, researchCredentialTools, researchToolActions } from "@/lib/lili/research-grants";
 import { requiredText, SyncInputError, type SyncScope } from "./policy";
 import { readTaskSnapshot } from "./snapshots";
 import { readSalesTraffic } from "./sales-query";
@@ -206,25 +207,49 @@ export async function manageMcpCredential(scope: SyncScope, actor: string, comma
     if (!["create", "rotate"].includes(action) || (action === "rotate" && prior?.status !== "ACTIVE")) throw new SyncInputError("操作不可用。");
     const scopes = parseAccessScopes(action === "rotate" ? prior!.scopes : command.scopes);
     const tools = action === "rotate" ? prior!.tools : command.tools;
-    if (!Array.isArray(tools) || !tools.length || tools.length > amazonMcpTools.length || tools.some(t => !amazonMcpTools.some(([name]) => name === t))) throw new SyncInputError("工具范围无效。");
+    const credentialTools = [...amazonMcpTools, ...researchCredentialTools];
+    if (!Array.isArray(tools) || !tools.length || tools.length > credentialTools.length || tools.some(t => !credentialTools.some(([name]) => name === t))) throw new SyncInputError("工具范围无效。");
+    for (const tool of tools) if (typeof tool === "string" && isResearchTool(tool)) {
+      await assertAmazonAction(scope, userId, "view", tx, "agents");
+      await assertAmazonAction(scope, userId, researchToolActions[tool], tx, "agents");
+    }
     const sources = await explicitSources(tx, scope, userId);
     if (scopes.some(s => s.marketplaceIds.some(m => !sources.some(source => source.sellerAccountId === s.sellerAccountId && source.marketplaceId === m)))) throw new SyncInputError("数据范围不可访问。", 403);
     const expiresAt = action === "rotate" ? prior!.expiresAt : new Date(String(command.expiresAt));
     if (!Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date() || expiresAt.getTime() > Date.now() + 90 * 86400000) throw new SyncInputError("有效期须在未来 90 天内。");
     const token = `amcp_${randomBytes(32).toString("base64url")}`;
     if (prior) await tx.amazonMcpCredential.update({ where: { id: prior.id, revision: prior.revision }, data: { status: "REVOKED", revision: { increment: 1 } } });
-    const row = await tx.amazonMcpCredential.create({ data: { id: randomUUID(), ...scope, userId, name: action === "rotate" ? prior!.name : requiredText(command.name, "名称", 100), tokenHash: mcpTokenHash(token), tokenPrefix: token.slice(0, 12), tools: [...new Set(tools)] as string[], scopes, expiresAt, createdByUserId: actor, rotatedFromId: prior?.id }, select: credentialSelect });
+    const row = await tx.amazonMcpCredential.create({ data: { id: randomUUID(), ...scope, userId, name: action === "rotate" ? prior!.name : requiredText(command.name, "名称", 100), tokenHash: mcpTokenHash(token), tokenPrefix: token.slice(0, 12), tools: [...new Set(tools)] as string[], scopes, expiresAt, createdByUserId: actor, rotatedFromId: prior?.name.startsWith("Lili device: ") ? prior.rotatedFromId : prior?.id }, select: credentialSelect });
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: `amazon.mcp.credential.${action}`, entityType: "AmazonMcpCredential", entityId: row.id, metadata: { workspaceId: scope.workspaceId, subjectUserId: userId, scopes, tools: row.tools } } });
     return { credential: row, token };
   });
 }
 
-export async function authenticateAmazonMcp(authorization: string | null) {
+export async function authenticateAmazonMcp(authorization: string | null, resource?: string) {
   const token = authorization?.match(/^Bearer (amcp_[A-Za-z0-9_-]{43})$/)?.[1];
   const row = token ? await prisma.amazonMcpCredential.findUnique({ where: { tokenHash: mcpTokenHash(token) } }) : null;
-  if (!row || row.status !== "ACTIVE" || row.expiresAt <= new Date()) {
+  if (row) {
+    const oauth = await prisma.liliOAuthGrant.findUnique({ where: { deviceId: row.id } });
+    if (oauth && (oauth.revokedAt || oauth.expiresAt <= new Date() || resource && resource !== oauth.resource)) throw new SyncInputError("认证失败。", 401);
+  }
+  return validateAmazonMcpCredential(row);
+}
+/** Server-only validation shared by OAuth refresh; never accepts client identity fields. */
+export async function validateAmazonMcpCredential(row: Awaited<ReturnType<typeof prisma.amazonMcpCredential.findUnique>>, allowExpired = false) {
+  if (!row || row.status !== "ACTIVE" || (!allowExpired && row.expiresAt <= new Date())) {
     await audit(null, null, "amazon.mcp.authentication.denied", { requestId: randomUUID(), reason: "INVALID_CREDENTIAL" });
     throw new SyncInputError("认证失败。", 401);
+  }
+  if (row.name.startsWith("Lili device: ")) {
+    let parentId = row.rotatedFromId;
+    const seen = new Set([row.id]);
+    while (parentId) {
+      if (seen.has(parentId) || seen.size > 20) throw new SyncInputError("认证失败。", 401);
+      seen.add(parentId);
+      const parent = await prisma.amazonMcpCredential.findFirst({ where: { id: parentId, organizationId: row.organizationId, workspaceId: row.workspaceId, userId: row.userId, status: "ACTIVE", expiresAt: { gt: new Date() } } });
+      if (!parent || row.tools.some(tool => !parent.tools.includes(tool)) || JSON.stringify(row.scopes) !== JSON.stringify(parent.scopes)) throw new SyncInputError("认证失败。", 401);
+      parentId = parent.name.startsWith("Lili device: ") ? parent.rotatedFromId : null;
+    }
   }
   try { await explicitAmazonDataAccess({ organizationId: row.organizationId, workspaceId: row.workspaceId }, row.userId, prisma, "view", true); }
   catch { await audit(row, row.userId, "amazon.mcp.authentication.denied", { requestId: randomUUID(), credentialId: row.id, reason: "CURRENT_ACCESS_DENIED" }); throw new SyncInputError("认证失败。", 401); }

@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { parseBrandCollection, brandCollectionWindows, brandTaskPolicy, assertBrandTaskPolicy, brandWindowKey } from "@/lib/amazon-sync/brand-collection";
 import { parseObservationPolicy, assertObservationClosed, observationReportSpec, brandReportTypes, type AnalyticsPolicy } from "@/lib/amazon-sync/observation-policy";
 import { parseObservationReport } from "@/lib/amazon-sync/observation-parsers";
+import { brandFieldCatalogue } from "@/lib/amazon-sync/brand-field-catalogue";
+import { brandFieldLabel } from "@/lib/amazon-sync/brand-fields";
 import { brandReports } from "@/lib/amazon-sync/brand-reports";
 import { advanceObservation, initialObservationState } from "@/lib/amazon-sync/observation-machine";
 import { automaticMarketplaceAllowed, brandMarketplaces, automaticMarketplaces } from "@/lib/amazon-sync/automatic-schedule";
@@ -97,11 +99,13 @@ test("catalog preserves unavailable prices and conversion without weakening metr
   raw.reportSpecification = observationReportSpec(p, site);
   raw.dataByAsin = [raw.dataByAsin[0]];
   const row = raw.dataByAsin[0];
+  row.impressionData.impressionMedianPrice = null;
   row.clickData.clickedMedianPrice = null;
   row.cartAddData.cartAddedMedianPrice = null;
   row.purchaseData.conversionRate = null;
   row.purchaseData.purchaseMedianPrice = null;
   const facts = parseObservationReport(JSON.stringify(raw), p, site)[0].facts;
+  assert.equal((facts.impressionData as Record<string, unknown>).impressionMedianPrice, null);
   assert.equal((facts.clickData as Record<string, unknown>).clickedMedianPrice, null);
   assert.equal((facts.cartAddData as Record<string, unknown>).cartAddedMedianPrice, null);
   assert.equal((facts.purchaseData as Record<string, unknown>).conversionRate, null);
@@ -110,10 +114,80 @@ test("catalog preserves unavailable prices and conversion without weakening metr
     (r: typeof row) => { r.asin = null; },
     (r: typeof row) => { r.purchaseData.conversionRate = 1.1; },
     (r: typeof row) => { r.clickData.clickCount = null; },
+    (r: typeof row) => { r.impressionData.impressionCount = null; },
+    (r: typeof row) => { r.impressionData.impressionMedianPrice = { amount: null, currencyCode: "USD" }; },
+    (r: typeof row) => { delete r.impressionData.impressionMedianPrice; },
     (r: typeof row) => { r.clickData.clickedMedianPrice = { amount: -1, currencyCode: "USD" }; },
     (r: typeof row) => { delete r.purchaseData.conversionRate; },
   ]) {
     const candidate = structuredClone(raw); mutate(candidate.dataByAsin[0]);
     assert.throws(() => parseObservationReport(JSON.stringify(candidate), p, site));
   }
+});
+
+
+test("every official brand business field has a receiver-page field entry and translated label", () => {
+  const names = { search_terms: "SearchTerms", search_query: "SearchQueryPerformance", search_catalog: "SearchCatalogPerformance", market_basket: "MarketBasketAnalysis", repeat_purchase: "RepeatPurchase" };
+  type Schema = { $ref?: string; type?: string; properties?: Record<string, Schema>; items?: Schema };
+  for (const [kind, name] of Object.entries(names)) {
+    const schema = JSON.parse(readFileSync(`src/data/amazon-contracts/sellingPartner${name}Report.json`, "utf8"));
+    const paths: string[] = [];
+    function walk(input: Schema, path = "") {
+      const node: Schema = input.$ref ? schema.definitions[input.$ref.split("/").at(-1)!] : input;
+      if (node.type === "object" && !(node.properties?.amount && node.properties?.currencyCode)) {
+        for (const [key, child] of Object.entries(node.properties ?? {})) walk(child, path ? `${path}.${key}` : key);
+      } else if (node.type === "array") walk(node.items!, path);
+      else paths.push(path);
+    }
+    walk(schema.properties[kind === "search_terms" ? "dataByDepartmentAndSearchTerm" : "dataByAsin"].items);
+    assert.deepEqual(brandFieldCatalogue[kind as keyof typeof names], paths);
+    for (const path of paths) for (const key of path.split(".")) assert.ok(/[\u4e00-\u9fff]|^ASIN$/.test(brandFieldLabel(key)), path);
+  }
+});
+
+test("SQP preserves observed unavailable shares/prices while other fields remain strict", () => {
+  const raw = JSON.parse(readFileSync("src/data/amazon-contracts/sellingPartnerSearchQueryPerformanceReport.json", "utf8")).examples[0];
+  const p = parseObservationPolicy({ ...root(), reportKind: "search_query", asins: [asin] }) as AnalyticsPolicy;
+  raw.reportSpecification = observationReportSpec(p, site); raw.dataByAsin = [raw.dataByAsin[0]];
+  const nullable = { clickData: ["asinMedianClickPrice"], cartAddData: ["asinCartAddShare", "totalMedianCartAddPrice", "asinMedianCartAddPrice"], purchaseData: ["asinPurchaseShare", "totalMedianPurchasePrice", "asinMedianPurchasePrice"] };
+  for (const [group, names] of Object.entries(nullable)) for (const name of names) raw.dataByAsin[0][group][name] = null;
+  const facts = parseObservationReport(JSON.stringify(raw), p, site)[0].facts;
+  for (const [group, names] of Object.entries(nullable)) for (const name of names) assert.equal((facts[group] as Record<string, unknown>)[name], null);
+  type Row = (typeof raw.dataByAsin)[number];
+  for (const mutate of [
+    (r: Row) => { r.asin = null; },
+    (r: Row) => { r.startDate = null; },
+    (r: Row) => { r.searchQueryData.searchQuery = null; },
+    (r: Row) => { r.cartAddData.asinCartAddCount = null; },
+    (r: Row) => { r.purchaseData.asinPurchaseShare = 100.1; },
+    (r: Row) => { r.cartAddData.asinCartAddShare = -0.1; },
+    (r: Row) => { r.clickData.asinClickShare = null; },
+    (r: Row) => { r.clickData.asinMedianClickPrice = { amount: null, currencyCode: "USD" }; },
+    (r: Row) => { delete r.clickData.asinMedianClickPrice; },
+    (r: Row) => { r.purchaseData.asinMedianPurchasePrice = { amount: null, currencyCode: "USD" }; },
+    (r: Row) => { r.cartAddData.totalMedianCartAddPrice = { amount: 1, currencyCode: "bad" }; },
+    (r: Row) => { delete r.purchaseData.asinPurchaseShare; },
+  ]) {
+    const candidate = structuredClone(raw); mutate(candidate.dataByAsin[0]);
+    assert.throws(() => parseObservationReport(JSON.stringify(candidate), p, site));
+  }
+});
+
+
+test("SQP retains native percent or fraction lexemes without guessing or changing other report units", () => {
+  const raw = JSON.parse(readFileSync("src/data/amazon-contracts/sellingPartnerSearchQueryPerformanceReport.json", "utf8")).examples[0];
+  const p = parseObservationPolicy({ ...root(), reportKind: "search_query", asins: [asin] }) as AnalyticsPolicy;
+  raw.reportSpecification = observationReportSpec(p, site); raw.dataByAsin = [raw.dataByAsin[0]];
+  raw.dataByAsin[0].impressionData.asinImpressionShare = 5.26;
+  raw.dataByAsin[0].clickData.totalClickRate = 600;
+  raw.dataByAsin[0].clickData.asinClickShare = 25;
+  raw.dataByAsin[0].cartAddData.totalCartAddRate = 50;
+  const facts = parseObservationReport(JSON.stringify(raw), p, site)[0].facts;
+  assert.equal(facts.shareUnit, "AMAZON_NATIVE_SQP");
+  assert.equal((facts.impressionData as Record<string, unknown>).asinImpressionShare, "5.26");
+  assert.equal((facts.clickData as Record<string, unknown>).totalClickRate, "600");
+  assert.equal((facts.clickData as Record<string, unknown>).asinClickShare, "25");
+  assert.equal((facts.purchaseData as Record<string, unknown>).asinPurchaseShare, "0.05");
+  const bad = structuredClone(raw); bad.dataByAsin[0].clickData.asinClickShare = 100.01;
+  assert.throws(() => parseObservationReport(JSON.stringify(bad), p, site));
 });

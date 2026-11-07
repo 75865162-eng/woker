@@ -39,8 +39,19 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
   const current = boundary.getStore();
   if (current) {
     if (current.organizationId !== scope.organizationId || current.workspaceId !== scope.workspaceId || current.userId !== actor) throw new SyncInputError("数据范围不可访问。", 403);
-    const credential = await db.amazonMcpCredential.findFirst({ where: { id: current.credentialId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() }, tools: { has: current.tool } }, select: { scopes: true } });
+    const credential = await db.amazonMcpCredential.findFirst({ where: { id: current.credentialId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() }, tools: { has: current.tool } }, select: { scopes: true, name: true, rotatedFromId: true, tools: true } });
     if (!credential) throw new SyncInputError("数据范围不可访问。", 403);
+    if (credential.name.startsWith("Lili device: ")) {
+      let parentId = credential.rotatedFromId;
+      const seen = new Set([current.credentialId]);
+      while (parentId) {
+        if (seen.has(parentId) || seen.size > 20) throw new SyncInputError("数据范围不可访问。", 403);
+        seen.add(parentId);
+        const parent = await db.amazonMcpCredential.findFirst({ where: { id: parentId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() } }, select: { scopes: true, tools: true, name: true, rotatedFromId: true } });
+        if (!parent || credential.tools.some(tool => !parent.tools.includes(tool)) || JSON.stringify(credential.scopes) !== JSON.stringify(parent.scopes)) throw new SyncInputError("数据范围不可访问。", 403);
+        parentId = parent.name.startsWith("Lili device: ") ? parent.rotatedFromId : null;
+      }
+    }
     const erp = await explicitAmazonDataAccess(scope, actor, db, current.action, true);
     const scopes = parseAccessScopes(credential.scopes).map(s => ({ ...s, marketplaceIds: s.marketplaceIds.filter(m => (erp.scopes ?? erp.sellerIds.map(sellerAccountId => ({ sellerAccountId, marketplaceIds: [] as string[] }))).some(g => g.sellerAccountId === s.sellerAccountId && (!g.marketplaceIds.length || g.marketplaceIds.includes(m)))) })).filter(s => s.marketplaceIds.length);
     if (!scopes.length) throw new SyncInputError("数据范围不可访问。", 403);

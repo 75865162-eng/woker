@@ -1,3 +1,4 @@
+import { brandFairTurn } from "./brand-fairness";
 import { assertBrandTaskPolicy } from "./brand-collection";
 import { continuityEvidence, continuityOrderTurn, continuityProbeDue } from "./continuity-access";
 import { assertProductDiscoveryHead, resolvedProductPolicy, validateProductManifest } from "./product-discovery";
@@ -11,7 +12,7 @@ import { settlementScope, assertFrozenSettlementScope } from "./settlement-scope
 import { allListingsReportType, parseAllListingsReport } from "./catalog-report";
 import { deduplicateFacts } from "./observation-parsers";
 import { advanceObservation, parseObservationState, observationOperation, type ObservationState } from "./observation-machine";
-import { observationReportSpec } from "./observation-policy";
+import { observationReportSpec, type AnalyticsPolicy } from "./observation-policy";
 import { isObservationResource, parseObservationPolicy, assertObservationRoles, assertObservationClosed } from "./observation-policy";
 import { reportTimestampMatches, parseReturnPolicy, assertReturnRoles, returnWindowFromFrozen, parseReturnState, parseReturnReport, returnPollDelay } from "./returns";
 import { sellerArchivePolicy, assertSellerArchiveTarget } from "./seller-archive-policy";
@@ -1060,6 +1061,7 @@ async function persistOrderRequests(run: AmazonSyncRun, events: AmazonRequestEve
   await prisma.$transaction(async tx => {
     await scopeLock(tx, run); await assertFence(tx, run); await assertLiveSource(tx, run);
     if (events.length) await tx.amazonSyncTaskLog.createMany({ data: events.map(e => ({ organizationId: run.organizationId, workspaceId: run.workspaceId, id: randomUUID(), taskId: run.id, attempt: run.attempts, event: e.operation, stage: "REQUEST", requestId: e.requestId, statusCode: e.status, rateLimit: e.rateLimit, code: run.resource === "finance" && e.operation === "listTransactions" && error instanceof AmazonSpApiError && e.status === error.status ? error.upstreamCode : null })) });
+    if (error instanceof AmazonSpApiError && ["REPORT_DOWNLOAD_GZIP", "REPORT_DOWNLOAD_TIMEOUT", "REPORT_DOWNLOAD_TRANSPORT"].includes(error.upstreamCode ?? "")) await tx.amazonSyncTaskLog.create({ data: { id: randomUUID(), organizationId: run.organizationId, workspaceId: run.workspaceId, taskId: run.id, attempt: run.attempts, event: "REPORT_DOWNLOAD_FAILED", stage: "DOWNLOAD", code: error.upstreamCode } });
     await tx.amazonSyncRun.update({ where: { id: run.id }, data: { apiRequests: { increment: events.length }, throttles: { increment: events.filter(e => e.status === 429).length }, leaseExpiresAt: new Date(now.getTime() + leaseMs) } });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
     const event = events.findLast(e => ["searchOrders", "getOrder", "listTransactions", "createReport", "getReport", "getReportDocument", "getInboundPlan", "listInboundPlanItems", "getShipment", "listShipmentItems", "getCompetitiveSummary", "getPricing"].includes(e.operation) && e.rateLimit);
@@ -1357,6 +1359,13 @@ async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiCl
       const coverage = { ...(manifest ? { discovery: manifest, catalogSnapshotComplete: true } : {}), type: "APPROVED_SCOPE_OBSERVATION", resource: policy.resource, complete: true, accountUniverseComplete: false, rowCount, capturedFrom: run.executionStartedAt!.toISOString(), capturedTo: new Date().toISOString(), ...(policy.resource === "fulfillment" ? { planIds: policy.planIds, marketplaceVerified: true, quantitySemantics: "DECLARED_ONLY", transportEventsAvailable: false } : policy.resource === "listing_details" ? { sellerSkus: policy.sellerSkus, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "catalog_items" ? { asins: policy.asins, attributeCoverage: "PRODUCT_FIELD_ALLOWLIST" } : policy.resource === "pricing" ? { asins: policy.asins, ownPriceCoverage: "APPROVED_ASINS_NEW_B2C_GET_PRICING" } : { from: policy.from, to: policy.to, asins: policy.asins, ...(policy.resource === "brand_analytics" ? { reportKind: policy.reportKind, reportPeriod: policy.reportPeriod } : {}), reportId: state.reportId! }) };
       await tx.amazonSyncDataSource.update({ where: { id: live.id }, data: { activeRunId: run.id, lastSuccessAt: new Date(), rowCount, coverage } });
       await tx.amazonSyncRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", stage: "COMPLETED", paginationComplete: true, finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, checkpointCiphertext: null, summary: { coverage } } });
+      // A failed report may have deferred its plan for a day. Once that same
+      // checkpoint succeeds, wake only an already-enabled finite brand plan.
+      // The scheduler still checks the manifest and never recreates uncertain work.
+      if (policy.resource === "brand_analytics" && (parseObservationPolicy(live.domainPolicy, "brand_analytics") as AnalyticsPolicy).collection) {
+        const now = new Date();
+        await tx.amazonSyncSchedule.updateMany({ where: { ...scope, resource: "brand_analytics", executionVersion: 2, enabled: true, planKey: automaticPlanKey(live.id), nextRunAt: { gt: now }, targets: { some: { sourceId: live.id } } }, data: { nextRunAt: now } });
+      }
       await log(tx, run, "OBSERVATIONS_PUBLISHED");
     }); return;
   }
@@ -1371,6 +1380,10 @@ async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiCl
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
     const budget = await tx.amazonSyncApiBudget.findUnique({ where: { organizationId_workspaceId_authorizationId_operation: key } });
     if (budget && budget.nextRequestAt > new Date()) return { allowed: false, nextAt: budget.nextRequestAt };
+    if (policy.resource === "brand_analytics") {
+      const turn = await brandFairTurn(tx, run, policy, operation, async peer => { await assertLiveSource(tx, peer); });
+      if (!turn.allowed) return turn;
+    }
     const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
     if (await continuityProbeDue(tx, source)) return { allowed: false, nextAt: new Date(Date.now() + 5000) };
     const result = reserveOrderToken(bucket, { requestsPerSecond: policy.requestsPerSecond, burst: 1 }, new Date());

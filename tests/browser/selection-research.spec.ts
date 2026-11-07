@@ -1,13 +1,13 @@
 import { build } from "esbuild";
 import { expect, test } from "@playwright/test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { LocalResearchStore } from "../../src/lib/selection-research/file-store";
 import { ResearchEngine } from "../../src/lib/selection-research/engine";
 import { researchFixture } from "../../src/lib/selection-research/fixture";
-import { renderResearchReport } from "../../src/lib/selection-research/report";
+import { renderResearchReport, renderResearchStageReport } from "../../src/lib/selection-research/report";
 import { SKILLS, ToolNotDispatchedError, type Decision, type Run } from "../../src/lib/selection-research/types";
 import { researchReadiness } from "../../src/lib/selection-research/preflight";
 import type { ProviderStatus, RuntimeTool } from "../../src/lib/lili/runtime-tools";
@@ -43,7 +43,9 @@ for (const scenario of ["normal", "save-failure", "pause", "agent-failure"] as c
       if (!url.pathname.startsWith("/api/")) return route.fulfill({ contentType: "text/html", body: `<div id="root"></div><script>${bundle}</script>` });
       if (route.request().method() === "GET") {
         if (url.pathname.endsWith("/report")) {
-          const html = renderResearchReport(await engine.inspect(run!.id));
+          const savedRun = await engine.inspect(run!.id);
+          const phase = url.searchParams.get("stage");
+          const html = phase === null ? renderResearchReport(savedRun) : renderResearchStageReport(savedRun, Number(phase));
           return route.fulfill({ contentType: "text/html", headers: { "content-disposition": 'attachment; filename="selection.html"' }, body: html });
         }
         if (url.pathname === "/api/selection-research") {
@@ -96,13 +98,20 @@ for (const scenario of ["normal", "save-failure", "pause", "agent-failure"] as c
     await expect(review.getByRole("article", { name: "阶段 1 研究结果", exact: true })).toBeVisible();
     if (scenario === "normal") {
       const stage = review.getByRole("article", { name: "阶段 1 研究结果", exact: true });
+      const phaseDownload = page.waitForEvent("download");
+      await stage.getByRole("link", { name: "下载第 1 阶段 HTML 报告（待审阅）", exact: true }).click();
+      const download = await phaseDownload;
+      const phasePath = path.join(root, "stage-1.html");
+      await download.saveAs(phasePath);
+      expect(await readFile(phasePath, "utf8")).toContain("待人工审阅");
+      expect(run!.stage).toBe(1); expect(run!.decisions).toHaveLength(0);
       await expect(stage).toContainText("计算公式：2 / 1 = 2（隔离展示）");
       await expect(stage).toContainText("假设，待验证");
       await expect(stage).toContainText("未引用成功调用证据");
       await expect(stage.locator("script[data-isolated]")).toHaveCount(0);
       await expect(stage.locator('a[href^="javascript:"]')).toHaveCount(0);
       expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__liliUnexpected)).toBeUndefined();
-      const citation = stage.getByRole("link").first();
+      const citation = stage.getByRole("link", { name: /^证据：/ }).first();
       const evidence = review.locator((await citation.getAttribute("href"))!);
       await expect(evidence.locator("pre")).toHaveCount(0);
       await citation.click();
@@ -163,7 +172,7 @@ for (const scenario of ["normal", "save-failure", "pause", "agent-failure"] as c
       failHistory = false;
     }
     await page.getByText("Skill 快照、调用证据及审批记录").click();
-    await expect(page.locator("pre")).toContainText("rawResponse");
+    await expect(page.locator("details").filter({ has: page.getByText("Skill 快照、调用证据及审批记录", { exact: true }) }).locator("pre")).toContainText("rawResponse");
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("amazon-bulk-ad:workspace-scope-changed")));
     await expect(page.getByRole("heading", { name: /第 5 \/ 5 阶段/ })).toHaveCount(0);
     expect(new URL(page.url()).searchParams.has("runId")).toBe(false);
@@ -428,4 +437,29 @@ test("each paid request clears the preceding receipt and charge before reconcili
     await expect(audit).toContainText("isolated-first-receipt");
     await expect(audit).toContainText('"units": 9');
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("live budget UI requires finite reviewed limits", async ({ page }) => {
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/*", async route => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== "selection.invalid") throw new Error("UNEXPECTED_NETWORK_REQUEST");
+    if (url.pathname === "/api/selection-research") {
+      if (route.request().method() === "POST") {
+        submitted = route.request().postDataJSON();
+        return route.fulfill({ status: 409, json: { error: "ISOLATED_STOP_BEFORE_REAL_TASK" } });
+      }
+      return route.fulfill({ json: { runs: [] } });
+    }
+    return route.fulfill({ contentType: "text/html", body: `<div id="root"></div><script>${bundle}</script>` });
+  });
+  await page.goto("http://selection.invalid/");
+  await expect(page.getByLabel("预算模式", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("最大市场调用次数", { exact: true })).toHaveValue("3");
+  await page.getByLabel("自然语言选品要求").fill("Isolated generic research task");
+  await page.getByRole("button", { name: "读取在线工具目录并创建真实任务", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("ISOLATED_STOP_BEFORE_REAL_TASK");
+  expect(submitted?.budgetMode).toBe("reviewed");
+  expect(submitted?.maxMarketCalls).toBe(3);
+  expect(submitted?.mode).toBe("live");
 });

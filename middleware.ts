@@ -68,6 +68,12 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/api/mcp/amazon") {
     return NextResponse.next();
   }
+  if (["/api/lili/oauth/authorize", "/api/lili/oauth/token", "/api/lili/oauth/register", "/api/lili/oauth/revoke", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/api/lili/mcp"].includes(pathname)) return NextResponse.next();
+  // Public MCP connection/Skill discovery requires no browser session. The
+  // handler still authenticates every private-data operation; neighboring APIs stay protected.
+  if ((pathname === "/api/lili/devices" && request.headers.has("authorization")) || pathname === "/api/lili/pair" || pathname === "/api/lili/mcp" || pathname === "/lili/api/mcp") {
+    return NextResponse.next();
+  }
 
   if (isPublicRoute || isPublicApi) {
     return NextResponse.next();

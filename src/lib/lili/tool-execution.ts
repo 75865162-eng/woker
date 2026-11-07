@@ -1,3 +1,4 @@
+import { getSkillManifest } from "./skill-manifest";
 import { findSkill, listSkills, listTools, listWorkflows, skillMarkdown, type InputSchema } from "./catalog";
 
 export function validateToolInput(schema: InputSchema, input: unknown): string[] {
@@ -37,7 +38,7 @@ export async function runCatalogTool(name: string, input: unknown) {
   if (name === "meta_load_skill") {
     const skill = findSkill(String(args.skill_name));
     if (!skill) return { status: 404, body: { ok: false, error: "unknown_skill" } };
-    return { status: 200, body: { ok: true, source: "shipped-definitions", skill, markdown: await skillMarkdown(skill.slug) } };
+    return { status: 200, body: { ok: true, source: "shipped-definitions", skill, manifest: await getSkillManifest(skill.slug), markdown: await skillMarkdown(skill.slug) } };
   }
   if (name === "meta_list_workflows") return { status: 200, body: { ok: true, source: "shipped-definitions", definitionOnly: true, templates: listWorkflows(), message: "仅工作流定义；没有查询保存记录、调度或执行状态。" } };
   return { status: 501, body: { ok: false, error: tool.readOnly ? "tool_adapter_not_mapped" : "live_write_unsupported", tool: name,

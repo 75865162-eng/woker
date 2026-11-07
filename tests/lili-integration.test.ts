@@ -53,10 +53,12 @@ test("Lili pages reuse their actual host module permission, including settings a
   assert.equal(roleCanPerformAction("limited", getModuleIdForPath("/lili/v2/settings"), "view", permissions), false);
 });
 
-test("the real host authentication rejects missing sessions and forged Lili cookies", async () => {
+test("private host operations reject missing sessions while forged cookies receive public definitions only", async () => {
   assert.equal((await handleLiliRequest(request("health"), ["health"])).status, 401);
   const forged = new Request("http://lili.invalid/lili/api/mcp", { headers: { cookie: "dby_session=anything; amazon_bulk_ad_session=forged.invalid" } });
-  assert.equal((await handleLiliRequest(forged, ["mcp"])).status, 401);
+  const response = await handleLiliRequest(forged, ["mcp"]);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).scope, "anonymous-definitions");
 });
 
 test("API authorization precedes catalog reads and enforces the destination module and action", async () => {
@@ -96,7 +98,12 @@ test("RPC keeps business failures explicit and does not grant personal Amazon MC
   const body = await response.json();
   assert.equal(body.result.isError, true); assert.match(body.result.content[0].text, /RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN/);
   const listed = await (await handleLiliRequest(request("mcp", { id: 2, method: "tools/list" }), ["mcp"], allow)).json();
-  assert.equal(listed.result.tools.length, 3); assert.ok(listed.result.tools.every((tool: { provider: string }) => tool.provider === "skills"));
+  assert.deepEqual(listed.result.tools.map((tool: { name: string }) => tool.name).sort(), ["meta_search_skills", "meta_load_skill", "meta_list_workflows", "lili_ping", "meta_get_skill_manifest", "meta_get_market_access", "research_prepare", "research_evidence", "research_list", "research_start", "research_read", "research_step", "research_export", "research_pause", "research_resume", "research_recover", "research_cancel"].sort());
+  assert.equal(listed.result.tools.filter((tool: { provider?: string }) => tool.provider === "skills").length, 6);
+  assert.deepEqual(listed.result.tools.filter((tool: { name: string }) => tool.name.startsWith("research_")).map((tool: { name: string }) => tool.name), ["research_prepare", "research_evidence", "research_list", "research_start", "research_read", "research_step", "research_export", "research_pause", "research_resume", "research_recover", "research_cancel"]);
+  const discovery = await (await handleLiliRequest(request("mcp"), ["mcp"], allow)).json();
+  assert.deepEqual(discovery.tools, listed.result.tools, "GET and JSON-RPC must expose the same runtime and workflow tools");
+  assert.equal(discovery.scope, "authenticated-ERP-session");
   assert.equal((await handleLiliRequest(request("mcp", { method: "tools/call", params: [] }), ["mcp"], allow)).status, 400);
 });
 

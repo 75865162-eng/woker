@@ -304,3 +304,26 @@ test("secret echo is never persisted and uncertain response is not automatically
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+
+test("saved pause survives engine recreation, prevents dispatch and preserves human gates on resume", async () => {
+ const { root, store, fixture, engine, run } = await setup();
+ try {
+  const paused = await executeResearchCommand(engine, run.id, { operation: "pause" }, false);
+  assert.ok(paused.pausedAt);
+  const unavailable = storedResearchEngine(store, scope, "fixture");
+  const unchanged = await unavailable.step(run.id);
+  assert.equal(unchanged.revision, paused.revision); assert.equal(unchanged.calls.length, 0);
+  assert.equal((await unavailable.pause(run.id)).revision, paused.revision);
+  await executeResearchCommand(unavailable, run.id, { operation: "resume" }, false);
+  const resumed = new ResearchEngine(store, scope, fixture.transport, fixture.agent, { mode: "fixture" });
+  const waiting = await drive(resumed, run.id);
+  assert.equal(waiting.gate?.kind, "NICHE");
+  await resumed.pause(run.id);
+  const after = await resumed.resume(run.id);
+  assert.equal(after.gate?.id, waiting.gate?.id); assert.equal(after.status, "WAITING_FOR_USER");
+  assert.equal((await resumed.step(run.id)).calls.length, waiting.calls.length);
+  await resumed.cancel(run.id);
+  await assert.rejects(resumed.pause(run.id), /TERMINAL/);
+  await assert.rejects(resumed.resume(run.id), /TERMINAL/);
+ } finally { await rm(root, { recursive: true, force: true }); }
+});

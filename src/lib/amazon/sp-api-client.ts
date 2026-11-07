@@ -361,7 +361,11 @@ export class AmazonSpApiClient {
         while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > limit) { await reader.cancel(); throw new AmazonSpApiError("报告超过下载大小限制。"); } downloadedBytes = length; chunks.push(part.value); }
       } finally { reader.releaseLock(); }
       const data = Buffer.concat(chunks);
-      const decoded = document.compressionAlgorithm === "GZIP" ? gunzipSync(data, { maxOutputLength: limit }) : data;
+      let decoded = data;
+      if (document.compressionAlgorithm === "GZIP") {
+        try { decoded = gunzipSync(data, { maxOutputLength: limit }); }
+        catch { throw new AmazonSpApiError("报告 GZIP 解压失败，原检查点保留。", { retryable: true, upstreamCode: "REPORT_DOWNLOAD_GZIP", downloadedBytes }); }
+      }
       if (textOnly) {
         const declared = /charset\s*=\s*["']?([^;\s"']+)/i.exec(response.headers.get("content-type") ?? "")?.[1].toLowerCase();
         const encoding = !declared || ["utf-8", "utf8"].includes(declared) ? "utf-8"

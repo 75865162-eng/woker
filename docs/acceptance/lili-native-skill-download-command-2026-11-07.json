@@ -1,0 +1,40 @@
+{
+  "client": "Codex app-server native MCP",
+  "server": "lili",
+  "endpoint": "http://localhost:3017/api/lili/mcp",
+  "loadedAt": "2026-11-07T12:20:46.903088+00:00",
+  "calls": [
+    {
+      "tool": "lili_ping",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_search_skills",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "skill_id": "amazon-niche-finder"
+    },
+    {
+      "tool": "meta_load_skill",
+      "skill_id": "amazon-niche-finder"
+    }
+  ],
+  "skills": [
+    {
+      "skill_id": "amazon-niche-finder",
+      "path": "/private/var/folders/r2/1864xtpd0xv8n0z_n47d845h0000gn/T/lili-native-download-2wzf5ruz/lili-amazon-niche-finder/SKILL.md",
+      "status": "downloaded",
+      "loaded": true,
+      "version": "sha256:fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3",
+      "sha256": "fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3",
+      "unavailable_original_tool_references": [
+        "market_find_products",
+        "market_find_node",
+        "market_scan_node"
+      ]
+    }
+  ],
+  "authenticated": true
+}

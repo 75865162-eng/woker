@@ -63,3 +63,11 @@ test("creation reuses its actual discovery snapshot without a second registry re
   assert.equal((await discoverResearchTools(transport)).registry.length, 3);
   assert.equal(reads, 1);
 });
+
+
+test("mock unlimited budget is fixture-only and never makes live readiness pass", () => {
+  assert.throws(() => parseResearchInput({ ...input, budgetMode: "mock_unlimited" }), /LIVE_BUDGET_REVIEW_REQUIRED/);
+  assert.equal(parseResearchInput({ ...input, mode: "fixture", budgetMode: "mock_unlimited" }).budgetMode, "mock_unlimited");
+  const result = researchReadiness({ providers, tools, skills, ai: "configured", request: { ...input, budgetMode: "mock_unlimited" } });
+  assert.equal(result.ready, false);
+});

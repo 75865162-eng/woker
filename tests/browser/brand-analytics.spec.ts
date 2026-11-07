@@ -2,8 +2,8 @@ import { build } from "esbuild";
 import { expect, test, type Page } from "@playwright/test";
 let bundle: string;
 test.beforeAll(async () => { const r = await build({ entryPoints: ["tests/browser/brand-analytics-harness.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"development"' } }); bundle = r.outputFiles[0].text; });
-async function setup(page: Page, repeat = false) {
-  const calls: Array<Record<string, unknown>> = [], reads: URLSearchParams[] = []; let denied = false;
+async function setup(page: Page, repeat = false, emptyReports = false) {
+  const calls: Array<Record<string, unknown>> = [], reads: URLSearchParams[] = []; let denied = false, pendingStatus = "MISSING";
   const configuration = { id: "brand-source", revision: 2, authorizationId: "fixture-auth", sellerAccountId: "fixture-seller", marketplaceId: "ATVPDKIKX0DER", enabled: true, freshnessMinutes: 1440, seller: { displayName: "Fixture Brand" }, domainPolicy: { resource: "brand_analytics", applicationId: "fixture", reportKind: "search_terms", reportPeriod: "WEEK", from: "2025-01-05", to: "2025-01-11", asins: [], maxRequests: 30, maxRows: 1000, requestsPerSecond: .01, brandEligibilityAttested: true, marketplaceTimeZone: "America/Los_Angeles" } };
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url()); expect(url.origin).toBe("http://127.0.0.1:43225");
@@ -19,10 +19,10 @@ async function setup(page: Page, repeat = false) {
     const product = { asin: "B123456789", title: "Scoped product", brand: "Scoped Brand", skus: ["sku-a", "sku-b"], thumbnailUrl: null, catalogRunId: null, capturedAt: null, detailRunIds: [] };
     const products = { B123456789: product, B987654321: { ...product, asin: "B987654321", title: "Basket partner" } };
     if (p.get("section") === "brand-asin-analysis") return route.fulfill({ json: { asin: p.get("asin"), reportPeriod: p.get("reportPeriod"), source: configuration, products, productWarnings: [], reports: ["search_terms", "search_query", "search_catalog", "market_basket", "repeat_purchase"].map(reportKind => ({ reportKind, unavailable: false, result: { rows: [{ id: reportKind, sourceRunId: "brand-run", facts, capturedAt: "2025-01-15T00:00:00Z" }], run: { id: "brand-run", coverage }, batchCount: 1, pagination: { total: 51, pageCount: 2 } } })) } });
-    return route.fulfill({ json: { products, productWarnings: [], sources: [configuration], source: configuration, configuration, plans: [], collection: { definition: { from: "2025-01-05", to: "2025-01-11", asins: ["B123456789"] }, total: 2, completed: 1, complete: false, items: [{ ...coverage, key: "one", status: "SUCCEEDED", rows: 1, taskId: "brand-run" }, { ...coverage, key: "two", reportKind: "repeat_purchase", status: "MISSING", rows: null, taskId: null }] }, rows: [{ id: "row", sourceRunId: "brand-run", facts, capturedAt: "2025-01-15T00:00:00Z" }], versions: [{ id: "brand-run", finishedAt: "2025-01-15T00:00:00Z", coverage }], versionsTruncated: false, run: { id: "brand-run", coverage }, batchCount: 1, latestTask: null, pagination: { total: 51, pageCount: 2 } } });
+    return route.fulfill({ json: { products, productWarnings: [], sources: [configuration], source: configuration, configuration, plans: [], collection: p.get("coverage") === "1" ? { definition: { from: "2025-01-05", to: "2025-01-11", asins: ["B123456789"] }, total: 2, completed: pendingStatus === "EMPTY" ? 2 : 1, complete: pendingStatus === "EMPTY", items: [{ ...coverage, key: "one", status: "SUCCEEDED", rows: 1, taskId: "brand-run" }, { ...coverage, key: "two", reportKind: "repeat_purchase", status: pendingStatus, rows: pendingStatus === "EMPTY" ? 0 : null, taskId: pendingStatus === "MISSING" ? null : "pending-run" }] } : null, rows: emptyReports ? [] : [{ id: "row", sourceRunId: "brand-run", facts, capturedAt: "2025-01-15T00:00:00Z" }], versions: [{ id: "brand-run", finishedAt: "2025-01-15T00:00:00Z", coverage }], versionsTruncated: false, run: { id: "brand-run", coverage }, batchCount: 1, latestTask: null, pagination: { total: 51, pageCount: 2 } } });
   });
   await page.goto(`http://127.0.0.1:43225/${repeat ? "?repeat=1" : ""}`);
-  return { calls, reads, deny: () => { denied = true; } };
+  return { calls, reads, deny: () => { denied = true; }, setPendingStatus: (status: string) => { pendingStatus = status; } };
 }
 test("all five pages expose metrics, all fields, history, filters and source without external calls", async ({ page }) => {
   const { calls, reads } = await setup(page);
@@ -84,5 +84,97 @@ test("ASIN analysis links multiple SKUs once, opens scoped reports and survives 
   await page.getByRole("button", { name: "查看完整报表与历史版本", exact: true }).last().click();
   await expect(page.getByLabel("ASIN", { exact: true })).toHaveValue("B123456789");
   await expect(page.getByRole("cell", { name: "1256", exact: true })).toHaveCount(1);
+  expect(calls).toHaveLength(0);
+});
+
+
+test("all report receivers expose their complete field guide before data is collected", async ({ page }) => {
+  const { calls } = await setup(page, false, true);
+  for (const [label, count, path] of [
+    ["搜索词分析", 7, "conversionShare"],
+    ["搜索查询绩效 SQP", 36, "purchaseData.totalTwoDayShippingPurchaseCount"],
+    ["搜索目录绩效 SCP", 26, "clickData.clickedMedianPrice"],
+    ["购买组合", 6, "combinationPct"],
+    ["复购分析", 8, "repeatPurchaseRevenuePctTotal"],
+  ] as const) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await page.getByText(`${label} · 全部 ${count} 项业务字段说明`, { exact: true }).click();
+    await expect(page.getByText(path, { exact: true })).toBeVisible();
+    if (label === "搜索查询绩效 SQP") await expect(page.getByText(/SQP 份额与比率保留 Amazon 原始值/)).toBeVisible();
+  }
+  expect(calls).toHaveLength(0);
+});
+
+
+test("coverage separates unselected reports and opens the exact report period", async ({ page }) => {
+  const { calls, reads } = await setup(page);
+  const summary = page.getByRole("region", { name: "各类品牌报告同步进度" });
+  await expect(summary.getByText("未纳入当前清单", { exact: true })).toHaveCount(3);
+  await expect(summary.getByText("0 / 1 份完成", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "查看复购分析 · 周", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "报告粒度", exact: true })).toHaveValue("WEEK");
+  await expect(page.getByLabel("窗口范围起", { exact: true })).toHaveValue("2025-01-05");
+  await expect(page.getByLabel("窗口范围止", { exact: true })).toHaveValue("2025-01-11");
+  await expect.poll(() => reads.at(-1)?.get("reportKind")).toBe("repeat_purchase");
+  expect(reads.at(-1)?.get("from")).toBe("2025-01-05");
+  expect(reads.at(-1)?.get("to")).toBe("2025-01-11");
+  expect(calls).toHaveLength(0);
+});
+
+
+test("collection blocks duplicate requests and directs recovery to the original task", async ({ page }) => {
+  const { calls, setPendingStatus } = await setup(page);
+  const request = page.getByRole("button", { name: "申请采集下一份报告", exact: true });
+  await expect(request).toBeEnabled();
+  for (const status of ["WAITING", "FAILED", "PAUSED"]) {
+    setPendingStatus(status);
+    await page.getByRole("button", { name: "刷新品牌数据", exact: true }).click();
+    await expect(request).toBeDisabled();
+    await expect(page.getByText(/请查看原任务；不会重复创建报告/)).toBeVisible();
+  }
+  await page.getByRole("button", { name: "来源任务", exact: true }).last().click();
+  await expect(page.locator("body")).toHaveAttribute("data-task", "pending-run");
+  setPendingStatus("EMPTY");
+  await page.getByRole("button", { name: "刷新品牌数据", exact: true }).click();
+  await expect(page.getByText("当前批准清单已完成。", { exact: true })).toBeVisible();
+  await expect(request).toBeDisabled();
+  expect(calls).toHaveLength(0);
+});
+
+
+test("report subpages return to coverage before requesting collection or retrying", async ({ page }) => {
+  const { calls, reads, setPendingStatus } = await setup(page);
+  for (const status of ["FAILED", "EMPTY"]) {
+    setPendingStatus(status);
+    await page.getByRole("button", { name: "搜索查询绩效 SQP", exact: true }).click();
+    await expect(page.getByRole("button", { name: "申请采集下一份报告", exact: true })).toHaveCount(0);
+    await expect.poll(() => reads.at(-1)?.get("coverage")).toBe("0");
+    await page.getByRole("button", { name: "管理报告采集", exact: true }).click();
+    await expect(page.getByRole("button", { name: "申请采集下一份报告", exact: true })).toBeDisabled();
+    await expect(page.getByText(status === "EMPTY" ? "当前批准清单已完成。" : /请查看原任务；不会重复创建报告/)).toBeVisible();
+    await expect.poll(() => reads.at(-1)?.get("coverage")).toBe("1");
+  }
+  expect(calls).toHaveLength(0);
+});
+
+
+test("coverage report links preserve source, period, dates and version across reload", async ({ page }) => {
+  const { calls, reads } = await setup(page);
+  await page.getByRole("combobox", { name: "品牌数据来源", exact: true }).selectOption("brand-source");
+  await page.getByRole("button", { name: "查看复购分析 · 周", exact: true }).click();
+  await page.getByRole("combobox", { name: "已发布版本", exact: true }).selectOption("brand-run");
+  await expect(page).toHaveURL(/brandRun=brand-run/);
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "品牌数据来源", exact: true })).toHaveValue("brand-source");
+  await expect(page.getByRole("combobox", { name: "报告粒度", exact: true })).toHaveValue("WEEK");
+  await expect(page.getByLabel("窗口范围起", { exact: true })).toHaveValue("2025-01-05");
+  await expect(page.getByLabel("窗口范围止", { exact: true })).toHaveValue("2025-01-11");
+  await expect(page.getByRole("combobox", { name: "已发布版本", exact: true })).toHaveValue("brand-run");
+  await expect.poll(() => reads.at(-1)?.get("runId")).toBe("brand-run");
+  for (const [name, value] of [["sourceId", "brand-source"], ["reportKind", "repeat_purchase"], ["reportPeriod", "WEEK"], ["from", "2025-01-05"], ["to", "2025-01-11"]]) expect(reads.at(-1)?.get(name)).toBe(value);
+  await page.getByRole("button", { name: "搜索查询绩效 SQP", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "报告粒度", exact: true })).toHaveValue("");
+  await expect(page.getByLabel("窗口范围起", { exact: true })).toHaveValue("");
+  await expect(page).not.toHaveURL(/brandRun=|brandFrom=|brandTo=|brandPeriod=/);
   expect(calls).toHaveLength(0);
 });

@@ -1,3 +1,6 @@
+import { researchRequestAuthorization } from "@/lib/selection-research/request-authorization";
+import { assertAmazonAction } from "@/lib/amazon-sync/data-access";
+import { liveMarketTransport } from "./market-access";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -30,6 +33,11 @@ export async function runtimeToolsForUser(user: { id: string; organizationId: st
   if (!await assertWorkspaceAccess(user.organizationId, workspaceId)) throw new Error("RESEARCH_SCOPE_DENIED");
   const scope = { organizationId: user.organizationId, userId: user.id, workspaceId };
   const settingsScope = { workspaceId, accountId: "", marketplace: "" };
+  const assertMarketAccess = async () => {
+    const verified = researchRequestAuthorization(request);
+    if (verified && !(await verified.authorize("agents", "edit", request)).ok) throw new Error("RESEARCH_SCOPE_DENIED");
+    await assertAmazonAction(scope, user.id, "edit", prisma, "agents");
+  };
   // Configuration failures are isolated per source; secrets remain inside server adapters.
   const providers: RuntimeProvider[] = [];
   let erpCredentialId: string | undefined;
@@ -40,16 +48,27 @@ export async function runtimeToolsForUser(user: { id: string; organizationId: st
   } catch { providers.push({ id: "erp", reason: "ERP_MCP_CONFIGURATION_UNAVAILABLE", isReadOnly: () => false }); }
   try {
     const settings = await getSellerSpriteMcpSettings(user, settingsScope);
+    const live = liveMarketTransport(async () => {
+      await assertMarketAccess();
+      const current = await getSellerSpriteMcpSettings(user, settingsScope);
+      if (!current.enabled || !current.apiKey || !current.serverUrl) return undefined;
+      return {
+        async listTools(signal) { return await listSellerSpriteRemoteTools(current, signal) as never; },
+        async callTool(name, args, signal, schema) { return await callSellerSpriteRemoteTool(current, name, args, signal, schema) as never; },
+      };
+    });
     providers.push({ id: "sellersprite", isReadOnly: tool => tool.annotations?.readOnlyHint !== false && Boolean(sellerSpritePolicy(tool)),
-      ...(settings.enabled && settings.apiKey ? { transport: {
-        async listTools(signal) { return await listSellerSpriteRemoteTools(settings, signal) as never; },
-        async callTool(name, args, signal, schema) { return await callSellerSpriteRemoteTool(settings, name, args, signal, schema) as never; },
-      } as Transport } : { reason: "SELLERSPRITE_MCP_NOT_CONFIGURED" }) });
+      ...(settings.enabled && settings.apiKey ? { transport: live } : { reason: "SELLERSPRITE_MCP_NOT_CONFIGURED" }) });
   } catch { providers.push({ id: "sellersprite", reason: "SELLERSPRITE_CONFIGURATION_UNAVAILABLE", isReadOnly: () => false }); }
   try {
     const settings = await toolConfigStore.read(scope);
     providers.push({ id: "xiyou", isReadOnly: tool => tool.annotations?.readOnlyHint !== false && xiyouResearchReadTools.has(tool.name),
-      ...(settings.enabled && settings.mcpToken ? { transport: createLiliTransport({ endpoint: settings.mcpUrl, authorization: `Bearer ${settings.mcpToken}` }) } : { reason: "XIYOU_MCP_NOT_CONFIGURED" }) });
+      ...(settings.enabled && settings.mcpToken ? { transport: liveMarketTransport(async () => {
+        await assertMarketAccess();
+        const current = await toolConfigStore.read(scope);
+        if (!current.enabled || !current.mcpToken) return undefined;
+        return createLiliTransport({ endpoint: current.mcpUrl, authorization: "Bearer " + current.mcpToken });
+      }) } : { reason: "XIYOU_MCP_NOT_CONFIGURED" }) });
   } catch { providers.push({ id: "xiyou", reason: "XIYOU_CONFIGURATION_UNAVAILABLE", isReadOnly: () => false }); }
   return { ...createRuntimeTools(providers), erpCredentialId };
 }

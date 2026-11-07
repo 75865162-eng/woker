@@ -1,3 +1,4 @@
+import { skillMetaTools, callSkillMeta } from "./skill-manifest";
 import { listTools } from "./catalog";
 import { runCatalogTool } from "./tool-execution";
 import { rejectCredentials, validate, stableJson } from "@/lib/selection-research/schema";
@@ -8,7 +9,7 @@ export type RuntimeTool = ToolDefinition & { provider: ProviderId | "skills"; re
 export type ProviderStatus = { provider: ProviderId; status: "connected" | "not_connected" | "unavailable"; toolCount: number; reason?: string };
 export type RuntimeProvider = { id: ProviderId; transport?: Transport; reason?: string; isReadOnly(tool: ToolDefinition): boolean };
 export class RuntimeToolError extends ToolNotDispatchedError {}
-const skillNames = new Set(["meta_search_skills", "meta_load_skill", "meta_list_workflows"]);
+const skillNames = new Set(["meta_search_skills", "meta_load_skill", "meta_list_workflows", ...skillMetaTools.map(tool => tool.name)]);
 /** Reviewed read endpoints observed in the fixed Xiyou runtime registry. Missing hints never grant arbitrary tools. */
 export const xiyouResearchReadTools = new Set(["get_asin_info", "get_asin_traffic", "get_asin_keywords", "get_asin_traffic_trends", "get_asin_keyword_traffic_trends", "get_asin_bsr_trends", "get_asin_variations"]);
 export const runtimeName = (provider: ProviderId, name: string) => `${provider}__${name}`;
@@ -29,6 +30,7 @@ export function createRuntimeTools(providers: RuntimeProvider[], options: { disc
       name: tool.name, description: tool.name === "meta_list_workflows" ? "List shipped workflow templates only. Does not list saved workflows or schedules." : tool.description, inputSchema: tool.inputSchema as ObjectJson,
       annotations: { readOnlyHint: true }, provider: "skills", remoteName: tool.name, permission: "read", availability: "available",
     }));
+    tools.push(...skillMetaTools.map(tool => ({ ...tool, provider: "skills" as const, remoteName: tool.name, permission: "read" as const, availability: "available" as const })));
     const statuses: ProviderStatus[] = [];
     // Bound provider count (three); one disconnected provider cannot hide working sources.
     const results = await Promise.all(providers.filter(provider => !selected || provider.id === selected).map(async provider => {
@@ -63,6 +65,7 @@ export function createRuntimeTools(providers: RuntimeProvider[], options: { disc
     }
     let result: Json;
     if (tool.provider === "skills") {
+      if (skillMetaTools.some(tool => tool.name === name)) return await callSkillMeta(name, args) as unknown as Json;
       const response = await runCatalogTool(name, args);
       if (response.status !== 200 || response.body.ok !== true) throw new RuntimeToolError("INVALID_TOOL_ARGUMENTS");
       result = response.body as unknown as Json;

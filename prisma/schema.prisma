@@ -3213,6 +3213,36 @@ model AmazonRoleDataAccessGrant {
   @@index([organizationId, workspaceId, roleId, enabled], map: "AmazonRoleGrant_scope_subject_enabled_idx")
 }
 
+model LiliOAuthClient {
+  id String @id
+  redirectUris String[]
+  createdAt DateTime @default(now())
+}
+
+model LiliOAuthGrant {
+  id String @id
+  clientId String
+  deviceId String @unique
+  resource String
+  redirectUri String
+  challenge String
+  codeHash String @unique
+  codeExpiresAt DateTime
+  codeUsedAt DateTime?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([clientId])
+}
+
+model LiliOAuthRefresh {
+  hash String @id
+  grantId String
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([grantId])
+}
+
 model AmazonMcpCredential {
   id String @id
   organizationId String

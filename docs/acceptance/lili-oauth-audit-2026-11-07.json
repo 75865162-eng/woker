@@ -1,0 +1,1735 @@
+[
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:05:48.843Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "1bcf6690-7045-4d3e-8915-880154220288",
+      "durationMs": 15,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "19345a79-e444-430a-bd3d-c0bc7b49279f",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:05:48.533Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_describe_table",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "82348343-c346-4ec5-bb29-d993020dd3c9",
+      "durationMs": 15,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "19345a79-e444-430a-bd3d-c0bc7b49279f",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:05:48.236Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "68ddaa2b-0729-42fb-ba3f-9f27a27b0965",
+      "durationMs": 15,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "19345a79-e444-430a-bd3d-c0bc7b49279f",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "lili.oauth.token.refreshed",
+    "entityId": "19345a79-e444-430a-bd3d-c0bc7b49279f",
+    "createdAt": "2026-11-07T04:05:43.802Z",
+    "metadata": {
+      "clientId": "b282366d-e48c-4b78-810e-1d3720af1cb2",
+      "workspaceId": "default"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:05:10.214Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "00e0cef7-19b0-47f5-b0e8-ce47f86e9c9b",
+      "durationMs": 18,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "19345a79-e444-430a-bd3d-c0bc7b49279f",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:05:09.906Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "9ecefeb0-a2e0-427a-8149-2752f9bff067",
+      "durationMs": 15,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "19345a79-e444-430a-bd3d-c0bc7b49279f",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "lili.oauth.token.issued",
+    "entityId": "19345a79-e444-430a-bd3d-c0bc7b49279f",
+    "createdAt": "2026-11-07T04:05:07.655Z",
+    "metadata": {
+      "clientId": "b282366d-e48c-4b78-810e-1d3720af1cb2",
+      "workspaceId": "default"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:04:50.377Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "eab3ba0b-78f4-4564-b97b-a62624564f0d",
+      "durationMs": 19,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "de27406e-072d-4762-b70f-9f53254517af",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:04:50.071Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "bd832069-9788-49bf-a14a-df2c1b29d0d2",
+      "durationMs": 13,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "de27406e-072d-4762-b70f-9f53254517af",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "lili.oauth.token.issued",
+    "entityId": "de27406e-072d-4762-b70f-9f53254517af",
+    "createdAt": "2026-11-07T04:04:47.983Z",
+    "metadata": {
+      "clientId": "5cb81bea-12cf-4272-83ba-7c750210fc53",
+      "workspaceId": "default"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:03:43.388Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "b7549f89-d6a0-4a35-acfa-917b1c53ecfa",
+      "durationMs": 17,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "ccfb0349-4938-4c92-b6da-77401003ed32",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:03:43.078Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "90caa7e7-e4eb-4be5-8966-27c7bfbbfcc0",
+      "durationMs": 16,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "ccfb0349-4938-4c92-b6da-77401003ed32",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "lili.oauth.token.issued",
+    "entityId": "ccfb0349-4938-4c92-b6da-77401003ed32",
+    "createdAt": "2026-11-07T04:03:41.049Z",
+    "metadata": {
+      "clientId": "14093f07-967b-431f-abf2-9c9b4b4f4e18",
+      "workspaceId": "default"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T04:03:05.641Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "ed5f12f4-320c-4004-8f08-c0145c9fdae9",
+      "durationMs": 18,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "520b2c80-dd63-4ce8-a025-158efe9fce62",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "lili.oauth.token.issued",
+    "entityId": "520b2c80-dd63-4ce8-a025-158efe9fce62",
+    "createdAt": "2026-11-07T04:03:03.473Z",
+    "metadata": {
+      "clientId": "66a80169-36c1-47dc-804a-8db80613374e",
+      "workspaceId": "default"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:48:55.390Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "096e6abf-b056-4ec5-bf5a-421eba042de7",
+      "durationMs": 15,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "a9b5630c-f3d5-4e6e-99ed-42169d9b997d",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:48:55.080Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_describe_table",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "76f5a129-2bda-486e-b345-edad2fa96350",
+      "durationMs": 15,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "a9b5630c-f3d5-4e6e-99ed-42169d9b997d",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:48:54.775Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "698cb8e8-ef55-45d8-8f95-43bd30f6617c",
+      "durationMs": 19,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "a9b5630c-f3d5-4e6e-99ed-42169d9b997d",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:46:14.713Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "1fda3145-7d03-4057-84a8-000f5d6a3c15",
+      "durationMs": 15,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "0076b0f7-67e3-4852-9263-eb6135d2c662",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:46:14.419Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_describe_table",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "33ae867d-e72f-4adc-bfd7-e5ddfa8cdc4b",
+      "durationMs": 14,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "0076b0f7-67e3-4852-9263-eb6135d2c662",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:46:14.106Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "31468d22-b819-4cf8-b526-f8bae6e5cb8c",
+      "durationMs": 12,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "0076b0f7-67e3-4852-9263-eb6135d2c662",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:44:14.358Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "dcb32bee-d617-4d86-a3a1-312119ea9905",
+      "durationMs": 16,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "4ebec9fe-1376-4a72-aa0f-87e4b77675e7",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:44:14.053Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_describe_table",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "f39110c2-cd74-4bf5-bfb2-931ed64de1de",
+      "durationMs": 18,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "4ebec9fe-1376-4a72-aa0f-87e4b77675e7",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:44:13.735Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "47ff20b5-5b81-4db2-8374-e24e1180c754",
+      "durationMs": 17,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "4ebec9fe-1376-4a72-aa0f-87e4b77675e7",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:43:28.799Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "d66a1895-8077-4810-a6fe-c691ebafcf3f",
+      "durationMs": 13,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "4ebec9fe-1376-4a72-aa0f-87e4b77675e7",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:37:53.222Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_query",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "source": "AmazonInventorySnapshot",
+      "pageSize": 3,
+      "requestId": "60dca7ea-5354-4c59-9068-77ce0379d4c6",
+      "durationMs": 63,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "8be15d07-c24d-441d-92a5-fd73f2b72b1e",
+      "failureClass": null,
+      "matchedCount": 201,
+      "querySummary": {
+        "sortBy": "sellerSku",
+        "sortDirection": "asc"
+      },
+      "gatewayStatus": "SUCCEEDED",
+      "returnedCount": 3,
+      "sourceVersionIds": []
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:36:40.816Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "data_describe_table",
+      "table": "inventory",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "d73da2aa-7fa2-4b48-8b81-3bf9e55c585b",
+      "durationMs": 32,
+      "toolVersion": "1.1.0",
+      "workspaceId": "default",
+      "credentialId": "8be15d07-c24d-441d-92a5-fd73f2b72b1e",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  },
+  {
+    "action": "amazon.mcp.tool.succeeded",
+    "entityId": null,
+    "createdAt": "2026-11-07T03:34:41.282Z",
+    "metadata": {
+      "to": null,
+      "from": null,
+      "page": 1,
+      "tool": "amazon.stores.list",
+      "scopes": [
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        },
+        {
+          "marketplaceIds": [
+            "ATVPDKIKX0DER"
+          ],
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7"
+        }
+      ],
+      "requestId": "d0b2fa6e-7b34-4e8b-8b3f-1a919db596a2",
+      "durationMs": 20,
+      "toolVersion": "1.0.0",
+      "workspaceId": "default",
+      "credentialId": "8be15d07-c24d-441d-92a5-fd73f2b72b1e",
+      "failureClass": null,
+      "querySummary": {},
+      "gatewayStatus": "SUCCEEDED"
+    }
+  }
+]

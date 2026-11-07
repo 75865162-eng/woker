@@ -12,8 +12,8 @@ test("the exact ERP MCP endpoint delegates cookie-free requests to bearer authen
   }
 });
 
-test("MCP routing never exempts neighboring APIs, Lili or credential management from session auth", async () => {
-  for (const path of ["/api/mcp/amazon-extra", "/api/mcp/amazon/child", "/api/mcp/other", "/api/operations/amazon-mcp", "/api/lili/mcp", "/lili/api/mcp"]) {
+test("MCP routing never exempts neighboring APIs, Lili settings or credential management from session auth", async () => {
+  for (const path of ["/api/mcp/amazon-extra", "/api/mcp/amazon/child", "/api/mcp/other", "/api/operations/amazon-mcp", "/api/lili/mcp/child", "/lili/api/tool-config", "/api/lili/tool-config"]) {
     const response = await middleware(new NextRequest(`http://localhost${path}`, {
       method: "POST", headers: { authorization: `Bearer amcp_${"a".repeat(43)}` },
     }));

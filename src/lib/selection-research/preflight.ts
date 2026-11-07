@@ -11,8 +11,10 @@ export function parseResearchInput(body: Record<string, unknown>) {
   const asin = typeof body.asin === "string" ? body.asin.trim().toUpperCase() : undefined;
   if (asin && !/^[A-Z0-9]{10}$/.test(asin)) throw new Error("INVALID_ASIN");
   if (body.erpCredentialId !== undefined && (typeof body.erpCredentialId !== "string" || body.erpCredentialId.length > 100)) throw new Error("INVALID_ERP_CREDENTIAL_ID");
+  if (body.budgetMode !== undefined && !["reviewed", "mock_unlimited"].includes(String(body.budgetMode))) throw new Error("INVALID_RESEARCH_REQUEST");
+  if (body.mode === "live" && body.budgetMode === "mock_unlimited") throw new Error("LIVE_BUDGET_REVIEW_REQUIRED");
   if (body.mode === "live" && (typeof body.maxMarketCalls !== "number" || !Number.isSafeInteger(body.maxMarketCalls) || body.maxMarketCalls < 1 || body.maxMarketCalls > 30)) throw new Error("MISSING_MARKET_CALL_BUDGET");
-  const input = { mode: body.mode, requirement: body.requirement.trim(), marketplace: body.marketplace.trim().toUpperCase(), asin: asin || undefined,
+  const input = { budgetMode: (body.budgetMode ?? "reviewed") as "reviewed" | "mock_unlimited", mode: body.mode, requirement: body.requirement.trim(), marketplace: body.marketplace.trim().toUpperCase(), asin: asin || undefined,
     aiConfigSource: parseResearchAiSource(body.aiConfigSource),
     erpCredentialId: typeof body.erpCredentialId === "string" ? body.erpCredentialId.trim() || undefined : undefined, maxMarketCalls: body.maxMarketCalls as number | undefined };
   rejectCredentials(input);
@@ -34,7 +36,7 @@ export function researchReadiness(input: { providers: ProviderStatus[]; tools: R
   checks.push({ id: "skills", status: skillsReady ? "ready" : "blocked", message: skillsReady ? "五个现有 Skill 原文及哈希已加载。" : "现有研究 Skill 加载失败或不完整；未替换为样本。" });
   try {
     parseResearchInput({ ...input.request, mode: "live" });
-    checks.push({ id: "input", status: "ready", message: "研究输入和调用次数上限格式有效；付费请求仍需逐次审批。" });
+    checks.push({ id: "input", status: "ready", message: "研究输入与所选预算模式有效；付费请求仍需逐次审批。" });
   } catch {
     checks.push({ id: "input", status: "blocked", message: "请填写研究要求、站点及1至30次的调用上限，并检查 ASIN 和凭证 ID 格式。" });
   }

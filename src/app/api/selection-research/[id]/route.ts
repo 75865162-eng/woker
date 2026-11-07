@@ -1,3 +1,4 @@
+import { readResearchEvidence } from "@/lib/selection-research/evidence";
 import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { NextResponse } from "next/server";
 import { researchAccess, researchError } from "@/lib/selection-research/server";
@@ -11,7 +12,9 @@ export async function GET(request: Request, context: Context) {
   try {
     const id = (await context.params).id;
     const access = await researchAccess(request, "view", { runId: id }); if (!access.ok) return access.response;
-    return NextResponse.json({ run: await access.engine.inspect(id) }, { headers: { "Cache-Control": "no-store" } });
+    const run = await access.engine.inspect(id);
+    if (new URL(request.url).searchParams.get("view") === "evidence") return NextResponse.json(readResearchEvidence(run, new URL(request.url).searchParams), { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ run }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return researchError(error); }
 }
 export async function POST(request: Request, context: Context) {

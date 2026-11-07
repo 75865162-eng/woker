@@ -1,0 +1,23 @@
+/** Host-owned diagnostics only. Never return provider exception text or model-supplied error details. */
+export const researchValidationMessages: Record<string, string> = {
+  INVALID_LANDED_COST_SCENARIO: "到岸成本情景结构无效。请检查币种、国家、税目、日期、数量及唯一基础税项。",
+  INVALID_LANDED_COST_INPUT: "到岸成本必须是非负的同币种单位金额；未知项填写 null。",
+  INVALID_TARIFF_SOURCE: "税目或税率来源不完整；请保留合法来源日期与链接，未知项填写 null。",
+  VERIFIED_TARIFF_SOURCE_REQUIRED: "已核实税率必须有成功证据、来源链接和适用日期。",
+  INVALID_TARIFF_APPLICABILITY: "税率或税目适用日期无效，或晚于情景日期。",
+  INVALID_TARIFF_RATE: "税率结构无效；税率用小数，未知值填写 null。",
+  CURRENT_TARIFF_VERIFICATION_REQUIRED: "主机尚未核实税目或税率的当前适用性，请保留 pending/candidate 或明确压力测试。",
+  LANDED_COST_OVERFLOW: "到岸成本计算超出可表示范围，请核对金额和数量。",
+  COST_BASIS_REQUIRED: "每个已填成本都需要来源性质和说明；实际观察或供应商报价还必须引用成功证据。",
+  INVALID_DECISION_ANALYSIS: "利润与评分结构不完整，请提供 scenarios 和 scorecards。",
+  INVALID_ECONOMICS_SCENARIO: "利润情景结构或币种无效。",
+  INVALID_BATCH_COSTS: "批量必须为正整数；固定成本必须非负；未知项填写 null。",
+  INVALID_SCENARIO_COST: "利润成本必须是非负单位金额，售价须大于零；未知项填写 null。",
+  ECONOMICS_OVERFLOW: "利润计算超出可表示范围，请核对金额和数量。",
+  INVALID_SCORECARD: "评分表需要候选方向及不重复的评分维度。",
+  INVALID_SCORE_DIMENSION: "评分维度需要依据；分数范围为 0–100，无证据时分数为 null。",
+  SCORE_WEIGHTS_MUST_SUM_TO_ONE: "评分权重必须合计为 1，不能自动补分或重分配缺失维度。",
+  INVALID_SCORE_CANDIDATE: "评分方向不在第一阶段的已保存候选清单中。",
+  MISSING_COST_EVIDENCE: "成本或税率引用了不存在或未成功的工具证据。",
+  MISSING_SCORE_EVIDENCE: "评分引用了不存在或未成功的工具证据。",
+};

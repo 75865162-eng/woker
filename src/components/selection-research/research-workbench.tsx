@@ -5,6 +5,8 @@ import type { Run } from "@/lib/selection-research/types";
 import type { ResearchReadiness } from "@/lib/selection-research/preflight";
 import type { ResearchAiSource } from "@/lib/selection-research/ai-settings";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { researchBudgetPreview, researchUsage } from "@/lib/selection-research/budget";
+import { researchValidationMessages } from "@/lib/selection-research/validation-feedback";
 import { ResearchResults } from "./research-results";
 import { ResearchAudit } from "./research-audit";
 
@@ -42,12 +44,13 @@ export function ResearchWorkbench() {
   const [mode, setMode] = useState<"fixture" | "live">("live");
   const [aiConfigSource, setAiConfigSource] = useState<ResearchAiSource>("workspace");
   const [availability, setAvailability] = useState<{ sellerSprite: string; ai: string; xiyou: string; erp?: string }>();
+  const budgetMode = "reviewed" as const;
   const [maxMarketCalls, setMaxMarketCalls] = useState(3);
   const [billingReceipt, setBillingReceipt] = useState("");
   const [billingUnits, setBillingUnits] = useState(1);
   const [budgetLimit, setBudgetLimit] = useState(4);
   const [discovery, setDiscovery] = useState<{ providers?: { provider: string; status: string; toolCount: number; reason?: string }[]; tools?: unknown[]; readiness?: ResearchReadiness; aiModel?: { provider: string; model: string } }>();
-  const reconciliationCall = run?.gate?.kind === "BILLING" ? run.calls.find(call => call.billing === "UNKNOWN" || !call.paid && ["UNKNOWN", "IN_FLIGHT"].includes(call.status)) : undefined;
+  const reconciliationCall = run?.gate?.kind === "BILLING" ? (run.calls.find(call => ["UNKNOWN", "IN_FLIGHT"].includes(call.status)) ?? [...run.calls].reverse().find(call => call.billing === "UNKNOWN")) : undefined;
   useEffect(() => {
     setBillingReceipt("");
     setBillingUnits(reconciliationCall?.paid ? 1 : 0);
@@ -119,7 +122,7 @@ export function ResearchWorkbench() {
     let next = initial;
     stopRequested.current = false; setAdvancing(true);
     try {
-      for (let i = 0; i < 30 && ["CREATED", "RESUMABLE", "RUNNING"].includes(next.status); i++) {
+      for (let i = 0; i < 30 && !next.pausedAt && ["CREATED", "RESUMABLE", "RUNNING"].includes(next.status); i++) {
         if (generation !== scopeGeneration.current || stopRequested.current) break;
         const data = await request(`/api/selection-research/${encodeURIComponent(next.id)}`, { operation: "step" });
         next = data.run;
@@ -130,7 +133,7 @@ export function ResearchWorkbench() {
   }
   const control = "rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50";
   return <div className="space-y-5">
-    <button className={control} disabled={busy} onClick={() => void perform(async () => { const generation = scopeGeneration.current; const result = await request("/api/selection-research/discover", { erpCredentialId, asin, requirement, marketplace, maxMarketCalls, aiConfigSource }); if (generation === scopeGeneration.current) setDiscovery(result); })}>检查工具与启动条件（不创建任务、不取市场数据）</button>
+    <button className={control} disabled={busy} onClick={() => void perform(async () => { const generation = scopeGeneration.current; const result = await request("/api/selection-research/discover", { erpCredentialId, asin, requirement, marketplace, maxMarketCalls, budgetMode, aiConfigSource }); if (generation === scopeGeneration.current) setDiscovery(result); })}>检查工具与启动条件（不创建任务、不取市场数据）</button>
     {discovery?.providers && <div className="rounded border p-3 text-sm" role="status">{discovery.providers.map(provider => <p key={provider.provider}>{provider.provider}：{provider.status} · {provider.toolCount} 个真实工具 {provider.reason ? `· ${provider.reason}` : ""}</p>)}</div>}
     {discovery?.readiness && <section className="space-y-2 rounded border p-3 text-sm" aria-label="真实研究启动检查">
       <h2 className="font-semibold">{discovery.readiness.ready ? "连接配置与输入检查通过" : "真实研究尚有阻塞项"}</h2>
@@ -139,10 +142,10 @@ export function ResearchWorkbench() {
       {discovery.aiModel && <p>所选模型：{discovery.aiModel.provider} / {discovery.aiModel.model}</p>}
     </section>}
     {discovery !== undefined && <details><summary>在线目录发现结果</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(discovery, null, 2)}</pre></details>}
-    <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm">Lili 已并入本系统，沿用当前 ERP 账号，无需单独注册或登录。ERP：{availability?.erp ?? "请发现在线目录"}；SellerSprite：{availability?.sellerSprite ?? "读取中"}；AI：{availability?.ai ?? "读取中"}；西柚：{availability?.xiyou ?? "读取中"}。真实模式会先读取在线工具目录；每个市场工具调用均需审批，市场服务实际费用须逐次核对。</div>
+    <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm">Lili 已并入本系统，沿用当前 ERP 账号，无需单独注册或登录。ERP：{availability?.erp ?? "请发现在线目录"}；SellerSprite：{availability?.sellerSprite ?? "读取中"}；AI：{availability?.ai ?? "读取中"}；西柚：{availability?.xiyou ?? "读取中"}。真实模式会先读取在线工具目录；每个市场工具调用均需审批，无限预算 mock 只模拟额度，实际积分与金额保持未知；审核模式逐次核对费用。</div>
     <form className="space-y-3 rounded border p-4" onSubmit={(event) => { event.preventDefault(); void perform(async () => {
       const generation = scopeGeneration.current;
-      const data = await request("/api/selection-research", { requirement, marketplace, mode, asin: asin.trim().toUpperCase() || undefined, erpCredentialId: erpCredentialId || undefined, ...(mode === "live" ? { maxMarketCalls, aiConfigSource } : {}) });
+      const data = await request("/api/selection-research", { requirement, marketplace, mode, asin: asin.trim().toUpperCase() || undefined, erpCredentialId: erpCredentialId || undefined, ...(mode === "live" ? { maxMarketCalls, budgetMode, aiConfigSource } : {}) });
       if (generation === scopeGeneration.current) { showRun(data.run); if (data.discovery) setAvailability((current) => current && ({ ...current, sellerSprite: `在线目录已读取，支持 ${data.discovery.registeredReadTools.length} 个只读工具；缺失 ${data.discovery.missingCanonicalTools.join(", ") || "无"}` })); }
     }); }}>
       <label className="block">目标 ASIN（指定商品研究时填写）<input aria-label="目标 ASIN" className={control} value={asin} maxLength={10} pattern="[A-Za-z0-9]{10}" onChange={event => setAsin(event.target.value.toUpperCase())} placeholder="B0XXXXXXXX" /></label>
@@ -163,13 +166,16 @@ export function ResearchWorkbench() {
     })}>{item.input.requirement?.slice(0, 30)} · {item.status}</button>)}</div></section>
     {run && <section className="space-y-4 rounded border p-4">
       <h2 className="font-semibold">第 {run.stage} / 5 阶段 · {run.status}</h2><p className="break-all text-sm">任务：{run.id} · 模式：{run.mode} · 调用记录：{run.calls.length} · 修订：{run.revision}</p>
+      {run.brief && <details><summary>任务解析与待确认约束</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(run.brief, null, 2)}</pre></details>}
       {run.aiModel && <p className="text-sm">任务保存的模型：{run.aiModel.provider} / {run.aiModel.model} · 来源：{run.aiConfigSource === "server_runtime" ? "已有服务端模型" : "当前工作区配置"}</p>}
-      {run.status === "FAILED" && <p role="alert" className="rounded border border-red-300 p-3 text-red-700">{failureMessages[run.failure ?? ""] ?? "本步骤失败，已保留现有证据。请检查执行记录后手动恢复。"}</p>}
+      {run.status === "FAILED" && <p role="alert" className="rounded border border-red-300 p-3 text-red-700">{researchValidationMessages[run.failure ?? ""] ?? failureMessages[run.failure ?? ""] ?? "本步骤失败，已保留现有证据。请检查执行记录后手动恢复。"}</p>}
       {run.calls.some((call) => call.dispatch === "NOT_SENT") && <p className="text-sm">已保留发送前拦截记录：{run.calls.filter((call) => call.dispatch === "NOT_SENT").length} 条；这些业务请求未发送，不占用调用预算。恢复后仍须重新批准付费请求。</p>}
-      {run.mode === "live" && <p className="text-sm">SellerSprite 请求次数：{run.calls.filter((call) => call.provider === "sellersprite" && call.dispatch !== "NOT_SENT").length} / {run.limits.sellersprite ?? 0}；西柚请求次数：{run.calls.filter((call) => call.provider === "xiyou" && call.dispatch !== "NOT_SENT").length} / {run.limits.xiyou ?? 0}。次数上限不代表费用金额上限；AI 模型也可能按其服务商规则计费。继续或批准后最多推进30步，遇到审批立即停止；可以暂停后续步骤。关闭页面后不会继续请求，可重新打开任务恢复。</p>}
+      {run.mode === "live" && run.budgetMode !== "mock_unlimited" && <p className="text-sm">SellerSprite 请求次数：{run.calls.filter((call) => call.provider === "sellersprite" && call.dispatch !== "NOT_SENT").length} / {run.limits.sellersprite ?? 0}；西柚请求次数：{run.calls.filter((call) => call.provider === "xiyou" && call.dispatch !== "NOT_SENT").length} / {run.limits.xiyou ?? 0}。次数上限不代表费用金额上限；AI 模型也可能按其服务商规则计费。继续或批准后最多推进30步，遇到审批立即停止；可以暂停后续步骤。关闭页面后不会继续请求，可重新打开任务恢复。</p>}
       <div className="flex flex-wrap gap-2">
         {["CREATED", "RESUMABLE", "RUNNING"].includes(run.status) && <button className={control} disabled={busy} onClick={() => void perform(() => drive())}>继续到下一确认节点</button>}
         {advancing && <button className={control} onClick={() => { stopRequested.current = true; }}>暂停后续步骤</button>}
+        {!["COMPLETED", "CANCELLED"].includes(run.status) && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: run.pausedAt ? "resume" : "pause" }))}>{run.pausedAt ? "解除暂停（保留审批节点）" : "暂停任务"}</button>}
+        {run.pausedAt && <span role="status">任务已暂停；暂停状态保存到服务端。</span>}
         {run.status === "FAILED" && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "recover" }))}>恢复失败任务</button>}
         {!["COMPLETED", "CANCELLED"].includes(run.status) && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "cancel" }))}>取消任务</button>}
       </div>
@@ -177,7 +183,7 @@ export function ResearchWorkbench() {
       {run.gate && <div className="space-y-2 rounded border border-blue-300 bg-blue-50 p-3"><h3 className="font-semibold">需要人工确认：{run.gate.kind}</h3><p>{run.gate.reason}</p>
         {run.gate.kind === "NICHE" && run.results[0]?.candidates?.map((candidate) => <button key={candidate.id} className={`${control} mr-2`} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "SELECT", candidateId: candidate.id } }))}>选择：{candidate.name}</button>)}
         {run.gate.kind === "FINAL" && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "CONFIRM" } }))}>确认研究结果，允许生成报告</button>}
-        {run.gate.kind === "MCP_CALL" && run.pendingAction && <div className="w-full space-y-2"><p className="font-medium">待执行工具：{run.pendingAction.tool}。预计费用金额目前无法从在线目录确认。</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-xs">{JSON.stringify({ arguments: run.pendingAction.arguments, schema: run.registry.find((tool) => tool.name === run.pendingAction!.tool)?.inputSchema }, null, 2)}</pre><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "AUTHORIZE_TOOL", callId: run.pendingActionId } }))}>批准并执行这一次请求</button></div>}
+        {run.gate.kind === "MCP_CALL" && run.pendingAction && <div className="w-full space-y-2"><p className="font-medium">待执行工具：{run.pendingAction.tool}。预计调用 1 次；费用未知，不表示免费。</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-xs">{JSON.stringify({ arguments: run.pendingAction.arguments, schema: run.registry.find((tool) => tool.name === run.pendingAction!.tool)?.inputSchema }, null, 2)}</pre><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "AUTHORIZE_TOOL", callId: run.pendingActionId } }))}>批准并执行这一次请求</button></div>}
         {reconciliationCall && <div className="space-y-2">
           <p className="break-all text-sm">待核对：{reconciliationCall.tool} · 请求 {reconciliationCall.id} · {reconciliationCall.requestedAt}</p>
           {!reconciliationCall.paid && <p className="text-sm">此读取不计市场调用费用，但结果仍未知。确认后保留失败记录，不自动重试，也不能作为成功证据。</p>}
@@ -189,6 +195,7 @@ export function ResearchWorkbench() {
         </div>}
         {run.gate.kind === "BUDGET" && <div className="flex items-end gap-2"><label>新的调用次数上限<input aria-label="新的调用次数上限" className={control} type="number" min={(run.limits.sellersprite ?? 0) + 1} value={budgetLimit} onChange={(event) => setBudgetLimit(Number(event.target.value))} /></label><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "INCREASE_BUDGET", limits: Object.fromEntries(Object.keys(run.limits).filter(provider => budgetLimit > run.limits[provider]).map(provider => [provider, budgetLimit])), toolMaxCalls: Object.fromEntries(Object.entries(run.policies).filter(([name, policy]) => run.calls.filter((call) => call.tool === name && call.dispatch !== "NOT_SENT").length >= policy.maxCalls && budgetLimit > policy.maxCalls).map(([name]) => [name, budgetLimit])) } }))}>批准提高调用上限</button></div>}
       </div>}
+      {run.mode === "live" && <details open={run.gate?.kind === "MCP_CALL"}><summary>阶段预算与真实调用用量</summary><p>{researchBudgetPreview(run).message}</p><pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify({ budget: researchBudgetPreview(run), usage: researchUsage(run) }, null, 2)}</pre></details>}
       <ResearchAudit key={`audit-${run.id}`} run={run} />
       {run.status === "COMPLETED" && <div className="flex gap-3"><a className={control} href={`/api/selection-research/${encodeURIComponent(run.id)}/report?workspaceId=${encodeURIComponent(run.scope.workspaceId)}`}>下载单文件 HTML 报告</a><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "export" }))}>保存 HTML 报告</button></div>}
       {(run.report?.fileId || savedFileId) && <p role="status">已保存文件：<a className="underline" href={`/api/selection-research/${encodeURIComponent(run.id)}/report/${encodeURIComponent(run.report?.fileId || savedFileId)}?workspaceId=${encodeURIComponent(run.scope.workspaceId)}`}>下载保存的 HTML 报告</a>（FileObject {run.report?.fileId || savedFileId}）</p>}

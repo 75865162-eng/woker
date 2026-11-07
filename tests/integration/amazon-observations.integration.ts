@@ -1,3 +1,7 @@
+import { brandFairTurn } from "@/lib/amazon-sync/brand-fairness";
+import { seal } from "@/lib/amazon-sync/approval-policy";
+import { initialObservationState } from "@/lib/amazon-sync/observation-machine";
+import type { Prisma } from "@prisma/client";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import { readBrandAnalytics, readBrandAsins, readBrandAsinAnalysis } from "@/lib/amazon-sync/brand-analytics-query";
 import { readBrandCollection } from "@/lib/amazon-sync/brand-collection-query";
@@ -54,7 +58,21 @@ async function fresh(resource: string, extra: Record<string, unknown> = {}) {
   const fetcher = async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input)); assert.ok(["observations.fixture.invalid", "lwa.fixture.invalid", "download.fixture.invalid"].includes(url.hostname)); calls.push(url.pathname);
     if (url.hostname === "lwa.fixture.invalid") return Response.json({ access_token: "fixture", expires_in: 3600 });
-    if (url.hostname === "download.fixture.invalid") return new Response(JSON.stringify(report));
+    if (url.hostname === "download.fixture.invalid") {
+      const body = structuredClone(report);
+      if (mode === "catalog-null") {
+        for (const row of body.dataByAsin as Array<{ impressionData: { impressionMedianPrice: unknown } }>) row.impressionData.impressionMedianPrice = null;
+      }
+      if (mode === "sqp-null" || mode === "sqp-invalid") {
+        for (const row of body.dataByAsin as Array<Record<string, Record<string, unknown>>>) {
+          for (const [group, names] of Object.entries({ cartAddData: ["asinCartAddShare", "totalMedianCartAddPrice", "asinMedianCartAddPrice"], purchaseData: ["asinPurchaseShare", "totalMedianPurchasePrice", "asinMedianPurchasePrice"] })) for (const name of names) row[group][name] = null;
+          row.impressionData.asinImpressionShare = 5.26;
+          row.clickData.totalClickRate = 100;
+          if (mode === "sqp-invalid") row.purchaseData.asinPurchaseCount = null;
+        }
+      }
+      return new Response(JSON.stringify(body));
+    }
     if (url.pathname.startsWith("/listings/2021-08-01/items/fixture-seller/")) {
       const raw = officialExample("src/data/amazon-contracts/listings-detail-model.json", "/listings/2021-08-01/items/{sellerId}/{sku}", "getListingsItem");
       raw.sku = decodeURIComponent(url.pathname.split("/").at(-1)!); raw.attributes = {}; (raw.attributes as Record<string, unknown>).bullet_point = [{ marketplace_id: site, language_tag: "en_US", value: "Fixture bullet" }]; raw.secret_contact = "DO_NOT_EXPOSE";
@@ -234,10 +252,12 @@ test("brand scheduled backfill is explicit, resumes from DB and does not replay 
   const plan = await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: approved.targetId } });
   await enqueueDueAutomaticPlans([f.scope], new Date());
   const first = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...f.scope, scheduleId: plan.id } });
+  // Simulate the plan backoff left behind by a failed report before its retry.
+  await prisma.amazonSyncSchedule.update({ where: { id: plan.id }, data: { nextRunAt: new Date(Date.now() + 86_400_000) } });
   f.setMode("empty"); assert.equal((await f.finish(first.id)).status, "SUCCEEDED");
+  assert.ok((await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: plan.id } })).nextRunAt! <= new Date());
   const source = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId }, include: { authorization: true } });
   const coverage = await readBrandCollection(prisma, f.scope, source); assert.equal(coverage!.items[0].status, "EMPTY"); assert.equal(coverage!.completed, 1);
-  await prisma.amazonSyncSchedule.update({ where: { id: plan.id }, data: { nextRunAt: new Date(0) } });
   await enqueueDueAutomaticPlans([f.scope], new Date());
   const second = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...f.scope, scheduleId: plan.id, id: { not: first.id } } });
   f.setMode("uncertain"); assert.equal((await f.finish(second.id)).status, "FAILED");
@@ -246,6 +266,17 @@ test("brand scheduled backfill is explicit, resumes from DB and does not replay 
   await enqueueDueAutomaticPlans([f.scope], new Date());
   assert.equal(await prisma.amazonSyncRun.count({ where: f.scope }), 2); assert.equal(f.getCreateCalls(), creates);
   assert.equal((await readBrandCollection(prisma, f.scope, source))!.complete, false);
+});
+test("brand publication never resumes an explicitly disabled collection plan", async () => {
+  const collection = { from: "2025-01-05", to: "2025-01-11", asins: [], maxTasks: 10, selections: [{ reportKind: "repeat_purchase", reportPeriod: "WEEK" }] };
+  const f = await fresh("brand_analytics", { collection });
+  const saved = await f.approved({ action: "save-plan", name: "Fixture paused brand backfill", resource: "brand_analytics", enabled: true, mode: "snapshot", intervalMinutes: 1440, sourceIds: [f.sourceId], retentionDays: 3650 });
+  const plan = await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: saved.targetId } });
+  await f.approved({ action: "save-plan", id: plan.id, revision: plan.revision, name: plan.name, resource: "brand_analytics", enabled: false, mode: "snapshot", intervalMinutes: 1440, sourceIds: [f.sourceId], retentionDays: 3650 });
+  const run = await f.start(); f.setMode("empty");
+  assert.equal((await f.finish(run.id)).status, "SUCCEEDED");
+  const after = await prisma.amazonSyncSchedule.findUniqueOrThrow({ where: { id: plan.id } });
+  assert.equal(after.enabled, false); assert.equal(after.nextRunAt, null);
 });
 test("uncertain report create is never replayed across retries", async () => {
   const f = await fresh("brand_analytics"); f.setMode("uncertain"); const run = await f.start(); const done = await f.finish(run.id); assert.equal(done.status, "FAILED"); assert.equal(f.getCreateCalls(), 1);
@@ -284,4 +315,90 @@ test("disabled bindings cancel queued observation work; idempotent approval appl
   const source = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId } });
   await f.approved({ action: "save-source", authorizationId: f.authorizationId, sellerAccountId: source.sellerAccountId, marketplaceId: site, resource: "fulfillment", enabled: false, freshnessMinutes: 1440 });
   const cancelled = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } }); assert.equal(cancelled.status, "CANCELLED"); assert.equal(f.calls.length, 0);
+});
+
+// Cloned contenders exist only in this disposable fixture and are never executed.
+test("brand fairness filters persisted contenders and skips invalid frozen grants", async () => {
+  const f = await fresh("brand_analytics"), run = await f.start();
+  const policy = parseObservationPolicy((run.frozenScope as { domainPolicy: unknown }).domainPolicy, "brand_analytics") as Parameters<typeof brandFairTurn>[2];
+  const now = new Date(), older = new Date(run.startedAt.getTime() - 1000);
+  const originalSource = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId } });
+  const peerSource = await prisma.amazonSyncDataSource.create({ data: { ...originalSource, id: randomUUID(), marketplaceId: "fixture-second-site", orderPolicy: undefined, financePolicy: undefined, returnsPolicy: undefined, domainPolicy: originalSource.domainPolicy as Prisma.InputJsonValue, settlementPolicy: undefined, coverage: undefined } });
+  const peer = await prisma.amazonSyncRun.create({ data: { ...run, sourceId: peerSource.id, id: randomUUID(), idempotencyKey: null, startedAt: older, frozenScope: run.frozenScope as Prisma.InputJsonValue, summary: undefined } });
+  const turn = (validate: Parameters<typeof brandFairTurn>[4] = async () => {}) => prisma.$transaction(tx => brandFairTurn(tx, run, policy, "createReport", validate, now));
+  assert.equal((await turn()).allowed, false);
+  await prisma.amazonSyncDataSource.update({ where: { id: peerSource.id }, data: { enabled: false } });
+  assert.equal((await turn()).allowed, true, "disabled source");
+  await prisma.amazonSyncDataSource.update({ where: { id: peerSource.id }, data: { enabled: true } });
+  await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { nextAttemptAt: new Date(now.getTime() + 120_001) } });
+  assert.equal((await turn()).allowed, true, "future retry outside lookahead");
+  await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { nextAttemptAt: now } });
+  assert.equal((await turn(async () => { throw new Error("revoked approval"); })).allowed, true);
+  for (const status of ["SUCCEEDED", "FAILED", "CANCELLED", "PAUSED"]) {
+    await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { status } });
+    assert.equal((await turn()).allowed, true, status);
+  }
+  await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { status: "WAITING", control: "pause" } });
+  assert.equal((await turn()).allowed, true);
+  await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { control: null, frozenScope: { ...(run.frozenScope as Prisma.JsonObject), domainPolicy: { ...policy, applicationId: "other-app" } } as Prisma.InputJsonValue } });
+  assert.equal((await turn()).allowed, true);
+  const state = { ...initialObservationState(policy), stage: "POLL", reportId: "fixture" };
+  await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { frozenScope: run.frozenScope as Prisma.InputJsonValue, checkpointCiphertext: seal({ state }, f.scope, peer.id, "amazon-observation-state.v1") } });
+  assert.equal((await turn()).allowed, true, "different operation");
+  await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { checkpointCiphertext: seal({ state: { ...initialObservationState(policy), requests: policy.maxRequests } }, f.scope, peer.id, "amazon-observation-state.v1") } });
+  assert.equal((await turn()).allowed, true, "exhausted budget");
+  await prisma.amazonSyncRun.update({ where: { id: peer.id }, data: { checkpointCiphertext: null } });
+  await prisma.amazonSyncTaskLog.create({ data: { ...f.scope, id: randomUUID(), attempt: 1, taskId: peer.id, stage: "REQUEST", event: "createReport", createdAt: now } });
+  assert.equal((await turn()).allowed, true, "actual request rotates turn");
+});
+
+test("brand processor yields a newer site to an approved older site under the same quota", async () => {
+  const f = await fresh("brand_analytics"), first = await f.start();
+  const ca = "A2EUQ1WTGCTBG2";
+  await prisma.amazonSpApiAuthorization.update({ where: { id: f.authorizationId }, data: { marketplaceParticipations: [{ marketplaceId: site, countryCode: "US" }, { marketplaceId: ca, countryCode: "CA" }] } });
+  const policy = (first.frozenScope as { domainPolicy: Prisma.InputJsonValue }).domainPolicy;
+  const source = await f.approved({ action: "save-source", authorizationId: f.authorizationId, sellerAccountId: f.sellerAccountId, marketplaceId: ca, resource: "brand_analytics", domainPolicy: policy, enabled: true, freshnessMinutes: 1440 });
+  const approval = await f.approved({ action: "run", sourceIds: [source.targetId] });
+  const second = await prisma.amazonSyncRun.findFirstOrThrow({ where: { executionApprovalId: approval.id } });
+  assert.equal((await f.slice(second.id)).status, "WAITING");
+  assert.equal(f.getCreateCalls(), 0);
+  await f.slice(first.id);
+  assert.equal(f.getCreateCalls(), 1);
+  await f.slice(second.id);
+  assert.equal(f.getCreateCalls(), 2, "other operation cannot hold the create turn");
+});
+
+
+test("brand SQP download retry preserves original report and budget while publishing nullable metrics", async () => {
+  const f = await fresh("brand_analytics", { reportKind: "search_query", from: "2025-01-05", to: "2025-01-11", asins: [asin, "B987654321"] });
+  f.setMode("sqp-invalid");
+  const run = await f.start(), failed = await f.finish(run.id);
+  assert.equal(failed.status, "FAILED"); assert.ok(failed.checkpointCiphertext);
+  assert.equal((await f.read()).rows.length, 0);
+  f.setMode("sqp-null");
+  await f.approved({ action: "control-task", id: run.id, control: "retry" });
+  const retry = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+  assert.equal(retry.checkpointCiphertext, failed.checkpointCiphertext);
+  assert.equal(retry.apiRequests, failed.apiRequests);
+  const done = await f.finish(run.id);
+  assert.equal(done.status, "SUCCEEDED", done.error ?? ""); assert.ok(done.apiRequests > failed.apiRequests);
+  assert.equal(f.getCreateCalls(), 1);
+  const result = await f.read(); assert.equal(result.rows.length, 2);
+  for (const row of result.rows) {
+    assert.equal((row.facts as Record<string, unknown>).shareUnit, "AMAZON_NATIVE_SQP");
+    const facts = row.facts as Record<string, Record<string, unknown>>;
+    assert.equal(facts.impressionData.asinImpressionShare, "5.26");
+    assert.equal(facts.clickData.totalClickRate, "100");
+    for (const key of ["asinPurchaseShare", "totalMedianPurchasePrice", "asinMedianPurchasePrice"]) assert.equal(facts.purchaseData[key], null);
+    for (const key of ["asinCartAddShare", "totalMedianCartAddPrice", "asinMedianCartAddPrice"]) assert.equal(facts.cartAddData[key], null);
+  }
+});
+
+
+test("brand catalog publishes unavailable impression median price as unknown", async () => {
+  const f = await fresh("brand_analytics", { reportKind: "search_catalog", from: "2025-01-05", to: "2025-01-11", asins: [asin, "B987654321"] });
+  f.setMode("catalog-null"); const run = await f.start(), done = await f.finish(run.id);
+  assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  const result = await f.read(); assert.equal(result.rows.length, 2);
+  for (const row of result.rows) assert.equal((row.facts as { impressionData: { impressionMedianPrice: unknown } }).impressionData.impressionMedianPrice, null);
 });

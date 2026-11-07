@@ -1,0 +1,211 @@
+{
+  "client": "Codex app-server native MCP",
+  "calls": [
+    {
+      "tool": "lili_ping",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_search_skills",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_search_skills",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_search_skills",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_search_skills",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_search_skills",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "amazon.stores.list",
+      "requestId": null,
+      "isError": false
+    },
+    {
+      "tool": "data_describe_table",
+      "requestId": "82348343-c346-4ec5-bb29-d993020dd3c9",
+      "isError": false
+    },
+    {
+      "tool": "data_query",
+      "requestId": "1bcf6690-7045-4d3e-8915-880154220288",
+      "isError": false
+    },
+    {
+      "tool": "meta_get_market_access",
+      "requestId": null,
+      "isError": false
+    }
+  ],
+  "skills": [
+    {
+      "skill_id": "amazon-niche-finder",
+      "version": "sha256:fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3",
+      "sha256": "fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3"
+    },
+    {
+      "skill_id": "amazon-product-research",
+      "version": "sha256:3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef",
+      "sha256": "3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef"
+    },
+    {
+      "skill_id": "amazon-review-analyzer",
+      "version": "sha256:7b95df3f4977d32e577e4de5c008d4fac365136729cb5ed69d051d7e81b425b1",
+      "sha256": "7b95df3f4977d32e577e4de5c008d4fac365136729cb5ed69d051d7e81b425b1"
+    },
+    {
+      "skill_id": "tariff-calculator-amazon",
+      "version": "sha256:f83727877be66917b094535b10087eac400da749a5aa1fb120dc8481d5710f9c",
+      "sha256": "f83727877be66917b094535b10087eac400da749a5aa1fb120dc8481d5710f9c"
+    },
+    {
+      "skill_id": "amazon-product-selection",
+      "version": "sha256:5bde1f3ae9f8841d01b39d77a0ec7dbb644c052f20af4cc7c7eeca90a87d815b",
+      "sha256": "5bde1f3ae9f8841d01b39d77a0ec7dbb644c052f20af4cc7c7eeca90a87d815b"
+    }
+  ],
+  "threadId": "01a1b5e6-7735-7882-9250-096e9feee79f",
+  "runtimeStatus": "connected",
+  "tools": [
+    "amazon.stores.list",
+    "data_describe_table",
+    "data_list_tables",
+    "data_query",
+    "data_sync_status",
+    "lili_ping",
+    "meta_get_market_access",
+    "meta_get_skill_manifest",
+    "meta_list_workflows",
+    "meta_load_skill",
+    "meta_search_skills",
+    "research_prepare"
+  ],
+  "serverInfo": {
+    "name": "lili-mcp",
+    "title": null,
+    "version": "1.4.0",
+    "description": null,
+    "icons": null,
+    "websiteUrl": null
+  },
+  "ping": {
+    "ok": true,
+    "server": "lili-mcp",
+    "version": "1.4.0",
+    "protocols": [
+      "2024-11-05",
+      "2025-03-26",
+      "2025-06-18"
+    ],
+    "authenticated": true
+  },
+  "inventory": {
+    "returnedRows": 3,
+    "total": 201,
+    "meta": {
+      "source": "AmazonInventorySnapshot",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-06T10:51:08.169Z",
+      "freshness": "stale",
+      "grain": [
+        "sellerAccountId",
+        "marketplaceId",
+        "sellerSku",
+        "condition",
+        "syncRunId"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [],
+      "page": {
+        "page": 1,
+        "pageSize": 3,
+        "hasNext": true
+      },
+      "sources": [
+        {
+          "sourceId": "f67200d5-4ba5-40e1-b217-230878a051c0",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "69f6c179-ad62-4fe4-bacc-5b5bccbd19b6",
+          "lastSyncAt": "2026-11-06T10:51:08.169Z"
+        }
+      ],
+      "requestId": "1bcf6690-7045-4d3e-8915-880154220288",
+      "toolVersion": "1.1.0",
+      "dataset": {
+        "id": "inventory",
+        "module": "amazon_sync",
+        "dataType": "inventory",
+        "legacyTable": "inventory"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "captured_at_utc",
+      "dateRange": null,
+      "sort": {
+        "field": "sellerSku",
+        "direction": "asc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "AVAILABLE",
+      "publicationPolicy": "successful_source_snapshot_head",
+      "timezone": null
+    }
+  },
+  "marketAccess": {
+    "authenticated": true,
+    "direct_market_access": false,
+    "paid_tools": [],
+    "estimated_cost": null,
+    "cost_status": "unknown",
+    "approval_required": true,
+    "reason": "PAID_CALLS_REQUIRE_PERSISTED_RESEARCH_APPROVAL"
+  }
+}

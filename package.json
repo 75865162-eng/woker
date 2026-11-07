@@ -28,6 +28,7 @@
     "sellfox:ads-reparse-cache": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reparse-from-cache.ts",
     "sellfox:ads-reset-stuck-creating": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/sellfox-ads-reset-stuck-creating.ts",
     "ops:cli": "tsx scripts/ops-cli.ts",
+    "lili:skills": "python3 scripts/lili/native-skill-sync.py",
     "setup:realesrgan": "powershell -ExecutionPolicy Bypass -File scripts/setup-realesrgan-ncnn.ps1",
     "setup:realesrgan:linux": "bash scripts/setup-realesrgan-ncnn-linux.sh",
     "lint": "eslint",

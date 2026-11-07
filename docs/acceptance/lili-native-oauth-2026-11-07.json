@@ -1,0 +1,181 @@
+{
+  "client": "Codex app-server native OAuth/PKCE",
+  "calls": [
+    {
+      "tool": "lili_ping",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "amazon.stores.list",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "data_query",
+      "isError": false,
+      "requestId": "00e0cef7-19b0-47f5-b0e8-ce47f86e9c9b"
+    },
+    {
+      "tool": "meta_search_skills",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_search_skills",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_search_skills",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_search_skills",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_search_skills",
+      "isError": false,
+      "requestId": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "isError": false,
+      "requestId": null
+    }
+  ],
+  "pkceMethod": "S256",
+  "resourceBound": true,
+  "callbackStatus": 200,
+  "authenticated": true,
+  "inventory": {
+    "returnedRows": 3,
+    "total": 201,
+    "meta": {
+      "source": "AmazonInventorySnapshot",
+      "isSandbox": false,
+      "lastSyncAt": "2026-11-06T10:51:08.169Z",
+      "freshness": "stale",
+      "grain": [
+        "sellerAccountId",
+        "marketplaceId",
+        "sellerSku",
+        "condition",
+        "syncRunId"
+      ],
+      "currency": null,
+      "attributionWindow": null,
+      "warnings": [],
+      "page": {
+        "page": 1,
+        "pageSize": 3,
+        "hasNext": true
+      },
+      "sources": [
+        {
+          "sourceId": "f67200d5-4ba5-40e1-b217-230878a051c0",
+          "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+          "marketplaceId": "ATVPDKIKX0DER",
+          "syncRunId": "69f6c179-ad62-4fe4-bacc-5b5bccbd19b6",
+          "lastSyncAt": "2026-11-06T10:51:08.169Z"
+        }
+      ],
+      "requestId": "00e0cef7-19b0-47f5-b0e8-ce47f86e9c9b",
+      "toolVersion": "1.1.0",
+      "dataset": {
+        "id": "inventory",
+        "module": "amazon_sync",
+        "dataType": "inventory",
+        "legacyTable": "inventory"
+      },
+      "scope": {
+        "pairs": [
+          {
+            "sellerAccountId": "bc6b9f51-fb75-408d-9ecd-4c5058bd39d7",
+            "marketplaceId": "ATVPDKIKX0DER"
+          }
+        ]
+      },
+      "dateSemantics": "captured_at_utc",
+      "dateRange": null,
+      "sort": {
+        "field": "sellerSku",
+        "direction": "asc"
+      },
+      "schemaStatus": "application_schema_confirmed_source_sample_pending",
+      "resultStatus": "AVAILABLE",
+      "publicationPolicy": "successful_source_snapshot_head",
+      "timezone": null
+    }
+  },
+  "skills": [
+    {
+      "skill_id": "amazon-niche-finder",
+      "status": "local-hit",
+      "version": "sha256:fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3",
+      "sha256": "fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3"
+    },
+    {
+      "skill_id": "amazon-product-research",
+      "status": "local-hit",
+      "version": "sha256:3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef",
+      "sha256": "3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef"
+    },
+    {
+      "skill_id": "amazon-review-analyzer",
+      "status": "local-hit",
+      "version": "sha256:7b95df3f4977d32e577e4de5c008d4fac365136729cb5ed69d051d7e81b425b1",
+      "sha256": "7b95df3f4977d32e577e4de5c008d4fac365136729cb5ed69d051d7e81b425b1"
+    },
+    {
+      "skill_id": "tariff-calculator-amazon",
+      "status": "local-hit",
+      "version": "sha256:f83727877be66917b094535b10087eac400da749a5aa1fb120dc8481d5710f9c",
+      "sha256": "f83727877be66917b094535b10087eac400da749a5aa1fb120dc8481d5710f9c"
+    },
+    {
+      "skill_id": "amazon-product-selection",
+      "status": "local-hit",
+      "version": "sha256:5bde1f3ae9f8841d01b39d77a0ec7dbb644c052f20af4cc7c7eeca90a87d815b",
+      "sha256": "5bde1f3ae9f8841d01b39d77a0ec7dbb644c052f20af4cc7c7eeca90a87d815b"
+    }
+  ],
+  "runtimeStatus": "connected",
+  "tools": [
+    "amazon.stores.list",
+    "data_describe_table",
+    "data_list_tables",
+    "data_query",
+    "data_sync_status",
+    "lili_ping",
+    "meta_get_market_access",
+    "meta_get_skill_manifest",
+    "meta_list_workflows",
+    "meta_load_skill",
+    "meta_search_skills",
+    "research_prepare"
+  ]
+}

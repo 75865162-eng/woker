@@ -1,9 +1,11 @@
+import { LiliDevicesPanel } from "./lili-devices-panel";
 import { ArrowRight } from "lucide-react";
 import { AmazonMcpPanel } from "@/components/operations/amazon-mcp-panel";
 
 export function SkillErpSettingsPanel() {
   return (
     <div className="space-y-5">
+      <LiliDevicesPanel />
       <section className="border-b border-border pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

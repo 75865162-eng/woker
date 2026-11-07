@@ -29,7 +29,7 @@ test("runtime discovery exposes actual schemas and permissions, isolates disconn
   ]);
   const discovery = await runtime.discover();
   assert.deepEqual(discovery.providers.map(p => p.status), ["connected", "unavailable", "not_connected"]);
-  assert.equal(discovery.tools.length, 5);
+  assert.deepEqual(discovery.tools.map(tool => tool.name).sort(), ["meta_search_skills", "meta_load_skill", "meta_list_workflows", "lili_ping", "meta_get_skill_manifest", "meta_get_market_access", "erp__actual_read", "erp__actual_write"].sort());
   assert.deepEqual(discovery.tools.find(t => t.name === "erp__actual_read")?.inputSchema, schema);
   assert.equal(discovery.tools.find(t => t.name === "erp__actual_write")?.permission, "approval_required");
   assert.ok(!JSON.stringify(discovery).includes("private provider failure"));

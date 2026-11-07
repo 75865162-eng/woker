@@ -11,7 +11,7 @@ export function createResearchAiAgent(settings: AiModelSettings, request: typeof
     // Keep full evidence persisted, but avoid repeating registry/Skill snapshots inside every AI request.
     const run = context.run;
     const prompt = JSON.stringify({ skill: context.skill, tools: context.tools, run: {
-      id: run.id, requirement: run.requirement, asin: run.asin, marketplace: run.marketplace, stage: run.stage,
+      id: run.id, validationFeedback: run.validationFeedback, brief: run.brief, requirement: run.requirement, asin: run.asin, marketplace: run.marketplace, stage: run.stage,
       requiredProviders: run.requiredProviders, selectedCandidateId: run.selectedCandidateId, results: run.results,
       calls: run.calls?.map(({ id, stage, provider, tool, arguments: args, status, rawResponse, errorCode }) => ({
         id, stage, provider, tool, arguments: args, status, errorCode,

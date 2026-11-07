@@ -67,6 +67,18 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
     assert.equal((await unconfigured.json()).error, "SELLERSPRITE_MCP_NOT_CONFIGURED");
     assert.equal(writes, 0);
     assert.equal((await report(request(), context)).status, 409);
+    const phaseRequest = (options: { anonymous?: boolean; other?: boolean; workspace?: string } = {}, stage = "1") => {
+      const original = request(undefined, options);
+      return new Request(`${original.url}?stage=${stage}`, { headers: original.headers });
+    };
+    assert.equal((await report(phaseRequest({ anonymous: true }), context)).status, 401);
+    assert.equal((await report(phaseRequest({ other: true }), context)).status, 404);
+    assert.equal((await report(phaseRequest({ workspace: "forbidden" }), context)).status, 403);
+    const phaseResponse = await report(phaseRequest(), context);
+    assert.equal(phaseResponse.status, 200);
+    assert.match(await phaseResponse.text(), /待人工审阅/);
+    assert.equal((await report(phaseRequest({}, "2"), context)).status, 409);
+    assert.equal(writes, 0);
     assert.equal((await POST(request({ operation: "step", approved: true, status: "COMPLETED" }), context)).status, 200);
     assert.equal(row.output.status, "WAITING_FOR_USER"); assert.equal(row.output.stage, 1);
     assert.equal((await POST(request({ operation: "decide", decision: { kind: "CONFIRM", gateId: "gate-niche" } }), context)).status, 409);

@@ -217,3 +217,8 @@ test("product detail clients request only their read allowlists and encode SKU p
   assert.equal((catalog.body as { fixture: boolean }).fixture, true); assert.equal(catalog.rawBody, '{"fixture":true}');
   await assert.rejects(() => client.getCatalogDetail({ asin: "bad", marketplaceId: "ATVPDKIKX0DER" }));
 });
+
+test("GZIP failure exposes only a fixed diagnostic and byte count", async () => {
+  const client = new AmazonSpApiClient(getAmazonSpApiServerConfiguration(environment), { fetch: async () => new Response("invalid gzip private report") });
+  await assert.rejects(client.downloadReportText({ url: "https://fixture.s3.amazonaws.com/report?private=secret", compressionAlgorithm: "GZIP" }), (e: unknown) => e instanceof AmazonSpApiError && e.upstreamCode === "REPORT_DOWNLOAD_GZIP" && e.downloadedBytes === 27 && !e.message.includes("secret"));
+});

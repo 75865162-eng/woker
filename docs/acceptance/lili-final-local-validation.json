@@ -1,0 +1,527 @@
+{
+  "observedAt": "2026-11-07T14:25:19.880747+00:00",
+  "scope": "local only; isolated fixtures are not production acceptance",
+  "git": {
+    "branch": "codex/amazon-multistore-mcp",
+    "head": "23cbb21e74e27b7d0552ccc3b0857b26a81cb274",
+    "existingPullRequest": 5,
+    "committed": false,
+    "pushed": false
+  },
+  "verification": {
+    "npm run check": {
+      "exitCode": 0,
+      "unitTests": 1200,
+      "lintErrors": 0,
+      "existingLintWarnings": 7,
+      "productionBuild": "passed"
+    },
+    "npm run typecheck": {
+      "exitCode": 0
+    },
+    "isolatedPostgresRedis": {
+      "passed": 49,
+      "failed": 0,
+      "oauthMigrationApplyDropReapply": "passed; disposable transaction only; existing business sentinel preserved"
+    },
+    "isolatedResearchBrowser": {
+      "passed": 13,
+      "failed": 0
+    },
+    "git diff --check": "passed"
+  },
+  "nativeEvidence": [
+    "lili-final-native-local.json",
+    "lili-final-native-anonymous.json",
+    "lili-final-native-skills.json"
+  ],
+  "pending": [
+    "Authorized research tool native calls: current credential has no research grants",
+    "Paid real five-stage run and human approvals",
+    "Production HTTPS deployment target and permission",
+    "Full worktree commit and GitHub sync; includes existing brand analytics changes"
+  ],
+  "productionRollback": "Retain additive OAuth tables and data when reverting application code. Destructive DDL exercised only in disposable fixture.",
+  "worktreeFiles": [
+    {
+      "status": " M",
+      "path": ".env.example"
+    },
+    {
+      "status": " M",
+      "path": ".gitignore"
+    },
+    {
+      "status": " M",
+      "path": "middleware.ts"
+    },
+    {
+      "status": " M",
+      "path": "package.json"
+    },
+    {
+      "status": " M",
+      "path": "prisma/schema.prisma"
+    },
+    {
+      "status": " M",
+      "path": "scripts/collect-amazon-brand-analytics.ts"
+    },
+    {
+      "status": " M",
+      "path": "scripts/test-amazon-sync-integration.mjs"
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/mcp/amazon/route.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/selection-research/[id]/report/route.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/selection-research/[id]/route.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/selection-research/route.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/components/operations/amazon-mcp-panel.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/operations/brand-analytics-workbench.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/operations/brand-asin-workbench.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/selection-research/research-results.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/selection-research/research-workbench.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/settings/skill-erp-settings-panel.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/data-access.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/mcp.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/observation-parsers.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/processor.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/lili/api.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/lili/runtime-server.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/lili/runtime-tools.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/lili/skill-bundle.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/lili/tool-execution.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/ai-agent.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/economics.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/engine.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/http.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/preflight.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/prisma-repository.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/report.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/seller-transport.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/server.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/types.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-brand-collection.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-mcp-middleware.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/browser/amazon-multistore.spec.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/browser/brand-analytics.spec.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/browser/selection-research.spec.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/integration/amazon-mcp.integration.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/integration/amazon-observations.integration.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/lili-integration.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/lili-runtime-tools.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/selection-research-api.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/selection-research-preflight.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/selection-research.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-audit-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-evidence-native-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-final-local-validation.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-final-native-anonymous.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-final-native-local.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-final-native-skills.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-history-native-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-lifecycle-native-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-market-native-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-native-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-native-active-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-native-download-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-native-five-skills-command-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-native-oauth-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-native-oauth-refresh-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-native-skill-download-command-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-oauth-audit-2026-11-07.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/lili-remote-mcp-2026-11-07.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/operations-brand-catalog-impression-recovery-plan-2026-11-07.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/operations-brand-fairness-plan-2026-11-07.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/operations-brand-local-receivers-2026-11-07.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/operations-brand-sqp-recovery-plan-2026-11-07.md"
+    },
+    {
+      "status": "??",
+      "path": "prisma/migrations/20261107030000_lili_oauth/migration.sql"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/native-oauth-smoke.py"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/native-skill-sync.py"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/native-smoke.py"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/pair-codex.py"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/skill-cache-worker.mjs"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/skill-cache.d.mts"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/skill-cache.mjs"
+    },
+    {
+      "status": "??",
+      "path": "scripts/lili/skill-sync.mjs"
+    },
+    {
+      "status": "??",
+      "path": "src/app/.well-known/[...parts]/route.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/lili/devices/route.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/lili/oauth/[action]/route.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/lili/pair/route.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/components/settings/lili-devices-panel.tsx"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/brand-fairness.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/brand-field-catalogue.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/device-pairing.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/market-access.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/oauth.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/public-mcp.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/public-research-tools.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/research-bearer-mcp.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/research-bearer-server.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/research-grants.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/research-tools.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/lili/skill-manifest.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/brief.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/budget.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/evidence.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/landed-cost.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/marketplace.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/request-authorization.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/review-evidence.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/selection-research/validation-feedback.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-brand-fairness.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/lili-market-access.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/lili-oauth.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/lili-public-mcp.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/lili-research-bearer-server.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/lili-research-bearer.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/lili-research-mcp.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/lili-skill-cache.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/selection-research-budget.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/selection-research-decision.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/selection-research-evidence.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/selection-research-landed-cost.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/selection-research-marketplace.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/selection-research-reviews.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "tests/selection-research-stage-report.test.ts"
+    }
+  ],
+  "preservedExistingChanges": [
+    "Amazon brand analytics collection/parser/processor/UI",
+    "Selection research evidence/cost/decision and report behavior"
+  ]
+}

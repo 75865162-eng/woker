@@ -1,8 +1,11 @@
+import { researchMcpTools, callResearchMcpTool } from "./research-tools";
 import { NextResponse } from "next/server";
 import type { PermissionAction } from "@/lib/accounts/permissions";
 import { listSkills, listTools, listWorkflows } from "./catalog";
 import type { ToolConfigDependencies } from "./tool-config-api";
 import { createRuntimeTools, RuntimeToolError, type RuntimeTools } from "./runtime-tools";
+import { publicMcpResponse } from "./public-mcp";
+import { publicResearchTools } from "./public-research-tools";
 
 type Authorization = { ok: true; user?: { id: string; organizationId: string } } | { ok: false; response: Response };
 export type LiliAuthorize = (moduleId: string, action: PermissionAction, request: Request) => Promise<Authorization>;
@@ -60,19 +63,41 @@ async function defaultAuthorize(moduleId: string, action: PermissionAction, requ
   return requireApiPermission(moduleId, action, request);
 }
 
-/** Both namespaces share host authorization. Catalog execution has no business fallback; settings use a separate scoped service. */
+/** Both namespaces expose public Skill definitions; business operations share scoped host authorization. */
 export async function handleLiliRequest(request: Request, parts: string[], authorize: LiliAuthorize = defaultAuthorize, toolConfigDependencies?: ToolConfigDependencies, runtimeTools?: RuntimeTools): Promise<Response> {
   try {
     const key = endpointKey(parts);
+    if (key === "mcp") {
+      const origin = request.headers.get("origin");
+      if (origin && origin !== new URL(request.url).origin) return json({ error: "origin_mismatch" }, 403);
+      const version = request.headers.get("mcp-protocol-version");
+      if (version && !["2024-11-05", "2025-03-26", "2025-06-18"].includes(version)) return json({ error: "unsupported_protocol_version" }, 400);
+    }
     const endpoint = Object.hasOwn(endpoints, key) ? endpoints[key] : undefined;
     const moduleId = endpoint?.moduleId ?? "agents";
     // The shared permission helper inspects workspaceId in JSON bodies. Bound that
     // body first so its clone cannot read an unlimited payload before our parser.
     const parsedBody = request.method !== "GET" && request.headers.get("content-type")?.includes("application/json")
       ? await boundedJson(request) : undefined;
+    // A supplied bearer never falls back to a browser cookie, including an invalid bearer.
+    if (key === "mcp" && request.headers.has("authorization")) {
+      const { handleResearchBearerMcp } = await import("./research-bearer-mcp");
+      const { researchBearerDependencies } = await import("./research-bearer-server");
+      return handleResearchBearerMcp(request, parsedBody, researchBearerDependencies);
+    }
+    const publicResult = key === "mcp" ? await publicMcpResponse(request, parsedBody) : undefined;
+    if (publicResult?.terminal) return publicResult.response;
     const authorizationRequest = parsedBody ? new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify(parsedBody) }) : request;
-    const permission = await authorize(moduleId, "view", authorizationRequest);
-    if (!permission.ok) return permission.response;
+    let permission: Authorization;
+    try { permission = await authorize(moduleId, "view", authorizationRequest); }
+    catch (error) { if (publicResult) return publicResult.response; throw error; }
+    if (!permission.ok) {
+      if (publicResult) return publicResult.response;
+      if (key === "mcp" && permission.response.status === 401) { const response = json({ jsonrpc: "2.0", id: parsedBody?.id ?? null, error: { code: -32001,
+        message: "This tool requires an authenticated data scope. Connecting and loading Skills do not require ERP browser login.",
+        data: { businessCode: "AUTHENTICATED_DATA_SCOPE_REQUIRED", authenticationRequired: true } } }, 401); response.headers.set("WWW-Authenticate", 'Bearer realm="lili-mcp", resource_metadata="' + new URL("/.well-known/oauth-protected-resource/api/lili/mcp", process.env.LILI_PUBLIC_ORIGIN || request.url).href + '"'); return response; }
+      return permission.response;
+    }
     if (!endpoint) return json({ ok: false, error: "not_found" }, 404);
     if (!endpoint.methods.includes(request.method)) return new Response(null, { status: 405, headers: { ...headers, Allow: endpoint.methods.join(", ") } });
     if (request.method !== "GET") {
@@ -110,7 +135,11 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
     const getRuntime = async () => runtimeTools ?? (permission.user
       ? (await import("./runtime-server")).runtimeToolsForUser(permission.user, authorizationRequest, parsedBody)
       : createRuntimeTools([]));
-    if (key === "mcp" && request.method === "GET") return json({ source: "runtime-registry", scope: "authenticated-ERP-session", ...await (await getRuntime()).discover() });
+    const discover = async () => {
+      const registered = await (await getRuntime()).discover();
+      return { ...registered, tools: [...registered.tools, ...publicResearchTools, ...researchMcpTools] };
+    };
+    if (key === "mcp" && request.method === "GET") return json({ source: "runtime-registry", scope: "authenticated-ERP-session", ...await discover() });
     if (key === "mcp" || key === "tools/run") {
       const body = parsedBody ?? await boundedJson(request);
       if (key === "tools/run") {
@@ -123,12 +152,16 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
       const id = body.id ?? null;
       if (body.method === "notifications/initialized") return new Response(null, { status: 202, headers });
       if (body.method === "initialize") return json({ jsonrpc: "2.0", id, result: { protocolVersion: "2025-06-18", serverInfo: { name: "lili-mcp", version: "1.1.0" }, capabilities: { tools: {} } } });
-      if (body.method === "tools/list") return json({ jsonrpc: "2.0", id, result: await (await getRuntime()).discover() });
+      if (body.method === "tools/list") return json({ jsonrpc: "2.0", id, result: await discover() });
       if (body.method === "tools/call") {
         const params = body.params;
         if (!params || typeof params !== "object" || Array.isArray(params) || typeof (params as Record<string, unknown>).name !== "string") return json({ jsonrpc: "2.0", id, error: { code: -32602, message: "Invalid tool parameters" } }, 400);
         const args = params as Record<string, unknown>;
         try {
+          if (researchMcpTools.some(tool => tool.name === args.name)) {
+            const output = await callResearchMcpTool(authorizationRequest, args.name as string, (args.arguments ?? {}) as never);
+            return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(output) }], isError: !output.ok } });
+          }
           requireReviewedMarketCall(args.name as string);
           const output = await (await getRuntime()).call(args.name as string, (args.arguments ?? {}) as never, request.signal);
           return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(output) }], isError: false } });

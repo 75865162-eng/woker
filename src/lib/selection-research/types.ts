@@ -1,3 +1,7 @@
+import type { LandedCostScenario } from "./landed-cost";
+import type { ResearchBrief } from "./brief";
+import type { DecisionAnalysis } from "./economics";
+import type { ReviewEvidence, ReviewProblem } from "./review-evidence";
 export const SKILLS = ["amazon-niche-finder", "amazon-product-research", "amazon-review-analyzer", "tariff-calculator-amazon", "amazon-product-selection"] as const;
 export type Status = "CREATED" | "RUNNING" | "WAITING_FOR_USER" | "RESUMABLE" | "COMPLETED" | "FAILED" | "CANCELLED";
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -14,7 +18,7 @@ export interface ToolPolicy { provider: string; paid: boolean; units: number; un
 export interface CallRecord {
   id: string; projectId: string; stage: number; skill: string; service: "lili" | "sellersprite" | "erp" | "xiyou"; provider: string; tool: string;
   arguments: ObjectJson; requestedAt: string; respondedAt?: string; status: "IN_FLIGHT" | "SUCCEEDED" | "FAILED" | "UNKNOWN";
-  paid: boolean; reservedUnits: number; billing: "FREE" | "UNKNOWN" | "CONFIRMED"; knownUnits?: number;
+  billingUnit?: "calls" | "credits"; paid: boolean; reservedUnits: number; billing: "FREE" | "UNKNOWN" | "CONFIRMED"; knownUnits?: number;
   retryCount: number; rawResponse?: Json; errorCode?: string;
   /** Legacy/unknown dispatches are conservatively counted; NOT_SENT requires a trusted adapter error. */
   dispatch?: "NOT_SENT" | "ATTEMPTED";
@@ -24,14 +28,18 @@ export interface Claim {
   text: string; kind: "observed" | "calculated" | "estimated" | "assumption"; evidenceIds: string[];
   formula?: string; sourceUrl?: string; applicableDate?: string; topic?: "tariff";
 }
-export interface StageResult { summary: string; claims: Claim[]; candidates?: { id: string; name: string }[]; verdict?: "GO" | "NO_GO" | "NEEDS_VALIDATION" }
+export interface StageResult { landedCostScenarios?: LandedCostScenario[]; decisionAnalysis?: DecisionAnalysis; reviewEvidence?: ReviewEvidence[]; reviewProblems?: ReviewProblem[]; summary: string; claims: Claim[]; candidates?: { id: string; name: string }[]; verdict?: "GO" | "NO_GO" | "NEEDS_VALIDATION" }
 export type Action = { type: "call"; tool: string; arguments: ObjectJson } | { type: "complete"; result: StageResult };
 export interface Gate { id: string; kind: "NICHE" | "FINAL" | "BUDGET" | "BILLING" | "MCP_CALL"; reason: string }
 export interface Decision { gateId: string; kind: "SELECT" | "CONFIRM" | "INCREASE_BUDGET" | "RECONCILE" | "AUTHORIZE_TOOL"; candidateId?: string; limits?: Record<string, number>; toolMaxCalls?: Record<string, number>; callId?: string; units?: number; receipt?: string }
 export interface Run {
+  brief?: ResearchBrief;
+  validationFeedback?: { code: string; stage: number; at: string };
+  budgetMode?: "reviewed" | "mock_unlimited";
   aiConfigSource?: "workspace" | "server_runtime";
   aiModel?: { provider: string; model: string };
   asin?: string; erpCredentialId?: string; requiredProviders?: string[];
+  pausedAt?: string;
   version: 1; id: string; revision: number; scope: Scope; requirement: string; marketplace: string; mode: "live" | "fixture";
   createdAt: string; updatedAt: string; status: Status; stage: number; skills: SkillSnapshot[];
   registry: ToolDefinition[]; registryAt?: string; policies: Record<string, ToolPolicy>; limits: Record<string, number>;

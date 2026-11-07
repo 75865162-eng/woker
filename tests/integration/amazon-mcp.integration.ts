@@ -19,6 +19,9 @@ import { publishedSnapshotScopes } from "@/lib/amazon-sync/read";
 import { renameAmazonStore, listAmazonStores } from "@/lib/amazon-sync/stores";
 import { assertExportJobAccess } from "@/lib/amazon-sync/exports";
 import { startAmazonOAuth, finishAmazonOAuth } from "@/lib/amazon-sync/oauth";
+import { handleLiliRequest } from "@/lib/lili/api";
+import { prismaResearchRepository } from "@/lib/selection-research/prisma-repository";
+import type { Run } from "@/lib/selection-research/types";
 
 if (process.env.AMAZON_SYNC_TEST_REDIS_DISPOSABLE !== "1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable runner required");
 const scope = { organizationId: randomUUID(), workspaceId: "main" }, other = { organizationId: randomUUID(), workspaceId: "main" };
@@ -61,6 +64,56 @@ after(async () => { globalThis.fetch = originalFetch; await prisma.$disconnect()
 test("MCP personal hash only; metadata never includes plaintext", async () => {
   const row = await prisma.amazonMcpCredential.findUniqueOrThrow({ where: { id: credentialId } });
   assert.notEqual(row.tokenHash, token); assert.equal(row.tokenHash.length, 64); assert.ok(!JSON.stringify(row).includes(token));
+});
+test("Lili research bearer uses real PostgreSQL grants, ownership, revocation and audit without external calls", async () => {
+  const role = await prisma.organizationRosterRole.findUniqueOrThrow({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } } });
+  const permissions = { ...(role.permissions as Record<string, Prisma.InputJsonValue>), agents: ["view", "create", "edit", "export"] };
+  const rpc = async (bearer: string, method: string, params?: unknown) => handleLiliRequest(new Request("http://localhost/api/lili/mcp", { method: "POST", headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) }), ["mcp"]);
+  const grant = { action: "create", name: "isolated Lili research", tools: ["data_query", "research_read", "research_step"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  try {
+    const publicRequest = new Request("http://localhost/api/lili/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+    const publicCatalog = await (await handleLiliRequest(publicRequest, ["mcp"])).json();
+    assert.equal(publicCatalog.result.scope, "anonymous-definitions");
+    assert.ok(publicCatalog.result.tools.every((tool: { name: string }) => !tool.name.startsWith("erp__")));
+    await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } }, data: { permissions } });
+    assert.equal((await rpc(token, "tools/list")).status, 200, "existing ERP grant works without adding research rights");
+    const made = await manageMcpCredential(scope, actor, grant);
+    const listed = await (await rpc(made.token!, "tools/list")).json();
+    assert.deepEqual(listed.result.tools.filter((t: { name: string }) => t.name.startsWith("research_")).map((t: { name: string }) => t.name), ["research_prepare", "research_read", "research_step"]);
+    const now = new Date().toISOString();
+    const run: Run = { version: 1, id: randomUUID(), revision: 0, scope: { ...scope, ownerId: actor }, mode: "live", budgetMode: "mock_unlimited", erpCredentialId: made.credential.id, requirement: "ISOLATED DATABASE FIXTURE ONLY", marketplace: "US", createdAt: now, updatedAt: now, status: "WAITING_FOR_USER", stage: 1, skills: [], registry: [], policies: {}, limits: {}, calls: [], actions: [], decisions: [], results: [], gate: { id: randomUUID(), kind: "NICHE", reason: "fixture only" } };
+    await prismaResearchRepository().create(run);
+    const args = { runId: run.id, workspaceId: scope.workspaceId };
+    const response = await rpc(made.token!, "tools/call", { name: "research_read", arguments: args });
+    assert.equal(response.status, 200);
+    const read = JSON.parse((await response.json()).result.content[0].text);
+    assert.equal(read.run.id, run.id); assert.equal(read.nextAction.kind, "HUMAN_REVIEW");
+    assert.equal((await rpc(made.token!, "tools/call", { name: "research_read", arguments: { ...args, workspaceId: "other" } })).status, 403);
+    assert.equal((await rpc(made.token!, "tools/call", { name: "research_approve", arguments: args })).status, 403);
+    assert.equal((await rpc(made.token!, "tools/call", { name: "sellersprite__product_search", arguments: {} })).status, 403);
+    const alternate = await manageMcpCredential(scope, actor, grant);
+    const crossCredential = JSON.parse((await (await rpc(alternate.token!, "tools/call", { name: "research_read", arguments: args })).json()).result.content[0].text);
+    assert.equal(crossCredential.status, 404);
+    await prisma.agentExecution.update({ where: { id: run.id }, data: { requestedByUserId: peer } });
+    const crossOwner = JSON.parse((await (await rpc(made.token!, "tools/call", { name: "research_read", arguments: args })).json()).result.content[0].text);
+    assert.equal(crossOwner.status, 404);
+    await prisma.agentExecution.update({ where: { id: run.id }, data: { requestedByUserId: actor } });
+    await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } }, data: { permissions: { ...permissions, agents: [] } } });
+    assert.equal((await rpc(made.token!, "tools/list")).status, 403, "current role revocation is immediate");
+    await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } }, data: { permissions } });
+    await prisma.amazonMcpCredential.update({ where: { id: made.credential.id }, data: { expiresAt: new Date(0) } });
+    assert.equal((await rpc(made.token!, "tools/list")).status, 401);
+    await prisma.amazonMcpCredential.update({ where: { id: made.credential.id }, data: { expiresAt: new Date(Date.now() + 60_000) } });
+    await manageMcpCredential(scope, actor, { action: "revoke", id: made.credential.id, revision: made.credential.revision });
+    assert.equal((await rpc(made.token!, "tools/list")).status, 401);
+    const saved = await prismaResearchRepository().read(run.id, run.scope);
+    assert.deepEqual(saved.run.decisions, []); assert.equal(saved.run.status, "WAITING_FOR_USER");
+    const logs = await prisma.auditLog.findMany({ where: { ...{ organizationId: scope.organizationId }, entityId: made.credential.id, action: { startsWith: "lili.mcp." } } });
+    assert.ok(logs.some(log => log.action === "lili.mcp.succeeded")); assert.ok(logs.some(log => log.action === "lili.mcp.denied"));
+    assert.ok(!JSON.stringify(logs).includes(made.token!));
+  } finally {
+    await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } }, data: { permissions: role.permissions as Prisma.InputJsonValue } });
+  }
 });
 test("all real MCP read tools and identical SKUs stay inside seller A", async () => {
   for (const tool of readTools) {
@@ -654,4 +707,198 @@ test("bounded management routes preserve real session identity and workspace che
   assert.equal((await storePatch(await request(owner, "/api/operations/amazon-stores", "PATCH", body))).status, 200);
   const start = await oauthStart(await request(owner, "/api/integrations/amazon/sp-api/oauth/start", "POST", { region: "us-east-1" }));
   assert.equal(start.status, 200); assert.equal(new URL((await start.json()).consentUrl).hostname, "sellercentral.amazon.com");
+});
+
+test("Lili pairing is single-use, bounded, isolated, expiring and immediately revocable on PostgreSQL", async () => {
+ const { createPairing, exchangePairing, revokeDevice } = await import("@/lib/lili/device-pairing");
+ const role = await prisma.organizationRosterRole.findUniqueOrThrow({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } } });
+ await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } }, data: { permissions: { ...(role.permissions as Prisma.InputJsonObject), settings: ["view", "edit"] } } });
+ try {
+  const parent = await manageMcpCredential(scope, actor, { action: "create", name: "Lili fixture parent", tools: ["amazon.stores.list", "data_query"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() });
+  await assert.rejects(createPairing(scope, peer, parent.credential.id));
+  const pair = await createPairing(scope, actor, parent.credential.id);
+  const stored = await prisma.amazonMcpCredential.findUniqueOrThrow({ where: { id: pair.pairingId } });
+  assert.notEqual(stored.tokenHash, pair.code); assert.equal(stored.tokenHash.length, 64); assert.equal(stored.status, "DISABLED");
+  await assert.rejects(authenticateAmazonMcp("Bearer " + pair.code));
+  const results = await Promise.allSettled([exchangePairing(pair.pairingId, pair.code, "fixture-device"), exchangePairing(pair.pairingId, pair.code, "replay")]);
+  assert.equal(results.filter(r => r.status === "fulfilled").length, 1);
+  const success = results.find(r => r.status === "fulfilled"); assert.ok(success?.status === "fulfilled");
+  const device = success.value;
+  const identity = await authenticateAmazonMcp("Bearer " + device.access_token);
+  assert.deepEqual(identity.tools, parent.credential.tools);
+  assert.equal(identity.userId, actor); assert.equal(identity.organizationId, scope.organizationId);
+  await assert.rejects(invokeAmazonMcp(identity, "data_query", { table: "inventory", sellerAccountId: sellerB, marketplaceId: site }));
+  await assert.rejects(invokeAmazonMcp(identity, "data_sync_start", { resource: "inventory" }));
+  await assert.rejects(revokeDevice(scope, peer, device.device.id));
+  await revokeDevice(scope, actor, device.device.id);
+  await assert.rejects(authenticateAmazonMcp("Bearer " + device.access_token));
+  const expiring = await createPairing(scope, actor, parent.credential.id);
+  await prisma.amazonMcpCredential.update({ where: { id: expiring.pairingId }, data: { expiresAt: new Date(0) } });
+  await assert.rejects(exchangePairing(expiring.pairingId, expiring.code, "expired"));
+  const locked = await createPairing(scope, actor, parent.credential.id);
+  for(let i=0;i<5;i++) await assert.rejects(exchangePairing(locked.pairingId, "A".repeat(43), "wrong"));
+  await assert.rejects(exchangePairing(locked.pairingId, locked.code, "locked"));
+  assert.equal((await prisma.amazonMcpCredential.findUniqueOrThrow({ where: { id: locked.pairingId } })).status, "REVOKED");
+  const cancelled = await createPairing(scope, actor, parent.credential.id);
+  await revokeDevice(scope, actor, cancelled.pairingId);
+  await assert.rejects(exchangePairing(cancelled.pairingId, cancelled.code, "cancelled"));
+  const second = await createPairing(scope, actor, parent.credential.id);
+  const child = await exchangePairing(second.pairingId, second.code, "parent-revoke");
+  const childIdentity = await authenticateAmazonMcp("Bearer " + child.access_token);
+  await manageMcpCredential(scope, actor, { action: "revoke", id: parent.credential.id, revision: parent.credential.revision });
+  await assert.rejects(authenticateAmazonMcp("Bearer " + child.access_token));
+  await assert.rejects(invokeAmazonMcp(childIdentity, "data_query", { table: "inventory", sellerAccountId: sellerA, marketplaceId: site }));
+ } finally { await prisma.organizationRosterRole.update({ where: { organizationId_id: { organizationId: scope.organizationId, id: "operations" } }, data: { permissions: role.permissions as Prisma.InputJsonObject } }); }
+});
+
+test("Lili OAuth S256 binds redirect/client/resource, rotates refresh and rejects replay with live grants", async () => {
+ const { createHash } = await import("node:crypto");
+ const { createPairing, revokeDevice } = await import("@/lib/lili/device-pairing");
+ const { registerLiliClient, authorizeLili, exchangeLiliToken, revokeLiliToken } = await import("@/lib/lili/oauth");
+ const roleKey = { organizationId_id: { organizationId: scope.organizationId, id: "operations" } };
+ const role = await prisma.organizationRosterRole.findUniqueOrThrow({ where: roleKey });
+ await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: { ...(role.permissions as Prisma.InputJsonObject), settings: ["view", "edit"] } } });
+ try {
+  const request = new Request("http://localhost:3017/api/lili/oauth/token");
+  const client = await registerLiliClient({ redirect_uris: ["http://127.0.0.1:1455/callback"] });
+  await assert.rejects(registerLiliClient({ redirect_uris: ["http://evil.example/callback"] }));
+  const parent = await manageMcpCredential(scope, actor, { action: "create", name: "OAuth fixture parent", tools: ["amazon.stores.list", "data_query"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 86400000).toISOString() });
+  const verifier = "v".repeat(64);
+  const authorization = new URLSearchParams({ client_id: client.client_id, redirect_uri: client.redirect_uris[0], response_type: "code", code_challenge_method: "S256", code_challenge: createHash("sha256").update(verifier).digest("base64url"), resource: "http://localhost:3017/api/lili/mcp", state: "unchanged-state" });
+  const issue = async () => {
+    const pair = await createPairing(scope, actor, parent.credential.id);
+    const location = new URL(await authorizeLili(authorization, request, pair.pairingId, pair.code));
+    assert.equal(location.searchParams.get("state"), "unchanged-state");
+    const form = new URLSearchParams({ grant_type: "authorization_code", client_id: client.client_id, redirect_uri: client.redirect_uris[0], code: location.searchParams.get("code")!, code_verifier: verifier });
+    const wrong = new URLSearchParams(form); wrong.set("code_verifier", "x".repeat(64)); await assert.rejects(exchangeLiliToken(wrong, request));
+    const otherClient = new URLSearchParams(form); otherClient.set("client_id", randomUUID()); await assert.rejects(exchangeLiliToken(otherClient, request));
+    const wrongResource = new URLSearchParams(form); wrongResource.set("resource", "http://localhost:3017/other"); await assert.rejects(exchangeLiliToken(wrongResource, request));
+    const wrongRedirect = new URLSearchParams(form); wrongRedirect.set("redirect_uri", "http://127.0.0.1:1456/callback"); await assert.rejects(exchangeLiliToken(wrongRedirect, request));
+    const issued = await exchangeLiliToken(form, request);
+    await assert.rejects(exchangeLiliToken(form, request));
+    return issued;
+  };
+  const issued = await issue();
+  const identity = await authenticateAmazonMcp("Bearer " + issued.access_token);
+  assert.equal(identity.userId, actor);
+  await assert.rejects(authenticateAmazonMcp("Bearer " + issued.access_token, "http://localhost:3017/api/mcp/amazon"));
+  await assert.rejects(invokeAmazonMcp(identity, "data_query", { table: "inventory", sellerAccountId: sellerB, marketplaceId: site }));
+  await assert.rejects(invokeAmazonMcp(identity, "data_sync_start", {}));
+  await prisma.amazonMcpCredential.update({ where: { id: identity.id }, data: { expiresAt: new Date(0) } });
+  await assert.rejects(authenticateAmazonMcp("Bearer " + issued.access_token));
+  const refreshForm = new URLSearchParams({ grant_type: "refresh_token", client_id: client.client_id, refresh_token: issued.refresh_token });
+  const refreshed = await exchangeLiliToken(refreshForm, request);
+  assert.equal((await authenticateAmazonMcp("Bearer " + refreshed.access_token)).id, identity.id);
+  await assert.rejects(exchangeLiliToken(refreshForm, request));
+  await assert.rejects(authenticateAmazonMcp("Bearer " + refreshed.access_token));
+  const revoked = await issue();
+  await revokeLiliToken(new URLSearchParams({ token: revoked.refresh_token, client_id: client.client_id }));
+  await assert.rejects(authenticateAmazonMcp("Bearer " + revoked.access_token));
+  const deviceRevoked = await issue();
+  const device = await authenticateAmazonMcp("Bearer " + deviceRevoked.access_token);
+  await revokeDevice(scope, actor, device.id);
+  await assert.rejects(exchangeLiliToken(new URLSearchParams({ grant_type: "refresh_token", client_id: client.client_id, refresh_token: deviceRevoked.refresh_token }), request));
+  const parentRevoked = await issue();
+  await prisma.amazonMcpCredential.update({ where: { id: parent.credential.id }, data: { status: "REVOKED" } });
+  await assert.rejects(exchangeLiliToken(new URLSearchParams({ grant_type: "refresh_token", client_id: client.client_id, refresh_token: parentRevoked.refresh_token }), request));
+ } finally { await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: role.permissions as Prisma.InputJsonObject } }); }
+});
+
+test("Lili market access reflects real PostgreSQL credential grants and disabled providers without external dispatch", async () => {
+ const { researchBearerDependencies } = await import("@/lib/lili/research-bearer-server");
+ const roleKey = { organizationId_id: { organizationId: scope.organizationId, id: "operations" } };
+ const role = await prisma.organizationRosterRole.findUniqueOrThrow({ where: roleKey });
+ await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: { ...(role.permissions as Prisma.InputJsonObject), agents: ["view", "edit"] } } });
+ try {
+  const request = new Request("http://localhost/api/lili/mcp");
+  const read = await manageMcpCredential(scope, actor, { action: "create", name: "market metadata read only", tools: ["data_query"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const readIdentity = await authenticateAmazonMcp("Bearer " + read.token);
+  assert.equal((await researchBearerDependencies.marketAccess!(readIdentity, request)).research_access, false);
+  const granted = await manageMcpCredential(scope, actor, { action: "create", name: "market metadata research", tools: ["data_query", "research_step"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const identity = await authenticateAmazonMcp("Bearer " + granted.token);
+  const result = await researchBearerDependencies.marketAccess!(identity, request);
+  assert.equal(result.research_access, false); assert.equal(result.direct_market_access, false);
+  assert.equal(result.registry_checked, false); assert.deepEqual(result.paid_tools, []);
+  assert.ok(Array.isArray(result.providers) && result.providers.every(p => typeof p === "object" && p !== null && !Array.isArray(p) && p.allowed === false));
+  assert.ok(!JSON.stringify(result).includes("apiKey"));
+ } finally { await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: role.permissions as Prisma.InputJsonObject } }); }
+});
+
+test("Lili lifecycle commands persist in AgentExecution and keep ownership and human gates", async () => {
+ const roleKey = { organizationId_id: { organizationId: scope.organizationId, id: "operations" } };
+ const role = await prisma.organizationRosterRole.findUniqueOrThrow({ where: roleKey });
+ await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: { ...(role.permissions as Prisma.InputJsonObject), agents: ["view", "edit"] } } });
+ try {
+  const granted = await manageMcpCredential(scope, actor, { action: "create", name: "lifecycle fixture", tools: ["data_query", "research_read", "research_pause", "research_resume", "research_recover", "research_cancel"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const now = new Date().toISOString();
+  const run: Run = { version: 1, id: randomUUID(), revision: 0, scope: { ...scope, ownerId: actor }, mode: "live", erpCredentialId: granted.credential.id, requirement: "ISOLATED LIFECYCLE FIXTURE", marketplace: "US", createdAt: now, updatedAt: now, status: "WAITING_FOR_USER", stage: 1, skills: [], registry: [], policies: {}, limits: {}, calls: [], actions: [], decisions: [], results: [], gate: { id: randomUUID(), kind: "NICHE", reason: "fixture" } };
+  await prismaResearchRepository().create(run);
+  const rpc = async (name: string, args = { runId: run.id }) => {
+   const response = await handleLiliRequest(new Request("http://localhost/api/lili/mcp", { method: "POST", headers: { authorization: "Bearer " + granted.token, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) }), ["mcp"]);
+   assert.equal(response.status, 200);
+   return JSON.parse((await response.json()).result.content[0].text);
+  };
+  assert.ok((await rpc("research_pause")).run.pausedAt);
+  const saved = (await prismaResearchRepository().read(run.id, run.scope)).run;
+  assert.ok(saved.pausedAt); assert.equal(saved.gate?.id, run.gate?.id);
+  const resumed = await rpc("research_resume");
+  assert.equal(resumed.run.pausedAt, undefined); assert.equal(resumed.run.gate.id, run.gate?.id);
+  await prisma.agentExecution.update({ where: { id: run.id }, data: { requestedByUserId: peer } });
+  assert.equal((await rpc("research_pause")).status, 404);
+  await prisma.agentExecution.update({ where: { id: run.id }, data: { requestedByUserId: actor } });
+  const persisted = (await prismaResearchRepository().read(run.id, run.scope)).run;
+  await prisma.agentExecution.update({ where: { id: run.id }, data: { status: "FAILED", output: JSON.parse(JSON.stringify({ ...persisted, status: "FAILED", failure: "fixture failure" })) } });
+  const recovered = await rpc("research_recover");
+  assert.equal(recovered.run.status, "RESUMABLE"); assert.equal(recovered.run.calls.length, 0);
+  assert.equal((await rpc("research_cancel")).run.status, "CANCELLED");
+  assert.equal((await prismaResearchRepository().read(run.id, run.scope)).run.status, "CANCELLED");
+ } finally { await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: role.permissions as Prisma.InputJsonObject } }); }
+});
+
+test("Lili history paginates persisted tasks and excludes other owners, credentials and fixture runs", async () => {
+ const { listCredentialResearch } = await import("@/lib/selection-research/prisma-repository");
+ const { withResearchRequestAuthorization } = await import("@/lib/selection-research/request-authorization");
+ const { GET: listRoute } = await import("@/app/api/selection-research/route");
+ const ownerScope = { ...scope, ownerId: actor };
+ const ids: string[] = [];
+ for (const [ownerId, credential, mode] of [[actor, "history-own", "live"], [actor, "history-own", "live"], [peer, "history-own", "live"], [actor, "history-other", "live"], [actor, "history-own", "fixture"]] as const) {
+  const now = new Date().toISOString(), id = randomUUID(); ids.push(id);
+  await prismaResearchRepository().create({ version: 1, id, revision: 0, scope: { ...scope, ownerId }, mode, erpCredentialId: credential, requirement: "ISOLATED HISTORY FIXTURE", marketplace: "US", createdAt: now, updatedAt: now, status: "CREATED", stage: 1, skills: [], registry: [], policies: {}, limits: {}, calls: [], actions: [], decisions: [], results: [] });
+ }
+ const page = await listCredentialResearch(ownerScope, "history-own", 1, 1);
+ const next = await listCredentialResearch(ownerScope, "history-own", 2, 1);
+ assert.equal(page.runs.length, 1); assert.equal(page.hasNext, true);
+ assert.equal(next.runs.length, 1); assert.equal(next.hasNext, false);
+ assert.deepEqual(new Set([page.runs[0].id, next.runs[0].id]), new Set(ids.slice(0, 2)));
+ assert.ok(!("output" in page.runs[0]));
+ const user = { id: actor, organizationId: scope.organizationId, organizationName: "fixture", role: "operations", name: "fixture", email: "fixture@invalid.test" };
+ const request = new Request("http://localhost/api/selection-research?workspaceId=" + scope.workspaceId + "&pageSize=1");
+ const response = await withResearchRequestAuthorization(request, { credentialId: "history-own", authorize: async () => ({ ok: true, user }) }, () => listRoute(request));
+ assert.equal(response.status, 200);
+ const result = await response.json(); assert.equal(result.persisted, true); assert.equal(result.runs.length, 1);
+ assert.equal(result.availability, undefined, "history must not read provider or AI configuration");
+});
+
+test("Lili saved evidence reads real PostgreSQL snapshots and enforces owner and credential isolation", async () => {
+ const roleKey = { organizationId_id: { organizationId: scope.organizationId, id: "operations" } };
+ const role = await prisma.organizationRosterRole.findUniqueOrThrow({ where: roleKey });
+ await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: { ...(role.permissions as Prisma.InputJsonObject), agents: ["view"] } } });
+ try {
+  const command = { action: "create", name: "evidence fixture", tools: ["data_query", "research_evidence"], scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], expiresAt: new Date(Date.now() + 60000).toISOString() };
+  const grant = await manageMcpCredential(scope, actor, command), alternate = await manageMcpCredential(scope, actor, command);
+  const now = new Date().toISOString();
+  const run: Run = { version: 1, id: randomUUID(), revision: 0, scope: { ...scope, ownerId: actor }, mode: "live", erpCredentialId: grant.credential.id, requirement: "ISOLATED EVIDENCE FIXTURE", marketplace: "US", createdAt: now, updatedAt: now, status: "CREATED", stage: 1, skills: [], registry: [], policies: {}, limits: {}, calls: [], actions: [], decisions: [], results: [] };
+  run.calls.push({ id: "saved-call", projectId: run.id, stage: 1, skill: "fixture", service: "erp", provider: "erp", tool: "data_query", arguments: {}, requestedAt: now, status: "SUCCEEDED", paid: false, reservedUnits: 0, billing: "FREE", retryCount: 0, inputSchema: {}, rawResponse: { fixture: "persisted evidence" } });
+  await prismaResearchRepository().create(run);
+  const rpc = async (bearer: string, args: Record<string, unknown>) => {
+   const response = await handleLiliRequest(new Request("http://localhost/api/lili/mcp", { method: "POST", headers: { authorization: "Bearer " + bearer, "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "research_evidence", arguments: { runId: run.id, ...args } } }) }), ["mcp"]);
+   assert.equal(response.status, 200);
+   return JSON.parse((await response.json()).result.content[0].text);
+  };
+  const page = await rpc(grant.token!, {}); assert.equal(page.calls[0].id, "saved-call"); assert.equal(page.calls[0].rawResponse, undefined);
+  const raw = await rpc(grant.token!, { callId: "saved-call" }); assert.deepEqual(JSON.parse(raw.chunk), { fixture: "persisted evidence" });
+  assert.equal((await rpc(alternate.token!, {})).status, 404);
+  await prisma.agentExecution.update({ where: { id: run.id }, data: { requestedByUserId: peer } });
+  assert.equal((await rpc(grant.token!, {})).status, 404);
+ } finally { await prisma.organizationRosterRole.update({ where: roleKey, data: { permissions: role.permissions as Prisma.InputJsonObject } }); }
 });

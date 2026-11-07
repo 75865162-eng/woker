@@ -58,6 +58,31 @@ test("Skill ERP settings displays an explicit empty MCP tool catalog", async ({ 
   await expect(page.getByText("当前没有可授权的 MCP 工具。", { exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox")).toHaveCount(0);
 });
+test("Lili research grants require explicit selection and preserve existing seller scope", async ({ page }) => {
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    expect(url.origin).toBe("http://127.0.0.1:43225");
+    if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
+    if (url.pathname === "/api/operations/amazon-stores") return route.fulfill({ json: { stores: [] } });
+    if (url.pathname === "/api/operations/amazon-mcp") {
+      if (request.method() === "POST") { submitted = request.postDataJSON(); return route.fulfill({ json: { credential: { id: "fixture-only" } } }); }
+      return route.fulfill({ json: { credentials: [], scopes: [{ sellerAccountId: "seller-a", marketplaceId: "US", displayName: "店铺 A" }], tools: mcpToolTuples, toolCatalog: mcpToolCatalog, tables: [] } });
+    }
+    return route.fulfill({ contentType: "text/html", body: '<div id="root"></div><script src="/bundle.js"></script>' });
+  });
+  await page.goto("http://127.0.0.1:43225");
+  const read = page.getByRole("checkbox", { name: "Lili 开品：读取本人研究" });
+  const start = page.getByRole("checkbox", { name: "Lili 开品：创建研究（真实调用仍需审批）" });
+  await expect(read).not.toBeChecked(); await expect(start).not.toBeChecked();
+  await expect(page.getByRole("button", { name: "创建个人凭证" })).toBeDisabled();
+  await page.getByRole("checkbox", { name: "店铺 A / US" }).check();
+  await read.check();
+  await page.getByRole("button", { name: "创建个人凭证" }).click();
+  await expect.poll(() => submitted?.tools).toEqual(["research_read"]);
+  expect(submitted?.scopes).toEqual([{ sellerAccountId: "seller-a", marketplaceIds: ["US"] }]);
+  expect(await page.evaluate(() => Object.values(localStorage).join(" "))).not.toContain("research_read");
+});
 test("Skill ERP settings rejects an invalid MCP tool catalog without stale fallback", async ({ page }) => {
   await page.route("**/*", async route => {
     const r = route.request(), url = new URL(r.url()); expect(url.origin).toBe("http://127.0.0.1:43225");

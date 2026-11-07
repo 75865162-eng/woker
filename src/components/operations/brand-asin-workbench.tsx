@@ -21,7 +21,7 @@ export function BrandAsinWorkbench({ sourceId, initialAsin, getHeaders, onTask, 
     return () => controller.abort();
   }, [sourceId, selection, getHeaders]);
   return <section className="space-y-4" aria-label="ASIN 品牌分析">
-    <h3 className="text-sm font-semibold">ASIN 品牌分析</h3><p className="text-xs text-muted">同一店铺、站点和 ASIN 下查看五类报告。多个 SKU 共享一份 ASIN 指标；各报告保留自己的周期，不跨报告累加。商品资料取当前已发布快照，不能代表历史时点的品牌归属。</p>
+    <h3 className="text-sm font-semibold">ASIN 品牌分析</h3><p className="text-xs text-muted">同一店铺、站点和 ASIN 下查看五类报告。多个 SKU 共享一份 ASIN 指标；各报告保留自己的周期，不跨报告累加。商品资料取当前已发布快照，不能代表历史时点的品牌归属。SQP 份额与比率保留上游原值，可能采用百分数，不自动换算或与其他报告混算。</p>
     <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); const asin = draft.trim().toUpperCase(); if (!/^[A-Z0-9]{10}$/.test(asin)) { setResult(null); setError("请输入 10 位 ASIN。"); return; } const url = new URL(window.location.href); url.searchParams.set("asin", asin); window.history.replaceState(null, "", url); setSelection({ asin, reportPeriod: period, from, to }); }}>
       <label className="grid gap-1 text-xs">分析 ASIN<input className={input} value={draft} onChange={e => setDraft(e.target.value)} required /></label>
       <label className="grid gap-1 text-xs">分析粒度<select className={input} value={period} onChange={e => setPeriod(e.target.value)}>{Object.entries(brandPeriodLabels).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>

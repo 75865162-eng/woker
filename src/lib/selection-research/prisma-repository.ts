@@ -72,3 +72,21 @@ export async function saveResearchReport(run: Run, html: string) {
     throw new Error("RESEARCH_REPORT_METADATA_FAILED");
   }
 }
+
+/** Project only small summaries; evidence stays in the saved task. */
+export async function listCredentialResearch(scope: Scope, credentialId: string, page: number, pageSize: number) {
+  const rows = await prisma.agentExecution.findMany({
+    where: { organizationId: scope.organizationId, workspaceId: scope.workspaceId, requestedByUserId: scope.ownerId,
+      AND: [{ context: { path: ["namespace"], equals: namespace } },
+        { output: { path: ["mode"], equals: "live" } },
+        { output: { path: ["erpCredentialId"], equals: credentialId } },
+        { output: { path: ["scope", "organizationId"], equals: scope.organizationId } },
+        { output: { path: ["scope", "workspaceId"], equals: scope.workspaceId } },
+        { output: { path: ["scope", "ownerId"], equals: scope.ownerId } } ] },
+    select: { id: true, status: true, input: true, marketplace: true, updatedAt: true },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize + 1,
+  });
+  return { runs: rows.slice(0, pageSize).map(row => ({ id: row.id, status: row.status,
+    requirement: String((row.input as { requirement?: string })?.requirement ?? "").slice(0, 240),
+    marketplace: row.marketplace, updatedAt: row.updatedAt })), page, pageSize, hasNext: rows.length > pageSize, persisted: true };
+}
