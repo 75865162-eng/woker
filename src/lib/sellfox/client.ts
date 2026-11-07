@@ -1,10 +1,21 @@
 import { createHmac, randomInt } from "node:crypto";
 import { Client } from "pg";
+import { currentSellfoxCredentials } from "./credential-context";
+import { legacySellfoxCredentials, type SellfoxResolvedCredentials } from "./credential-store";
 
 const baseUrl = "https://openapi.sellfox.com";
 const requestTimeoutMs = Math.min(Math.max(Number(process.env.SELLFOX_REQUEST_TIMEOUT_MS) || 30_000, 5_000), 120_000);
-let cachedToken: { value: string; expiresAt: number } | null = null;
-let cachedTokenRequest: Promise<string> | null = null;
+type TokenState = { token: { value: string; expiresAt: number } | null; pending: Promise<string> | null };
+const tokenStates = new Map<string, TokenState>();
+function tokenState(namespace: string) {
+  let state = tokenStates.get(namespace);
+  if (!state) {
+    if (tokenStates.size >= 1_000) for (const [key, entry] of tokenStates) { if (!entry.pending) { tokenStates.delete(key); break; } }
+    state = { token: null, pending: null };
+    tokenStates.set(namespace, state);
+  }
+  return state;
+}
 let requestTail: Promise<void> = Promise.resolve();
 let lastRequestFinishedAt = 0;
 let lockClientReady: Promise<Client> | null = null;
@@ -19,11 +30,9 @@ export class SellfoxRequestError extends Error {
   }
 }
 
-function credentials() {
-  const clientId = process.env.SELLFOX_CLIENT_ID;
-  const clientSecret = process.env.SELLFOX_CLIENT_SECRET;
-  if (!clientId || !clientSecret) throw new SellfoxRequestError("未配置 SELLFOX_CLIENT_ID 和 SELLFOX_CLIENT_SECRET。", false);
-  return { clientId, clientSecret };
+async function credentials() {
+  try { return await (currentSellfoxCredentials() ?? legacySellfoxCredentials()); }
+  catch { throw new SellfoxRequestError("赛狐凭据未配置或不可用，未发送请求。", false); }
 }
 
 const officialErrorText: Record<number, string> = {
@@ -47,11 +56,11 @@ function responseError(response: Response, code?: number) {
   return new SellfoxRequestError(`赛狐接口调用失败（HTTP ${response.status}${code ? ` / ${code}` : ""}${official ? `，${official}` : ""}）。`, retryable, code);
 }
 
-async function getAccessToken() {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.value;
-  if (!cachedTokenRequest) {
-    cachedTokenRequest = (async () => {
-      const { clientId, clientSecret } = credentials();
+async function getAccessToken(credentials: SellfoxResolvedCredentials, state: TokenState) {
+  if (state.token && state.token.expiresAt > Date.now()) return state.token.value;
+  if (!state.pending) {
+    state.pending = (async () => {
+      const { clientId, clientSecret } = credentials;
       const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
       const { response, payload } = await fetchJsonWithTimeout<{ access_token?: string; expires_in?: number }>(() => ({
         url: `${baseUrl}/api/oauth/v2/token.json?${params}`, init: { cache: "no-store" },
@@ -63,13 +72,18 @@ async function getAccessToken() {
         throw new SellfoxRequestError("赛狐 Token 响应缺少有效凭证或毫秒有效期。", false);
       }
       // Sellfox expires_in is milliseconds. Refresh early without extending short TTLs.
-      cachedToken = { value: token, expiresAt: Date.now() + ttlMs - Math.min(60_000, ttlMs * 0.1) };
+      state.token = { value: token, expiresAt: Date.now() + ttlMs - Math.min(60_000, ttlMs * 0.1) };
       return token;
     })();
   }
-  const pending = cachedTokenRequest;
+  const pending = state.pending;
   try { return await pending; }
-  finally { if (cachedTokenRequest === pending) cachedTokenRequest = null; }
+  finally { if (state.pending === pending) state.pending = null; }
+}
+
+/** Explicit administrator connection test: fresh token only, no business API or token response. */
+export async function testSellfoxConnection(credentials: SellfoxResolvedCredentials) {
+  await getAccessToken(credentials, { token: null, pending: null });
 }
 
 async function getLockClient() {
@@ -156,11 +170,13 @@ async function fetchJsonWithTimeout<T>(buildRequest: () => HttpRequest) {
 }
 
 export async function sellfoxPost<T>(path: string, body: unknown, options?: { retry?: boolean }): Promise<T> {
-  const { clientId, clientSecret } = credentials();
+  const resolved = await credentials();
+  const { clientId, clientSecret } = resolved;
+  const state = tokenState(resolved.namespace);
   let refreshedToken = false;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      const accessToken = await getAccessToken();
+      const accessToken = await getAccessToken(resolved, state);
       const { response, payload } = await fetchJsonWithTimeout<T>(() => {
         const timestamp = String(Date.now());
         const nonce = String(randomInt(1, 999_999_999));
@@ -171,7 +187,7 @@ export async function sellfoxPost<T>(path: string, body: unknown, options?: { re
         return { url: `${baseUrl}${path}?${query}`, init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" } };
       });
       if (payload.code === 40001) {
-        if (cachedToken?.value === accessToken) cachedToken = null;
+        if (state.token?.value === accessToken) state.token = null;
         if (!refreshedToken && attempt < 3) { refreshedToken = true; continue; }
       }
       if (!response.ok || payload.code) throw responseError(response, payload.code);
@@ -182,4 +198,13 @@ export async function sellfoxPost<T>(path: string, body: unknown, options?: { re
     }
   }
   throw new SellfoxRequestError("赛狐接口调用超过重试限制。", false);
+}
+
+/** Call only after the worker has drained its in-flight jobs. */
+export async function closeSellfoxClient() {
+  await requestTail;
+  const pending = lockClientReady;
+  lockClientReady = null;
+  if (pending) await pending.then(client => client.end()).catch(() => undefined);
+  tokenStates.clear();
 }

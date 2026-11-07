@@ -1,3 +1,4 @@
+import { getSellfoxCredentialStatus } from "@/lib/sellfox/credential-store";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({
-      configured: Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET),
+      configured: (await getSellfoxCredentialStatus(where)).configured,
       stores,
       hourlyCount,
       counts: { stores: stores.length, inventory: inventoryCount, sales: salesCount, performance: performanceCount, hourly: hourlyCount },

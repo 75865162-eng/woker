@@ -25,6 +25,7 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
 
     const { user } = permission;
     const { agentId } = await context.params;
+    if (agentId.startsWith("selection-research-v1:")) return NextResponse.json({ error: "Use the owner-scoped selection research API." }, { status: 404 });
     const scope = workspaceScopeFromRequest(request);
     const runtimeConfig = await resolveAgentRuntimeConfigStatus(user, scope);
 

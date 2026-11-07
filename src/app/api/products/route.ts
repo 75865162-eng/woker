@@ -1,3 +1,4 @@
+import { stripAmazonProductObservations } from "@/lib/products/amazon-field-policy";
 import { readAmazonProductsForSkus } from "@/lib/operations/amazon-products";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -61,9 +62,7 @@ function isProduct(value: unknown): value is Product {
 }
 
 function normalizeProduct(product: Product): Product {
-  const clean = { ...product };
-  delete clean.amazonSnapshots;
-  delete clean.amazonSnapshotError;
+  const clean = stripAmazonProductObservations(product);
   return {
     ...clean,
     id: product.id || `prod-${product.sku}`,
@@ -371,7 +370,7 @@ export async function getProductsResponse(
         const rolePermissions = permissions ?? await import("@/lib/accounts/role-permissions-server").then((module) => module.getOrganizationRolePermissions(user.organizationId));
         if (roleCanPerformAction(user.role, "operations", "view", rolePermissions) && list.products.length) {
           try {
-            const snapshots = await measure("amazonSnapshots", readAmazonProductsForSkus(user.organizationId, scope.workspaceId, list.products.map((row) => row.sku)));
+            const snapshots = await measure("amazonSnapshots", readAmazonProductsForSkus(user.organizationId, scope.workspaceId, list.products.map((row) => row.sku), user.id));
             payload = { ...list, products: list.products.map((row) => ({ ...row, amazonSnapshots: snapshots.filter((snapshot) => snapshot.sellerSku === row.sku) })) };
           } catch {
             payload = { ...list, products: list.products.map((row) => ({ ...row, amazonSnapshotError: "Amazon 快照暂不可读；公司商品资料正常。" })) };

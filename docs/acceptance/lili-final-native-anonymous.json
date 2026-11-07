@@ -1,0 +1,38 @@
+{
+  "observedAt": "2026-11-07T14:24:04.851011+00:00",
+  "client": "Codex app-server native MCP",
+  "endpoint": "http://localhost:3017/api/lili/mcp",
+  "scope": "anonymous",
+  "runtimeStatus": "connected",
+  "visibleResearchTools": [
+    "research_list",
+    "research_evidence",
+    "research_pause",
+    "research_resume",
+    "research_recover",
+    "research_cancel"
+  ],
+  "stage0": {
+    "persisted": false,
+    "budgetMode": "reviewed",
+    "missingArguments": [
+      "workspaceId",
+      "maxMarketCalls"
+    ]
+  },
+  "privateCallsDenied": [
+    {
+      "tool": "research_list",
+      "isError": true
+    },
+    {
+      "tool": "research_evidence",
+      "isError": true
+    },
+    {
+      "tool": "research_pause",
+      "isError": true
+    }
+  ],
+  "limitation": "Anonymous discovery/rejection only; no authorized lifecycle acceptance or production HTTPS acceptance."
+}

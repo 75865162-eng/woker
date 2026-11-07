@@ -8,6 +8,7 @@ const tabs = [
   { id: "workspace", label: "工作区" },
   { id: "notifications", label: "通知" },
   { id: "integrations", label: "集成" },
+  { id: "skill-erp", label: "Skill / ERP" },
   { id: "operations", label: "运维" },
 ] as const;
 
@@ -18,12 +19,14 @@ export function SettingsTabs({
   workspaceContent,
   notificationContent,
   integrationsContent,
+  skillErpContent,
   operationsContent,
 }: {
   modelContent: ReactNode;
   workspaceContent: ReactNode;
   notificationContent: ReactNode;
   integrationsContent: ReactNode;
+  skillErpContent: ReactNode;
   operationsContent: ReactNode;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("models");
@@ -42,8 +45,9 @@ export function SettingsTabs({
   }, []);
 
   useEffect(() => {
-    if (activeTab === "integrations" && window.location.hash === "#amazon-sp-api") {
-      requestAnimationFrame(() => document.getElementById("amazon-sp-api")?.scrollIntoView({ block: "start" }));
+    const target = window.location.hash.slice(1);
+    if (activeTab === "integrations" && ["amazon-sp-api", "sellfox-credentials"].includes(target)) {
+      requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: "start" }));
     }
   }, [activeTab]);
 
@@ -59,6 +63,7 @@ export function SettingsTabs({
     workspace: workspaceContent,
     notifications: notificationContent,
     integrations: integrationsContent,
+    "skill-erp": skillErpContent,
     operations: operationsContent,
   };
 

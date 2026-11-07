@@ -1,0 +1,25 @@
+{
+  "contract": "Amazon Reports 2021-06-30 / Inventory Ledger Report - Detailed View",
+  "reportType": "GET_LEDGER_DETAIL_VIEW_DATA",
+  "role": "Amazon Fulfillment",
+  "requestedOrScheduled": "request-only",
+  "output": "tab-delimited flat file",
+  "history": "up to 18 months",
+  "reportOptions": {
+    "eventType": ["", "Adjustments", "CustomerReturns", "Receipts", "Shipments", "VendorReturns", "WhseTransfers"],
+    "FNSKU": "optional item filter",
+    "MSKU": "optional item filter",
+    "ASIN": "optional item filter"
+  },
+  "columns": [
+    "Date", "FNSKU", "ASIN", "MSKU", "Title", "Event Type", "Reference ID", "Quantity",
+    "Fulfillment Center", "Disposition", "Reason", "Country", "Reconciled Quantity",
+    "Unreconciled Quantity", "Date and Time", "Store"
+  ],
+  "runtimeScope": {
+    "maxClosedDateWindowDays": 31,
+    "maxLookbackDays": 540,
+    "automaticSchedules": false,
+    "productRecordWrites": false
+  }
+}

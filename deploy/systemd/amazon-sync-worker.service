@@ -1,13 +1,16 @@
 [Unit]
-Description=Amazon SP-API inventory sync worker
+Description=Amazon SP-API automatic data synchronization worker
 After=network-online.target docker.service amazon-web.service
 Wants=network-online.target
+# PostgreSQL/Redis may become ready after this service during a host reboot.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/amazon-ad-bulk-current
 EnvironmentFile=/opt/amazon-ad-bulk-operation/.env
 Environment=NODE_ENV=production
+Environment=ERP_RUNTIME_MODE=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=AMAZON_SYNC_WORKER_CONCURRENCY=1
 ExecStart=/usr/bin/npm run worker:amazon-sync

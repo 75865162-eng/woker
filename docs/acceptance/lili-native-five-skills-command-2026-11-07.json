@@ -1,0 +1,119 @@
+{
+  "client": "Codex app-server native MCP",
+  "server": "lili",
+  "endpoint": "http://localhost:3017/api/lili/mcp",
+  "loadedAt": "2026-11-07T12:20:57.139013+00:00",
+  "calls": [
+    {
+      "tool": "lili_ping",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_search_skills",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "skill_id": "amazon-niche-finder"
+    },
+    {
+      "tool": "meta_search_skills",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "skill_id": "amazon-product-research"
+    },
+    {
+      "tool": "meta_search_skills",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "skill_id": "amazon-review-analyzer"
+    },
+    {
+      "tool": "meta_search_skills",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "skill_id": "tariff-calculator-amazon"
+    },
+    {
+      "tool": "meta_search_skills",
+      "skill_id": null
+    },
+    {
+      "tool": "meta_get_skill_manifest",
+      "skill_id": "amazon-product-selection"
+    }
+  ],
+  "skills": [
+    {
+      "skill_id": "amazon-niche-finder",
+      "path": "/Users/chenjieliang/.codex/skills/lili-amazon-niche-finder/SKILL.md",
+      "status": "local-hit",
+      "loaded": true,
+      "version": "sha256:fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3",
+      "sha256": "fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3",
+      "unavailable_original_tool_references": [
+        "market_find_products",
+        "market_find_node",
+        "market_scan_node"
+      ]
+    },
+    {
+      "skill_id": "amazon-product-research",
+      "path": "/Users/chenjieliang/.codex/skills/lili-amazon-product-research/SKILL.md",
+      "status": "local-hit",
+      "loaded": true,
+      "version": "sha256:3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef",
+      "sha256": "3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef",
+      "unavailable_original_tool_references": [
+        "market_find_products",
+        "market_get_asin",
+        "market_research_keyword"
+      ]
+    },
+    {
+      "skill_id": "amazon-review-analyzer",
+      "path": "/Users/chenjieliang/.codex/skills/lili-amazon-review-analyzer/SKILL.md",
+      "status": "local-hit",
+      "loaded": true,
+      "version": "sha256:7b95df3f4977d32e577e4de5c008d4fac365136729cb5ed69d051d7e81b425b1",
+      "sha256": "7b95df3f4977d32e577e4de5c008d4fac365136729cb5ed69d051d7e81b425b1",
+      "unavailable_original_tool_references": [
+        "market_get_reviews",
+        "market_get_asin",
+        "competitor_find_similar"
+      ]
+    },
+    {
+      "skill_id": "tariff-calculator-amazon",
+      "path": "/Users/chenjieliang/.codex/skills/lili-tariff-calculator-amazon/SKILL.md",
+      "status": "local-hit",
+      "loaded": true,
+      "version": "sha256:f83727877be66917b094535b10087eac400da749a5aa1fb120dc8481d5710f9c",
+      "sha256": "f83727877be66917b094535b10087eac400da749a5aa1fb120dc8481d5710f9c",
+      "unavailable_original_tool_references": [
+        "finance_get_fee_estimate",
+        "market_get_asin"
+      ]
+    },
+    {
+      "skill_id": "amazon-product-selection",
+      "path": "/Users/chenjieliang/.codex/skills/lili-amazon-product-selection/SKILL.md",
+      "status": "local-hit",
+      "loaded": true,
+      "version": "sha256:5bde1f3ae9f8841d01b39d77a0ec7dbb644c052f20af4cc7c7eeca90a87d815b",
+      "sha256": "5bde1f3ae9f8841d01b39d77a0ec7dbb644c052f20af4cc7c7eeca90a87d815b",
+      "unavailable_original_tool_references": [
+        "market_find_products",
+        "finance_get_fee_estimate",
+        "market_get_reviews"
+      ]
+    }
+  ],
+  "authenticated": true
+}

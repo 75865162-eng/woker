@@ -6,8 +6,8 @@ import type { SyncScope } from "./policy";
 import type { WorkspaceScopeInput } from "@/lib/workspace/scope";
 
 /** Legacy consumers get aggregate freshness from the same published heads as the center. */
-export async function centerCompatibilityReadiness(scope: SyncScope, workspace: WorkspaceScopeInput): Promise<OperationsReadiness> {
-  const sources = await listSources(scope), heads = await publishedSnapshotScopes(scope, "inventory");
+export async function centerCompatibilityReadiness(scope: SyncScope, workspace: WorkspaceScopeInput, actor?: string): Promise<OperationsReadiness> {
+  const sources = await listSources(scope, {}, actor), heads = await publishedSnapshotScopes(scope, "inventory", actor);
   const totals = heads.length ? await prisma.amazonInventorySnapshot.aggregate({ where: inventoryPublishedWhere(scope, heads), _sum: { fulfillableQuantity: true, inboundWorkingQuantity: true, inboundShippedQuantity: true, inboundReceivingQuantity: true, reservedQuantity: true, unfulfillableQuantity: true } }) : null;
   const inventorySources = sources.filter(s => s.resource === "inventory" && s.enabled), capturedAt = oldestSnapshot(heads);
   const inventory = { status: !inventorySources.length || inventorySources.some(s => !s.activeRunId) ? "NOT_SYNCED" as const : inventorySources.some(s => !s.lastSuccessAt || Date.now() - s.lastSuccessAt.getTime() > s.freshnessMinutes * 60000) ? "STALE" as const : "FRESH" as const,

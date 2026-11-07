@@ -100,6 +100,36 @@ test("tool gateway requests approval for critical tools", async () => {
   assert.equal(result.approval?.riskLevel, "CRITICAL");
 });
 
+test("MCP gateway validates registered input and output schemas", async () => {
+  const gateway = createToolGateway({ tools: [], adapters: [] });
+  const inputSchema = { type: "object", required: ["page"], properties: { page: { type: "integer", minimum: 1, maximum: 4 } }, additionalProperties: false };
+  const outputSchema = { type: "object", required: ["items"], properties: { items: { type: "array" } } };
+  await assert.rejects(() => gateway.invokeMcp({ toolId: "mcp.read", input: { page: 5 }, inputSchema, outputSchema, timeoutMs: 100, execute: async () => ({ items: [] }) }), /input does not match/);
+  await assert.rejects(() => gateway.invokeMcp({ toolId: "mcp.read", input: { page: 1 }, inputSchema, outputSchema, timeoutMs: 100, execute: async () => ({ total: 0 }) }), /output does not match/);
+  assert.deepEqual(await gateway.invokeMcp({ toolId: "mcp.read", input: { page: 1 }, inputSchema, outputSchema, timeoutMs: 100, execute: async () => ({ items: [] }) }), { items: [] });
+});
+
+test("MCP gateway bounds a single attempt and never returns a late success", async () => {
+  const gateway = createToolGateway({ tools: [], adapters: [] });
+  const inputSchema = { type: "object", additionalProperties: false };
+  let executions = 0;
+  await assert.rejects(() => gateway.invokeMcp({ toolId: "mcp.read", input: {}, inputSchema, outputSchema: { type: "object" }, timeoutMs: 5,
+    execute: async signal => { executions += 1; await new Promise(resolve => setTimeout(resolve, 20)); return { late: signal.aborted }; } }), /exceeded its execution budget/);
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(executions, 1);
+});
+
+test("MCP gateway propagates caller cancellation to handlers", async () => {
+  const gateway = createToolGateway({ tools: [], adapters: [] });
+  const controller = new AbortController();
+  const pending = gateway.invokeMcp({ toolId: "mcp.read", input: {}, inputSchema: { type: "object" }, outputSchema: { type: "object" }, timeoutMs: 100,
+    signal: controller.signal, execute: async signal => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }) });
+  controller.abort();
+  await assert.rejects(() => pending, /cancelled/);
+});
+
 test("runtime executes a full run with trace and tool calls", async () => {
   const agent = createAgent();
   const runtime = createAgentRuntime({

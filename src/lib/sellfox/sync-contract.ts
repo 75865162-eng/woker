@@ -1,4 +1,4 @@
-export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
+export const sellfoxSyncResources = ["stores", "inventory", "sales", "performance", "hourly", "listings", "orders", "fba_shipments", "ads_report", "ads_targeting", "ads_search_term", "ads_campaign", "ads_ad_group", "ads_placement"] as const;
 export type SellfoxSyncResource = (typeof sellfoxSyncResources)[number];
 
 export function sellfoxSyncDisabledReason(resource: string): string | null {
@@ -70,6 +70,11 @@ export function normalizeSellfoxDates(resource: SellfoxSyncResource, input: Reco
     return { reportDate: today };
   }
   if (resource === "stores") return {};
+  if (resource === "fba_shipments" && startDate === undefined && endDate === undefined && reportDate === undefined) return {};
+  if (resource === "orders" && startDate === undefined && endDate === undefined && reportDate === undefined) {
+    startDate = sellfoxDateAt(now, -6);
+    endDate = sellfoxDateAt(now);
+  }
   const from = String(startDate ?? endDate ?? reportDate ?? sellfoxDateAt(now, -1));
   const to = String(endDate ?? startDate ?? reportDate ?? from);
   const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;

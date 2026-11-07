@@ -82,3 +82,16 @@ test("duplicate create reports conflict without querying a PostgreSQL transactio
   const tx = { productRecord: { create: async () => { throw new Prisma.PrismaClientKnownRequestError("duplicate", { code: "P2002", clientVersion: "test" }); } } } as unknown as Prisma.TransactionClient;
   await assert.rejects(saveProductRecord(tx, { product, user, scope, existingRecord: null }), ProductRecordRevisionConflictError);
 });
+
+test("all ProductRecord write entry points strip read-only Amazon observations and preserve ERP fields", async () => {
+  const { stripAmazonProductObservations } = await import("@/lib/products/amazon-field-policy");
+  const { createProductRecordData } = await import("@/lib/products/product-record-repository");
+  const manual = { ...product, englishName: "ERP maintained title", asin: "ERP-ASIN", amazonSnapshotError: "source unavailable", amazonSnapshots: [{ asin: "AMAZON-ASIN", listingStatus: "BUYABLE" }] } as Product;
+  const clean = stripAmazonProductObservations(manual);
+  assert.equal(clean.englishName, "ERP maintained title"); assert.equal(clean.asin, "ERP-ASIN");
+  assert.equal("amazonSnapshots" in clean, false); assert.equal("amazonSnapshotError" in clean, false);
+  assert.ok(manual.amazonSnapshots, "form observation data is not mutated");
+  const payload = createProductRecordData(manual, user, scope).payload as Record<string, unknown>;
+  assert.equal(payload.asin, "ERP-ASIN"); assert.equal("amazonSnapshots" in payload, false);
+  assert.equal(createProductRecordData(manual, user, scope).userId, user.id);
+});

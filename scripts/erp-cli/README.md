@@ -59,7 +59,7 @@ SKU 按组织 + 工作区定位。新建默认 `pending`，ID 由商品聚合生
 CLI 从当前进程读取环境变量，不自动加载 `.env`。需要文件加载时可直接运行：
 
 ```bash
-node --env-file=.env --import tsx scripts/erp-cli/src/cli.ts products upsert --file scripts/erp-cli/draft.example.json
+node --import ./scripts/runtime/database-bootstrap.mjs --import tsx scripts/erp-cli/src/cli.ts products upsert --file scripts/erp-cli/draft.example.json
 ```
 
 Agent 要获取纯 JSON stdout，可用 `pnpm --silent erp -- ...` 或 `npm --silent run erp -- ...`，也可直接使用上面的 node 入口。没有凭据、fixture、无权限或失败均非 0 退出。默认权限模型与网页角色/旧权限配置一致；CLI 的只读权限查询不会初始化角色记录。数据库原始诊断不输出到 JSON，避免泄露连接信息。

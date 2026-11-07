@@ -1,6 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import path from "node:path";
 import type { StorageDriver, StoredObject } from "@/lib/storage/types";
+import { collectBoundedBuffer } from "./bounded-buffer";
 
 const uploadRoot = path.resolve(process.cwd(), process.env.UPLOAD_DIR ?? "uploads");
 
@@ -35,6 +37,13 @@ export const localStorageDriver: StorageDriver = {
 
   async getBuffer(key) {
     return readFile(resolveStoragePath(key));
+  },
+
+  async getBoundedBuffer(key, maxBytes) {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error("STORAGE_READ_LIMIT_INVALID");
+    const stream = createReadStream(resolveStoragePath(key), { highWaterMark: Math.min(64 * 1024, maxBytes + 1) });
+    try { return await collectBoundedBuffer(stream, maxBytes); }
+    finally { stream.destroy(); }
   },
 
   getLocalPath(key) {

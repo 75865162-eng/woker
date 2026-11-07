@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         workspaceId: scope.workspaceId,
       },
     });
-    if (!fileObject) {
+    if (!fileObject || fileObject.storageKey.startsWith("selection-research/")) {
       return NextResponse.json({ error: "商品附件不存在。" }, { status: 404 });
     }
 

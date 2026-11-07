@@ -104,17 +104,22 @@ function money(value: number | null, currency: string) {
   }
 }
 
-export function OperationsHubWorkbench() {
-  const [tab, setTab] = useState("overview");
+export type OperationsBusinessTab = "inventory" | "catalog" | "replenishment" | "ads";
+
+export function OperationsHubWorkbench({ embeddedTab, onSync, canSync = true }: { embeddedTab?: OperationsBusinessTab; onSync?: (resource: AmazonReadDomain) => void; canSync?: boolean } = {}) {
+  const [activeTab, setTab] = useState("overview");
+  const tab = embeddedTab ?? activeTab;
+  const needsReadiness = !embeddedTab || embeddedTab === "inventory";
   const [runResource, setRunResource] = useState("");
   const [runStatus, setRunStatus] = useState("");
   const [runDate, setRunDate] = useState("");
   const requests = useRef({ readiness: 0, inventory: 0, metrics: 0, scope: 0 });
   useEffect(() => {
+    if (embeddedTab) return;
     const update = () => setTab(new URLSearchParams(window.location.search).get("tab") || "overview");
     update(); window.addEventListener("popstate", update);
     return () => window.removeEventListener("popstate", update);
-  }, []);
+  }, [embeddedTab]);
   const [readiness, setReadiness] = useState<OperationsReadiness | null>(null);
   const [inventory, setInventory] = useState<InventoryResponse | null>(null);
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
@@ -195,6 +200,7 @@ export function OperationsHubWorkbench() {
   }, [metricAsin, metricFrom, metricPage, metricSku, metricTo]);
 
   useEffect(() => {
+    if (!needsReadiness) return;
     let cancelled = false;
     setLoading(true);
     void loadReadiness().catch((error) => {
@@ -203,15 +209,16 @@ export function OperationsHubWorkbench() {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [loadReadiness, scopeRevision]);
+  }, [loadReadiness, scopeRevision, needsReadiness]);
 
   useEffect(() => {
+    if (!needsReadiness) return;
     const timer = window.setInterval(() => { void loadReadiness().catch(() => undefined); }, 30_000);
     return () => window.clearInterval(timer);
-  }, [loadReadiness]);
+  }, [loadReadiness, needsReadiness]);
 
-  useEffect(() => { void loadInventory(); }, [loadInventory, scopeRevision]);
-  useEffect(() => { void loadMetrics(); }, [loadMetrics, scopeRevision]);
+  useEffect(() => { if (!embeddedTab || embeddedTab === "inventory") void loadInventory(); }, [loadInventory, scopeRevision, embeddedTab]);
+  useEffect(() => { if (!embeddedTab || embeddedTab === "ads") void loadMetrics(); }, [loadMetrics, scopeRevision, embeddedTab]);
   useEffect(() => {
     const reload = () => {
       requests.current.readiness++; requests.current.inventory++; requests.current.metrics++; requests.current.scope++;
@@ -224,26 +231,21 @@ export function OperationsHubWorkbench() {
   }, []);
 
   async function refreshAll() {
-    await Promise.all([loadReadiness(), loadInventory(), loadMetrics()]).catch((error) => {
+    await Promise.all([...(needsReadiness ? [loadReadiness()] : []), ...(!embeddedTab || embeddedTab === "inventory" ? [loadInventory()] : []), ...(!embeddedTab || embeddedTab === "ads" ? [loadMetrics()] : [])]).catch((error) => {
       setNotice(error instanceof Error ? error.message : "经营中台刷新失败。");
     });
   }
 
   async function requestSync(resource = selectedResource) {
+    if (embeddedTab) { if (canSync) onSync?.(resource); return; }
     const scope = requests.current.scope;
     setRequesting(true);
     setNotice("");
     try {
-      const response = await fetch("/api/operations/sync-runs", {
-        method: "POST",
-        headers: new Headers([...workspaceHeaders(), ["Content-Type", "application/json"]]),
-        body: JSON.stringify({ resource, idempotencyKey: `manual-${resource}-${crypto.randomUUID()}` }),
-      });
-      const payload = (await response.json()) as { run?: OperationsSyncRun; error?: string };
+      const response = await fetch("/operations?view=approvals");
+      void response;
       if (scope !== requests.current.scope) return;
-      if (!response.ok || !payload.run) throw new Error(payload.error || "同步请求创建失败。");
-      setNotice(payload.run.error || "同步请求已创建。");
-      await refreshAll();
+      window.location.assign(`/operations?view=${resource === "inventory" || resource === "catalog" ? "connections" : "approvals"}`);
     } catch (error) {
       if (scope === requests.current.scope) setNotice(error instanceof Error ? error.message : "同步请求创建失败。");
     } finally {
@@ -256,12 +258,8 @@ export function OperationsHubWorkbench() {
     setValidating(true);
     setNotice("");
     try {
-      const response = await fetch("/api/operations/connection/validate", { method: "POST", headers: workspaceHeaders() });
-      const payload = (await response.json()) as { error?: string };
       if (scope !== requests.current.scope) return;
-      if (!response.ok) throw new Error(payload.error || "Amazon 连接校验失败。");
-      setNotice("Amazon 连接校验完成。商品与库存执行器已就绪；未绑定 Seller ID/店铺/站点时同步将明确阻断。");
-      await refreshAll();
+      window.location.assign("/operations?view=connections");
     } catch (error) {
       if (scope === requests.current.scope) setNotice(error instanceof Error ? error.message : "Amazon 连接校验失败。");
     } finally {
@@ -280,11 +278,12 @@ export function OperationsHubWorkbench() {
 
   return (
     <div className="space-y-5">
-      <nav aria-label="经营中台分区" className="flex flex-wrap gap-2 border-b border-border pb-3">
+      {embeddedTab && ["inventory", "ads"].includes(embeddedTab) && <div className="flex justify-end"><Button size="sm" variant="secondary" onClick={() => void refreshAll()}>刷新数据</Button></div>}
+      {!embeddedTab && <nav aria-label="经营中台分区" className="flex flex-wrap gap-2 border-b border-border pb-3">
         {[["overview", "概览"], ["sync", "同步与计划"], ["inventory", "库存"], ["ads", "广告联看"], ["orders", "订单"], ["catalog", "在线产品"], ["replenishment", "补货计划"], ["runs", "同步历史"]].map(([key, label]) => <a key={key} href={`?tab=${key}`} aria-current={tab === key ? "page" : undefined} className={`rounded px-3 py-2 text-sm ${tab === key ? "bg-brand text-white" : "text-muted"}`} onClick={(event) => { event.preventDefault(); window.history.pushState(null, "", `?tab=${key}`); setTab(key); }}>{label}</a>)}
         <Button size="sm" variant="secondary" onClick={() => void refreshAll()} disabled={requesting}>刷新数据</Button>
-      </nav>
-      {tab === "sync" && <SyncSchedulesPanel key={scopeRevision} headers={workspaceHeaders} onSync={(resource) => void requestSync(resource ?? "inventory")} onChanged={() => void refreshAll()} />}
+      </nav>}
+      {tab === "sync" && <SyncSchedulesPanel />}
       {tab === "replenishment" && <ReplenishmentPanel key={scopeRevision} headers={workspaceHeaders} />}
       {tab === "catalog" && <AmazonProductsPanel key={scopeRevision} headers={workspaceHeaders} />}
       {tab === "orders" && <section className="border border-border p-5"><h3 className="text-sm font-bold">订单 · NOT_SYNCED</h3><p title="赛狐有、API/本地无" className="mt-2 text-sm text-muted">赛狐有、API/本地无 · 订单明细尚未接入，不以销量件数冒充订单量。</p></section>}
@@ -296,7 +295,7 @@ export function OperationsHubWorkbench() {
         </div>
       ) : null}
 
-      <section hidden={tab !== "overview"} className="border-b border-border pb-5">
+      {tab === "overview" && <section className="border-b border-border pb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-brand text-white"><CloudCog className="h-5 w-5" /></div>
@@ -308,7 +307,7 @@ export function OperationsHubWorkbench() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!readiness?.connection.runtimeConfiguration.configured ? (
-              <Button size="sm" onClick={() => window.location.assign("/settings?tab=integrations#amazon-sp-api")}><CloudCog className="h-4 w-4" />去配置 Amazon 连接</Button>
+              <Button size="sm" onClick={() => window.location.assign("/operations?view=connections")}><CloudCog className="h-4 w-4" />去配置 Amazon 连接</Button>
             ) : readiness.connection.status !== "CONFIGURED" ? (
               <Button size="sm" onClick={() => void validateConnection()} disabled={validating}><ShieldCheck className="h-4 w-4" />{validating ? "校验中..." : "验证 Amazon 连接"}</Button>
             ) : null}
@@ -348,9 +347,9 @@ export function OperationsHubWorkbench() {
             <Button size="sm" onClick={() => void requestSync()} disabled={requesting}><ShieldCheck className="h-4 w-4" />{requesting ? "提交中..." : "请求只读同步"}</Button>
           </div>
         </div>
-      </section>
+      </section>}
 
-      <section hidden={tab !== "inventory"} className="border-b border-border pb-5">
+      {tab === "inventory" && <section className="border-b border-border pb-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div><div className="flex items-center gap-2"><PackageSearch className="h-4 w-4 text-brand" /><h3 className="text-sm font-bold text-foreground">Amazon 库存快照</h3><Badge tone={freshnessBadge(readiness?.inventory.status === "FRESH" ? "FRESH" : readiness?.inventory.status === "STALE" ? "STALE" : "NOT_SYNCED").tone}>{readiness?.inventory.status === "FRESH" ? "新鲜" : readiness?.inventory.status === "STALE" ? "已过期" : "未同步"}</Badge></div>
             <p className="mt-1 text-xs text-muted">可售 {inventoryQuantity(readiness?.inventory.fulfillableQuantity)} · 在途 {inventoryQuantity(readiness?.inventory.inboundQuantity)} · 预留 {inventoryQuantity(readiness?.inventory.reservedQuantity)} · 不可售 {inventoryQuantity(readiness?.inventory.unfulfillableQuantity)}</p>
@@ -358,8 +357,8 @@ export function OperationsHubWorkbench() {
             {readiness?.domains.inventory.reason ? <p className="mt-1 text-xs text-amber-800">{readiness.domains.inventory.reason} {readiness.domains.inventory.recommendedAction}</p> : null}
             {readiness?.domains.inventory.lastAttemptError ? <p className="mt-1 text-xs text-red-700">最近同步失败：{readiness.domains.inventory.lastAttemptError}</p> : null}
           </div>
-          <Button size="sm" onClick={() => void requestSync("inventory")} disabled={requesting}>立即同步库存</Button>
-          <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); setInventoryPage(1); setInventorySku(inventorySkuInput.trim()); }}>
+          <Button size="sm" onClick={() => void requestSync("inventory")} disabled={requesting || !canSync}>立即同步库存</Button>
+          <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); setInventoryPage(1); setInventorySku(inventorySkuInput.trim()); }}>
             <label className="grid gap-1 text-xs font-semibold text-muted">按 SKU 查询<input value={inventorySkuInput} onChange={(event) => setInventorySkuInput(event.target.value)} className="h-9 w-52 max-w-full border border-border px-3 text-sm text-foreground" placeholder="输入 Seller SKU" /></label>
             <Button size="sm" variant="secondary" type="submit"><PackageSearch className="h-4 w-4" />查询</Button>
           </form>
@@ -371,9 +370,9 @@ export function OperationsHubWorkbench() {
           </table>
         </div>
         <div className="mt-3 flex items-center justify-end gap-2 text-xs text-muted"><span>{inventory?.pagination.total ?? 0} 条 · 第 {inventory?.pagination.page ?? inventoryPage} / {Math.max(inventory?.pagination.pageCount ?? 0, 1)} 页</span><Button variant="secondary" size="sm" aria-label="上一页库存" onClick={() => setInventoryPage((page) => Math.max(1, page - 1))} disabled={inventoryPage <= 1 || inventoryLoading}><ChevronLeft className="h-4 w-4" /></Button><Button variant="secondary" size="sm" aria-label="下一页库存" onClick={() => setInventoryPage((page) => page + 1)} disabled={inventoryLoading || (inventory?.pagination.pageCount ?? 0) <= inventoryPage}><ChevronRight className="h-4 w-4" /></Button></div>
-      </section>
+      </section>}
 
-      <section hidden={tab !== "ads"} className="border-b border-border pb-5">
+      {tab === "ads" && <section className="border-b border-border pb-5">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold text-foreground">经营指标 · 广告 × 销量</h3><a href="/workspace" className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline">广告优化工作台<ArrowUpRight className="h-3.5 w-3.5" /></a></div><p title="赛狐有、API/本地无" className="mt-1 max-w-3xl text-xs text-muted">{metrics?.sourceNote ?? "赛狐有、API/本地无 · 本页广告日投影未接通；不另建广告同步。"} TACOS = 广告花费 ÷ 销售额。</p></div>
           <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); setMetricPage(1); setMetricSku(metricSkuInput.trim()); setMetricAsin(metricAsinInput.trim()); }}>
@@ -391,9 +390,9 @@ export function OperationsHubWorkbench() {
           </table>
         </div>
         <div className="mt-3 flex items-center justify-end gap-2 text-xs text-muted"><span>第 {metricPage} 页</span><Button variant="secondary" size="sm" aria-label="上一页经营指标" onClick={() => setMetricPage((page) => Math.max(1, page - 1))} disabled={metricPage <= 1 || metricsLoading}><ChevronLeft className="h-4 w-4" /></Button><Button variant="secondary" size="sm" aria-label="下一页经营指标" onClick={() => setMetricPage((page) => page + 1)} disabled={metricsLoading || !metrics?.pagination.hasNextPage}><ChevronRight className="h-4 w-4" /></Button></div>
-      </section>
+      </section>}
 
-      <section hidden={!["overview", "sync", "runs"].includes(tab)}>
+      {["overview", "sync", "runs"].includes(tab) && <section>
         <div className="flex items-center gap-2"><h3 className="text-sm font-bold text-foreground">同步历史</h3><span className="text-xs text-muted">最近 {readiness?.runs.length ?? 0} 条</span></div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs"><select aria-label="历史数据域" value={runResource} onChange={(e) => setRunResource(e.target.value)}><option value="">全部域</option>{amazonReadDomains.map((domain) => <option key={domain} value={domain}>{resourceLabel(domain)}</option>)}</select><select aria-label="历史状态" value={runStatus} onChange={(e) => setRunStatus(e.target.value)}><option value="">全部状态</option>{["SUCCEEDED", "FAILED", "BLOCKED", "QUEUED", "RUNNING"].map((status) => <option key={status}>{status}</option>)}</select><input aria-label="历史开始日期" type="date" value={runDate} onChange={(e) => setRunDate(e.target.value)} /><span className="text-muted">筛选最近 20 次运行</span></div>
         <div className="mt-3 overflow-x-auto border border-border">
@@ -402,7 +401,7 @@ export function OperationsHubWorkbench() {
             <tbody>{readiness?.runs.length ? readiness.runs.filter((run) => (!runResource || run.resource === runResource) && (!runStatus || run.status === runStatus) && (!runDate || run.startedAt.slice(0, 10) >= runDate) && (tab !== "overview" || run.status === "FAILED" || run.status === "BLOCKED")).map((run) => { const badge = runBadge(run.status); return <tr key={run.id} className="border-b border-border last:border-0"><td className="px-3 py-2.5 font-medium text-foreground">{resourceLabel(run.resource)}</td><td className="px-3 py-2.5"><Badge tone={badge.tone}>{badge.label}</Badge></td><td className="px-3 py-2.5 text-muted">{formatDateTime(run.startedAt)}</td><td className="max-w-xl px-3 py-2.5 text-muted">{run.error || (run.status === "SUCCEEDED" ? "同步成功" : "等待执行结果")}<details className="mt-1 text-xs"><summary>运行详情</summary><p>{run.id} · 耗时：{run.finishedAt ? `${Math.max(0, Math.round((Date.parse(run.finishedAt) - Date.parse(run.startedAt)) / 1000))} 秒` : "执行中"}</p><pre className="whitespace-pre-wrap">{JSON.stringify(run.summary, null, 2)}</pre></details></td></tr>; }) : <tr><td colSpan={4} className="px-3 py-8 text-center text-sm text-muted"><CheckCircle2 className="mx-auto mb-2 h-5 w-5" />{loading ? "读取同步历史中..." : "暂无同步记录。"}</td></tr>}</tbody>
           </table>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

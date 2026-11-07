@@ -1,0 +1,354 @@
+/* Sellfox typography from docs/sellfox-replica/assets/typography.json.
+   Scoped to .sellfox-ui so AppShell keeps its own font. */
+.sellfox-ui {
+  --sf-font: -apple-system, BlinkMacSystemFont, Verdana, Roboto, "Helvetica Neue", Arial, "Noto Sans S Chinese", "Noto Sans", sans-serif;
+  --sf-blue: #3d6ef5;
+  --sf-blue-soft: #eef3ff;
+  --sf-line: #e6e8ee;
+  --sf-text: #303133;
+  --sf-muted: #909399;
+  --sf-head: #f7f8fa;
+  font-family: var(--sf-font);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: normal;
+  color: var(--sf-text);
+  background: #f5f6f8;
+  border: 1px solid var(--sf-line);
+  border-radius: 2px;
+}
+
+.sellfox-ui button,
+.sellfox-ui input,
+.sellfox-ui select {
+  font-family: var(--sf-font);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.sellfox-ui .sf-tabs {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  background: #fff;
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-tabs a,
+.sellfox-ui .sf-dims button {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 40px;
+}
+
+.sellfox-ui .sf-tabs a {
+  flex: none;
+  padding: 0 16px;
+  color: #606266;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.sellfox-ui .sf-tabs a[aria-current="page"] {
+  color: var(--sf-blue);
+  border-bottom-color: var(--sf-blue);
+}
+
+.sellfox-ui .sf-dims {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 0 12px;
+  background: #fff;
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-dims button {
+  height: 40px;
+  padding: 0 12px;
+  color: #606266;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.sellfox-ui .sf-dims button[aria-current="page"] {
+  color: var(--sf-blue);
+  border-bottom-color: var(--sf-blue);
+}
+
+.sellfox-ui .sf-dims button:disabled,
+.sellfox-ui .sf-actions button:disabled,
+.sellfox-ui .sf-check input:disabled + span {
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+.sellfox-ui .sf-filter,
+.sellfox-ui .sf-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fff;
+}
+
+.sellfox-ui .sf-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 40px;
+}
+
+.sellfox-ui .sf-filter input,
+.sellfox-ui .sf-filter select,
+.sellfox-ui .sf-pager select {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 32px;
+  color: var(--sf-text);
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 2px;
+}
+
+.sellfox-ui .sf-metrics {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid #dcdfe6;
+  border-radius: 2px;
+}
+
+.sellfox-ui .sf-metrics button {
+  height: 32px;
+  padding: 0 12px;
+  color: #606266;
+  background: #fff;
+  border: 0;
+  border-right: 1px solid #dcdfe6;
+  cursor: pointer;
+}
+
+.sellfox-ui .sf-metrics button:last-child { border-right: 0; }
+
+.sellfox-ui .sf-metrics button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--sf-blue);
+}
+
+.sellfox-ui .sf-search {
+  width: 220px;
+}
+
+.sellfox-ui .sf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  color: #606266;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.sellfox-ui .sf-btn-primary {
+  color: #fff;
+  background: var(--sf-blue);
+  border-color: var(--sf-blue);
+}
+
+.sellfox-ui .sf-btn:disabled {
+  color: #c0c4cc;
+  background: #f5f7fa;
+  border-color: #e4e7ed;
+}
+
+.sellfox-ui .sf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 0 12px 8px;
+  background: #fff;
+}
+
+.sellfox-ui .sf-actions .sf-spacer { flex: 1; }
+
+.sellfox-ui .sf-check {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  line-height: 32px;
+}
+
+.sellfox-ui .sf-notice {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #8a5a00;
+  background: #fff7e6;
+}
+
+.sellfox-ui .sf-table-wrap {
+  overflow: auto;
+  background: #fff;
+  border-top: 1px solid var(--sf-line);
+}
+
+.sellfox-ui table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.sellfox-ui th,
+.sellfox-ui td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid #eef0f3;
+  white-space: nowrap;
+}
+
+.sellfox-ui th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 23px;
+  color: #606266;
+  background: var(--sf-head);
+}
+
+.sellfox-ui td {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 23px;
+}
+
+.sellfox-ui .sf-thumb {
+  display: block;
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  background: #f2f3f5;
+  border: 1px solid var(--sf-line);
+  border-radius: 2px;
+}
+
+.sellfox-ui .sf-stack {
+  display: flex;
+  flex-direction: column;
+  line-height: 18px;
+}
+
+.sellfox-ui .sf-stack small,
+.sellfox-ui .sf-muted {
+  color: var(--sf-muted);
+  font-size: 12px;
+}
+
+.sellfox-ui .sf-link { color: var(--sf-blue); }
+
+.sellfox-ui .sf-empty {
+  padding: 48px 16px;
+  color: var(--sf-muted);
+  text-align: center;
+}
+
+.sellfox-ui .sf-empty strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #606266;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sellfox-ui .sf-totals,
+.sellfox-ui .sf-pager {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  background: #fff;
+  border-top: 1px solid var(--sf-line);
+}
+
+.sellfox-ui .sf-totals {
+  justify-content: flex-start;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.sellfox-ui .sf-pager {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.sellfox-ui .sf-pager button {
+  min-width: 28px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 28px;
+  color: #606266;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.sellfox-ui .sf-pager button[aria-current="page"] {
+  color: #fff;
+  background: var(--sf-blue);
+  border-color: var(--sf-blue);
+}
+
+.sellfox-ui .sf-pager button:disabled { color: #c0c4cc; cursor: not-allowed; }
+
+.sellfox-ui .sf-modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 35%);
+}
+
+.sellfox-ui .sf-modal {
+  width: min(520px, calc(100vw - 32px));
+  padding: 16px;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.sellfox-ui .sf-modal h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 40px;
+}
+
+.sellfox-ui .sf-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.sellfox-ui .sf-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}

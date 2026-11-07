@@ -1,3 +1,4 @@
+import { getSellfoxCredentialStatus } from "@/lib/sellfox/credential-store";
 import { sellfoxScheduleIntervals, nextSellfoxScheduleAt, sellfoxSyncScopeLock, defaultSellfoxBackfillStart } from "@/lib/sellfox/schedule-time";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
   const now = new Date();
   const heartbeat = await prisma.workerHeartbeat.findFirst({ where: { queueName: "sellfox-sync-jobs" }, orderBy: { lastSeenAt: "desc" }, select: { lastSeenAt: true, status: true } });
   const worker = { online: Boolean(heartbeat?.status === "online" && now.getTime() - heartbeat.lastSeenAt.getTime() <= 90_000), lastSeenAt: heartbeat?.lastSeenAt ?? null };
-  return NextResponse.json({ configured: Boolean(process.env.SELLFOX_CLIENT_ID && process.env.SELLFOX_CLIENT_SECRET), queueEnabled: process.env.QUEUE_DRIVER === "redis", worker, schedules: Object.entries(intervals).map(([resource, intervalMinutes]) => {
+  return NextResponse.json({ configured: (await getSellfoxCredentialStatus({ organizationId: permission.user.organizationId, workspaceId: scope.workspaceId })).configured, queueEnabled: process.env.QUEUE_DRIVER === "redis", worker, schedules: Object.entries(intervals).map(([resource, intervalMinutes]) => {
     const schedule = schedules.find((item) => item.resource === resource);
     return { resource, enabled: schedule?.enabled ?? false, intervalMinutes, lastEnqueuedAt: schedule?.lastEnqueuedAt ?? null, backfillStart: schedule?.backfillStart ?? (resource === "sales" ? defaultSellfoxBackfillStart() : null), backfillNextDate: schedule?.backfillNextDate ?? null, nextRunAt: schedule?.enabled ? nextSellfoxScheduleAt(schedule, now).toISOString() : null, disabledReason: sellfoxSyncDisabledReason(resource) };
   }) });
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   if (typeof body?.resource !== "string" || !Object.prototype.hasOwnProperty.call(intervals, body.resource) || typeof body.enabled !== "boolean") {
     return NextResponse.json({ error: "无效的定时同步设置。" }, { status: 400 });
   }
-  if (body.enabled && (!process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET)) return NextResponse.json({ error: "服务端未配置赛狐凭据。请联系管理员检查服务端环境变量。" }, { status: 503 });
+  if (body.enabled && !(await getSellfoxCredentialStatus({ organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request).workspaceId })).configured) return NextResponse.json({ error: "服务端未配置赛狐凭据或已保存配置不可用，请在设置的集成页检查。" }, { status: 503 });
   const scope = workspaceScopeFromRequest(request);
   const resource = body.resource as ScheduledResource;
   const disabledReason = sellfoxSyncDisabledReason(resource);

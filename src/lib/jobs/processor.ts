@@ -22,10 +22,12 @@ import { getStorageDriver } from "@/lib/storage";
 import type { AdjustmentDraft, CampaignGroup, DataBatch, LifecycleGroupId, PerformanceRow } from "@/lib/types";
 import type { CurrentUser } from "@/lib/auth/session";
 
+import { claimExecution, ExecutionLostError, type JobExecution } from "@/lib/runtime/job-execution";
+
 const maxProductExportRows = 100_000;
 
-function createResultKey(jobId: string) {
-  return `results/${new Date().toISOString().slice(0, 10)}/${jobId}.xlsx`;
+function createResultKey(jobId: string, token: string) {
+  return `results/${new Date().toISOString().slice(0, 10)}/${jobId}/${token}.xlsx`;
 }
 
 function getDefaultLifecycleGroupId(): LifecycleGroupId {
@@ -91,15 +93,11 @@ async function getAuditUserForJob(job: {
 
 async function recordJobVersion(
   input: Parameters<typeof recordDataChangeVersion>[0] | undefined,
+  execution: JobExecution,
 ) {
   if (!input) return;
 
-  try {
-    await recordDataChangeVersion(input);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to record job version.";
-    console.warn(message);
-  }
+  await execution.write(tx => recordDataChangeVersion(input, tx));
 }
 
 function buildImportedData(input: ReturnType<typeof parseBulkWorkbook>, batchId: string) {
@@ -178,11 +176,13 @@ async function processProductExportJob(
     };
   },
   auditUser: CurrentUser | undefined,
+  execution: JobExecution,
 ) {
+  const resultKey = createResultKey(job.id, execution.token);
   const payload = normalizeProductExportPayload(job.payload);
   const startedAt = new Date().toISOString();
 
-  await prisma.importJob.update({
+  await execution.write(tx => tx.importJob.update({
     where: { id: job.id },
     data: {
       progress: 10,
@@ -196,7 +196,7 @@ async function processProductExportJob(
         },
       } as unknown as Prisma.InputJsonValue,
     },
-  });
+  }));
 
   if (auditUser) {
     await recordJobVersion({
@@ -221,7 +221,7 @@ async function processProductExportJob(
         accountId: job.accountId,
         marketplace: job.marketplace,
       },
-    });
+    }, execution);
   }
 
   const records = await prisma.productSummaryRecord.findMany({
@@ -243,7 +243,7 @@ async function processProductExportJob(
     throw new Error(`导出结果超过 ${maxProductExportRows.toLocaleString("zh-CN")} 条，请缩小筛选范围后重试。`);
   }
 
-  await prisma.importJob.update({
+  await execution.write(tx => tx.importJob.update({
     where: { id: job.id },
     data: {
       progress: 55,
@@ -257,7 +257,7 @@ async function processProductExportJob(
         },
       } as unknown as Prisma.InputJsonValue,
     },
-  });
+  }));
 
   const productRecords = await prisma.productRecord.findMany({
     where: {
@@ -276,7 +276,7 @@ async function processProductExportJob(
     .filter((product): product is ReturnType<typeof productRecordPayloadToProduct> => Boolean(product));
   const buffer = Buffer.from(await buildProductExportWorkbook(products));
 
-  await prisma.importJob.update({
+  await execution.write(tx => tx.importJob.update({
     where: { id: job.id },
     data: {
       progress: 85,
@@ -290,279 +290,47 @@ async function processProductExportJob(
         },
       } as unknown as Prisma.InputJsonValue,
     },
-  });
+  }));
 
   await getStorageDriver().putBuffer({
-    key: job.file.storageKey,
+    key: resultKey,
     buffer,
     contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
-  await prisma.importJob.update({
-    where: { id: job.id },
-    data: {
-      status: "done",
-      progress: 100,
-      resultKey: job.file.storageKey,
-      payload: {
-        ...payload,
-        _runtime: {
-          phase: "已完成",
-          startedAt,
-          processedCount: products.length,
-          totalCount: records.length,
-        },
-      } as unknown as Prisma.InputJsonValue,
-      file: {
-        update: {
-          status: "done",
-          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          size: buffer.byteLength,
-        },
-      },
-    },
-  });
-
-  await prisma.exportRecord.upsert({
-    where: {
-      jobId_resultKey: {
-        jobId: job.id,
-        resultKey: job.file.storageKey,
-      },
-    },
-    create: {
-      organizationId: job.organizationId,
-      userId: job.userId,
-      workspaceId: job.workspaceId,
-      accountId: job.accountId,
-      marketplace: job.marketplace,
-      fileId: job.fileId,
-      jobId: job.id,
-      resultKey: job.file.storageKey,
-      fileName: job.file.originalName,
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      size: buffer.byteLength,
-    },
-    update: {
-      fileName: job.file.originalName,
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      size: buffer.byteLength,
-    },
-  });
-
-  if (auditUser) {
-    await recordJobVersion({
-      user: auditUser,
-      entityType: "import_job",
-      entityId: job.id,
-      action: "import_job_done",
-      summary: `${job.file.originalName} 导出完成`,
-      payload: {
-        id: job.id,
-        fileId: job.fileId,
-        type: "product_export",
-        status: "done",
-        progress: 100,
-        resultKey: job.file.storageKey,
-        workspaceId: job.workspaceId,
-        accountId: job.accountId,
-        marketplace: job.marketplace,
-        rowCount: products.length,
-      } as unknown as Prisma.InputJsonValue,
-      scope: {
-        workspaceId: job.workspaceId,
-        accountId: job.accountId,
-        marketplace: job.marketplace,
-      },
-    });
-    await recordJobVersion({
-      user: auditUser,
-      entityType: "export_record",
-      entityId: `${job.id}:${job.file.storageKey}`,
-      action: "export_record_save",
-      summary: job.file.originalName,
-      payload: {
-        jobId: job.id,
-        fileId: job.fileId,
-        resultKey: job.file.storageKey,
-        fileName: job.file.originalName,
-        size: buffer.byteLength,
-        workspaceId: job.workspaceId,
-        accountId: job.accountId,
-        marketplace: job.marketplace,
-      } as unknown as Prisma.InputJsonValue,
-      scope: {
-        workspaceId: job.workspaceId,
-        accountId: job.accountId,
-        marketplace: job.marketplace,
-      },
-    });
-  }
-}
-
-export async function processImportJob(jobId: string) {
-  const claimed = await prisma.importJob.updateMany({
-    where: {
-      id: jobId,
-      status: { in: ["queued", "failed"] },
-    },
-    data: {
-      status: "running",
-      progress: 10,
-      error: null,
-    },
-  });
-  if (!claimed.count) return;
-
-  const job = await prisma.importJob.findUniqueOrThrow({
-    where: { id: jobId },
-    include: { file: true },
-  });
-  await prisma.fileObject.update({
-    where: { id: job.fileId },
-    data: { status: "processing" },
-  });
-  const auditUser = await getAuditUserForJob(job);
-
-  try {
-    if (job.type === "product_export") {
-      await processProductExportJob(job, auditUser);
-      return;
-    }
-
-    if (auditUser) {
-      await recordJobVersion({
-        user: auditUser,
-        entityType: "import_job",
-        entityId: job.id,
-        action: "import_job_start",
-        summary: `${job.file.originalName} 开始处理`,
-        payload: {
-          id: job.id,
-          fileId: job.fileId,
-          type: job.type,
-          status: "running",
-          progress: 10,
-          workspaceId: job.workspaceId,
-          accountId: job.accountId,
-          marketplace: job.marketplace,
-        } as unknown as Prisma.InputJsonValue,
-        scope: {
-          workspaceId: job.workspaceId,
-          accountId: job.accountId,
-          marketplace: job.marketplace,
-        },
-      });
-    }
-
-    const storage = getStorageDriver();
-    const fileBuffer = await storage.getBuffer(job.file.storageKey);
-    const arrayBuffer = new Uint8Array(fileBuffer).buffer;
-    const parsedWorkbook = parseBulkWorkbook(arrayBuffer);
-
-    if (parsedWorkbook.matchedSheets.length === 0) {
-      throw new Error("未找到可解析的 Amazon Bulk Operations Sheet。");
-    }
-
-    await prisma.importJob.update({
-      where: { id: jobId },
-      data: {
-        progress: 45,
-      },
-    });
-
-    const batchId = `job-${jobId}`;
-    const importedData = buildImportedData(parsedWorkbook, batchId);
-
-    if (importedData.campaignGroups.length === 0) {
-      throw new Error(buildParseFailureMessage(importedData.diagnostics));
-    }
-
-    const campaignGroups = importedData.campaignGroups.map((group) => ({
-      ...group,
-      lifecycleGroupId: group.lifecycleGroupId ?? getDefaultLifecycleGroupId(),
-    }));
-    const dataBatches = buildDataBatches({
-      campaignGroups,
-      batchId,
-      fileName: job.file.originalName,
-      rowCount: importedData.performanceRows.length,
-    });
-    const drafts = runImportedBulkOptimization({
-      campaignGroups,
-      performanceRows: importedData.performanceRows,
-      dataBatches,
-      batchId,
-    });
-
-    if (drafts.length === 0) {
-      throw new Error("规则未生成可写回草稿，请检查 Bulk 指标、规则条件或默认生命周期分组。");
-    }
-
-    const resultKey = createResultKey(jobId);
-    const exportResult = await exportBulkDrafts({
-      workbookBuffer: arrayBuffer,
-      drafts,
-      fileName: job.file.originalName,
-    });
-
-    if (exportResult.writableCount === 0) {
-      throw new Error(
-        `没有可写回的草稿。冲突 ${exportResult.conflictCount} 条，阻止 ${exportResult.blockedCount} 条。`,
-      );
-    }
-
-    await storage.putBuffer({
-      key: resultKey,
-      buffer: Buffer.from(exportResult.data),
-      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-
-    const exportFileName = `${job.file.originalName.replace(/\.[^.]+$/, "")}-optimized.xlsx`;
-
-    await prisma.importJob.update({
-      where: { id: jobId },
+  await execution.write(async tx => {
+    const recordJobVersion = (input: Parameters<typeof recordDataChangeVersion>[0]) => recordDataChangeVersion(input, tx);
+    await tx.importJob.update({
+      where: { id: job.id },
       data: {
         status: "done",
         progress: 100,
         resultKey,
+        leaseExpiresAt: null,
+        payload: {
+          ...payload,
+          _runtime: {
+            phase: "已完成",
+            startedAt,
+            processedCount: products.length,
+            totalCount: records.length,
+          },
+        } as unknown as Prisma.InputJsonValue,
         file: {
           update: {
             status: "done",
+            storageKey: resultKey,
+            mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            size: buffer.byteLength,
           },
         },
       },
     });
-    if (auditUser) {
-      await recordJobVersion({
-        user: auditUser,
-        entityType: "import_job",
-        entityId: job.id,
-        action: "import_job_done",
-        summary: `${job.file.originalName} 处理完成`,
-        payload: {
-          id: job.id,
-          fileId: job.fileId,
-          type: job.type,
-          status: "done",
-          progress: 100,
-          resultKey,
-          workspaceId: job.workspaceId,
-          accountId: job.accountId,
-          marketplace: job.marketplace,
-        } as unknown as Prisma.InputJsonValue,
-        scope: {
-          workspaceId: job.workspaceId,
-          accountId: job.accountId,
-          marketplace: job.marketplace,
-        },
-      });
-    }
 
-    await prisma.exportRecord.upsert({
+    await tx.exportRecord.upsert({
       where: {
         jobId_resultKey: {
-          jobId,
+          jobId: job.id,
           resultKey,
         },
       },
@@ -573,70 +341,56 @@ export async function processImportJob(jobId: string) {
         accountId: job.accountId,
         marketplace: job.marketplace,
         fileId: job.fileId,
-        jobId,
+        jobId: job.id,
         resultKey,
-        fileName: exportFileName,
+        fileName: job.file.originalName,
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        size: exportResult.data.byteLength,
+        size: buffer.byteLength,
       },
       update: {
-        fileName: exportFileName,
+        fileName: job.file.originalName,
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        size: exportResult.data.byteLength,
+        size: buffer.byteLength,
       },
     });
-    if (auditUser) {
-      await recordJobVersion({
-        user: auditUser,
-        entityType: "export_record",
-        entityId: `${job.id}:${resultKey}`,
-        action: "export_record_save",
-        summary: exportFileName,
-        payload: {
-          jobId,
-          fileId: job.fileId,
-          resultKey,
-          fileName: exportFileName,
-          size: exportResult.data.byteLength,
-          workspaceId: job.workspaceId,
-          accountId: job.accountId,
-          marketplace: job.marketplace,
-        } as unknown as Prisma.InputJsonValue,
-        scope: {
-          workspaceId: job.workspaceId,
-          accountId: job.accountId,
-          marketplace: job.marketplace,
-        },
-      });
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Job processing failed.";
-    await prisma.importJob.update({
-      where: { id: jobId },
-      data: {
-        status: "failed",
-        error: message,
-        file: {
-          update: {
-            status: "failed",
-          },
-        },
-      },
-    });
+
     if (auditUser) {
       await recordJobVersion({
         user: auditUser,
         entityType: "import_job",
         entityId: job.id,
-        action: "import_job_failed",
-        summary: message,
+        action: "import_job_done",
+        summary: `${job.file.originalName} 导出完成`,
         payload: {
           id: job.id,
           fileId: job.fileId,
-          type: job.type,
-          status: "failed",
-          progress: 0,
-          error: message,
+          type: "product_export",
+          status: "done",
+          progress: 100,
+          resultKey,
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+          rowCount: products.length,
+        } as unknown as Prisma.InputJsonValue,
+        scope: {
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+        },
+      });
+      await recordJobVersion({
+        user: auditUser,
+        entityType: "export_record",
+        entityId: `${job.id}:${resultKey}`,
+        action: "export_record_save",
+        summary: job.file.originalName,
+        payload: {
+          jobId: job.id,
+          fileId: job.fileId,
+          resultKey,
+          fileName: job.file.originalName,
+          size: buffer.byteLength,
           workspaceId: job.workspaceId,
           accountId: job.accountId,
           marketplace: job.marketplace,
@@ -648,5 +402,262 @@ export async function processImportJob(jobId: string) {
         },
       });
     }
+    });
   }
+
+  export async function processImportJob(jobId: string) {
+    const execution = await claimExecution("import", jobId);
+    if (!execution) return;
+    let loadedJob: Awaited<ReturnType<typeof loadJob>> | undefined;
+    let auditUser: CurrentUser | undefined;
+    try {
+      const job = await loadJob(jobId);
+      loadedJob = job;
+      await execution.write(async tx => {
+        await tx.importJob.update({ where: { id: jobId }, data: { progress: 10, error: null } });
+        await tx.fileObject.update({ where: { id: job!.fileId }, data: { status: "processing" } });
+      });
+      auditUser = await getAuditUserForJob(job);
+      if (job.type === "product_export") {
+        await processProductExportJob(job, auditUser, execution);
+        return;
+      }
+
+      if (auditUser) {
+        await recordJobVersion({
+          user: auditUser,
+          entityType: "import_job",
+          entityId: job.id,
+          action: "import_job_start",
+          summary: `${job.file.originalName} 开始处理`,
+          payload: {
+            id: job.id,
+            fileId: job.fileId,
+            type: job.type,
+            status: "running",
+            progress: 10,
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          } as unknown as Prisma.InputJsonValue,
+          scope: {
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          },
+        }, execution);
+      }
+
+      const storage = getStorageDriver();
+      const fileBuffer = await storage.getBuffer(job.file.storageKey);
+      const arrayBuffer = new Uint8Array(fileBuffer).buffer;
+      const parsedWorkbook = parseBulkWorkbook(arrayBuffer);
+
+      if (parsedWorkbook.matchedSheets.length === 0) {
+        throw new Error("未找到可解析的 Amazon Bulk Operations Sheet。");
+      }
+
+      await execution.write(tx => tx.importJob.update({
+        where: { id: jobId },
+        data: {
+          progress: 45,
+        },
+      }));
+
+      const batchId = `job-${jobId}`;
+      const importedData = buildImportedData(parsedWorkbook, batchId);
+
+      if (importedData.campaignGroups.length === 0) {
+        throw new Error(buildParseFailureMessage(importedData.diagnostics));
+      }
+
+      const campaignGroups = importedData.campaignGroups.map((group) => ({
+        ...group,
+        lifecycleGroupId: group.lifecycleGroupId ?? getDefaultLifecycleGroupId(),
+      }));
+      const dataBatches = buildDataBatches({
+        campaignGroups,
+        batchId,
+        fileName: job.file.originalName,
+        rowCount: importedData.performanceRows.length,
+      });
+      const drafts = runImportedBulkOptimization({
+        campaignGroups,
+        performanceRows: importedData.performanceRows,
+        dataBatches,
+        batchId,
+      });
+
+      if (drafts.length === 0) {
+        throw new Error("规则未生成可写回草稿，请检查 Bulk 指标、规则条件或默认生命周期分组。");
+      }
+
+      const resultKey = createResultKey(jobId, execution.token);
+      const exportResult = await exportBulkDrafts({
+        workbookBuffer: arrayBuffer,
+        drafts,
+        fileName: job.file.originalName,
+      });
+
+      if (exportResult.writableCount === 0) {
+        throw new Error(
+          `没有可写回的草稿。冲突 ${exportResult.conflictCount} 条，阻止 ${exportResult.blockedCount} 条。`,
+        );
+      }
+
+      await storage.putBuffer({
+        key: resultKey,
+        buffer: Buffer.from(exportResult.data),
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const exportFileName = `${job.file.originalName.replace(/\.[^.]+$/, "")}-optimized.xlsx`;
+
+      await execution.write(async tx => {
+      const recordJobVersion = (input: Parameters<typeof recordDataChangeVersion>[0]) => recordDataChangeVersion(input, tx);
+      await tx.importJob.update({
+        where: { id: jobId },
+        data: {
+          status: "done",
+          progress: 100,
+          resultKey,
+          leaseExpiresAt: null,
+          file: {
+            update: {
+              status: "done",
+            },
+          },
+        },
+      });
+      if (auditUser) {
+        await recordJobVersion({
+          user: auditUser,
+          entityType: "import_job",
+          entityId: job.id,
+          action: "import_job_done",
+          summary: `${job.file.originalName} 处理完成`,
+          payload: {
+            id: job.id,
+            fileId: job.fileId,
+            type: job.type,
+            status: "done",
+            progress: 100,
+            resultKey,
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          } as unknown as Prisma.InputJsonValue,
+          scope: {
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          },
+        });
+      }
+
+      await tx.exportRecord.upsert({
+        where: {
+          jobId_resultKey: {
+            jobId,
+            resultKey,
+          },
+        },
+        create: {
+          organizationId: job.organizationId,
+          userId: job.userId,
+          workspaceId: job.workspaceId,
+          accountId: job.accountId,
+          marketplace: job.marketplace,
+          fileId: job.fileId,
+          jobId,
+          resultKey,
+          fileName: exportFileName,
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          size: exportResult.data.byteLength,
+        },
+        update: {
+          fileName: exportFileName,
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          size: exportResult.data.byteLength,
+        },
+      });
+      if (auditUser) {
+        await recordJobVersion({
+          user: auditUser,
+          entityType: "export_record",
+          entityId: `${job.id}:${resultKey}`,
+          action: "export_record_save",
+          summary: exportFileName,
+          payload: {
+            jobId,
+            fileId: job.fileId,
+            resultKey,
+            fileName: exportFileName,
+            size: exportResult.data.byteLength,
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          } as unknown as Prisma.InputJsonValue,
+          scope: {
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          },
+        });
+      }
+      });
+    } catch (error) {
+      if (error instanceof ExecutionLostError) return;
+      if (!loadedJob) throw error;
+      const message = error instanceof Error ? error.message : "Job processing failed.";
+      const failedJob = loadedJob;
+      await execution.write(async tx => {
+        const job = failedJob;
+      const recordJobVersion = (input: Parameters<typeof recordDataChangeVersion>[0]) => recordDataChangeVersion(input, tx);
+      await tx.importJob.update({
+        where: { id: jobId },
+        data: {
+          status: "failed",
+          leaseExpiresAt: null,
+          error: message,
+          file: {
+            update: {
+              status: "failed",
+            },
+          },
+        },
+      });
+      if (auditUser) {
+        await recordJobVersion({
+          user: auditUser,
+          entityType: "import_job",
+          entityId: job.id,
+          action: "import_job_failed",
+          summary: message,
+          payload: {
+            id: job.id,
+            fileId: job.fileId,
+            type: job.type,
+            status: "failed",
+            progress: 0,
+            error: message,
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          } as unknown as Prisma.InputJsonValue,
+          scope: {
+            workspaceId: job.workspaceId,
+            accountId: job.accountId,
+            marketplace: job.marketplace,
+          },
+        });
+      }
+    }).catch(failure => { if (!(failure instanceof ExecutionLostError)) throw failure; });
+  } finally {
+    execution.dispose();
+  }
+}
+
+function loadJob(id: string) {
+  return prisma.importJob.findUniqueOrThrow({ where: { id }, include: { file: true } });
 }

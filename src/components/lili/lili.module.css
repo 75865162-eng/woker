@@ -1,0 +1,137 @@
+/* Keep the visual system local to Lili; use the same tokens as Product Center. */
+.root {
+  min-width: 0;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.root :global(.lili-card) {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.root :global(.lili-btn-orange),
+.root :global(.lili-btn-ghost) {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  transition: background-color 150ms, border-color 150ms, color 150ms;
+}
+
+/* Preserve the existing class name so behavior and consumers stay unchanged. */
+.root :global(.lili-btn-orange) {
+  background: var(--brand);
+  color: white;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.root :global(.lili-btn-orange:hover) { background: var(--brand-dark); }
+
+.root :global(.lili-btn-ghost) {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.root :global(.lili-btn-ghost:hover) { background: var(--surface-muted); }
+
+.root :global(.lili-btn-orange:disabled),
+.root :global(.lili-btn-ghost:disabled) {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.root :global(.lili-field) {
+  min-width: 0;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 0 12px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.root :global(.lili-field::placeholder) { color: var(--muted); }
+.root :global(.lili-field:read-only) { background: var(--surface-muted); }
+.root :global(.lili-field:focus) { border-color: var(--brand); outline: none; }
+
+.root :global(.lili-field:focus-visible),
+.root button:focus-visible,
+.root a:focus-visible,
+.root summary:focus-visible,
+.root input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.root input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--brand);
+}
+
+.root :global(.lili-config) > p,
+.root :global(.lili-config) section > p {
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.root :global(.lili-config) section > h2 {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.root :global(.lili-config) label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.root :global(.lili-config) label:has(input[type="checkbox"]) {
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.root :global(.lili-config) details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted);
+  padding: 12px;
+  color: var(--foreground);
+}
+
+.root :global(.lili-config) summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.root :global(.lili-config) a:not(:global(.lili-btn-orange)):not(:global(.lili-btn-ghost)) {
+  color: var(--brand);
+  text-underline-offset: 3px;
+}
+
+.root :global(.lili-config) [role="status"]:not(:empty) {
+  border-left: 3px solid var(--brand);
+  background: var(--surface-muted);
+  padding: 8px 12px;
+  color: var(--foreground);
+}

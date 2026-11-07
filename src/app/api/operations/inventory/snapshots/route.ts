@@ -1,3 +1,5 @@
+import { SyncInputError } from "@/lib/amazon-sync/policy";
+import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
 import { publishedSnapshotScopes, inventoryPublishedWhere, oldestSnapshot } from "@/lib/amazon-sync/read";
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
@@ -23,7 +25,8 @@ export async function GET(request: Request) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const tenantScope = { organizationId: permission.user.organizationId, workspaceId: scope.workspaceId };
-    const heads = await publishedSnapshotScopes(tenantScope, "inventory");
+    await auditAmazonDataRead(tenantScope, permission.user.id, "inventory", permission.user.role);
+    const heads = await publishedSnapshotScopes(tenantScope, "inventory", permission.user.id);
     if (!heads.length) {
       return NextResponse.json({
         rows: [],
@@ -54,6 +57,6 @@ export async function GET(request: Request) {
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "库存快照读取失败。" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof SyncInputError ? "数据范围不可访问。" : "库存快照读取失败。" }, { status: error instanceof SyncInputError ? error.status : 500, headers: { "Cache-Control": "no-store" } });
   }
 }

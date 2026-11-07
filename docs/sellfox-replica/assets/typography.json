@@ -1,0 +1,437 @@
+{
+  "source": "ElementUI theme (theme_03/elementUI_theme_2026) + sellfox-web app CSS; body fontFamily confirmed in Chrome DevTools Styles panel. Runtime getComputedStyle via page.evaluate was blocked.",
+  "sharedTheme": {
+    "body": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "normal"
+    },
+    "tableHeaderTh": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "500",
+      "lineHeight": "23px",
+      "notes": ".el-table 14px; thead weight 500; vxe-header--column weight 700"
+    },
+    "tableTd": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "23px"
+    },
+    "filterLabel": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "40px",
+      "selector": ".el-form-item__label"
+    },
+    "filterInput": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "32px",
+      "notes": "el-input__inner inherits; small control height ~32px"
+    },
+    "filterSelect": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "32px"
+    },
+    "buttonPrimary": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "1",
+      "selector": ".el-button / .el-button--primary"
+    },
+    "buttonDefault": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "1"
+    },
+    "buttonSmall": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "1",
+      "notes": ".el-button--small=12px; some header ops override to 14px"
+    },
+    "sectionHeaderH2": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": null,
+      "notes": "pages use tab/page titles, not h2"
+    },
+    "tabStrip": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "500",
+      "lineHeight": "40px",
+      "selector": ".el-tabs__item; some all_tab_bar tabs 12px"
+    },
+    "totalsBar": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400"
+    },
+    "pagination": {
+      "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "700",
+      "lineHeight": "28px",
+      "selector": ".el-pagination"
+    }
+  },
+  "pages": {
+    "1-sales-stats": {
+      "page": "1-sales-stats",
+      "url": "https://www.sellfox.com/amzup-web-main/web/profitStats/productStat/index.html",
+      "source": "ElementUI/app CSS + DevTools Styles (page.evaluate blocked by Playwright proxy)",
+      "body": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "normal"
+      },
+      "tableHeaderTh": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "23px",
+        "notes": ".el-table 14px; thead weight 500; vxe-header--column weight 700"
+      },
+      "tableTd": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px"
+      },
+      "filterLabel": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "40px"
+      },
+      "filterInput": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "filterSelect": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "buttonPrimary": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonDefault": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonSmall": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "sectionHeaderH2": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": null,
+        "note": "no dedicated h2; uses tab titles"
+      },
+      "tabStrip": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "40px"
+      },
+      "totalsBar": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400"
+      },
+      "pagination": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "700",
+        "lineHeight": "28px"
+      }
+    },
+    "2-online-products": {
+      "page": "2-online-products",
+      "url": "https://www.sellfox.com/amzup-web-main/web/product/index.html",
+      "source": "ElementUI/app CSS + DevTools Styles (page.evaluate blocked)",
+      "body": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "normal"
+      },
+      "tableHeaderTh": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "23px"
+      },
+      "tableTd": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px"
+      },
+      "filterLabel": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "40px"
+      },
+      "filterInput": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "filterSelect": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "buttonPrimary": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonDefault": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonSmall": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "sectionHeaderH2": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": null,
+        "note": "tab titles used instead of h2"
+      },
+      "tabStrip": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "40px"
+      },
+      "totalsBar": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400"
+      },
+      "pagination": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "700",
+        "lineHeight": "28px"
+      }
+    },
+    "3-all-orders": {
+      "page": "3-all-orders",
+      "url": "https://www.sellfox.com/amzup-web-main/amzup-web-vue3?amzup-web-vue3=%2Fvue3%2Fweb%2Fv3%2Forder%2Findex.html%3ForderTab%3D1",
+      "source": "ElementUI/app CSS + DevTools Styles (page.evaluate blocked)",
+      "body": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "normal"
+      },
+      "tableHeaderTh": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "23px"
+      },
+      "tableTd": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px"
+      },
+      "filterLabel": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "40px"
+      },
+      "filterInput": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "filterSelect": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "buttonPrimary": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonDefault": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonSmall": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "sectionHeaderH2": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": null,
+        "note": "tab titles used instead of h2"
+      },
+      "tabStrip": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "40px"
+      },
+      "totalsBar": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400"
+      },
+      "pagination": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "700",
+        "lineHeight": "28px"
+      }
+    },
+    "4-fba-shipments": {
+      "page": "4-fba-shipments",
+      "status": "MISSING",
+      "note": "page not accessible; shared theme typography still applies app-wide",
+      "body": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "normal"
+      }
+    },
+    "5-replenishment": {
+      "page": "5-replenishment",
+      "status": "MISSING",
+      "note": "page not accessible; shared theme typography still applies app-wide",
+      "body": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "normal"
+      }
+    },
+    "6-sales-profit": {
+      "page": "6-sales-profit",
+      "url": "https://www.sellfox.com/amzup-web-main/web/profitStats/sales/index.html",
+      "source": "ElementUI/app CSS + DevTools Styles (page.evaluate blocked by Playwright proxy)",
+      "body": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "normal"
+      },
+      "tableHeaderTh": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "23px"
+      },
+      "tableTd": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px"
+      },
+      "filterLabel": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "40px"
+      },
+      "filterInput": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "filterSelect": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "32px"
+      },
+      "buttonPrimary": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonDefault": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "buttonSmall": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400",
+        "lineHeight": "1"
+      },
+      "sectionHeaderH2": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": null,
+        "note": "tab titles used instead of h2"
+      },
+      "tabStrip": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "40px"
+      },
+      "totalsBar": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "400"
+      },
+      "pagination": {
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Verdana, Roboto, Helvetica Neue, Arial, Noto Sans S Chinese, Noto Sans, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "700",
+        "lineHeight": "28px"
+      }
+    }
+  }
+}

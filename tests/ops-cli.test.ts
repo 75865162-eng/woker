@@ -1,14 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { Prisma } from "@prisma/client";
 import { authorizeOps, formatOpsOutput, opsIdentity, parseOpsArgs, runOpsCommand } from "@/lib/operations/cli";
 import { suggestPpc } from "@/lib/operations/ppc-read";
 
 const identity = { organizationId: "org", workspaceId: "ws", actorUserId: "actor" };
+
+test("CLI help needs no private configuration and retired configuration is rejected before database access", () => {
+  const entry = fileURLToPath(new URL("../scripts/ops-cli.ts", import.meta.url));
+  const run = (args: string[], env: Record<string, string | undefined>) => spawnSync(process.execPath, ["--import", "tsx", entry, ...args], {
+    env: { ...env, PATH: process.env.PATH, NODE_ENV: "test" }, encoding: "utf8", timeout: 15_000,
+  });
+  const help = run(["--help"], { ERP_LOCAL_INTEGRATION_PROFILE: "fixture-retired" });
+  assert.equal(help.status, 0); assert.match(help.stdout, /Internal ERP/);
+  for (const env of [{ ERP_LOCAL_INTEGRATION_PROFILE: "fixture-retired" }, { DOTENV_CONFIG_PATH: "fixture-private-alternate" }]) {
+    const result = run(["freshness", "--json"], env);
+    assert.equal(result.status, 4);
+    assert.equal(JSON.parse(result.stderr).error.code, "READ_FAILED");
+    assert.ok(!result.stderr.includes("fixture-private"));
+    assert.equal(result.stdout, "");
+  }
+});
 const calls: Array<{ table: string; args: Record<string, unknown> }> = [];
 const readOnlyDb = new Proxy({}, { get: (_, table: string) => new Proxy({}, { get: (_, method: string) => async (args: Record<string, unknown>) => {
   assert.ok(["findFirst", "findMany", "findUnique", "aggregate"].includes(method), `unexpected database mutation: ${method}`);
   calls.push({ table, args });
+  if (table === "organizationMember") return { role: "owner", user: { status: "active" } };
+  if (table === "workspaceScope") return { id: "ws" };
+  if (table === "organizationRosterRole") return [{ id: "owner", permissions: {} }];
+  if (table === "amazonSyncDataSource") return [{ id: "source", activeRunId: "run-1", sellerAccountId: "seller", marketplaceId: "site", resource: "inventory" }, { id: "catalog-source", activeRunId: "catalog-run", sellerAccountId: "seller", marketplaceId: "site", resource: "catalog" }];
   if (table === "workspaceDataset") return null;
   if (table === "amazonSyncRun" && method === "findFirst") return { id: "run-1", finishedAt: new Date("2026-10-24T00:00:00Z") };
   if (method === "aggregate") return { _sum: { fulfillableQuantity: 4 }, _count: { _all: 1 } };
@@ -25,6 +47,7 @@ test("all CLI commands smoke with scoped, read-only local DB calls", async () =>
       assert.ok(output);
       for (const call of calls) {
         const where = call.args.where as Record<string, unknown>;
+        if (call.table === "organizationMember" || call.table === "workspaceScope" || call.table === "organizationRosterRole") continue;
         assert.equal(where.organizationId, "org"); assert.equal(where.workspaceId, "ws");
       }
       assert.doesNotThrow(() => JSON.parse(formatOpsOutput(output, true)));

@@ -1,0 +1,145 @@
+[
+  {
+    "index": 1,
+    "title": "周一经营例会",
+    "summary": "每周一想用十分钟看清上周发生了什么、这周该做什么。",
+    "prompt": "使用粒粒 MCP，帮我准备周一的经营例会，按下面的顺序来：\n1. 用 store-weekly-review 复盘上周的销售、流量、广告、费用和库存风险，和前一周对比。\n2. 用 weekly-ads-review-routine 看广告：数据是否健康，哪两三个广告活动的花费或 ACOS 变化最大，有哪些待处理的建议。\n3. 用 buybox-competition-watch 检查有没有 ASIN 丢了购物车，是从哪天、被什么价格抢走的。\n4. 用 turbot-inventory-restock 列出两周内可能断货的 SKU，以及建议的补货数量和最晚下单日期。\n\n最后合成一份 HTML 报告：开头用三句话说结论，然后是按优先级排序的动作清单。每条动作写明负责的环节（广告、库存、定价）和这周要看的指标。",
+    "steps": [
+      "用 store-weekly-review 复盘上周的销售、流量、广告、费用和库存风险，和前一周对比。",
+      "用 weekly-ads-review-routine 看广告：数据是否健康，哪两三个广告活动的花费或 ACOS 变化最大，有哪些待处理的建议。",
+      "用 buybox-competition-watch 检查有没有 ASIN 丢了购物车，是从哪天、被什么价格抢走的。",
+      "用 turbot-inventory-restock 列出两周内可能断货的 SKU，以及建议的补货数量和最晚下单日期。"
+    ]
+  },
+  {
+    "index": 2,
+    "title": "广告止血",
+    "summary": "ACOS 高了、广告费花得心疼，想一次找出问题并拿到可执行的调整清单。",
+    "prompt": "使用粒粒 MCP，帮我给广告做一次止血，按下面的顺序来：\n1. 用 acos-spike-triage 对比近 7 天和近 30 天，找出 ACOS 变化最大的三个广告活动，分清是花费涨了还是销售掉了。\n2. 用 wasted-spend-audit 找出近 30 天花了钱没出单的搜索词和投放，汇总成每月白花多少钱。\n3. 用 negative-keyword-strategy 给这些词定否定方式：精准还是词组，加在广告组还是广告活动。在别处能出单的词不要否。\n4. 用 bid-adjustment-strategy 列出该降出价和该加出价的投放，写明当前出价和建议出价。\n\n最后合成一份 HTML 报告：开头用三句话说结论，然后是按优先级排序的动作清单。每条写明预计每月能省多少或多卖多少。任何会修改店铺或产生费用的步骤，都先把预览给我看，我确认后再执行。",
+    "steps": [
+      "用 acos-spike-triage 对比近 7 天和近 30 天，找出 ACOS 变化最大的三个广告活动，分清是花费涨了还是销售掉了。",
+      "用 wasted-spend-audit 找出近 30 天花了钱没出单的搜索词和投放，汇总成每月白花多少钱。",
+      "用 negative-keyword-strategy 给这些词定否定方式：精准还是词组，加在广告组还是广告活动。在别处能出单的词不要否。",
+      "用 bid-adjustment-strategy 列出该降出价和该加出价的投放，写明当前出价和建议出价。"
+    ]
+  },
+  {
+    "index": 3,
+    "title": "销量下滑全链路诊断",
+    "summary": "某个产品或整个店铺销量掉了，不知道问题出在流量、转化还是购物车。",
+    "prompt": "使用粒粒 MCP，帮我查清销量为什么下滑，按下面的顺序来：\n1. 用 traffic-conversion-triage 按 ASIN 对比近 7 天和之前四周，分清每个下滑的 ASIN 是访问量少了、转化率掉了，还是购物车占比降了。\n2. 购物车有问题的，用 buybox-competition-watch 查是哪天丢的、对手什么价格。\n3. 流量有问题的，用 impression-drop-diagnosis 查广告曝光：是预算撞线、出价失去竞争力、活动被暂停，还是商品失去投放资格。\n4. 转化有问题的，用 low-conversion-diagnosis 找出点击多但不出单的词，分清是流量不对还是详情页的问题。\n\n最后合成一份 HTML 报告：开头用三句话说结论，然后是按优先级排序的动作清单。每个下滑的 ASIN 单独给出一句话的原因和第一步该做什么；数据里看不出来、需要我去卖家后台确认的，单独列出来。",
+    "steps": [
+      "用 traffic-conversion-triage 按 ASIN 对比近 7 天和之前四周，分清每个下滑的 ASIN 是访问量少了、转化率掉了，还是购物车占比降了。",
+      "购物车有问题的，用 buybox-competition-watch 查是哪天丢的、对手什么价格。",
+      "流量有问题的，用 impression-drop-diagnosis 查广告曝光：是预算撞线、出价失去竞争力、活动被暂停，还是商品失去投放资格。",
+      "转化有问题的，用 low-conversion-diagnosis 找出点击多但不出单的词，分清是流量不对还是详情页的问题。"
+    ]
+  },
+  {
+    "index": 4,
+    "title": "新品从上架到开广告",
+    "summary": "手上有新品的图片和基本信息，想一次把 Listing 和起步广告都做好。",
+    "prompt": "使用粒粒 MCP，帮我把这个新品从上架做到开广告。我会给你产品图片和基本信息，按下面的顺序来：\n1. 用 amazon-keyword-research 给这个产品做关键词调研，按搜索意图分组，标出最值得先打的词。\n2. 用 listing-new-product-oneshot 看图补属性、写标题和五点、准备图片，生成一份预览给我过目。\n3. 用 acos-target-setting 按我的成本和售价算出新品期可以接受的 ACOS。\n4. 用 ads-build-from-scratch 设计起步广告：活动结构、每组投哪些词、出价、预算和否定词。\n\n每一步做完先停下来给我看结果，我确认后再进行下一步。任何会修改店铺或产生费用的步骤，都先把预览给我看，我确认后再执行。全部完成后，用一份 HTML 报告汇总 Listing 要点、关键词分组和广告方案。",
+    "steps": [
+      "用 amazon-keyword-research 给这个产品做关键词调研，按搜索意图分组，标出最值得先打的词。",
+      "用 listing-new-product-oneshot 看图补属性、写标题和五点、准备图片，生成一份预览给我过目。",
+      "用 acos-target-setting 按我的成本和售价算出新品期可以接受的 ACOS。",
+      "用 ads-build-from-scratch 设计起步广告：活动结构、每组投哪些词、出价、预算和否定词。"
+    ]
+  },
+  {
+    "index": 5,
+    "title": "从选品到开品文档",
+    "summary": "只有一个大方向（比如想做宠物用品），想一路做到能交给工厂的开品文档。",
+    "prompt": "使用粒粒 MCP，帮我从一个大方向做到开品文档。我想做的方向是：【填你的方向】。按下面的顺序来：\n1. 用 amazon-niche-finder 在这个方向里找 3 到 5 个有需求、竞争可承受的细分市场，说明每个的依据。\n2. 我选定一个后，用 amazon-product-research 把它研究透：需求规模、竞争格局、价格带、进入门槛。\n3. 用 amazon-review-analyzer 分析头部竞品的差评，整理成痛点清单，按改良价值排序。\n4. 用 tariff-calculator-amazon 算从中国发到目标站点的关税和到岸成本。\n5. 用 amazon-product-selection 给候选产品打分并做利润测算，给出做或不做的结论。\n\n第 1 步和第 5 步做完后停下来等我确认。这个流程会调用付费的市场数据，开始前先告诉我大概要调用多少次。最后产出一份 HTML 开品文档：卖点、规格、目标成本、改良点和验收标准。",
+    "steps": [
+      "用 amazon-niche-finder 在这个方向里找 3 到 5 个有需求、竞争可承受的细分市场，说明每个的依据。",
+      "我选定一个后，用 amazon-product-research 把它研究透：需求规模、竞争格局、价格带、进入门槛。",
+      "用 amazon-review-analyzer 分析头部竞品的差评，整理成痛点清单，按改良价值排序。",
+      "用 tariff-calculator-amazon 算从中国发到目标站点的关税和到岸成本。",
+      "用 amazon-product-selection 给候选产品打分并做利润测算，给出做或不做的结论。"
+    ]
+  },
+  {
+    "index": 6,
+    "title": "竞品全拆解",
+    "summary": "盯上了一个做得好的竞品，想知道它是怎么做起来的、弱点在哪。",
+    "prompt": "使用粒粒 MCP，帮我把这个竞品拆透。竞品 ASIN：【填 ASIN】，我自己的 ASIN：【填 ASIN】。按下面的顺序来：\n1. 用 competitor-playbook-teardown 还原它是怎么做起来的：什么时候起量、广告怎么投、评价怎么积累、价格怎么变。\n2. 用 amazon-competitor-analysis 把它和我的产品逐项对比：Listing、图片、定价、评价、广告。\n3. 用 amazon-review-analyzer 分析它的评价，找出买家反复抱怨的点和最看重的点。\n4. 如果我提供了它的价格记录，用 amazon-price-tracker 判断我该跟价、守价还是做差异化；没有就跳过这一步并说明。\n\n这个流程会调用付费的市场数据，开始前先告诉我大概要调用多少次。最后合成一份 HTML 报告：开头用三句话说结论，然后是按优先级排序的动作清单。重点写清它的三个弱点，以及我可以从哪里切入。",
+    "steps": [
+      "用 competitor-playbook-teardown 还原它是怎么做起来的：什么时候起量、广告怎么投、评价怎么积累、价格怎么变。",
+      "用 amazon-competitor-analysis 把它和我的产品逐项对比：Listing、图片、定价、评价、广告。",
+      "用 amazon-review-analyzer 分析它的评价，找出买家反复抱怨的点和最看重的点。",
+      "如果我提供了它的价格记录，用 amazon-price-tracker 判断我该跟价、守价还是做差异化；没有就跳过这一步并说明。"
+    ]
+  },
+  {
+    "index": 7,
+    "title": "补货到发货一条龙",
+    "summary": "该补货了，想从算补多少一直做到货件建好、发货文件备齐。",
+    "prompt": "使用粒粒 MCP，帮我把这次补货从算量做到发货，按下面的顺序来：\n1. 用 turbot-inventory-restock 看库存和销售速度，列出该补的 SKU、建议数量和最晚下单日期。等我确认这次实际发哪些、发多少。\n2. 我会给你实际的装箱信息（每箱的内容、尺寸、毛重）。用 fba-inbound-shipment 创建入库计划并完成装箱，然后把分仓方案和费用给我看。\n3. 我确认分仓后，继续运输登记，把承运选项和费用给我看，确认后取箱唛。\n4. 用 amazon-fba-shipment-kit 按我给的物流周报价整理下单资料、箱唛和提货交接单，归到这一票的文件夹里。\n\n分仓和承运两步会产生真实费用，必须等我明确同意再执行。不要猜箱规和重量，缺什么直接问我。最后告诉我文件夹位置、已完成到哪一步、还有哪些待办。",
+    "steps": [
+      "用 turbot-inventory-restock 看库存和销售速度，列出该补的 SKU、建议数量和最晚下单日期。等我确认这次实际发哪些、发多少。",
+      "我会给你实际的装箱信息（每箱的内容、尺寸、毛重）。用 fba-inbound-shipment 创建入库计划并完成装箱，然后把分仓方案和费用给我看。",
+      "我确认分仓后，继续运输登记，把承运选项和费用给我看，确认后取箱唛。",
+      "用 amazon-fba-shipment-kit 按我给的物流周报价整理下单资料、箱唛和提货交接单，归到这一票的文件夹里。"
+    ]
+  },
+  {
+    "index": 8,
+    "title": "利润体检",
+    "summary": "销售额看着不错但没赚到钱，想找出利润漏在哪里。",
+    "prompt": "使用粒粒 MCP，帮我做一次利润体检，按下面的顺序来：\n1. 用 profit-fee-analysis 按实际的亚马逊费用算近 30 天每个 SKU 的利润，标出亏钱的和费用占比异常的。\n2. 用 reimbursement-recovery 找出亚马逊弄丢或损坏、超过 30 天还没赔付的库存，算出可以索赔的金额。\n3. 用 clearance-aging-decision 找出库龄长、仓储费高的库存，算出不处理每月要多付多少。\n4. 用 amazon-return-weekly-analysis 找出退货率最高的产品和主要原因。\n\n最后合成一份 HTML 报告：开头用三句话说结论，然后是按优先级排序的动作清单。把四项漏损各自折算成每月的金额，从大到小排。这些数字不含采购成本和头程，报告里要写明这一点。",
+    "steps": [
+      "用 profit-fee-analysis 按实际的亚马逊费用算近 30 天每个 SKU 的利润，标出亏钱的和费用占比异常的。",
+      "用 reimbursement-recovery 找出亚马逊弄丢或损坏、超过 30 天还没赔付的库存，算出可以索赔的金额。",
+      "用 clearance-aging-decision 找出库龄长、仓储费高的库存，算出不处理每月要多付多少。",
+      "用 amazon-return-weekly-analysis 找出退货率最高的产品和主要原因。"
+    ]
+  },
+  {
+    "index": 9,
+    "title": "大促备战",
+    "summary": "Prime Day 或黑五前三到四周，想把备货、广告和促销一次安排好。",
+    "prompt": "使用粒粒 MCP，帮我备战这次大促。大促是：【填大促名称和日期】。按下面的顺序来：\n1. 用 turbot-seasonal-planning 排出从现在到大促结束的时间表：每周该完成什么。\n2. 用 turbot-inventory-restock 按大促期间的预计销量算每个主推 SKU 要备多少货，哪些来不及补需要控制销售节奏。\n3. 用 amazon-deal-finder 判断哪些产品适合报秒杀或开优惠券，算一下各自能不能赚钱。\n4. 用 seasonal-peak-preparation 定广告方案：哪些活动加预算、加多少，哪些词提高出价，大促前哪些设置不要动。\n\n最后合成一份 HTML 报告：开头用三句话说结论，然后是按优先级排序的动作清单。按周列出待办，每条写明截止日期。备货量和促销折扣给出你的计算依据，我来拍板。",
+    "steps": [
+      "用 turbot-seasonal-planning 排出从现在到大促结束的时间表：每周该完成什么。",
+      "用 turbot-inventory-restock 按大促期间的预计销量算每个主推 SKU 要备多少货，哪些来不及补需要控制销售节奏。",
+      "用 amazon-deal-finder 判断哪些产品适合报秒杀或开优惠券，算一下各自能不能赚钱。",
+      "用 seasonal-peak-preparation 定广告方案：哪些活动加预算、加多少，哪些词提高出价，大促前哪些设置不要动。"
+    ]
+  },
+  {
+    "index": 10,
+    "title": "老品清退",
+    "summary": "一个老款想慢慢退出，既要清掉库存，又不想广告费白花。",
+    "prompt": "使用粒粒 MCP，帮我把这个老款有序清退。产品是：【填 ASIN 或款号】。按下面的顺序来：\n1. 用 clearance-aging-decision 看它还有多少库存、库龄和每月仓储费，按现在的销售速度多久能卖完。\n2. 用 ads-sunset-wind-down 判断广告现在能不能退：广告销售占比多少，自然位能不能扛住。给出分阶段降出价、降预算的方案和每阶段的观察指标。\n3. 用 turbot-coupon-strategy 算一下开优惠券加速清货划不划算，折扣设多少还能保本。\n\n把三项合在一起给我一个清退时间表：每周广告怎么调、价格怎么动、预计什么时候清完。任何会修改店铺或产生费用的步骤，都先把预览给我看，我确认后再执行。最后合成一份 HTML 报告。",
+    "steps": [
+      "用 clearance-aging-decision 看它还有多少库存、库龄和每月仓储费，按现在的销售速度多久能卖完。",
+      "用 ads-sunset-wind-down 判断广告现在能不能退：广告销售占比多少，自然位能不能扛住。给出分阶段降出价、降预算的方案和每阶段的观察指标。",
+      "用 turbot-coupon-strategy 算一下开优惠券加速清货划不划算，折扣设多少还能保本。"
+    ]
+  },
+  {
+    "index": 11,
+    "title": "退货攻坚",
+    "summary": "某个产品退货率偏高，想找出原因并知道先改哪里。",
+    "prompt": "使用粒粒 MCP，帮我把退货率降下来，按下面的顺序来：\n1. 用 amazon-return-weekly-analysis 分析近几周的退货：整体退货率的趋势，哪些颜色和尺码组合风险最高，退货评论里买家具体说了什么。\n2. 用 turbot-return-reduction 把退货原因对应到 Listing、图片、产品和包装四个方面，每个原因给出具体的改法。\n3. 其中属于 Listing 描述不清或图片误导的，用 amazon-listing-optimization 写出修改后的标题、五点和需要重拍或补充的图片说明。\n\n最后合成一份 HTML 报告：开头用三句话说结论，然后是按优先级排序的动作清单。动作按\"改起来有多快\"和\"能减少多少退货\"排序，先列不用动产品就能改的。",
+    "steps": [
+      "用 amazon-return-weekly-analysis 分析近几周的退货：整体退货率的趋势，哪些颜色和尺码组合风险最高，退货评论里买家具体说了什么。",
+      "用 turbot-return-reduction 把退货原因对应到 Listing、图片、产品和包装四个方面，每个原因给出具体的改法。",
+      "其中属于 Listing 描述不清或图片误导的，用 amazon-listing-optimization 写出修改后的标题、五点和需要重拍或补充的图片说明。"
+    ]
+  },
+  {
+    "index": 12,
+    "title": "月度经营报告",
+    "summary": "月初想要一份上个月的完整经营报告，自己看或者发给团队。",
+    "prompt": "使用粒粒 MCP，帮我出上个月的经营报告，按下面的顺序来：\n1. 用 amazon-ads-performance-report 汇总广告：花费、销售额和 ACOS 的走势，表现最好和最差的广告活动，和前一个月对比。\n2. 用 profit-fee-analysis 汇总利润：各 SKU 的收入、亚马逊费用和利润，费用结构有没有变化。\n3. 用 promotions-review 盘点上个月跑过的促销：各花了多少、有没有失败或撞档的。\n4. 如果我有多个站点，用 multi-marketplace-ads-review 对比各站点的广告表现，用比率而不是金额来比；只有一个站点就跳过。\n\n合成一份 HTML 月报：第一屏是关键数字和三句话的总结，后面依次是广告、利润、促销、多站点四个部分，最后是下个月的三件要事。不同币种的金额分开列，不要相加。",
+    "steps": [
+      "用 amazon-ads-performance-report 汇总广告：花费、销售额和 ACOS 的走势，表现最好和最差的广告活动，和前一个月对比。",
+      "用 profit-fee-analysis 汇总利润：各 SKU 的收入、亚马逊费用和利润，费用结构有没有变化。",
+      "用 promotions-review 盘点上个月跑过的促销：各花了多少、有没有失败或撞档的。",
+      "如果我有多个站点，用 multi-marketplace-ads-review 对比各站点的广告表现，用比率而不是金额来比；只有一个站点就跳过。"
+    ]
+  }
+]

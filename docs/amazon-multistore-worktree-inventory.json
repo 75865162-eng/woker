@@ -1,0 +1,971 @@
+{
+  "head": "42f8c1f785b06812ce1c369e8748a290ddf317a0",
+  "branch": "cursor/rebrand-tiaotiao-aa9a",
+  "target": {
+    "remote": "origin",
+    "repository": "github.com/75865162-eng/woker",
+    "proposedBranch": "codex/amazon-multistore-mcp",
+    "pullRequest": "draft to main",
+    "deploy": false
+  },
+  "entries": [
+    {
+      "status": " M",
+      "path": "AGENTS.md",
+      "disposition": "proposed_included",
+      "sha256": "583767aeb95a8d1b28a4838ba16f0b3666e142e6fd89ebc4941864b771f9526a",
+      "bytes": 49489
+    },
+    {
+      "status": " M",
+      "path": "docs/amazon-sync-center-phase1/README.md",
+      "disposition": "proposed_included",
+      "sha256": "b9f780860064206d04b3f987c9cc2cf417142b4da88ea7e9ff61b87f0d59e750",
+      "bytes": 3473
+    },
+    {
+      "status": " M",
+      "path": "docs/amazon-sync-center-phase1/files.md",
+      "disposition": "proposed_included",
+      "sha256": "a91c3336b4b9500e3f94db4c9e4c486bffdb179f6b449cf0c3968647b776abe5",
+      "bytes": 6906
+    },
+    {
+      "status": " M",
+      "path": "docs/amazon-sync-center-phase1/rollout.md",
+      "disposition": "proposed_included",
+      "sha256": "d49d872fbbf4e126b6554b8bcc3c00f7714f867cc528210d57323cb2027c7f6d",
+      "bytes": 4123
+    },
+    {
+      "status": " M",
+      "path": "docs/amazon-sync-center-phase1/verification-summary.json",
+      "disposition": "proposed_included",
+      "sha256": "2fec3ad077dcc537fd05c4eac29dc5e4c9b87362e1fc853b0306ef8c6aa4ae15",
+      "bytes": 7465
+    },
+    {
+      "status": " M",
+      "path": "docs/product-domain-simple-architecture-plan.md",
+      "disposition": "scope_confirmation_required",
+      "sha256": "8649011d10194fc2eeae1edbda00fc7d820847813c01b6a482f79147af911dbd",
+      "bytes": 32990
+    },
+    {
+      "status": " M",
+      "path": "prisma/schema.prisma",
+      "disposition": "proposed_included",
+      "sha256": "4a090232f914a1238cf5362d03eac0e34982d655374ee3d115740eb2bd7da32f",
+      "bytes": 95661
+    },
+    {
+      "status": " M",
+      "path": "scripts/amazon-sync-worker.ts",
+      "disposition": "proposed_included",
+      "sha256": "3de4a431cd86ec3c60903bc1eefce0987d0f175158b97b713f19b0e60377d51b",
+      "bytes": 3967
+    },
+    {
+      "status": " M",
+      "path": "scripts/ops-cli.ts",
+      "disposition": "proposed_included",
+      "sha256": "de2da590c362f866e43808e7e251fe3692d96901c28d012ccb2936f9a013b1d7",
+      "bytes": 1748
+    },
+    {
+      "status": " M",
+      "path": "scripts/test-amazon-sync-integration.mjs",
+      "disposition": "proposed_included",
+      "sha256": "d33db6024bfccbd674d00a5562b0f28d88bddef70ea38fb185565e6c0fa11fea",
+      "bytes": 5510
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/files/[id]/download/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "c2ec68fe18bfc7032e628b84ad003038131a5ce29428bb4ff0d977c16a65c303",
+      "bytes": 2323
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/integrations/amazon/sp-api/bindings/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "5f0cebab495f5f6fb4b3ebaf4e7ce219ef73b1eda60143ed63ad461fc951d23f",
+      "bytes": 687
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/integrations/amazon/sp-api/credentials/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "5f0cebab495f5f6fb4b3ebaf4e7ce219ef73b1eda60143ed63ad461fc951d23f",
+      "bytes": 687
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/connection/validate/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "e028377de46a37f94180ccbe357eb9d6675c02dd8b55883ffc192193240ba7d8",
+      "bytes": 557
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/freshness/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "9f7353e8f0b70e740c3cc86e75dc2b4bf258bd26e3c40687310dd0ced1e6a5f8",
+      "bytes": 1367
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/inventory/snapshots/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "41384c3e3561deab615e176844c8fd4b0559258b10d53c7293829d0e692b21d9",
+      "bytes": 3206
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/products/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "74432a93fc29e9dcd205690fe45f5d5df264866cc38bc1dab1561a340a0c5050",
+      "bytes": 2893
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/readiness/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "c9227c9cebf5a03cdf4e9876fae6ff1b740f7b0c766a79c3b9b37ad5f9a5f78e",
+      "bytes": 1286
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/replenishment/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "584c0be285780c2c9f66c69620ffcca8f66c46a3c8f292281aeac04080e476dc",
+      "bytes": 5597
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/schedules/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "56d258ca7f11290003d1b5533b2ad3f8f8de3413a8cd99f0529a8fefd5afce92",
+      "bytes": 586
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/sync-center/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "619423967d9fb5c3f7d522ea832e5fe0881fc562eaf3029072dd8bed5b5907b3",
+      "bytes": 9408
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/operations/sync-runs/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "ba637493cbac9ba55960c778a4db4a1d62607c87b8d51a03bbea67b87857fe66",
+      "bytes": 559
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/products/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "d257ae51e9fab1c4ff2829e62097b7b84af9ada9897edfff88dd7c9e8f4bd889",
+      "bytes": 33014
+    },
+    {
+      "status": " M",
+      "path": "src/components/operations/operations-hub-workbench.tsx",
+      "disposition": "proposed_included",
+      "sha256": "c2f946a5f0770178ebf23ad4cc14e208c44ab6a04dad32b3abaf70b4990f2b24",
+      "bytes": 33636
+    },
+    {
+      "status": " M",
+      "path": "src/components/operations/sync-center-workbench.tsx",
+      "disposition": "proposed_included",
+      "sha256": "d316c8d77bbc7fa8850acf2d036a6e3b6635e240aa06acc2a5c0b6dc73c3723e",
+      "bytes": 69126
+    },
+    {
+      "status": " M",
+      "path": "src/components/operations/sync-schedules-panel.tsx",
+      "disposition": "proposed_included",
+      "sha256": "d2bd43a742fc59aaadef90ab7d79870eecc517f0b5d285012ab84fa552ec543f",
+      "bytes": 565
+    },
+    {
+      "status": " M",
+      "path": "src/components/products/product-meeting-notes.tsx",
+      "disposition": "scope_confirmation_required",
+      "sha256": "680691dedaae70b1e0398669a8dc745c5927581f0f14af201be6acbf5c22abcb",
+      "bytes": 9692
+    },
+    {
+      "status": " M",
+      "path": "src/components/settings/amazon-sp-api-settings-panel.tsx",
+      "disposition": "proposed_included",
+      "sha256": "457909b6dd7a3bad217ff769a3c1ebe638a23e30848baad801acbfeb41945793",
+      "bytes": 704
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/compatibility.ts",
+      "disposition": "proposed_included",
+      "sha256": "5183c7b7ce1553843bf1a89b5dbeb8c14f0f4e2574552014c11b2fd53a642611",
+      "bytes": 3747
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/contracts.ts",
+      "disposition": "proposed_included",
+      "sha256": "47b186f67e37ef7725d958280f8cfdd3ae593240ad4f583397980c0eeda095c1",
+      "bytes": 3041
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/maintenance.ts",
+      "disposition": "proposed_included",
+      "sha256": "8bdfd0accc8288aea541e80d682088fb939e971a5db229de917c7a07b04f9e98",
+      "bytes": 300
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/policy.ts",
+      "disposition": "proposed_included",
+      "sha256": "8ab34793407216880432377d21c674ec595f893d9f0f03190502b5a338e36a76",
+      "bytes": 6726
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/processor.ts",
+      "disposition": "proposed_included",
+      "sha256": "d1640e524844810008305bb0dbbdd3596d97e0a40fd6b62e880ab36c35f6d6c5",
+      "bytes": 37265
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/read.ts",
+      "disposition": "proposed_included",
+      "sha256": "ffd855289a6e07711d53d2cec65f6899323eb768d41df241253b093355f82248",
+      "bytes": 10723
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/scheduler.ts",
+      "disposition": "proposed_included",
+      "sha256": "abbde39b20fdadb67fa2c10ff807d2a61a4e3f05384c9cf422a1883b737b7c24",
+      "bytes": 4425
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/service.ts",
+      "disposition": "proposed_included",
+      "sha256": "6320e699eba262b2415f8c831a461586fbd0405e24676eafa62f86992a75e7c9",
+      "bytes": 27527
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon/sp-api-client.ts",
+      "disposition": "proposed_included",
+      "sha256": "be17cac162e4553b124e758aae020b089cb26dd9cf6e04905593e8827bf6ab12",
+      "bytes": 16263
+    },
+    {
+      "status": " M",
+      "path": "src/lib/operations/amazon-products.ts",
+      "disposition": "proposed_included",
+      "sha256": "33733a17a55195946502c0d2a1607f7422ec9e7ef0047cf41427ba608eded9e0",
+      "bytes": 4994
+    },
+    {
+      "status": " M",
+      "path": "src/lib/operations/cli.ts",
+      "disposition": "proposed_included",
+      "sha256": "64ae9cc7230ec6c7922e1d5c5facf0cc4410d6b14838cbbff24836f760ffab44",
+      "bytes": 10333
+    },
+    {
+      "status": " M",
+      "path": "src/lib/operations/ppc-read.ts",
+      "disposition": "proposed_included",
+      "sha256": "41398f8a9b543c2e54a18a941873287f2711450dc6f6136ed1ed0ddc71de89e7",
+      "bytes": 6761
+    },
+    {
+      "status": " M",
+      "path": "src/lib/operations/readiness.ts",
+      "disposition": "proposed_included",
+      "sha256": "f5f4abccc812d85427af95766d0711a47d81520936b0a1cfbc6b68bb78caed50",
+      "bytes": 11502
+    },
+    {
+      "status": " M",
+      "path": "src/lib/operations/replenishment-service.ts",
+      "disposition": "proposed_included",
+      "sha256": "cbe563281b5d0a38ac2c7d27b8d95c921046897f8c8950064cdaba55ab127ac5",
+      "bytes": 8972
+    },
+    {
+      "status": " M",
+      "path": "src/lib/operations/schedules.ts",
+      "disposition": "proposed_included",
+      "sha256": "e72581f02601b5c32aab195138820722b264bbdc22769cd0689925800da5bf2e",
+      "bytes": 1148
+    },
+    {
+      "status": " M",
+      "path": "src/lib/operations/sync-processor.ts",
+      "disposition": "proposed_included",
+      "sha256": "87bda1bed3470a07a3cf565600158a24595688954181aaf4bde31aa227690709",
+      "bytes": 533
+    },
+    {
+      "status": " M",
+      "path": "src/lib/products/product-record-repository.ts",
+      "disposition": "proposed_included",
+      "sha256": "adee1eb4684cbe4b4c10e1872e95ce1379cd629e13e059593502bf91cd4165fd",
+      "bytes": 6779
+    },
+    {
+      "status": " M",
+      "path": "src/lib/queue/index.ts",
+      "disposition": "proposed_included",
+      "sha256": "c352e60d76e4536c314fb276e10afeda426f61966964bb8dc4df7962ee76a864",
+      "bytes": 2724
+    },
+    {
+      "status": " M",
+      "path": "src/lib/queue/redis-queue.ts",
+      "disposition": "proposed_included",
+      "sha256": "7641d11ea2db3e1bf1f26a5178979032bf20b8fc567f3975eb2e4ca7e1433b7d",
+      "bytes": 2560
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-seller-bindings.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "b2a4f52be9077c136b86668e6dc537766d6d100ca816b63dcc86899b654279ba",
+      "bytes": 13173
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-sp-api-client.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "24c6a186a0c581f0a24133e6cda671f97b50296e0ed935bccf7e0580517d6af7",
+      "bytes": 7632
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-sync-center.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "9d2babbcce66de25e67705a8a75bf4b86b4ec5a903327d2e860a098af939e1e1",
+      "bytes": 10456
+    },
+    {
+      "status": " M",
+      "path": "tests/browser/amazon-sp-api-settings.spec.ts",
+      "disposition": "proposed_included",
+      "sha256": "d0baf0b7912d25f1cdd62c742a7decb188589df954490ea0dc1fdb8c994207a2",
+      "bytes": 1552
+    },
+    {
+      "status": " M",
+      "path": "tests/browser/sync-center.config.ts",
+      "disposition": "proposed_included",
+      "sha256": "cba51438cdca59cb1fcd6ef49dc195c54070d9c0a39b4b75a4eff1c8393db82b",
+      "bytes": 307
+    },
+    {
+      "status": " M",
+      "path": "tests/browser/sync-center.spec.ts",
+      "disposition": "proposed_included",
+      "sha256": "0635b05ab9a7ff5955bc5798df6e3477cf974648268b7dd882bd1b4da47ba3ac",
+      "bytes": 35553
+    },
+    {
+      "status": " M",
+      "path": "tests/integration/amazon-sync-center.integration.ts",
+      "disposition": "proposed_included",
+      "sha256": "45deec33ab292236843de17850214a22b402e15b63aa4a2e4b6057d23894eac6",
+      "bytes": 35429
+    },
+    {
+      "status": " M",
+      "path": "tests/operations-replenishment-service.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "0dc9f81af67dcff468de1f6a9dee8b770e8f9923382d49af122aaa9027559584",
+      "bytes": 9548
+    },
+    {
+      "status": " M",
+      "path": "tests/ops-cli.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "b4fcbf3bd0681556ff516eaf98ebde4a919c4b8883485998e736488e39086bc3",
+      "bytes": 6964
+    },
+    {
+      "status": " M",
+      "path": "tests/product-edit-draft.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "632ef28261b7ed07b7fbfc7d6cc8774cba4f1cd0bf60872e721274b96af60314",
+      "bytes": 6875
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-multistore-delivery-2026-11-05.md",
+      "disposition": "proposed_included",
+      "sha256": "400f958c1c76ccb240a74d6ad994ff7dab959d4dc87afb5cba2af07a7b1c42b1",
+      "bytes": 16464
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-multistore-github-sync-plan.md",
+      "disposition": "proposed_included",
+      "hashPolicy": "derived approval artifact; no recursive self-hash"
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-multistore-s0-delivery.md",
+      "disposition": "proposed_included",
+      "sha256": "b265266252f55f1ad62e19d501e84ae21f376c4b307f59684b7d51336ff8a03f",
+      "bytes": 7813
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-multistore-security-audit-2026-11-05.md",
+      "disposition": "proposed_included",
+      "sha256": "b5a1558dc4b29c8569eb83dc2116919b90c6a8a1c302b9f08731010ae9a0eed8",
+      "bytes": 19057
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-multistore-verification-2026-11-05.json",
+      "disposition": "proposed_included",
+      "sha256": "8de13d2fe5868eb1fbf538fc5f504ff887b090c7d79899b21510bc8a1c7221c1",
+      "bytes": 2576
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-multistore-worktree-inventory.json",
+      "disposition": "proposed_included",
+      "hashPolicy": "derived approval artifact; no recursive self-hash"
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-access-grants-isolated-verification.json",
+      "disposition": "proposed_included",
+      "sha256": "1ed8e4a0f1ea5341cd20387d61957f4bc09209d82537cd9bfe88b1e1bbe93ce3",
+      "bytes": 5603
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/live-preflight-result.json",
+      "disposition": "proposed_included",
+      "sha256": "10798a6426c9e01b48b9936d534b3e319f28f9f0a59042a223c0a2c02b4c97a7",
+      "bytes": 904
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/live-validation.md",
+      "disposition": "proposed_included",
+      "sha256": "64d3412bbb832339927faadcd78f29ea5aec28577b90a6c628171c8fa74c0692",
+      "bytes": 16055
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/local-environment-result.json",
+      "disposition": "proposed_included",
+      "sha256": "f43883a1f626bb9066dc05dd97f1306ac28b89115414c8337078029ced30ea97",
+      "bytes": 1620
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/local-environment.md",
+      "disposition": "proposed_included",
+      "sha256": "1eeaf4e6491b0027842bb28294ff9f987b2c80939e69da6176b62c733318a015",
+      "bytes": 6626
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/merged-business-result.json",
+      "disposition": "proposed_included",
+      "sha256": "9393885aae5dc80dde478e2ee27757e9a8443a2f2b9549a033371558639fd518",
+      "bytes": 662
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/quick-delivery.md",
+      "disposition": "proposed_included",
+      "sha256": "cb353ec2e6f10b7cfea362396e1763689362db379413ddec5cc09a8f010763c4",
+      "bytes": 9582
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/ui-connections.png",
+      "disposition": "proposed_included",
+      "sha256": "12a4a87842f60d5b75bfd9ab0f337e152abf5ca62b8f2bc4d13625f95e8adca8",
+      "bytes": 138077
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/ui-merged-business.png",
+      "disposition": "proposed_included",
+      "sha256": "680a1f512dfc39e5486fe4a3ba8cf349b77c23f9ea3c3c7b0638783164afaeb1",
+      "bytes": 131230
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/ui-overview.png",
+      "disposition": "proposed_included",
+      "sha256": "5a6682dedeb2a9d81ba9757e996b5e0508b58ad2ae7721fdc957dd591a8428b1",
+      "bytes": 184953
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/ui-plans.png",
+      "disposition": "proposed_included",
+      "sha256": "4c106aa148b9800aaaad9cba51ac8233cd39015de5df7955c7ed1002a1f2d47b",
+      "bytes": 166858
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/ui-quality.png",
+      "disposition": "proposed_included",
+      "sha256": "dcf8e90cccec5371417dcf4be0b87df2b687d1b541bf3cb37867254430a1f1cf",
+      "bytes": 113048
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/ui-task-detail.png",
+      "disposition": "proposed_included",
+      "sha256": "276c6cc431f7bfc7c2ccc2475b523087d5295a4677b19c729c2c11bddf23da4d",
+      "bytes": 141659
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase1/ui-tasks.png",
+      "disposition": "proposed_included",
+      "sha256": "879eef33b91b68075097b63cac7a17cdbd3e739e51a139e9144147c236bd7c58",
+      "bytes": 92608
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-center-phase2-development.md",
+      "disposition": "proposed_included",
+      "sha256": "968a85d76efd42126481e02908dfe4e515a12143ad991583c3bdda086016cd92",
+      "bytes": 17049
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-default-isolated-verification.json",
+      "disposition": "proposed_included",
+      "sha256": "9f5a099f06b12b8df27eed112a3383723696f5828b6aff8a80b13f693ef90767",
+      "bytes": 3979
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-sales-isolated-verification.json",
+      "disposition": "proposed_included",
+      "sha256": "aeaf2cdc49c6fadef324134dce8ce4dfa4c62407b8b38cb23703611ec51558ba",
+      "bytes": 1647
+    },
+    {
+      "status": "??",
+      "path": "docs/amazon-sync-sales-pipeline-verification.json",
+      "disposition": "proposed_included",
+      "sha256": "ff4a55962b1ee306018618fd727968872e68c76193ddab6d40e7cf54838957f9",
+      "bytes": 2622
+    },
+    {
+      "status": "??",
+      "path": "docs/erp-production-readiness-plan.md",
+      "disposition": "proposed_included",
+      "sha256": "e04510cdbb959495fbd00c0471826d3f7d3b412eb63308dec92705c52bd260fe",
+      "bytes": 11057
+    },
+    {
+      "status": "??",
+      "path": "prisma/migrations/20261104010000_amazon_authorization_validation_state/migration.sql",
+      "disposition": "proposed_included",
+      "sha256": "be29b184a39617450457f1d19bddf1d5341e7d921264158bc11ac13e7e7f5d72",
+      "bytes": 218
+    },
+    {
+      "status": "??",
+      "path": "prisma/migrations/20261104020000_amazon_data_center_change_requests/migration.sql",
+      "disposition": "proposed_included",
+      "sha256": "dee0d6c2335d0d09f01459898f87e337de962388ad5abcf8f936b3ee994bece9",
+      "bytes": 8425
+    },
+    {
+      "status": "??",
+      "path": "prisma/migrations/20261104030000_amazon_sales_traffic_snapshots/migration.sql",
+      "disposition": "proposed_included",
+      "sha256": "ac4f319a8a17175456a6ed81796ea9c36e499fdd8c174d8d04a649d53516148c",
+      "bytes": 3795
+    },
+    {
+      "status": "??",
+      "path": "prisma/migrations/20261105000000_amazon_data_access_grants/migration.sql",
+      "disposition": "proposed_included",
+      "sha256": "6da8f171ba41c55e8dddadfa24af1780e7e5c301853a01773c92c014e3af1f58",
+      "bytes": 1817
+    },
+    {
+      "status": "??",
+      "path": "prisma/migrations/20261105010000_amazon_multistore_mcp/migration.sql",
+      "disposition": "proposed_included",
+      "sha256": "e53c0b91f7485fa8b95c0763d77dfb1f073d43df57c4eadd8f900524bcec1b35",
+      "bytes": 5002
+    },
+    {
+      "status": "??",
+      "path": "scripts/amazon-sync-live-preflight.mjs",
+      "disposition": "proposed_included",
+      "sha256": "5502eb50788f47af45bd0e68b7e703ed4c7a745896637ef42c09f5be604aaebe",
+      "bytes": 2304
+    },
+    {
+      "status": "??",
+      "path": "scripts/audit-amazon-lineage.ts",
+      "disposition": "proposed_included",
+      "sha256": "f43691c3ccfea14a815314b56a1bc7832831c739716386899512dd4cb24df9b0",
+      "bytes": 1656
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/integrations/amazon/sp-api/oauth/callback/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "646677263ff1e88600ff63f775682f4162343c74bd0a99cc9e985876f05f5f00",
+      "bytes": 1152
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/integrations/amazon/sp-api/oauth/start/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "3d85173d7cb45e428a8d4fb6055f5f79b1cc2a9949e677e3d56e9b56ebd38c37",
+      "bytes": 1231
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/mcp/amazon/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "c29998bf02f28a138440ee4c6abf2a81ad06c374adbc8f70a3fb5f2a86420be0",
+      "bytes": 4040
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/operations/amazon-mcp/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "e6cedfb2ad4878bbb7655919bfe197983166c9fce351177a694fea648ed4c5c2",
+      "bytes": 1545
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/operations/amazon-stores/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "4312c6b56e6d89f468c8f300031c90ddc42904fcf2f81e67c192dfed062a67c4",
+      "bytes": 2328
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/operations/sync-center/approvals/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "3cd4be8b6c1ee9f77e9624d3ad949db72e12d4204f4670a7cb465c9326efffab",
+      "bytes": 1913
+    },
+    {
+      "status": "??",
+      "path": "src/app/api/operations/sync-center/exports/route.ts",
+      "disposition": "proposed_included",
+      "sha256": "4b1586ff34a7f2070cdf594b0cfa6ac2667e9ca1be72ce349aa925726c511696",
+      "bytes": 3268
+    },
+    {
+      "status": "??",
+      "path": "src/components/operations/amazon-mcp-panel.tsx",
+      "disposition": "proposed_included",
+      "sha256": "5ba10342a6d18954262712facfba9db8a3255cb670a626c88558065262dcded6",
+      "bytes": 6248
+    },
+    {
+      "status": "??",
+      "path": "src/components/operations/amazon-stores-panel.tsx",
+      "disposition": "proposed_included",
+      "sha256": "9cadc8aae6e0cd70e0c502fcfa05b8c765cc5696f6d65a58b3540ace22947e8f",
+      "bytes": 7389
+    },
+    {
+      "status": "??",
+      "path": "src/components/operations/sales-traffic-workbench.tsx",
+      "disposition": "proposed_included",
+      "sha256": "db7616e2bd8527fd271065304e373efb5da4a1186346339592ddfd642f73943c",
+      "bytes": 12730
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/access-management.ts",
+      "disposition": "proposed_included",
+      "sha256": "50ac246b4aabea7ed8fcaf69b0a74cb90cef0b2fe0f71a96cd3cb9658466792a",
+      "bytes": 4048
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/approval-policy.ts",
+      "disposition": "proposed_included",
+      "sha256": "606d9fb5717be27b61eabc929218a2ca51507ab8ef2a153d2581d3730f869a6b",
+      "bytes": 8284
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/approved-context.ts",
+      "disposition": "proposed_included",
+      "sha256": "e3215c76bc63fd0dd9ea8d6e9de3a9ff7d2b83ef2b3dafc3a0ecf14e58f06898",
+      "bytes": 913
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/change-approval.ts",
+      "disposition": "proposed_included",
+      "sha256": "b55e97d4b6c728ab68e839de2dd9953aeb7857242a2dd153321db80d4458f69a",
+      "bytes": 29205
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/data-access.ts",
+      "disposition": "proposed_included",
+      "sha256": "395e2ef3011e9fd85f3c52240ccb0a6667354425dfe8f04aa8247efb26e2d2e4",
+      "bytes": 8859
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/date-range.ts",
+      "disposition": "proposed_included",
+      "sha256": "0a3cc2a8ce4dec48c2c9ae0fb81a609208aa202011aa7c4e404340a8a25fe0e5",
+      "bytes": 4343
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/execution-window.ts",
+      "disposition": "proposed_included",
+      "sha256": "ce1eb8dcf382335fe9ee0bfebb696d34b1cf793cfc76b2ab01ef14e171ff4393",
+      "bytes": 710
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/exports.ts",
+      "disposition": "proposed_included",
+      "sha256": "10847f5021a9d6adbc62f892b742a180ccc2ebf820e9280c985176f402c6123a",
+      "bytes": 11739
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/lineage-audit.ts",
+      "disposition": "proposed_included",
+      "sha256": "39a3b0b6d575307153c899a50ecd5b53fb7bd1f0ec7df87bd2b7e56a3a70b177",
+      "bytes": 3504
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/mcp.ts",
+      "disposition": "proposed_included",
+      "sha256": "ca3832e83a9d5877901ad2b3baedd3df464f4263973309f5ab62906ce4506eb2",
+      "bytes": 17341
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/oauth.ts",
+      "disposition": "proposed_included",
+      "sha256": "5a887576df4d1094750e581302dbc7c0906158abdbca0f20b07a5e44d30e6435",
+      "bytes": 10908
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/read-audit.ts",
+      "disposition": "proposed_included",
+      "sha256": "1c2d564ca67723ca877308a4b132cf0df907ec5fd032bf1e2d01a6c2b4e85260",
+      "bytes": 692
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/request-body.ts",
+      "disposition": "proposed_included",
+      "sha256": "1d2c84f4866bc55d7f1c100260d6acab9b33b4e73dfb844fcb965939d0babe66",
+      "bytes": 1630
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/sales-query.ts",
+      "disposition": "proposed_included",
+      "sha256": "f8dce1a36958686561d40342788215ff87afeb7c4b7d8b6189a57ef8046965af",
+      "bytes": 6966
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/sales-traffic.ts",
+      "disposition": "proposed_included",
+      "sha256": "54532404320e4fdba104d2f73e8a5a5dff93b8b667e2c57c50d3a90d887d7312",
+      "bytes": 3250
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/snapshot-query.ts",
+      "disposition": "proposed_included",
+      "sha256": "d5e4c76c6c1abfc4bf6380d0cbc78916866158e8bc43bbed558e26827777ffab",
+      "bytes": 1710
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/snapshots.ts",
+      "disposition": "proposed_included",
+      "sha256": "3991a1035501202ac54d69650888109aceaf6ddce5850375d89b50ebd6ccd3bc",
+      "bytes": 3723
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/stores.ts",
+      "disposition": "proposed_included",
+      "sha256": "7fd78208dedcecdac60dee52d12bb8836727c513a909a31e69b6bae29a60060b",
+      "bytes": 4206
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/worker-policy.ts",
+      "disposition": "proposed_included",
+      "sha256": "4c0131c52d326587177dfcf5a0c78a38884b620b1ca63cd6192556e3b2720734",
+      "bytes": 1601
+    },
+    {
+      "status": "??",
+      "path": "src/lib/operations/amazon-read-scope.ts",
+      "disposition": "proposed_included",
+      "sha256": "7511be8202b1e86e67e58ba458335c63d76d713937eec15f1ee7e9272a169382",
+      "bytes": 953
+    },
+    {
+      "status": "??",
+      "path": "src/lib/operations/replenishment-access.ts",
+      "disposition": "proposed_included",
+      "sha256": "52a83f47f3c97989b28f3718f1370aa64d75bfc0907bd2a53cf54de65ba3b32f",
+      "bytes": 953
+    },
+    {
+      "status": "??",
+      "path": "src/lib/products/amazon-field-policy.ts",
+      "disposition": "proposed_included",
+      "sha256": "5c4d72ba636a1dd3309b2fb1637d8d22b6b33136da24b8dd2c62530f52c98c67",
+      "bytes": 484
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-authorization-approval.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "a3f30b772f786ee546c9e72eac96f2acff45f521d2d5b1ac652e4e9c398ce0b3",
+      "bytes": 2631
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-data-center-approval.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "322b6ab49fd9c61b8cd436d816540c7261c8929fe3aa513e3eb0d117e47c64a8",
+      "bytes": 3250
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-management-request.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "62a3c0abaa2995849f14a0e3b024e205be04ede1ff609c5c3a4c16f2b443b2ee",
+      "bytes": 2310
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-production-boundaries.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "5222c5c49fb9696d05090b4e80f4bc0dc775dafae5767629875c4cb6720246bf",
+      "bytes": 9798
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-report-lifecycle.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "a66cc43a39be275a4c80ee4dbe35179ad321063383ad657e576db98e0589400e",
+      "bytes": 10461
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-sales-export.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "2bed34e20b869f500ce3e7a76307a54ae5388a1be75ef3320a0943a48bcc6229",
+      "bytes": 3808
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-sales-traffic.test.ts",
+      "disposition": "proposed_included",
+      "sha256": "f28ac09181aa50af831e174bc01a1e978da0a1df06d140d3c2e08b4248cee3f4",
+      "bytes": 9399
+    },
+    {
+      "status": "??",
+      "path": "tests/amazon-sync-preflight.test.mjs",
+      "disposition": "proposed_included",
+      "sha256": "6686b35ef39ea001a2bf976d52e80dd34f02f2d690c706e69e41236a9f66403d",
+      "bytes": 1580
+    },
+    {
+      "status": "??",
+      "path": "tests/browser/amazon-multistore.spec.ts",
+      "disposition": "proposed_included",
+      "sha256": "3465489268c4a32613f94af27b03dcbbe0e58fa33dd4fbe866044c7df2f667c0",
+      "bytes": 5826
+    },
+    {
+      "status": "??",
+      "path": "tests/integration/amazon-mcp.integration.ts",
+      "disposition": "proposed_included",
+      "sha256": "f39ab9b2c0b76c3ab6fc83495196fd9fa5a2adde518150013a64928a34e8e6d2",
+      "bytes": 26339
+    },
+    {
+      "status": "??",
+      "path": "tests/integration/amazon-multistore-security.integration.ts",
+      "disposition": "proposed_included",
+      "sha256": "57a48b20e2e86980d445300c93e738158166929fcbb69f75ab0edf2de409c654",
+      "bytes": 15967
+    },
+    {
+      "status": "??",
+      "path": "tests/integration/amazon-sales-pipeline.integration.ts",
+      "disposition": "proposed_included",
+      "sha256": "16b7e529913c65613e9809ea564aecebc66ea57affb8c0cd851a7f802fa9d55f",
+      "bytes": 16010
+    },
+    {
+      "status": "??",
+      "path": "tests/integration/amazon-sales-traffic.integration.ts",
+      "disposition": "proposed_included",
+      "sha256": "8af877b909a08341b69d2fabe467eaf54491347aa8a696073e8b056a3edd8408",
+      "bytes": 8103
+    },
+    {
+      "status": "??",
+      "path": "tests/integration/sync-center-browser.ts",
+      "disposition": "proposed_included",
+      "sha256": "733c5ccfb338af7fb101ec5822601ea75cfff57b640357bdf6823fbc5b12640d",
+      "bytes": 10990
+    }
+  ],
+  "excludedGeneratedArtifacts": {
+    "path": ".next-amazon-live/",
+    "files": 1028,
+    "bytes": 196004184,
+    "reason": "AGENTS.md build artifact exclusions; retained locally"
+  },
+  "summary": {
+    "listedFiles": 135,
+    "requiresSeparateScopeConfirmation": [
+      "docs/product-domain-simple-architecture-plan.md",
+      "src/components/products/product-meeting-notes.tsx"
+    ],
+    "generatedFilesExcluded": 1028
+  },
+  "approvalStatus": "PENDING_SPECIFIC_SCOPE_APPROVAL"
+}

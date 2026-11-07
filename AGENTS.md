@@ -4,6 +4,12 @@
 系统要做“可迁移设计”。
 也就是继续开发功能，同时慢慢把业务逻辑、数据模型、文件处理边界理清楚。PPC Workspace 的 IndexedDB 用于本地恢复与浏览器缓存，服务端快照、草稿记录等已由数据库承载；Product Center 商品主数据以 PostgreSQL 为事实源。新增多人数据应沿现有服务端存储边界扩展，不把 IndexedDB 描述为未来才迁移的唯一存储层。
 
+## 长期安全审批规则
+
+任何涉及真实数据、外部 API、凭证、配置写入、配置上传、生产环境或不可逆操作的行为，默认禁止执行。必须先提供具体、可审阅的变更方案，并等待用户针对该方案明确批准。用户批准某一项操作，不代表批准后续相关操作；如果目标环境、文件、范围、配置内容或影响发生变化，必须重新提交方案并等待批准。
+
+未经批准，只允许只读检查、风险分析、生成变更方案、生成脱敏 diff、编写但不执行的脚本，以及在隔离环境使用 mock 数据进行验证。不得修改、覆盖、删除或上传真实配置，不得调用真实外部 API，不得启动真实任务、生产任务、迁移、部署、重启、回滚或清理真实数据。
+
 ## 最高优先级操作原则：两端对齐、同步闭环、生产级交付
 
 每接到一个任务，都要默认按“本地 + GitHub 两端对齐、同步闭环、生产级”的标准执行；服务器备份、发布和恢复只在你明确要求时纳入任务范围：
@@ -15,6 +21,21 @@
 - 同步闭环：任务不能只停留在代码修改；要同步必要的文档、脚本、配置、验证步骤和部署注意事项，确保下一个 agent 或人工接手时能继续执行。
 - 生产级交付：改动必须考虑构建、lint、兼容性、回滚、日志、错误处理、安全和数据保护；不能把临时方案当作最终生产方案。
 - 结果确认：每个任务结束前，要说明已完成什么、验证了什么、还剩什么风险或需要用户确认的事项。
+
+## Commit / Push 后的页面追溯记录
+
+- 每次成功执行 `git commit` 或 `git push` 后，必须将本次变更涉及的每个页面说明追加到 `/Users/chenjieliang/Desktop/pm-system-overview.md` 文档末尾，保留原有内容和历史记录，不覆盖、不重排。文档不存在时创建；该路径不可访问或追加失败时，必须明确报告未完成项，待路径可用后补记，不得声称追溯已完成。
+- 每条记录注明北京时间（Asia/Shanghai）、仓库路径、操作类型（commit / push）、分支、实际提交 SHA 和变更摘要。commit 记录对应提交；push 记录目标 remote/分支及本次实际推送的提交范围。首次推送等无法确定范围的情况必须说明，不猜测。提交成功后的 push 即使失败，也应保留 commit 记录，并如实记录推送失败状态。
+- 按本次提交或实际推送范围逐页记录，覆盖新增、修改、删除和因共享逻辑变化而受影响的页面；不能只记录当前聊天产生的改动，也不能将尚未提交的工作区改动当作已提交内容。每个页面必须写清以下六项：
+  1. **放在哪里**：页面名称、访问路由、入口位置和主要源码路径；删除或迁移时注明原位置及去向。
+  2. **负责什么**：业务目的、核心功能和本次行为变化。
+  3. **谁能看**：实际角色、权限及 organization/workspace/ownership 可见范围，区分页面入口与服务端权限校验。
+  4. **怎么流转**：从何处进入、用户操作、状态变化、审批或草稿环节，以及后续页面或任务去向。
+  5. **依赖什么**：关键组件、API、service/repository、数据事实源、派生层、存储、worker 或外部服务，仅列与该页面相关的依赖。
+  6. **边界在哪**：读写范围、模块职责、权限与数据隔离、哪些操作只生成草稿，以及不得自动执行的操作。
+- 说明必须以对应提交的代码和已核实文档为依据；未核实内容标为“待确认”，不得凭页面名称推断权限、数据来源或流转。若本次只涉及文档、脚本等且无页面影响，也要追加操作记录并注明“本次无页面功能或流转变化”，不编造页面说明。
+- 同一提交的 commit 和 push 分别留下操作记录；push 可引用已存在的 SHA 对应页面说明，仅补充推送范围、同步状态和遗漏内容，避免重复抄写。补记时注明补记时间和原始操作信息，不伪造原始时间或同步状态。
+- 这份桌面文档属于本机追溯记录，不自动提交到仓库或上传；不得写入密码、Token、密钥、完整连接串、真实个人信息或原始业务数据。该规则不授予 commit、push、外部 API、部署或生产操作权限，仍须遵守原有审批规则；不得为了记录追溯信息自动产生额外 commit / push 或递归触发同步。
 
 ## 最小化处理和验证路线
 
@@ -46,6 +67,7 @@
 10. Repository First
 11. Three-End Production Closure
 12. Minimum Scope Verification
+13. Runnable MVP First
 
 ## Minimum Change Principle
 
@@ -59,6 +81,10 @@ Avoid:
 - Reorganizing folders
 - Reformatting unrelated files
 - Updating dependencies
+
+## Runnable MVP First
+
+Build each request on top of the core code that already exists and prioritize a working, verifiable MVP. Before implementing, check the relevant existing workflow and reuse or extend its capabilities; do not rewrite features that already exist. Avoid broad standalone audits, architecture design, and fine-grained optimization unless they are necessary to make the requested MVP work safely and reliably.
 ## Backward Compatibility
 
 Every modification must preserve existing functionality unless the task explicitly requests a behavior change.
@@ -221,6 +247,27 @@ Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 
 - 当前可以使用 local storage 和 inline processor，但接口边界应兼容未来替换为 R2/S3 和 queue worker。
 - 所有未来需要多人使用的数据模型，应预留 `orgId` / `userId` / ownership 边界。
 
+## 本地与服务器运行环境统一规则
+
+本节是本地开发、测试及 Worker 启动的配置边界；与旧文档或示例冲突时，以本节为准。它统一配置入口和每个环境内的连接目标，不表示本地与生产共享数据。
+
+- 本地 Next web、API、CLI 和常驻 Worker 的唯一常规配置源是仓库根目录 `.env`。新增或修改变量先更新 `.env.example`，真实值只由用户在本地受控配置中维护；不得提交 `.env`、复制密钥或在启动命令、shell profile、`DOTENV_CONFIG_PATH`、`--env-file`、Next 环境文件或各服务专属 dotenv 文件中另设第二来源。
+- 本地所有进程必须使用相同的 `DATABASE_URL`、`REDIS_URL` 和 `QUEUE_DRIVER=redis`。启动器应校验继承环境与根 `.env` 无冲突，连接地址采用 loopback；发现多个本地环境文件、连接目标不一致或远程地址时先停止启动并盘点，不能静默混用或自动改写配置。loopback 也可能是 SSH 隧道，需结合端口转发和数据库身份确认其实际目标。
+- 每个环境只选择一套 PostgreSQL 业务库和一套 Redis/BullMQ 实例作为该环境的运行目标。web 与 Worker 的连接目标必须完全一致（包括 Redis DB index）；不得在不同 worker、测试脚本、CLI 或页面进程中悄悄切换库/Redis。生产与本地是相互隔离的独立环境，各自有自己的单一目标。
+- `ProductRecord` 及其他持久化业务记录仍以 PostgreSQL 为事实源；Redis 用于 BullMQ 队列与调度，不是业务数据事实源。需要可恢复的后台任务必须有数据库任务/状态、幂等处理、租约或检查点及可重复的 queued-job 恢复路径；不得假定 Redis 队列内容是唯一任务记录。Redis 重启/清空后的恢复能力需以隔离验证为依据，不得承诺零丢失。
+- 已登记 Worker 统一由 `src/lib/runtime/worker-registry.json` 描述，由 `scripts/runtime/worker-manager.mjs` 管理；`npm run worker` 启动注册的本地 Worker 集合，受支持的单 Worker 命令必须仍经同一管理器。不得绕过 manager 直接启动 Worker entrypoint、另造未登记消费者或对同一 Worker 重复启多个实例。健康状态需区分进程心跳、Redis/队列连通和代码版本；单有进程在线不等于任务可消费。
+- 生产 `.env` 由服务器独立正式环境变量注入（当前 systemd `EnvironmentFile`）；web 和每个 systemd Worker 使用同一生产 `DATABASE_URL` / `REDIS_URL`，不读取本地 `.env`。生产服务的编排/恢复边界以 registry、部署清单和 systemd 为准；改动这些共享边界须先说明影响范围、回滚方式和验证计划，并经明确批准。
+- 仓库中曾使用的 `.env.amazon-live.local` 及 `DOTENV_CONFIG_PATH` 是旧联调配置路径，不能再作为常规本地 app/worker 运行来源。现存文件、已运行进程、端口转发、数据库、Redis 及其中可能有价值的数据均须只读盘点；在明确目标库、组织/工作区数据量、队列范围及匹配加密密钥前，不得覆盖、删除、合并配置，切换连接，停止进程或迁移数据。不要仅因连接地址是 loopback 就认定库是空库或非生产数据。
+- 隔离测试可以使用脚本显式构造的临时 PostgreSQL/Redis 与 fixture 环境，但必须不加载根 `.env`、不继承真实凭据、使用独立容器/端口和可识别的临时数据；测试清理只能删除本次创建并核实身份的资源。此例外不改变本地 app/worker 的唯一 `.env` 约束，也不授权对既有数据库、Redis、容器或运行进程做故障注入。
+- 数据库备份脚本或配置存在，不等于已启用自动备份或已完成恢复演练。备份、恢复、Redis 清空/重启、定时器启用及真实运行态切换均按长期审批规则执行；恢复验证必须使用隔离目标，并同时说明数据库、上传对象/文件存储及队列任务各自的恢复边界。
+
+### 当前运行实现核对基线
+
+- 已检查的 runtime loader 从项目根 `.env` 解析本地变量，拒绝冲突的继承变量、额外 Next `.env.*` 文件、非 loopback 本地数据库/Redis 地址和非 Redis 队列模式；web 启动包装器及 Worker manager 复用该解析结果。改动前须以当前代码和测试复核这些行为，不能只凭本段认定所有启动入口都已接入。
+- Worker registry 当前登记 `import`（含 Product Outbox）、`image-upscale`、`amazon-sync`（含 SP-API 与 Ads 队列）和 `sellfox-sync` 四类 Worker；manager 支持受控单项启动、失败退避和信号停止，子进程锁用于拒绝同一目标上的重复实例。队列恢复能力按各 worker 实现分别核实，不能把统一启动误写成统一恢复已完成。
+- 服务器仍由独立 systemd unit 监督服务进程；这是统一注册/入口管理之上的进程恢复边界，不表示已经合并成一个 systemd unit。更新 Worker 入口、注册表或公共 runtime 时检查所有受影响服务与部署计划。
+- 运行状态必须用本次只读命令核验并注明观察时间；进程、容器、心跳和队列状态都是瞬时事实。不得把历史测试、当前本机进程或单次健康检查写成服务器验收或持续可用证明。
+
 ## 服务器部署与更新规则
 
 本节是生产服务器部署与更新的唯一仓库内记录。新开窗口接手服务器更新时，先读本节；不要依赖散落在其他文档或聊天记录里的部署规则。
@@ -289,6 +336,17 @@ GitHub CI 负责测试、lint、build、打包和 release-check；本机不重�
 
 - 未完成任务按 ProductRecord 当前阶段和负责人判断，不以通知 readAt 判断完成；关闭弹窗只收起，同一次登录去重，下次登录仍有任务才弹。详细边界与回滚见 `docs/product-domain-simple-architecture-plan.md` 的业务流转通知段落。
 - `npx playwright test --config tests/browser/notifications.config.ts`：模拟通知 API、真实 Tailwind 样式的隔离登录提醒回归，不访问生产。
+
+## Amazon 数据同步中心审批
+
+- 支持单管理员流程：当前组织有效 `owner` / `database_admin` 在具备 `operations:approve` 和原有业务权限时，可批准自己的申请；普通成员仍不得自行审批。角色与权限必须在服务端从数据库实时读取，不接受客户端声明。
+- 保留申请、脱敏审阅、批准、独立应用、revision、有效期、范围和审计校验；批准不等于应用或启动任务。批准审计记录 `selfApproved` / `approverRole`，不自动批准既有申请；其他业务模块的审批规则不变。
+
+### Amazon Orders P1/P2 离线开发边界
+
+- `orders` uses Orders v2026-01-01 `searchOrders` plus optional approval-bound `getOrder` detail. Each job resumes a bounded cursor; page/work/fact/raw commits are idempotent and raw PII remains AES-GCM encrypted. Amazon documents say v2026-01-01 Orders PII does not require RDT; do not create or reuse a v0 Tokens path. PII datasets require explicit business-purpose and restricted-role attestation; standard queries/UI expose no PII or raw envelopes. Official pages: `https://developer-docs.amazon.com/sp-api/reference/getorder-3`, `https://developer-docs.amazon.com/sp-api/docs/access-orders-pii`.
+- `npm run test:amazon-orders:offline`: disposable preinstalled Docker PG/Redis + `.invalid` fixture HTTP + order browser; no inherited credentials/database config, dotenv, image pulls or real sync. `npm run test:amazon-sync:offline` includes existing sync regressions. Specs, validation, and remaining financial/returns gates: `docs/amazon-orders-p1.md`, `docs/amazon-orders-p2-plan.md`.
+- Amazon 角色仅记录管理员核实的 attestation，不把 Marketplace 参与资格当作 Orders 域权限证明。非敏感 applicationId/预算同应用跨站点一致；新数据仍隔离 organization/workspace/seller/site，不改 ProductRecord 或 PPC 存储边界。
 
 ## UI 与交互约定
 
@@ -406,12 +464,14 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 
 ### Sellfox 只读同步
 
+- 凭据页「测试连接」是显式测试例外：`POST /api/integrations/sellfox/credentials/test` 由 Node Route Handler 复用 `sellfox/client.ts` 请求一次新 Token，实时核验管理员/权限/工作区/revision、每范围一分钟防重及脱敏审计。仅用户点击时发起，不请求业务接口、不启用计划；常规数据采集仍只走 Worker。成功只说明 Token 可获取，不代表业务权限。实现验证禁止自动使用真实凭据请求上游。
+
 - `npm run sellfox:ads-reparse-cache -- --organization-id=<id> --workspace-id=<id>`：仅从现有 task.fileKey 缓存重解析完成/已下载广告报告，默认 dry-run，只有 `--write` 才按原窗口事务替换；默认投放与搜索词，不创建/轮询/下载上游任务。上线后另行授权执行，范围、空报告及回滚注意事项见 `docs/sellfox-ads-subtabs-gap.md`「既有数据纠正」。
 - `npm run sellfox:ads-reset-stuck-creating -- --organization-id=<id> --workspace-id=<id>`：将卡住的广告报告任务（`creating` 且无 externalTaskId/fileKey）标为 `failed` 以便重提；默认 dry-run，只有 `--write` 才更新 status；不删行、不调赛狐。123 上 SD×adTargeringReport 等用法见 `docs/sellfox-ads-subtabs-gap.md`「部署后重置卡住 creating」。
 
 - 广告 Phase A/B 新增 `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`，报告代码精确为 `adTargeringReport` / `adSearchTermReport` / `adCampaignReport` / `adGroupReport` / `adSpaceReport`；2026-10-26 已对照真实 XLSX 确认列映射（覆盖范围见缺口文档）；投放/搜索词真实 ID 列为 `广告投放ID`，兼容 `投放ID`，双列歧义或显式空 ID 拒绝。五计划默认关闭、1440 分钟、Asia/Shanghai 06:30；广告位已确认活动/广告位/日期唯一，真实文件无广告组ID，兼容广告组仅元数据，重复身份整文件拒绝。列/身份/回退与灰显范围见 `docs/sellfox-ads-subtabs-gap.md`；`/saihu-search-merge` 人工上传保持独立。
 
-- 凭据仅由服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 读取；overview 只返回 configured。所有 Open API 请求必须在 Node Worker 中经 `src/lib/sellfox/client.ts` 发起。
+- 赛狐凭据入口为 `/settings?tab=integrations#sellfox-credentials`：组织有效 owner/database_admin 且具备 settings:edit / sellfox:create 时可直接保存，服务端实时校验成员、权限和工作区；独立 `SellfoxIntegrationCredential` 按组织/工作区 AES-GCM 加密、revision CAS 并与脱敏审计同事务写入。`SELLFOX_CREDENTIAL_ENCRYPTION_KEY` 仅由服务端配置；页面不回显、不缓存密钥，保存不调用赛狐或启用同步。未配置数据库凭据时保留 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 兼容路径，解密失败不得回退；所有 Open API 请求仍在 Node Worker 经 `src/lib/sellfox/client.ts` 发起，Token 按范围和凭据版本隔离。迁移与真实主密钥配置须另行审批，入口、验证与回滚见 `docs/sellfox-credentials-form-proposal.md`。
 - 使用专用 `npm run worker:sellfox-sync` 和 `amazon-sellfox-sync-worker.service`；BullMQ concurrency 固定为 1。客户端对 token、重试和资源请求统一串行，间隔不少于 1200ms。
 - 官方 token `expires_in` 单位为毫秒。库存/销量/Listing已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts`、`narrow-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。上述广告 Phase A/B 的真实样本覆盖与剩余验证缺口见 `docs/sellfox-ads-subtabs-gap.md`；后续未验证资源仍由 `sellfoxSyncDisabledReason` 禁止同步，不得恢复猜字段落库。
 - 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
@@ -420,6 +480,7 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - Sellfox 计划与手动提交按组织/工作区/资源共用事务防重锁；执行开始重新检查 active 用户和 sellfox:create。`/settings?tab=operations` 赛狐面板显示 Worker 心跳及当前工作区计划，schedules API 返回 lastEnqueuedAt/nextRunAt；时间为 Asia/Shanghai，计划默认关闭，页面不启动 Worker。创建防重不等于多副本执行租约，生产接管验证见 `docs/sellfox-sync-workbench-plan.md` §10。
 - 库存、销量、表现、店铺和运行记录按 organization/workspace 隔离；详细接口契约与验证步骤见 `docs/sellfox-sync-workbench-plan.md`。
 - `npm run test:sellfox:browser`：隔离模拟接口验证多店/日期/站点、URL 导航、导出链接、按需详情、日志轮询与切工作区迟到响应；不访问真实赛狐或生产库。浏览器不持有 token；列表与导出复用 browse-query，导出超过 10,000 条明确拒绝，不能静默截断。
+- 订单与 FBA 货件走 Worker 资源 `orders`、`fba_shipments`，默认每 720 分钟，计划仍默认关闭。订单读 `POST /api/order/pageList.json` 写入 `SellfoxOrderSnapshot`（订单一行一项）；货件读 `POST /api/fba/shippingOrder/pageList.json` 写入 `SellfoxFbaShipmentSnapshot`。契约字段对不上时该店失败并在页面列出，不补行。补货建议不建表，按 `sellfox_listing_current` 可售、货件在途和 `SellfoxSalesDailySnapshot` 近 30 个可观察日（去掉最近 2 天，断货日不进分母）实时计算。路径、公式和回滚见 `docs/sellfox-orders-shipments-restock.md`。
 
 ### 本地 Amazon US 选品 CLI
 
@@ -447,3 +508,67 @@ C:\Users\Administrator\Desktop\AMAZON BULK AD
 - `npm run test:amazon-sync:integration` 使用预装官方 Docker 镜像建立独立 PostgreSQL／Redis，一次性验证真实迁移、队列和恢复；Amazon 响应模拟，不调用生产。脚本不拉取镜像，不接触既有容器。
 - `npm run test:amazon-sync:browser` 为真实 Tailwind 样式、模拟 API 的隔离浏览器回归。
 - 本轮包含 schema 扩展；关闭试点需保留兼容新唯一键的应用，禁止任意回滚到迁移前应用或自动删表。部署／回滚、验证限制见 `docs/amazon-sync-center-phase1/`，未明确要求不得执行生产迁移或发布。
+
+## Amazon SP-API 本地真实联调
+
+- 2026-11-05 默认库存/Listing 隔离集成已获单独批准并通过 16 项（真实 fixture PostgreSQL/Redis、审批 Route Handler、测试 Worker、Chromium，Amazon transport 模拟），临时资源已清理。记录：`docs/amazon-sync-default-isolated-verification.json`。不代表真实 Amazon 或生产性能验收。
+
+- 日期/Reports 销售流量、版本查询/导出、商品观察字段写入保护的本地增量边界见 `docs/amazon-sync-center-phase2-development.md`。销售数据为店铺逐日汇总，缺失/未闭合报告不发布为完整；单独获批的临时空库迁移/SQL 及销售审批→测试 BullMQ consumer→发布→查询→本地导出下载集成已通过（Amazon HTTP 模拟）。现有环境迁移和真实联调仍须逐项审批，旧集成通过记录不代表当前代码已验收。
+
+- `node scripts/amazon-sync-live-preflight.mjs`：复用统一 runtime loader，只检查环境配置并输出脱敏结果，不连接数据库／Redis、不解密、不请求 Amazon；退出 2 表示未就绪，退出 0 不能代表真实验收。拒绝替代 env、冲突继承变量及退役 profile；生产注入配置不会通过本地联调验收检查。
+- `node --test tests/amazon-sync-preflight.test.mjs`：预检脱敏与拒绝非本地配置的专项测试。
+- 操作与未填真实结果记录见 `docs/amazon-sync-center-phase1/live-validation.md`。共用 Amazon Worker 会扫描旧计划及补货到期任务；历史上使用的独立本地数据库/Redis 配置不能作为当前流程继续切换目标。联调前先完成根 `.env` 的目标库身份与数据范围审查；不使用测试 fixture 或生产隧道，不制造真实限流。
+
+- 历史 Amazon 本地联调说明与结果见 `docs/amazon-sync-center-phase1/local-environment.md`。其中提及的私有 `.env.amazon-live.local`、`DOTENV_CONFIG_PATH` 与独立本地服务属于旧配置路径，不得作为常规 app/worker 配置入口；如仍需联调，先只读核实进程及数据库/Redis身份，再按本节完成配置归并方案与数据/密钥影响审查。不得把空授权环境就绪表述为真实 Amazon 验收通过。
+
+## Amazon ERP 生产准入补充
+
+- `node scripts/test-amazon-sync-integration.mjs --security`：一次性 PostgreSQL/Redis 和本地临时存储的多店铺安全回归，验证补货、只读 CLI、撤权及导入结果下载；不访问真实 Amazon，不替代 MCP/OAuth 验收。S0 范围、兼容性和验证结果见 `docs/amazon-multistore-s0-delivery.md`。
+
+- 成员 Workspace/Seller 数据授权、24 小时人工任务执行窗口、受控 Worker 的本地代码边界及生产门槛见 `docs/erp-production-readiness-plan.md`。普通成员无显式授权拒绝；旧无执行期限任务/旧无范围导出须重新批准/申请，不自动回填权限。
+- `AMAZON_SYNC_WORKER_MODE=approved-only` 配合 JSON `AMAZON_SYNC_WORKER_TASK_IDS` / `AMAZON_SYNC_WORKER_EXPORT_IDS` 只处理明确 ID、使用独立队列且不刷新补货；默认 standard 保留原行为。真实配置和启动仍需单独审批。设置页标准队列心跳不代表受控队列在线。
+- 隔离 runner 当前包含第五迁移 `20261105000000_amazon_data_access_grants`；2026-11-05 单独获批后，销售 SQL 4 项、销售链路 1 项、默认库存/Listing 16 项均通过，临时资源已清理。记录见 `docs/amazon-sync-access-grants-isolated-verification.json`；不代表现有库迁移或真实 Amazon 验收通过。
+
+## Amazon 多店铺身份与个人 MCP
+
+- 本地交付与生产门槛见 `docs/amazon-multistore-delivery-2026-11-05.md`；验证清单见 `docs/amazon-multistore-verification-2026-11-05.json`。隔离 runner 增加第六迁移 `20261105010000_amazon_multistore_mcp`；新增 SQL 不能据此视为已应用到现有库。
+- `node scripts/test-amazon-sync-integration.mjs --mcp`：真实临时 PostgreSQL / Redis 的个人凭证、当前 ERP 用户/角色/站点/操作交集、OAuth、审批及并发撤权回归；所有 Amazon HTTP 模拟。
+- MCP 入口为 `/api/mcp/amazon`，凭证绑定个人且只在创建/轮换时展示一次。ERP 管理员身份不隐式授权 MCP，旧 grants 的 `mcpEnabled` 默认 false。凭证页面在同步中心“同步设置”；店铺及角色范围在“店铺与授权”。
+- OAuth 使用固定登记 callback、单次 state 及卖家范围验证；参与站点不能单独证明 Seller ID。OAuth 配置变量名及历史数据核查/回滚规则见交付文档，不在仓库保存真实值。
+- `npx tsx scripts/audit-amazon-lineage.ts --report-only --organization-id=<id> --workspace-id=<id>` 是有界只读归属报告，不加载 `.env`，不按 SKU/ASIN 推测或自动回填。连接真实目标前仍须具体审批；截断/异常退出 2，不能当作全库核查完成。
+- 主要 ERP 读取入口与 MCP 有 append-only 审计；CLI 业务查询仍在 READ ONLY 事务中，输出前在事务外追加读取审计。不得为写审计放宽业务查询范围。
+
+## Amazon 财务 P3 本地实现边界
+
+- Finances v2024-06-19 只使用 `listTransactions`，复用现有审批 / service / processor / SP-API client。`financePolicy` 明确卖家级范围、全部验证站点、时区、窗口、预算和可选 FX；source marketplace 仅为管理锚点，不是返回行的默认归属。
+- 财务采集及查询当前限实时 owner/database_admin，仍须逐次范围审批和每站点有效绑定。site-only grant / MCP 不暴露财务 source、run 或 raw。缺角色或范围变化在 HTTP 前阻断；落库前再次检查。
+- 金额保留 JSON number 原文并使用 NUMERIC，不经 JS Number；未知归属加密隔离，查询排除；不把完成 posted 窗口称作结算完整。生产不提供 raw 自动重放入口。
+- `npm run test:amazon-finance:offline` 运行 fixture 单测、临时 PG/Redis 集成与浏览器验证；`npm run test:amazon-sync:offline` 扩展旧三链路及 Orders 回归。均不加载真实 dotenv 或运行真实任务。详见 `docs/amazon-finance-p3-plan.md`、`docs/amazon-finance-p3-validation.md`。P4 须阶段确认后推进。
+
+## Amazon 退货 P4 本地实现边界
+
+- P4 仅 FBA 仓收退货，复用 Reports v2021-06-30/client/processor/审批；reportType 仅由 `returns.ts` 枚举及批准策略 allowlist 提供。Pricing 或 Amazon Fulfillment 角色须已确认；本报告非受限类型，不申请 RDT。不借此允许其他报告类型。
+- `returnsPolicy` 明确窗口、站点时区、至少一天安全延迟、三操作预算、轮询上限和解析批次。cursor 的 `reportStateCiphertext` 保存报告/文档/原件/行 offset；每批明细和 cursor 同事务；未知 create 结果停下人工核查，不能重放创建。404 轮询与过期下载 URL 走有界退避。
+- 单份已发布报告为查询边界；`reportId + rowHash` 仅报告内幂等，不能跨报告累加当独立退货事件。原因维度保留原始代码，订单关联限 tenant/seller/site/authorization，不造订单，不修改库存/财务。原件仅加密归档，评论/商品自由文本不进普通 DTO/日志/UI；无 offset 日期 fail closed。
+- `npm run test:amazon-returns:offline`：fixture 单测、临时 PG/Redis、退货及订单/财务浏览器；全资源回归 `npm run test:amazon-sync:offline`。不得读取真实 dotenv、启动真实 job 或执行真实迁移。计划/官方依据/验收见 `docs/amazon-returns-p4-plan.md`、`docs/amazon-returns-p4-validation.md`。P5 仍需阶段确认。
+
+## Amazon 同步 P5 生命周期与观测
+
+后续用户已批准 US/CA 自动同步范围，当前持续调度规则见 `docs/amazon-automatic-sync.md`：有效授权和数据源就绪后系统建计划，订单／日报／财务最多回溯 730 天，再每日增量，商品／库存每日快照。P5 下述逐次审批描述保留为手动任务历史边界；自动任务由实时启用计划、revision、角色、数据源与授权共同控制。退货未纳入自动计划。新增计划约束迁移须随版本经 CI 发布，不得只推 worker 而遗漏迁移。
+
+- P5继续逐次审批窗口，不开放自动持续采集。新三资源的异常/控制状态经 `service.ts syncIncrementalCursorStatus` 在scope锁及run变更同事务更新；只改匹配source/resource/activeRunId且未SUCCEEDED的cursor，禁止清空watermark/token/reportState/成功水位。健康窗口RUNNING与run等待片段状态语义不同，不强制逐片同值。
+- scheduler租约恢复与执行审批阻断、processor执行前阻断/运行中pause/cancel、service显式resume/retry须遵守该边界；旧三链路保持原调度/重试/预算。Finance/Returns使用独立校验码，Orders旧码兼容。
+- source进度DTO只select资源/窗口/status/lastSuccessAt/updatedAt；任务提示只允许固定文案，不得输出token/密文/raw/签名URL/PII。现有tenant/seller/site过滤和财务管理员边界不可放宽。
+- 专项 `npm run test:amazon-sync:lifecycle`，完整 `npm run test:amazon-sync:offline`；前者仅新建临时PG/Redis与mock transport。运维、角色/额度、轮换、恢复及告警边界见 `docs/amazon-sync-p5-operations.md`；P5不新增迁移、端点或真实配置操作。
+
+## Amazon API 参考文档
+
+- 查阅 SP-API 配置或接入说明时，优先参考本机文档 `/Users/chenjieliang/Desktop/亚马逊SP-API新人配置指南.md`。
+- 查阅 Amazon Ads API 配置或接入说明时，优先参考本机文档 `/Users/chenjieliang/Desktop/Amazon-Ads-API-单配置.md`。
+- 以上文档仅作为配置与接入参考；任何真实凭证、外部 API、配置写入或生产操作仍须遵守本文件的长期安全审批规则。
+
+### 2026-11-06 Amazon 四域独立本机联调例外
+
+用户已明确批准本轮恢复隔离注册入口：仅显式 `ERP_LOCAL_INTEGRATION_PROFILE=amazon-live-approved`，固定 `.env.amazon-live.local`、PG127.0.0.1:55439/amazon_sync_live_local、Redis127.0.0.1:6399/db0及amazon-live-local/default。loader不合并根.env，拒绝生产模式、发布构建及继承目标冲突。此为既有真实隔离联调的单项批准，不是常规app/worker第二配置入口；不得据此扩大组织、端口、密钥或服务器范围。
+
+私有启动器须经 `scripts/runtime/worker-manager.mjs amazon-sync`，保留注册child、IPC归属及同目标锁；不得直接启动child规避manager。运行态核验须同时看真实进程、最新online心跳及queueReady，不能用spawn成功替代上线验证。未批准的新恢复动作仍需按长期审批规则逐项审阅；财务同窗口重放、结算分段续传的批准与实际执行结果以 `docs/amazon-four-domain-repair-delivery-2026-11-06.md` 最新记录为准。

@@ -15,6 +15,8 @@ export type StorageDriver = {
     contentType?: string;
   }): Promise<StoredObject>;
   getBuffer(key: string): Promise<Buffer>;
+  /** Optional bounded read. Callers requiring a limit must reject unsupported drivers. */
+  getBoundedBuffer?(key: string, maxBytes: number): Promise<Buffer>;
   getLocalPath?(key: string): string;
   getPublicPath?(key: string): string;
   delete(key: string): Promise<void>;

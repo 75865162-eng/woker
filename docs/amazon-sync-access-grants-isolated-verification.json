@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-05",
+  "timeZone": "Asia/Shanghai",
+  "authorization": "User explicitly approved five-migration isolated verification in all three modes and same-scope fixes/reruns",
+  "environment": {
+    "postgres": "postgres:16-alpine, 512 MiB/1 CPU",
+    "redis": "redis:7, 128 MiB/0.5 CPU",
+    "imagesPulled": false,
+    "ports": "random localhost loopback",
+    "baseline": "cd2be5e5fbad8e67f1e565abe1248927ee135515:prisma/schema.prisma",
+    "migrations": [
+      "20261104000000_amazon_sync_center_phase1",
+      "20261104010000_amazon_authorization_validation_state",
+      "20261104020000_amazon_data_center_change_requests",
+      "20261104030000_amazon_sales_traffic_snapshots",
+      "20261105000000_amazon_data_access_grants"
+    ]
+  },
+  "runs": [
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs --sales-only",
+      "exitCode": 0,
+      "testsPassed": 4,
+      "testsFailed": 0,
+      "durationMs": 377.465042,
+      "testNames": [
+        "SQL resolves each business day independently and excludes partial and foreign scope rows",
+        "SQL cutoff, task lineage, backend filters and pagination agree",
+        "database rejects duplicate day evidence and cross-workspace source/task references",
+        "scope grants enforce membership, seller tenancy and uniqueness and revocation denies SQL reads"
+      ],
+      "temporaryDirectoryRemoved": true,
+      "logSha256": "a4d6403ab65370582bdd15ee3e643a11637d0a09f1b7d31c0ec22ebed44eaa8c"
+    },
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs --sales-pipeline",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "testsFailed": 0,
+      "durationMs": 1590.493917,
+      "testNames": [
+        "approval to real BullMQ report worker to filtered API and stored export retains version and ownership"
+      ],
+      "temporaryDirectoryRemoved": true,
+      "logSha256": "efb1b710180d91c8574ca0bcb637edf3a53b735207de72e910ca58065ed8f03a"
+    },
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs",
+      "exitCode": 0,
+      "testsPassed": 16,
+      "testsFailed": 0,
+      "durationMs": 23961.086875,
+      "testNames": [
+        "DB constraints enforce tenant authorization/store isolation and one active task",
+        "complete empty scope publishes a fresh zero-row manifest and preserves the other marketplace",
+        "pagination failure retains old head, safe checkpoint, retry and deduplication",
+        "cancel/pause controls persist and a queued stale generation cannot execute",
+        "per-scope checkpoints survive worker interruption and stale publisher is fenced",
+        "invalid page/loop and revoked domain prevent publication; manual retry restarts snapshot",
+        "approved policies cannot auto-run; explicit execution and Redis loss retain dispatch intent",
+        "approval cannot be replayed or bypassed and task ownership is checked",
+        "listing adapter rejects malformed pagination and publishes only a validated catalog",
+        "looping pagination and authorization revision changes cannot advance a published head",
+        "bounded 1k/5k/10k fixture snapshots and page reads record capacity evidence",
+        "a real BullMQ worker consumes persisted dispatch and publishes only after processing",
+        "authenticated API to real queue/worker to seller-bound snapshot completes with credential rotation",
+        "real browser creates authorization, runs a queued task, retries failure and reads its snapshot",
+        "sources and plans can be stopped after authorization becomes unavailable",
+        "retention remains approval-only and cannot silently delete historical or published data"
+      ],
+      "temporaryDirectoryRemoved": true,
+      "logSha256": "d7b54f65925fb58f79dd629be25b494469d7927f2d0754b97268e16bb53c731e"
+    }
+  ],
+  "capacity": {
+    "environment": "disposable localhost PostgreSQL 16 (1 CPU/512 MiB) + Redis 7; mocked Amazon; no browser/network production SLA",
+    "capturedAt": "2026-11-04T16:55:42.435Z",
+    "evidence": [
+      {
+        "rows": 1000,
+        "taskDurationMs": 266.86945900000046,
+        "slices": 1,
+        "sliceMs": [
+          225.07858399999986
+        ],
+        "readSamples": 40,
+        "readP50Ms": 0.9659999999994398,
+        "readP95Ms": 1.3225419999998849,
+        "readP99Ms": 1.5481249999993452,
+        "rssBytes": 500711424
+      },
+      {
+        "rows": 5000,
+        "taskDurationMs": 4512.772833,
+        "slices": 1,
+        "sliceMs": [
+          4432.319375000001
+        ],
+        "readSamples": 40,
+        "readP50Ms": 1.9632500000006985,
+        "readP95Ms": 2.1991670000006707,
+        "readP99Ms": 2.2357499999998254,
+        "rssBytes": 563576832
+      },
+      {
+        "rows": 10000,
+        "taskDurationMs": 9024.648915999998,
+        "slices": 2,
+        "sliceMs": [
+          4437.20225,
+          4452.470583000002
+        ],
+        "readSamples": 40,
+        "readP50Ms": 3.3245000000024447,
+        "readP95Ms": 3.7269999999989523,
+        "readP99Ms": 3.8120830000007118,
+        "rssBytes": 503857152
+      }
+    ]
+  },
+  "cleanup": {
+    "matchingFixtureContainersRemaining": 0,
+    "allThreeTemporaryDirectoriesRemoved": true
+  },
+  "limits": [
+    "Amazon HTTP mocked; no real Amazon acceptance",
+    "No existing database migration, real credential access, official Worker startup, push or deployment",
+    "Fixture SQL capacity does not establish Product Center or production P95",
+    "Previous 706 core and 17 mocked-browser tests were not rerun because application code did not change during this verification"
+  ]
+}

@@ -33,11 +33,12 @@
     "**/*.ts",
     "**/*.tsx",
     ".next-auth-check/types/**/*.ts",
+    ".next-build-temp/types/**/*.ts",
     ".next-build/types/**/*.ts",
     ".next-dev/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-build-temp/types/**/*.ts"
+    ".next-amazon-live/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

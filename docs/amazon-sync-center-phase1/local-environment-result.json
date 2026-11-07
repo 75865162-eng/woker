@@ -1,0 +1,53 @@
+{
+  "checkedAt": "2026-11-04T04:54:04.215Z",
+  "base": "http://127.0.0.1:3017",
+  "checks": {
+    "databaseLogin": true,
+    "workerOnlineInUi": true,
+    "authorizationFields": true,
+    "regionSelection": true,
+    "noFakeAuthorizationOrSources": true,
+    "foreignWorkspaceBlocked": true,
+    "anonymousBlocked": true,
+    "fullNextApplication": true
+  },
+  "amazonRequests": 0,
+  "database": {
+    "organizationId": "amazon-live-local",
+    "workspaceId": "default",
+    "authorizations": 0,
+    "tasks": 0,
+    "sources": 0,
+    "inventorySnapshots": 0,
+    "listingSnapshots": 0,
+    "enabledSchedules": 0
+  },
+  "status": "ENVIRONMENT_READY_WAITING_REAL_AUTHORIZATION",
+  "postgres": {
+    "address": "127.0.0.1:55439",
+    "database": "amazon_sync_live_local",
+    "container": "amazon-sync-live-postgres",
+    "appliedMigrations": 77,
+    "status": "up to date",
+    "generate": "passed"
+  },
+  "redis": {
+    "address": "127.0.0.1:6399/0",
+    "container": "amazon-sync-live-redis",
+    "ping": "PONG"
+  },
+  "authorization": "WAITING_REAL_AUTHORIZATION",
+  "sellerId": null,
+  "marketplaceId": null,
+  "region": null,
+  "worker": "amazon-live-local-worker",
+  "realAmazonAcceptance": "NOT_RUN",
+  "remaining": [
+    "Legal Amazon credentials through local UI",
+    "Verified real Seller and Marketplace",
+    "ERP SellerAccount provisioning in this dedicated database",
+    "Real Listings and Inventory read-only sync and reconciliation"
+  ],
+  "localAdminLogin": "1",
+  "localAdminUpdate": "owner credentials updated only in dedicated local database; old sessions revoked; full application login verified"
+}

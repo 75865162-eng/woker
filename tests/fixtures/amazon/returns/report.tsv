@@ -1,0 +1,5 @@
+﻿return-date	order-id	sku	asin	fnsku	product-name	quantity	fulfillment-center-id	detailed-disposition	reason	status	license-plate-number	customer-comments
+2026-11-01T03:00:00+02:00	fixture-order-1	fixture sku 1	fixture-asin-1	fixture-fnsku	fixture private product	2	fixture-fc	SELLABLE	DEFECTIVE	Unit_returned_to_inventory	fixture-lpn	fixture-private-comment
+2026-11-01T03:00:00+02:00	fixture-order-1	fixture sku 1	fixture-asin-1	fixture-fnsku	fixture private product	2	fixture-fc	SELLABLE	DEFECTIVE	Unit_returned_to_inventory	fixture-lpn	fixture-private-comment
+2026-11-01T02:00:00Z	fixture-order-2	fixture-sku-2	fixture-asin-2		fixture private product	1			FUTURE_REASON			"fixture comment	with tab
+and newline"

@@ -2,10 +2,11 @@ import "server-only";
 
 import fs from "node:fs";
 import path from "node:path";
-import { defaultAppVersionLabel, normalizeAppVersionLabel } from "@/lib/app-version";
+import { defaultAppVersionLabel, formatAppReleaseLabel } from "@/lib/app-version";
 
 type ReleaseMetadata = {
   appVersion?: unknown;
+  builtAt?: unknown;
 };
 
 function getReleaseMetadataPath() {
@@ -16,7 +17,7 @@ export function getCurrentAppVersionLabel() {
   try {
     const raw = fs.readFileSync(getReleaseMetadataPath(), "utf8");
     const metadata = JSON.parse(raw) as ReleaseMetadata;
-    return normalizeAppVersionLabel(metadata.appVersion);
+    return formatAppReleaseLabel(metadata.appVersion, metadata.builtAt);
   } catch {
     return defaultAppVersionLabel;
   }

@@ -30,6 +30,9 @@ async function setup(page: Page, mode = "", imageAssets?: Product["imageAssets"]
       state.product = { ...product, revision: state.product.revision! + 1 };
       return route.fulfill({ json: { product: state.product } });
     }
+    if (url.pathname.endsWith("/meeting-notes") && request.method() === "GET") {
+      return route.fulfill({ json: { notes: [] } });
+    }
     if (url.pathname.endsWith("/detail")) {
       if (state.detailGate) await state.detailGate;
       if (state.detailFail) return route.fulfill({ status: 500, json: { error: "模拟详情失败" } });

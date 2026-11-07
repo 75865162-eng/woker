@@ -23,7 +23,7 @@ function readiness(workspaceId: string): OperationsReadiness {
 
 async function setup(page: Page, tab = "overview") {
   const calls: Array<{ path: string; method: string; workspace: string | undefined; body: unknown }> = [];
-  const state = { canEdit: false, stale: false, denied: false, delayPath: "", releaseInventory: () => {}, inventoryStarted: false, enabled: false, policyRows: [] as Record<string, unknown>[], salesComplete: false, sellfoxDenied: false };
+  const state = { canEdit: false, stale: false, denied: false, delayPath: "", releaseInventory: () => {}, inventoryStarted: false, enabled: false, policyRows: [] as Record<string, unknown>[], salesComplete: false, sellfoxDenied: false, productImages: false };
   await page.route("**/*", async (route) => {
     const request = route.request(); const url = new URL(request.url());
     expect(url.origin, "browser must never call Amazon or another external host").toBe("http://127.0.0.1:43220");
@@ -52,7 +52,12 @@ async function setup(page: Page, tab = "overview") {
       if (request.method() === "PATCH") state.enabled = request.postDataJSON().enabled;
       return route.fulfill({ json: { canEdit: state.canEdit, schedules: amazonReadDomains.map((resource) => ({ resource, enabled: resource === "inventory" && state.enabled, intervalMinutes: resource === "inventory" ? 60 : 1440, supported: resource === "inventory" || resource === "catalog", source: resource === "ads" ? "sourced_from_ppc" : "amazon_sp_api", lastEnqueuedAt: null, nextScheduledAt: null })) } });
     }
-    if (url.pathname.endsWith("/products")) return route.fulfill({ json: { rows: [{ sellerAccountId: "store", marketplaceId: "US", sellerSku: "TEST-SKU", asin: null, listingStatus: null, available: null, inbound: null, reserved: null, unfulfillable: null, catalogUpdatedAt: null, inventoryUpdatedAt: null, inventoryRunId: null, freshness: "NOT_SYNCED", fieldSources: {}, lastError: null }], hasNextPage: false } });
+    if (url.pathname.startsWith("/api/operations/products/images/")) return route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150"><rect width="150" height="150" fill="white"/></svg>' });
+    if (url.pathname.endsWith("/products")) {
+      const base = { sellerAccountId: "store", marketplaceId: "US", sellerSku: "TEST-SKU", asin: null, listingStatus: null, available: null, inbound: null, reserved: null, unfulfillable: null, catalogUpdatedAt: null, inventoryUpdatedAt: null, inventoryRunId: null, freshness: "NOT_SYNCED", fieldSources: {}, lastError: null };
+      const rows = state.productImages ? ["TEST-SKU", "TEST-SKU-2"].map(sellerSku => ({ ...base, sellerSku, asin: "B000000001", title: "Persisted main image", thumbnailUrl: "/api/operations/products/images/mock-shared-file?workspaceId=workspace-a" })) : [base];
+      return route.fulfill({ json: { rows, hasNextPage: false } });
+    }
     if (url.pathname === "/api/sellfox/stores") return route.fulfill({ json: { rows: [
       { id: "tk-local-us", externalId: "124687", name: "TK店-US", marketplace: "US" },
       { id: "tk-local-ca", externalId: "124688", name: "TK店-CA", marketplace: "CA" },
@@ -97,8 +102,25 @@ test("unsynced inventory quantities and catalog fields stay unknown", async ({ p
   await page.getByRole("link", { name: "在线产品", exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: "TEST-SKU" });
   await expect(row).toBeVisible();
-  await expect(row.getByRole("cell").nth(4)).toHaveText("未同步");
+  await expect(row.getByRole("cell").nth(5)).toHaveText("未同步");
   await expect(row.getByRole("cell").nth(3)).toHaveText("未同步");
+});
+
+test("catalog displays persisted main images at 150px and reuses the URL for duplicate ASINs", async ({ page }) => {
+  const { state, calls } = await setup(page);
+  state.productImages = true;
+  await page.getByRole("link", { name: "在线产品", exact: true }).click();
+  const images = page.getByRole("img", { name: "Persisted main image" });
+  await expect(images).toHaveCount(2);
+  for (const image of await images.all()) {
+    await expect(image).toHaveAttribute("width", "150");
+    await expect(image).toHaveAttribute("height", "150");
+    await expect(image).toHaveAttribute("src", "/api/operations/products/images/mock-shared-file?workspaceId=workspace-a");
+    await expect(image).toHaveCSS("width", "150px");
+    await expect(image).toHaveCSS("height", "150px");
+  }
+  await expect(images.first()).toBeVisible();
+  expect(calls.every(call => call.method === "GET")).toBe(true);
 });
 
 test("read-only schedules cannot be edited; manual sync uses scope and idempotency", async ({ page }) => {

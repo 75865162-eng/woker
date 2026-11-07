@@ -1,0 +1,32 @@
+{
+  "initialFrom": "2026-11-01T00:00:00.000Z",
+  "windowMinutes": 60,
+  "overlapSeconds": 120,
+  "safetyLagSeconds": 120,
+  "marketplaceTimeZone": "Etc/UTC",
+  "applicationId": "fixture-application",
+  "requestsPerSecond": 0.0056,
+  "burst": 20,
+  "statusMapping": {
+    "UNSHIPPED": "ready",
+    "SHIPPED": "shipped"
+  },
+  "requiredRoles": [
+    "Fixture Order Read"
+  ],
+  "details": {
+    "includedData": [
+      "FULFILLMENT",
+      "PROCEEDS",
+      "BUYER",
+      "RECIPIENT"
+    ],
+    "requiredRoles": [
+      "Direct-to-Consumer Shipping (Restricted)"
+    ],
+    "purpose": "fixture.fulfillment",
+    "requestsPerSecond": 0.5,
+    "burst": 30,
+    "maxOrders": 10
+  }
+}

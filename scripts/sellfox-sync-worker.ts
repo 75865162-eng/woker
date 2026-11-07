@@ -1,5 +1,8 @@
+import "./runtime/worker-bootstrap.mjs";
+import { createHeartbeatWriter } from "@/lib/runtime/heartbeat-writer";
+import { observeWorker, runtimeHeartbeatMetadata } from "@/lib/runtime/worker-diagnostics";
+import { getSellfoxCredentialStatus } from "@/lib/sellfox/credential-store";
 import { recoverExpiredSellfoxRuns, SellfoxLeaseLostError, sellfoxMaxRunAttempts } from "@/lib/sellfox/run-lease";
-import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { UnrecoverableError, Worker } from "bullmq";
 import { Prisma } from "@prisma/client";
@@ -11,7 +14,7 @@ import { recoverSellfoxQueueRun } from "@/lib/sellfox/queue-recovery";
 import { createRedisConnectionOptions, sellfoxSyncQueueName } from "@/lib/queue/redis-queue";
 import { processSellfoxSyncRun } from "@/lib/sellfox/sync-service";
 import { sellfoxStoreFailure, SellfoxStoreSyncError } from "@/lib/sellfox/sync-errors";
-import { SellfoxRequestError } from "@/lib/sellfox/client";
+import { SellfoxRequestError, closeSellfoxClient } from "@/lib/sellfox/client";
 import { normalizeSellfoxDates, sellfoxSyncDisabledReason, SellfoxSyncInputError, SellfoxSyncUnavailableError, type SellfoxSyncResource } from "@/lib/sellfox/sync-contract";
 
 const workerName = process.env.SELLFOX_SYNC_WORKER_NAME?.trim() || `${sellfoxSyncQueueName}-${process.pid}`;
@@ -37,7 +40,8 @@ async function recoverAndSchedule() {
     await recoverExpiredSellfoxRuns();
     const pending = await prisma.sellfoxSyncRun.findMany({ where: { status: "queued" }, orderBy: { startedAt: "asc" }, take: 50 });
     for (const run of pending) await recoverSellfoxQueueRun(run.id);
-    if (process.env.QUEUE_DRIVER !== "redis" || !process.env.SELLFOX_CLIENT_ID || !process.env.SELLFOX_CLIENT_SECRET) return;
+    if (process.env.QUEUE_DRIVER !== "redis") return;
+    const credentialStatuses = new Map<string, Promise<boolean>>();
     const schedules = await prisma.sellfoxSyncSchedule.findMany({ where: { enabled: true }, orderBy: { lastEnqueuedAt: "asc" }, take: 100 });
     for (const candidate of schedules) {
       const disabledReason = sellfoxSyncDisabledReason(candidate.resource);
@@ -48,6 +52,9 @@ async function recoverAndSchedule() {
       }
       const now = new Date();
       if (!due(candidate, now)) continue;
+      const scopeKey = JSON.stringify([candidate.organizationId, candidate.workspaceId]);
+      if (!credentialStatuses.has(scopeKey)) credentialStatuses.set(scopeKey, getSellfoxCredentialStatus(candidate).then(status => status.configured));
+      if (!(await credentialStatuses.get(scopeKey))) continue;
       await prisma.$transaction(async (tx) => {
         const lockKey = sellfoxSyncScopeLock(candidate.organizationId, candidate.workspaceId, candidate.resource);
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
@@ -75,14 +82,18 @@ async function recoverAndSchedule() {
   } finally { recovering = false; }
 }
 
-async function heartbeat(status: "online" | "stopping" = "online") {
+observeWorker(worker, "sellfox-sync-worker");
+
+async function persistHeartbeat(status: "online" | "stopping") {
   if (!process.env.DATABASE_URL) return;
   await prisma.workerHeartbeat.upsert({
     where: { id: workerId },
-    create: { id: workerId, workerName, queueName: sellfoxSyncQueueName, status, concurrency: 1, lastSeenAt: new Date(), metadata: { pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
-    update: { status, concurrency: 1, lastSeenAt: new Date(), metadata: { pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
+    create: { id: workerId, workerName, queueName: sellfoxSyncQueueName, status, concurrency: 1, lastSeenAt: new Date(), metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
+    update: { status, concurrency: 1, lastSeenAt: new Date(), metadata: { ...runtimeHeartbeatMetadata(), pid: process.pid, hostname: process.env.HOSTNAME } satisfies Prisma.InputJsonValue },
   });
 }
+
+const heartbeat = createHeartbeatWriter(persistHeartbeat);
 
 void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule recovery failed", sellfoxStoreFailure(error).error));
 const recoveryTimer = setInterval(() => void recoverAndSchedule().catch((error) => console.error("[sellfox-sync-worker] schedule tick failed", sellfoxStoreFailure(error).error)), 30_000);
@@ -93,7 +104,7 @@ worker.on("failed", (job, error) => console.error(`[sellfox-sync-worker] failed 
 
 async function shutdown() {
   clearInterval(recoveryTimer); clearInterval(heartbeatTimer);
-  await heartbeat("stopping").catch(() => undefined); await worker.close(); await prisma.$disconnect(); process.exit(0);
+  await heartbeat("stopping").catch(() => undefined); await worker.close(); await closeSellfoxClient(); await prisma.$disconnect(); process.exit(0);
 }
 process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());

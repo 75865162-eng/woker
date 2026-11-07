@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
+import { readWorkbookXmlElements, removeWorkbookXmlElements } from "./bulk-workbook-xml";
 import type { AdjustmentDraft, DraftValidationResult, HeaderMap } from "@/lib/types";
 
 type Worksheet = XLSX.WorkSheet;
@@ -503,31 +504,18 @@ function getSheetXmlPaths(zip: JSZip) {
       throw new Error("Workbook 结构不完整，无法定位 Sheet XML。");
     }
 
-    const parser = new DOMParser();
-    const workbookDoc = parser.parseFromString(workbookText, "application/xml");
-    const relationshipsDoc = parser.parseFromString(relationshipsText, "application/xml");
     const relationshipById = new Map<string, string>();
-
-    Array.from(relationshipsDoc.getElementsByTagName("Relationship")).forEach((relationship) => {
-      const id = relationship.getAttribute("Id");
-      const target = relationship.getAttribute("Target");
-
-      if (id && target) {
-        relationshipById.set(id, resolveWorkbookRelationshipTarget(target));
-      }
-    });
-
-    return Array.from(workbookDoc.getElementsByTagName("sheet")).reduce<Map<string, string>>((map, sheet) => {
-      const name = sheet.getAttribute("name");
-      const relationshipId = sheet.getAttribute("r:id");
-      const target = relationshipId ? relationshipById.get(relationshipId) : undefined;
-
-      if (name && target) {
-        map.set(name, target);
-      }
-
-      return map;
-    }, new Map());
+    for (const relationship of readWorkbookXmlElements(relationshipsText, "Relationship")) {
+      const { Id: id, Target: target } = relationship.attributes;
+      if (id && target) relationshipById.set(id, resolveWorkbookRelationshipTarget(target));
+    }
+    const paths = new Map<string, string>();
+    for (const sheet of readWorkbookXmlElements(workbookText, "sheet")) {
+      const { name, "r:id": relationshipId } = sheet.attributes;
+      const target = relationshipById.get(relationshipId);
+      if (name && target) paths.set(name, target);
+    }
+    return paths;
   });
 }
 
@@ -539,50 +527,18 @@ async function removeExcludedUploadSheets(zip: JSZip) {
     return;
   }
 
-  const parser = new DOMParser();
-  const serializer = new XMLSerializer();
-  const workbookDoc = parser.parseFromString(workbookText, "application/xml");
-  const relationshipsDoc = parser.parseFromString(relationshipsText, "application/xml");
-  const relationshipById = new Map<string, Element>();
-  const removedTargets: string[] = [];
-
-  Array.from(relationshipsDoc.getElementsByTagName("Relationship")).forEach((relationship) => {
-    const id = relationship.getAttribute("Id");
-
-    if (id) {
-      relationshipById.set(id, relationship);
-    }
-  });
-
-  Array.from(workbookDoc.getElementsByTagName("sheet")).forEach((sheet) => {
-    const name = sheet.getAttribute("name") ?? "";
-    const relationshipId = sheet.getAttribute("r:id");
-
-    if (!shouldExcludeFromBulkUpload(name) || !relationshipId) {
-      return;
-    }
-
-    const relationship = relationshipById.get(relationshipId);
-    const target = relationship?.getAttribute("Target");
-
-    if (target) {
-      removedTargets.push(resolveWorkbookRelationshipTarget(target));
-    }
-
-    relationship?.parentNode?.removeChild(relationship);
-    sheet.parentNode?.removeChild(sheet);
-  });
-
-  if (!removedTargets.length) {
-    return;
+  const relationships = readWorkbookXmlElements(relationshipsText, "Relationship");
+  const sheets = readWorkbookXmlElements(workbookText, "sheet");
+  const excluded = sheets.filter(sheet => shouldExcludeFromBulkUpload(sheet.attributes.name ?? ""));
+  const ids = new Set(excluded.map(sheet => sheet.attributes["r:id"]).filter(Boolean));
+  const removedRelationships = relationships.filter(item => ids.has(item.attributes.Id));
+  if (!excluded.length) return;
+  for (const relationship of removedRelationships) {
+    const target = relationship.attributes.Target;
+    if (target) zip.remove(resolveWorkbookRelationshipTarget(target));
   }
-
-  for (const target of removedTargets) {
-    zip.remove(target);
-  }
-
-  zip.file("xl/workbook.xml", serializer.serializeToString(workbookDoc));
-  zip.file("xl/_rels/workbook.xml.rels", serializer.serializeToString(relationshipsDoc));
+  zip.file("xl/workbook.xml", removeWorkbookXmlElements(workbookText, excluded));
+  zip.file("xl/_rels/workbook.xml.rels", removeWorkbookXmlElements(relationshipsText, removedRelationships));
 }
 
 function escapeRegExp(value: string) {

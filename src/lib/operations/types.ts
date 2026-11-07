@@ -4,6 +4,7 @@ export type AmazonReadDomain = (typeof amazonReadDomains)[number];
 export type AmazonSyncResource = "readiness" | AmazonReadDomain;
 
 export type AmazonMarketplaceParticipation = {
+  isParticipating?: boolean;
   marketplaceId: string;
   countryCode: string;
   name: string;

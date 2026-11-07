@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma";
 import { enqueueImportJob } from "@/lib/queue";
 import { getStorageDriver, getStorageType } from "@/lib/storage";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
+import { dispatchPersistedJob } from "@/lib/runtime/dispatch-persisted-job";
 
 export const runtime = "nodejs";
 
@@ -129,8 +130,13 @@ export async function POST(request: Request) {
       scope,
     });
 
+    let dispatchDeferred = false;
     try {
-      await enqueueImportJob(job.id);
+      if (process.env.QUEUE_DRIVER === "redis") {
+        ({ dispatchDeferred } = await dispatchPersistedJob(() => enqueueImportJob(job.id)));
+      } else {
+        await enqueueImportJob(job.id);
+      }
     } catch (enqueueError) {
       const message = enqueueError instanceof Error ? enqueueError.message : "Failed to enqueue job.";
       await prisma.importJob.update({
@@ -156,6 +162,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       job: queuedJob,
+      dispatchDeferred,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Upload failed.";

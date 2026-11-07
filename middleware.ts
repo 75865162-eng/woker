@@ -59,13 +59,21 @@ async function hasValidSessionCookie(request: NextRequest) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  // Lili verifies its own session. Production routing remains owned by Caddy.
-  if (process.env.NODE_ENV === "development" && (pathname === "/lili" || pathname.startsWith("/lili/"))) {
-    return NextResponse.next();
-  }
   const publicOrigin = getPublicOrigin(request);
   const isPublicRoute = publicRoutes.includes(pathname);
   const isPublicApi = publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
+
+  // This exact endpoint authenticates every request with its personal MCP bearer.
+  // Requiring a browser session here prevents external MCP clients from reaching it.
+  if (pathname === "/api/mcp/amazon") {
+    return NextResponse.next();
+  }
+  if (["/api/lili/oauth/authorize", "/api/lili/oauth/token", "/api/lili/oauth/register", "/api/lili/oauth/revoke", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/api/lili/mcp"].includes(pathname)) return NextResponse.next();
+  // Public MCP connection/Skill discovery requires no browser session. The
+  // handler still authenticates every private-data operation; neighboring APIs stay protected.
+  if ((pathname === "/api/lili/devices" && request.headers.has("authorization")) || pathname === "/api/lili/pair" || pathname === "/api/lili/mcp" || pathname === "/lili/api/mcp") {
+    return NextResponse.next();
+  }
 
   if (isPublicRoute || isPublicApi) {
     return NextResponse.next();
@@ -88,7 +96,7 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  if (pathname.startsWith("/api/")) {
+  if (pathname.startsWith("/api/") || pathname.startsWith("/lili/api/")) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

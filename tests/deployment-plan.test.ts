@@ -40,10 +40,11 @@ test("documentation does not build, migrate or restart services", () => {
   for (const key of ["requiresBuild", "requiresDeploy", "requiresMigration", "requiresWorkerRestart", "requiresWebRestart", "requiresSellfoxSyncWorkerRestart", "requiresCaddyReload"]) assert.equal(plan[key], false, key);
 });
 
-test("UI-only release restarts web, not workers or database", () => {
+test("every application release moves all Workers to the current code", () => {
   const plan = generate({ "src/components/example.tsx": "component" });
   assert.equal(plan.requiresWebRestart, true);
-  for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresMigration", "requiresPrismaGenerate", "requiresRuntimeConfig", "requiresCaddyReload", "requiresInfraUpdate"]) assert.equal(plan[key], false, key);
+  for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresAmazonSyncWorkerRestart", "requiresSellfoxSyncWorkerRestart"]) assert.equal(plan[key], true, key);
+  for (const key of ["requiresMigration", "requiresPrismaGenerate", "requiresRuntimeConfig", "requiresCaddyReload", "requiresInfraUpdate"]) assert.equal(plan[key], false, key);
 });
 
 test("shared libraries conservatively restart both dependent workers", () => {
@@ -54,19 +55,12 @@ test("shared libraries conservatively restart both dependent workers", () => {
   assert.equal(plan.requiresMigration, false);
 });
 
-test("individual worker entry changes do not restart the other worker", () => {
-  const plan = generate({ "scripts/image-upscale-worker.ts": "worker" });
-  assert.equal(plan.requiresWorkerRestart, false);
-  assert.equal(plan.requiresImageWorkerRestart, true);
-  assert.equal(plan.requiresAmazonSyncWorkerRestart, false);
-  assert.equal(plan.requiresSellfoxSyncWorkerRestart, false);
-  const amazonPlan = generate({ "scripts/amazon-sync-worker.ts": "worker" });
-  assert.equal(amazonPlan.requiresWorkerRestart, false);
-  assert.equal(amazonPlan.requiresImageWorkerRestart, false);
-  assert.equal(amazonPlan.requiresAmazonSyncWorkerRestart, true);
-  const sellfoxPlan = generate({ "scripts/sellfox-sync-worker.ts": "worker" });
-  assert.equal(sellfoxPlan.requiresSellfoxSyncWorkerRestart, true);
-  assert.equal(sellfoxPlan.requiresAmazonSyncWorkerRestart, false);
+test("worker and runtime entry changes restart all registered services without database migration", () => {
+  for (const file of ["scripts/image-upscale-worker.ts", "scripts/amazon-sync-worker.ts", "scripts/sellfox-sync-worker.ts", "scripts/runtime/environment.mjs"]) {
+    const plan = generate({ [file]: "worker" });
+    for (const key of ["requiresWorkerRestart", "requiresImageWorkerRestart", "requiresAmazonSyncWorkerRestart", "requiresSellfoxSyncWorkerRestart"]) assert.equal(plan[key], true, key);
+    assert.equal(plan.requiresMigration, false);
+  }
 });
 
 test("schema without migration and invalid base fail closed", () => {

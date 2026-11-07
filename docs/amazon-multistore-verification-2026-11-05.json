@@ -1,0 +1,85 @@
+{
+  "date": "2026-11-05",
+  "status": "LOCAL_IMPLEMENTATION_VERIFIED_PRODUCTION_NOT_ACCEPTED",
+  "environment": {
+    "database": "disposable PostgreSQL 16 localhost; synthetic data",
+    "redis": "disposable Redis 7 localhost",
+    "storage": "temporary local directory",
+    "amazonHttp": "mocked; no real Amazon calls",
+    "realDatabaseTouched": false,
+    "configurationWritten": false,
+    "githubPushed": false,
+    "deployed": false
+  },
+  "checks": [
+    {
+      "command": "npm test",
+      "passed": 715,
+      "failed": 0
+    },
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs --mcp",
+      "passed": 25,
+      "failed": 0
+    },
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs --security",
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs",
+      "passed": 16,
+      "failed": 0
+    },
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs --sales-pipeline",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "command": "node scripts/test-amazon-sync-integration.mjs --sales-only",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "command": "npx playwright test --config tests/browser/sync-center.config.ts",
+      "passed": 19,
+      "failed": 0
+    },
+    {
+      "command": "npm run typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "npx eslint --ignore-pattern '.next-amazon-live/**'",
+      "errors": 0,
+      "existingWarnings": 5
+    },
+    {
+      "command": "prisma validate / generate",
+      "status": "passed",
+      "databaseConnected": false
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "migration": "20261105010000_amazon_multistore_mcp",
+  "verificationLimits": [
+    "No production migration, build, deployment or real OAuth acceptance",
+    "Historical existing database lineage report has not been run",
+    "Mixed pre-existing worktree changes require reviewed GitHub synchronization scope",
+    "RLS not enabled; application scopes and composite database constraints enforced",
+    "Orders, profit and external ads executors/tools are not invented"
+  ],
+  "report": "docs/amazon-multistore-delivery-2026-11-05.md",
+  "followup": {
+    "managementRequestBoundary": "streaming byte limits and same-origin object JSON checked before session helper body parsing",
+    "routeBoundaryTests": 9,
+    "changedFilesLint": "passed, no warnings",
+    "githubSyncPlan": "docs/amazon-multistore-github-sync-plan.md",
+    "githubSyncApproved": false
+  }
+}

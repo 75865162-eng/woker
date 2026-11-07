@@ -42,6 +42,7 @@ model Organization {
   productSuppliers   ProductSupplier[]
   productCosts       ProductCost[]
   productMedia       ProductMedia[]
+  amazonDataCenterChangeRequests AmazonDataCenterChangeRequest[]
 }
 
 model User {
@@ -70,6 +71,8 @@ model User {
   workspaceSnapshots      WorkspaceSnapshot[]
   imageUpscaleJobs        ImageUpscaleJob[]
   productOutboxEvents     ProductOutboxEvent[]
+  amazonDataCenterChangeRequestsRequested AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterChangeRequestedBy")
+  amazonDataCenterChangeRequestsApproved AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterChangeApprovedBy")
 }
 
 model WorkspaceScope {
@@ -82,8 +85,25 @@ model WorkspaceScope {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  amazonDataExports AmazonDataExport[]
+  amazonDataCenterChanges AmazonDataCenterChangeRequest[]
+  amazonDataAccessGrants AmazonDataAccessGrant[]
+  sellfoxCredential SellfoxIntegrationCredential?
 
   @@id([organizationId, id])
+}
+
+model SellfoxIntegrationCredential {
+  organizationId       String
+  workspaceId          String
+  credentialsCiphertext String
+  revision             Int      @default(1)
+  updatedByUserId       String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  workspace            WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Cascade, map: "SellfoxIntegrationCredential_workspace_fkey")
+
+  @@id([organizationId, workspaceId])
 }
 
 model OrganizationMember {
@@ -95,6 +115,12 @@ model OrganizationMember {
   updatedAt      DateTime         @updatedAt
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amazonDataExports AmazonDataExport[]
+  amazonChangesRequested AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterMemberRequestedBy")
+  amazonChangesApproved AmazonDataCenterChangeRequest[] @relation("AmazonDataCenterMemberApprovedBy")
+  amazonDataAccessGrants AmazonDataAccessGrant[]
+  amazonAdsSyncPlans AmazonAdsSyncPlan[] @relation("AmazonAdsPlanActor")
+  amazonAdsSyncTasks AmazonAdsSyncTask[] @relation("AmazonAdsTaskActor")
 
   @@unique([organizationId, userId])
   @@index([userId])
@@ -218,7 +244,9 @@ model FileObject {
   marketplace      String             @default("")
   contentHash      String?
   productBindingStatus ProductAttachmentStatus?
+  amazonCatalogImageBlob AmazonCatalogImageBlob?
   DraftRun         DraftRun[]
+  amazonDataExports AmazonDataExport[]
   exportRecords    ExportRecord[]
   jobs             ImportJob[]
   WorkspaceDataset WorkspaceDataset[]
@@ -233,6 +261,10 @@ model FileObject {
 }
 
 model ImportJob {
+  executionToken String?
+  leaseExpiresAt DateTime?
+  executionAttempts Int @default(0)
+  maxAttempts Int @default(3)
   id               String            @id @default(cuid())
   organizationId   String
   userId           String
@@ -251,6 +283,7 @@ model ImportJob {
   exportRecords    ExportRecord[]
   file             FileObject        @relation(fields: [fileId], references: [id], onDelete: Cascade)
   WorkspaceDataset WorkspaceDataset?
+  @@index([status, leaseExpiresAt])
 
   @@index([organizationId, createdAt])
   @@index([organizationId, workspaceId, createdAt])
@@ -268,6 +301,11 @@ enum ImageUpscaleJobStatus {
 }
 
 model ImageUpscaleJob {
+  executionToken String?
+  leaseExpiresAt DateTime?
+  executionAttempts Int @default(0)
+  maxAttempts Int @default(3)
+  @@index([status, leaseExpiresAt])
   id             String                @id @default(cuid())
   organizationId String
   userId         String
@@ -428,6 +466,8 @@ model SellerAccount {
   marketplace     Marketplace?     @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
   listings        ProductListing[]
   amazonSyncSources AmazonSyncDataSource[]
+  amazonDataAccessGrants AmazonDataAccessGrant[]
+  amazonAdsSyncPlans AmazonAdsSyncPlan[] @relation("AmazonAdsPlanSeller")
 
   @@unique([organizationId, workspaceId, id], map: "SellerAccount_sync_scope_id_key")
 
@@ -1240,6 +1280,8 @@ model SellfoxStore {
   SellfoxProductDailySnapshot SellfoxProductDailySnapshot[]
   SellfoxFbaInventorySnapshot SellfoxFbaInventorySnapshot[]
   SellfoxSalesDailySnapshot   SellfoxSalesDailySnapshot[]
+  SellfoxOrderSnapshot        SellfoxOrderSnapshot[]
+  SellfoxFbaShipmentSnapshot  SellfoxFbaShipmentSnapshot[]
   SellfoxSnapshotHead SellfoxSnapshotHead[]
   SellfoxListingSnapshot SellfoxListingSnapshot[]
   SellfoxAdsProductDaily SellfoxAdsProductDaily[]
@@ -1341,6 +1383,84 @@ model SellfoxSalesDailySnapshot {
   @@index([organizationId, workspaceId, msku])
 }
 
+// One row per order line. Upserted by store + order + line; historical lines stay.
+model SellfoxOrderSnapshot {
+  id                 String       @id
+  organizationId     String
+  workspaceId        String       @default("default")
+  storeId            String
+  shopExternalId     String
+  orderId            String
+  lineKey            String
+  sellerOrderId      String?
+  asin               String       @default("")
+  msku               String       @default("")
+  sku                String       @default("")
+  orderStatus        String
+  purchaseDate       String?
+  purchaseDateRaw    String?
+  payAt              String?
+  refundAt           String?
+  currency           String?
+  orderTotal         Float?
+  qty                Int?
+  refundQty          Int?
+  itemAmount         Float?
+  revenue            Float?
+  promo              String?
+  shipServiceLevel   String?
+  fulfillmentChannel String       @default("")
+  address            Json?
+  latestCapturedAt   DateTime
+  payload            Json
+  syncedAt           DateTime     @default(now())
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime
+  SellfoxStore       SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, orderId, lineKey])
+  @@index([organizationId, workspaceId, purchaseDate])
+  @@index([organizationId, workspaceId, orderStatus])
+  @@index([organizationId, workspaceId, asin])
+  @@index([organizationId, workspaceId, msku])
+  @@index([organizationId, workspaceId, orderId])
+}
+
+// One row per shipment line. A finished store capture replaces lines from older captures.
+model SellfoxFbaShipmentSnapshot {
+  id               String       @id
+  organizationId   String
+  workspaceId      String       @default("default")
+  storeId          String
+  shopExternalId   String
+  shipmentId       String
+  shipmentName     String?
+  status           String
+  lineKey          String
+  asin             String       @default("")
+  msku             String       @default("")
+  sku              String       @default("")
+  declaredQty      Int?
+  shippedQty       Int?
+  receivedQty      Int?
+  sourceCreatedAt  String?
+  sourceUpdatedAt  String?
+  shippedAt        String?
+  fulfillmentCenterId String?
+  latestCapturedAt DateTime
+  payload          Json
+  syncedAt         DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime
+  SellfoxStore     SellfoxStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, shipmentId, lineKey])
+  @@index([organizationId, workspaceId, status])
+  @@index([organizationId, workspaceId, storeId, latestCapturedAt])
+  @@index([organizationId, workspaceId, msku])
+  @@index([organizationId, workspaceId, asin])
+}
+
 model SellfoxSyncSchedule {
   id             String   @id
   organizationId String
@@ -1409,6 +1529,446 @@ model AmazonSellerBinding {
   @@index([organizationId, workspaceId, updatedAt])
 }
 
+// Amazon Ads OAuth is intentionally separate from SP-API authorization.
+model AmazonAdsAuthorization {
+  id                  String   @id
+  organizationId      String
+  workspaceId         String   @default("default")
+  name                String
+  credentialsCiphertext String  @db.Text
+  consentRegion       String
+  status              String   @default("CONNECTED")
+  revision            Int      @default(1)
+  authorizedByUserId  String
+  refreshTokenExpiresAt DateTime?
+  lastValidatedAt     DateTime?
+  validationErrorCode String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  profiles            AmazonAdsProfile[]
+
+  @@unique([organizationId, workspaceId, id], map: "AmazonAdsAuth_scope_id_key")
+  @@index([organizationId, workspaceId, status, updatedAt], map: "AmazonAdsAuth_scope_status_idx")
+}
+
+model AmazonAdsProfile {
+  id                 String   @id
+  organizationId     String
+  workspaceId        String   @default("default")
+  authorizationId    String
+  authorization      AmazonAdsAuthorization @relation(fields: [organizationId, workspaceId, authorizationId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  region             String
+  profileId          String
+  advertiserAccountId String?
+  advertiserAccountRevision Int @default(0)
+  countryCode        String
+  marketplaceId      String?
+  currencyCode       String?
+  timezone           String?
+  accountInfo        Json
+  sellerAccountId    String?
+  lastDiscoveredAt   DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  syncPlans          AmazonAdsSyncPlan[]
+  syncTasks          AmazonAdsSyncTask[]
+  syncDomainStates   AmazonAdsSyncDomainState[]
+  entities           AmazonAdsEntityRecord[]
+  syncAttempts       AmazonAdsSyncAttempt[]
+  reportRequests     AmazonAdsReportRequest[]
+  reportFacts        AmazonAdsReportFact[]
+  reportVersions     AmazonAdsReportVersion[]
+
+  @@unique([organizationId, workspaceId, authorizationId, region, profileId], map: "AmazonAdsProfile_auth_profile_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonAdsProfile_scope_id_key")
+  @@index([organizationId, workspaceId, countryCode], map: "AmazonAdsProfile_scope_country_idx")
+  @@index([organizationId, workspaceId, sellerAccountId], map: "AmazonAdsProfile_scope_seller_idx")
+}
+
+model AmazonAdsSyncPlan {
+  id                  String   @id
+  organizationId      String
+  workspaceId         String   @default("default")
+  profileId           String
+  profile             AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  actorUserId         String
+  sellerAccountId     String
+  authorizationRevision Int
+  status              String   @default("ACTIVE")
+  revision            Int      @default(1)
+  intervalMinutes     Int      @default(1440)
+  historyStartDate    DateTime?
+  reportLookbackDays  Int      @default(14)
+  attributionLagDays  Int      @default(14)
+  nextRunAt           DateTime @default(now())
+  lastEnqueuedAt      DateTime?
+  lastSuccessAt       DateTime?
+  lastErrorCode       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  tasks               AmazonAdsSyncTask[]
+  seller              SellerAccount @relation("AmazonAdsPlanSeller", fields: [organizationId, workspaceId, sellerAccountId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  actor               OrganizationMember @relation("AmazonAdsPlanActor", fields: [organizationId, actorUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, profileId], map: "AmazonAdsSyncPlan_profile_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonAdsSyncPlan_scope_id_key")
+  @@index([status, nextRunAt], map: "AmazonAdsSyncPlan_due_idx")
+  @@index([organizationId, workspaceId, status, nextRunAt], map: "AmazonAdsSyncPlan_scope_due_idx")
+}
+
+model AmazonAdsSyncTask {
+  id                  String   @id
+  organizationId      String
+  workspaceId         String   @default("default")
+  planId              String
+  plan                AmazonAdsSyncPlan @relation(fields: [organizationId, workspaceId, planId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  profileId           String
+  profile             AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  requestedByUserId   String
+  requestedBy         OrganizationMember @relation("AmazonAdsTaskActor", fields: [organizationId, requestedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  idempotencyKey      String
+  planRevision        Int
+  trigger             String   @default("schedule")
+  status              String   @default("WAITING")
+  stage               String   @default("DISCOVER")
+  attempts            Int      @default(0)
+  maxAttempts         Int      @default(5)
+  dispatchVersion     Int      @default(1)
+  fenceVersion        Int      @default(0)
+  leaseOwner          String?
+  leaseExpiresAt      DateTime?
+  nextAttemptAt       DateTime @default(now())
+  checkpointCiphertext String?  @db.Text
+  requestedFrom       DateTime?
+  requestedTo         DateTime?
+  apiRequests         Int      @default(0)
+  throttles           Int      @default(0)
+  processedCount      Int      @default(0)
+  insertedCount       Int      @default(0)
+  updatedCount        Int      @default(0)
+  failedCount         Int      @default(0)
+  errorCode           String?
+  errorMessage        String?
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  entities            AmazonAdsEntityRecord[]
+  attemptRuns         AmazonAdsSyncAttempt[]
+  domainStates        AmazonAdsSyncDomainState[]
+  reportRequests      AmazonAdsReportRequest[]
+  reportFacts         AmazonAdsReportFact[]
+  reportVersions      AmazonAdsReportVersion[]
+
+  @@unique([organizationId, workspaceId, idempotencyKey], map: "AmazonAdsSyncTask_idempotency_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonAdsSyncTask_scope_id_key")
+  @@unique([organizationId, workspaceId, id, profileId], map: "AmazonAdsSyncTask_scope_profile_key")
+  @@index([status, nextAttemptAt], map: "AmazonAdsSyncTask_dispatch_idx")
+  @@index([organizationId, workspaceId, profileId, createdAt], map: "AmazonAdsSyncTask_profile_idx")
+}
+
+model AmazonAdsEntityRecord {
+  id                  String   @id
+  organizationId      String
+  workspaceId         String   @default("default")
+  profileId           String
+  profile             AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  entityType          String
+  externalId          String
+  parentExternalId    String?
+  state               String?
+  name                String?
+  adProduct           String?
+  campaignId          String?
+  adGroupId           String?
+  startDate           DateTime? @db.Date
+  endDate             DateTime? @db.Date
+  targetingType       String?
+  budgetAmount        Decimal?  @db.Decimal(20, 6)
+  budgetType          String?
+  bid                 Decimal?  @db.Decimal(20, 6)
+  keywordText         String?
+  matchType           String?
+  expressionType      String?
+  targetingExpression Json?
+  payload             Json
+  sourceUpdatedAt     DateTime?
+  syncedAt            DateTime @default(now())
+  sourceTaskId        String
+  sourceTask          AmazonAdsSyncTask @relation(fields: [organizationId, workspaceId, sourceTaskId, profileId], references: [organizationId, workspaceId, id, profileId], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, profileId, entityType, externalId], map: "AmazonAdsEntity_business_key")
+  @@index([organizationId, workspaceId, profileId, entityType, parentExternalId], map: "AmazonAdsEntity_parent_idx")
+  @@index([organizationId, workspaceId, profileId, syncedAt], map: "AmazonAdsEntity_sync_idx")
+  @@index([organizationId, workspaceId, profileId, entityType, state, name], map: "AmazonAdsEntity_list_idx")
+}
+
+model AmazonAdsSyncDomainState {
+  id             String             @id
+  organizationId String
+  workspaceId    String             @default("default")
+  profileId      String
+  profile        AmazonAdsProfile   @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  dataDomain     String
+  reportType     String             @default("")
+  status         String             @default("UNKNOWN")
+  coveredFrom    DateTime?          @db.Date
+  coveredTo      DateTime?          @db.Date
+  lastAttemptAt  DateTime?
+  lastSuccessAt  DateTime?
+  lastTaskId     String?
+  lastTask       AmazonAdsSyncTask? @relation(fields: [organizationId, workspaceId, lastTaskId, profileId], references: [organizationId, workspaceId, id, profileId], onDelete: Restrict)
+  warningCodes   String[]           @default([])
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([organizationId, workspaceId, profileId, dataDomain, reportType], map: "AmazonAdsSyncDomainState_key")
+  @@index([organizationId, workspaceId, profileId, dataDomain, lastSuccessAt], map: "AmazonAdsSyncDomainState_freshness_idx")
+}
+
+model AmazonAdsSyncAttempt {
+  id               String            @id
+  organizationId   String
+  workspaceId      String             @default("default")
+  profileId        String
+  profile          AmazonAdsProfile  @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  taskId           String
+  task             AmazonAdsSyncTask @relation(fields: [organizationId, workspaceId, taskId, profileId], references: [organizationId, workspaceId, id, profileId], onDelete: Restrict)
+  attemptNumber    Int
+  stage            String
+  status           String
+  startedAt        DateTime          @default(now())
+  finishedAt       DateTime?
+  retryAt          DateTime?
+  errorCode        String?
+  safeErrorSummary String?
+  apiRequests      Int               @default(0)
+  processedCount   Int               @default(0)
+  createdAt        DateTime          @default(now())
+
+  @@unique([organizationId, workspaceId, taskId, attemptNumber], map: "AmazonAdsSyncAttempt_task_number_key")
+  @@index([organizationId, workspaceId, profileId, startedAt], map: "AmazonAdsSyncAttempt_profile_idx")
+}
+
+model AmazonAdsReportVersion {
+  id                String   @id
+  organizationId    String
+  workspaceId       String   @default("default")
+  profileId         String
+  profile           AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  sourceTaskId      String
+  sourceTask        AmazonAdsSyncTask @relation(fields: [organizationId, workspaceId, sourceTaskId, profileId], references: [organizationId, workspaceId, id, profileId], onDelete: Restrict)
+  status            String   @default("STAGING")
+  requestedFrom     DateTime? @db.Date
+  requestedTo       DateTime? @db.Date
+  rowCount          Int      @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  facts             AmazonAdsReportFact[]
+  requests          AmazonAdsReportRequest[]
+
+  @@unique([organizationId, workspaceId, id], map: "AmazonAdsReportVersion_scope_id_key")
+  @@unique([organizationId, workspaceId, id, profileId], map: "AmazonAdsReportVersion_scope_profile_key")
+  @@unique([organizationId, workspaceId, id, profileId, sourceTaskId], map: "AmazonAdsReportVersion_scope_task_key")
+  @@unique([organizationId, workspaceId, sourceTaskId], map: "AmazonAdsReportVersion_task_key")
+  @@index([organizationId, workspaceId, profileId, status, publishedAt], map: "AmazonAdsReportVersion_published_idx")
+}
+
+model AmazonAdsReportFact {
+  id                  String   @id
+  organizationId      String
+  workspaceId         String   @default("default")
+  profileId           String
+  profile             AmazonAdsProfile @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  versionId           String?
+  version             AmazonAdsReportVersion? @relation(fields: [organizationId, workspaceId, versionId, profileId, sourceTaskId], references: [organizationId, workspaceId, id, profileId, sourceTaskId], onDelete: Restrict)
+  reportType          String
+  adProduct           String
+  reportDate          DateTime @db.Date
+  factKey             String
+  campaignId          String?
+  adGroupId           String?
+  targetingId         String?
+  advertisedAsin      String?
+  searchTerm          String?
+  placement           String?
+  impressions         BigInt?
+  clicks              BigInt?
+  spend               Decimal? @db.Decimal(20, 6)
+  orders              BigInt?
+  sales               Decimal? @db.Decimal(20, 6)
+  units               BigInt?
+  currencyCode        String?
+  attributionWindow   String?
+  apiVersion          String
+  sourceTaskId        String
+  sourceTask          AmazonAdsSyncTask @relation(fields: [organizationId, workspaceId, sourceTaskId, profileId], references: [organizationId, workspaceId, id, profileId], onDelete: Restrict)
+  rawDimensions       Json
+  syncedAt            DateTime @default(now())
+
+  @@unique([organizationId, workspaceId, versionId, reportType, adProduct, reportDate, factKey], map: "AmazonAdsReportFact_version_business_key")
+  @@index([organizationId, workspaceId, profileId, reportDate], map: "AmazonAdsReportFact_profile_date_idx")
+  @@index([organizationId, workspaceId, profileId, campaignId, reportDate], map: "AmazonAdsReportFact_campaign_date_idx")
+}
+
+model AmazonAdsReportRequest {
+  id              String                    @id
+  organizationId  String
+  workspaceId     String                    @default("default")
+  profileId       String
+  profile         AmazonAdsProfile          @relation(fields: [organizationId, workspaceId, profileId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  sourceTaskId    String
+  sourceTask      AmazonAdsSyncTask         @relation(fields: [organizationId, workspaceId, sourceTaskId, profileId], references: [organizationId, workspaceId, id, profileId], onDelete: Restrict)
+  versionId       String?
+  version         AmazonAdsReportVersion?   @relation(fields: [organizationId, workspaceId, versionId, profileId, sourceTaskId], references: [organizationId, workspaceId, id, profileId, sourceTaskId], onDelete: Restrict)
+  idempotencyKey  String
+  apiVersion      String
+  reportType      String
+  adProduct       String
+  requestedFrom   DateTime                  @db.Date
+  requestedTo     DateTime                  @db.Date
+  requestOptions  Json
+  remoteRequestId String?
+  status          String                    @default("PENDING")
+  warningCodes    String[]                  @default([])
+  errorCode       String?
+  requestedAt     DateTime                  @default(now())
+  lastPolledAt    DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  documents       AmazonAdsReportDocument[]
+
+  @@unique([organizationId, workspaceId, idempotencyKey], map: "AmazonAdsReportRequest_idempotency_key")
+  @@unique([organizationId, workspaceId, id, profileId], map: "AmazonAdsReportRequest_scope_profile_key")
+  @@unique([organizationId, workspaceId, profileId, remoteRequestId], map: "AmazonAdsReportRequest_remote_key")
+  @@index([organizationId, workspaceId, profileId, status, requestedAt], map: "AmazonAdsReportRequest_status_idx")
+}
+
+model AmazonAdsReportDocument {
+  id             String                 @id
+  organizationId String
+  workspaceId    String                 @default("default")
+  profileId      String
+  requestId      String
+  request        AmazonAdsReportRequest @relation(fields: [organizationId, workspaceId, requestId, profileId], references: [organizationId, workspaceId, id, profileId], onDelete: Restrict)
+  partIndex      Int                    @default(0)
+  format         String?
+  compression    String?
+  status         String                 @default("PENDING")
+  storageFileId  String?
+  contentSha256  String?
+  byteSize       BigInt?
+  rowCount       Int?
+  downloadedAt   DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([organizationId, workspaceId, requestId, partIndex], map: "AmazonAdsReportDocument_request_part_key")
+  @@index([organizationId, workspaceId, profileId, status, createdAt], map: "AmazonAdsReportDocument_status_idx")
+}
+
+// One global lease per Ads LwA client prevents cross-Profile request bursts.
+model AmazonAdsApiBudget {
+  clientIdHash     String   @id
+  leaseOwner       String?
+  leaseExpiresAt   DateTime?
+  operation        String?
+  nextRequestAt    DateTime @default(now())
+  lastRequestAt    DateTime?
+  updatedAt        DateTime @updatedAt
+
+  @@index([leaseExpiresAt], map: "AmazonAdsApiBudget_lease_idx")
+  @@index([nextRequestAt], map: "AmazonAdsApiBudget_next_request_idx")
+}
+
+model AmazonAdsOAuthAttempt {
+  id              String   @id
+  organizationId  String
+  workspaceId     String   @default("default")
+  userId          String
+  region          String
+  stateHash       String   @unique
+  redirectUri     String
+  status          String   @default("PENDING")
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, workspaceId, userId, status], map: "AmazonAdsOAuth_scope_user_status_idx")
+  @@index([status, expiresAt], map: "AmazonAdsOAuth_status_expiry_idx")
+}
+
+// Approval evidence contains only allowlisted summaries. Commands (including secrets)
+// live in a separate encrypted envelope and never enter list/detail DTOs.
+model AmazonDataCenterChangeRequest {
+  id String @id
+  organizationId String
+  workspaceId String
+  targetEnvironment String
+  changeType String
+  operation String
+  targetId String
+  beforeSummary Json
+  afterSummary Json
+  sellerIds String[] @default([])
+  marketplaceIds String[] @default([])
+  domains String[] @default([])
+  sourceIds String[] @default([])
+  baseRevision Int
+  changeDigest String
+  payloadDigest String
+  requestedByUserId String
+  approvedByUserId String?
+  decidedAt DateTime?
+  status String @default("REQUESTED")
+  expiresAt DateTime
+  appliedAt DateTime?
+  decisionReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  requestedBy User @relation("AmazonDataCenterChangeRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  approvedBy User? @relation("AmazonDataCenterChangeApprovedBy", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  requesterMembership OrganizationMember @relation("AmazonDataCenterMemberRequestedBy", fields: [organizationId, requestedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  approverMembership OrganizationMember? @relation("AmazonDataCenterMemberApprovedBy", fields: [organizationId, approvedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  sealedCommand AmazonDataCenterSealedCommand?
+  versions AmazonDataCenterConfigVersion[]
+  tasks AmazonSyncRun[] @relation("AmazonTaskApproval")
+  @@unique([organizationId, workspaceId, id], map: "AmazonDataCenterChange_scope_id_key")
+  @@index([organizationId, workspaceId, status, createdAt])
+}
+
+model AmazonDataCenterSealedCommand {
+  id String @id
+  organizationId String
+  workspaceId String
+  ciphertext String @db.Text
+  request AmazonDataCenterChangeRequest @relation(fields: [organizationId, workspaceId, id], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, id])
+}
+
+// Append-only configuration revisions; the existing authorization/source/policy
+// rows are current pointers. Revision history is not changed by publication.
+model AmazonDataCenterConfigVersion {
+  id String @id
+  organizationId String
+  workspaceId String
+  targetEnvironment String
+  entityType String
+  entityId String
+  revision Int
+  summary Json
+  approvalId String
+  changeDigest String
+  createdAt DateTime @default(now())
+  approval AmazonDataCenterChangeRequest @relation(fields: [organizationId, workspaceId, approvalId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, entityType, entityId, revision])
+  @@index([organizationId, workspaceId, entityId, createdAt])
+}
+
 model AmazonSyncRun {
   id                String    @id
   organizationId    String
@@ -1444,6 +2004,15 @@ model AmazonSyncRun {
   insertedCount     Int       @default(0)
   updatedCount      Int       @default(0)
   skippedCount      Int       @default(0)
+  salesTrafficRows  AmazonSalesTrafficSnapshot[]
+  orderRows         AmazonOrderRecord[]
+  financeRows       AmazonFinanceRecord[]
+  returnRows        AmazonReturnRecord[]
+  reportDocuments   AmazonSyncReportDocument[]
+  resourceCursors   AmazonSyncResourceCursor[]
+  rawPages          AmazonSyncRawPage[]
+  failedCount       Int       @default(0)
+  detailsCompletedCount Int   @default(0)
   logs              AmazonSyncTaskLog[]
   pages             AmazonSyncPage[]
   publishedSources  AmazonSyncDataSource[] @relation("PublishedHead")
@@ -1462,6 +2031,15 @@ model AmazonSyncRun {
   @@unique([organizationId, workspaceId, id], map: "AmazonSyncRun_scope_id_key")
   @@index([executionVersion, status, nextAttemptAt], map: "AmazonSyncRun_dispatch_idx")
   @@index([sourceId, startedAt], map: "AmazonSyncRun_source_started_idx")
+  executionApprovalId String?
+  executionApproval AmazonDataCenterChangeRequest? @relation("AmazonTaskApproval", fields: [organizationId, workspaceId, executionApprovalId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  frozenScope Json?
+  frozenScopeDigest String?
+
+  observations AmazonDomainObservation[]
+  settlementReports AmazonSettlementReport[] @relation("SettlementOwner")
+  settlementRawReports AmazonSettlementReport[] @relation("SettlementRawRun")
+
 }
 
 model AmazonInventorySnapshot {
@@ -1504,6 +2082,7 @@ model AmazonCatalogSnapshot {
   asin             String   @default("")
   listingStatus    String?
   fulfillmentType  String?
+  listingAttributes Json?
   sourceRunId      String
   fieldSources     Json
   sourceUpdatedAt  DateTime?
@@ -2257,20 +2836,29 @@ model AmazonSpApiAuthorization {
   awsRegion             String
   endpoint              String
   credentialsCiphertext String @db.Text
+  approvedRoles         String[] @default([])
+  rolesAttestedAt       DateTime?
   revision              Int @default(1)
   status                String @default("NOT_CONFIGURED")
   marketplaceParticipations Json @default("[]")
   lastValidatedAt       DateTime?
+  identityVerifiedAt    DateTime?
+  identityEvidence      String @default("MANUAL_UNVERIFIED")
+  authorizedByUserId    String?
+  validationAttemptedAt DateTime?
+  validationErrorCode   String?
   updatedByUserId        String
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   sources               AmazonSyncDataSource[]
+  settlementReports     AmazonSettlementReport[]
 
   @@unique([organizationId, workspaceId, id], map: "AmazonAuth_scope_id_key")
   @@unique([organizationId, workspaceId, amazonSellerId, awsRegion], map: "AmazonAuth_seller_region_key")
 }
 
 model AmazonSyncDataSource {
+  settlementPolicy Json?
   id                    String @id
   organizationId        String
   workspaceId           String @default("default")
@@ -2290,11 +2878,26 @@ model AmazonSyncDataSource {
   coverage              Json?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  salesTrafficRows      AmazonSalesTrafficSnapshot[]
+  orderPolicy           Json?
+  financePolicy         Json?
+  returnsPolicy         Json?
+  domainPolicy          Json?
+  observations          AmazonDomainObservation[]
+  settlementRows        AmazonSettlementRow[]
+  returnRows            AmazonReturnRecord[]
+  reportDocuments       AmazonSyncReportDocument[]
+  reportRows            AmazonSyncReportRow[]
+  financeRows           AmazonFinanceRecord[]
+  orderRows             AmazonOrderRecord[]
+  resourceCursor        AmazonSyncResourceCursor?
   runs                  AmazonSyncRun[] @relation("SourceTasks")
   targets               AmazonSyncPlanTarget[]
 
   @@unique([organizationId, workspaceId, id], map: "AmazonSource_scope_id_key")
   @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, resource], map: "AmazonSource_store_site_domain_key")
+  revision Int @default(1)
+
 }
 
 model AmazonSyncPlanTarget {
@@ -2351,4 +2954,560 @@ model AmazonSyncApiBudget {
   updatedAt      DateTime @updatedAt
 
   @@id([organizationId, workspaceId, authorizationId, operation])
+}
+
+// Orders v2026-01-01 only. PII lives only in an encrypted detail envelope.
+model AmazonOrderRecord {
+  id                  String @id
+  organizationId      String
+  workspaceId         String
+  sourceId            String
+  source              AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  sourceRunId         String
+  task                AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict)
+  sellerAccountId     String
+  amazonSellerId      String
+  marketplaceId       String
+  amazonOrderId       String
+  createdTime         DateTime @db.Timestamptz(3)
+  sourceUpdatedAt     DateTime @db.Timestamptz(3)
+  rawStatus           String?
+  normalizedStatus    String?
+  marketplaceTimeZone String
+  capturedAt          DateTime @db.Timestamptz(3)
+  detailsUpdatedAt    DateTime? @db.Timestamptz(3)
+  detailPolicyDigest  String?
+  detailHash          String?
+  detailCiphertext    String? @db.Text
+  grandTotalOriginal  String?
+  grandTotalAmount    Decimal? @db.Decimal(65, 30)
+  currencyCode        String?
+  items               AmazonOrderItemRecord[]
+  detailWork          AmazonOrderDetailWork[]
+
+  @@unique([organizationId, workspaceId, sourceId, id], map: "AmazonOrder_scope_record_key")
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, amazonOrderId], map: "AmazonOrder_scope_business_key")
+  @@index([organizationId, workspaceId, sourceId, sourceUpdatedAt], map: "AmazonOrder_source_updated_idx")
+}
+
+model AmazonOrderItemRecord {
+  organizationId String
+  workspaceId String
+  sourceId String
+  orderRecordId String
+  order AmazonOrderRecord @relation(fields: [organizationId, workspaceId, sourceId, orderRecordId], references: [organizationId, workspaceId, sourceId, id], onDelete: Restrict, map: "AmazonOrderItemRecord_order_fkey")
+  orderItemId String
+  asin String?
+  sellerSku String?
+  quantityOrdered Int
+  proceedsOriginal String?
+  proceedsAmount Decimal? @db.Decimal(65, 30)
+  currencyCode String?
+
+  @@id([orderRecordId, orderItemId])
+  @@index([organizationId, workspaceId, sourceId, asin], map: "AmazonOrderItem_scope_asin_idx")
+}
+
+// Durable detail work is part of the existing orders job, not another scheduler.
+model AmazonOrderDetailWork {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  orderRecordId String
+  order AmazonOrderRecord @relation(fields: [organizationId, workspaceId, sourceId, orderRecordId], references: [organizationId, workspaceId, sourceId, id], onDelete: Restrict, map: "AmazonOrderDetailWork_order_fkey")
+  amazonOrderId String
+  listedUpdatedAt DateTime @db.Timestamptz(3)
+  watermarkFrom DateTime @db.Timestamptz(3)
+  watermarkTo DateTime @db.Timestamptz(3)
+  policyDigest String
+  status String @default("PENDING")
+  completedAt DateTime? @db.Timestamptz(3)
+
+  @@unique([sourceId, amazonOrderId, listedUpdatedAt, policyDigest], map: "AmazonOrderDetail_business_key")
+  @@index([organizationId, workspaceId, sourceId, status, watermarkFrom, watermarkTo], map: "AmazonOrderDetail_pending_idx")
+}
+
+model AmazonFinanceRecord {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  source AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonFinance_source_fkey")
+  sourceRunId String
+  task AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonFinance_run_fkey")
+  sellerAccountId String
+  amazonSellerId String
+  transactionId String
+  marketplaceId String?
+  marketplaceTimeZone String?
+  attributionStatus String
+  quarantineReason String?
+  postedAt DateTime @db.Timestamptz(3)
+  transactionType String?
+  rawStatus String?
+  orderId String?
+  classification String
+  originalAmount String?
+  amount Decimal? @db.Decimal(65,30)
+  currency String?
+  convertedAmount Decimal? @db.Decimal(65,30)
+  convertedCurrency String?
+  conversionStatus String
+  fxEvidence Json?
+  observationSequence Int
+  rowHash String
+  capturedAt DateTime @db.Timestamptz(3)
+  quarantine AmazonFinanceQuarantine?
+
+  @@unique([organizationId, workspaceId, sellerAccountId, transactionId], map: "AmazonFinance_business_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonFinance_scope_id_key")
+  @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, postedAt], map: "AmazonFinance_scope_posted_idx")
+  @@index([organizationId, workspaceId, sourceId, attributionStatus, postedAt], map: "AmazonFinance_source_posted_idx")
+}
+
+// Unknown attribution stays outside the queryable financial facts/amounts.
+model AmazonFinanceQuarantine {
+  organizationId String
+  workspaceId String
+  recordId String @id
+  record AmazonFinanceRecord @relation(fields: [organizationId, workspaceId, recordId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonFinanceQuarantine_record_fkey")
+  ciphertext String @db.Text
+  createdAt DateTime @db.Timestamptz(3)
+  @@unique([organizationId, workspaceId, recordId], map: "AmazonFinanceQuarantine_scope_key")
+}
+
+// A business cursor survives task termination and is committed with each page.
+model AmazonSyncResourceCursor {
+  id                  String @id
+  organizationId      String
+  workspaceId         String
+  sourceId            String @unique
+  source              AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  resource            String
+  amazonSellerId      String
+  marketplaceId       String
+  watermarkFrom       DateTime @db.Timestamptz(3)
+  watermarkTo         DateTime @db.Timestamptz(3)
+  nextTokenCiphertext String? @db.Text
+  activeRunId         String?
+  task                AmazonSyncRun? @relation(fields: [activeRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict)
+  lastSuccessAt       DateTime? @db.Timestamptz(3)
+  status              String
+  listComplete        Boolean @default(false)
+  detailPolicyDigest  String?
+  captureSequence     Int @default(0)
+  reportStateCiphertext String? @db.Text
+  updatedAt           DateTime @updatedAt
+
+  @@unique([organizationId, workspaceId, resource, amazonSellerId, marketplaceId], map: "AmazonCursor_scope_resource_key")
+  @@unique([organizationId, workspaceId, sourceId], map: "AmazonCursor_scope_source_key")
+}
+
+// Response body is an encrypted envelope; metadata never contains credentials/PII.
+model AmazonSyncRawPage {
+  organizationId  String
+  workspaceId     String
+  taskId          String
+  task            AmazonSyncRun @relation(fields: [organizationId, workspaceId, taskId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  page            Int
+  resource        String
+  requestMetadata Json
+  rawCiphertext   String @db.Text
+  bodySha256      String
+  capturedAt      DateTime @db.Timestamptz(3)
+
+  @@id([taskId, page])
+  settlementReports AmazonSettlementReport[]
+}
+
+// Shared seller/application bucket across marketplaces; operation has its own quota.
+model AmazonSyncTokenBucket {
+  bucketKey       String @id
+  tokens          Float
+  replenishedAt   DateTime @db.Timestamptz(3)
+  blockedUntil    DateTime? @db.Timestamptz(3)
+  observedLimit   Float?
+}
+
+// Seller/day totals only. ASIN range totals are deliberately not split into daily facts.
+model AmazonSalesTrafficSnapshot {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  source AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonSalesTraffic_source_fkey")
+  syncRunId String
+  task AmazonSyncRun @relation(fields: [syncRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonSalesTraffic_task_fkey")
+  sellerAccountId String
+  marketplaceId String
+  businessDate String @db.VarChar(10)
+  reportId String
+  documentId String
+  metrics Json
+  quality String
+  capturedAt DateTime
+
+  @@unique([organizationId, workspaceId, syncRunId, businessDate], map: "AmazonSalesTraffic_run_date_key")
+  @@index([organizationId, workspaceId, sourceId, businessDate], map: "AmazonSalesTraffic_scope_date_idx")
+}
+
+model AmazonDataExport {
+  id String @id
+  organizationId String
+  workspaceId String
+  requestedByUserId String
+  idempotencyKey String
+  query Json
+  cutoff DateTime
+  status String @default("QUEUED")
+  fileId String?
+  file FileObject? @relation(fields: [fileId], references: [id], onDelete: Restrict, map: "AmazonDataExport_file_fkey")
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict, map: "AmazonDataExport_workspace_fkey")
+  actor OrganizationMember @relation(fields: [organizationId, requestedByUserId], references: [organizationId, userId], onDelete: Restrict, map: "AmazonDataExport_actor_fkey")
+  rowCount Int @default(0)
+  error String?
+  createdAt DateTime @default(now())
+  finishedAt DateTime?
+  leaseExpiresAt DateTime?
+  fence Int @default(0)
+  @@unique([organizationId, workspaceId, requestedByUserId, idempotencyKey], map: "AmazonDataExport_idempotency_key")
+  @@index([status, createdAt])
+}
+
+// Scope authorization complements existing RBAC; no implicit grants for ordinary members.
+model AmazonDataAccessGrant {
+  id String @id
+  organizationId String
+  workspaceId String
+  userId String
+  sellerAccountId String
+  enabled Boolean @default(true)
+  marketplaceIds String[] @default([])
+  actions String[] @default(["view", "sync", "export", "edit"])
+  mcpEnabled Boolean @default(false)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member OrganizationMember @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict)
+  workspace WorkspaceScope @relation(fields: [organizationId, workspaceId], references: [organizationId, id], onDelete: Restrict)
+  seller SellerAccount @relation(fields: [organizationId, workspaceId, sellerAccountId], references: [organizationId, workspaceId, id], onDelete: Restrict)
+  @@unique([organizationId, workspaceId, userId, sellerAccountId], map: "AmazonAccess_member_seller_key")
+  @@index([organizationId, workspaceId, userId, enabled], map: "AmazonAccess_lookup_idx")
+}
+
+model AmazonRoleDataAccessGrant {
+  id String @id
+  organizationId String
+  workspaceId String
+  roleId String
+  sellerAccountId String
+  marketplaceIds String[] @default([])
+  actions String[] @default([])
+  mcpEnabled Boolean @default(false)
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId, workspaceId, roleId, sellerAccountId], map: "AmazonRoleGrant_scope_subject_seller_key")
+  @@index([organizationId, workspaceId, roleId, enabled], map: "AmazonRoleGrant_scope_subject_enabled_idx")
+}
+
+model LiliOAuthClient {
+  id String @id
+  redirectUris String[]
+  createdAt DateTime @default(now())
+}
+
+model LiliOAuthGrant {
+  id String @id
+  clientId String
+  deviceId String @unique
+  resource String
+  redirectUri String
+  challenge String
+  codeHash String @unique
+  codeExpiresAt DateTime
+  codeUsedAt DateTime?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([clientId])
+}
+
+model LiliOAuthRefresh {
+  hash String @id
+  grantId String
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([grantId])
+}
+
+model AmazonMcpCredential {
+  id String @id
+  organizationId String
+  workspaceId String
+  userId String
+  name String
+  tokenHash String @unique
+  tokenPrefix String
+  tools String[]
+  scopes Json
+  status String @default("ACTIVE")
+  revision Int @default(1)
+  expiresAt DateTime
+  createdByUserId String
+  rotatedFromId String?
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId, workspaceId, userId, status])
+}
+
+model AmazonOAuthAttempt {
+  id String @id
+  organizationId String
+  workspaceId String
+  userId String
+  stateHash String @unique
+  region String
+  redirectUri String
+  status String @default("PENDING")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AmazonSellerIdentity {
+  id String @id
+  organizationId String
+  workspaceId String
+  sellerAccountId String
+  amazonSellerId String
+  marketplaceId String
+  region String
+  authorizationId String
+  verifiedAt DateTime
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId], map: "AmazonIdentity_scope_seller_site_key")
+  @@unique([organizationId, workspaceId, amazonSellerId, marketplaceId, region], map: "AmazonIdentity_scope_amazon_site_region_key")
+}
+
+model AmazonReturnReason {
+  id String @id
+  organizationId String
+  workspaceId String
+  code String
+  rows AmazonReturnRecord[]
+  @@unique([organizationId, workspaceId, code], map: "AmazonReturnReason_code_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonReturnReason_scope_key")
+}
+model AmazonReturnRecord {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  source AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonReturn_source_fkey")
+  sourceRunId String
+  task AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonReturn_run_fkey")
+  sellerAccountId String
+  amazonSellerId String
+  marketplaceId String
+  marketplaceTimeZone String
+  reportId String
+  rowHash String
+  returnAt DateTime @db.Timestamptz(3)
+  amazonOrderId String
+  sellerSku String
+  asin String
+  fnsku String?
+  quantity Int
+  fulfillmentCenterId String?
+  disposition String?
+  reasonId String?
+  reason AmazonReturnReason? @relation(fields: [organizationId, workspaceId, reasonId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonReturn_reason_fkey")
+  rawStatus String?
+  capturedAt DateTime @db.Timestamptz(3)
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, reportId, rowHash], map: "AmazonReturn_business_key")
+  @@index([organizationId, workspaceId, sourceId, reportId, returnAt], map: "AmazonReturn_report_idx")
+}
+
+// Other Reports-domain observations are immutable and organization/workspace scoped.
+// Their raw TSV lives in encrypted AmazonSyncRawPage envelopes.
+model AmazonSyncReportDocument {
+  id                String @id
+  organizationId    String
+  workspaceId       String
+  sourceId          String
+  source            AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonReport_source_fkey")
+  sourceRunId       String
+  task              AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonReport_run_fkey")
+  sellerAccountId   String
+  amazonSellerId    String
+  marketplaceId     String
+  resource          String
+  reportType        String
+  reportId          String
+  reportCreatedAt   DateTime? @db.Timestamptz(3)
+  businessDateField String
+  rowCount          Int
+  contentSha256     String
+  status            String @default("STAGED")
+  capturedAt        DateTime @db.Timestamptz(3)
+  publishedAt       DateTime? @db.Timestamptz(3)
+  rows              AmazonSyncReportRow[]
+
+  @@unique([organizationId, workspaceId, sourceId, reportId], map: "AmazonReport_business_key")
+  @@unique([organizationId, workspaceId, sourceId, reportId, id], map: "AmazonReport_scope_id_key")
+  @@index([organizationId, workspaceId, sourceId, resource, publishedAt], map: "AmazonReport_source_published_idx")
+}
+
+model AmazonSyncReportRow {
+  id                 String @id
+  organizationId     String
+  workspaceId        String
+  sourceId           String
+  source             AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonReportRow_source_fkey")
+  reportDocumentId   String
+  reportId           String
+  document           AmazonSyncReportDocument @relation(fields: [organizationId, workspaceId, sourceId, reportId, reportDocumentId], references: [organizationId, workspaceId, sourceId, reportId, id], onDelete: Restrict, map: "AmazonReportRow_document_fkey")
+  rowNumber          Int
+  rowHash            String
+  businessDateRaw    String?
+  businessDate       String? @db.VarChar(10)
+  orderId            String?
+  sellerSku           String?
+  asin                String?
+  transactionType     String?
+  amountType          String?
+  amountDescription   String?
+  amountOriginal      String?
+  currencyCode        String?
+  quantityOriginal    String?
+  fields              Json
+
+  @@unique([reportDocumentId, rowNumber], map: "AmazonReportRow_document_row_key")
+  @@index([organizationId, workspaceId, sourceId, businessDate], map: "AmazonReportRow_source_date_idx")
+  @@index([organizationId, workspaceId, sourceId, orderId], map: "AmazonReportRow_source_order_idx")
+  @@index([organizationId, workspaceId, sourceId, sellerSku], map: "AmazonReportRow_source_sku_idx")
+  @@index([organizationId, workspaceId, sourceId, asin], map: "AmazonReportRow_source_asin_idx")
+}
+
+// External observations only: never a ProductRecord write path.
+model AmazonDomainObservation {
+  id String @id
+  organizationId String
+  workspaceId String
+  sourceId String
+  source AmazonSyncDataSource @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, map: "AmazonObservation_source_fkey")
+  sourceRunId String
+  task AmazonSyncRun @relation(fields: [sourceRunId, organizationId, workspaceId, sourceId], references: [id, organizationId, workspaceId, sourceId], onDelete: Restrict, map: "AmazonObservation_run_fkey")
+  kind String
+  businessKey String
+  asin String?
+  sellerSku String?
+  searchTerm String?
+  facts Json
+  capturedAt DateTime @db.Timestamptz(3)
+
+  @@unique([sourceRunId, kind, businessKey], map: "AmazonObservation_run_key")
+  @@index([organizationId, workspaceId, sourceId, sourceRunId, kind], map: "AmazonObservation_scope_idx")
+  @@index([organizationId, workspaceId, sourceId, asin], map: "AmazonObservation_asin_idx")
+}
+
+model AmazonCatalogImageBlob {
+  id             String   @id
+  organizationId String
+  workspaceId    String   @default("default")
+  contentHash    String
+  fileId         String   @unique
+  width          Int
+  height         Int
+  size           Int
+  createdAt      DateTime @default(now())
+  file           FileObject @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  imageReferences AmazonCatalogImageReference[]
+
+  @@unique([organizationId, workspaceId, contentHash], map: "AmazonCatalogImageBlob_scope_hash_key")
+  @@index([organizationId, workspaceId, createdAt], map: "AmazonCatalogImageBlob_scope_created_idx")
+}
+
+model AmazonCatalogImageReference {
+  id               String   @id
+  organizationId   String
+  workspaceId      String   @default("default")
+  sellerAccountId  String
+  marketplaceId    String
+  asin             String
+  variant          String   @default("MAIN")
+  sourceResource   String
+  sourceRunId      String
+  sourceUrl        String
+  blobId           String
+  capturedAt       DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  blob             AmazonCatalogImageBlob @relation(fields: [blobId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, asin, variant], map: "AmazonCatalogImageReference_product_key")
+  @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, asin], map: "AmazonCatalogImageReference_product_idx")
+  @@index([blobId])
+}
+
+// Seller-level settlement originals; rows are published only with explicit site attribution.
+model AmazonSettlementReport {
+  id String @id
+  organizationId String
+  workspaceId String
+  amazonSellerId String
+  region String
+  reportType String
+  reportId String
+  authorizationId String
+  authorizationRevision Int
+  sourceRunId String
+  reportMarketplaceIds Json
+  collectionMarketplaceIds Json
+  siteBindings Json
+  rawTaskId String?
+  rawPage Int?
+  contentSha256 String?
+  status String @default("DISCOVERED")
+  createdTime DateTime? @db.Timestamptz(3)
+  capturedAt DateTime? @db.Timestamptz(3)
+  publishedAt DateTime? @db.Timestamptz(3)
+  authorization AmazonSpApiAuthorization @relation(fields: [organizationId, workspaceId, authorizationId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_auth_fkey")
+  task AmazonSyncRun @relation("SettlementOwner", fields: [organizationId, workspaceId, sourceRunId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_run_fkey")
+  rawTask AmazonSyncRun? @relation("SettlementRawRun", fields: [organizationId, workspaceId, rawTaskId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_raw_scope_fkey")
+  rawArchive AmazonSyncRawPage? @relation(fields: [rawTaskId, rawPage], references: [taskId, page], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementReport_raw_fkey")
+  rows AmazonSettlementRow[]
+  @@unique([organizationId, workspaceId, amazonSellerId, region, reportType, reportId], map: "AmazonSettlementReport_business_key")
+  @@unique([organizationId, workspaceId, id], map: "AmazonSettlementReport_scope_key")
+  @@index([organizationId, workspaceId, status, createdTime], map: "AmazonSettlementReport_scope_status_idx")
+}
+model AmazonSettlementRow {
+  id String @id
+  organizationId String
+  workspaceId String
+  reportDocumentId String
+  rowNumber Int
+  rowHash String
+  sourceId String?
+  marketplaceId String?
+  sellerAccountId String?
+  attributionStatus String
+  businessDate String? @db.VarChar(10)
+  businessDateRaw String?
+  orderId String?
+  sellerSku String?
+  asin String?
+  amountOriginal String?
+  currencyCode String?
+  transactionType String?
+  amountType String?
+  amountDescription String?
+  fields Json?
+  document AmazonSettlementReport @relation(fields: [organizationId, workspaceId, reportDocumentId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementRow_report_fkey")
+  source AmazonSyncDataSource? @relation(fields: [organizationId, workspaceId, sourceId], references: [organizationId, workspaceId, id], onDelete: Restrict, onUpdate: NoAction, map: "AmazonSettlementRow_source_fkey")
+  @@unique([reportDocumentId, rowNumber], map: "AmazonSettlementRow_document_row_key")
+  @@index([organizationId, workspaceId, sourceId, businessDate], map: "AmazonSettlementRow_source_date_idx")
 }

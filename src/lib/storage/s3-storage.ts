@@ -1,6 +1,7 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageDriver, StoredObject } from "@/lib/storage/types";
+import { collectBoundedBuffer } from "./bounded-buffer";
 
 function getRequiredEnv(name: string) {
   const value = process.env[name];
@@ -78,6 +79,14 @@ export function createS3StorageDriver(): StorageDriver {
       );
 
       return streamToBuffer(response.Body);
+    },
+
+    async getBoundedBuffer(key, maxBytes) {
+      const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      if (!response.Body || typeof response.Body !== "object" || !(Symbol.asyncIterator in response.Body)) {
+        throw new Error("S3 object body does not support bounded streaming.");
+      }
+      return collectBoundedBuffer(response.Body as AsyncIterable<Uint8Array>, maxBytes);
     },
 
     async delete() {

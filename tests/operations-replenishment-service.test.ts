@@ -10,13 +10,13 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
   const older = new Date("2026-10-23T00:00:00Z");
   const newer = new Date("2026-10-23T00:01:00Z");
   const policy = {
-    id: "policy", enabled: true, organizationId: "org", workspaceId: "ws", sellerAccountId: "store",
+    id: "policy", updatedByUserId: "fixture-actor", enabled: true, organizationId: "org", workspaceId: "ws", sellerAccountId: "store",
     marketplaceId: "market", sellerSku: "sku", updatedAt: new Date("2026-10-22T00:00:00Z"),
     inputs: { lifecycle: "NEW", newProductDailyUnits: 2, productionDays: 1, domesticDays: 1, oceanDays: 1, sourceNote: "confirmed trial demand" },
   };
   type Saved = { generatedAt: Date; policyUpdatedAt: Date; inventoryRunId: string | null; result: { lifecycle: string; status: string }; lastError: string | null };
   let saved: Saved | null = null;
-  let successfulRunReads = 0;
+  let taskListReads = 0;
   let fail = false;
   let releaseOlder = () => {};
   let notifyStarted = () => {};
@@ -24,6 +24,9 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
   const olderGate = new Promise<void>((resolve) => { releaseOlder = resolve; });
   let delayNextInventoryRead = false;
   const database = {
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    organizationRosterRole: { findMany: async () => [] },
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async () => [{ id: policy.id }],
     $executeRaw: async () => 1,
     $transaction: async (callback: (tx: unknown) => Promise<void>) => callback(database),
@@ -33,13 +36,9 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
       upsert: async ({ update }: { update: Saved }) => { saved = update; return update; },
     },
     amazonSyncRun: {
-      findFirst: async ({ where }: { where: { resource: string } }) => {
-        if (where.resource === "catalog") return null;
-        successfulRunReads += 1;
-        return { id: "inventory-run-actually-read" };
-      },
-      findMany: async () => [],
+      findMany: async () => { taskListReads += 1; return []; },
     },
+    amazonSyncDataSource: { findFirst: async () => ({ id: "source" }), findMany: async ({ where }: { where: { resource: string } }) => where.resource === "inventory" ? [{ activeRunId: "inventory-run-actually-read", sellerAccountId: "store", marketplaceId: "market", lastSuccessAt: newer, freshnessMinutes: 360 }] : [] },
     amazonCatalogSnapshot: { findMany: async () => [] },
     amazonInventorySnapshot: { findMany: async () => {
       if (delayNextInventoryRead) { delayNextInventoryRead = false; notifyStarted(); await olderGate; }
@@ -59,7 +58,7 @@ test("plan persistence keeps exact inventory provenance, newer results and new-p
     const current = saved as Saved | null;
     assert.equal(current?.generatedAt.getTime(), newer.getTime(), "slower earlier calculation must not overwrite the newer plan");
     assert.equal(current?.inventoryRunId, "inventory-run-actually-read");
-    assert.equal(successfulRunReads, 2, "one inventory-run lookup per calculation; no second latest-run lookup");
+    assert.equal(taskListReads, 2, "only scoped task summaries are queried for error context");
     fail = true;
     await refreshDueReplenishmentPlans(new Date(newer.getTime() + 60_000));
     const failed = saved as Saved | null;
@@ -82,7 +81,7 @@ test("Sellfox plans use complete daily MSKU sales and current inventory, never p
   const previousUrl = process.env.DATABASE_URL;
   let now = new Date("2026-10-25T00:00:00Z");
   const policy = {
-    id: "policy", enabled: true, organizationId: "org", workspaceId: "ws", sellerAccountId: "seller",
+    id: "policy", updatedByUserId: "fixture-actor", enabled: true, organizationId: "org", workspaceId: "ws", sellerAccountId: "seller",
     marketplaceId: "ATVPDKIKX0DER", sellerSku: "EXACT-MSKU", updatedAt: new Date("2026-10-24T00:00:00Z"),
     inputs: { lifecycle: "MATURE", productionDays: 1, domesticDays: 1, oceanDays: 1, sourceNote: "verified store mapping",
       historicalSource: { storeId: "tk-us" }, salesHistory: [{ date: "2026-10-01", units: 999 }] },
@@ -97,6 +96,10 @@ test("Sellfox plans use complete daily MSKU sales and current inventory, never p
   let invalidStore = false;
   let salesReads = 0;
   const database = {
+    organizationMember: { findUnique: async () => ({ role: "owner", user: { status: "active" } }) },
+    organizationRosterRole: { findMany: async () => [] },
+    amazonSyncDataSource: { findFirst: async () => ({ id: "source" }) },
+    workspaceScope: { findUnique: async () => ({ id: "ws" }) },
     $queryRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
       const query = sql.join("?");
       if (query.includes('FROM "AmazonReplenishmentPolicy"')) return [{ id: policy.id }];
@@ -148,7 +151,8 @@ test("Sellfox plans use complete daily MSKU sales and current inventory, never p
     incomplete = false; missingInventory = true;
     assert.equal((await refresh())?.result.status, "NEEDS_DATA", "no Amazon fallback when current is empty");
     invalidStore = true;
-    assert.ok((await refresh())?.lastError);
+    const beforeDenied = saved;
+    assert.equal(await refresh(), beforeDenied, "unavailable source authorization must not publish new failure inputs");
     const reads = salesReads;
     policy.sellerSku = " ";
     assert.equal((await refresh())?.result.status, "NEEDS_DATA");

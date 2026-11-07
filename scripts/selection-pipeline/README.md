@@ -22,7 +22,7 @@ npm run selection:tag -- --slug kayak-cockpit-cover --cloud-patch
 `--write` 需要下方明确的数据库和操作者配置。**不要在未审查草稿时运行写库命令。** 模块不自动读取 `.env`；需要时沿用仓库风格：
 
 ```bash
-node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/selection-pipeline/src/cli.ts create --slug kayak-cockpit-cover --write
+node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/selection-pipeline/src/cli.ts create --slug kayak-cockpit-cover --write
 ```
 
 ## 规则与分步续作
@@ -169,7 +169,7 @@ npm run selection:workbook -- --slug kayak-cockpit-cover
 3. 审查 quality 与 draft。下面示例为本机 zsh，保密输入避免 shell 历史留下 Cookie；DATABASE_URL 可来自你已受控配置的环境文件，不展示密码。
 
 ```zsh
-# 在仓库根目录；如用现有 .env，则用文末 node --env-file 方式让子进程显式加载。
+# 在仓库根目录；如用现有 .env，则用文末 database-bootstrap 方式让子进程统一加载。
 export DATABASE_URL  # 已由你选择并配置的目标数据库
 export SELECTION_ORGANIZATION_ID='<目标组织ID>'
 export SELECTION_ACTOR_USER_ID='<该组织有效owner/database_admin用户ID>'
@@ -182,7 +182,7 @@ npm run selection:workbook -- --slug kayak-cockpit-cover --upload-images --works
 # 确认完整证据、上传结果与作用域后，显式写库。
 npm run selection:create -- --slug kayak-cockpit-cover --write --workspace-id default
 # DATABASE_URL 只在 .env 时改用：
-# node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/selection-pipeline/src/cli.ts create --slug kayak-cockpit-cover --write --workspace-id default
+# node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/selection-pipeline/src/cli.ts create --slug kayak-cockpit-cover --write --workspace-id default
 unset SELECTION_ERP_COOKIE
 ```
 

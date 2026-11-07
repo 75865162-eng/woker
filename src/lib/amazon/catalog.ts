@@ -1,4 +1,4 @@
-export type CatalogItem = { sellerSku: string; asin: string; listingStatus: string | null; fulfillmentType: string | null };
+export type CatalogItem = { sellerSku: string; asin: string; listingStatus: string | null; fulfillmentType: string | null; listingAttributes?: Record<string, string | null> };
 
 export function extractCatalogPage(payload: unknown, marketplaceId: string): { items: CatalogItem[]; nextToken?: string } {
   if (!payload || typeof payload !== "object" || !Array.isArray((payload as { items?: unknown }).items)) throw new Error("Amazon 刊登响应缺少 items；不能当作空快照成功。");

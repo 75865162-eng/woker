@@ -32,12 +32,14 @@ export async function GET(request: Request) {
       prisma.agentDefinition.findMany({
         where: {
           organizationId: user.organizationId,
+          NOT: { id: { startsWith: "selection-research-v1:" } },
         },
         orderBy: [{ updatedAt: "desc" }],
       }),
       prisma.agentExecution.findMany({
         where: {
           organizationId: user.organizationId,
+          NOT: { agentDefinitionId: { startsWith: "selection-research-v1:" } },
         },
         orderBy: [{ createdAt: "desc" }],
         take: 200,

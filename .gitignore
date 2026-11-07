@@ -21,6 +21,7 @@
 /.next-dev */
 /.next-build/
 /.next-build*/
+/.next-amazon-live/
 /.next-auth-check/
 /out/
 
@@ -66,3 +67,6 @@ standalone-start.*.log
 /scripts/selection-pipeline/data/
 /selections/*
 !/selections/_example/
+
+# Python helpers generate only local bytecode
+/scripts/lili/__pycache__/

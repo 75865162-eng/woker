@@ -43,7 +43,7 @@
 正式运行采用现有 Next.js + PostgreSQL + Redis/BullMQ + 独立 Node Worker；本地用于开发、契约测试与隔离验收。所有同步只读赛狐，在自有数据库保留报表快照，不写 ProductRecord、不执行广告或 Listing 修改。
 
 - 复用 `src/lib/sellfox/client.ts` 的 HMAC、token 缓存与重试，禁止另建 HTTP 客户端。
-- 凭据只来自服务端 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET`，可选 `SELLFOX_REQUEST_TIMEOUT_MS`。页面只显示 configured，不提供凭据输入或回显，不将密钥写入 Agent/SellerSprite。
+- 凭据优先来自组织/工作区独立加密配置；入口 `/settings?tab=integrations#sellfox-credentials`。服务端环境变量 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 保留兼容；数据库凭据解密失败禁止回退。`SELLFOX_REQUEST_TIMEOUT_MS` 仍可选。页面可输入但不回显/持久缓存密钥，不将密钥写入 Agent/SellerSprite。
 - 首期完成 stores、inventory、sales、performance、listings；hourly 保留并标注浅同步，ads_report 保留灰态占位。
 - 保留原 performance API 和 XLSX 导出能力，新增各域 CSV，不删除既有日利润、退款率、FBA/FBM 等展示能力。
 - 永久保留已同步业务日记录，无 TTL、无定时删除。销量/表现同一天重复同步允许更新该日业务记录；这不代表保留每次修订版本。
@@ -284,7 +284,9 @@
 
 ## 11. 本机验收：无密钥时的管道与定时开关
 
-真实拉取只认服务端环境变量，页面不收集密钥：
+早期环境变量兼容路径（新版网页加密配置见 §12）：
+
+页面凭据入口已升级为「设置 → 集成 → 赛狐 Open API 凭据」；运维页继续查看运行状态。保存和查看配置不请求赛狐、不启动 Worker 或启用计划。
 
 - `SELLFOX_CLIENT_ID`
 - `SELLFOX_CLIENT_SECRET`
@@ -294,3 +296,17 @@
 启用步骤：把上述变量写入服务器 `.env`（不要提交），重启 `npm run worker:sellfox-sync`（生产 unit 为 `amazon-sellfox-sync-worker`）。在 `/sellfox` 或 `/settings?tab=operations` 由具备 `sellfox:create` 的用户打开对应资源计划。计划默认关闭；缺凭据时开启接口返回 503，Worker 在凭据为空时不入队。每日销量/利润/Listing/广告在 Asia/Shanghai 06:30 入队，库存默认 180 分钟。Worker 不由页面启动。
 
 没有密钥时，`npm run sellfox:fixture-pipeline` 用 `tests/fixtures/sellfox/` 的脱敏页，走与线上相同的 `syncSellfoxSnapshotStores`、`syncSellfoxListings`、`syncSellfoxProductDailySnapshots` 写入当前库。店铺名带「演示」，不是 TK店-US 金样，也不能代替 OpenAPI 定时拉取。广告报告仍要真实 XLSX，fixture 管道不编造广告行。
+
+
+## 12. 网页凭据输入与保存（2026-11-06）
+
+追加「测试连接」：保存凭据后可点击，只在 Node 服务端复用现有 client 请求一次全新 Token，不经过同步 Worker、不读取店铺/业务数据、不启用计划。需要有效管理员配置权限，按组织/工作区每分钟最多一次，前后核验 revision/权限并记录脱敏审计。成功仅代表 Token 可获取。详见 `docs/sellfox-credentials-form-proposal.md`「用户追加：测试连接按钮」。
+
+- 用户已批准 `docs/sellfox-credentials-form-proposal.md` 的本地实现。访问 `/settings?tab=integrations#sellfox-credentials`，输入 Client ID / Client Secret 后点击「保存赛狐凭据」；保存直接生效，不沿用 Amazon 专用审批表，Amazon 审批逻辑不变。
+- `GET/PUT /api/integrations/sellfox/credentials` 按 session 当前组织和 workspace header 定界。实时数据库成员角色、sellfox:view、settings:edit、sellfox:create 和工作区存在性由服务端核验；仅 owner/database_admin 可保存。客户端角色不授予权限，GET/PUT 均 no-store。
+- 首次创建 revision=0，后续使用读取到的 revision；冲突返回 409，用户重新读取核对，不自动覆盖。数据库凭据更新可留空保留某项；环境变量兼容配置也可迁入工作区存储，保存后数据库优先。凭据和不含密钥/密文的审计在同一事务提交。
+- 迁移：`20261106150000_sellfox_integration_credentials`。唯一事实源为 `SellfoxIntegrationCredential`，不写真实 `.env`。运行前由管理员另行审批应用迁移，并在 web/赛狐 Worker 配置同一个持久 `SELLFOX_CREDENTIAL_ENCRYPTION_KEY`（32 字节 Base64）；缺密钥/表时禁用保存，页面显示原因。不自动生成或替换已有主密钥。
+- Worker 首次上游请求前按任务组织/工作区解析一次凭据；后续请求使用该任务版本。Token 按组织/工作区、revision 与密文身份隔离，原有串行限流保留；保存不测试连接、不启动任务、不改变计划。已完成断点不需要重新读取凭据，旧环境变量任务仍兼容。
+- 浏览器输入仅在当前表单内存，成功清空，失败可重试；切换工作区/组织卸载表单并取消旧读取/保存响应；不写 localStorage、sessionStorage 或 IndexedDB。
+- 离线专项：`node scripts/test-sellfox-credentials-integration.mjs` 自动创建/清理单个临时 PostgreSQL，要求预装 `postgres:16`，不拉镜像、不加载真实 dotenv；验证实际新增迁移、密文、并发 CAS、实时撤权、跨租户、审计失败回滚和模拟 Worker HTTP。`npx playwright test --config tests/browser/sellfox-credentials.config.ts` 使用模拟 API 验证输入/保存/迟到响应，不访问真实赛狐。
+- 回滚仅回退应用代码；保留新增表和密文，不删表、不改环境文件。旧版本继续环境变量路径。真实保存、迁移、主密钥准备及生产启用不由本轮测试代签。

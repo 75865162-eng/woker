@@ -28,6 +28,7 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
   const loaded = useRef(false);
   const endpoint = `/api/products/${encodeURIComponent(sku)}/meeting-notes`;
   const requestHeaders = useMemo(() => ({ "Content-Type": "application/json", "x-workspace-id": workspaceId }), [workspaceId]);
+  const hasContent = notes.some((note) => note.content.trim().length > 0);
 
   const updateNote = useCallback(async (id: string, content: string) => {
     setSavingIds((current) => new Set(current).add(id));
@@ -73,8 +74,8 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
   }, [sku, workspaceId]);
 
   useEffect(() => {
-    if (open && !loaded.current) void loadNotes();
-  }, [loadNotes, open]);
+    if (!disabled && !loaded.current) void loadNotes();
+  }, [disabled, loadNotes, open]);
 
   useEffect(() => () => {
     saveTimers.current.forEach((timer) => window.clearTimeout(timer));
@@ -149,7 +150,7 @@ export function ProductMeetingNotes({ sku, workspaceId, disabled = false }: { sk
   return (
     <>
       <Button type="button" variant="secondary" size="icon" title="会议记录" aria-label="会议记录" onClick={() => setOpen(true)} disabled={disabled}>
-        <NotebookPen className="h-4 w-4" />
+        <NotebookPen className={`h-4 w-4${hasContent ? " text-danger" : ""}`} />
       </Button>
       {open ? (
         <section aria-label="会议记录" className="fixed left-4 top-4 z-[80] flex h-[200px] w-[min(680px,calc(100vw-32px))] flex-col overflow-hidden rounded-md border border-border bg-white shadow-xl">

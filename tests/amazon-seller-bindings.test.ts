@@ -64,7 +64,7 @@ test("operations editors cannot read or write settings-only Amazon bindings", as
   }
 });
 
-test("successful connection validation persists CONFIGURED status and lastValidatedAt", async () => {
+test("retired connection validation never calls the external API or writes connection state", async () => {
   const envKeys = ["DATABASE_URL", "AMAZON_SP_API_LWA_CLIENT_ID", "AMAZON_SP_API_LWA_CLIENT_SECRET", "AMAZON_SP_API_REFRESH_TOKEN", "AMAZON_SP_API_AWS_ACCESS_KEY_ID", "AMAZON_SP_API_AWS_SECRET_ACCESS_KEY", "AMAZON_SP_API_ALLOWED_ORGANIZATION_ID", "AMAZON_SP_API_ALLOWED_WORKSPACE_ID"];
   const priorEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   const globalObject = globalThis as typeof globalThis & { prisma?: unknown };
@@ -93,12 +93,8 @@ test("successful connection validation persists CONFIGURED status and lastValida
     : new Response(JSON.stringify({ payload: [{ marketplace: { id: "ATVPDKIKX0DER", countryCode: "US" } }] }), { status: 200 });
   try {
     const user: CurrentUser = { id: "user-1", organizationId: "org-1", organizationName: "ERP", role: "owner", email: "owner@example.test", name: "Owner" };
-    const result = await validateAmazonConnection({ user, scope: { workspaceId: "workspace-1", accountId: "", marketplace: "" } });
-    assert.equal(result.connection.status, "CONFIGURED");
-    assert.ok(result.connection.lastValidatedAt);
-    assert.equal(writes.length, 1);
-    assert.equal(writes[0]?.create.status, "CONFIGURED");
-    assert.ok(writes[0]?.create.lastValidatedAt instanceof Date);
+    await assert.rejects(() => validateAmazonConnection({ user, scope: { workspaceId: "workspace-1", accountId: "", marketplace: "" } }), /旧验证入口已退役/);
+    assert.equal(writes.length, 0);
   } finally {
     for (const key of envKeys) {
       const previous = priorEnv[key];
@@ -111,7 +107,7 @@ test("successful connection validation persists CONFIGURED status and lastValida
   }
 });
 
-test("binding API persists and returns scoped rows without exposing process secrets", async () => {
+test("legacy binding API returns a no-store retirement response without writing", async () => {
   const previousDriver = process.env.AUTH_DRIVER;
   const previousBindings = process.env.AMAZON_SP_API_SELLER_BINDINGS;
   const globalObject = globalThis as typeof globalThis & { prisma?: unknown };
@@ -120,39 +116,19 @@ test("binding API persists and returns scoped rows without exposing process secr
   process.env.AUTH_DRIVER = "local";
   delete process.env.DATABASE_URL;
   process.env.AMAZON_SP_API_SELLER_BINDINGS = "must-not-be-used";
-  const saved: AmazonSellerBinding[] = [];
-  const auditRows: unknown[] = [];
-  const tx = {
-    amazonSellerBinding: {
-      findMany: async () => [...saved],
-      deleteMany: async () => { saved.splice(0); return { count: 0 }; },
-      createMany: async ({ data }: { data: AmazonSellerBinding[] }) => { saved.push(...data); return { count: data.length }; },
-    },
-    auditLog: { create: async ({ data }: { data: unknown }) => { auditRows.push(data); return data; } },
-  };
-  globalObject.prisma = {
-    amazonIntegrationSecret: { findUnique: async () => null },
-    sellerAccount: {
-      findMany: async ({ where }: { where: { id?: { in: string[] } } }) => where.id ? where.id.in.includes("store-1") ? [{ id: "store-1" }] : [] : [{ id: "store-1", displayName: "US Store", accountKey: "internal-key", marketplaceCode: "US", marketplaceId: "marketplace" }],
-    },
-    amazonSellerBinding: { findMany: async () => [...saved] },
-    amazonIntegrationConnection: { findUnique: async () => null },
-    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
-  };
+  const writes: unknown[] = [];
+  globalObject.prisma = { $transaction: async () => { writes.push("transaction"); } };
   try {
     const session = await createLocalSession({ id: "owner-user", organizationId: "org-1", organizationName: "ERP", role: "owner", email: "owner@example.test", name: "Owner" });
     const headers = { "Content-Type": "application/json", cookie: `${session.sessionCookie.name}=${session.sessionCookie.value}` };
     const put = await PUT(new Request("http://localhost/api/integrations/amazon/sp-api/bindings", { method: "PUT", headers, body: JSON.stringify({ bindings: [{ ...row(), organizationId: "forged", workspaceId: "forged" }] }) }));
-    assert.equal(put.status, 200);
-    assert.equal(saved[0]?.organizationId, "org-1");
-    assert.equal(saved[0]?.workspaceId, "default");
-    assert.equal(auditRows.length, 1);
-    assert.equal(JSON.stringify(auditRows).includes("must-not-be-used"), false);
+    assert.equal(put.status, 410);
+    assert.equal(JSON.stringify(await put.json()).includes("must-not-be-used"), false);
+    assert.match(put.headers.get("cache-control") ?? "", /no-store/);
+    assert.equal(writes.length, 0);
     const get = await GET(new Request("http://localhost/api/integrations/amazon/sp-api/bindings", { headers: { cookie: headers.cookie } }));
-    const payload = await get.json() as { bindings: { sellerAccountId: string; marketplaceId: string; amazonSellerId: string; authorizedResources: string[]; active: boolean }[]; runtimeConfiguration: { configured: boolean } };
-    assert.equal(get.status, 200);
-    assert.deepEqual(payload.bindings, [{ sellerAccountId: "store-1", marketplaceId: "ATVPDKIKX0DER", amazonSellerId: "SELLER-1", authorizedResources: ["inventory", "catalog"], active: true }]);
-    assert.equal(payload.runtimeConfiguration.configured, false);
+    assert.equal(get.status, 410);
+    assert.equal(writes.length, 0);
     assert.match(get.headers.get("cache-control") ?? "", /no-store/);
   } finally {
     if (previousDriver === undefined) delete process.env.AUTH_DRIVER; else process.env.AUTH_DRIVER = previousDriver;
@@ -173,7 +149,7 @@ test("SP-API credentials use authenticated encryption scoped to organization and
   assert.throws(() => encryptAmazonSpApiCredentials(credentials, scope, {}), /AMAZON_SP_API_ENCRYPTION_KEY/);
 });
 
-test("credential API stores ciphertext and returns no submitted secret values", async () => {
+test("legacy credential API returns a no-store retirement response without writing", async () => {
   const previousDriver = process.env.AUTH_DRIVER;
   const previousKey = process.env.AMAZON_SP_API_ENCRYPTION_KEY;
   const globalObject = globalThis as typeof globalThis & { prisma?: unknown };
@@ -182,17 +158,8 @@ test("credential API stores ciphertext and returns no submitted secret values", 
   process.env.AUTH_DRIVER = "local";
   delete process.env.DATABASE_URL;
   process.env.AMAZON_SP_API_ENCRYPTION_KEY = Buffer.alloc(32, 8).toString("base64");
-  let stored: Record<string, unknown> | null = null;
-  const audits: Array<{ metadata?: unknown }> = [];
-  const tx = {
-    amazonIntegrationSecret: { upsert: async ({ create }: { create: Record<string, unknown> }) => { stored = create; return create; } },
-    amazonIntegrationConnection: { updateMany: async () => ({ count: 0 }) },
-    auditLog: { create: async ({ data }: { data: { metadata?: unknown } }) => { audits.push(data); return data; } },
-  };
-  globalObject.prisma = {
-    amazonIntegrationSecret: { findUnique: async () => stored, findFirst: async () => null },
-    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
-  };
+  const writes: unknown[] = [];
+  globalObject.prisma = { $transaction: async () => { writes.push("transaction"); } };
   try {
     const session = await createLocalSession({ id: "owner-user", organizationId: "org-1", organizationName: "ERP", role: "owner", email: "owner@example.test", name: "Owner" });
     const secretValues = ["client-secret-value", "lwa-secret-value", "refresh-secret-value", "access-id-value", "aws-secret-value"];
@@ -202,12 +169,10 @@ test("credential API stores ciphertext and returns no submitted secret values", 
       body: JSON.stringify({ lwaClientId: secretValues[0], lwaClientSecret: secretValues[1], refreshToken: secretValues[2], region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com" }),
     }));
     const responseText = await response.text();
-    const persistedRecord = stored as Record<string, unknown> | null;
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 410);
     assert.equal(secretValues.some((value) => responseText.includes(value)), false);
-    assert.equal(typeof persistedRecord?.credentialsCiphertext, "string");
-    assert.equal(secretValues.some((value) => (persistedRecord?.credentialsCiphertext as string).includes(value)), false);
-    assert.equal(secretValues.some((value) => JSON.stringify(audits).includes(value)), false);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+    assert.equal(writes.length, 0);
   } finally {
     if (previousDriver === undefined) delete process.env.AUTH_DRIVER; else process.env.AUTH_DRIVER = previousDriver;
     if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = previousDatabaseUrl;

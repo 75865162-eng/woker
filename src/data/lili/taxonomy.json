@@ -1,0 +1,722 @@
+{
+  "acos-reduction-plan": {
+    "cat": "ads",
+    "sort": 5,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "ACOS reduction plan"
+  },
+  "acos-spike-triage": {
+    "cat": "ads",
+    "sort": 6,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "ACOS spike triage"
+  },
+  "acos-target-setting": {
+    "cat": "ads",
+    "sort": 7,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "ACOS target setting"
+  },
+  "ads-build-from-scratch": {
+    "cat": "ads",
+    "sort": 8,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "Ads build from scratch"
+  },
+  "ads-data-health-interpretation": {
+    "cat": "ads",
+    "sort": 9,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "Ads data health interpretation",
+    "summaryEn": "Read the ads data health report: what each failing check means and whether the data can be trusted for analysis."
+  },
+  "ads-data-pull": {
+    "cat": "ads",
+    "sort": 10,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "Ads data pull",
+    "summaryEn": "Name a product and get its ads data in a fixed seven-part checklist: overview, campaigns, keywords, search terms, organic vs orders, inventory and category rank."
+  },
+  "ads-metrics-glossary": {
+    "cat": "ads",
+    "sort": 11,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "Ads metrics glossary",
+    "summaryEn": "Plain-language explanations of ads terms (ACOS, TACOS, CPC, CTR, CVR, impressions, attribution) using your own numbers."
+  },
+  "ads-playbook-interview": {
+    "cat": "ads",
+    "sort": 0,
+    "isNew": true,
+    "featured": true,
+    "nameEn": "Ads playbook interview",
+    "summaryEn": "A question-by-question interview that turns the ads approach in your head into a written playbook: how you structure campaigns, which metrics each ad type is judged on, and what you refuse to automate."
+  },
+  "ads-sunset-wind-down": {
+    "cat": "ads",
+    "sort": 12,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "Ads sunset wind down"
+  },
+  "ads-tune-live": {
+    "cat": "ads",
+    "sort": 13,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "Ads tune live"
+  },
+  "amazon-a-plus-content": {
+    "cat": "listing",
+    "sort": 14,
+    "isNew": false,
+    "featured": false,
+    "nameEn": "A Plus content",
+    "summaryEn": "A+ content planning and creation: module layout, comparison charts, and image briefs."
+  },
+  "amazon-ads-analysis-operator": {
+    "cat": "ads",
+    "sort": 111,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-ads-funnel-sop": {
+    "cat": "ads",
+    "sort": 1,
+    "isNew": true,
+    "featured": true,
+    "nameEn": "Ads funnel diagnosis and optimization",
+    "summaryEn": "First works out whether the problem is the main image, the detail page, the product itself or the ad setup, then fixes structure, negatives, and harvest."
+  },
+  "amazon-ads-funnel-sop-keywords-negatives": {
+    "cat": "ads",
+    "sort": 113,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-ads-funnel-sop-pitfalls": {
+    "cat": "ads",
+    "sort": 114,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-ads-funnel-sop-report-rules": {
+    "cat": "ads",
+    "sort": 115,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-ads-funnel-sop-structure-bids": {
+    "cat": "ads",
+    "sort": 116,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-ads-performance-report": {
+    "cat": "data",
+    "sort": 117,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-advertising-strategy": {
+    "cat": "ads",
+    "sort": 118,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-backend-keywords": {
+    "cat": "keywords",
+    "sort": 119,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-boutique-rank-tracker": {
+    "cat": "market",
+    "sort": 120,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-brand-analytics": {
+    "cat": "market",
+    "sort": 121,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-buy-box": {
+    "cat": "data",
+    "sort": 122,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-competitor-analysis": {
+    "cat": "market",
+    "sort": 123,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-competitor-monitoring": {
+    "cat": "market",
+    "sort": 124,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-deal-finder": {
+    "cat": "market",
+    "sort": 125,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-display-ads": {
+    "cat": "ads",
+    "sort": 126,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-fba-calculator": {
+    "cat": "profit",
+    "sort": 127,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-fba-prep": {
+    "cat": "restock",
+    "sort": 128,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-fba-shipment-kit": {
+    "cat": "restock",
+    "sort": 129,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-global-selling": {
+    "cat": "market",
+    "sort": 130,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-keyword-research": {
+    "cat": "keywords",
+    "sort": 131,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-keyword-tracker": {
+    "cat": "keywords",
+    "sort": 132,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-listing-images": {
+    "cat": "listing",
+    "sort": 133,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-listing-optimization": {
+    "cat": "listing",
+    "sort": 134,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-negative-keywords": {
+    "cat": "ads",
+    "sort": 135,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-niche-finder": {
+    "cat": "market",
+    "sort": 136,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-ppc-campaign": {
+    "cat": "ads",
+    "sort": 137,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-product-intelligence-report": {
+    "cat": "market",
+    "sort": 138,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-product-photography": {
+    "cat": "listing",
+    "sort": 139,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-product-research": {
+    "cat": "market",
+    "sort": 140,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-product-selection": {
+    "cat": "market",
+    "sort": 141,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-profit-analysis": {
+    "cat": "profit",
+    "sort": 142,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-rank-tracker": {
+    "cat": "market",
+    "sort": 143,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-repricing-strategy": {
+    "cat": "profit",
+    "sort": 144,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-return-weekly-analysis": {
+    "cat": "returns",
+    "sort": 145,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-review-analyzer": {
+    "cat": "market",
+    "sort": 146,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-sales-estimator": {
+    "cat": "market",
+    "sort": 147,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-search-optimization": {
+    "cat": "keywords",
+    "sort": 148,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-seller-analytics": {
+    "cat": "data",
+    "sort": 149,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-shipping-calculator": {
+    "cat": "profit",
+    "sort": 150,
+    "isNew": false,
+    "featured": false
+  },
+  "amazon-trending-products": {
+    "cat": "market",
+    "sort": 151,
+    "isNew": false,
+    "featured": false
+  },
+  "auto-campaign-strategy": {
+    "cat": "ads",
+    "sort": 152,
+    "isNew": false,
+    "featured": false
+  },
+  "bid-adjustment-strategy": {
+    "cat": "ads",
+    "sort": 153,
+    "isNew": false,
+    "featured": false
+  },
+  "bid-floor-ceiling-guardrails": {
+    "cat": "ads",
+    "sort": 154,
+    "isNew": false,
+    "featured": false
+  },
+  "branded-vs-generic-split": {
+    "cat": "ads",
+    "sort": 155,
+    "isNew": false,
+    "featured": false
+  },
+  "budget-capped-campaigns": {
+    "cat": "ads",
+    "sort": 156,
+    "isNew": false,
+    "featured": false
+  },
+  "budget-pacing-review": {
+    "cat": "ads",
+    "sort": 157,
+    "isNew": false,
+    "featured": false
+  },
+  "buybox-competition-watch": {
+    "cat": "data",
+    "sort": 158,
+    "isNew": false,
+    "featured": false
+  },
+  "campaign-structure-audit": {
+    "cat": "ads",
+    "sort": 159,
+    "isNew": false,
+    "featured": false
+  },
+  "category-node-scan": {
+    "cat": "market",
+    "sort": 160,
+    "isNew": false,
+    "featured": false
+  },
+  "clearance-aging-decision": {
+    "cat": "restock",
+    "sort": 161,
+    "isNew": false,
+    "featured": false
+  },
+  "competitor-playbook-teardown": {
+    "cat": "market",
+    "sort": 162,
+    "isNew": false,
+    "featured": false
+  },
+  "cross-border-bestseller-radar": {
+    "cat": "market",
+    "sort": 2,
+    "isNew": true,
+    "featured": true,
+    "nameEn": "Cross-border bestseller radar",
+    "summaryEn": "Sweeps supplier listings marked for cross-border or Amazon sellers and categorizes the returned candidates. Requires a live mapped 1688 feed; unavailable data must not be replaced with samples."
+  },
+  "fba-inbound-shipment": {
+    "cat": "restock",
+    "sort": 164,
+    "isNew": false,
+    "featured": false
+  },
+  "harvest-search-terms": {
+    "cat": "keywords",
+    "sort": 165,
+    "isNew": false,
+    "featured": false
+  },
+  "impression-drop-diagnosis": {
+    "cat": "ads",
+    "sort": 166,
+    "isNew": false,
+    "featured": false
+  },
+  "keyword-benchmark-diagnosis": {
+    "cat": "keywords",
+    "sort": 3,
+    "isNew": true,
+    "featured": false,
+    "nameEn": "Keyword benchmark: search funnel vs parent",
+    "summaryEn": "Uses Search Query Performance (SQP) to compare one parent ASIN — all sizes and colors summed — against the market on every search term, stage by stage."
+  },
+  "keyword-match-type-strategy": {
+    "cat": "keywords",
+    "sort": 168,
+    "isNew": false,
+    "featured": false
+  },
+  "keyword-role-taxonomy": {
+    "cat": "keywords",
+    "sort": 169,
+    "isNew": false,
+    "featured": false
+  },
+  "listing-direct-creation": {
+    "cat": "listing",
+    "sort": 170,
+    "isNew": false,
+    "featured": false
+  },
+  "listing-new-product-oneshot": {
+    "cat": "listing",
+    "sort": 171,
+    "isNew": false,
+    "featured": false
+  },
+  "low-conversion-diagnosis": {
+    "cat": "ads",
+    "sort": 172,
+    "isNew": false,
+    "featured": false
+  },
+  "low-ctr-diagnosis": {
+    "cat": "ads",
+    "sort": 173,
+    "isNew": false,
+    "featured": false
+  },
+  "mcf-fulfillment": {
+    "cat": "restock",
+    "sort": 174,
+    "isNew": false,
+    "featured": false
+  },
+  "multi-marketplace-ads-review": {
+    "cat": "ads",
+    "sort": 175,
+    "isNew": false,
+    "featured": false
+  },
+  "negative-keyword-strategy": {
+    "cat": "ads",
+    "sort": 176,
+    "isNew": false,
+    "featured": false
+  },
+  "new-product-launch-ads": {
+    "cat": "ads",
+    "sort": 177,
+    "isNew": false,
+    "featured": false
+  },
+  "placement-optimization": {
+    "cat": "ads",
+    "sort": 178,
+    "isNew": false,
+    "featured": false
+  },
+  "post-peak-wind-down": {
+    "cat": "ads",
+    "sort": 179,
+    "isNew": false,
+    "featured": false
+  },
+  "product-selection": {
+    "cat": "market",
+    "sort": 180,
+    "isNew": false,
+    "featured": false
+  },
+  "profit-fee-analysis": {
+    "cat": "profit",
+    "sort": 181,
+    "isNew": false,
+    "featured": false
+  },
+  "promotions-review": {
+    "cat": "data",
+    "sort": 182,
+    "isNew": false,
+    "featured": false
+  },
+  "recommendation-review-workflow": {
+    "cat": "ads",
+    "sort": 183,
+    "isNew": false,
+    "featured": false
+  },
+  "reimbursement-recovery": {
+    "cat": "profit",
+    "sort": 184,
+    "isNew": false,
+    "featured": false
+  },
+  "report-spec": {
+    "cat": "data",
+    "sort": 185,
+    "isNew": false,
+    "featured": false
+  },
+  "review-solicitation": {
+    "cat": "orders",
+    "sort": 186,
+    "isNew": false,
+    "featured": false
+  },
+  "search-term-cleanup": {
+    "cat": "ads",
+    "sort": 187,
+    "isNew": false,
+    "featured": false
+  },
+  "seasonal-peak-preparation": {
+    "cat": "ads",
+    "sort": 188,
+    "isNew": false,
+    "featured": false
+  },
+  "sorftime-multiplatform": {
+    "cat": "market",
+    "sort": 4,
+    "isNew": true,
+    "featured": false,
+    "nameEn": "Sorftime multi-platform data",
+    "summaryEn": "Walmart / TikTok Shop / Shopee / Temu market data, supplier sourcing and consumer discussions through Sorftime — plus Amazon. Live Sorftime data requires a working mapped provider; unavailable data must fail explicitly."
+  },
+  "sponsored-products-funnel-metrics": {
+    "cat": "ads",
+    "sort": 190,
+    "isNew": false,
+    "featured": false
+  },
+  "store-weekly-review": {
+    "cat": "data",
+    "sort": 191,
+    "isNew": false,
+    "featured": false
+  },
+  "sync-cadence-and-freshness": {
+    "cat": "data",
+    "sort": 192,
+    "isNew": false,
+    "featured": false
+  },
+  "tariff-calculator-amazon": {
+    "cat": "profit",
+    "sort": 193,
+    "isNew": false,
+    "featured": false
+  },
+  "traffic-conversion-triage": {
+    "cat": "data",
+    "sort": 194,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-account-health-appeal": {
+    "cat": "compliance",
+    "sort": 195,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-ad-scheduling": {
+    "cat": "ads",
+    "sort": 196,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-brand-promotions": {
+    "cat": "ads",
+    "sort": 197,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-brand-registry": {
+    "cat": "compliance",
+    "sort": 198,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-bundling": {
+    "cat": "listing",
+    "sort": 199,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-coupon-strategy": {
+    "cat": "profit",
+    "sort": 200,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-inventory-restock": {
+    "cat": "restock",
+    "sort": 201,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-listing-localization": {
+    "cat": "listing",
+    "sort": 202,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-private-label": {
+    "cat": "listing",
+    "sort": 203,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-product-compliance": {
+    "cat": "compliance",
+    "sort": 204,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-return-reduction": {
+    "cat": "returns",
+    "sort": 205,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-review-compliance": {
+    "cat": "compliance",
+    "sort": 206,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-seasonal-planning": {
+    "cat": "restock",
+    "sort": 207,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-storefront": {
+    "cat": "listing",
+    "sort": 208,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-subscribe-save": {
+    "cat": "profit",
+    "sort": 209,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-variation-strategy": {
+    "cat": "listing",
+    "sort": 210,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-vine": {
+    "cat": "returns",
+    "sort": 211,
+    "isNew": false,
+    "featured": false
+  },
+  "turbot-wholesale-sourcing": {
+    "cat": "profit",
+    "sort": 212,
+    "isNew": false,
+    "featured": false
+  },
+  "wasted-spend-audit": {
+    "cat": "ads",
+    "sort": 213,
+    "isNew": false,
+    "featured": false
+  },
+  "weekday-dayparting-review": {
+    "cat": "ads",
+    "sort": 214,
+    "isNew": false,
+    "featured": false
+  },
+  "weekly-ads-review-routine": {
+    "cat": "ads",
+    "sort": 215,
+    "isNew": false,
+    "featured": false
+  }
+}

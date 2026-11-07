@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-11-04T05:18:13.518Z",
+  "checks": [
+    {
+      "page": "库存浏览",
+      "url": "http://127.0.0.1:3017/operations?view=inventory",
+      "apiStatus": 200
+    },
+    {
+      "page": "在线商品",
+      "url": "http://127.0.0.1:3017/operations?view=catalog",
+      "apiStatus": 200
+    },
+    {
+      "page": "补货计划",
+      "url": "http://127.0.0.1:3017/operations?view=replenishment",
+      "apiStatus": 200
+    },
+    {
+      "page": "PPC 经营指标",
+      "url": "http://127.0.0.1:3017/operations?view=ads",
+      "apiStatus": 200
+    }
+  ],
+  "externalAmazonRequests": 0,
+  "unexpectedWrites": 0,
+  "status": "passed"
+}

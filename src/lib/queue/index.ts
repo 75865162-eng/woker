@@ -13,11 +13,12 @@ export async function enqueueImportJob(jobId: string) {
   }
 
   if (driver === "redis") {
+    const intent = await prisma.importJob.findUniqueOrThrow({ where: { id: jobId }, select: { executionAttempts: true } });
     await getImportJobQueue().add(
       "process-import-job",
       { jobId },
       {
-        jobId: `import-job-${jobId}`,
+        jobId: `import-job-${jobId}-attempt-${intent.executionAttempts}`,
         attempts: 3,
         backoff: {
           type: "exponential",
@@ -68,22 +69,9 @@ export async function enqueueProductOutboxEvent(eventId: string) {
   );
 }
 
-export async function enqueueAmazonSyncRun(runId: string) {
-  if (process.env.QUEUE_DRIVER !== "redis") {
-    throw new Error("Amazon 数据同步必须启用 Redis Worker。请配置 QUEUE_DRIVER=redis。");
-  }
-
-  await getAmazonSyncQueue().add(
-    "process-amazon-sync-run",
-    { runId },
-    {
-      jobId: `amazon-sync-${runId}`,
-      attempts: 3,
-      backoff: { type: "exponential", delay: 5_000 },
-      removeOnComplete: true,
-      removeOnFail: 200,
-    },
-  );
+export async function enqueueAmazonSyncRun(runId: string): Promise<never> {
+  void runId;
+  throw new Error("旧 Amazon 入队入口已退役；请使用审批服务。");
 }
 
 export async function enqueueSellfoxSyncRun(runId: string) {
