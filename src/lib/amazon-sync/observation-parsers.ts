@@ -57,13 +57,14 @@ export function parseCompetitivePrices(raw: string, policy: PricingPolicy, marke
   return rows;
 }
 
-type Schema = { $ref?: string; type?: string; required?: string[]; properties?: Record<string, Schema>; items?: Schema; enum?: unknown[]; minimum?: number; maximum?: number; pattern?: string; format?: string; definitions?: Record<string, Schema> };
+type Schema = { nullable?: boolean; $ref?: string; type?: string; required?: string[]; properties?: Record<string, Schema>; items?: Schema; enum?: unknown[]; minimum?: number; maximum?: number; pattern?: string; format?: string; definitions?: Record<string, Schema> };
 type Projected = string | boolean | null | Projected[] | { [key: string]: Projected };
 /** Frozen official report schemas are also the field allowlist. Unknown fields are
  * discarded, never copied into public facts. All wire numbers become exact strings.
  */
 function project(value: unknown, schema: Schema, root: Schema, depth = 0): Projected {
   if (depth > 32) return invalid();
+  if (value === null && schema.nullable) return null;
   if (schema.$ref) {
     if (!schema.$ref.startsWith("#/definitions/")) return invalid();
     const resolved = root.definitions?.[schema.$ref.slice(14)];
@@ -89,7 +90,14 @@ function project(value: unknown, schema: Schema, root: Schema, depth = 0): Proje
   }
   return invalid();
 }
-const schemas = { search_terms: searchTerms, search_query: searchQuery, search_catalog: searchCatalog, market_basket: marketBasket, repeat_purchase: repeatPurchase };
+// Live Repeat Purchase responses include null metrics for some ASINs. Preserve
+// these as unknown; identifiers, period, missing keys and non-null values remain strict.
+const repeatMetricNames = new Set(["orders", "uniqueCustomers", "repeatCustomersPctTotal", "repeatPurchaseRevenue", "repeatPurchaseRevenuePctTotal"]);
+const repeatRow = repeatPurchase.definitions.DataByAsin;
+const nullableRepeatPurchase = { ...repeatPurchase, definitions: { ...repeatPurchase.definitions,
+  DataByAsin: { ...repeatRow, properties: Object.fromEntries(Object.entries(repeatRow.properties)
+    .map(([key, schema]) => [key, repeatMetricNames.has(key) ? { ...schema, nullable: true } : schema])) } } };
+const schemas = { search_terms: searchTerms, search_query: searchQuery, search_catalog: searchCatalog, market_basket: marketBasket, repeat_purchase: nullableRepeatPurchase };
 export function parseObservationReport(raw: string, policy: AnalyticsPolicy | BuyBoxHistoryPolicy, marketplaceId: string): SafeFact[] {
   const schema = (policy.resource === "buy_box_history" ? salesTraffic : schemas[policy.reportKind]) as Schema;
   const projected = object(project(readFinanceJson(raw), schema, schema)), expected = observationReportSpec(policy, marketplaceId), spec = object(projected.reportSpecification);

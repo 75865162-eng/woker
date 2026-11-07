@@ -33,3 +33,10 @@
 全域隔离回归首次暴露旧夹具问题：缺少 runtime_execution_leases / 商品图片迁移、手动绑定夹具触发自动初始化导致身份冲突、旧角色字段撤权断言、DAY 报告请求时区断言以及旧授权表单定位。修正仅限隔离测试和 runner，不修改真实绑定或配置。明确验证禁用来源不会因授权验证而自动恢复；测试显式启用仅发生在临时数据库。
 
 首批代码提交 b51731f 已推送，PR CI 完整通过，但随后发现订单表单遗漏，因此该 SHA 不作为本轮最终生产验收结果。提交后其他聊天仍在持续修改 Lili/选品代码，后续发布必须准确说明最终快照及未提交增量，不能把 b51731f 的 CI 成功套用到新快照。
+
+
+真实报告发现及修复：2026-11-07 本机四站 market_basket 首份均成功，随后 CA/MX/US repeat_purchase 下载归档成功但解析失败。只读检查归档结构确认上游会把 orders、uniqueCustomers、repeatCustomersPctTotal、repeatPurchaseRevenue、repeatPurchaseRevenuePctTotal 显式返回 null。仅对复购这五个字段增加 nullable 覆盖，保留官方原始 schema 文件与身份/日期/非空数值校验；null 表示上游未返回，不填零。三份既有原文离线复验分别可解析 31 / 1 / 71 行。恢复操作经现有审批，只允许固定验收周、原 reportId、DOWNLOAD 检查点且剩余请求预算充足；沿用原任务，未重新 createReport。
+
+销售日报队列集成发现客户端发 UTC 日历边界，而接收校验器仅认可旧站点时区边界。现兼容精确 UTC 日历请求边界及旧保存范围，错日/错小时仍拒绝；原业务日、账号范围与版本完整性规则保留。针对性队列→查询→导出验收通过。
+
+最新 check:fast：1,128 项核心测试全部通过，lint 0 error/7 既有 warning，TypeScript 通过；同步中心浏览器 48 项通过。全域隔离最终结果及真实覆盖总量仍按最终读取补记。

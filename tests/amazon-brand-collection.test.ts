@@ -72,3 +72,20 @@ test("brand opt-in supports eighteen documented sites without broadening other a
   for (const id of brandMarketplaces) { assert.ok(reportTimeZone(id)); assert.equal(automaticMarketplaceAllowed("brand_analytics", id), true); }
   assert.equal(automaticMarketplaceAllowed("orders", "A1PA6795UKMFR9"), false); assert.equal(automaticMarketplaces.size, 4);
 });
+
+test("repeat purchase preserves upstream null metrics while keeping identity and non-null contracts strict", () => {
+  const raw = JSON.parse(readFileSync("src/data/amazon-contracts/sellingPartnerRepeatPurchaseReport.json", "utf8")).examples[0];
+  const p = parseObservationPolicy({ ...root(), reportKind: "repeat_purchase", from: "2021-06-06", to: "2021-06-12" }) as AnalyticsPolicy;
+  raw.reportSpecification.dataEndTime = p.to;
+  raw.dataByAsin = [raw.dataByAsin[0]];
+  const names = ["orders", "uniqueCustomers", "repeatCustomersPctTotal", "repeatPurchaseRevenue", "repeatPurchaseRevenuePctTotal"];
+  for (const name of names) raw.dataByAsin[0][name] = null;
+  const rows = parseObservationReport(JSON.stringify(raw), p, site);
+  for (const name of names) assert.equal(rows[0].facts[name], null);
+  const invalid = (patch: Record<string, unknown>) => JSON.stringify({ ...raw, dataByAsin: [{ ...raw.dataByAsin[0], ...patch }] });
+  for (const patch of [{ asin: null }, { startDate: null }, { orders: -1 }, { repeatCustomersPctTotal: 1.1 }, { repeatPurchaseRevenue: { amount: "bad", currencyCode: "USD" } }]) {
+    assert.throws(() => parseObservationReport(invalid(patch), p, site));
+  }
+  delete raw.dataByAsin[0].orders;
+  assert.throws(() => parseObservationReport(JSON.stringify(raw), p, site));
+});

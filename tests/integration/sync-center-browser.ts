@@ -1,3 +1,4 @@
+import { automaticMarketplaces } from "@/lib/amazon-sync/automatic-schedule";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -61,11 +62,11 @@ export async function exerciseSyncCenterBrowser(input: { organizationId: string;
       const approvalUrl = `${origin}/api/operations/sync-center/approvals`;
       const decision = await context.request.post(approvalUrl, { headers: { "x-workspace-id": input.workspaceId, cookie: `${approverSession.sessionCookie.name}=${approverSession.sessionCookie.value}` }, data: { id: changeRequest.id, decision: "APPROVED" } });
       assert.equal(decision.status(), 200);
-      const enabledScopes = process.env.AMAZON_SYNC_CENTER_SCOPES;
-      if (response.request().postDataJSON().action === "validate-authorization") process.env.AMAZON_SYNC_CENTER_SCOPES = "[]";
+      const automaticSites = [...automaticMarketplaces];
+      if (response.request().postDataJSON().action === "validate-authorization") automaticMarketplaces.clear();
       let applied: Awaited<ReturnType<typeof context.request.post>>;
       try { applied = await context.request.post(approvalUrl, { headers: { "x-workspace-id": input.workspaceId }, data: { id: changeRequest.id, decision: "APPLY" } }); }
-      finally { process.env.AMAZON_SYNC_CENTER_SCOPES = enabledScopes; }
+      finally { for (const site of automaticSites) automaticMarketplaces.add(site); }
       assert.equal(applied.status(), 200, await applied.text());
       return String(changeRequest.id);
     };
@@ -74,7 +75,8 @@ export async function exerciseSyncCenterBrowser(input: { organizationId: string;
     await page.getByRole("button", { name: "店铺与授权", exact: true }).click();
     await page.getByRole("button", { name: "新增授权", exact: true }).click();
     await page.getByLabel("授权名称", { exact: true }).fill("Browser Seller C");
-    await page.getByLabel("Amazon Seller ID（业务同步时填写真实编号）").fill("BROWSER_SELLER_C");
+    await page.getByText("可选高级配置（无需手填卖家编号）", { exact: true }).click();
+    await page.getByLabel("Amazon Seller ID（可选，OAuth 自动获取）").fill("BROWSER_SELLER_C");
     await page.getByLabel("lwaClientId", { exact: true }).fill("browser-fixture-client");
     await page.getByLabel("lwaClientSecret", { exact: true }).fill("browser-fixture-secret");
     await page.getByLabel("refreshToken", { exact: true }).fill("browser-fixture-refresh");

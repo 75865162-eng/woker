@@ -1,3 +1,4 @@
+import { automaticMarketplaces } from "@/lib/amazon-sync/automatic-schedule";
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
@@ -239,12 +240,12 @@ test("authenticated API to real queue/worker to seller-bound snapshot completes 
     assert.ok(!JSON.stringify(changeRequest).includes("fixture-b-secret"));
     const decision = await approvalPost(new Request("http://localhost/api/operations/sync-center/approvals", { method: "POST", headers: { ...headers, cookie: `${approverSession.sessionCookie.name}=${approverSession.sessionCookie.value}` }, body: JSON.stringify({ id: changeRequest.id, decision: "APPROVED" }) }));
     assert.equal(decision.status, 200);
-    const enabledScopes = process.env.AMAZON_SYNC_CENTER_SCOPES;
-    if (body.action === "validate-authorization") process.env.AMAZON_SYNC_CENTER_SCOPES = "[]";
+    const automaticSites = [...automaticMarketplaces];
+    if (body.action === "validate-authorization") automaticMarketplaces.clear();
     let applied: Response;
     try { applied = await approvalPost(new Request("http://localhost/api/operations/sync-center/approvals", { method: "POST", headers, body: JSON.stringify({ id: changeRequest.id, decision: "APPLY" }) })); }
-    finally { process.env.AMAZON_SYNC_CENTER_SCOPES = enabledScopes; }
-    assert.equal(applied.status, expectedStatus);
+    finally { for (const site of automaticSites) automaticMarketplaces.add(site); }
+    assert.equal(applied.status, expectedStatus, await applied.text());
     return changeRequest as { id: string; targetId: string };
   };
   const auth = await appliedPost({ action: "save-authorization", name: "Seller B private", amazonSellerId: "SELLER_B_DISTINCT", region: "us-east-1", endpoint: "https://sellingpartnerapi-na.amazon.com", lwaClientId: "fixture-b-client", lwaClientSecret: "fixture-b-secret", refreshToken: "fixture-b-refresh" });

@@ -44,6 +44,13 @@ test("daily report preserves genuine zeros, rejects wrong report/site/window and
   for (const patch of [{ reportType: "OTHER" }, { marketplaceIds: ["OTHER"] }, { dataEndTime: "2026-11-01" }, { reportOptions: { dateGranularity: "WEEK", asinGranularity: "CHILD" } }]) assert.throws(() => parseSalesTraffic({ ...report(), reportSpecification: { ...report().reportSpecification, ...patch } }, range, site));
   assert.equal(parseSalesTraffic({ ...report(), reportSpecification: { ...report().reportSpecification, dataStartTime: range.from, dataEndTime: range.to } }, range, site).complete, true);
 });
+test("DAY response accepts the exact UTC calendar request and rejects adjacent or shifted windows", () => {
+  const specification = { ...report().reportSpecification, dataStartTime: `${range.from}T00:00:00Z`, dataEndTime: `${range.to}T23:59:59Z` };
+  assert.equal(parseSalesTraffic({ ...report(), reportSpecification: specification }, range, site).complete, true);
+  for (const patch of [{ dataStartTime: "2026-10-31T00:00:00Z" }, { dataEndTime: "2026-11-03T23:59:59Z" }, { dataStartTime: "2026-11-01T01:00:00Z" }]) {
+    assert.throws(() => parseSalesTraffic({ ...report(), reportSpecification: { ...specification, ...patch } }, range, site), /日期范围/);
+  }
+});
 test("missing days or metrics remain incomplete and null, duplicate dates and invalid metrics reject", () => {
   const missing = report(); missing.salesAndTrafficByDate.pop();
   const parsed = parseSalesTraffic(missing, range, site); assert.equal(parsed.complete, false); assert.deepEqual(parsed.missingDates, ["2026-11-02"]);

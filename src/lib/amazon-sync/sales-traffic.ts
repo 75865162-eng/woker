@@ -7,8 +7,8 @@ export function parseSalesTraffic(value: unknown, range: RequestedRange, marketp
   if (specification.reportType !== salesTrafficReportType || options.dateGranularity !== "DAY" || options.asinGranularity !== "CHILD" || !Array.isArray(specification.marketplaceIds) || specification.marketplaceIds.length !== 1 || specification.marketplaceIds[0] !== marketplaceId) throw new Error("报告类型、站点或粒度与冻结任务不匹配。");
   // Report specification timestamps must match the requested API window.
   const start = String(specification.dataStartTime), end = String(specification.dataEndTime);
-  const startMatches = /^\d{4}-\d{2}-\d{2}$/.test(start) ? start === range.from : Date.parse(start) === Date.parse(range.startAt);
-  const endMatches = /^\d{4}-\d{2}-\d{2}$/.test(end) ? end === range.to : Date.parse(end) === Date.parse(range.reportEndAt);
+  const startMatches = /^\d{4}-\d{2}-\d{2}$/.test(start) ? start === range.from : [range.startAt, `${range.from}T00:00:00Z`].some(expected => Date.parse(start) === Date.parse(expected));
+  const endMatches = /^\d{4}-\d{2}-\d{2}$/.test(end) ? end === range.to : [range.reportEndAt, `${range.to}T23:59:59Z`].some(expected => Date.parse(end) === Date.parse(expected));
   if (!startMatches || !endMatches) throw new Error("报告日期范围不匹配。");
   if (!Array.isArray(root.salesAndTrafficByDate) || root.salesAndTrafficByDate.length > 31) throw new Error("报告缺少逐日数据或超出范围。");
   const seen = new Set<string>();
