@@ -1369,12 +1369,24 @@ async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiCl
       await log(tx, run, "OBSERVATIONS_PUBLISHED");
     }); return;
   }
-  if (state.requests >= policy.maxRequests) throw new SyncInputError("观察任务已达到审批请求预算，未发布新版本。", 409);
+  // Reparse the authenticated original archive after a compatible parser fix.
+  // No network call, new report, or request budget reset is involved.
+  let archivedDownload: string | undefined;
+  if (policy.resource === "brand_analytics" && state.stage === "DOWNLOAD") {
+    const page = await prisma.amazonSyncRawPage.findFirst({ where: { ...scope, taskId: run.id, resource: "brand_analytics", requestMetadata: { path: ["operation"], equals: "downloadReportDocument" } }, orderBy: { page: "desc" } });
+    if (page) {
+      const raw = unseal(page.rawCiphertext, scope, run.id + ":" + page.page, "amazon-observation-raw.v1").rawBody;
+      if (typeof raw !== "string" || digest(raw) !== page.bodySha256) throw new SyncInputError("报告归档完整性校验失败。", 409);
+      try { advanceObservation(policy, state, null, { rawBody: raw, marketplaceId: source.marketplaceId, sellerId: source.authorization.amazonSellerId }); archivedDownload = raw; }
+      catch { /* Keep the normal download path for an unchanged invalid report. */ }
+    }
+  }
+  if (archivedDownload === undefined && state.requests >= policy.maxRequests) throw new SyncInputError("观察任务已达到审批请求预算，未发布新版本。", 409);
   const operation = observationOperation(state, policy.resource), auth = source.authorization;
   const key = { ...scope, authorizationId: auth.id, operation };
   // Same bucket namespace as existing Reports receivers. Never split by site.
   const bucketKey = digest([`${operation}.${["createReport", "getReport", "getReportDocument"].includes(operation) ? "2021-06-30" : policy.resource === "listing_details" ? "2021-08-01" : policy.resource === "catalog_items" ? "2022-04-01" : policy.resource === "fulfillment" ? "2024-03-20" : operation === "getPricing" ? "v0" : "2022-05-01"}`, auth.amazonSellerId, policy.applicationId]);
-  const reserve = await prisma.$transaction(async tx => {
+  const reserve = archivedDownload !== undefined ? { allowed: true, nextAt: new Date() } : await prisma.$transaction(async tx => {
     await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
     if (await stopForControl(tx, run)) return null;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
@@ -1412,7 +1424,7 @@ async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiCl
     } else if (state.stage === "CREATING") body = await client.createObservationReport(observationReportSpec(policy, source.marketplaceId));
     else if (state.stage === "POLL") body = await client.getReport(state.reportId!);
     else if (state.stage === "DOCUMENT") body = await client.getReportDocument(state.documentId!);
-    else if (state.stage === "DOWNLOAD") { rawBody = await client.downloadReportText(state.document); body = null; }
+    else if (state.stage === "DOWNLOAD") { rawBody = archivedDownload ?? await client.downloadReportText(state.document, policy.resource === "brand_analytics" ? { timeoutMs: 90_000 } : {}); body = null; }
     else throw new SyncInputError("观察任务阶段无效。");
     if (!rawBody) rawBody = JSON.stringify(body);
   } catch (error) {
@@ -1425,14 +1437,14 @@ async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiCl
     }
     throw error;
   }
-  await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, new Date());
+  if (archivedDownload === undefined) await persistOrderRequests(run, events, bucketKey, policy.requestsPerSecond, new Date());
   const capturedAt = new Date();
   // Archive before validation, including rejected contracts; never expose raw data.
   if (Buffer.byteLength(rawBody, "utf8") > 4 * 1024 * 1024) throw new SyncInputError("Amazon 单次观察响应超过 4 MiB 限制；保留旧版本。", 413);
   await prisma.$transaction(async tx => {
     await scopeLock(tx, scope); await assertFence(tx, run); await assertLiveSource(tx, run);
     if (await stopForControl(tx, run)) throw new SyncFenceLost();
-    await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: state.requests, resource: run.resource, requestMetadata: { operation, ...(manifest ? { batchIndex: Math.floor(state.planIndex / 100), objectIndex: state.planIndex } : {}) }, rawCiphertext: seal({ rawBody }, scope, `${run.id}:${state.requests}`, "amazon-observation-raw.v1"), bodySha256: digest(rawBody), capturedAt } });
+    if (archivedDownload === undefined) await tx.amazonSyncRawPage.create({ data: { ...scope, taskId: run.id, page: state.requests, resource: run.resource, requestMetadata: { operation, ...(manifest ? { batchIndex: Math.floor(state.planIndex / 100), objectIndex: state.planIndex } : {}) }, rawCiphertext: seal({ rawBody }, scope, `${run.id}:${state.requests}`, "amazon-observation-raw.v1"), bodySha256: digest(rawBody), capturedAt } });
   });
   const result = advanceObservation(policy, state, body, { rawBody, marketplaceId: source.marketplaceId, sellerId: auth.amazonSellerId });
   await prisma.$transaction(async tx => {

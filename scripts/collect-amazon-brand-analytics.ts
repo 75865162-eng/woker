@@ -24,6 +24,9 @@ async function main() {
       { site: "BR", id: "4f85f662-0f02-41ee-a780-35bf20429c46", marketplaceId: "A2Q3Y263D00KWC", kind: "search_query", rows: 2 },
       { site: "MX", id: "699d009f-9676-454b-a84e-1a9af05d75ff", marketplaceId: "A1AM78C64UM0Y8", kind: "search_query", rows: 9 },
       { site: "CA", id: "4521f0f2-96cd-48e2-afe1-e1768e825da0", marketplaceId: "A2EUQ1WTGCTBG2", kind: "search_catalog", rows: 14 },
+      { site: "CA-SQP", id: "cc38ed70-de07-4f88-b9cf-e9eaa7115ae1", marketplaceId: "A2EUQ1WTGCTBG2", kind: "search_query", rows: 94 },
+      { site: "US-SQP", id: "a5235d75-21bf-40c3-ba36-6f4c5116586a", marketplaceId: "ATVPDKIKX0DER", kind: "search_query", rows: 123 },
+      { site: "MX-SQP", id: "f6dd4b17-83e0-452b-b0c5-830d477a8d92", marketplaceId: "A1AM78C64UM0Y8", kind: "search_query", rows: 3 },
     ];
     for (const target of targets) {
       const run = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...scope, id: target.id, authorizationRevision: 3, resource: "brand_analytics" }, include: { source: true } });

@@ -1,5 +1,5 @@
 import { brandFairTurn } from "@/lib/amazon-sync/brand-fairness";
-import { seal } from "@/lib/amazon-sync/approval-policy";
+import { seal, unseal, digest } from "@/lib/amazon-sync/approval-policy";
 import { initialObservationState } from "@/lib/amazon-sync/observation-machine";
 import type { Prisma } from "@prisma/client";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
@@ -394,6 +394,28 @@ test("brand SQP download retry preserves original report and budget while publis
   }
 });
 
+
+test("brand parser recovery reuses the original verified archive without network or budget changes", async () => {
+  const f = await fresh("brand_analytics", { reportKind: "search_query", from: "2025-01-05", to: "2025-01-11", asins: [asin, "B987654321"] });
+  f.setMode("sqp-invalid");
+  const run = await f.start(), failed = await f.finish(run.id);
+  assert.equal(failed.status, "FAILED");
+  const page = await prisma.amazonSyncRawPage.findFirstOrThrow({ where: { ...f.scope, taskId: run.id, requestMetadata: { path: ["operation"], equals: "downloadReportDocument" } } });
+  const archiveKey = run.id + ":" + page.page;
+  const report = JSON.parse(unseal(page.rawCiphertext, f.scope, archiveKey, "amazon-observation-raw.v1").rawBody as string);
+  for (const row of report.dataByAsin) row.purchaseData.asinPurchaseCount = 0;
+  // Simulate an original archive accepted by a repaired parser in this fixture.
+  const rawBody = JSON.stringify(report);
+  await prisma.amazonSyncRawPage.update({ where: { taskId_page: { taskId: run.id, page: page.page } }, data: { bodySha256: digest(rawBody), rawCiphertext: seal({ rawBody }, f.scope, archiveKey, "amazon-observation-raw.v1") } });
+  await f.approved({ action: "control-task", id: run.id, control: "retry" });
+  const calls = f.calls.length;
+  const done = await f.finish(run.id);
+  assert.equal(done.status, "SUCCEEDED", done.error ?? "");
+  assert.equal(done.apiRequests, failed.apiRequests);
+  assert.equal(f.calls.length, calls);
+  assert.equal(f.getCreateCalls(), 1);
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { ...f.scope, taskId: run.id } }), await prisma.amazonSyncRawPage.count({ where: { ...f.scope, taskId: run.id, page: { lte: page.page } } }));
+});
 
 test("brand catalog publishes unavailable impression median price as unknown", async () => {
   const f = await fresh("brand_analytics", { reportKind: "search_catalog", from: "2025-01-05", to: "2025-01-11", asins: [asin, "B987654321"] });
