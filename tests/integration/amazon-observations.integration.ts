@@ -21,6 +21,7 @@ import { withApprovedChange } from "@/lib/amazon-sync/approved-context";
 import { controlTask } from "@/lib/amazon-sync/service";
 import { automaticBrandCandidates, latestClosedBrandWindow } from "@/lib/amazon-sync/automatic-brand";
 import { localDate, shiftDate } from "@/lib/amazon-sync/date-range";
+import { discoverProductObjects } from "@/lib/amazon-sync/product-discovery";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline DB required");
 const site = "ATVPDKIKX0DER", region = "observation-fixture", scopes: Array<[string, string]> = [], planId = "a".repeat(38), asin = "B123456789";
@@ -211,6 +212,33 @@ test("automatic brand approval resumes older complete periods without recreating
   assert.equal(selected.automaticDiscovery, undefined); assert.equal(selected.brandEligibilityAttested, false);
   assert.equal((await f.finish(run.id)).status, "SUCCEEDED");
   assert.equal(await prisma.amazonSyncRun.count({ where: { id: { in: priorIds }, status: "FAILED", error: "fixture previous attempt retained" } }), priorIds.length);
+  assert.equal(f.getCreateCalls(), 1);
+});
+
+test("automatic brand catalog changes collect only new ASINs and retain failed batches", async () => {
+  const now = new Date(), from = shiftDate(localDate(now, "America/Los_Angeles"), -40);
+  const f = await fresh("brand_analytics", { automaticDiscovery: true, reportKind: "search_terms", reportPeriod: "DAY", from, to: from });
+  const source = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId }, include: { authorization: true } });
+  const policy = parseObservationPolicy(source.domainPolicy, "brand_analytics");
+  if (policy.resource !== "brand_analytics") throw new Error("Fixture policy mismatch");
+  const upstreamId = randomUUID(), headId = randomUUID(), added = "B000000000";
+  const oldAsins = Array.from({ length: 18 }, (_, i) => `B${String(i + 1).padStart(9, "0")}`);
+  await prisma.amazonSyncDataSource.create({ data: { ...f.scope, id: upstreamId, authorizationId: f.authorizationId, sellerAccountId: f.sellerAccountId, marketplaceId: site, resource: "catalog", enabled: true, freshnessMinutes: 1440 } });
+  await prisma.amazonSyncRun.create({ data: { ...f.scope, id: headId, sourceId: upstreamId, requestedByUserId: f.actor, resource: "catalog", mode: "snapshot", executionVersion: 2, status: "SUCCEEDED", stage: "COMPLETED", finishedAt: now, paginationComplete: true, idempotencyKey: headId, frozenScope: { authorizationId: f.authorizationId, authorizationRevision: 1, amazonSellerId: "fixture-seller" }, summary: { coverage: { type: "complete_snapshot", paginationComplete: true } } } });
+  await prisma.amazonSyncDataSource.update({ where: { id: upstreamId }, data: { activeRunId: headId, rowCount: 19 } });
+  await prisma.amazonCatalogSnapshot.createMany({ data: [added, ...oldAsins].map((asin, i) => ({ ...f.scope, id: randomUUID(), sellerAccountId: f.sellerAccountId, marketplaceId: site, sellerSku: `sku-${i}`, asin, sourceRunId: headId, fieldSources: {}, capturedAt: now })) });
+  assert.equal((await discoverProductObjects(prisma, f.scope, source, { resource: "catalog_items", applicationId: policy.applicationId, asins: [], maxRows: 50000, maxRequests: 1000, requestsPerSecond: .2, discovery: { mode: "catalog_snapshot", sourceId: upstreamId, batchSize: 100, maxObjects: 1000 } }))?.total, 19);
+  const priorIds: string[] = [];
+  for (const domainPolicy of automaticBrandCandidates(policy, oldAsins, now).filter(candidate => candidate.from >= from)) {
+    const id = randomUUID(); priorIds.push(id);
+    await prisma.amazonSyncRun.create({ data: { ...f.scope, id, sourceId: f.sourceId, requestedByUserId: f.actor, resource: "brand_analytics", mode: "report", executionVersion: 2, status: "FAILED", stage: "REPORT_CREATING", finishedAt: now, idempotencyKey: id, frozenScope: { sourceRevision: source.revision, authorizationId: source.authorizationId, authorizationRevision: source.authorization.revision, domainPolicy } } });
+  }
+  const run = await f.start();
+  const selected = (run.frozenScope as { domainPolicy: { asins: string[]; reportKind: string } }).domainPolicy;
+  assert.equal(selected.reportKind, "search_query"); assert.deepEqual(selected.asins, [added]);
+  assert.equal((await f.finish(run.id)).status, "SUCCEEDED");
+  assert.deepEqual((await f.read({ reportKind: "search_query" })).rows.map(row => row.asin), [added]);
+  assert.equal(await prisma.amazonSyncRun.count({ where: { id: { in: priorIds }, status: "FAILED" } }), priorIds.length);
   assert.equal(f.getCreateCalls(), 1);
 });
 

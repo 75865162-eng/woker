@@ -5,7 +5,7 @@ import { getAmazonSpApiServerConfiguration } from "../src/lib/amazon/sp-api-conf
 import { parseObservationPolicy, type AnalyticsPolicy, type BuyBoxHistoryPolicy } from "../src/lib/amazon-sync/observation-policy";
 import { advanceObservation, initialObservationState, parseObservationState } from "../src/lib/amazon-sync/observation-machine";
 import { parseNotificationSubscriptions } from "../src/lib/amazon-sync/notifications";
-import { automaticBrandCandidates, automaticBrandHistoryCandidates, latestClosedBrandWindow, assertAutomaticBrandTask } from "../src/lib/amazon-sync/automatic-brand";
+import { automaticBrandCandidates, automaticBrandHistoryCandidates, latestClosedBrandWindow, assertAutomaticBrandTask, nextUnattemptedAutomaticBrandPolicy } from "../src/lib/amazon-sync/automatic-brand";
 import { brandWindowKey } from "../src/lib/amazon-sync/brand-collection";
 import { nextBuyBoxDay, assertBuyBoxTaskPolicy } from "../src/lib/amazon-sync/buy-box-history";
 import { rawResponseEnvelope } from "../src/lib/amazon-sync/raw-fields";
@@ -156,4 +156,20 @@ test("Buy Box failed days remain gaps but do not block later days from schedulin
   const tx = { amazonSyncRun: { findMany: async () => [{ status: "FAILED", summary: { coverage: { complete: false } }, frozenScope: { domainPolicy: policy } }] } } as unknown as import("@prisma/client").Prisma.TransactionClient;
   const next = await nextBuyBoxPolicy(tx, { organizationId: "fixture", workspaceId: "fixture" }, { id: "source", revision: 1, authorizationId: "auth", authorization: { revision: 1 }, domainPolicy: policy }, new Date("2026-11-07T20:00:00Z"));
   assert.equal(next.from, "2026-11-04");
+});
+
+test("Brand catalog batch changes schedule only new ASINs in each report window", () => {
+  const now = new Date("2026-11-07T20:00:00Z");
+  const p = parseObservationPolicy({ ...common, resource: "brand_analytics", automaticDiscovery: true, reportKind: "search_terms", reportPeriod: "DAY", asins: [], from: "2026-07-01", to: "2026-07-01", marketplaceTimeZone: "America/Los_Angeles" }) as AnalyticsPolicy;
+  const oldAsins = Array.from({ length: 18 }, (_, i) => `B${String(i + 1).padStart(9, "0")}`), added = "B000000000";
+  const attempts = automaticBrandCandidates(p, oldAsins, now);
+  const next = nextUnattemptedAutomaticBrandPolicy(p, [added, ...oldAsins], attempts, now)!;
+  assert.equal(next.reportKind, "search_query"); assert.equal(next.reportPeriod, "WEEK");
+  assert.deepEqual(next.asins, [added]);
+  assert.doesNotThrow(() => parseObservationPolicy(next));
+  assert.doesNotThrow(() => assertAutomaticBrandTask(p, next, now));
+  const following = nextUnattemptedAutomaticBrandPolicy(p, [added, ...oldAsins], [...attempts, next], now)!;
+  assert.equal(following.reportPeriod, "MONTH"); assert.deepEqual(following.asins, [added]);
+  const unchanged = nextUnattemptedAutomaticBrandPolicy(p, [...oldAsins].reverse(), [...attempts, attempts[0]], now)!;
+  assert.equal(unchanged.reportKind, "search_terms"); assert.equal(unchanged.from, "2026-11-05");
 });

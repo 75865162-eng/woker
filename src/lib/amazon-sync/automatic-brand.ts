@@ -44,6 +44,27 @@ export function assertAutomaticBrandTask(configured: AnalyticsPolicy, candidate:
   if (!automaticDiscovery || candidate.automaticDiscovery || candidate.collection || digest(fixed) !== digest(selectedFixed) || selectedFrom < from || selectedTo >= localDate(now, configured.marketplaceTimeZone)) throw new SyncInputError("品牌自动任务超出完整周期或来源预算。", 403);
 }
 
+/** A changing catalog can move previously attempted ASINs between batches.
+ * Compare objects within each report window, not only the old batch key. Failed
+ * objects still belong to their original task/checkpoint and are not recreated. */
+export function nextUnattemptedAutomaticBrandPolicy(configured: AnalyticsPolicy, asins: string[], attempts: AnalyticsPolicy[], now: Date): AnalyticsPolicy | null {
+  const byWindow = new Map<string, Set<string>>();
+  for (const policy of attempts) {
+    const key = brandWindowKey({ ...policy, asins: [] });
+    const objects = byWindow.get(key) ?? new Set<string>();
+    for (const asin of policy.asins.length ? policy.asins : ["*"]) objects.add(asin);
+    byWindow.set(key, objects);
+  }
+  for (const candidate of automaticBrandHistoryCandidates(configured, asins, now)) {
+    const objects = byWindow.get(brandWindowKey({ ...candidate, asins: [] }));
+    if (!objects) return candidate;
+    if (!candidate.asins.length) continue;
+    const remaining = candidate.asins.filter(asin => !objects.has(asin));
+    if (remaining.length) return { ...candidate, asins: remaining };
+  }
+  return null;
+}
+
 /** Resume the existing task manifest across current and historical closed
  * periods. Failed creates remain gaps bound to their original tasks. */
 export async function nextAutomaticBrandPolicy(tx: Prisma.TransactionClient, scope: SyncScope, sourceId: string, configured: AnalyticsPolicy, now = new Date()) {
@@ -62,11 +83,11 @@ export async function nextAutomaticBrandPolicy(tx: Prisma.TransactionClient, sco
     { frozenScope: { path: ["authorizationRevision"], equals: source.authorization.revision } },
   ] }, select: { frozenScope: true }, take: 4001 });
   if (runs.length > 4000) throw new SyncInputError("品牌自动任务证据超过容量，未重放历史任务。", 409);
-  const attempted = new Set(runs.flatMap(run => { try { const p = parseObservationPolicy((run.frozenScope as { domainPolicy?: unknown }).domainPolicy, "brand_analytics"); return p.resource === "brand_analytics" ? [brandWindowKey(p)] : []; } catch { return []; } }));
+  const attempts = runs.flatMap(run => { try { const p = parseObservationPolicy((run.frozenScope as { domainPolicy?: unknown }).domainPolicy, "brand_analytics"); return p.resource === "brand_analytics" ? [p] : []; } catch { return []; } });
   // Failed and uncertain creates retain their task and checkpoint. They cannot
   // monopolize every other report kind/period or be silently recreated here.
-  for (const next of automaticBrandHistoryCandidates(configured, asins, now)) {
-    if (attempted.has(brandWindowKey(next))) continue;
+  const next = nextUnattemptedAutomaticBrandPolicy(configured, asins, attempts, now);
+  if (next) {
     assertAutomaticBrandTask(configured, next, now);
     return next;
   }
