@@ -94,9 +94,9 @@ test("unmapped reads and all business writes refuse execution, even with a forge
 test("RPC keeps business failures explicit and does not grant personal Amazon MCP access", async () => {
   const response = await handleLiliRequest(request("mcp", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "meta_list_stores", arguments: {} } }), ["mcp"], allow);
   const body = await response.json();
-  assert.equal(body.result.isError, true); assert.match(body.result.content[0].text, /tool_adapter_not_mapped/);
+  assert.equal(body.result.isError, true); assert.match(body.result.content[0].text, /RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN/);
   const listed = await (await handleLiliRequest(request("mcp", { id: 2, method: "tools/list" }), ["mcp"], allow)).json();
-  assert.equal(listed.result.tools.length, 107); assert.match(listed.result.tools[0].description, /ERP:/);
+  assert.equal(listed.result.tools.length, 3); assert.ok(listed.result.tools.every((tool: { provider: string }) => tool.provider === "skills"));
   assert.equal((await handleLiliRequest(request("mcp", { method: "tools/call", params: [] }), ["mcp"], allow)).status, 400);
 });
 

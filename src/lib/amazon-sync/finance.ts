@@ -180,9 +180,9 @@ export function parseFinancePage(rawBody: string, window: FinanceWindow): { tran
  * https://developer-docs.amazon.com/sp-api/docs/finances-api-v2024-06-19-use-case-guide
  */
 export function assertFinanceRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, automaticRead = false) {
-  // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
-  if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length)) return;
-  if (!auth.rolesAttestedAt || !auth.approvedRoles.includes("Finance and Accounting")) throw new SyncInputError("财务同步缺少已确认的 Finance and Accounting 角色，请管理员核对并审批。", 403);
+  // API capabilities are enforced by Amazon. Member permissions live in account settings.
+  // Keep the legacy signature for stored callers; role attestations are metadata only.
+  void auth; void automaticRead;
 }
 
 export type FinancePolicy = {

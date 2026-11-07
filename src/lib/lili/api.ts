@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { PermissionAction } from "@/lib/accounts/permissions";
 import { listSkills, listTools, listWorkflows } from "./catalog";
-import { runCatalogTool } from "./tool-execution";
 import type { ToolConfigDependencies } from "./tool-config-api";
+import { createRuntimeTools, RuntimeToolError, type RuntimeTools } from "./runtime-tools";
 
 type Authorization = { ok: true; user?: { id: string; organizationId: string } } | { ok: false; response: Response };
 export type LiliAuthorize = (moduleId: string, action: PermissionAction, request: Request) => Promise<Authorization>;
@@ -61,7 +61,7 @@ async function defaultAuthorize(moduleId: string, action: PermissionAction, requ
 }
 
 /** Both namespaces share host authorization. Catalog execution has no business fallback; settings use a separate scoped service. */
-export async function handleLiliRequest(request: Request, parts: string[], authorize: LiliAuthorize = defaultAuthorize, toolConfigDependencies?: ToolConfigDependencies): Promise<Response> {
+export async function handleLiliRequest(request: Request, parts: string[], authorize: LiliAuthorize = defaultAuthorize, toolConfigDependencies?: ToolConfigDependencies, runtimeTools?: RuntimeTools): Promise<Response> {
   try {
     const key = endpointKey(parts);
     const endpoint = Object.hasOwn(endpoints, key) ? endpoints[key] : undefined;
@@ -104,24 +104,35 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
       response.cookies.set("lili_locale", body.locale, { path: "/", httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", maxAge: 31_536_000 });
       return response;
     }
-    if (key === "mcp" && request.method === "GET") return json({ source: "shipped-definitions", scope: "authenticated-ERP-session", businessExecutionReady: false, tools: listTools().map(({ name, description, inputSchema, availability }) => ({ name, description, inputSchema, availability })) });
+    const requireReviewedMarketCall = (name: string) => {
+      if (name.startsWith("sellersprite__") || name.startsWith("xiyou__")) throw new Error("RESEARCH_REQUEST_REQUIRES_HUMAN_REVIEW");
+    };
+    const getRuntime = async () => runtimeTools ?? (permission.user
+      ? (await import("./runtime-server")).runtimeToolsForUser(permission.user, authorizationRequest, parsedBody)
+      : createRuntimeTools([]));
+    if (key === "mcp" && request.method === "GET") return json({ source: "runtime-registry", scope: "authenticated-ERP-session", ...await (await getRuntime()).discover() });
     if (key === "mcp" || key === "tools/run") {
       const body = parsedBody ?? await boundedJson(request);
       if (key === "tools/run") {
         if (typeof body.name !== "string") return json({ ok: false, error: "invalid_tool_name" }, 400);
-        const result = await runCatalogTool(body.name, body.input ?? {});
-        return json(result.body, result.status);
+        if (body.name.startsWith("sellersprite__") || body.name.startsWith("xiyou__")) return json({ ok: false, error: "RESEARCH_REQUEST_REQUIRES_HUMAN_REVIEW", nextPath: "/agents/selection-research" }, 409);
+        const runtime = await getRuntime();
+        const output = await runtime.call(body.name, (body.input ?? {}) as never, request.signal);
+        return json({ ok: true, source: "runtime-adapter", result: output });
       }
       const id = body.id ?? null;
       if (body.method === "notifications/initialized") return new Response(null, { status: 202, headers });
-      if (body.method === "initialize") return json({ jsonrpc: "2.0", id, result: { protocolVersion: "2025-06-18", serverInfo: { name: "lili-catalog", version: "1.0.0" }, capabilities: { tools: {} } } });
-      if (body.method === "tools/list") return json({ jsonrpc: "2.0", id, result: { tools: listTools().map(({ name, description, inputSchema, availability, readOnly }) => ({ name, description: `${description}\n[ERP: ${availability === "catalog" ? "static catalog only" : "adapter not mapped"}]`, inputSchema, annotations: { readOnlyHint: readOnly } })) } });
+      if (body.method === "initialize") return json({ jsonrpc: "2.0", id, result: { protocolVersion: "2025-06-18", serverInfo: { name: "lili-mcp", version: "1.1.0" }, capabilities: { tools: {} } } });
+      if (body.method === "tools/list") return json({ jsonrpc: "2.0", id, result: await (await getRuntime()).discover() });
       if (body.method === "tools/call") {
         const params = body.params;
         if (!params || typeof params !== "object" || Array.isArray(params) || typeof (params as Record<string, unknown>).name !== "string") return json({ jsonrpc: "2.0", id, error: { code: -32602, message: "Invalid tool parameters" } }, 400);
         const args = params as Record<string, unknown>;
-        const result = await runCatalogTool(args.name as string, args.arguments ?? {});
-        return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result.body) }], isError: result.status >= 400 } });
+        try {
+          requireReviewedMarketCall(args.name as string);
+          const output = await (await getRuntime()).call(args.name as string, (args.arguments ?? {}) as never, request.signal);
+          return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(output) }], isError: false } });
+        } catch (error) { return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify({ error: error instanceof RuntimeToolError ? error.code : "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN", message: "请检查真实 Schema、当前授权；外部市场请求请进入选品研究审批。" }) }], isError: true } }); }
       }
       return json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
     }
@@ -132,6 +143,10 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
       message: "此独立 Lili 操作未映射；请使用主系统对应入口。没有修改配置、创建业务记录、启动任务或调用外部服务。" }, 501);
   } catch (error) {
     // Never echo provider errors, credentials, raw bodies or connection strings.
+    if (error instanceof RuntimeToolError) {
+      const invalid = error.code === "INVALID_TOOL_ARGUMENTS";
+      return json({ ok: false, error: error.code, message: invalid ? "参数不符合当前真实 Schema，请展开参数定义后修正。" : "工具不可用、权限不足或 Schema 已改变，请重新发现工具。" }, invalid ? 400 : error.code === "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN" ? 403 : 409);
+    }
     const invalid = error instanceof RequestFormatError || error instanceof SyntaxError;
     return json({ ok: false, error: invalid ? "invalid_request" : "lili_unavailable", message: invalid ? "请求格式无效，请检查参数后重试。" : "服务暂不可用，请稍后重试。" }, invalid ? 400 : 503);
   }

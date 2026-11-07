@@ -39,7 +39,7 @@ test("automatic sync covers only executable resources and keeps each API's histo
   assert.equal(automaticInventoryEventBackfillDays, 540);
   assert.equal(automaticReportDiscoveryDays, 90);
   for (const resource of ["returns", "inventory_events", "settlements", "reimbursements", "inventory_age", "fulfillment", "listing_details", "catalog_items", "pricing"]) assert.ok((automaticResources as readonly string[]).includes(resource));
-  for (const resource of ["brand_analytics", "buy_box_history"]) assert.ok(!(automaticResources as readonly string[]).includes(resource));
+  for (const resource of ["buy_box_history"]) assert.ok(!(automaticResources as readonly string[]).includes(resource));
   const now = new Date("2026-11-06T12:00:00.000Z");
   const first = nextAutomaticInventoryEventWindow(null, now)!;
   assert.equal(first.from, "2025-05-15");

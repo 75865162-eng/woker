@@ -16,7 +16,7 @@ test("reimbursement history advances in 30 closed days and never overwrites a pe
 
 test("automatic plan scope includes the requested North American sales marketplaces and executable source policies", () => {
   assert.deepEqual([...automaticMarketplaces].sort(), ["A1AM78C64UM0Y8", "A2EUQ1WTGCTBG2", "A2Q3Y263D00KWC", "ATVPDKIKX0DER"]);
-  assert.deepEqual(["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"].filter(isAutomaticResource), ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing"]);
+  assert.deepEqual(["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"].filter(isAutomaticResource), ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"]);
   assert.equal(automaticIntervalMinutes, 1440);
   assert.equal(automaticBackfillDays, 730);
   assert.equal(automaticBackfillStart(now), "2024-11-05T12:00:00.000Z");

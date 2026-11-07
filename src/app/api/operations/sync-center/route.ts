@@ -1,4 +1,5 @@
 import { readObservations } from "@/lib/amazon-sync/observations-query";
+import { readBrandAnalytics, readBrandAsins, readBrandAsinAnalysis } from "@/lib/amazon-sync/brand-analytics-query";
 import { readReturns } from "@/lib/amazon-sync/returns-query";
 import { readFinance } from "@/lib/amazon-sync/finance-query";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
     if (section === "finance") return json({ ...await readFinance(scope, p, actor), access });
     if (section === "orders") return json({ ...await readOrders(scope, p, actor), access });
     if (section === "observations") return json({ ...await readObservations(scope, p, actor), access });
+    if (section === "brand-analytics") return json({ ...await readBrandAnalytics(scope, p, actor), access });
+    if (section === "brand-asin-analysis") return json(await readBrandAsinAnalysis(scope, p, actor));
+    if (section === "brand-asins") return json(await readBrandAsins(scope, p.get("sourceId") ?? "", actor));
     if (section === "seller-report-evidence") return json(await readSellerReportEvidence(scope, p, actor));
     if (section === "domain-reports") {
       try { return json({ ...await readDomainReports(scope, p, actor), access }); }

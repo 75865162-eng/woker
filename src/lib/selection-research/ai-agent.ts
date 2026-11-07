@@ -8,7 +8,16 @@ import { parseAction } from "./fixture";
 export function createResearchAiAgent(settings: AiModelSettings, request: typeof fetchAiApi = fetchAiApi): Agent {
   return { async next(context) {
     if (!settings.apiKey) throw new Error("RESEARCH_AI_NOT_CONFIGURED");
-    const prompt = JSON.stringify(context);
+    // Keep full evidence persisted, but avoid repeating registry/Skill snapshots inside every AI request.
+    const run = context.run;
+    const prompt = JSON.stringify({ skill: context.skill, tools: context.tools, run: {
+      id: run.id, requirement: run.requirement, asin: run.asin, marketplace: run.marketplace, stage: run.stage,
+      requiredProviders: run.requiredProviders, selectedCandidateId: run.selectedCandidateId, results: run.results,
+      calls: run.calls?.map(({ id, stage, provider, tool, arguments: args, status, rawResponse, errorCode }) => ({
+        id, stage, provider, tool, arguments: args, status, errorCode,
+        rawResponse: tool === "meta_load_skill" && args.skill_name === context.skill.name ? { note: "Exact Skill body is supplied in context.skill." } : rawResponse,
+      })),
+    } });
     if (prompt.length > 180_000) throw new Error("RESEARCH_CONTEXT_TOO_LARGE_REQUIRES_REVIEW");
     const chat = settings.wireApi === "chat_completions";
     const response = await request(buildAiTextEndpoint(settings), {

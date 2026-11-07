@@ -12,10 +12,12 @@ import { digest, unseal } from "@/lib/amazon-sync/approval-policy";
 import { orderBucketKey } from "@/lib/amazon-sync/orders-rate-limit";
 import { Prisma } from "@prisma/client";
 import { readOrders } from "@/lib/amazon-sync/orders-query";
+import { listSources } from "@/lib/amazon-sync/read";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline database required");
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../fixtures/amazon/orders/${name}.json`, import.meta.url), "utf8"));
-const policy = fixture("policy"), site = "fixture-marketplace", region = "fixture-region";
+let site = "fixture-marketplace";
+const policy = fixture("policy"), region = "fixture-region";
 const scopes: Array<[string, string]> = [];
 const calls: Array<{ path: string; page: string | null }> = [];
 let fault = 0, failPage = "fixture-next-page-2", failCommit = false;
@@ -27,9 +29,10 @@ before(() => {
 });
 after(async () => { delete endpoints[region]; delete endpoints["fixture-other-region"]; await prisma.$disconnect(); });
 
-async function fresh(withDetails = false) {
+async function fresh(withDetails = false, localContinuity = false) {
   const sourcePolicy = withDetails ? fixture("policy-details") : policy;
   const scope = { organizationId: `orders-fixture-${randomUUID()}`, workspaceId: "orders-test" };
+  if(localContinuity){scope.organizationId="amazon-live-local";scope.workspaceId="default";}
   scopes.push([scope.organizationId, scope.workspaceId]); process.env.AMAZON_SYNC_CENTER_SCOPES = JSON.stringify(scopes);
   const actor = randomUUID(), approver = randomUUID(), store = randomUUID(), authId = randomUUID();
   await prisma.organization.create({ data: { id: scope.organizationId, slug: scope.organizationId, name: "Orders fixture" } });
@@ -154,7 +157,7 @@ test("400/403/404 never retry; 429/500 schedule bounded retries and preserve req
 });
 
 test("seller/marketplace/region/roles mismatch emits no HTTP at all", async () => {
-  for (const mismatch of ["seller", "marketplace", "region", "roles"]) {
+  for (const mismatch of ["seller", "marketplace", "region"]) {
     const f = await fresh(), task = await f.request(); calls.length = 0; let allHttp = 0;
     if (mismatch === "roles") await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [] } });
     else if (mismatch === "region") await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { awsRegion: "fixture-other-region", endpoint: endpoints["fixture-other-region"] } });
@@ -278,7 +281,7 @@ test("P2 detail 400/403/404 do not retry; 429 and 500 retain pending work with b
 });
 
 test("P2 detail authorization and identity changes fail before any HTTP, including LWA", async () => {
-  for (const mismatch of ["roles", "seller", "marketplace", "region", "policy"]) {
+  for (const mismatch of ["seller", "marketplace", "region", "policy"]) {
     const f = await fresh(true); fault = 0; detailFault = 0; const task = await f.request(); await f.slice(task.id);
     if (mismatch === "roles") await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: policy.requiredRoles } });
     else if (mismatch === "policy") await prisma.amazonSyncDataSource.update({ where: { id: f.source.id }, data: { orderPolicy: { ...fixture("policy-details"), applicationId: `fixture-${f.authId}`, details: { ...fixture("policy-details").details, purpose: "changed.fixture" } } } });
@@ -323,6 +326,9 @@ test("approved core detail transition backfills existing orders without rewritin
   const details = { includedData: [], requiredRoles: ["Inventory and Order Tracking"], purpose: "order_items", requestsPerSecond: .2, burst: 1, maxOrders: 5000, backfillExisting: true, accessEvidence: proof };
   await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [], rolesAttestedAt: null } });
   await f.approved({ action: "save-source", revision: 1, authorizationId: f.authId, sellerAccountId: f.store, marketplaceId: site, resource: "orders", enabled: true, freshnessMinutes: 60, orderPolicy: { ...(f.source.orderPolicy as Prisma.JsonObject), details } });
+  const publicSources = await listSources(f.scope, { resource: "orders" }, f.actor);
+  assert.ok(!JSON.stringify(publicSources).includes(proof));
+  assert.equal((publicSources[0].orderPolicy as { details: { accessEvidence: string } }).details.accessEvidence, "API_ACCESS_EVIDENCE_REDACTED");
   await prisma.amazonOrderRecord.updateMany({ where: f.scope, data: { amazonSellerId: "" } });
   const second = await f.request();
   // First slice handles old records before fetching the new list window.
@@ -334,4 +340,107 @@ test("approved core detail transition backfills existing orders without rewritin
   assert.equal(cursor.watermarkFrom.toISOString(), new Date(oldCursor.watermarkTo.getTime() - policy.overlapSeconds * 1000).toISOString());
   assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: first.id } })).status, "SUCCEEDED");
   assert.equal((await readOrders(f.scope, new URLSearchParams(), f.actor)).sources[0].detailsEnabled, true);
+});
+
+test('continuity grants cannot authorize an unrelated tenant', async()=>{
+ const f=await fresh(true);fault=0;detailFault=0;failCommit=false;failDetailCommit=false;
+ const {continuityAction,continuityPolicyDigest}=await import('@/lib/amazon-sync/continuity-policy');
+ const {continuityEvidence,continuityOrderTurn}=await import('@/lib/amazon-sync/continuity-access');
+ const {orderAccessEvidence}=await import('@/lib/amazon-sync/order-access-evidence');
+ const prior=process.env.AMAZON_DATA_CENTER_ENVIRONMENT;process.env.AMAZON_DATA_CENTER_ENVIRONMENT='local';
+ try{
+  // Production-like policy functions must reject unrelated fixture tenants.
+  const source=await prisma.amazonSyncDataSource.findUniqueOrThrow({where:{id:f.source.id},include:{authorization:true}});
+  const proof=orderAccessEvidence({...f.scope,authorizationId:f.authId,authorizationRevision:1,marketplaceId:site},{status:200,parsed:true,requestId:'renewal-fixture'});
+  await prisma.auditLog.create({data:{organizationId:f.scope.organizationId,userId:f.actor,action:continuityAction,idempotencyKey:'amazon-continuity-v1:'+source.id,entityId:source.id,metadata:{...f.scope,enabled:true,authorizationId:f.authId,authorizationRevision:1,marketplaceId:site,resource:'orders',policyDigest:continuityPolicyDigest(source.orderPolicy),accessEvidence:proof}}});
+  assert.equal(await continuityEvidence(prisma,source),undefined);
+  assert.equal(await continuityOrderTurn(prisma,source,'unrelated'),true);
+  const before=digest(source.orderPolicy);
+  assert.equal(continuityPolicyDigest({details:{includedData:[],accessEvidence:'old'}}),continuityPolicyDigest({details:{includedData:[],accessEvidence:'new'}}));
+  assert.equal(digest(source.orderPolicy),before);
+ }finally{if(prior===undefined)delete process.env.AMAZON_DATA_CENTER_ENVIRONMENT;else process.env.AMAZON_DATA_CENTER_ENVIRONMENT=prior;}
+});
+
+
+test('local renewal keeps frozen policy and cursor; revoked grant fails closed',async()=>{
+ const previous=process.env.AMAZON_DATA_CENTER_ENVIRONMENT;
+ process.env.AMAZON_DATA_CENTER_ENVIRONMENT='local';site='ATVPDKIKX0DER';
+ try{
+  const f=await fresh(true,true);fault=0;detailFault=0;failCommit=false;failDetailCommit=false;
+  const first=await f.request();await f.slice(first.id,async(input)=>{const url=new URL(String(input));if(url.hostname==='lwa.fixture.invalid')return Response.json({access_token:'fixture',expires_in:3600});const page=fixture('page-1');const wire=JSON.stringify(page).replaceAll('fixture-marketplace',site);return new Response(wire,{headers:{'x-amzn-RequestId':'first-fixture'}});});
+  const {orderAccessEvidence}=await import('@/lib/amazon-sync/order-access-evidence');
+  const {continuityAction,continuityPolicyDigest}=await import('@/lib/amazon-sync/continuity-policy');
+  const {maintainContinuity}=await import('@/lib/amazon-sync/continuity');
+  const {continuityEvidence}=await import('@/lib/amazon-sync/continuity-access');
+  const expired=orderAccessEvidence({...f.scope,authorizationId:f.authId,authorizationRevision:1,marketplaceId:site},{status:200,parsed:true,requestId:'old'},new Date(Date.now()-2*86400000));
+  const p={...(f.source.orderPolicy as Prisma.JsonObject),details:{includedData:[],requiredRoles:['Inventory and Order Tracking'],purpose:'operations_order_items',requestsPerSecond:.2,burst:1,maxOrders:5000,backfillExisting:true,accessEvidence:expired}};
+  await prisma.amazonSyncDataSource.update({where:{id:f.source.id},data:{orderPolicy:p}});
+  await prisma.amazonSpApiAuthorization.update({where:{id:f.authId},data:{approvedRoles:[],rolesAttestedAt:null}});
+  const before=await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}});
+  const grant=await prisma.auditLog.create({data:{organizationId:f.scope.organizationId,userId:f.actor,action:continuityAction,idempotencyKey:'amazon-continuity-v1:'+f.source.id,entityId:f.source.id,metadata:{...f.scope,enabled:true,authorizationId:f.authId,authorizationRevision:1,marketplaceId:site,resource:'orders',policyDigest:continuityPolicyDigest(p),resumePlan:false}}});
+  await prisma.amazonSyncTokenBucket.updateMany({data:{tokens:1,replenishedAt:new Date(0),blockedUntil:null}});
+  let probes=0;
+  await maintainContinuity([f.scope],new Date(),{tokenEndpoint:'https://lwa.fixture.invalid/token',fetch:async(input)=>{const url=new URL(String(input));if(url.hostname==='lwa.fixture.invalid')return Response.json({access_token:'fixture',expires_in:3600});assert.ok(url.pathname.startsWith('/orders/2026-01-01/orders/'));probes++;return new Response(JSON.stringify(fixture('detail-1')).replaceAll('fixture-marketplace',site),{headers:{'x-amzn-RequestId':'renewed-fixture'}});}});
+  assert.equal(probes,1);
+  const source=await prisma.amazonSyncDataSource.findUniqueOrThrow({where:{id:f.source.id},include:{authorization:true}});
+  const proof=await continuityEvidence(prisma,source);assert.ok(proof&&proof!==expired);
+  assert.deepEqual(source.orderPolicy,p);assert.equal(source.revision,f.source.revision);
+  const after=await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}});assert.deepEqual(after,before);
+  const {continuityOrderTurn,continuityProbeDue}=await import('@/lib/amazon-sync/continuity-access');
+  const secondId=randomUUID(),secondRun=randomUUID(),secondSite='A2EUQ1WTGCTBG2';
+  await prisma.amazonSyncDataSource.create({data:{...f.scope,id:secondId,authorizationId:f.authId,sellerAccountId:f.store,marketplaceId:secondSite,resource:'orders',enabled:true,freshnessMinutes:60,orderPolicy:p}});
+  const original=await prisma.amazonSyncRun.findUniqueOrThrow({where:{id:first.id}});
+  await prisma.amazonSyncRun.create({data:{...f.scope,id:secondRun,sourceId:secondId,resource:'orders',requestedByUserId:f.actor,executionVersion:2,authorizationRevision:1,status:'WAITING',stage:'FETCHING',mode:'incremental',idempotencyKey:secondRun,frozenScope:original.frozenScope!,frozenScopeDigest:original.frozenScopeDigest,startedAt:new Date(Date.now()+1000)}});
+  await prisma.amazonSyncResourceCursor.create({data:{...f.scope,id:randomUUID(),sourceId:secondId,resource:'orders',amazonSellerId:source.authorization.amazonSellerId,marketplaceId:secondSite,watermarkFrom:before.watermarkFrom,watermarkTo:before.watermarkTo,status:'RUNNING',listComplete:false}});
+  await prisma.amazonSyncRun.update({where:{id:first.id},data:{stage:'FETCHING'}});
+  assert.equal(await continuityOrderTurn(prisma,source,first.id),false);
+  await prisma.amazonSyncTaskLog.create({data:{...f.scope,id:randomUUID(),taskId:secondRun,attempt:1,event:'searchOrders',stage:'REQUEST',createdAt:new Date(Date.now()+1000)}});
+  assert.equal(await continuityOrderTurn(prisma,source,first.id),true);
+  // An empty marketplace's new run retains its source's last actual request;
+  // it must not return to the front on every new historical window.
+  await prisma.amazonSyncRun.update({where:{id:secondRun},data:{status:'SUCCEEDED'}});
+  const replacementRun=randomUUID();
+  await prisma.amazonSyncRun.create({data:{...f.scope,id:replacementRun,sourceId:secondId,resource:'orders',requestedByUserId:f.actor,executionVersion:2,authorizationRevision:1,status:'WAITING',stage:'FETCHING',mode:'incremental',idempotencyKey:replacementRun,frozenScope:original.frozenScope!,frozenScopeDigest:original.frozenScopeDigest,startedAt:new Date(Date.now()+2000)}});
+  assert.equal(await continuityOrderTurn(prisma,source,first.id),true,'fairness persists across empty-window generations');
+  await prisma.auditLog.create({data:{organizationId:f.scope.organizationId,userId:f.actor,action:continuityAction,idempotencyKey:'amazon-continuity-v1:'+secondId,entityId:secondId,metadata:{...f.scope,enabled:true,authorizationId:f.authId,authorizationRevision:1,marketplaceId:secondSite,resource:'orders',policyDigest:continuityPolicyDigest(p)}}});
+  assert.equal(await continuityProbeDue(prisma,source),false,'empty sibling must not stall work');
+  const originalOrder=await prisma.amazonOrderRecord.findFirstOrThrow({where:{sourceId:f.source.id}});
+  await prisma.amazonOrderRecord.create({data:{...originalOrder,id:randomUUID(),sourceId:secondId,sourceRunId:secondRun,marketplaceId:secondSite}});
+  assert.equal(await continuityProbeDue(prisma,source),true,'due sibling probe reserves shared operation slot');
+  await prisma.auditLog.update({where:{idempotencyKey:'amazon-continuity-v1:'+secondId},data:{metadata:{enabled:false}}});
+  assert.equal(await continuityProbeDue(prisma,source),false);
+  await prisma.auditLog.update({where:{id:grant.id},data:{metadata:{enabled:false}}});assert.equal(await continuityEvidence(prisma,source),undefined);
+  const inventoryId=randomUUID(),planId=randomUUID();
+  await prisma.amazonSyncDataSource.create({data:{...f.scope,id:inventoryId,authorizationId:f.authId,sellerAccountId:f.store,marketplaceId:secondSite,resource:'inventory_age',enabled:true,freshnessMinutes:60}});
+  await prisma.amazonSyncSchedule.create({data:{...f.scope,id:planId,resource:'inventory_age',executionVersion:2,planKey:'auto-v1:'+inventoryId,name:'Fixture recovery',revision:2,mode:'incremental',intervalMinutes:60,enabled:false,updatedByUserId:f.actor,nextRunAt:new Date()}});
+  await prisma.amazonSyncPlanTarget.create({data:{...f.scope,scheduleId:planId,sourceId:inventoryId}});
+  const recoveryGrant=await prisma.auditLog.create({data:{organizationId:f.scope.organizationId,userId:f.actor,action:continuityAction,idempotencyKey:'amazon-continuity-v1:'+inventoryId,entityId:inventoryId,metadata:{...f.scope,enabled:true,authorizationId:f.authId,authorizationRevision:1,marketplaceId:secondSite,resource:'inventory_age',policyDigest:continuityPolicyDigest(null),reportRecoveryResume:{planId,pausedRevision:2,sourceRevision:1,day:'2026-11-07'}}}});
+  await maintainContinuity([f.scope]);
+  assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({where:{id:planId}})).enabled,true,'restore interrupted maintenance pause');
+  const recoveredGrant=await prisma.auditLog.findUniqueOrThrow({where:{id:recoveryGrant.id}});
+  assert.equal((recoveredGrant.metadata as Prisma.JsonObject).reportRecoveryResume,undefined);
+  await prisma.amazonSyncSchedule.update({where:{id:planId},data:{enabled:false,revision:{increment:1}}});
+  await maintainContinuity([f.scope],new Date(Date.now()+120000));
+  assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({where:{id:planId}})).enabled,false,'later manual pause must persist');
+  const base={...(f.source.orderPolicy as Prisma.JsonObject)};delete base.details;
+  await prisma.amazonSyncDataSource.update({where:{id:f.source.id},data:{orderPolicy:base}});
+  await prisma.amazonSyncRun.update({where:{id:first.id},data:{status:'SUCCEEDED'}});
+  await prisma.amazonSyncResourceCursor.update({where:{sourceId:f.source.id},data:{status:'SUCCEEDED',listComplete:true}});
+  const completedCursor=await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}});
+  const orderPlan=randomUUID();
+  await prisma.amazonSyncSchedule.create({data:{...f.scope,id:orderPlan,resource:'orders',executionVersion:2,planKey:'auto-v1:'+f.source.id,name:'Fixture order transition',revision:1,mode:'incremental',intervalMinutes:60,enabled:true,updatedByUserId:f.actor,nextRunAt:new Date()}});
+  await prisma.amazonSyncPlanTarget.create({data:{...f.scope,scheduleId:orderPlan,sourceId:f.source.id}});
+  await prisma.auditLog.update({where:{id:grant.id},data:{metadata:{...f.scope,enabled:true,authorizationId:f.authId,authorizationRevision:1,marketplaceId:site,resource:'orders',policyDigest:continuityPolicyDigest(base),accessEvidence:proof,proofExpiresAt:new Date(Date.now()+86400000).toISOString(),resumePlan:true}}});
+  await maintainContinuity([f.scope]);
+  const transitioned=await prisma.amazonSyncDataSource.findUniqueOrThrow({where:{id:f.source.id}});
+  assert.equal(transitioned.revision,2,'complete boundary enables details via approved service');
+  assert.equal(((transitioned.orderPolicy as Prisma.JsonObject).details as Prisma.JsonObject).backfillExisting,true);
+  assert.equal((await prisma.amazonSyncSchedule.findUniqueOrThrow({where:{id:orderPlan}})).enabled,true);
+  assert.deepEqual(await prisma.amazonSyncResourceCursor.findUniqueOrThrow({where:{sourceId:f.source.id}}),completedCursor);
+  const transitionMetadata=(await prisma.auditLog.findUniqueOrThrow({where:{id:grant.id}})).metadata as Prisma.JsonObject;
+  assert.equal(transitionMetadata.policyDigest,continuityPolicyDigest(transitioned.orderPolicy));
+  assert.equal(transitionMetadata.resumePlan,false);
+
+
+ }finally{site='fixture-marketplace';if(previous===undefined)delete process.env.AMAZON_DATA_CENTER_ENVIRONMENT;else process.env.AMAZON_DATA_CENTER_ENVIRONMENT=previous;}
 });

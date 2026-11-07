@@ -119,15 +119,11 @@ export function parseOrderPage(value: unknown, marketplaceId: string, policy: Or
 }
 
 /** Approved roles are admin-attested metadata, not inferred from marketplace participation. */
-export function assertOrderRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, policy: OrderSyncPolicy, automaticRead = false, context?: OrderAccessContext) {
-  // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
-  if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length) && !policy.details) return;
-  if (context && policy.details?.accessEvidence && policy.details.includedData.length === 0) {
-    assertOrderAccessEvidence(policy.details.accessEvidence, context);
-    return;
-  }
-  const required = [...policy.requiredRoles, ...(policy.details?.requiredRoles ?? [])];
-  if (!auth.rolesAttestedAt || !required.every(role => auth.approvedRoles.includes(role))) throw new SyncInputError("订单所需 Amazon 角色未确认，请管理员核对 Developer Console 角色并提交审批。", 403);
+export function assertOrderRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, policy: OrderSyncPolicy, automaticRead = false, context?: OrderAccessContext & { currentEvidence?: string }) {
+  // No manual API-role registry. Preserve verification of explicitly supplied
+  // operation evidence; it is never a substitute for account data permissions.
+  void auth; void automaticRead;
+  if (context && (context.currentEvidence || policy.details?.accessEvidence)) assertOrderAccessEvidence(context.currentEvidence ?? policy.details!.accessEvidence!, context);
 }
 
 export type OrderMoney = { original: string; currency: string };

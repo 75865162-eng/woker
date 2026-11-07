@@ -7,7 +7,7 @@ import { callSellerSpriteRemoteTool, listSellerSpriteRemoteTools, defaultSellerS
 import { ResearchEngine, budgetSummary } from "../src/lib/selection-research/engine";
 import { LocalResearchStore } from "../src/lib/selection-research/file-store";
 import { sellerSpritePolicy, createSellerSpriteResearchTransport } from "../src/lib/selection-research/seller-transport";
-import { SKILLS, type Agent, type ToolDefinition } from "../src/lib/selection-research/types";
+import { SKILLS, type Agent, type ToolDefinition, type ObjectJson } from "../src/lib/selection-research/types";
 import { createResearchAiAgent } from "../src/lib/selection-research/ai-agent";
 import { defaultAiModelSettings } from "../src/lib/ai-settings";
 
@@ -85,7 +85,8 @@ test("live engine persists immutable approval, blocks changed schema, accounts c
     };
     const agent: Agent = { async next(context) {
       assert.equal(context.tools[0]?.name, "product_research");
-      return { type: "call", tool: "product_research", arguments: { market: "US" } };
+      const args: ObjectJson = changed ? {} : { market: "US" };
+      return { type: "call", tool: "product_research", arguments: args };
     } };
     const engine = () => new ResearchEngine(store, scope, transport, agent, { mode: "live", authorizeLive: async () => true });
     const policy = sellerSpritePolicy(tool)!;
@@ -105,8 +106,50 @@ test("live engine persists immutable approval, blocks changed schema, accounts c
     changed = true;
     state = await engine().step(run.id);
     assert.equal(state.status, "FAILED"); assert.equal(dispatches, 1);
+    assert.equal(state.failure, "APPROVED_SCHEMA_CHANGED");
+    state = await engine().recover(run.id);
+    assert.equal(state.pendingActionApproved, undefined); assert.equal(state.pendingAction, undefined);
+    state = await engine().step(run.id);
+    assert.equal(state.gate?.kind, "MCP_CALL"); assert.deepEqual(state.pendingAction?.arguments, {});
+    assert.equal(dispatches, 1); // New schema must be reviewed again, not replayed under the earlier approval.
     assert.equal(sellerSpritePolicy({ name: "market_query_xiyou" }), null);
     assert.equal(sellerSpritePolicy({ name: "data_query" }), null);
     assert.ok(createSellerSpriteResearchTransport(settings));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("engine records actionable host error codes without persisting untrusted exception details", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "selection-errors-isolated-"));
+  try {
+    for (const message of ["RESEARCH_AI_REQUEST_FAILED", "RESEARCH_AI_REQUEST_FAILED Bearer isolated-private-secret"]) {
+      const store = new LocalResearchStore(root);
+      const engine = new ResearchEngine(store, { organizationId: "isolated", workspaceId: "isolated", ownerId: "isolated" }, { async listTools() { return []; }, async callTool() { throw new Error("unreachable"); } }, { async next() { throw new Error(message); } }, { mode: "fixture" });
+      const run = await engine.create({ requirement: "Isolated error handling verification", marketplace: "US", policies: {}, limits: {}, skills: SKILLS.map(name => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })) });
+      const failed = await engine.step(run.id);
+      assert.equal(failed.status, "FAILED");
+      assert.equal(failed.failure, message === "RESEARCH_AI_REQUEST_FAILED" ? message : "RESEARCH_STEP_FAILED_REVIEW_CONTEXT");
+      assert.ok(!JSON.stringify(await engine.inspect(run.id)).includes("isolated-private-secret"));
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("untrusted transport errors cannot attest non-dispatch or release paid and legacy reservations", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "selection-unknown-isolated-"));
+  try {
+    for (const failure of [new Error("RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN"), Object.assign(new Error("APPROVED_SCHEMA_CHANGED"), { name: "ToolNotDispatchedError", code: "APPROVED_SCHEMA_CHANGED" })]) {
+      const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "isolated", workspaceId: "isolated", ownerId: "isolated" }, {
+        async listTools() { return [tool]; }, async callTool() { throw failure; },
+      }, { async next() { return { type: "call", tool: tool.name, arguments: { market: "US" } }; } }, { mode: "live", authorizeLive: async () => true });
+      let run = await engine.create({ requirement: "Isolated unknown dispatch verification", marketplace: "US", policies: { [tool.name]: sellerSpritePolicy(tool)! }, limits: { sellersprite: 1 }, skills: SKILLS.map(name => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })) });
+      run = await engine.step(run.id);
+      run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: run.gate!.id, callId: run.pendingActionId });
+      run = await engine.step(run.id);
+      assert.equal(run.calls[0].dispatch, "ATTEMPTED");
+      assert.equal(run.calls[0].status, "UNKNOWN");
+      assert.equal(run.gate?.kind, "BILLING");
+      assert.deepEqual(budgetSummary(run).sellersprite, { limit: 1, committed: 1, unknownCalls: 1 });
+      delete run.calls[0].dispatch; // Older persisted runs do not carry the new field.
+      assert.deepEqual(budgetSummary(run).sellersprite, { limit: 1, committed: 1, unknownCalls: 1 });
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });

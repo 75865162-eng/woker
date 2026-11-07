@@ -1,3 +1,5 @@
+import { assertBrandTaskPolicy } from "./brand-collection";
+import { continuityEvidence, continuityOrderTurn, continuityProbeDue } from "./continuity-access";
 import { assertProductDiscoveryHead, resolvedProductPolicy, validateProductManifest } from "./product-discovery";
 import { requiresReportRowAttribution } from "./report-row-attribution";
 import { assertSettlementMarketplaces, parseSettlementReport, type SettlementPolicy, type SettlementBinding } from "./settlements";
@@ -15,7 +17,7 @@ import { reportTimestampMatches, parseReturnPolicy, assertReturnRoles, returnWin
 import { sellerArchivePolicy, assertSellerArchiveTarget } from "./seller-archive-policy";
 import { assertDomainReportRoles, assertDomainReportReady, assertSettlementDiscoveryAvailable, domainReportRunWindow, domainReportTypes, parseDomainReport, parseGetReportsPage, type DomainReportResource } from "./domain-reports";
 import { assertExecutionWindow } from "./execution-window";
-import { automaticPlanKey, automaticMarketplaces, isAutomaticResource } from "./automatic-schedule";
+import { automaticPlanKey, automaticMarketplaceAllowed, isAutomaticResource } from "./automatic-schedule";
 import { assertFinanceScope } from "./finance-scope";
 import { parseFinancePolicy, parseFinancePage, financeWindowFromFrozen, assertFinanceRequestWindow, attributeFinanceTransaction, convertFinanceMoney } from "./finance";
 import { assertSellerMarketplaceAccess } from "./data-access";
@@ -127,7 +129,7 @@ async function assertLiveSource(tx: Prisma.TransactionClient, run: AmazonSyncRun
   if (scheduled && (!["owner", "database_admin"].includes(actorMember.role) || !roleCanPerformAction(actorMember.role, "operations", "approve", rolePermissions))) throw new SyncPreflightRejected("自动计划管理员权限已变化。");
   const frozen = run.frozenScope as { sourceId?: string; sourceRevision?: number; authorizationId?: string; authorizationRevision?: number; amazonSellerId?: string; sellerAccountId?: string; marketplaceId?: string; resource?: string; region?: string; endpoint?: string; scheduleId?: string; scheduleRevision?: number } | null;
   const frozenDigest = frozen ? digest(frozen) : "";
-  if ((scheduled ? !schedule : !grant) || !approverStillAuthorized || !frozen || frozenDigest !== run.frozenScopeDigest || (scheduled && (frozen.scheduleId !== run.scheduleId || frozen.scheduleRevision !== run.scheduleRevision || !isAutomaticResource(run.resource) || !automaticMarketplaces.has(frozen.marketplaceId ?? "")))) throw new SyncPreflightRejected("执行审批或固定目标范围已失效。");
+  if ((scheduled ? !schedule : !grant) || !approverStillAuthorized || !frozen || frozenDigest !== run.frozenScopeDigest || (scheduled && (frozen.scheduleId !== run.scheduleId || frozen.scheduleRevision !== run.scheduleRevision || !isAutomaticResource(run.resource) || !automaticMarketplaceAllowed(run.resource, frozen.marketplaceId ?? "")))) throw new SyncPreflightRejected("执行审批或固定目标范围已失效。");
   const source = await tx.amazonSyncDataSource.findFirst({ where: { id: run.sourceId!, organizationId: run.organizationId, workspaceId: run.workspaceId, ...(!scheduled ? { enabled: true } : {}) }, include: { authorization: true, seller: true } });
   if (!source || !source.enabled || source.id !== frozen.sourceId || source.revision !== frozen.sourceRevision || source.authorizationId !== frozen.authorizationId || source.sellerAccountId !== frozen.sellerAccountId || source.marketplaceId !== frozen.marketplaceId || source.resource !== frozen.resource || source.resource !== run.resource || (!scheduled && source.seller.status !== "active") || source.authorization.status !== "CONFIGURED" || source.authorization.amazonSellerId !== frozen.amazonSellerId || source.authorization.revision !== frozen.authorizationRevision || source.authorization.revision !== run.authorizationRevision) throw new SyncPreflightRejected("数据源或授权在同步期间改变。");
   if (["orders", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events"].includes(run.resource) && (source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint)) throw new SyncPreflightRejected("授权区域与已批准范围不匹配。");
@@ -168,8 +170,11 @@ async function assertLiveSource(tx: Prisma.TransactionClient, run: AmazonSyncRun
   if (isObservationResource(run.resource)) {
     try {
       const p = parseObservationPolicy(source.domainPolicy, run.resource);
-      assertObservationRoles(p, source.authorization, { organizationId: run.organizationId, workspaceId: run.workspaceId, authorizationId: source.authorizationId, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId }); assertObservationClosed(p, new Date(), source.marketplaceId);
-      if (digest(p) !== digest(parseObservationPolicy((run.frozenScope as { domainPolicy?: unknown }).domainPolicy, run.resource)) || source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint) throw new Error();
+      assertObservationRoles(p, source.authorization, { organizationId: run.organizationId, workspaceId: run.workspaceId, authorizationId: source.authorizationId, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId, currentEvidence: await continuityEvidence(tx, source) }); assertObservationClosed(p, new Date(), source.marketplaceId);
+      const taskPolicy = parseObservationPolicy((run.frozenScope as { domainPolicy?: unknown }).domainPolicy, run.resource);
+      if (p.resource === "brand_analytics" && p.collection && taskPolicy.resource === "brand_analytics") assertBrandTaskPolicy(p, taskPolicy);
+      else if (digest(p) !== digest(taskPolicy)) throw new Error();
+      if (source.authorization.awsRegion !== frozen.region || source.authorization.endpoint !== frozen.endpoint) throw new Error();
       if ((p.resource === "listing_details" || p.resource === "catalog_items") && p.discovery) await assertProductDiscoveryHead(tx, { organizationId: run.organizationId, workspaceId: run.workspaceId }, source, validateProductManifest((run.frozenScope as { productManifest?: unknown }).productManifest, p));
     } catch { throw new SyncPreflightRejected("观察域角色、站点或冻结策略已变化。"); }
   }
@@ -470,7 +475,7 @@ export async function executeOrderSlice(run: AmazonSyncRun, client: AmazonSpApiC
   });
   const policy = parseOrderSyncPolicy(source.orderPolicy), auth = source.authorization;
   officialEndpoint(auth.awsRegion, auth.endpoint);
-  assertOrderRoles(auth, policy, run.trigger === "schedule", { ...scope, authorizationId: auth.id, authorizationRevision: auth.revision, marketplaceId: source.marketplaceId });
+  assertOrderRoles(auth, policy, run.trigger === "schedule", { ...scope, authorizationId: auth.id, authorizationRevision: auth.revision, marketplaceId: source.marketplaceId, currentEvidence: await continuityEvidence(prisma, source) });
   const sites = extractMarketplaceParticipations({ payload: auth.marketplaceParticipations });
   if (!sites.some(site => site.marketplaceId === source.marketplaceId)) throw new SyncPreflightRejected("订单站点未验证。");
   const window = orderWindowFromFrozen((run.frozenScope as { orderWindow?: unknown } | null)?.orderWindow);
@@ -502,6 +507,7 @@ export async function executeOrderSlice(run: AmazonSyncRun, client: AmazonSpApiC
     }
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
     const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
+    if (!await continuityOrderTurn(tx, source, run.id)) { const budget = reserveOrderToken(bucket, policy, now()); return { complete: false as const, cursor, reservation: { allowed: false, nextAt: new Date(Math.max(now().getTime() + 5000, budget.nextAt.getTime())) } }; }
     const reservation = reserveOrderToken(bucket, policy, now());
     await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: reservation.tokens, replenishedAt: reservation.replenishedAt }, update: { tokens: reservation.tokens, replenishedAt: reservation.replenishedAt } });
     return { complete: false as const, cursor, reservation };
@@ -580,9 +586,10 @@ async function executeOrderDetailSlice(run: AmazonSyncRun, source: Awaited<Retur
   if (work) {
     const reservation = await prisma.$transaction(async tx => {
       await scopeLock(tx, scope); await assertFence(tx, run);
-      const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy, false, { ...scope, authorizationId: live.authorizationId, authorizationRevision: live.authorization.revision, marketplaceId: live.marketplaceId });
+      const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy, false, { ...scope, authorizationId: live.authorizationId, authorizationRevision: live.authorization.revision, marketplaceId: live.marketplaceId, currentEvidence: await continuityEvidence(tx, live) });
       if (await stopForControl(tx, run)) return null;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${bucketKey}, 0))`;
+      if (await continuityProbeDue(tx, live)) return { allowed: false, nextAt: new Date(now().getTime() + 5000) };
       const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
       const result = reserveOrderToken(bucket, details, now());
       await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: result.tokens, replenishedAt: result.replenishedAt }, update: { tokens: result.tokens, replenishedAt: result.replenishedAt } });
@@ -593,7 +600,7 @@ async function executeOrderDetailSlice(run: AmazonSyncRun, source: Awaited<Retur
     events.length = 0;
     try {
       await assertActor(run);
-      await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy, false, { ...scope, authorizationId: live.authorizationId, authorizationRevision: live.authorization.revision, marketplaceId: live.marketplaceId }); });
+      await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy, false, { ...scope, authorizationId: live.authorizationId, authorizationRevision: live.authorization.revision, marketplaceId: live.marketplaceId, currentEvidence: await continuityEvidence(tx, live) }); });
       response = await client.getOrder({ orderId: work.amazonOrderId, includedData: details.includedData });
     } catch (error) {
       await persistOrderRequests(run, events, bucketKey, details.requestsPerSecond, now(), error); throw error;
@@ -604,7 +611,7 @@ async function executeOrderDetailSlice(run: AmazonSyncRun, source: Awaited<Retur
   const capturedAt = now(), policyDigest = digest(details);
   await assertActor(run);
   await prisma.$transaction(async tx => {
-    await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy, false, { ...scope, authorizationId: live.authorizationId, authorizationRevision: live.authorization.revision, marketplaceId: live.marketplaceId });
+    await scopeLock(tx, scope); await assertFence(tx, run); const live = await assertLiveSource(tx, run); assertOrderRoles(live.authorization, policy, false, { ...scope, authorizationId: live.authorizationId, authorizationRevision: live.authorization.revision, marketplaceId: live.marketplaceId, currentEvidence: await continuityEvidence(tx, live) });
     if (await stopForControl(tx, run)) return;
     const currentCursor = await tx.amazonSyncResourceCursor.findUniqueOrThrow({ where: { sourceId: source.id } });
     if (currentCursor.activeRunId !== run.id || currentCursor.detailPolicyDigest !== policyDigest || currentCursor.watermarkFrom.toISOString() !== window.from || currentCursor.watermarkTo.toISOString() !== window.to || currentCursor.nextTokenCiphertext !== cursor.nextTokenCiphertext) throw new SyncFenceLost();
@@ -1330,7 +1337,7 @@ export async function executeReturnSlice(run: AmazonSyncRun, client: AmazonSpApi
 async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiClient, events: AmazonRequestEvent[]) {
   const scope = { organizationId: run.organizationId, workspaceId: run.workspaceId };
   const source = await prisma.$transaction(async tx => { await scopeLock(tx, scope); await assertFence(tx, run); return assertLiveSource(tx, run); });
-  const configuredPolicy = parseObservationPolicy(source.domainPolicy, run.resource);
+  const configuredPolicy = parseObservationPolicy(run.resource === "brand_analytics" ? (run.frozenScope as { domainPolicy?: unknown }).domainPolicy : source.domainPolicy, run.resource);
   const manifest = (run.frozenScope as { productManifest?: unknown }).productManifest;
   const policy = resolvedProductPolicy(configuredPolicy, manifest);
   let state = parseObservationState(run.checkpointCiphertext ? unseal(run.checkpointCiphertext, scope, run.id, "amazon-observation-state.v1").state : null, policy);
@@ -1365,6 +1372,7 @@ async function executeObservationSlice(run: AmazonSyncRun, client: AmazonSpApiCl
     const budget = await tx.amazonSyncApiBudget.findUnique({ where: { organizationId_workspaceId_authorizationId_operation: key } });
     if (budget && budget.nextRequestAt > new Date()) return { allowed: false, nextAt: budget.nextRequestAt };
     const bucket = await tx.amazonSyncTokenBucket.findUnique({ where: { bucketKey } });
+    if (await continuityProbeDue(tx, source)) return { allowed: false, nextAt: new Date(Date.now() + 5000) };
     const result = reserveOrderToken(bucket, { requestsPerSecond: policy.requestsPerSecond, burst: 1 }, new Date());
     await tx.amazonSyncTokenBucket.upsert({ where: { bucketKey }, create: { bucketKey, tokens: result.tokens, replenishedAt: result.replenishedAt }, update: { tokens: result.tokens, replenishedAt: result.replenishedAt } });
     if (result.allowed) {

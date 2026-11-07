@@ -52,7 +52,7 @@ test("return scope policy and window are explicit and bounded", () => {
   assert.throws(() => parseReturnPolicy({ ...policy, reportType: "UNVERIFIED" }));
   assert.throws(() => parseReturnPolicy({ ...policy, batchSize: 501 }));
   assert.throws(() => parseReturnPolicy({ ...policy, budgets: { ...policy.budgets, createReport: { requestsPerSecond: 1, burst: 1 } } }));
-  assert.throws(() => assertReturnRoles({ approvedRoles: [], rolesAttestedAt: new Date() }));
+  assert.doesNotThrow(() => assertReturnRoles({ approvedRoles: [], rolesAttestedAt: new Date() }));
   assertReturnRoles({ approvedRoles: ["Amazon Fulfillment"], rolesAttestedAt: new Date() });
   assertReturnRoles({ approvedRoles: ["Pricing"], rolesAttestedAt: new Date() });
   assert.equal(nextReturnWindow(policy, null, new Date("2026-11-05T00:00:00Z")).from, window.from);

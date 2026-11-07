@@ -21,6 +21,7 @@ async function main(){
   for(const id of [...pending]){
    const s=await prisma.amazonSyncDataSource.findFirstOrThrow({where:{...scope,id},include:{authorization:true,resourceCursor:true}});
    if(parseOrderSyncPolicy(s.orderPolicy).details){console.log(JSON.stringify({marketplaceId:s.marketplaceId,status:'ALREADY_CONFIGURED'}));pending.delete(id);continue;}
+   if(s.authorization.id!=='3895911f-89c4-4ebd-8212-dc58bede447e'||s.authorization.revision!==3||s.authorization.status!=='CONFIGURED')throw Error('Authorization changed during recovery');
    if(s.resourceCursor?.status!=='SUCCEEDED')continue;
    const active=await prisma.amazonSyncRun.count({where:{...scope,sourceId:id,status:{in:['WAITING','QUEUED','RUNNING','RETRY_WAIT','PAUSED']}}});if(active)continue;
    const actor=s.authorization.updatedByUserId;

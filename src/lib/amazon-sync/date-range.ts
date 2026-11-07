@@ -5,6 +5,7 @@ const zones: Record<string, string> = {
   ATVPDKIKX0DER: "America/Los_Angeles", A2EUQ1WTGCTBG2: "America/Los_Angeles", A1AM78C64UM0Y8: "America/Los_Angeles", A2Q3Y263D00KWC: "America/Sao_Paulo",
   A1PA6795UKMFR9: "Europe/Berlin", A1RKKUPIHCS9HS: "Europe/Madrid", A13V1IB3VIYZZH: "Europe/Paris",
   A1F83G8C2ARO7P: "Europe/London", APJ6JRA9NG5V4: "Europe/Rome", A1VC38T7YXB528: "Asia/Tokyo",
+  A1805IZSGTT6HS: "Europe/Amsterdam", A2NODRKZP88ZB9: "Europe/Stockholm", A33AVAJ2PDY3EV: "Europe/Istanbul", A17E79C6D8DWNP: "Asia/Riyadh", A2VIGQ35RCS4UG: "Asia/Dubai",
   A39IBJ37TRP1C6: "Australia/Sydney", A19VAU5U5O7RUS: "Asia/Singapore", A21TJRUUN4KGV: "Asia/Kolkata",
 };
 export function reportTimeZone(marketplaceId: string): string { const zone = zones[marketplaceId]; if (!zone) throw new SyncInputError("该站点业务时区尚未核验。"); return zone; }

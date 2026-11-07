@@ -588,6 +588,10 @@ test("observation domains expose inbound layers, own prices, brand analyses and 
   const observed: URLSearchParams[] = [];
   await page.route("**/api/operations/sync-center?*", async route => {
     const params = new URL(route.request().url()).searchParams;
+    if (params.get("section") === "brand-analytics") {
+      const coverage = { reportKind: params.get("reportKind"), from: "2026-10-01", to: "2026-10-31", reportPeriod: "MONTH" };
+      return route.fulfill({ json: { sources: [], source: null, plans: [], collection: null, configuration: null, versions: [], run: { id: "brand", coverage }, batchCount: 1, rows: [{ id: "brand", sourceRunId: "brand", capturedAt: "2026-11-01T01:00:00Z", facts: { asin: "B123456789", clickedAsin: "B123456789", searchTerm: "fixture search", searchQueryData: { searchQuery: "fixture search" } } }], pagination: { total: 1, pageCount: 1 } } });
+    }
     if (params.get("section") !== "observations") return route.fallback();
     observed.push(params);
     const resource = params.get("resource"), kind = params.get("kind")!;
@@ -606,9 +610,9 @@ test("observation domains expose inbound layers, own prices, brand analyses and 
   await page.getByRole("button", { name: "价格与 Featured Offer", exact: true }).click();
   await expect(page.getByTestId("amazon-pricing-observations").getByText("NO_OFFER_RETURNED", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "品牌分析", exact: true }).click();
-  for (const label of ["搜索查询绩效", "搜索目录绩效", "购买组合", "搜索词分析"]) {
+  for (const label of ["搜索查询绩效 SQP", "搜索目录绩效 SCP", "购买组合", "搜索词分析", "复购分析"]) {
     await page.getByTestId("amazon-brand_analytics-observations").getByRole("button", { name: label, exact: true }).click();
-    await expect(page.getByText("fixture search", { exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "B123456789", exact: true })).toBeVisible();
   }
   await page.getByRole("button", { name: "Buy Box 历史日报", exact: true }).click();
   await expect(page.getByTestId("amazon-buy_box_history-observations").getByText("0%", { exact: true })).toBeVisible();
@@ -665,7 +669,7 @@ test("operations organizes existing readers into eight sections and keeps capabi
   await expect(page.getByRole("heading", { name: "Amazon 库存快照", exact: true })).toBeVisible();
   await expect.poll(() => businessCalls.includes("/api/operations/inventory/snapshots") && businessCalls.includes("/api/operations/freshness")).toBe(true);
   const beforeBusiness = businessCalls.length;
-  for (const label of ["商品类型与属性定义", "A+ 内容与关联 ASIN", "AWD 库存", "自配送运费与面单", "MCF 履约单与包裹", "佣金与 FBA 费用预估", "报价变动通知", "税务与发票", "复购分析", "Data Kiosk 查询", "买家消息与邀评", "账户健康与卖家绩效"]) {
+  for (const label of ["商品类型与属性定义", "A+ 内容与关联 ASIN", "AWD 库存", "自配送运费与面单", "MCF 履约单与包裹", "佣金与 FBA 费用预估", "报价变动通知", "税务与发票", "Data Kiosk 查询", "买家消息与邀评", "账户健康与卖家绩效"]) {
     await navigation.getByRole("button", { name: `${label}· 待接入`, exact: true }).click();
     await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "板块字段与来源" })).toContainText("当前没有此能力的已接入查询或采集操作");

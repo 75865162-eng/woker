@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { createLocalSession } from "@/lib/auth/session";
 import { GET, POST } from "@/app/api/selection-research/[id]/route";
@@ -31,7 +32,8 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
   let writes = 0;
   let fileReads = 0;
   let foundFile: Record<string, unknown> | undefined;
-  localStorageDriver.getBuffer = async () => { fileReads++; return Buffer.from("isolated report"); };
+  let savedBytes = Buffer.from("isolated report");
+  localStorageDriver.getBuffer = async () => { fileReads++; return Buffer.from(savedBytes); };
   globals.prisma = {
     workspaceScope: { findUnique: async ({ where }: { where: { organizationId_id: { id: string } } }) => where.organizationId_id.id === "fixture-workspace" ? { id: "fixture-workspace" } : null },
     agentExecution: {
@@ -54,7 +56,13 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
     assert.equal((await GET(request(undefined, { anonymous: true }), context)).status, 401);
     assert.equal((await GET(request(undefined, { other: true }), context)).status, 404);
     assert.equal((await GET(request(undefined, { workspace: "forbidden" }), context)).status, 403);
-    const unconfigured = await create(request({ mode: "live", requirement: "fixture", marketplace: "US", approved: true }));
+    for (const mode of [undefined, "lve", false]) {
+      const rejected = await create(request({ mode, requirement: "fixture", marketplace: "US", approved: true }));
+      assert.equal(rejected.status, 400); assert.equal((await rejected.json()).error, "EXPLICIT_RESEARCH_MODE_REQUIRED");
+    }
+    const invalidAsin = await create(request({ mode: "live", asin: 123, requirement: "fixture", marketplace: "US", maxMarketCalls: 3 }));
+    assert.equal(invalidAsin.status, 400); assert.equal((await invalidAsin.json()).error, "INVALID_ASIN");
+    const unconfigured = await create(request({ mode: "live", requirement: "fixture", marketplace: "US", maxMarketCalls: 3, approved: true }));
     assert.equal(unconfigured.status, 409);
     assert.equal((await unconfigured.json()).error, "SELLERSPRITE_MCP_NOT_CONFIGURED");
     assert.equal(writes, 0);
@@ -70,7 +78,7 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
     assert.ok(writes > 0); assert.equal(row.context.leaseId, null);
     row.output.status = "COMPLETED";
     row.output.report = { fileId: "isolated-file", savedAt: new Date().toISOString() };
-    foundFile = { id: "isolated-file", storageKey: `selection-research/${run.scope.organizationId}/${run.scope.workspaceId}/${run.id}/isolated.html`, originalName: `selection-research-${run.id}.html` };
+    foundFile = { id: "isolated-file", storageKey: `selection-research/${run.scope.organizationId}/${run.scope.workspaceId}/${run.id}/isolated.html`, originalName: `selection-research-${run.id}.html`, contentHash: createHash("sha256").update(savedBytes).digest("hex"), size: savedBytes.length };
     const savedContext = { params: Promise.resolve({ id: run.id, fileId: "isolated-file" }) };
     assert.equal((await savedReport(request(undefined, { anonymous: true }), savedContext)).status, 401);
     assert.equal((await savedReport(request(undefined, { workspace: "forbidden" }), savedContext)).status, 403);
@@ -81,6 +89,10 @@ test("real Next handlers enforce session/scope, reject unconfigured live, serial
     assert.equal(fileReads, 1); assert.match(exported.headers.get("content-security-policy")!, /sandbox/);
     assert.equal((await savedReport(request(), { params: Promise.resolve({ id: run.id, fileId: "different-file" }) })).status, 404);
     assert.equal(fileReads, 1);
+    savedBytes = Buffer.from("isolated tampered report");
+    const corrupt = await savedReport(request(), savedContext);
+    assert.equal(corrupt.status, 409); assert.equal((await corrupt.json()).error, "RESEARCH_REPORT_INTEGRITY_FAILED");
+    assert.equal(fileReads, 2);
   } finally {
     if (previousSkillRoot === undefined) delete process.env.SELECTION_SKILL_ROOT; else process.env.SELECTION_SKILL_ROOT = previousSkillRoot;
     await rm(isolatedSkillDirectory, { recursive: true, force: true });

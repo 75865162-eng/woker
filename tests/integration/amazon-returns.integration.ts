@@ -132,7 +132,7 @@ for (const status of [403, 404]) test(`signed download ${status} expiry refreshe
   assert.equal((await f.slice(run.id)).status, "WAITING"); assert.equal((await prisma.amazonSpApiAuthorization.findUniqueOrThrow({ where: { id: f.authId } })).status, "CONFIGURED");
   f.setFault(0); assert.equal((await f.finish(run.id)).status, "SUCCEEDED"); assert.equal(f.calls.filter(u => u.pathname.endsWith('/reports')).length, 1);
 });
-for (const field of ["seller", "marketplace", "region", "roles"]) test(`return ${field} mismatch sends no HTTP`, async () => {
+for (const field of ["seller", "marketplace", "region"]) test(`return ${field} mismatch sends no HTTP`, async () => {
   const f = await fresh(), run = await f.request();
   const data = field === "seller" ? { amazonSellerId: "wrong-fixture" } : field === "marketplace" ? { marketplaceParticipations: [] } : field === "region" ? { awsRegion: "wrong-fixture-region" } : { approvedRoles: [] };
   await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data });

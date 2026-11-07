@@ -1,5 +1,11 @@
-import type { Decision, Run, Scope } from "./types";
-import type { ResearchEngine } from "./engine";
+import type { Decision, Run, Scope, Store } from "./types";
+import { ResearchEngine } from "./engine";
+
+/** History, approvals and export need saved evidence, never a working external connection. */
+export function storedResearchEngine(store: Store, scope: Scope, mode: "fixture" | "live") {
+  const unavailable = async (): Promise<never> => { throw new Error("LIVE_EXECUTION_NOT_INITIALIZED"); };
+  return new ResearchEngine(store, scope, { listTools: unavailable, callTool: unavailable }, { next: unavailable }, { mode, authorizeLive: async () => false });
+}
 
 /** Kept separate from Next/Prisma so authorization is exercised with isolated repositories. */
 export function requireOwnedRun(run: Run, scope: Scope) {

@@ -52,8 +52,8 @@ test("finance policy freezes windows and refuses unapproved scope, FX ambiguity 
   assert.throws(() => parseFinancePolicy({ ...policy, sellerWide: false }));
   assert.throws(() => parseFinancePolicy({ ...policy, requestsPerSecond: 1 }));
   assert.throws(() => parseFinancePolicy({ ...policy, fx: { ...policy.fx, rates: [policy.fx!.rates[0], policy.fx!.rates[0]] } }));
-  assert.throws(() => assertFinanceRoles({ approvedRoles: [], rolesAttestedAt: new Date() }), /Finance and Accounting/);
-  assert.throws(() => assertFinanceRoles({ approvedRoles: ["Finance and Accounting"], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertFinanceRoles({ approvedRoles: [], rolesAttestedAt: new Date() }));
+  assert.doesNotThrow(() => assertFinanceRoles({ approvedRoles: ["Finance and Accounting"], rolesAttestedAt: null }));
   assertFinanceRoles({ approvedRoles: ["Finance and Accounting"], rolesAttestedAt: new Date() });
   const next = nextFinanceWindow(policy, { watermarkFrom: new Date(window.from), watermarkTo: new Date(window.to), status: "SUCCEEDED" }, new Date("2026-11-05T00:00:00Z"));
   assert.equal(next.from, "2026-11-01T23:00:00.000Z");

@@ -10,6 +10,8 @@ import { prisma } from "@/lib/db/prisma";
 import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp, listMcpSkillTableOptions, listDiscoverableAmazonMcpTools, getMcpSettingsSnapshot } from "@/lib/amazon-sync/mcp";
 import { amazonDataAccess, assertSellerMarketplaceAccess } from "@/lib/amazon-sync/data-access";
 import { POST } from "@/app/api/mcp/amazon/route";
+import { NextRequest } from "next/server";
+import { middleware } from "../../middleware";
 import { requestChange, decideChange, applyChange } from "@/lib/amazon-sync/change-approval";
 import { auditAmazonLineage } from "@/lib/amazon-sync/lineage-audit";
 import { readTaskSnapshot } from "@/lib/amazon-sync/snapshots";
@@ -288,6 +290,51 @@ test("real JSON-RPC Route authenticates bearer, rejects origin and hides failure
   assert.equal((await unavailable.json() as { error: { code: string } }).error.code, "SCHEMA_UNVERIFIED");
   assert.equal((await POST(request("Bearer invalid"))).status, 401);
   assert.equal((await POST(request(`Bearer ${token}`, "https://evil.invalid"))).status, 403);
+});
+
+test("cookie-free MCP discovery and database reads traverse middleware without weakening bearer auth", async () => {
+  const request = async (method: string, params: Record<string, unknown> = {}, bearer = token) => {
+    const input = new NextRequest("http://localhost/api/mcp/amazon", {
+      method: "POST", headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    const gate = await middleware(input);
+    assert.equal(gate.headers.get("x-middleware-next"), "1");
+    return POST(input);
+  };
+  assert.equal((await request("initialize", { protocolVersion: "2025-06-18" })).status, 200);
+  const catalog = await (await request("tools/list")).json();
+  assert.ok(catalog.result.tools.some((entry: { name: string }) => entry.name === "amazon.inventory.list"));
+  const response = await request("tools/call", { name: "amazon.inventory.list", arguments: { sellerAccountId: sellerA, marketplaceId: site } });
+  assert.equal(response.status, 200);
+  const output = JSON.parse((await response.json()).result.content[0].text);
+  assert.ok(output.rows.length > 0);
+  assert.ok(output.rows.every((row: { sellerAccountId: string; marketplaceId: string }) => row.sellerAccountId === sellerA && row.marketplaceId === site));
+  assert.equal((await request("tools/list", {}, "invalid")).status, 401);
+  assert.equal((await request("tools/call", { name: "amazon.inventory.list", arguments: {} }, "invalid")).status, 401);
+});
+
+test("disabled ERP users, inactive sellers and disconnected SP-API authorization cannot reuse an MCP identity", async () => {
+  const identity = await authenticateAmazonMcp(`Bearer ${token}`);
+  const source = await prisma.amazonSyncDataSource.findFirstOrThrow({ where: { ...scope, sellerAccountId: sellerA } });
+  const authorization = await prisma.amazonSpApiAuthorization.findUniqueOrThrow({ where: { id: source.authorizationId } });
+  try {
+    await prisma.user.update({ where: { id: actor }, data: { status: "disabled" } });
+    await assert.rejects(() => authenticateAmazonMcp(`Bearer ${token}`));
+    await assert.rejects(() => invokeAmazonMcp(identity, "amazon.inventory.list", {}));
+    await prisma.user.update({ where: { id: actor }, data: { status: "active" } });
+    await prisma.sellerAccount.update({ where: { id: sellerA }, data: { status: "inactive" } });
+    assert.deepEqual(await listDiscoverableAmazonMcpTools(identity), []);
+    await assert.rejects(() => invokeAmazonMcp(identity, "amazon.inventory.list", {}));
+    await prisma.sellerAccount.update({ where: { id: sellerA }, data: { status: "active" } });
+    await prisma.amazonSpApiAuthorization.update({ where: { id: authorization.id }, data: { status: "NOT_CONFIGURED" } });
+    assert.deepEqual(await listDiscoverableAmazonMcpTools(identity), []);
+    await assert.rejects(() => invokeAmazonMcp(identity, "amazon.inventory.list", {}));
+  } finally {
+    await prisma.user.update({ where: { id: actor }, data: { status: "active" } });
+    await prisma.sellerAccount.update({ where: { id: sellerA }, data: { status: "active" } });
+    await prisma.amazonSpApiAuthorization.update({ where: { id: authorization.id }, data: { status: authorization.status } });
+  }
 });
 test("dataset errors preserve legacy codes while distinguishing unpublished, unverified and invalid queries", async () => {
   const request = (args: Record<string, unknown>) => new Request("http://localhost/api/mcp/amazon", {

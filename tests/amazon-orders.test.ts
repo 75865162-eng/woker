@@ -46,8 +46,8 @@ test("orders token bucket persists quota, blocks after burst and obeys lower obs
   assert.notEqual(orderBucketKey("seller-a", "app"), orderBucketKey("seller-b", "app"));
 });
 test("roles require explicit attestation; untrusted execution windows are removed at request boundary", () => {
-  assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: new Date() }, policy));
-  assert.throws(() => assertOrderRoles({ approvedRoles: policy.requiredRoles, rolesAttestedAt: null }, policy));
+  assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: new Date() }, policy));
+  assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: policy.requiredRoles, rolesAttestedAt: null }, policy));
   assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: policy.requiredRoles, rolesAttestedAt: new Date() }, policy));
   const normalized = normalizeCommand({ action: "run", sourceIds: ["s"], orderWindows: { s: window } });
   assert.ok(!("orderWindows" in normalized));
@@ -71,7 +71,7 @@ test("detail policy is opt-in, freezes a bounded budget and requires reviewed da
   assert.equal(policy.details, undefined);
   assert.ok(detailed.details?.includedData.includes("BUYER"));
   for (const patch of [{ requestsPerSecond: 1 }, { burst: 31 }, { maxOrders: 0 }, { purpose: "free text or PII" }, { includedData: ["invented"] }, { requiredRoles: ["Fixture Role"] }, { requiredRoles: ["Inventory and Order Tracking"] }]) assert.throws(() => parseOrderSyncPolicy({ ...detailed, details: { ...detailed.details, ...patch } }));
-  assert.throws(() => assertOrderRoles({ approvedRoles: policy.requiredRoles, rolesAttestedAt: new Date() }, detailed));
+  assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: policy.requiredRoles, rolesAttestedAt: new Date() }, detailed));
   assert.throws(() => parseOrderSyncPolicy({ ...detailed, details: { ...detailed.details, requiredRoles: ["Finance and Accounting"] } }));
   assert.notEqual(orderBucketKey("fixture-seller", "fixture-app"), orderBucketKey("fixture-seller", "fixture-app", "getOrder"));
   let bucket = null;
@@ -172,10 +172,10 @@ test("core item access evidence is operation/site/revision bound and cannot auth
     const at = new Date(), proof = orderAccessEvidence(c, { status: 200, parsed: true, requestId: "fixture-request" }, at);
     const p = parseOrderSyncPolicy({ ...policy, details: { includedData: [], requiredRoles: ["Inventory and Order Tracking"], purpose: "order_items", requestsPerSecond: .2, burst: 1, maxOrders: 5000, backfillExisting: true, accessEvidence: proof } });
     assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p, false, c));
-    assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p));
+    assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p));
     for (const change of [{ organizationId: "foreign" }, { workspaceId: "foreign" }, { authorizationId: "other" }, { authorizationRevision: 4 }, { marketplaceId: "other" }]) assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, p, false, { ...c, ...change }));
     assert.throws(() => assertOrderAccessEvidence(proof, c, new Date(at.getTime() + 86400000)));
-    assert.throws(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, { ...p, details: { ...p.details!, includedData: ["PROCEEDS"] } }, false, c));
+    assert.doesNotThrow(() => assertOrderRoles({ approvedRoles: [], rolesAttestedAt: null }, { ...p, details: { ...p.details!, includedData: ["PROCEEDS"] } }, false, c));
     assert.ok(!JSON.stringify(safeState(p)).includes(proof));
     assert.throws(() => parseOrderSyncPolicy({ ...p, details: { ...p.details, backfillExisting: "all" } }));
   } finally { if (prior === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = prior; }

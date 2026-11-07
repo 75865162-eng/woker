@@ -1,3 +1,7 @@
+import { nextBrandCollectionPolicy } from "./brand-collection-query";
+import { assertBrandTaskPolicy } from "./brand-collection";
+import { continuityPolicyDigest } from "./continuity-policy";
+import { continuityEvidence, continuityGrant } from "./continuity-access";
 import { discoverProductObjects } from "./product-discovery";
 import { sellerArchivePolicy, assertSellerArchiveTarget } from "./seller-archive-policy";
 import { parseSettlementPolicy } from "./settlements";
@@ -22,7 +26,7 @@ import { approvedContext } from "./approved-context";
 import { digest } from "./approval-policy";
 import { AmazonSpApiClient, AmazonSpApiError } from "@/lib/amazon/sp-api-client";
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
-import { automaticMarketplaces, automaticPlanKey, automaticResources, nextPlanRunAt } from "./automatic-schedule";
+import { automaticMarketplaceAllowed, automaticPlanKey, automaticResources, nextPlanRunAt } from "./automatic-schedule";
 import { activeTaskStatuses, isIncrementalResource, boundedInteger, implementedDomain, officialEndpoint, optionalAmazonSellerId, parseSyncPlan, requiredText, requireSyncCenter, SyncInputError, type SyncScope } from "./policy";
 
 /** Caller holds the run's scope lock and updates its run in this transaction.
@@ -219,6 +223,12 @@ export async function saveSource(scope: SyncScope, actorUserId: string, body: Re
     const financeData = financePolicy ? { financePolicy: financePolicy as Prisma.InputJsonValue } : {};
     const orderData = orderPolicy ? { orderPolicy: orderPolicy as Prisma.InputJsonValue } : {};
     const row = await tx.amazonSyncDataSource.upsert({ where: { organizationId_workspaceId_sellerAccountId_marketplaceId_resource: { ...scope, sellerAccountId, marketplaceId, resource } }, create: { ...scope, id: existing?.id ?? requiredText(body.proposedId, "新数据源 ID"), authorizationId, sellerAccountId, marketplaceId, resource, freshnessMinutes, enabled: body.enabled as boolean, ...orderData, ...financeData, ...returnData, ...domainData, ...settlementData }, update: { freshnessMinutes, enabled: body.enabled as boolean, revision: { increment: 1 }, ...orderData, ...financeData, ...returnData, ...domainData, ...settlementData } });
+    if (existing && resource === "orders" && orderPolicy) {
+      const grant = await continuityGrant(tx, { ...existing, authorization: { revision: auth.revision } });
+      if (grant && grant.metadata.policyDigest === continuityPolicyDigest(existing.orderPolicy) && grant.metadata.transitionPolicyDigest === continuityPolicyDigest(orderPolicy)) {
+        await tx.auditLog.update({ where: { id: grant.grant.id }, data: { metadata: { ...grant.metadata, policyDigest: continuityPolicyDigest(orderPolicy), transitionPolicyDigest: null } } });
+      }
+    }
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actorUserId, action: "amazon.sync.source.saved", entityType: "AmazonSyncDataSource", entityId: row.id, metadata: { workspaceId: scope.workspaceId, enabled: row.enabled } } });
     return row;
   })(db);
@@ -234,10 +244,13 @@ export async function savePlan(scope: SyncScope, actorUserId: string, body: Reco
     if (body.id && !existing) throw new SyncInputError("计划不存在。", 404);
     if (!existing && await tx.amazonSyncSchedule.count({ where: { ...scope, executionVersion: 2 } }) >= 200) throw new SyncInputError("试点最多支持 200 个计划，扩容需性能评审。", 409);
     if (existing && body.revision !== existing.revision) throw new SyncInputError("计划已被更新，请刷新。", 409);
-    const automatic = existing?.planKey.startsWith("auto-v1:") === true;
-    if (!existing && ["returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(plan.resource)) throw new SyncInputError("该数据域只支持系统自动计划，不支持创建自定义计划。", 409);
+    const brandPlan = plan.resource === "brand_analytics";
+    if (brandPlan) await assertAmazonScopeAdmin(scope, actorUserId, tx);
+    const automatic = existing?.planKey.startsWith("auto-v1:") === true || brandPlan;
+    if (!existing && !brandPlan && ["returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "pricing", "brand_analytics", "buy_box_history", "listing_details", "catalog_items"].includes(plan.resource)) throw new SyncInputError("该数据域只支持系统自动计划，不支持创建自定义计划。", 409);
     const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: sourceIds }, resource: plan.resource, ...(plan.enabled && !automatic ? { enabled: true } : {}) } });
     if (sources.length !== sourceIds.length) throw new SyncInputError("计划范围包含无效、停用或其他数据域的数据源。");
+    if (brandPlan && (sourceIds.length !== 1 || plan.intervalMinutes !== 1440 || !sources.every(source => automaticMarketplaceAllowed("brand_analytics", source.marketplaceId)) || !sources.every(source => { const p = parseObservationPolicy(source.domainPolicy); return p.resource === "brand_analytics" && !!p.collection; }))) throw new SyncInputError("品牌回补计划须绑定一个已批准清单来源，间隔固定 1440 分钟。", 422);
     if (existing?.planKey.startsWith("auto-v1:")) {
       if (sourceIds.length !== 1 || existing.planKey !== automaticPlanKey(sourceIds[0]) || existing.resource !== plan.resource || existing.mode !== plan.mode || existing.intervalMinutes !== plan.intervalMinutes) throw new SyncInputError("自动计划的范围、模式和频率不可改变；可暂停或恢复。", 409);
     }
@@ -247,14 +260,14 @@ export async function savePlan(scope: SyncScope, actorUserId: string, body: Reco
       if (conflict) throw new SyncInputError("相同数据源已有启用的快照计划；请先暂停原计划。", 409);
     }
     const data = { ...fields, nextRunAt: nextPlanRunAt(plan.enabled, automatic, plan.intervalMinutes), updatedByUserId: actorUserId };
-    const row = existing ? await tx.amazonSyncSchedule.update({ where: { id }, data: { ...data, revision: { increment: 1 } } }) : await tx.amazonSyncSchedule.create({ data: { ...scope, id, planKey: id, executionVersion: 2, ...data } });
+    const row = existing ? await tx.amazonSyncSchedule.update({ where: { id }, data: { ...data, revision: { increment: 1 } } }) : await tx.amazonSyncSchedule.create({ data: { ...scope, id, planKey: brandPlan ? automaticPlanKey(sourceIds[0]) : id, executionVersion: 2, ...data } });
     await tx.amazonSyncPlanTarget.deleteMany({ where: { ...scope, scheduleId: id } });
     await tx.amazonSyncPlanTarget.createMany({ data: sourceIds.map(sourceId => ({ ...scope, scheduleId: id, sourceId })) });
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actorUserId, action: "amazon.sync.plan.saved", entityType: "AmazonSyncSchedule", entityId: id, metadata: { workspaceId: scope.workspaceId, revision: row.revision, enabled: row.enabled, targetCount: sourceIds.length } } });
     return row;
   })(db);
 }
-export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope, actorUserId: string, sourceId: string, options: { key: string; trigger: string; scheduleId?: string; scheduleRevision?: number; maxAttempts?: number; priority?: number; requestedRange?: RequestedRange; orderWindow?: OrderWindow; financeWindow?: FinanceWindow; returnWindow?: FinanceWindow; reportWindow?: DomainReportWindow }) {
+export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope, actorUserId: string, sourceId: string, options: { key: string; trigger: string; scheduleId?: string; scheduleRevision?: number; maxAttempts?: number; priority?: number; requestedRange?: RequestedRange; orderWindow?: OrderWindow; financeWindow?: FinanceWindow; returnWindow?: FinanceWindow; reportWindow?: DomainReportWindow; brandPolicy?: unknown }) {
   const scheduled = options.trigger === "schedule";
   const approval = scheduled ? null : approvedContext(scope, "run");
   scope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
@@ -263,7 +276,7 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   if (!source.authorization.amazonSellerId && source.resource === "listing_details") throw new SyncInputError("Listing Items 详情需要 OAuth 卖家身份；全量商品使用 catalog 报表。", 409);
   implementedDomain(source.resource);
   const schedule = scheduled && options.scheduleId ? await tx.amazonSyncSchedule.findFirst({ where: { ...scope, id: options.scheduleId, resource: source.resource, executionVersion: 2, enabled: true, revision: options.scheduleRevision, targets: { some: { sourceId } } } }) : null;
-  if (scheduled && (!schedule || schedule.updatedByUserId !== actorUserId || schedule.planKey !== automaticPlanKey(source.id) || !automaticMarketplaces.has(source.marketplaceId) || !(automaticResources as readonly string[]).includes(source.resource))) throw new SyncInputError("自动计划已停用、已变更或不包含此数据源。", 409);
+  if (scheduled && (!schedule || schedule.updatedByUserId !== actorUserId || schedule.planKey !== automaticPlanKey(source.id) || !automaticMarketplaceAllowed(source.resource, source.marketplaceId) || !(automaticResources as readonly string[]).includes(source.resource))) throw new SyncInputError("自动计划已停用、已变更或不包含此数据源。", 409);
   await assertSellerMarketplaceAccess(scope, actorUserId, source.sellerAccountId, source.marketplaceId, tx, "sync", scheduled);
   const existing = await tx.amazonSyncRun.findUnique({ where: { organizationId_workspaceId_idempotencyKey: { ...scope, idempotencyKey: options.key } } });
   if (existing) {
@@ -275,7 +288,7 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
   if (!scheduled && !approval?.commandSourceIds?.includes(sourceId)) throw new SyncInputError("任务目标超出执行审批范围。", 403);
   if (source.resource === "sales_traffic") rangeFromFrozen({ requestedRange: options.requestedRange });
   const orderWindow = source.resource === "orders" ? orderWindowFromFrozen(options.orderWindow) : undefined;
-  if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy), scheduled, { ...scope, authorizationId: source.authorizationId, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId });
+  if (orderWindow) assertOrderRoles(source.authorization, parseOrderSyncPolicy(source.orderPolicy), scheduled, { ...scope, authorizationId: source.authorizationId, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId, currentEvidence: await continuityEvidence(tx, source) });
   const financeWindow = source.resource === "finance" ? financeWindowFromFrozen(options.financeWindow) : undefined;
   if (financeWindow) await assertFinanceScope(tx, scope, source, [actorUserId], scheduled);
   const returnWindow = source.resource === "returns" ? returnWindowFromFrozen(options.returnWindow) : undefined;
@@ -288,8 +301,16 @@ export async function createTask(tx: Prisma.TransactionClient, scope: SyncScope,
     if (!source.authorization.amazonSellerId || !source.authorization.identityVerifiedAt) throw new SyncInputError("卖家归档须先核验真实卖家身份。", 409);
   }
   if (["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource)) assertDomainReportRoles(source.resource as DomainReportResource, source.authorization, scheduled || !!archivePolicy);
-  const domainPolicy = isObservationResource(source.resource) ? parseObservationPolicy(source.domainPolicy, source.resource) : undefined;
-  if (domainPolicy) { assertObservationRoles(domainPolicy, source.authorization, { ...scope, authorizationId: source.authorization.id, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId }); assertObservationClosed(domainPolicy, new Date(), source.marketplaceId); }
+  const configuredDomainPolicy = isObservationResource(source.resource) ? parseObservationPolicy(source.domainPolicy, source.resource) : undefined;
+  let domainPolicy = configuredDomainPolicy;
+  if (configuredDomainPolicy?.resource === "brand_analytics" && configuredDomainPolicy.collection) {
+    const selected = parseObservationPolicy(options.brandPolicy, "brand_analytics");
+    if (selected.resource !== "brand_analytics") throw new SyncInputError("品牌任务范围无效。");
+    assertBrandTaskPolicy(configuredDomainPolicy, selected);
+    if (digest(await nextBrandCollectionPolicy(tx, scope, source)) !== digest(selected)) throw new SyncInputError("品牌回补进度已变化，请重新审阅下一份报告。", 409);
+    domainPolicy = selected;
+  }
+  if (domainPolicy) { assertObservationRoles(domainPolicy, source.authorization, { ...scope, authorizationId: source.authorization.id, authorizationRevision: source.authorization.revision, marketplaceId: source.marketplaceId, currentEvidence: await continuityEvidence(tx, source) }); assertObservationClosed(domainPolicy, new Date(), source.marketplaceId); }
   const freezesEndpoint = Boolean(domainPolicy || reportWindow || returnWindow || financeWindow || orderWindow) || ["settlements", "reimbursements", "inventory_age", "inventory_events"].includes(source.resource);
   const settlement = source.resource === "settlements" && source.settlementPolicy ? await settlementScope(tx, scope, source, [actorUserId]) : undefined;
   const productManifest = domainPolicy ? await discoverProductObjects(tx, scope, source, domainPolicy) : undefined;
@@ -312,6 +333,7 @@ export async function requestTasks(scope: SyncScope, actorUserId: string, body: 
     if (body.returnWindows !== undefined) fingerprintParts.push(body.returnWindows);
     if (body.financeWindows !== undefined) fingerprintParts.push(body.financeWindows);
     if (body.orderWindows !== undefined) fingerprintParts.push(body.orderWindows);
+    if (body.brandPolicies !== undefined) fingerprintParts.push(body.brandPolicies);
     const fingerprint = createHash("sha256").update(JSON.stringify(fingerprintParts)).digest("hex");
     // A request record in the audit table binds a user key to the complete fan-out payload.
     const requestId = createHash("sha256").update(JSON.stringify([scope.organizationId, scope.workspaceId, key])).digest("hex");
@@ -322,7 +344,7 @@ export async function requestTasks(scope: SyncScope, actorUserId: string, body: 
       return tx.amazonSyncRun.findMany({ where: { ...scope, id: { in: metadata.taskIds } } });
     }
     const runs = [];
-    for (const sourceId of sourceIds) runs.push(await createTask(tx, scope, actorUserId, sourceId, { key: `manual:${requestId}:${sourceId}`, trigger: "manual", scheduleId: plan?.id, scheduleRevision: plan?.revision, maxAttempts: plan?.maxAttempts, priority: plan?.priority, requestedRange: (body.requestedRanges as Record<string, RequestedRange> | undefined)?.[sourceId], returnWindow: (body.returnWindows as Record<string, FinanceWindow> | undefined)?.[sourceId], financeWindow: (body.financeWindows as Record<string, FinanceWindow> | undefined)?.[sourceId], orderWindow: (body.orderWindows as Record<string, OrderWindow> | undefined)?.[sourceId], reportWindow: (body.reportWindows as Record<string, { createdSince: string; createdUntil: string } | { from: string; to: string; dataStartTime: string; dataEndTime: string; eventType: string }> | undefined)?.[sourceId] }));
+    for (const sourceId of sourceIds) runs.push(await createTask(tx, scope, actorUserId, sourceId, { key: `manual:${requestId}:${sourceId}`, trigger: "manual", scheduleId: plan?.id, scheduleRevision: plan?.revision, maxAttempts: plan?.maxAttempts, priority: plan?.priority, brandPolicy: (body.brandPolicies as Record<string, unknown> | undefined)?.[sourceId], requestedRange: (body.requestedRanges as Record<string, RequestedRange> | undefined)?.[sourceId], returnWindow: (body.returnWindows as Record<string, FinanceWindow> | undefined)?.[sourceId], financeWindow: (body.financeWindows as Record<string, FinanceWindow> | undefined)?.[sourceId], orderWindow: (body.orderWindows as Record<string, OrderWindow> | undefined)?.[sourceId], reportWindow: (body.reportWindows as Record<string, { createdSince: string; createdUntil: string } | { from: string; to: string; dataStartTime: string; dataEndTime: string; eventType: string }> | undefined)?.[sourceId] }));
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actorUserId, action: "amazon.sync.request", entityType: "AmazonSyncRun", entityId: requestId, metadata: { workspaceId: scope.workspaceId, fingerprint, taskIds: runs.map(r => r.id) } } });
     return runs;
   })(db);

@@ -59,11 +59,11 @@ export const operationsSections: OperationsSection[] = [
   },
   {
     id: "insights", label: "经营与品牌分析",
-    fields: "销售额、销量、订单商品量、Sessions、Page Views、转化与购物车相关指标（按返回）；搜索词、搜索查询、搜索目录、购买组合",
+    fields: "销售额、销量、订单商品量、Sessions、Page Views、转化与购物车相关指标（按返回）；搜索词、搜索查询、搜索目录、购买组合、复购",
     source: "销售与流量报告、Brand Analytics 报告；PPC 指标保留独立来源",
     boundary: "日报与品牌报告分别保留业务日、周期、版本和资格限制。搜索频率排名不等于搜索量；PPC 与店铺销售指标不混算。",
     entries: [{ view: "sales-traffic", label: "销售流量日报" }, { view: "brand_analytics", label: "品牌分析" }, { view: "ads", label: "PPC 经营指标" },
-      { view: "repeat-purchase", label: "复购分析", pending: { source: "Brand Analytics 复购报告", fields: "复购买家、复购销售与对应周期指标", requirement: "现有品牌分析支持搜索词、搜索查询、搜索目录和购买组合；复购报告尚未接入，需核验品牌资格。" } },
+      { view: "repeat-purchase", label: "复购分析" },
       { view: "data-kiosk", label: "Data Kiosk 查询", pending: { source: "Data Kiosk", fields: "适用数据集的销售、流量或分析查询结果", requirement: "需核验可用数据集、查询权限及异步任务流程；当前不提交 Data Kiosk 查询。" } }],
   },
   {

@@ -45,13 +45,26 @@ export function prismaResearchRepository(): ResearchRepository {
 export async function saveResearchReport(run: Run, html: string) {
   const buffer = Buffer.from(html, "utf8");
   const hash = createHash("sha256").update(buffer).digest("hex");
-  const key = `selection-research/${run.scope.organizationId}/${run.scope.workspaceId}/${run.id}/${randomUUID()}.html`;
+  const prefix = `selection-research/${run.scope.organizationId}/${run.scope.workspaceId}/${run.id}/`;
+  const originalName = `selection-research-${run.id}.html`;
   const storage = getStorageDriver();
+  const existing = await prisma.fileObject.findFirst({ where: {
+    organizationId: run.scope.organizationId, userId: run.scope.ownerId, workspaceId: run.scope.workspaceId,
+    marketplace: run.marketplace, originalName, mimeType: "text/html", contentHash: hash, status: "done", storageType: getStorageType(), storageKey: { startsWith: prefix },
+  }, select: { id: true, storageKey: true } });
+  if (existing) {
+    let saved: Buffer;
+    try { saved = await storage.getBuffer(existing.storageKey); }
+    catch { throw new Error("RESEARCH_REPORT_UNAVAILABLE"); }
+    if (saved.length !== buffer.length || createHash("sha256").update(saved).digest("hex") !== hash) throw new Error("RESEARCH_REPORT_INTEGRITY_FAILED");
+    return existing.id;
+  }
+  const key = `${prefix}${randomUUID()}.html`;
   await storage.putBuffer({ key, buffer, contentType: "text/html; charset=utf-8" });
   // Never return a public storage URL: downloads are served behind scoped authorization.
   try {
     const file = await prisma.fileObject.create({ data: { organizationId: run.scope.organizationId, userId: run.scope.ownerId, workspaceId: run.scope.workspaceId,
-      marketplace: run.marketplace, originalName: `selection-research-${run.id}.html`, mimeType: "text/html", size: buffer.length, storageKey: key, storageType: getStorageType(), status: "done", contentHash: hash } });
+      marketplace: run.marketplace, originalName, mimeType: "text/html", size: buffer.length, storageKey: key, storageType: getStorageType(), status: "done", contentHash: hash } });
     return file.id;
   } catch {
     // A unique new object is safe to compensate; never delete or replace an existing report.

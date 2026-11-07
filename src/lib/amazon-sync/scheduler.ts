@@ -1,3 +1,7 @@
+import { nextBrandCollectionPolicy } from "./brand-collection-query";
+import { brandWindowKey } from "./brand-collection";
+import { continuityGrant } from "./continuity-access";
+import { maintainContinuity } from "./continuity";
 import { automaticTaskKey } from "./automatic-schedule";
 import { ensureAutomaticConnections } from "./automatic-connection";
 import { assertExecutionWindow } from "./execution-window";
@@ -13,7 +17,7 @@ import { nextOrderWindow, orderWindowFromFrozen, parseOrderSyncPolicy } from "./
 import { parseReturnPolicy, returnWindowFromFrozen } from "./returns";
 import { domainReportRunWindow } from "./domain-reports";
 import { isObservationResource, parseObservationPolicy } from "./observation-policy";
-import { nextAutomaticInventoryEventWindow, nextAutomaticReimbursementWindow, latestClosedReimbursementWindow, nextAutomaticReturnWindow, nextAutomaticSettlementDiscovery, nextSalesTrafficRange, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource } from "./automatic-schedule";
+import { nextAutomaticInventoryEventWindow, nextAutomaticReimbursementWindow, latestClosedReimbursementWindow, nextAutomaticReturnWindow, nextAutomaticSettlementDiscovery, nextSalesTrafficRange, automaticBackfillStart, automaticIntervalMinutes, automaticMarketplaces, automaticMarketplaceAllowed, automaticPlanId, automaticPlanKey, automaticResources, isAutomaticResource } from "./automatic-schedule";
 import { assertAmazonAction, assertAmazonScopeAdmin } from "./data-access";
 
 export function enabledSyncScopes(value = process.env.AMAZON_SYNC_CENTER_SCOPES): SyncScope[] {
@@ -56,6 +60,7 @@ export async function tickSyncCenter(now = new Date(), only?: { taskIds: string[
   if (!scopes.length || !process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis") return;
   await dispatchSalesExports(scopes, only?.exportIds);
   if (!only) {
+    await maintainContinuity(scopes, now);
     await ensureAutomaticConnections(scopes, now);
     await ensureAutomaticSchedules(scopes, now);
     await enqueueDueAutomaticPlans(scopes, now);
@@ -97,6 +102,8 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceId
     include: { authorization: { select: { updatedByUserId: true } }, resourceCursor: true }, take: 200,
   });
   for (const candidate of sources) {
+    // Brand collection is opt-in through an explicitly approved save-plan.
+    if (candidate.resource === "brand_analytics") continue;
     if ((candidate.resource === "orders" && !candidate.orderPolicy) || (candidate.resource === "finance" && !candidate.financePolicy) || (candidate.resource === "returns" && !candidate.returnsPolicy) || (isObservationResource(candidate.resource) && !candidate.domainPolicy)) continue;
     const scope = { organizationId: candidate.organizationId, workspaceId: candidate.workspaceId };
     try { await prisma.$transaction(async tx => {
@@ -133,18 +140,26 @@ async function ensureAutomaticSchedules(scopes: SyncScope[], now: Date, sourceId
   }
 }
 
-async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceIds?: string[]) {
+export async function enqueueDueAutomaticPlans(scopes: SyncScope[], now: Date, sourceIds?: string[]) {
   const plans = await prisma.amazonSyncSchedule.findMany({ where: { OR: scopes, executionVersion: 2, enabled: true, planKey: { startsWith: "auto-v1:" }, ...(sourceIds ? { targets: { some: { sourceId: { in: sourceIds } } } } : {}), nextRunAt: { lte: now } }, include: { targets: { include: { source: { include: { authorization: true, seller: true, resourceCursor: true } } } } }, orderBy: { nextRunAt: "asc" }, take: 100 });
   for (const plan of plans) {
     if (!isAutomaticResource(plan.resource)) continue;
     const target = plan.targets[0]?.source;
-    if (!target || !target.enabled || plan.targets.length !== 1 || target.authorization.status !== "CONFIGURED" || !automaticMarketplaces.has(target.marketplaceId)) continue;
+    if (!target || !target.enabled || plan.targets.length !== 1 || target.authorization.status !== "CONFIGURED" || !automaticMarketplaceAllowed(plan.resource, target.marketplaceId)) continue;
     if (await prisma.amazonSyncRun.findFirst({ where: { organizationId: plan.organizationId, workspaceId: plan.workspaceId, sourceId: target.id, status: { in: activeTaskStatuses } }, select: { id: true } })) continue;
     const scope = { organizationId: plan.organizationId, workspaceId: plan.workspaceId };
+    // Leave a completed boundary for the approved detail transition; don't
+    // immediately race it with another base-only history window.
+    if (plan.resource === "orders" && !parseOrderSyncPolicy(target.orderPolicy).details && target.resourceCursor?.status === "SUCCEEDED" && await continuityGrant(prisma, target) && await prisma.amazonOrderRecord.count({ where: { ...scope, sourceId: target.id } })) continue;
+
     let options: Parameters<typeof createTask>[4];
     let backfill = false;
     try {
-      if (plan.resource === "orders") {
+      if (plan.resource === "brand_analytics") {
+        const brandPolicy = await nextBrandCollectionPolicy(prisma, scope, target);
+        options = { key: automaticTaskKey(plan, target, brandWindowKey(brandPolicy)), trigger: "schedule", scheduleId: plan.id, scheduleRevision: plan.revision, maxAttempts: plan.maxAttempts, priority: plan.priority, brandPolicy };
+        backfill = true;
+      } else if (plan.resource === "orders") {
         if (!target.orderPolicy) continue;
         const policy = parseOrderSyncPolicy(target.orderPolicy);
         const cursor = target.resourceCursor;

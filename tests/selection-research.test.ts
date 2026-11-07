@@ -13,7 +13,7 @@ import { renderResearchReport } from "../src/lib/selection-research/report";
 import { createLiliTransport, parseRpc } from "../src/lib/selection-research/lili-transport";
 import { validate, rejectCredentials } from "../src/lib/selection-research/schema";
 import { calculateUnitEconomics } from "../src/lib/selection-research/economics";
-import { executeResearchCommand } from "../src/lib/selection-research/http";
+import { executeResearchCommand, storedResearchEngine } from "../src/lib/selection-research/http";
 import { SKILLS, type Agent, type Scope, type SkillSnapshot } from "../src/lib/selection-research/types";
 
 const scope: Scope = { organizationId: "fixture-org", workspaceId: "fixture-workspace", ownerId: "fixture-owner" };
@@ -79,6 +79,28 @@ test("auth scope and approval permission cannot be supplied through model input"
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("stored live history, human gates and report export work without external adapters while dispatch stays denied", async () => {
+  const { root, store, engine, run } = await setup();
+  try {
+    const waiting = await drive(engine, run.id);
+    await store.transaction(run.id, async (state, save) => { state.mode = "live"; await save(); });
+    const offline = storedResearchEngine(store, scope, "live");
+    assert.equal((await offline.inspect(run.id)).gate?.id, waiting.gate!.id);
+    await assert.rejects(offline.saveReport(run.id, async () => "must-not-save"), /BOTH_HUMAN_GATES/);
+    const approved = await executeResearchCommand(offline, run.id, { operation: "decide", decision: { kind: "SELECT", candidateId: "fixture-1", gateId: waiting.gate!.id } }, true);
+    assert.equal(approved.stage, 2);
+    await assert.rejects(offline.step(run.id), /LIVE_EXECUTION_NOT_AUTHORIZED/);
+    await store.transaction(run.id, async (state, save) => { state.mode = "fixture"; await save(); });
+    const final = await drive(engine, run.id);
+    await store.transaction(run.id, async (state, save) => { state.mode = "live"; await save(); });
+    await offline.decide(run.id, { kind: "CONFIRM", gateId: final.gate!.id });
+    const saved = await offline.saveReport(run.id, async current => { assert.ok(renderResearchReport(current)); return "isolated-offline-report"; });
+    assert.equal(saved.fileId, "isolated-offline-report");
+    assert.equal((await storedResearchEngine(store, scope, "live").inspect(run.id)).report?.fileId, saved.fileId);
+    await assert.rejects(storedResearchEngine(store, { ...scope, ownerId: "different-owner" }, "live").inspect(run.id), /SCOPE_DENIED/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("pre-dispatch budget reservation, uncertain billing and overage require distinct human decisions", async () => {
   const { root, store, fixture, engine, run } = await setup();
   let dispatches = 0;
@@ -119,6 +141,34 @@ test("process interruption and timeout never replay a potentially charged reques
     await store.transaction(run.id, async (value, save) => { value.status = "RUNNING"; value.calls[0].status = "IN_FLIGHT"; await save(); });
     state = await engine.step(run.id);
     assert.equal(state.gate?.kind, "BILLING"); assert.equal(state.calls.length, 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("free uncertain reads require a zero-unit review and cannot be reconciled twice or replayed", async () => {
+  const { root, store, fixture, run } = await setup();
+  let dispatches = 0;
+  try {
+    const engine = new ResearchEngine(store, scope, { ...fixture.transport, async callTool() { dispatches++; throw new Error("isolated lost response"); } }, fixture.agent, { mode: "fixture" });
+    let state = await engine.step(run.id);
+    assert.equal(state.calls[0].paid, false);
+    assert.equal(state.calls[0].billing, "FREE");
+    assert.equal(state.calls[0].status, "UNKNOWN");
+    assert.equal(state.gate?.kind, "BILLING");
+    const review = { kind: "RECONCILE" as const, gateId: state.gate!.id, callId: state.calls[0].id, units: 0, receipt: "Isolated review: response remains unknown" };
+    await assert.rejects(engine.decide(run.id, { ...review, units: 1 }), /INVALID_BILLING/);
+    await assert.rejects(engine.decide(run.id, { ...review, receipt: " " }), /INVALID_BILLING/);
+    state = await engine.decide(run.id, review);
+    assert.equal(state.calls[0].status, "FAILED");
+    assert.equal(state.calls[0].errorCode, "OUTCOME_UNVERIFIED_NOT_REPLAYED");
+    assert.equal(state.calls[0].knownUnits, 0);
+    assert.equal(state.calls[0].rawResponse, undefined);
+    state = await engine.step(run.id);
+    assert.equal(state.failure, "DUPLICATE_CALL_REQUIRES_REVIEW");
+    assert.equal(dispatches, 1);
+    await store.transaction(run.id, async (current, save) => { current.status = "WAITING_FOR_USER"; current.gate = { kind: "BILLING", id: "isolated-new-gate", reason: "isolated" }; await save(); });
+    await assert.rejects(engine.decide(run.id, { ...review, gateId: "isolated-new-gate" }), /INVALID_BILLING/);
+    await store.transaction(run.id, async (current, save) => { current.calls[0].status = "SUCCEEDED"; await save(); });
+    await assert.rejects(engine.decide(run.id, { ...review, gateId: "isolated-new-gate" }), /INVALID_BILLING/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

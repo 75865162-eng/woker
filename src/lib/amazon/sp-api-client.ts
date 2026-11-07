@@ -159,7 +159,7 @@ export class AmazonSpApiClient {
     return { body, rawBody };
   }
   async createObservationReport(input: { reportType: string; marketplaceIds: string[]; dataStartTime: string; dataEndTime: string; reportOptions: Record<string, string> }): Promise<unknown> {
-    if (!["GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT", "GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT", "GET_SALES_AND_TRAFFIC_REPORT"].includes(input.reportType) || input.marketplaceIds.length !== 1) throw new AmazonSpApiError("报告请求类型或站点范围无效。");
+    if (!["GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT", "GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT", "GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT", "GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT", "GET_SALES_AND_TRAFFIC_REPORT"].includes(input.reportType) || input.marketplaceIds.length !== 1) throw new AmazonSpApiError("报告请求类型或站点范围无效。");
     return this.request("POST", "/reports/2021-06-30/reports", input);
   }
   async listInboundPlans(input: { paginationToken?: string } = {}): Promise<{ body: unknown; rawBody: string }> {

@@ -30,33 +30,43 @@ export function createLiliTransport(config: { endpoint: string; authorization?: 
     if (session) headers["mcp-session-id"] = session;
     if (protocol) headers["mcp-protocol-version"] = protocol;
     const response = await fetcher(url, { method: "POST", redirect: "error", headers, cache: "no-store", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(config.timeoutMs ?? 30_000)]) : AbortSignal.timeout(config.timeoutMs ?? 30_000), body: JSON.stringify({ jsonrpc: "2.0", ...(notification ? {} : { id }), method, params }) });
-    // Bound body reading too; do not buffer unbounded provider responses.
+    if (!response.ok) { await response.body?.cancel(); throw new Error(`LILI_HTTP_${response.status}`); }
+    if (method === "initialize") session = response.headers.get("mcp-session-id") ?? undefined;
+    if (notification) { await response.body?.cancel(); return {}; }
+    // Streamable HTTP may keep SSE open after the matching event. Stop at that event.
     const reader = response.body?.getReader();
-    let size = 0;
-    const chunks: Uint8Array[] = [];
+    const decoder = new TextDecoder();
+    const secret = config.authorization?.replace(/^Bearer\s+/i, "");
+    let size = 0, text = "";
+    const isSse = response.headers.get("content-type")?.includes("text/event-stream");
+    const parse = () => {
+      if (secret && text.includes(secret)) throw new Error("LILI_SECRET_ECHO_REJECTED");
+      return parseRpc(text, id);
+    };
     if (reader) {
       try {
         for (;;) {
-          const part = await reader.read(); if (part.done) break;
+          const part = await reader.read();
+          if (part.done) break;
           size += part.value.byteLength;
-          if (size > 8_000_000) { await reader.cancel(); throw new Error("LILI_RESPONSE_TOO_LARGE"); }
-          chunks.push(part.value);
+          if (size > 8_000_000) throw new Error("LILI_RESPONSE_TOO_LARGE");
+          text += decoder.decode(part.value, { stream: true });
+          if (secret && text.includes(secret)) throw new Error("LILI_SECRET_ECHO_REJECTED");
+          if (isSse && /\r?\n\r?\n/.test(text)) {
+            try { return parse(); } catch (error) { if (!(error instanceof Error) || error.message !== "LILI_MATCHING_RPC_RESPONSE_MISSING") throw error; }
+          }
         }
-      } finally { reader.releaseLock(); }
+        text += decoder.decode();
+      } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
     }
-    const text = Buffer.concat(chunks).toString("utf8");
-    const secret = config.authorization?.replace(/^Bearer\s+/i, "");
-    if (secret && text.includes(secret)) throw new Error("LILI_SECRET_ECHO_REJECTED");
-    if (!response.ok) throw new Error(`LILI_HTTP_${response.status}`);
-    if (method === "initialize") session = response.headers.get("mcp-session-id") ?? undefined;
-    if (notification) return {};
-    return parseRpc(text, id);
+    return parse();
   }
+
   async function initialize() {
     if (initialized) return;
     const envelope = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "erp-selection-research", version: "1" } });
-    if (!object(envelope.result) || typeof envelope.result.protocolVersion !== "string") throw new Error("LILI_INITIALIZE_FAILED");
-    protocol = envelope.result.protocolVersion;
+    if (envelope.error || !object(envelope.result) || !["2024-11-05", "2025-03-26", "2025-06-18"].includes(String(envelope.result.protocolVersion))) throw new Error("LILI_INITIALIZE_FAILED");
+    protocol = String(envelope.result.protocolVersion);
     await request("notifications/initialized", {}, undefined, true);
     initialized = true;
   }
@@ -68,9 +78,10 @@ export function createLiliTransport(config: { endpoint: string; authorization?: 
       let cursor: string | undefined;
       do {
         const envelope = await request("tools/list", cursor ? { cursor } : {});
-        if (!object(envelope.result) || !Array.isArray(envelope.result.tools)) throw new Error("LILI_REGISTRY_UNAVAILABLE");
+        if (envelope.error || !object(envelope.result) || !Array.isArray(envelope.result.tools)) throw new Error("LILI_REGISTRY_UNAVAILABLE");
         for (const value of envelope.result.tools) {
           if (!object(value) || typeof value.name !== "string" || !object(value.inputSchema)) throw new Error("LILI_INVALID_TOOL_DEFINITION");
+          if (tools.some(tool => tool.name === value.name) || tools.length >= 1000) throw new Error("LILI_INVALID_TOOL_DEFINITION");
           tools.push(value as unknown as ToolDefinition);
         }
         const next = envelope.result.nextCursor;

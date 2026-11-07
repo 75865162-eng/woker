@@ -2,29 +2,61 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Run } from "@/lib/selection-research/types";
+import type { ResearchReadiness } from "@/lib/selection-research/preflight";
 import { workspaceScopeChangedEventName } from "@/lib/workspace/workspace-scope-events";
+import { ResearchResults } from "./research-results";
+import { ResearchAudit } from "./research-audit";
 
 type Summary = { id: string; status: string; input: { requirement?: string }; updatedAt: string };
+const failureMessages: Record<string, string> = {
+  APPROVED_SCHEMA_CHANGED: "工具参数定义已改变，原请求未执行。恢复后必须重新审阅请求。",
+  REQUIRED_PROVIDER_EVIDENCE_MISSING: "缺少 ERP、SellerSprite 或西柚的成功证据，不能完成本阶段。",
+  TOOL_UNAVAILABLE_OR_FORBIDDEN: "工具不可用或无权调用，请检查当前工作区的连接和授权。",
+  RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN: "发送前检查发现工具不可用或授权已撤回，业务请求未发送。修复连接后可手动恢复并重新审批。",
+  INVALID_TOOL_ARGUMENTS: "发送前检查发现参数不符合工具 Schema，业务请求未发送，请核对执行记录后恢复。",
+  UNSUPPORTED_TOOL_SCHEMA: "当前工具 Schema 含未支持的约束，业务请求未发送，需要修复适配器后再恢复。",
+  DUPLICATE_CALL_REQUIRES_REVIEW: "检测到重复请求，已停止，避免重复调用或扣费。",
+  RESEARCH_AI_NOT_CONFIGURED: "当前工作区缺少 AI 模型配置，请在 ERP 设置中选择已有模型。",
+  RESEARCH_AI_REQUEST_FAILED: "AI 服务请求失败，证据已保留。请检查模型服务后再手动恢复。",
+  RESEARCH_CONTEXT_TOO_LARGE_REQUIRES_REVIEW: "证据超过模型上下文上限，需要人工审阅，未自动截断证据。",
+  RESEARCH_ACTION_TIMEOUT: "本步骤超时。请核对执行记录后再恢复，避免重复请求。",
+  GO_REQUIRES_RESOLVED_ASSUMPTIONS: "仍有未验证假设或估算，不能生成 GO 结论。",
+};
+function rememberRun(id?: string) {
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set("runId", id); else url.searchParams.delete("runId");
+  window.history.replaceState(null, "", url);
+}
 export function ResearchWorkbench() {
+  const [asin, setAsin] = useState("");
+  const [erpCredentialId, setErpCredentialId] = useState("");
   const [requirement, setRequirement] = useState("");
   const [marketplace, setMarketplace] = useState("US");
   const [runs, setRuns] = useState<Summary[]>([]);
   const [run, setRun] = useState<Run>();
   const [busy, setBusy] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
   const [error, setError] = useState("");
   const [savedFileId, setSavedFileId] = useState("");
-  const [mode, setMode] = useState<"fixture" | "live">("fixture");
-  const [availability, setAvailability] = useState<{ sellerSprite: string; ai: string; xiyou: string }>();
+  const [mode, setMode] = useState<"fixture" | "live">("live");
+  const [availability, setAvailability] = useState<{ sellerSprite: string; ai: string; xiyou: string; erp?: string }>();
   const [maxMarketCalls, setMaxMarketCalls] = useState(3);
   const [billingReceipt, setBillingReceipt] = useState("");
   const [billingUnits, setBillingUnits] = useState(1);
   const [budgetLimit, setBudgetLimit] = useState(4);
-  const [discovery, setDiscovery] = useState<unknown>();
+  const [discovery, setDiscovery] = useState<{ providers?: { provider: string; status: string; toolCount: number; reason?: string }[]; tools?: unknown[]; readiness?: ResearchReadiness }>();
+  const reconciliationCall = run?.gate?.kind === "BILLING" ? run.calls.find(call => call.billing === "UNKNOWN" || !call.paid && ["UNKNOWN", "IN_FLIGHT"].includes(call.status)) : undefined;
+  useEffect(() => {
+    setBillingReceipt("");
+    setBillingUnits(reconciliationCall?.paid ? 1 : 0);
+  }, [run?.id, reconciliationCall?.id, reconciliationCall?.paid]);
   const scopeGeneration = useRef(0);
+  const stopRequested = useRef(false);
+  const showRun = useCallback((next: Run) => { setRun(next); setSavedFileId(next.report?.fileId ?? ""); rememberRun(next.id); }, []);
   const request = useCallback(async (url: string, body?: unknown) => {
     const response = await fetch(url, { method: body ? "POST" : "GET", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "请求失败");
+    if (!response.ok) throw new Error(`${data.error || "请求失败"}${data.providers ? " · " + data.providers.map((p: { provider: string; reason?: string; status: string }) => `${p.provider}: ${p.reason ?? p.status}`).join("；") : ""}`);
     return data;
   }, []);
   const refresh = useCallback(async () => {
@@ -33,77 +65,128 @@ export function ResearchWorkbench() {
     if (generation === scopeGeneration.current) { setRuns(data.runs); setAvailability(data.availability); }
   }, [request]);
   useEffect(() => {
-    const changed = () => { scopeGeneration.current++; setRun(undefined); setSavedFileId(""); setError(""); setRuns([]); void refresh().catch(() => setError("工作区任务读取失败，请刷新。")); };
-    void refresh().catch(() => setError("任务读取失败，请确认已登录且有 Agent 查看权限。"));
+    let disposed = false;
+    const invalidate = () => { scopeGeneration.current++; stopRequested.current = true; };
+    const initialize = async (restore: boolean) => {
+      const generation = scopeGeneration.current;
+      const id = restore ? new URL(window.location.href).searchParams.get("runId") : null;
+      // A failed history/availability request must not hide an independently authorized saved run.
+      const active = () => !disposed && generation === scopeGeneration.current;
+      let historyFailed = false, restored = false;
+      const history = refresh().catch(() => {
+        historyFailed = true;
+        if (active() && (!id || restored)) setError(id ? "历史列表暂时读取失败；当前任务已恢复，可查看已保存结果。" : "历史列表读取失败，请确认当前工作区与查看权限后重试。");
+      });
+      const current = id ? request(`/api/selection-research/${encodeURIComponent(id)}`).then(data => {
+        if (!active()) return;
+        restored = true; showRun(data.run);
+        if (historyFailed) setError("历史列表暂时读取失败；当前任务已恢复，可查看已保存结果。");
+      }).catch(() => { if (active()) setError("任务读取失败，请确认当前工作区与查看权限后重试。"); }) : Promise.resolve();
+      await Promise.all([history, current]);
+    };
+    const changed = () => { invalidate(); setRun(undefined); setSavedFileId(""); setError(""); setRuns([]); setDiscovery(undefined); setAvailability(undefined); setErpCredentialId(""); setBusy(false); setAdvancing(false); rememberRun(); void initialize(false); };
+    void initialize(true);
     window.addEventListener(workspaceScopeChangedEventName, changed);
-    return () => { window.removeEventListener(workspaceScopeChangedEventName, changed); };
-  }, [refresh]);
+    return () => { disposed = true; invalidate(); window.removeEventListener(workspaceScopeChangedEventName, changed); };
+  }, [refresh, request, showRun]);
   async function perform(work: () => Promise<void>) {
+    const generation = scopeGeneration.current;
     setBusy(true); setError("");
-    try { await work(); await refresh(); } catch (failure) { setError(failure instanceof Error ? failure.message : "操作失败"); }
-    finally { setBusy(false); }
+    try { await work(); if (generation === scopeGeneration.current) await refresh(); } catch (failure) { if (generation === scopeGeneration.current) setError(failure instanceof Error ? failure.message : "操作失败"); }
+    finally { if (generation === scopeGeneration.current) setBusy(false); }
   }
   async function command(body: unknown) {
     if (!run) return;
     const generation = scopeGeneration.current;
     const data = await request(`/api/selection-research/${encodeURIComponent(run.id)}`, body);
-    if (generation === scopeGeneration.current && data.run) setRun(data.run);
+    if (generation === scopeGeneration.current && data.run) showRun(data.run);
     if (generation === scopeGeneration.current && data.fileId) setSavedFileId(data.fileId);
+    if (generation === scopeGeneration.current && data.run?.status === "COMPLETED" && !data.run.report && (body as { operation?: string }).operation === "decide") {
+      try {
+        const saved = await request(`/api/selection-research/${encodeURIComponent(run.id)}`, { operation: "export" });
+        if (generation === scopeGeneration.current) { showRun(saved.run); setSavedFileId(saved.fileId); }
+      } catch { throw new Error("研究已完成，但报告保存失败。审批和证据已保留，请点击“保存 HTML 报告”重试。"); }
+    } else if (generation === scopeGeneration.current && data.run && (body as { operation?: string }).operation === "decide") {
+      await drive(data.run);
+    }
   }
   // Bounded HTTP steps. A human gate stops the loop; no background task survives in the browser.
-  async function drive() {
-    if (!run) return;
+  async function drive(initial = run) {
+    if (!initial) return;
     const generation = scopeGeneration.current;
-    let next = run;
-    for (let i = 0; i < (run.mode === "live" ? 1 : 30) && ["CREATED", "RESUMABLE", "RUNNING"].includes(next.status); i++) {
-      if (generation !== scopeGeneration.current) break;
-      const data = await request(`/api/selection-research/${encodeURIComponent(next.id)}`, { operation: "step" });
-      next = data.run;
-      if (generation !== scopeGeneration.current) break;
-      setRun(next);
-    }
+    let next = initial;
+    stopRequested.current = false; setAdvancing(true);
+    try {
+      for (let i = 0; i < 30 && ["CREATED", "RESUMABLE", "RUNNING"].includes(next.status); i++) {
+        if (generation !== scopeGeneration.current || stopRequested.current) break;
+        const data = await request(`/api/selection-research/${encodeURIComponent(next.id)}`, { operation: "step" });
+        next = data.run;
+        if (generation !== scopeGeneration.current) break;
+        showRun(next);
+      }
+    } finally { if (generation === scopeGeneration.current) setAdvancing(false); }
   }
   const control = "rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50";
   return <div className="space-y-5">
-    <button className={control} disabled={busy} onClick={() => void perform(async () => { const result = await request("/api/selection-research/discover", {}); setDiscovery(result); })}>仅发现在线工具目录（不创建任务、不取市场数据）</button>
-    {discovery !== undefined && <details open><summary>在线目录发现结果</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(discovery, null, 2)}</pre></details>}
-    <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm">Lili 已并入本系统，沿用当前 ERP 账号，无需单独注册或登录。SellerSprite：{availability?.sellerSprite ?? "读取中"}；AI：{availability?.ai ?? "读取中"}；西柚：{availability?.xiyou ?? "读取中"}。真实模式会先读取在线工具目录；每个市场工具调用均需审批，市场服务实际费用须逐次核对。</div>
+    <button className={control} disabled={busy} onClick={() => void perform(async () => { const generation = scopeGeneration.current; const result = await request("/api/selection-research/discover", { erpCredentialId, asin, requirement, marketplace, maxMarketCalls }); if (generation === scopeGeneration.current) setDiscovery(result); })}>检查工具与启动条件（不创建任务、不取市场数据）</button>
+    {discovery?.providers && <div className="rounded border p-3 text-sm" role="status">{discovery.providers.map(provider => <p key={provider.provider}>{provider.provider}：{provider.status} · {provider.toolCount} 个真实工具 {provider.reason ? `· ${provider.reason}` : ""}</p>)}</div>}
+    {discovery?.readiness && <section className="space-y-2 rounded border p-3 text-sm" aria-label="真实研究启动检查">
+      <h2 className="font-semibold">{discovery.readiness.ready ? "连接配置与输入检查通过" : "真实研究尚有阻塞项"}</h2>
+      <p>这是本次检查结果，修改输入后请重新检查。配置存在不代表模型调用已成功；检查不会创建任务、请求模型或调用市场业务数据。</p>
+      <ul>{discovery.readiness.checks.map(check => <li key={check.id} className={check.status === "blocked" ? "text-red-700" : "text-slate-700"}>{check.id} · {check.status === "ready" ? "通过" : "未就绪"}：{check.message}</li>)}</ul>
+    </section>}
+    {discovery !== undefined && <details><summary>在线目录发现结果</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(discovery, null, 2)}</pre></details>}
+    <div className="rounded border border-slate-300 bg-slate-50 p-4 text-sm">Lili 已并入本系统，沿用当前 ERP 账号，无需单独注册或登录。ERP：{availability?.erp ?? "请发现在线目录"}；SellerSprite：{availability?.sellerSprite ?? "读取中"}；AI：{availability?.ai ?? "读取中"}；西柚：{availability?.xiyou ?? "读取中"}。真实模式会先读取在线工具目录；每个市场工具调用均需审批，市场服务实际费用须逐次核对。</div>
     <form className="space-y-3 rounded border p-4" onSubmit={(event) => { event.preventDefault(); void perform(async () => {
       const generation = scopeGeneration.current;
-      const data = await request("/api/selection-research", { requirement, marketplace, mode, ...(mode === "live" ? { maxMarketCalls } : {}) });
-      if (generation === scopeGeneration.current) { setRun(data.run); setSavedFileId(""); if (data.discovery) setAvailability((current) => current && ({ ...current, sellerSprite: `在线目录已读取，支持 ${data.discovery.registeredReadTools.length} 个只读工具；缺失 ${data.discovery.missingCanonicalTools.join(", ") || "无"}` })); }
+      const data = await request("/api/selection-research", { requirement, marketplace, mode, asin: asin.trim().toUpperCase() || undefined, erpCredentialId: erpCredentialId || undefined, ...(mode === "live" ? { maxMarketCalls } : {}) });
+      if (generation === scopeGeneration.current) { showRun(data.run); if (data.discovery) setAvailability((current) => current && ({ ...current, sellerSprite: `在线目录已读取，支持 ${data.discovery.registeredReadTools.length} 个只读工具；缺失 ${data.discovery.missingCanonicalTools.join(", ") || "无"}` })); }
     }); }}>
+      <label className="block">目标 ASIN（指定商品研究时填写）<input aria-label="目标 ASIN" className={control} value={asin} maxLength={10} pattern="[A-Za-z0-9]{10}" onChange={event => setAsin(event.target.value.toUpperCase())} placeholder="B0XXXXXXXX" /></label>
+      <label className="block">ERP MCP 凭证 ID（存在多个授权时必填）<input aria-label="ERP MCP 凭证 ID" className={control} value={erpCredentialId} maxLength={100} onChange={event => setErpCredentialId(event.target.value)} placeholder="使用现有个人授权，不填 Token" /></label>
       <label className="block font-medium" htmlFor="research-requirement">自然语言选品要求</label>
       <textarea id="research-requirement" className="min-h-28 w-full rounded border p-3" required maxLength={20000} value={requirement} onChange={(event) => setRequirement(event.target.value)} placeholder="输入产品方向、目标市场、价格带及选品要求" />
       <label className="mr-3">市场 <input aria-label="目标市场" className={control} value={marketplace} onChange={(event) => setMarketplace(event.target.value)} required maxLength={16} /></label>
       <label className="mr-3">运行模式 <select aria-label="运行模式" className={control} value={mode} onChange={(event) => setMode(event.target.value as "fixture" | "live")}><option value="fixture">隔离样本</option><option value="live">真实数据</option></select></label>
-      {mode === "live" && <label className="mr-3">SellerSprite 最大调用次数 <input aria-label="最大市场调用次数" className={control} type="number" min={1} max={30} value={maxMarketCalls} onChange={(event) => setMaxMarketCalls(Number(event.target.value))} /></label>}
+      {mode === "live" && <label className="mr-3">每个外部来源最大调用次数 <input aria-label="最大市场调用次数" className={control} type="number" min={1} max={30} value={maxMarketCalls} onChange={(event) => setMaxMarketCalls(Number(event.target.value))} /></label>}
       <button className={control} disabled={busy || !requirement.trim()} type="submit">{mode === "live" ? "读取在线工具目录并创建真实任务" : "创建隔离样本任务"}</button>
     </form>
     {error && <p role="alert" className="rounded border border-red-300 p-3 text-red-700">{error}</p>}
     <section className="rounded border p-4"><h2 className="mb-2 font-semibold">我的研究任务（当前工作区，最近30条）</h2><div className="flex flex-wrap gap-2">{runs.map((item) => <button className={control} disabled={busy} key={item.id} onClick={() => void perform(async () => {
       const generation = scopeGeneration.current;
       const data = await request(`/api/selection-research/${encodeURIComponent(item.id)}`);
-      if (generation === scopeGeneration.current) { setRun(data.run); setSavedFileId(""); }
+      if (generation === scopeGeneration.current) showRun(data.run);
     })}>{item.input.requirement?.slice(0, 30)} · {item.status}</button>)}</div></section>
     {run && <section className="space-y-4 rounded border p-4">
-      <h2 className="font-semibold">第 {run.stage} / 5 阶段 · {run.status}</h2><p className="break-all text-sm">任务：{run.id} · 模式：{run.mode} · 调用：{run.calls.length} · 修订：{run.revision}</p>
-      {run.mode === "live" && <p className="text-sm">SellerSprite 请求次数：{run.calls.filter((call) => call.provider === "sellersprite").length} / {run.limits.sellersprite ?? 0}。次数上限不代表费用金额上限；AI 模型也可能按其服务商规则计费。关闭页面后不会继续请求，可重新打开任务恢复。</p>}
+      <h2 className="font-semibold">第 {run.stage} / 5 阶段 · {run.status}</h2><p className="break-all text-sm">任务：{run.id} · 模式：{run.mode} · 调用记录：{run.calls.length} · 修订：{run.revision}</p>
+      {run.status === "FAILED" && <p role="alert" className="rounded border border-red-300 p-3 text-red-700">{failureMessages[run.failure ?? ""] ?? "本步骤失败，已保留现有证据。请检查执行记录后手动恢复。"}</p>}
+      {run.calls.some((call) => call.dispatch === "NOT_SENT") && <p className="text-sm">已保留发送前拦截记录：{run.calls.filter((call) => call.dispatch === "NOT_SENT").length} 条；这些业务请求未发送，不占用调用预算。恢复后仍须重新批准付费请求。</p>}
+      {run.mode === "live" && <p className="text-sm">SellerSprite 请求次数：{run.calls.filter((call) => call.provider === "sellersprite" && call.dispatch !== "NOT_SENT").length} / {run.limits.sellersprite ?? 0}；西柚请求次数：{run.calls.filter((call) => call.provider === "xiyou" && call.dispatch !== "NOT_SENT").length} / {run.limits.xiyou ?? 0}。次数上限不代表费用金额上限；AI 模型也可能按其服务商规则计费。继续或批准后最多推进30步，遇到审批立即停止；可以暂停后续步骤。关闭页面后不会继续请求，可重新打开任务恢复。</p>}
       <div className="flex flex-wrap gap-2">
-        {["CREATED", "RESUMABLE", "RUNNING"].includes(run.status) && <button className={control} disabled={busy} onClick={() => void perform(drive)}>{run.mode === "live" ? "继续执行一步" : "继续到下一确认节点"}</button>}
+        {["CREATED", "RESUMABLE", "RUNNING"].includes(run.status) && <button className={control} disabled={busy} onClick={() => void perform(() => drive())}>继续到下一确认节点</button>}
+        {advancing && <button className={control} onClick={() => { stopRequested.current = true; }}>暂停后续步骤</button>}
         {run.status === "FAILED" && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "recover" }))}>恢复失败任务</button>}
         {!["COMPLETED", "CANCELLED"].includes(run.status) && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "cancel" }))}>取消任务</button>}
       </div>
+      <ResearchResults key={`results-${run.id}`} run={run} />
       {run.gate && <div className="space-y-2 rounded border border-blue-300 bg-blue-50 p-3"><h3 className="font-semibold">需要人工确认：{run.gate.kind}</h3><p>{run.gate.reason}</p>
         {run.gate.kind === "NICHE" && run.results[0]?.candidates?.map((candidate) => <button key={candidate.id} className={`${control} mr-2`} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "SELECT", candidateId: candidate.id } }))}>选择：{candidate.name}</button>)}
         {run.gate.kind === "FINAL" && <button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "CONFIRM" } }))}>确认研究结果，允许生成报告</button>}
-        {run.gate.kind === "MCP_CALL" && run.pendingAction && <div className="w-full space-y-2"><p className="font-medium">待执行工具：{run.pendingAction.tool}。预计费用金额目前无法从在线目录确认。</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-xs">{JSON.stringify({ arguments: run.pendingAction.arguments, schema: run.registry.find((tool) => tool.name === run.pendingAction!.tool)?.inputSchema }, null, 2)}</pre><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "AUTHORIZE_TOOL", callId: run.pendingActionId } }))}>批准这一次请求（点击继续后执行）</button></div>}
-        {run.gate.kind === "BILLING" && run.calls.some((call) => call.billing === "UNKNOWN") && <div className="flex flex-wrap items-end gap-2"><label>实际扣费单位<input aria-label="实际扣费单位" className={control} type="number" min={0} value={billingUnits} onChange={(event) => setBillingUnits(Number(event.target.value))} /></label><label>账单/扣费凭据<input aria-label="扣费凭据" className={control} value={billingReceipt} onChange={(event) => setBillingReceipt(event.target.value)} /></label><button className={control} disabled={busy || !billingReceipt.trim()} onClick={() => { const call = [...run.calls].reverse().find((entry) => entry.billing === "UNKNOWN"); if (call) void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "RECONCILE", callId: call.id, units: billingUnits, receipt: billingReceipt } })); }}>登记实际费用并继续</button></div>}
-        {run.gate.kind === "BUDGET" && <div className="flex items-end gap-2"><label>新的调用次数上限<input aria-label="新的调用次数上限" className={control} type="number" min={(run.limits.sellersprite ?? 0) + 1} value={budgetLimit} onChange={(event) => setBudgetLimit(Number(event.target.value))} /></label><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "INCREASE_BUDGET", limits: { sellersprite: budgetLimit }, toolMaxCalls: Object.fromEntries(Object.entries(run.policies).filter(([name, policy]) => run.calls.filter((call) => call.tool === name).length >= policy.maxCalls && budgetLimit > policy.maxCalls).map(([name]) => [name, budgetLimit])) } }))}>批准提高调用上限</button></div>}
+        {run.gate.kind === "MCP_CALL" && run.pendingAction && <div className="w-full space-y-2"><p className="font-medium">待执行工具：{run.pendingAction.tool}。预计费用金额目前无法从在线目录确认。</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-xs">{JSON.stringify({ arguments: run.pendingAction.arguments, schema: run.registry.find((tool) => tool.name === run.pendingAction!.tool)?.inputSchema }, null, 2)}</pre><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "AUTHORIZE_TOOL", callId: run.pendingActionId } }))}>批准并执行这一次请求</button></div>}
+        {reconciliationCall && <div className="space-y-2">
+          <p className="break-all text-sm">待核对：{reconciliationCall.tool} · 请求 {reconciliationCall.id} · {reconciliationCall.requestedAt}</p>
+          {!reconciliationCall.paid && <p className="text-sm">此读取不计市场调用费用，但结果仍未知。确认后保留失败记录，不自动重试，也不能作为成功证据。</p>}
+          <div className="flex flex-wrap items-end gap-2">
+            {reconciliationCall.paid && <label>实际扣费单位<input aria-label="实际扣费单位" className={control} type="number" min={0} value={billingUnits} onChange={(event) => setBillingUnits(Number(event.target.value))} /></label>}
+            <label>{reconciliationCall.paid ? "账单/扣费凭据" : "读取核对说明"}<input aria-label={reconciliationCall.paid ? "扣费凭据" : "读取核对说明"} className={control} value={billingReceipt} onChange={(event) => setBillingReceipt(event.target.value)} /></label>
+            <button className={control} disabled={busy || !billingReceipt.trim()} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "RECONCILE", callId: reconciliationCall.id, units: reconciliationCall.paid ? billingUnits : 0, receipt: billingReceipt } }))}>{reconciliationCall.paid ? "登记实际费用并继续" : "确认结果未核实，保留记录并继续"}</button>
+          </div>
+        </div>}
+        {run.gate.kind === "BUDGET" && <div className="flex items-end gap-2"><label>新的调用次数上限<input aria-label="新的调用次数上限" className={control} type="number" min={(run.limits.sellersprite ?? 0) + 1} value={budgetLimit} onChange={(event) => setBudgetLimit(Number(event.target.value))} /></label><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "decide", decision: { gateId: run.gate!.id, kind: "INCREASE_BUDGET", limits: Object.fromEntries(Object.keys(run.limits).filter(provider => budgetLimit > run.limits[provider]).map(provider => [provider, budgetLimit])), toolMaxCalls: Object.fromEntries(Object.entries(run.policies).filter(([name, policy]) => run.calls.filter((call) => call.tool === name && call.dispatch !== "NOT_SENT").length >= policy.maxCalls && budgetLimit > policy.maxCalls).map(([name]) => [name, budgetLimit])) } }))}>批准提高调用上限</button></div>}
       </div>}
-      {run.status === "COMPLETED" && <div className="flex gap-3"><a className={control} href={`/api/selection-research/${encodeURIComponent(run.id)}/report?workspaceId=${encodeURIComponent(run.scope.workspaceId)}`}>下载单文件 HTML 报告</a><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "export" }))}>另存到现有文件存储</button></div>}
+      <ResearchAudit key={`audit-${run.id}`} run={run} />
+      {run.status === "COMPLETED" && <div className="flex gap-3"><a className={control} href={`/api/selection-research/${encodeURIComponent(run.id)}/report?workspaceId=${encodeURIComponent(run.scope.workspaceId)}`}>下载单文件 HTML 报告</a><button className={control} disabled={busy} onClick={() => void perform(() => command({ operation: "export" }))}>保存 HTML 报告</button></div>}
       {(run.report?.fileId || savedFileId) && <p role="status">已保存文件：<a className="underline" href={`/api/selection-research/${encodeURIComponent(run.id)}/report/${encodeURIComponent(run.report?.fileId || savedFileId)}?workspaceId=${encodeURIComponent(run.scope.workspaceId)}`}>下载保存的 HTML 报告</a>（FileObject {run.report?.fileId || savedFileId}）</p>}
-      <ol className="space-y-2">{run.results.map((result, i) => <li className="rounded bg-slate-50 p-3" key={i}><strong>阶段 {i + 1}</strong>：{result.summary} {result.verdict ?? ""}</li>)}</ol>
       <details><summary>Skill 快照、调用证据及审批记录</summary><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(run, null, 2)}</pre></details>
     </section>}
   </div>;

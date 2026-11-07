@@ -1,3 +1,4 @@
+import repeatPurchase from "@/data/amazon-contracts/sellingPartnerRepeatPurchaseReport.json";
 import { createHash } from "node:crypto";
 import searchTerms from "@/data/amazon-contracts/sellingPartnerSearchTermsReport.json";
 import searchQuery from "@/data/amazon-contracts/sellingPartnerSearchQueryPerformanceReport.json";
@@ -88,7 +89,7 @@ function project(value: unknown, schema: Schema, root: Schema, depth = 0): Proje
   }
   return invalid();
 }
-const schemas = { search_terms: searchTerms, search_query: searchQuery, search_catalog: searchCatalog, market_basket: marketBasket };
+const schemas = { search_terms: searchTerms, search_query: searchQuery, search_catalog: searchCatalog, market_basket: marketBasket, repeat_purchase: repeatPurchase };
 export function parseObservationReport(raw: string, policy: AnalyticsPolicy | BuyBoxHistoryPolicy, marketplaceId: string): SafeFact[] {
   const schema = (policy.resource === "buy_box_history" ? salesTraffic : schemas[policy.reportKind]) as Schema;
   const projected = object(project(readFinanceJson(raw), schema, schema)), expected = observationReportSpec(policy, marketplaceId), spec = object(projected.reportSpecification);

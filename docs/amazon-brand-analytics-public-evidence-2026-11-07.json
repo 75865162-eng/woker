@@ -1,0 +1,20 @@
+{
+  "recordedAt": "2026-11-06T20:26:13.329314+00:00",
+  "retrievedOn": "2026-11-07",
+  "sources": [
+    {
+      "url": "https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics",
+      "sha256": "8d49e947e54ab014f023fb23283cf47617cdd56b33d7394fb0a708c0f3c9615e",
+      "bytes": 1787084,
+      "note": "Official public report catalogue HTML; public read only"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellingPartnerRepeatPurchaseReport.json",
+      "sha256": "79a3995ab1ca6cd52ba354753d8b732083ac6bd7a1767d7db34df54877963bb1",
+      "bytes": 9272,
+      "note": "Official repeat-purchase schema; other schemas were pre-existing"
+    }
+  ],
+  "sellerApiCalled": false,
+  "scope": "Current public Seller Brand Analytics list has five reports. Eligibility and obtainable history require target-specific verification. Demographics/item comparison/alternate purchase are absent from this list; absence is not proof of retirement."
+}

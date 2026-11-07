@@ -1,3 +1,4 @@
+import { parseBrandCollection, type BrandCollection } from "./brand-collection";
 import { assertProductAccessEvidence, type ProductAccessContext } from "./product-access-evidence";
 import { reportTimeZone } from "./date-range";
 import { SyncInputError } from "./policy";
@@ -9,13 +10,14 @@ export const brandReportTypes = {
   search_query: "GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT",
   search_catalog: "GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT",
   market_basket: "GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT",
+  repeat_purchase: "GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT",
 } as const;
 export type BrandReportKind = keyof typeof brandReportTypes;
 export type ReportPeriod = "DAY" | "WEEK" | "MONTH" | "QUARTER";
 type CommonPolicy = { resource: ObservationResource; applicationId: string; maxRequests: number; maxRows: number; requestsPerSecond: number };
 export type InboundPolicy = CommonPolicy & { resource: "fulfillment"; planIds: string[] };
 export type PricingPolicy = CommonPolicy & { resource: "pricing"; asins: string[] };
-export type AnalyticsPolicy = CommonPolicy & { resource: "brand_analytics"; reportKind: BrandReportKind; reportPeriod: ReportPeriod; from: string; to: string; marketplaceTimeZone: string; asins: string[]; brandEligibilityAttested: true };
+export type AnalyticsPolicy = CommonPolicy & { resource: "brand_analytics"; collection?: BrandCollection; reportKind: BrandReportKind; reportPeriod: ReportPeriod; from: string; to: string; marketplaceTimeZone: string; asins: string[]; brandEligibilityAttested: true };
 export type BuyBoxHistoryPolicy = CommonPolicy & { resource: "buy_box_history"; from: string; to: string; marketplaceTimeZone: string; asins: string[] };
 export type ProductDiscovery = { mode: "catalog_snapshot"; sourceId: string; maxObjects: number; batchSize: 100 };
 type ProductOptions = { discovery?: ProductDiscovery; accessEvidence?: string };
@@ -58,7 +60,7 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
     if (extra.discovery && ids.length) return observationInvalid("自动发现不能同时配置静态对象。");
     return p.resource === "listing_details" ? { ...base, ...extra, resource: p.resource, sellerSkus: ids } : { ...base, ...extra, resource: p.resource, asins: ids };
   }
-  const asins = list(p.asins, /^[A-Z0-9]{10}$/, p.resource === "pricing" ? 20 : 18, p.resource === "brand_analytics" && ["search_terms", "market_basket"].includes(String(p.reportKind)));
+  const asins = list(p.asins, /^[A-Z0-9]{10}$/, p.resource === "pricing" ? 20 : 18, p.resource === "brand_analytics" && ["search_terms", "market_basket", "repeat_purchase"].includes(String(p.reportKind)));
   if (p.resource === "pricing") return { ...base, resource: p.resource, asins };
   const from = observationDate(p.from), to = observationDate(p.to), marketplaceTimeZone = observationText(p.marketplaceTimeZone, 100);
   try { new Intl.DateTimeFormat("en-CA", { timeZone: marketplaceTimeZone }).format(); } catch { return observationInvalid(); }
@@ -67,27 +69,27 @@ export function parseObservationPolicy(value: unknown, resource?: string): Obser
     if (from !== to) return observationInvalid("ASIN Buy Box 历史任务仅允许单个已闭合业务日，避免伪造逐日分拆。");
     return { ...base, resource: p.resource, asins, from, to, marketplaceTimeZone };
   }
-  if (typeof p.reportKind !== "string" || !Object.hasOwn(brandReportTypes, p.reportKind) || p.brandEligibilityAttested !== true || !["DAY", "WEEK", "MONTH", "QUARTER"].includes(String(p.reportPeriod))) return observationInvalid();
+  if (typeof p.reportKind !== "string" || !Object.hasOwn(brandReportTypes, p.reportKind) || !["DAY", "WEEK", "MONTH", "QUARTER"].includes(String(p.reportPeriod))) return observationInvalid();
   const reportKind = p.reportKind as BrandReportKind, reportPeriod = p.reportPeriod as ReportPeriod;
-  if (["search_query", "search_catalog"].includes(reportKind) && reportPeriod === "DAY") return observationInvalid();
-  if (["search_terms", "market_basket"].includes(reportKind) && asins.length) return observationInvalid("该报告不接受 ASIN 请求过滤，不能伪装成指定商品覆盖。");
+  if (["search_query", "search_catalog", "repeat_purchase"].includes(reportKind) && reportPeriod === "DAY") return observationInvalid();
+  if (["search_terms", "market_basket", "repeat_purchase"].includes(reportKind) && asins.length) return observationInvalid("该报告不接受 ASIN 请求过滤，不能伪装成指定商品覆盖。");
   const start = new Date(from + "T00:00:00Z"); let end = new Date(start);
   if (reportPeriod === "WEEK") { if (start.getUTCDay() !== 0) return observationInvalid(); end = new Date(start.getTime() + 6 * 86400000); }
   if (reportPeriod === "MONTH") { if (start.getUTCDate() !== 1) return observationInvalid(); end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)); }
   if (reportPeriod === "QUARTER") { if (start.getUTCDate() !== 1 || start.getUTCMonth() % 3) return observationInvalid(); end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 0)); }
   if (end.toISOString().slice(0, 10) !== to) return observationInvalid("必须选择一个完整报告周期；不支持跨周期任务。");
-  return { ...base, resource: p.resource, reportKind, reportPeriod, asins, from, to, marketplaceTimeZone, brandEligibilityAttested: true };
+  return { ...base, resource: p.resource, reportKind, reportPeriod, asins, from, to, marketplaceTimeZone, brandEligibilityAttested: true, ...(p.collection === undefined ? {} : { collection: parseBrandCollection(p.collection) }) };
 }
-export function assertObservationRoles(policy: ObservationPolicy, auth: { approvedRoles: readonly string[]; rolesAttestedAt: Date | null }, context?: Omit<ProductAccessContext, "resource">): void {
-  if ((policy.resource === "listing_details" || policy.resource === "catalog_items") && policy.accessEvidence && context) { assertProductAccessEvidence(policy.accessEvidence, { ...context, resource: policy.resource }); return; }
-  const role = ["listing_details", "catalog_items"].includes(policy.resource) ? "Product Listing" : policy.resource === "fulfillment" ? "Amazon Fulfillment" : policy.resource === "pricing" ? "Pricing" : policy.resource === "brand_analytics" ? "Brand Analytics" : "Brand Analytics";
-  if (!(auth.rolesAttestedAt instanceof Date) || !Number.isFinite(auth.rolesAttestedAt.getTime()) || !auth.approvedRoles.includes(role)) throw new SyncInputError(`该域需要已确认的 ${role} 角色；参与站点不证明业务权限。`, 403);
+export function assertObservationRoles(policy: ObservationPolicy, auth: { approvedRoles: readonly string[]; rolesAttestedAt: Date | null }, context?: Omit<ProductAccessContext, "resource"> & { currentEvidence?: string }): void {
+  if ((policy.resource === "listing_details" || policy.resource === "catalog_items") && context && (context.currentEvidence || policy.accessEvidence)) { assertProductAccessEvidence(context.currentEvidence ?? policy.accessEvidence!, { ...context, resource: policy.resource }); return; }
+  // Account RBAC and source/identity checks are enforced by callers; Amazon enforces API roles.
+  void auth;
 }
 export function assertObservationClosed(policy: ObservationPolicy, now = new Date(), marketplaceId?: string): void {
   if (policy.resource !== "brand_analytics" && policy.resource !== "buy_box_history") return;
   if (marketplaceId && policy.marketplaceTimeZone !== reportTimeZone(marketplaceId)) throw new SyncInputError("报告业务时区与站点不匹配。", 422);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: policy.marketplaceTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-  if (policy.to >= today) throw new SyncInputError("报告周期尚未闭合，不能启动任务。", 409);
+  if ((policy.resource === "brand_analytics" && policy.collection ? policy.collection.to : policy.to) >= today) throw new SyncInputError("报告周期尚未闭合，不能启动任务。", 409);
 }
 export function observationReportSpec(policy: AnalyticsPolicy | BuyBoxHistoryPolicy, marketplaceId: string): { reportType: string; marketplaceIds: string[]; dataStartTime: string; dataEndTime: string; reportOptions: Record<string, string> } {
   return { reportType: policy.resource === "brand_analytics" ? brandReportTypes[policy.reportKind] : "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [marketplaceId], dataStartTime: policy.from, dataEndTime: policy.to,

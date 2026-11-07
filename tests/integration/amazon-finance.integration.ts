@@ -183,9 +183,8 @@ for (const status of [400, 403, 404, 429, 500]) test(`finance ${status}: finite 
   if (status === 500) { assert.equal(result.status, "FAILED"); assert.equal(result.attempts, 3); }
   assert.equal(await prisma.amazonFinanceRecord.count({ where: f.scope }), 0);
 });
-for (const change of ["roles", "region", "sites", "actor", "approver", "binding"]) test(`finance ${change} mismatch blocks before any HTTP`, async () => {
+for (const change of ["region", "sites", "actor", "approver", "binding"]) test(`finance ${change} mismatch blocks before any HTTP`, async () => {
   const f = await fresh(), task = await f.request();
-  if (change === "roles") await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { approvedRoles: [] } });
   if (change === "region") await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { awsRegion: "other-fixture-region" } });
   if (change === "sites") await prisma.amazonSpApiAuthorization.update({ where: { id: f.authId }, data: { marketplaceParticipations: [{ marketplaceId: site }] } });
   if (change === "actor" || change === "approver") await prisma.organizationMember.update({ where: { organizationId_userId: { organizationId: f.scope.organizationId, userId: change === "actor" ? f.actor : f.approver } }, data: { role: "operations" } });

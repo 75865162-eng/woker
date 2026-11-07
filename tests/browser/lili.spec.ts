@@ -2,6 +2,7 @@ import { build } from "esbuild";
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { handleLiliRequest } from "@/lib/lili/api";
+import { createRuntimeTools } from "@/lib/lili/runtime-tools";
 import { defaultXiyouSettings, mergeXiyouSettings } from "@/lib/lili/tool-config";
 import { defaultSellerSpriteMcpSettings, toPublicSellerSpriteMcpSettings } from "@/lib/integrations/sellersprite";
 
@@ -25,7 +26,19 @@ test.beforeAll(async () => {
 });
 
 async function setup(page: Page, path: string) {
-  const state = { failNetwork: false, configReadFailure: false, calls: [] as string[], probes: 0 };
+  const state = { failNetwork: false, configReadFailure: false, sellerTestFailure: false, sellerProbes: 0, calls: [] as string[], probes: 0 };
+  // Isolated protocol doubles: never resolve real credentials or database state in browser tests.
+  const runtime = createRuntimeTools([
+    { id: "erp", isReadOnly: () => true, transport: {
+      async listTools() { return [{ name: "data_query", description: "Isolated inventory query", inputSchema: { type: "object", properties: { table: { type: "string", enum: ["inventory"] } }, required: ["table"], additionalProperties: false }, annotations: { readOnlyHint: true } }]; },
+      async callTool(_name, args) { return { source: "isolated-browser-fixture", table: args.table }; },
+    } },
+    { id: "sellersprite", isReadOnly: () => true, transport: {
+      async listTools() { return [{ name: "asin.detail", inputSchema: { type: "object", properties: {} } }]; },
+      async callTool() { throw new Error("Paid calls must not run in the tool panel"); },
+    } },
+    { id: "xiyou", isReadOnly: () => false, reason: "ISOLATED_PROVIDER_NOT_CONNECTED" },
+  ]);
   let xiyou = { ...defaultXiyouSettings };
   let sellerSprite = { ...defaultSellerSpriteMcpSettings };
   await page.route("**/*", async (route) => {
@@ -38,6 +51,12 @@ async function setup(page: Page, path: string) {
         const patch = req.postDataJSON().settings;
         sellerSprite = { ...sellerSprite, ...patch, apiKey: patch.apiKey || sellerSprite.apiKey };
       }
+      if (req.method() === "POST") {
+        state.sellerProbes++;
+        return state.sellerTestFailure
+          ? route.fulfill({ status: 502, json: { ok: false, message: "SellerSprite MCP 连接失败，请检查已保存配置、网络及服务状态。" } })
+          : route.fulfill({ json: { ok: true, message: "SellerSprite MCP 连接成功，已读取 2 个工具；未调用业务工具。" } });
+      }
       return route.fulfill({ json: { settings: toPublicSellerSpriteMcpSettings(sellerSprite) } });
     }
     if (url.pathname.startsWith("/api/lili/")) {
@@ -48,7 +67,7 @@ async function setup(page: Page, path: string) {
       const response = await handleLiliRequest(request, url.pathname.slice("/api/lili/".length).split("/"), async () => ({ ok: true, user: { id: "fixture-user", organizationId: "fixture-org" } }), {
         store: { async read() { return xiyou; }, async save(_scope, patch) { xiyou = mergeXiyouSettings(patch, xiyou); return xiyou; } },
         async probe() { state.probes++; },
-      });
+      }, runtime);
       return route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
     }
     return route.fulfill({ contentType: "text/html; charset=utf-8", body: '<html><head><meta charset="utf-8"><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>' });
@@ -85,6 +104,25 @@ test("tool input validation, catalog result, and network retry keep controls usa
   await expect(page.getByRole("status")).toContainText("shipped-definitions");
 });
 
+test("runtime panel discovers schemas, dispatches read tools, routes paid calls to review and clears scope", async ({ page }) => {
+  await setup(page, "/lili/v2/tools");
+  await page.getByRole("button", { name: "发现真实工具", exact: true }).click();
+  await expect(page.getByText(/erp：connected.*1 个工具/)).toBeVisible();
+  const picker = page.getByLabel("选择在线工具");
+  await picker.selectOption("erp__data_query");
+  await page.getByText("真实参数 Schema", { exact: true }).click();
+  await expect(page.locator("details pre").first()).toContainText('"required"');
+  await page.getByLabel("工具参数 JSON").fill('{"table":"inventory"}');
+  await page.getByRole("button", { name: "执行授权只读查询", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("isolated-browser-fixture");
+  await picker.selectOption("sellersprite__asin.detail");
+  await expect(page.getByRole("button", { name: "执行授权只读查询", exact: true })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "进入 ASIN 选品研究、人工审批与历史报告", exact: true })).toHaveAttribute("href", "/agents/selection-research");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("amazon-bulk-ad:workspace-scope-changed")));
+  await expect(picker).toHaveCount(0);
+  await expect(page.getByRole("status")).toHaveCount(0);
+});
+
 test("workflow detail retains source gaps and refuses automatic execution explicitly", async ({ page }) => {
   await setup(page, "/lili/v2/workflows/competitor-teardown");
   await expect(page.getByText("amazon-price-tracker：原始源码包未附此技能定义。")).toBeVisible();
@@ -109,11 +147,23 @@ test("tool configuration restores both providers, masks secrets after save and p
   await page.getByRole("link", { name: "工具配置", exact: true }).click();
   await expect(page.getByRole("heading", { name: "工具配置", exact: true })).toBeVisible();
   const seller = page.getByRole("region", { name: "卖家精灵 SellerSprite", exact: true });
+  await expect(seller.getByRole("button", { name: "测试已保存连接" })).toBeDisabled();
   await seller.getByLabel("SellerSprite MCP URL").fill("https://mcp.sellersprite.com/mcp");
   await seller.getByLabel("SellerSprite secret-key").fill("fixture-seller-secret");
   await seller.getByRole("button", { name: "保存卖家精灵配置" }).click();
   await expect(seller.getByRole("status")).toContainText("已保存卖家精灵配置");
   await expect(seller.getByLabel("SellerSprite secret-key")).toHaveValue("");
+  const sellerTest = seller.getByRole("button", { name: "测试已保存连接" });
+  await expect(sellerTest).toBeEnabled();
+  await seller.getByLabel("站点").fill("CA");
+  await expect(sellerTest).toBeEnabled();
+  await sellerTest.click();
+  await expect(seller.getByRole("status")).toContainText("连接成功");
+  expect(state.sellerProbes).toBe(1);
+  state.sellerTestFailure = true;
+  await sellerTest.click();
+  await expect(seller.getByRole("status")).toContainText("连接失败");
+  expect(state.sellerProbes).toBe(2);
   const card = page.getByRole("region", { name: "西柚洞察", exact: true });
   await card.getByLabel("MCP Token", { exact: true }).fill("fixture-xiyou-browser-token");
   await card.getByLabel("启用西柚 MCP").check();

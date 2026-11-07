@@ -10,8 +10,10 @@ export function nextPlanRunAt(enabled: boolean, automatic: boolean, intervalMinu
   return enabled ? new Date(now.getTime() + (automatic ? 0 : intervalMinutes * 60_000)) : null;
 }
 
-export const automaticResources = ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing"] as const;
+export const automaticResources = ["catalog", "inventory", "orders", "sales_traffic", "finance", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics"] as const;
 export const automaticMarketplaces = new Set(["ATVPDKIKX0DER", "A2EUQ1WTGCTBG2", "A1AM78C64UM0Y8", "A2Q3Y263D00KWC"]);
+export const brandMarketplaces = new Set([...automaticMarketplaces, "A1RKKUPIHCS9HS", "A1F83G8C2ARO7P", "A13V1IB3VIYZZH", "A1805IZSGTT6HS", "A1PA6795UKMFR9", "APJ6JRA9NG5V4", "A2NODRKZP88ZB9", "A33AVAJ2PDY3EV", "A17E79C6D8DWNP", "A2VIGQ35RCS4UG", "A21TJRUUN4KGV", "A19VAU5U5O7RUS", "A39IBJ37TRP1C6", "A1VC38T7YXB528"]);
+export function automaticMarketplaceAllowed(resource: string, marketplaceId: string) { return (resource === "brand_analytics" ? brandMarketplaces : automaticMarketplaces).has(marketplaceId); }
 export const automaticIntervalMinutes = 1440;
 export const automaticBackfillDays = 730;
 export const automaticInventoryEventBackfillDays = 540;

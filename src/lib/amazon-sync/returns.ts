@@ -44,9 +44,9 @@ export function parseReturnPolicy(value: unknown): ReturnPolicy {
     batchSize: integer(p.batchSize, 1, 500), maxRows: integer(p.maxRows, 1, 50000), pollMaxAttempts: integer(p.pollMaxAttempts, 1, 100), pollDeadlineMinutes: integer(p.pollDeadlineMinutes, 1, 1440), pollBaseSeconds, pollMaxSeconds, budgets };
 }
 export function assertReturnRoles(auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, automaticRead = false) {
-  // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
-  if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length)) return;
-  if (!auth.rolesAttestedAt || !["Pricing", "Amazon Fulfillment"].some(r => auth.approvedRoles.includes(r))) throw new SyncInputError("FBA 退货需要已确认的 Pricing 或 Amazon Fulfillment 角色及 FBA 卖家资格。", 403);
+  // API capabilities are enforced by Amazon. Member permissions live in account settings.
+  // Keep the legacy signature for stored callers; role attestations are metadata only.
+  void auth; void automaticRead;
 }
 export const returnWindowFromFrozen = financeWindowFromFrozen;
 /** Amazon metadata can truncate request milliseconds to whole seconds. */

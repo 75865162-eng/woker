@@ -5,6 +5,7 @@ import { getStorageDriver } from "@/lib/storage";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { assertWorkspaceAccess } from "@/lib/workspace/access";
 import { prismaResearchRepository } from "@/lib/selection-research/prisma-repository";
+import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
 export async function GET(request: Request, context: { params: Promise<{ id: string; fileId: string }> }) {
@@ -27,6 +28,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     } });
     if (!file) return NextResponse.json({ error: "RESEARCH_REPORT_NOT_FOUND" }, { status: 404 });
     const buffer = await getStorageDriver().getBuffer(file.storageKey);
+    if (file.contentHash && createHash("sha256").update(buffer).digest("hex") !== file.contentHash || typeof file.size === "number" && file.size !== buffer.length) return NextResponse.json({ error: "RESEARCH_REPORT_INTEGRITY_FAILED" }, { status: 409 });
     return new Response(new Uint8Array(buffer), { headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,

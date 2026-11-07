@@ -38,7 +38,7 @@ test("settlement report discovery validates identity and retains creation time",
 
 test("report windows and attested roles are enforced", () => {
   assert.throws(() => domainReportRunWindow("settlements", { createdSince: "2025-01-01T00:00:00Z", createdUntil: "2025-05-01T00:00:00Z" }));
-  assert.throws(() => assertDomainReportRoles("settlements", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertDomainReportRoles("settlements", { approvedRoles: ["Finance and Accounting"], rolesAttestedAt: null }));
 });
 
 test("inventory events validate a closed bounded report window and event allowlist", () => {

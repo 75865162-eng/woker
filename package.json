@@ -17,6 +17,8 @@
     "products:scan-statuses": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/scan-product-statuses.ts",
     "products:benchmark": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/benchmark-product-domain.ts",
     "products:backfill-image-assets": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/backfill-product-image-assets.ts",
+    "amazon:images:preview": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/backfill-amazon-catalog-images.ts --preview",
+    "amazon:images:apply": "node --import ./scripts/runtime/database-bootstrap.mjs node_modules/tsx/dist/cli.mjs scripts/backfill-amazon-catalog-images.ts --apply",
     "worker": "node scripts/runtime/worker-manager.mjs",
     "worker:image-upscale": "node scripts/runtime/worker-manager.mjs image-upscale",
     "worker:amazon-sync": "node scripts/runtime/worker-manager.mjs amazon-sync",

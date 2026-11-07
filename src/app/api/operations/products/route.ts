@@ -29,5 +29,8 @@ export async function GET(request: Request) {
     `;
     const rows = await readAmazonProductsForSkus(scope.organizationId, scope.workspaceId, keys.slice(0, 50).map((row) => row.sellerSku), permission.user.id, undefined, true);
     return NextResponse.json({ rows, page, hasNextPage: keys.length > 50, status: rows.length ? "AVAILABLE" : "NOT_SYNCED" }, { headers: { "Cache-Control": "no-store" } });
-  } catch { return NextResponse.json({ error: "Amazon 商品快照读取失败。" }, { status: 500 }); }
+  } catch (error) {
+    console.error("[operations.products.read]", { name: error instanceof Error ? error.name : "UnknownError", code: (error as { code?: string })?.code });
+    return NextResponse.json({ error: "Amazon 商品快照读取失败。" }, { status: 500 });
+  }
 }

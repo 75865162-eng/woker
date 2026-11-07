@@ -79,6 +79,7 @@ export function summary(command: Record<string, unknown>) {
     if (typeof v === "string") { if (v.length > 200) throw new SyncInputError("配置字段过长。"); result[k] = v; }
     else if (typeof v === "boolean" || typeof v === "number" || v === null) result[k] = v;
     else if (["requestedRanges", "orderWindows", "financeWindows", "returnWindows", "reportWindows", "reportWindow"].includes(k) && v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
+    else if (k === "brandPolicies" && v && typeof v === "object" && !Array.isArray(v)) result[k] = Object.fromEntries(Object.entries(v).map(([id, policy]) => [id, parseObservationPolicy(policy, "brand_analytics")]));
     else if (k === "settlementPolicy") result[k] = parseSettlementPolicy(v);
     else if (k === "domainPolicy") result[k] = v && typeof v === "object" && "mode" in v && v.mode === "seller-archive-only" ? parseSellerArchivePolicy(v) : parseObservationPolicy(v);
     else if (k === "returnsPolicy") result[k] = parseReturnPolicy(v);

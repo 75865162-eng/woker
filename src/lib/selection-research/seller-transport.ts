@@ -4,7 +4,7 @@ import type { ToolPolicy, Transport } from "./types";
 
 const stages: Record<string, number[]> = {
   market_find_products: [1, 2, 5], market_find_node: [1], market_scan_node: [1, 2],
-  market_get_asin: [2, 3, 5], market_research_keyword: [2, 5], market_mine_keywords: [1, 2],
+  market_get_asin: [1, 2, 3, 5], market_research_keyword: [2, 5], market_mine_keywords: [1, 2],
   market_get_reviews: [3, 5], market_list_competitors: [2, 3], market_aba_trend: [2],
 };
 

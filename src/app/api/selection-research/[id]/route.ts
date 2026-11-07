@@ -1,3 +1,4 @@
+import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { NextResponse } from "next/server";
 import { researchAccess, researchError } from "@/lib/selection-research/server";
 import { executeResearchCommand } from "@/lib/selection-research/http";
@@ -15,7 +16,7 @@ export async function GET(request: Request, context: Context) {
 }
 export async function POST(request: Request, context: Context) {
   try {
-    const body = await request.json() as Record<string, unknown>;
+    const body = await boundedJsonObject(request, 64_000);
     const action = body.operation === "decide" ? "approve" : body.operation === "export" ? "export" : "edit";
     const id = (await context.params).id;
     const access = await researchAccess(request, action, { ...body, runId: id }); if (!access.ok) return access.response;

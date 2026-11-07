@@ -31,7 +31,7 @@ test("HTTP evidence is revision, tenant, site and operation bound; never grants 
     assert.throws(() => productAccessEvidence(c, { status: 403, parsed: false, requestId: "rejected" }));
     const p = parseObservationPolicy({ ...fields, accessEvidence: token });
     assert.doesNotThrow(() => assertObservationRoles(p, { approvedRoles: [], rolesAttestedAt: null }, c));
-    assert.throws(() => assertObservationRoles(p, { approvedRoles: [], rolesAttestedAt: null }));
+    assert.doesNotThrow(() => assertObservationRoles(p, { approvedRoles: [], rolesAttestedAt: null }));
     assert.ok(!JSON.stringify(safeState(p)).includes(token));
   } finally { if (prior === undefined) delete process.env.AMAZON_SP_API_ENCRYPTION_KEY; else process.env.AMAZON_SP_API_ENCRYPTION_KEY = prior; }
 });

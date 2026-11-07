@@ -238,11 +238,9 @@ export function reportDomainRoles(resource: DomainReportResource): string[] {
 }
 
 export function assertDomainReportRoles(resource: DomainReportResource, auth: { approvedRoles: string[]; rolesAttestedAt: Date | null }, automaticRead = false) {
-  // Automatic token-scoped reads let Amazon enforce its actual operation role; no attestation is invented.
-  if (automaticRead && (!auth.rolesAttestedAt || !auth.approvedRoles.length)) return;
-  const roles = reportDomainRoles(resource);
-  const valid = resource === "reimbursements" ? roles.some(role => auth.approvedRoles.includes(role)) : roles.every(role => auth.approvedRoles.includes(role));
-  if (!auth.rolesAttestedAt || !valid) throw new SyncInputError(`${resource} 数据域所需 Amazon 角色尚未由管理员核实。`, 403);
+  // API capabilities are enforced by Amazon. Member permissions live in account settings.
+  // Keep the legacy signature for stored callers; role attestations are metadata only.
+  void resource; void auth; void automaticRead;
 }
 
 export function parseGetReportsPage(value: unknown, expectedType: string, marketplaceId: string, collectionMarketplaceIds?: string[]) {

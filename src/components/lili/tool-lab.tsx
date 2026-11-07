@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LiveTools } from "./live-tools";
 import { useMemo, useState } from "react";
 import type { Locale } from "@/lib/lili/tx";
 import { tx } from "@/lib/lili/tx";
@@ -18,8 +19,9 @@ export function ToolLab({ locale, tools }: { locale: Locale; tools: ToolCard[] }
   });
   return (
     <div>
+      <LiveTools />
       <div className="mb-4 rounded-lg bg-surface-muted px-4 py-3 text-sm leading-6 text-muted">
-        {tx(locale, "保留全部工具定义。3 个目录工具可查询静态技能与模板；业务工具尚未映射，请使用主系统对应工作台。", "All definitions are retained. Three catalog tools query static skills and templates. Business tools are not mapped; use the corresponding ERP workspace.")}
+        {tx(locale, "下方保留历史工具定义供参考；当前可调用工具、参数与授权以上方真实 MCP 目录为准。", "Historical tool definitions are retained below for reference. Use the live MCP registry above for callable tools, schemas and permissions.")}
       </div>
       <div className="mb-3 flex flex-wrap gap-2">
         <input className="lili-field min-w-[220px] flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tx(locale, "搜索工具", "Search tools")} />

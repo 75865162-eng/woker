@@ -1,17 +1,24 @@
+import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { NextResponse } from "next/server";
-import { discoverResearchTools, researchAccess, researchError } from "@/lib/selection-research/server";
+import { researchAccess, researchError, getResearchAvailability, installedResearchSkills } from "@/lib/selection-research/server";
 import { rejectCredentials } from "@/lib/selection-research/schema";
+import { runtimeToolsForUser } from "@/lib/lili/runtime-server";
+import { researchReadiness } from "@/lib/selection-research/preflight";
 
 export const runtime = "nodejs";
 /** Explicit metadata-only discovery: no research record, model request or tools/call. */
 export async function POST(request: Request) {
   try {
-    const access = await researchAccess(request, "view", { mode: "live" });
+    const body = await boundedJsonObject(request, 64_000);
+    const access = await researchAccess(request, "view", { ...body, mode: "fixture" });
     if (!access.ok) return access.response;
-    if (!access.transport || !access.sellerSettings?.enabled || !access.sellerSettings.apiKey) throw new Error("SELLERSPRITE_MCP_NOT_CONFIGURED");
-    const result = await discoverResearchTools(access.transport);
-    rejectCredentials(result.registry);
-    return NextResponse.json({ discoveredAt: new Date().toISOString(), scope: { workspaceId: access.scope.workspaceId }, tools: result.registry,
-      missingCanonicalTools: result.missing, xiyou: "unavailable_no_ERP_provider_adapter", toolsCallCount: 0, aiRequestCount: 0, persisted: false }, { headers: { "Cache-Control": "no-store" } });
+    const runtimeTools = await runtimeToolsForUser({ id: access.scope.ownerId, organizationId: access.scope.organizationId }, request, body);
+    const [result, availability, skills] = await Promise.all([
+      runtimeTools.discover(), getResearchAvailability(request, body).catch(() => undefined), installedResearchSkills().catch(() => undefined),
+    ]);
+    if (availability && !availability.ok) return availability.response;
+    rejectCredentials(result);
+    const readiness = researchReadiness({ ...result, ai: availability?.ok ? availability.ai : "model_configuration_unavailable", skills, request: body });
+    return NextResponse.json({ ...result, readiness, scope: { workspaceId: access.scope.workspaceId }, toolsCallCount: 0, aiRequestCount: 0, persisted: false }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return researchError(error); }
 }

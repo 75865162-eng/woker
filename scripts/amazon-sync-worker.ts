@@ -1,4 +1,5 @@
 import "./runtime/worker-bootstrap.mjs";
+import { continuityGrant } from "@/lib/amazon-sync/continuity-access";
 import { createHeartbeatWriter } from "@/lib/runtime/heartbeat-writer";
 import { observeWorker, runtimeHeartbeatMetadata } from "@/lib/runtime/worker-diagnostics";
 import { amazonWorkerPolicy, workerAllows } from "@/lib/amazon-sync/worker-policy";
@@ -27,7 +28,17 @@ const worker = new Worker<AmazonSyncQueueJob>(
     if (job.name === "export-amazon-sales" && job.data.exportId && Number.isInteger(job.data.fence)) { if (workerAllows(policy, "export", job.data.exportId)) await processSalesExport(job.data.exportId, job.data.fence!); return; }
     if (job.name === "process-amazon-ads-sync-task" && job.data.adsTaskId && Number.isInteger(job.data.adsDispatchVersion)) { if (workerAllows(policy, "task", job.data.adsTaskId)) await processAmazonAdsSyncTask(job.data.adsTaskId, job.data.adsDispatchVersion!); return; }
     if (!Number.isInteger(job.data.dispatchVersion)) throw new Error("Legacy/unversioned jobs are rejected.");
-    if (workerAllows(policy, "task", job.data.runId)) await processSyncCenterTask(job.data.runId, job.data.dispatchVersion!);
+    if (workerAllows(policy, "task", job.data.runId)) {
+      await processSyncCenterTask(job.data.runId, job.data.dispatchVersion!);
+      // DB checkpoint remains authoritative. Redis loss falls back to the existing tick.
+      try {
+        const next = await prisma.amazonSyncRun.findUnique({ where: { id: job.data.runId }, include: { source: { include: { authorization: true } } } });
+        if (next?.status === "WAITING" && next.source && await continuityGrant(prisma, next.source)) {
+          const { getAmazonSyncQueue } = await import("@/lib/queue/redis-queue");
+          await getAmazonSyncQueue().add("process-amazon-sync-run", { runId: next.id, dispatchVersion: next.dispatchVersion }, { jobId: 'adc-' + next.id + '-' + next.dispatchVersion, delay: Math.max(250, next.nextAttemptAt.getTime() - Date.now()), priority: next.priority, attempts: 1, removeOnComplete: true, removeOnFail: true });
+        }
+      } catch { /* Durable scheduler redispatches the saved generation. */ }
+    }
   },
   { connection: createRedisConnectionOptions(), concurrency },
 );

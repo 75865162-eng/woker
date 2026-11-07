@@ -13,6 +13,7 @@ import {
   sellerSpriteIntegrationProvider,
   toPublicSellerSpriteMcpSettings,
   validateSellerSpriteMcpSettings,
+  listSellerSpriteRemoteTools,
   type SellerSpriteMcpSettings,
 } from "@/lib/integrations/sellersprite";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
@@ -129,9 +130,12 @@ export async function POST(request: Request) {
       return permission.response;
     }
 
-    const body = (await request.json().catch(() => ({}))) as SellerSpritePayload;
-    const submitted = parseSubmittedSettings(body.settings);
-    const candidate = normalizeSellerSpriteMcpSettings(submitted);
+    const body = (await request.json().catch(() => ({}))) as SellerSpritePayload & { testSaved?: unknown };
+    const scope = workspaceScopeFromRequest(request, body as Record<string, unknown>);
+    const savedOrSubmitted = body.testSaved === true
+      ? await getSellerSpriteMcpSettings(permission.user, scope)
+      : normalizeSellerSpriteMcpSettings(parseSubmittedSettings(body.settings));
+    const candidate = { ...savedOrSubmitted, enabled: true };
     const validationError = validateSellerSpriteMcpSettings(candidate);
     const publicSettings = toPublicSellerSpriteMcpSettings(candidate);
 
@@ -144,12 +148,14 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({
-      ok: false,
-      status: "transport_unavailable",
-      settings: publicSettings,
-      message: "连接测试失败：当前版本尚未接入真实 SellerSprite MCP 协议，配置格式通过不代表服务已连接。市场研究已禁用模拟回退。",
-    }, { status: 501 });
+    let tools;
+    try {
+      tools = await listSellerSpriteRemoteTools(candidate);
+    } catch {
+      return NextResponse.json({ ok: false, status: "connection_failed", message: "SellerSprite MCP 连接失败，请检查已保存配置、网络及服务状态。" }, { status: 502 });
+    }
+    return NextResponse.json({ ok: true, status: "connected", settings: publicSettings, toolCount: tools.length,
+      message: `SellerSprite MCP 连接成功，已读取 ${tools.length} 个工具；未调用业务工具。` });
   } catch (error) {
     const message = error instanceof Error ? error.message : "SellerSprite MCP 连接测试失败。";
     return NextResponse.json({ error: message }, { status: 500 });

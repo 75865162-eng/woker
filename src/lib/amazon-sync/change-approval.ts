@@ -1,3 +1,4 @@
+import { nextBrandCollectionPolicy } from "./brand-collection-query";
 import { discoverProductObjects } from "./product-discovery";
 import { previewReportAttribution, applyReportAttribution } from "./report-attribution-recovery";
 import { settlementScope } from "./settlement-scope";
@@ -140,7 +141,7 @@ async function inspect(tx: Prisma.TransactionClient, scope: SyncScope, command: 
     parseSyncPlan(command);
     const plan = id ? await tx.amazonSyncSchedule.findFirst({ where: { ...scope, id, executionVersion: 2 }, include: { targets: { select: { sourceId: true } } } }) : null;
     if (id && !plan) throw new SyncInputError("计划不存在。", 404);
-    if (command.enabled === true && !plan?.planKey.startsWith("auto-v1:")) throw new SyncInputError("仅可恢复系统生成的自动同步计划。", 409);
+    if (command.enabled === true && !plan?.planKey.startsWith("auto-v1:") && !(command.resource === "brand_analytics" && !plan)) throw new SyncInputError("仅可恢复系统生成的自动同步计划。", 409);
       if (plan && command.revision !== plan.revision) throw new SyncInputError("计划版本已变化。", 409);
     before = plan ? { id: plan.id, revision: plan.revision, name: plan.name, enabled: plan.enabled, resource: plan.resource, intervalMinutes: plan.intervalMinutes, retentionDays: plan.retentionDays, maxAttempts: plan.maxAttempts, priority: plan.priority, mode: plan.mode, sourceIds: plan.targets.map(t => t.sourceId).sort() } : null;
     baseRevision = plan?.revision ?? 0;
@@ -198,15 +199,21 @@ export async function requestChange(scope: SyncScope, actor: string, input: Reco
   if (!command.id && ["save-authorization", "save-source", "save-plan", "save-access-grant"].includes(action)) command.proposedId = randomUUID();
   return prisma.$transaction(async tx => {
     await scopeLock(tx, scope); await assertChangePermission(scope, actor, action, tx);
+    if (action === "save-plan" && command.resource === "brand_analytics") await assertAmazonScopeAdmin(scope, actor, tx);
     if (action === "run") {
-      const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: command.sourceIds as string[] ?? [] } } });
+      const sources = await tx.amazonSyncDataSource.findMany({ where: { ...scope, id: { in: command.sourceIds as string[] ?? [] } }, include: { authorization: true } });
       const requestedRanges: Record<string, unknown> = {};
       const orderWindows: Record<string, unknown> = {};
       const financeWindows: Record<string, unknown> = {};
       const returnWindows: Record<string, unknown> = {};
       const reportWindows: Record<string, unknown> = {};
+      const brandPolicies: Record<string, unknown> = {};
       for (const source of sources) {
-        if (source.resource === "sales_traffic") requestedRanges[source.id] = resolveRequestedRange(source.marketplaceId, command);
+        if (source.resource === "brand_analytics") {
+          if (command.dateFrom || command.dateTo || command.datePreset) throw new SyncInputError("品牌日期由已批准的来源清单确定。");
+          brandPolicies[source.id] = await nextBrandCollectionPolicy(tx, scope, source);
+        }
+        else if (source.resource === "sales_traffic") requestedRanges[source.id] = resolveRequestedRange(source.marketplaceId, command);
         else if (source.resource === "orders") {
           if (command.dateFrom || command.dateTo || command.datePreset) throw new SyncInputError("订单窗口由持久化游标和已审批策略确定，不接受临时历史日期。");
           const cursor = await tx.amazonSyncResourceCursor.findUnique({ where: { sourceId: source.id } });
@@ -240,6 +247,7 @@ export async function requestChange(scope: SyncScope, actor: string, input: Reco
       if (Object.keys(financeWindows).length) command.financeWindows = financeWindows;
       if (Object.keys(orderWindows).length) command.orderWindows = orderWindows;
       if (Object.keys(reportWindows).length) command.reportWindows = reportWindows;
+      if (Object.keys(brandPolicies).length) command.brandPolicies = brandPolicies;
     }
     const ciphertext = seal(command, scope, id, environment), payloadDigest = digest(ciphertext);
     const evidence = await inspect(tx, scope, command); evidence.targetId ||= String(command.proposedId ?? id);
@@ -409,6 +417,7 @@ export async function applyChange(scope: SyncScope, actor: string, id: string) {
       const envelope = await tx.amazonDataCenterSealedCommand.findFirst({ where: { ...scope, id } });
       if (!envelope || digest(envelope.ciphertext) !== row.payloadDigest) throw new SyncInputError("待应用配置完整性校验失败。", 409);
       const command = unseal(envelope.ciphertext, scope, id, row.targetEnvironment);
+      if (action === "save-plan" && command.resource === "brand_analytics") await assertAmazonScopeAdmin(scope, row.approvedByUserId ?? "", tx);
       if (operation(command.action) !== action) throw new SyncInputError("审批操作不匹配。", 409);
       const evidence = await inspect(tx, scope, command); evidence.targetId ||= row.targetId;
       assertApplicable(row, { environment: targetEnvironment(), digest: evidenceDigest(scope, row, evidence), revision: evidence.baseRevision });

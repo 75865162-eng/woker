@@ -6,9 +6,9 @@ export async function readObservations(scope: SyncScope, params: URLSearchParams
   const resource = params.get("resource"); if (!resource || !isObservationResource(resource)) throw new SyncInputError("观察域无效。");
   for (const key of ["sourceId", "sellerAccountId", "marketplaceId", "asin", "sellerSku", "searchTerm", "kind", "runId"]) if ((params.get(key)?.length ?? 0) > 5000) throw new SyncInputError("筛选超出长度限制。");
   const access = await amazonDataAccess(scope, actor);
-  const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...sourceAccessWhere(access), resource, ...(params.get("sellerAccountId") ? { sellerAccountId: params.get("sellerAccountId")! } : {}), ...(params.get("marketplaceId") ? { marketplaceId: params.get("marketplaceId")! } : {}) }, select: { id: true, sellerAccountId: true, marketplaceId: true, activeRunId: true, coverage: true, lastSuccessAt: true, seller: { select: { displayName: true } } }, orderBy: { id: "asc" }, take: 201 });
+  const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, ...sourceAccessWhere(access), resource, ...(params.get("sellerAccountId") ? { sellerAccountId: params.get("sellerAccountId")! } : {}), ...(params.get("marketplaceId") ? { marketplaceId: params.get("marketplaceId")! } : {}) }, select: { id: true, sellerAccountId: true, marketplaceId: true, activeRunId: true, rowCount: true, coverage: true, lastSuccessAt: true, seller: { select: { displayName: true } } }, orderBy: { id: "asc" }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("数据源超出试点容量。", 409);
-  const source = params.get("sourceId") ? sources.find(s => s.id === params.get("sourceId")) : sources[0];
+  const source = params.get("sourceId") ? sources.find(s => s.id === params.get("sourceId")) : resource === "listing_details" ? sources.find(s => s.activeRunId && s.rowCount > 0) ?? sources[0] : sources[0];
   if (params.get("sourceId") && !source) throw new SyncInputError("数据源不可访问。", 403);
   const runId = params.get("runId") || source?.activeRunId;
   const run = runId && source ? await prisma.amazonSyncRun.findFirst({ where: { ...scope, sourceId: source.id, id: runId, resource, status: "SUCCEEDED", stage: { not: "PURGED" }, finishedAt: { not: null }, executionVersion: 2 }, select: { id: true, finishedAt: true, summary: true } }) : null;

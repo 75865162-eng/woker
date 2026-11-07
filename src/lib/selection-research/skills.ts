@@ -15,3 +15,13 @@ export async function loadResearchSkills(root: string): Promise<SkillSnapshot[]>
     return { name, path: file, markdown, tools, sha256: createHash("sha256").update(markdown).digest("hex") };
   }));
 }
+
+/** Bundled originals are also available on a deployed host without a device-local Codex installation. */
+export async function loadBundledResearchSkills(): Promise<SkillSnapshot[]> {
+  const { skillMarkdown, findSkill } = await import("@/lib/lili/catalog");
+  return Promise.all(SKILLS.map(async name => {
+    const markdown = await skillMarkdown(name);
+    if (!markdown) throw new Error("RESEARCH_SKILL_MISSING");
+    return { name, path: `lili://skills/${name}/SKILL.md`, markdown, tools: findSkill(name)?.tools ?? [], sha256: createHash("sha256").update(markdown).digest("hex") };
+  }));
+}

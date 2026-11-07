@@ -26,6 +26,7 @@ export async function CatalogContent({ kind, slug, locale }: { kind: string; slu
       {[
         ["/lili/v2/skills", "查技能", "搜索、分类、复制提示词并查看完整步骤。"],
         ["/lili/v2/cases", "选工作流", "按定义逐步查看，不自动执行店铺操作。"],
+        ["/agents/selection-research", "ASIN 选品研究", "真实来源取证、两次人工确认、HTML 报告和历史恢复。"],
         ["/agents", "Agent 执行与审批", "进入主系统已有执行轨迹和人工审批。"],
         ["/operations", "店铺、同步与 MCP", "使用当前工作区已授权的数据源与个人凭证。"],
       ].map(([href, title, description]) => <Link key={href} href={href} prefetch={false} className="lili-card space-y-2 p-4 hover:border-brand"><h2 className="font-semibold">{title}</h2><p className="text-sm text-muted">{description}</p></Link>)}

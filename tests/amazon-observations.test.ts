@@ -16,10 +16,10 @@ test("observation scope normalizes allowlists, closed periods and exact report o
   assert.throws(() => policy("search_query", { reportPeriod: "DAY", to: "2025-01-05" }));
   assert.throws(() => policy("search_terms", { asins: [id] }));
   assert.throws(() => policy("market_basket", { from: "2025-01-06", to: "2025-01-12" }));
-  assert.throws(() => policy("search_terms", { brandEligibilityAttested: false }));
+  assert.doesNotThrow(() => policy("search_terms", { brandEligibilityAttested: false }));
   assert.throws(() => assertObservationClosed(p, new Date("2025-01-11T12:00:00Z")));
   assert.doesNotThrow(() => assertObservationClosed(p, new Date("2025-01-12T12:00:00Z")));
-  assert.throws(() => assertObservationRoles(p, { approvedRoles: ["Brand Analytics"], rolesAttestedAt: null }));
+  assert.doesNotThrow(() => assertObservationRoles(p, { approvedRoles: ["Brand Analytics"], rolesAttestedAt: null }));
 });
 for (const [kind, filename] of [["search_terms", "sellingPartnerSearchTermsReport"], ["search_query", "sellingPartnerSearchQueryPerformanceReport"], ["search_catalog", "sellingPartnerSearchCatalogPerformanceReport"], ["market_basket", "sellingPartnerMarketBasketAnalysisReport"]]) test(`official ${kind} example is accepted, scoped and strips unknown fields`, () => {
   const raw = report(filename), spec = raw.reportSpecification;

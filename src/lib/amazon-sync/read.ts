@@ -1,6 +1,7 @@
 import { amazonDataAccess, sourceAccessWhere } from "./data-access";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { safeState } from "./approval-policy";
 import { inventorySnapshotStatus } from "@/lib/operations/readiness";
 import { SyncInputError, isIncrementalResource, type SyncScope } from "./policy";
 
@@ -34,7 +35,7 @@ export async function listSources(scope: SyncScope, filters: { sellerAccountId?:
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { AND: [{ ...scope, ...filters }, allowed] }, include: sourceInclude, orderBy: { createdAt: "asc" }, take: 201 });
   if (sources.length > 200) throw new SyncInputError("数据源超过试点容量，需要容量评审。", 409);
   const latest = sources.length ? await prisma.amazonSyncRun.findMany({ where: { ...scope, executionVersion: 2, sourceId: { in: sources.map(s => s.id) } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], distinct: ["sourceId"] }) : [];
-  return sources.map(source => ({ ...source, resourceCursor: isIncrementalResource(source.resource) && source.resourceCursor ? { ...source.resourceCursor, hasIncompleteWindow: source.resourceCursor.status !== "SUCCEEDED" } : null, nextScheduledAt: source.targets.filter(t => t.schedule.enabled && t.schedule.nextRunAt).map(t => t.schedule.nextRunAt!).sort((a, b) => a.getTime() - b.getTime())[0] ?? null, latestTask: latest.find(t => t.sourceId === source.id) ? taskSummary(latest.find(t => t.sourceId === source.id)!) : null, health: sourceHealth(source, latest.find(t => t.sourceId === source.id)?.status) }));
+  return sources.map(source => ({ ...source, orderPolicy: safeState(source.orderPolicy) as Prisma.JsonValue, domainPolicy: safeState(source.domainPolicy) as Prisma.JsonValue, resourceCursor: isIncrementalResource(source.resource) && source.resourceCursor ? { ...source.resourceCursor, hasIncompleteWindow: source.resourceCursor.status !== "SUCCEEDED" } : null, nextScheduledAt: source.targets.filter(t => t.schedule.enabled && t.schedule.nextRunAt).map(t => t.schedule.nextRunAt!).sort((a, b) => a.getTime() - b.getTime())[0] ?? null, latestTask: latest.find(t => t.sourceId === source.id) ? taskSummary(latest.find(t => t.sourceId === source.id)!) : null, health: sourceHealth(source, latest.find(t => t.sourceId === source.id)?.status) }));
 }
 /** Static advice only: no upstream error/body, cursor token or raw document. */
 export function incrementalOperatorAction(resource: string, status: string) {

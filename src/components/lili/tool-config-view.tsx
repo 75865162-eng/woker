@@ -13,6 +13,7 @@ function SellerSpriteConfigCard() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [retry, setRetry] = useState(0);
+  const canTestSavedConnection = Boolean(saved?.hasApiKey && saved.serverUrl.startsWith("http"));
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -41,6 +42,16 @@ function SellerSpriteConfigCard() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "卖家精灵配置保存失败。"); }
     finally { setBusy(false); }
   }
+  async function testSavedConnection() {
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch("/api/integrations/sellersprite", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ testSaved: true }) });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.message || "卖家精灵 MCP 连接测试失败。");
+      setMessage(data.message || "卖家精灵 MCP 连接成功；未调用业务工具。");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "卖家精灵 MCP 连接测试失败。"); }
+    finally { setBusy(false); }
+  }
   return <section className="lili-card space-y-3 p-5" aria-label="卖家精灵 SellerSprite">
     <h2 className="text-base font-bold">卖家精灵 SellerSprite</h2>
     <p className="text-sm">与主系统设置共用同一配置。填写「我的密钥」中的 secret-key；留空保留已保存密钥。</p>
@@ -55,11 +66,11 @@ function SellerSpriteConfigCard() {
           <label className="block text-sm">超时（秒）<input type="number" min={5} max={180} className="lili-field mt-1 w-full" value={settings.timeoutSeconds} onChange={(event) => setSettings({ ...settings, timeoutSeconds: Number(event.target.value) })} /></label>
           <label className="block text-sm">协议版本<input className="lili-field mt-1 w-full" value={settings.protocolVersion} onChange={(event) => setSettings({ ...settings, protocolVersion: event.target.value })} /></label>
         </div></details>
-        <button type="submit" className="lili-btn-orange">{busy ? "处理中…" : "保存卖家精灵配置"}</button>
+        <div className="flex flex-wrap gap-3"><button type="submit" className="lili-btn-orange">{busy ? "处理中…" : "保存卖家精灵配置"}</button><button type="button" className="lili-btn-ghost" disabled={loading || busy || !canTestSavedConnection} onClick={() => void testSavedConnection()}>测试已保存连接</button></div>
       </fieldset>
     </form>
     <Link className="underline text-sm" href="/settings?tab=models">打开主系统模型设置</Link>
-    <p className="text-xs text-muted">主系统现有连接测试接口仍返回尚未实现；此处不会把保存成功显示为连接成功。Lili 业务工具执行器仍须逐项接入。</p>
+    <p className="text-xs text-muted">连接测试使用已保存 URL 和密钥，只执行 MCP 握手并读取工具目录，不调用市场业务工具，也不会更改启用状态；未保存的编辑不会影响本次测试。Lili 业务工具执行器仍须逐项接入。</p>
     <p role="status" aria-live="polite" className="text-sm">{message}</p>
     {!loading && !saved && <button className="lili-btn-ghost" onClick={() => setRetry(retry + 1)}>重新读取卖家精灵配置</button>}
   </section>;

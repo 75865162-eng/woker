@@ -1,3 +1,4 @@
+import { brandReportTypes } from "./observation-policy";
 import { parseProductDetail } from "./product-observations";
 import { assertInboundPageProgress, assertInboundPlanMarketplace, inboundItemKey, parseInboundItemsPage, parseInboundPlan, parseInboundShipment } from "./inbound";
 import { observationFact, parseOwnPrices, parseCompetitivePrices, parseObservationReport, type SafeFact } from "./observation-parsers";
@@ -68,7 +69,7 @@ export function advanceObservation(policy: ObservationPolicy, state: Observation
     const root = s.stage === "DOWNLOAD" ? {} : object(response);
     if (s.stage === "CREATING") { s.reportId = text(root.reportId, 200); s.stage = "POLL"; }
     else if (s.stage === "POLL") {
-      if (root.reportId !== s.reportId || root.reportType !== (policy.resource === "brand_analytics" ? { search_terms: "GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT", search_query: "GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT", search_catalog: "GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT", market_basket: "GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT" }[policy.reportKind] : "GET_SALES_AND_TRAFFIC_REPORT") || !Array.isArray(root.marketplaceIds) || root.marketplaceIds.length !== 1 || root.marketplaceIds[0] !== context.marketplaceId) return invalid();
+      if (root.reportId !== s.reportId || root.reportType !== (policy.resource === "brand_analytics" ? brandReportTypes[policy.reportKind] : "GET_SALES_AND_TRAFFIC_REPORT") || !Array.isArray(root.marketplaceIds) || root.marketplaceIds.length !== 1 || root.marketplaceIds[0] !== context.marketplaceId) return invalid();
       if (root.processingStatus === "DONE") { s.documentId = text(root.reportDocumentId, 200); s.stage = "DOCUMENT"; }
       else if (!["IN_QUEUE", "IN_PROGRESS"].includes(String(root.processingStatus))) return invalid();
     } else if (s.stage === "DOCUMENT") {

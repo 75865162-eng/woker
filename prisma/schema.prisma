@@ -244,6 +244,7 @@ model FileObject {
   marketplace      String             @default("")
   contentHash      String?
   productBindingStatus ProductAttachmentStatus?
+  amazonCatalogImageBlob AmazonCatalogImageBlob?
   DraftRun         DraftRun[]
   amazonDataExports AmazonDataExport[]
   exportRecords    ExportRecord[]
@@ -3381,6 +3382,45 @@ model AmazonDomainObservation {
   @@unique([sourceRunId, kind, businessKey], map: "AmazonObservation_run_key")
   @@index([organizationId, workspaceId, sourceId, sourceRunId, kind], map: "AmazonObservation_scope_idx")
   @@index([organizationId, workspaceId, sourceId, asin], map: "AmazonObservation_asin_idx")
+}
+
+model AmazonCatalogImageBlob {
+  id             String   @id
+  organizationId String
+  workspaceId    String   @default("default")
+  contentHash    String
+  fileId         String   @unique
+  width          Int
+  height         Int
+  size           Int
+  createdAt      DateTime @default(now())
+  file           FileObject @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  imageReferences AmazonCatalogImageReference[]
+
+  @@unique([organizationId, workspaceId, contentHash], map: "AmazonCatalogImageBlob_scope_hash_key")
+  @@index([organizationId, workspaceId, createdAt], map: "AmazonCatalogImageBlob_scope_created_idx")
+}
+
+model AmazonCatalogImageReference {
+  id               String   @id
+  organizationId   String
+  workspaceId      String   @default("default")
+  sellerAccountId  String
+  marketplaceId    String
+  asin             String
+  variant          String   @default("MAIN")
+  sourceResource   String
+  sourceRunId      String
+  sourceUrl        String
+  blobId           String
+  capturedAt       DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  blob             AmazonCatalogImageBlob @relation(fields: [blobId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, workspaceId, sellerAccountId, marketplaceId, asin, variant], map: "AmazonCatalogImageReference_product_key")
+  @@index([organizationId, workspaceId, sellerAccountId, marketplaceId, asin], map: "AmazonCatalogImageReference_product_idx")
+  @@index([blobId])
 }
 
 // Seller-level settlement originals; rows are published only with explicit site attribution.

@@ -63,6 +63,12 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = publicRoutes.includes(pathname);
   const isPublicApi = publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
 
+  // This exact endpoint authenticates every request with its personal MCP bearer.
+  // Requiring a browser session here prevents external MCP clients from reaching it.
+  if (pathname === "/api/mcp/amazon") {
+    return NextResponse.next();
+  }
+
   if (isPublicRoute || isPublicApi) {
     return NextResponse.next();
   }

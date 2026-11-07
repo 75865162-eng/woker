@@ -1,7 +1,9 @@
 import { amazonDataAccess, sellerAccessWhere, sourceAccessWhere } from "@/lib/amazon-sync/data-access";
+import { extractAmazonProductTitle } from "@/lib/amazon-sync/catalog-images";
 import { publishedSnapshotScopes, catalogPublishedWhere, inventoryPublishedWhere } from "@/lib/amazon-sync/read";
 import { prisma } from "@/lib/db/prisma";
 import { inventorySnapshotStatus } from "./readiness";
+import { readProductImageReferences } from "./amazon-product-images";
 
 export type AmazonProductReadRow = {
   sellerAccountId: string; marketplaceId: string; sellerSku: string; asin: string | null;
@@ -57,46 +59,45 @@ export async function readAmazonProductsForSkus(organizationId: string, workspac
     result.fieldSources = { ...result.fieldSources, available: "Amazon SP-API FBA Inventory Summaries", inbound: "Amazon SP-API FBA Inventory Summaries", reserved: "Amazon SP-API FBA Inventory Summaries", unfulfillable: "Amazon SP-API FBA Inventory Summaries" };
   }
   if (includeCatalogDetails) {
-    const asins = [...new Set([...rows.values()].map(row => row.asin).filter((asin): asin is string => !!asin))];
-    if (asins.length) {
-      const catalogRows = [...rows.values()];
-      const catalogSources = await prisma.amazonSyncDataSource.findMany({
-        where: {
-          ...scope,
-          ...sourceAccessWhere(await amazonDataAccess(scope, actor)),
-          resource: "catalog_items",
-          enabled: true,
-          activeRunId: { not: null },
-          sellerAccountId: { in: [...new Set(catalogRows.map(row => row.sellerAccountId))] },
-          marketplaceId: { in: [...new Set(catalogRows.map(row => row.marketplaceId))] },
-          publishedRun: { status: "SUCCEEDED", resource: "catalog_items", executionVersion: 2, finishedAt: { not: null }, stage: { not: "PURGED" } },
-        },
-        select: { id: true, activeRunId: true, sellerAccountId: true, marketplaceId: true },
-        take: 200,
+    const productRows = [...rows.values()].filter(row => row.asin);
+    if (productRows.length) {
+      const access = await amazonDataAccess(scope, actor);
+      const sources = await prisma.amazonSyncDataSource.findMany({
+        where: { ...scope, ...sourceAccessWhere(access), resource: { in: ["catalog_items", "listing_details"] }, enabled: true, activeRunId: { not: null }, sellerAccountId: { in: [...new Set(productRows.map(row => row.sellerAccountId))] }, marketplaceId: { in: [...new Set(productRows.map(row => row.marketplaceId))] }, publishedRun: { status: "SUCCEEDED", executionVersion: 2, finishedAt: { not: null }, stage: { not: "PURGED" } } },
+        select: { id: true, resource: true, activeRunId: true, sellerAccountId: true, marketplaceId: true }, take: 200,
       });
-      if (catalogSources.length) {
-        const observations = await prisma.amazonDomainObservation.findMany({
-          where: { ...scope, sourceId: { in: catalogSources.map(source => source.id) }, sourceRunId: { in: catalogSources.map(source => source.activeRunId!) }, kind: "CATALOG_DETAIL", asin: { in: asins } },
-          select: { sourceId: true, asin: true, facts: true },
-          take: 400,
+      const asins = [...new Set(productRows.map(row => row.asin!))];
+      const observations = sources.length ? await prisma.amazonDomainObservation.findMany({ where: { ...scope, OR: sources.map(source => ({ sourceId: source.id, sourceRunId: source.activeRunId! })), asin: { in: asins }, kind: { in: ["CATALOG_DETAIL", "LISTING_DETAIL"] } }, select: { sourceId: true, asin: true, facts: true }, take: 4000 }) : [];
+      const sourceById = new Map(sources.map(source => [source.id, source]));
+      const detailsByProduct = new Map<string, { title: string | null; titleResource: string }>();
+      for (const observation of observations) {
+        if (!observation.asin) continue;
+        const source = sourceById.get(observation.sourceId);
+        if (!source || (source.resource !== "catalog_items" && source.resource !== "listing_details")) continue;
+        const key = JSON.stringify([source.sellerAccountId, source.marketplaceId, observation.asin]);
+        const previous = detailsByProduct.get(key);
+        const title = extractAmazonProductTitle(observation.facts, source.marketplaceId);
+        const preferred = source.resource === "catalog_items";
+        detailsByProduct.set(key, {
+          title: title && (!previous?.title || preferred) ? title : previous?.title ?? null,
+          titleResource: title && (!previous?.title || preferred) ? source.resource : previous?.titleResource ?? source.resource,
         });
-        for (const observation of observations) {
-          const source = catalogSources.find(candidate => candidate.id === observation.sourceId);
-          if (!source || !observation.asin) continue;
-          const facts = observation.facts as { summaries?: Array<{ marketplaceId?: string; itemName?: string }>; images?: Array<{ marketplaceId?: string; images?: Array<{ variant?: string; link?: string; width?: number; height?: number }> }> };
-          const summary = facts.summaries?.find(item => item.marketplaceId === source.marketplaceId);
-          const images = facts.images?.find(item => item.marketplaceId === source.marketplaceId)?.images ?? [];
-          const mainImage = images.filter(image => image.variant === "MAIN" && typeof image.link === "string").sort((a, b) => (a.width ?? Infinity) * (a.height ?? Infinity) - (b.width ?? Infinity) * (b.height ?? Infinity))[0];
-          let thumbnailUrl: string | null = null;
-          try {
-            const url = new URL(mainImage?.link ?? "");
-            if (url.protocol === "https:" && url.hostname === "m.media-amazon.com") thumbnailUrl = url.toString();
-          } catch { /* Missing or invalid image metadata stays empty. */ }
-          for (const row of catalogRows.filter(candidate => candidate.asin === observation.asin && candidate.sellerAccountId === source.sellerAccountId && candidate.marketplaceId === source.marketplaceId)) {
-            row.title = summary?.itemName ?? null;
-            row.thumbnailUrl = thumbnailUrl;
-            row.fieldSources = { ...row.fieldSources, ...(row.title ? { title: "Amazon Catalog Items API" } : {}), ...(row.thumbnailUrl ? { thumbnailUrl: "Amazon Catalog Items API" } : {}) };
-          }
+      }
+      for (const row of productRows) {
+        const detail = detailsByProduct.get(JSON.stringify([row.sellerAccountId, row.marketplaceId, row.asin]));
+        if (detail) {
+          row.title = detail.title;
+          row.fieldSources = { ...row.fieldSources, ...(row.title ? { title: detail.titleResource === "catalog_items" ? "Amazon Catalog Items API" : "Amazon Listings Items API" } : {}) };
+        }
+      }
+      const uniqueProducts = [...new Map(productRows.map(row => [JSON.stringify([row.sellerAccountId, row.marketplaceId, row.asin]), row])).values()];
+      const imageReferences = await readProductImageReferences(scope, uniqueProducts.map(row => ({ sellerAccountId: row.sellerAccountId, marketplaceId: row.marketplaceId, asin: row.asin! })));
+      const imageByProduct = new Map(imageReferences.map(image => [JSON.stringify([image.sellerAccountId, image.marketplaceId, image.asin]), image]));
+      for (const row of productRows) {
+        const image = imageByProduct.get(JSON.stringify([row.sellerAccountId, row.marketplaceId, row.asin]));
+        if (image) {
+          row.thumbnailUrl = `/api/operations/products/images/${encodeURIComponent(image.fileId)}?workspaceId=${encodeURIComponent(workspaceId)}`;
+          row.fieldSources = { ...row.fieldSources, thumbnailUrl: "本地持久化 Amazon 主图" };
         }
       }
     }
