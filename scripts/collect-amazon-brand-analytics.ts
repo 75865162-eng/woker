@@ -30,7 +30,7 @@ async function main() {
         const run = await prisma.amazonSyncRun.findFirstOrThrow({ where: { ...scope, id: coverage.next.taskId!, sourceId: source.id, status: "FAILED" } });
         const state = unseal(run.checkpointCiphertext!, scope, run.id, "amazon-observation-state.v1").state as { stage?: string; reportId?: string; requests?: number };
         const policy = (run.frozenScope as { domainPolicy?: { from?: string; to?: string; reportKind?: string } }).domainPolicy;
-        if (state.stage !== "DOWNLOAD" || !state.reportId || (state.requests ?? 30) >= 30 || policy?.from !== "2026-10-25" || policy.to !== "2026-10-31" || policy.reportKind !== "repeat_purchase") throw Error("Only reviewed repeat report download checkpoints can resume");
+        if (state.stage !== "DOWNLOAD" || !state.reportId || (state.requests ?? 30) >= 30 || policy?.from !== "2026-10-25" || policy.to !== "2026-10-31" || !["repeat_purchase", "search_catalog"].includes(policy.reportKind ?? "")) throw Error("Only reviewed repeat/catalog report download checkpoints can resume");
         await approved({ action: "control-task", id: run.id, control: "retry" });
         console.log(JSON.stringify({ marketplaceId: source.marketplaceId, taskId: run.id, resumedExistingReportDownload: true }));
       }

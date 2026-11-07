@@ -89,3 +89,31 @@ test("repeat purchase preserves upstream null metrics while keeping identity and
   delete raw.dataByAsin[0].orders;
   assert.throws(() => parseObservationReport(JSON.stringify(raw), p, site));
 });
+
+
+test("catalog preserves unavailable prices and conversion without weakening metric or identity validation", () => {
+  const raw = JSON.parse(readFileSync("src/data/amazon-contracts/sellingPartnerSearchCatalogPerformanceReport.json", "utf8")).examples[0];
+  const p = parseObservationPolicy({ ...root(), reportKind: "search_catalog", asins: [asin] }) as AnalyticsPolicy;
+  raw.reportSpecification = observationReportSpec(p, site);
+  raw.dataByAsin = [raw.dataByAsin[0]];
+  const row = raw.dataByAsin[0];
+  row.clickData.clickedMedianPrice = null;
+  row.cartAddData.cartAddedMedianPrice = null;
+  row.purchaseData.conversionRate = null;
+  row.purchaseData.purchaseMedianPrice = null;
+  const facts = parseObservationReport(JSON.stringify(raw), p, site)[0].facts;
+  assert.equal((facts.clickData as Record<string, unknown>).clickedMedianPrice, null);
+  assert.equal((facts.cartAddData as Record<string, unknown>).cartAddedMedianPrice, null);
+  assert.equal((facts.purchaseData as Record<string, unknown>).conversionRate, null);
+  assert.equal((facts.purchaseData as Record<string, unknown>).purchaseMedianPrice, null);
+  for (const mutate of [
+    (r: typeof row) => { r.asin = null; },
+    (r: typeof row) => { r.purchaseData.conversionRate = 1.1; },
+    (r: typeof row) => { r.clickData.clickCount = null; },
+    (r: typeof row) => { r.clickData.clickedMedianPrice = { amount: -1, currencyCode: "USD" }; },
+    (r: typeof row) => { delete r.purchaseData.conversionRate; },
+  ]) {
+    const candidate = structuredClone(raw); mutate(candidate.dataByAsin[0]);
+    assert.throws(() => parseObservationReport(JSON.stringify(candidate), p, site));
+  }
+});

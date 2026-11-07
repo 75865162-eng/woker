@@ -301,7 +301,9 @@ test("authenticated API to real queue/worker to seller-bound snapshot completes 
   try { await appliedPost({ action: "validate-authorization", id: authorization.id }, 409); }
   finally { globalThis.fetch = savedFetch; }
   const connections = await get("section=connections"), connectionsText = await connections.text();
-  assert.ok(connectionsText.includes("AUTH_REJECTED")); assert.ok(!connectionsText.includes("private-upstream-token")); assert.ok(!connectionsText.includes("fixture-rotated-refresh"));
+  assert.ok(connectionsText.includes("VALIDATION_FAILED"));
+  assert.equal((await prisma.amazonSpApiAuthorization.findUniqueOrThrow({ where: { id: authorization.id } })).status, "NOT_CONFIGURED");
+  assert.ok(!connectionsText.includes("private-upstream-token")); assert.ok(!connectionsText.includes("fixture-rotated-refresh"));
   await appliedPost({ action: "validate-authorization", id: authorization.id });
   globalThis.fetch = async (input, init) => String(input).includes("api.amazon.com/auth/o2/token") ? Response.json({ error: "invalid_grant", error_description: "fixture-rotated-refresh" }, { status: 400 }) : savedFetch(input, init);
   try {

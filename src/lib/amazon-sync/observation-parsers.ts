@@ -97,7 +97,20 @@ const repeatRow = repeatPurchase.definitions.DataByAsin;
 const nullableRepeatPurchase = { ...repeatPurchase, definitions: { ...repeatPurchase.definitions,
   DataByAsin: { ...repeatRow, properties: Object.fromEntries(Object.entries(repeatRow.properties)
     .map(([key, schema]) => [key, repeatMetricNames.has(key) ? { ...schema, nullable: true } : schema])) } } };
-const schemas = { search_terms: searchTerms, search_query: searchQuery, search_catalog: searchCatalog, market_basket: marketBasket, repeat_purchase: nullableRepeatPurchase };
+// Live catalog reports omit unavailable prices/conversion as explicit nulls.
+// Override only observed metric fields; keep the frozen official contract intact.
+const catalogNullableMetrics: Record<string, string[]> = {
+  SearchCatalogPerformanceClickData: ["clickedMedianPrice"],
+  SearchCatalogPerformanceCartAddData: ["cartAddedMedianPrice"],
+  SearchCatalogPerformancePurchaseData: ["conversionRate", "purchaseMedianPrice"],
+};
+const nullableSearchCatalog: Schema = { ...searchCatalog, definitions: Object.fromEntries(
+  Object.entries(searchCatalog.definitions).map(([name, definition]) => [name, {
+    ...definition, properties: Object.fromEntries(Object.entries(definition.properties).map(([key, child]) =>
+      [key, catalogNullableMetrics[name]?.includes(key) ? { ...child, nullable: true } : child])),
+  }]),
+) };
+const schemas = { search_terms: searchTerms, search_query: searchQuery, search_catalog: nullableSearchCatalog, market_basket: marketBasket, repeat_purchase: nullableRepeatPurchase };
 export function parseObservationReport(raw: string, policy: AnalyticsPolicy | BuyBoxHistoryPolicy, marketplaceId: string): SafeFact[] {
   const schema = (policy.resource === "buy_box_history" ? salesTraffic : schemas[policy.reportKind]) as Schema;
   const projected = object(project(readFinanceJson(raw), schema, schema)), expected = observationReportSpec(policy, marketplaceId), spec = object(projected.reportSpecification);
@@ -118,7 +131,7 @@ export function parseObservationReport(raw: string, policy: AnalyticsPolicy | Bu
     const validateShares = (value: unknown): void => {
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       for (const [key, v] of Object.entries(value)) {
-        if (/(Share|Rate|combinationPct)$/.test(key) && (typeof v !== "string" || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > 1)) return invalid();
+        if (v !== null && /(Share|Rate|combinationPct)$/.test(key) && (typeof v !== "string" || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > 1)) return invalid();
         if (v && typeof v === "object") validateShares(v);
       }
     };
