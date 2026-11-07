@@ -12,7 +12,7 @@ const functions = ["assert_service_release", "restart_runtime_service", "install
   assert.ok(match, name); return match[0];
 }).join("\n");
 
-function run(stale: boolean, failRestart = false) {
+function run(stale: boolean, failRestart = false, restartSellfox = true) {
   const dir = mkdtempSync(path.join(tmpdir(), "release-runtime-"));
   try {
     writeFileSync(path.join(dir, "cwd"), "/old-release");
@@ -37,11 +37,11 @@ restart_web=false
 restart_worker=false
 restart_image_worker=false
 restart_amazon_sync_worker=true
-restart_sellfox_sync_worker=true
+restart_sellfox_sync_worker="$4"
 caddy_reload=false
 install_runtime_from_release /new-release
 cat "$fixture_dir/calls"
-`, "release-runtime-test", dir, String(stale), String(failRestart)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+`, "release-runtime-test", dir, String(stale), String(failRestart), String(restartSellfox)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -53,6 +53,15 @@ test("selected sync services really restart and verify the new process release",
     assert.ok(calls.includes(`show ${service} --property=MainPID --value`));
   }
   assert.ok(!calls.includes("restart amazon-web"));
+});
+
+test("a sync-only plan does not enable or restart unrelated services", () => {
+  const calls = run(false, false, false);
+  assert.ok(calls.includes("restart amazon-sync-worker\n"));
+  for (const service of ["amazon-web", "amazon-worker", "amazon-image-upscale-worker", "amazon-sellfox-sync-worker"]) {
+    assert.ok(!calls.includes(`restart ${service}\n`), service);
+    assert.ok(!calls.includes(`enable ${service}\n`), service);
+  }
 });
 
 test("an active worker on an old release cannot pass deployment verification", () => {
