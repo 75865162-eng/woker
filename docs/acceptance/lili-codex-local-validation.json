@@ -1,0 +1,322 @@
+{
+  "observedAt": "2026-11-07T15:03:29.391852+00:00",
+  "executionMode": "codex",
+  "serverModelRequired": false,
+  "productionDeployment": "not authorized; no deployment performed",
+  "nativeResearchRunId": "87e2686e-d8d2-4b8b-ae33-761a1eb89d83",
+  "nativeResearchStatus": "WAITING_FOR_USER / MCP_CALL; revision 21; zero saved decisions and zero paid calls at last native readback",
+  "nativeRevocation": "temporary device private research_list succeeded before revoke and was rejected after revoke",
+  "checks": {
+    "focusedTests": {
+      "passed": 88,
+      "failed": 0
+    },
+    "browserTests": {
+      "passed": 13,
+      "failed": 0
+    },
+    "productionBuild": {
+      "exitCode": 0,
+      "log": "/tmp/lili-closure-build.log",
+      "includesNextTypecheck": true
+    },
+    "typecheck": "passed /tmp/lili-codex-current-types.log",
+    "scopedLint": "passed /tmp/lili-codex-lint.log",
+    "diffCheck": "passed",
+    "fullCheck": "Equivalent component commands completed successfully: npm run test, npm run lint, npm run build. Previously failing concurrent marketplace assertions were updated by the other workstream; this agent did not edit them.",
+    "latestIsolatedIntegration": {
+      "exitCode": 0,
+      "passed": 49,
+      "failed": 0,
+      "log": "/tmp/lili-codex-integration-fixed.log",
+      "migration": "OAuth apply/drop/reapply in disposable transaction; business sentinel preserved",
+      "cleanup": "Owned disposable fixture containers removed by runner"
+    },
+    "coreTests": {
+      "passed": 1205,
+      "failed": 0,
+      "log": "/tmp/lili-closure-tests.log"
+    },
+    "fullLint": {
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 7,
+      "log": "/tmp/lili-closure-lint.log"
+    },
+    "finalUiPatch": {
+      "passed": 1,
+      "failed": 0,
+      "log": "/tmp/lili-budget-ui-final.log"
+    }
+  },
+  "git": {
+    "head": "13b78b9d10508c23b07bcabb859c51889e7137a9",
+    "branch": "codex/amazon-multistore-mcp",
+    "agentCommitOrPushPerformed": false,
+    "concurrentChangesObserved": true,
+    "upstreamCommitDivergence": "0 ahead / 0 behind; working changes remain uncommitted",
+    "reason": "Shared workspace contains concurrent Amazon sync changes outside this local Lili closure; no all-change commit/push approval requested or inferred."
+  },
+  "worktree": [
+    {
+      "status": " M",
+      "path": ".env.example"
+    },
+    {
+      "status": " M",
+      "path": "docs/amazon-automatic-sync.md"
+    },
+    {
+      "status": " M",
+      "path": "docs/lili-remote-mcp-2026-11-07.md"
+    },
+    {
+      "status": " M",
+      "path": "middleware.ts"
+    },
+    {
+      "status": " M",
+      "path": "scripts/amazon-sync-worker.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/selection-research/[id]/route.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/app/api/selection-research/route.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/components/amazon-ads/ads-campaign-workspace.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/amazon-ads/ads-workspace-route.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/operations/sync-center-workbench.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/components/selection-research/research-workbench.tsx"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-ads/sync-policy.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-ads/sync-scheduler.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-ads/sync-service.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/automatic-connection.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/automatic-schedule.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/brand-collection-query.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/date-range.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/identity-adoption.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/mcp.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/oauth.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/observation-machine.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/observation-parsers.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/observation-policy.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/policy.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/processor.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/product-discovery.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon-sync/scheduler.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/amazon/sp-api-client.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/lili/research-tools.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/ai-agent.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/engine.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/http.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/server.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/selection-research/types.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-automatic-schedule.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-brand-collection.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/amazon-mcp-middleware.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/browser/amazon-ads.spec.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/integration/amazon-ads.integration.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/integration/amazon-mcp.integration.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/lili-research-mcp.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/selection-research-budget.test.ts"
+    },
+    {
+      "status": " M",
+      "path": "tests/selection-research-live.test.ts"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-codex-local-validation.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-codex-native-approval-readback.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-codex-native-approved-market.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-codex-native-first-market.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-codex-native-market-gate.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-codex-native-run.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-audit.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-boundaries.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-cancel.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-evidence-roundtrip.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-model-diagnostic.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-model-gate.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-revocation.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-run.json"
+    },
+    {
+      "status": "??",
+      "path": "docs/acceptance/lili-research-native-skills.json"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-ads/automatic-binding.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/activation.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/lib/amazon-sync/raw-fields.ts"
+    }
+  ],
+  "userDecision": "Keep exact market request pending; finish local closure. No market dispatch or production deployment authorized.",
+  "remaining": [
+    "Human approval and actual paid provider response, evidence roundtrip and full live HTML report remain unverified.",
+    "Formal HTTPS native acceptance deferred by explicit no-deployment instruction.",
+    "Current local changes are not committed/pushed."
+  ],
+  "logSha256": {
+    "/tmp/lili-closure-tests.log": "2d684c7f941aa716d24c0244b0ba7a39f599664da760a803ddd477b49b72d773",
+    "/tmp/lili-closure-lint.log": "acb3a2f2161f6f75acbc789736685d9b09e5ceac5446f42cf57514585b3ea472",
+    "/tmp/lili-closure-build.log": "432c2136599cb8613aa0752069c16910b64feae2f36b9a8f3d0e92f627c67541",
+    "/tmp/lili-codex-integration-fixed.log": "d4edd2cd0d86aa106753772c5320f4d44cc1e0c81a57f007c80ddd6826498aac"
+  }
+}

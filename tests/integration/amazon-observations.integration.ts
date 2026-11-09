@@ -17,6 +17,10 @@ import { readObservations } from "@/lib/amazon-sync/observations-query";
 import { encryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets";
 import { endpoints } from "@/lib/amazon-sync/policy";
 import { observationReportSpec, parseObservationPolicy } from "@/lib/amazon-sync/observation-policy";
+import { withApprovedChange } from "@/lib/amazon-sync/approved-context";
+import { controlTask } from "@/lib/amazon-sync/service";
+import { automaticBrandCandidates, latestClosedBrandWindow } from "@/lib/amazon-sync/automatic-brand";
+import { localDate, shiftDate } from "@/lib/amazon-sync/date-range";
 
 if (process.env.AMAZON_SYNC_OFFLINE_FIXTURE !== "1" || new URL(process.env.DATABASE_URL!).hostname !== "127.0.0.1" || new URL(process.env.DATABASE_URL!).pathname !== "/amazon_sync_test") throw new Error("Disposable offline DB required");
 const site = "ATVPDKIKX0DER", region = "observation-fixture", scopes: Array<[string, string]> = [], planId = "a".repeat(38), asin = "B123456789";
@@ -83,13 +87,19 @@ async function fresh(resource: string, extra: Record<string, unknown> = {}) {
       raw.asin = url.pathname.split("/").at(-1)!; raw.attributes = {}; (raw.attributes as Record<string, unknown>).brand = [{ marketplace_id: site, value: "Fixture Brand" }]; raw.secret_contact = "DO_NOT_EXPOSE";
       return Response.json(raw);
     }
+    if (url.pathname === "/notifications/v1/subscriptions") {
+      assert.equal(init?.method, "GET");
+      if ((mode === "notification-forbidden" || mode === "notification-last-page-forbidden" && url.searchParams.has("nextToken")) && url.searchParams.get("notificationTypes") === "ORDER_CHANGE") return Response.json({ errors: [{ code: "Unauthorized", message: "fixture type denied" }] }, { status: 403 });
+      const next = url.searchParams.get("nextToken");
+      return Response.json({ payload: { subscriptions: next ? [] : [{ subscriptionId: `sub-${url.searchParams.get("notificationTypes")}`, payloadVersion: "1.0", destinationId: "PRIVATE_DESTINATION", processingDirective: { filterExpression: "PRIVATE_FILTER" } }], ...(next ? {} : { nextToken: "fixture-second-page" }) } });
+    }
     if (url.pathname === "/products/pricing/v0/price") {
       assert.equal(url.searchParams.get("ItemType"), "Asin"); assert.equal(url.searchParams.get("OfferType"), "B2C");
       return Response.json({ payload: [{ status: "Success", ASIN: asin, Product: { Identifiers: { MarketplaceASIN: { ASIN: asin, MarketplaceId: site } }, Offers: [] } }] });
     }
     if (url.pathname.includes("competitiveSummary")) return Response.json({ responses: [{ status: { statusCode: mode === "partial" ? 429 : 200 }, body: { asin, marketplaceId: site, featuredBuyingOptions: [] } }] });
     if (url.pathname === "/reports/2021-06-30/reports") {
-      if (resource === "brand_analytics" && (domainPolicy.collection || domainPolicy.reportKind === "repeat_purchase")) {
+      if (resource === "brand_analytics" && (domainPolicy.collection || domainPolicy.automaticDiscovery || domainPolicy.reportKind === "repeat_purchase")) {
         const spec = JSON.parse(String(init?.body));
         const names: Record<string, string> = { GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT: "sellingPartnerSearchTermsReport", GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT: "sellingPartnerSearchQueryPerformanceReport", GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT: "sellingPartnerSearchCatalogPerformanceReport", GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT: "sellingPartnerMarketBasketAnalysisReport", GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT: "sellingPartnerRepeatPurchaseReport" };
         const example = JSON.parse(readFileSync(`src/data/amazon-contracts/${names[spec.reportType]}.json`, "utf8")).examples[0];
@@ -160,7 +170,7 @@ for (const resource of ["listing_details", "catalog_items"]) test(`${resource} d
 for (const resource of ["listing_details", "catalog_items"]) test(`${resource} discovers 224 objects and publishes all batches as one version`, async () => {
   const f = await fresh(resource), upstreamId = randomUUID(), headId = randomUUID();
   await prisma.amazonSyncDataSource.create({ data: { ...f.scope, id: upstreamId, authorizationId: f.authorizationId, sellerAccountId: f.sellerAccountId, marketplaceId: site, resource: "catalog", enabled: true, freshnessMinutes: 1440 } });
-  await prisma.amazonSyncRun.create({ data: { ...f.scope, id: headId, sourceId: upstreamId, requestedByUserId: f.actor, resource: "catalog", executionVersion: 2, authorizationRevision: 1, status: "SUCCEEDED", stage: "COMPLETED", finishedAt: new Date(), paginationComplete: true, idempotencyKey: headId, mode: "snapshot", frozenScope: { authorizationId: f.authorizationId, authorizationRevision: 1, amazonSellerId: "fixture-seller" } } });
+  await prisma.amazonSyncRun.create({ data: { ...f.scope, id: headId, sourceId: upstreamId, requestedByUserId: f.actor, resource: "catalog", executionVersion: 2, authorizationRevision: 1, status: "SUCCEEDED", stage: "COMPLETED", finishedAt: new Date(), paginationComplete: true, idempotencyKey: headId, mode: "snapshot", frozenScope: { authorizationId: f.authorizationId, authorizationRevision: 1, amazonSellerId: "fixture-seller" }, summary: { coverage: { type: "complete_snapshot", paginationComplete: true } } } });
   await prisma.amazonSyncDataSource.update({ where: { id: upstreamId }, data: { activeRunId: headId, rowCount: 224, coverage: { type: "complete_snapshot", paginationComplete: true } } });
   await prisma.amazonCatalogSnapshot.createMany({ data: Array.from({ length: 224 }, (_, i) => ({ ...f.scope, id: randomUUID(), sellerAccountId: f.sellerAccountId, marketplaceId: site, sellerSku: `sku-${String(i).padStart(4, "0")}`, asin: `B${String(i).padStart(9, "0")}`, sourceRunId: headId, fieldSources: {}, capturedAt: new Date() })) });
   const domainPolicy = { resource, applicationId: "fixture-app", maxRows: 1000, maxRequests: 500, requestsPerSecond: .2, discovery: { mode: "catalog_snapshot", sourceId: upstreamId, maxObjects: 1000, batchSize: 100 }, ...(resource === "listing_details" ? { sellerSkus: [] } : { asins: [] }) };
@@ -183,6 +193,27 @@ test("pricing incomplete batch never replaces complete snapshot", async () => {
 test("brand search report request/poll/download/archive/publish uses exact approved specification", async () => {
   const f = await fresh("brand_analytics"), run = await f.start(), done = await f.finish(run.id); assert.equal(done.status, "SUCCEEDED", done.error ?? ""); assert.ok((await f.read()).rows.length); assert.equal(f.getCreateCalls(), 1);
 });
+test("automatic brand approval resumes older complete periods without recreating failed recent tasks", async () => {
+  const now = new Date(), today = localDate(now, "America/Los_Angeles"), from = shiftDate(today, -10);
+  const f = await fresh("brand_analytics", { automaticDiscovery: true, reportKind: "search_terms", reportPeriod: "DAY", from, to: from, brandEligibilityAttested: false });
+  const source = await prisma.amazonSyncDataSource.findUniqueOrThrow({ where: { id: f.sourceId }, include: { authorization: true } });
+  const policy = parseObservationPolicy(source.domainPolicy, "brand_analytics"); assert.equal(policy.resource, "brand_analytics");
+  if (policy.resource !== "brand_analytics") throw new Error("Fixture policy mismatch");
+  const priorIds: string[] = [];
+  for (const domainPolicy of automaticBrandCandidates(policy, [], now).filter(candidate => candidate.from >= from)) {
+    const id = randomUUID(); priorIds.push(id);
+    await prisma.amazonSyncRun.create({ data: { ...f.scope, id, sourceId: f.sourceId, requestedByUserId: f.actor, resource: "brand_analytics", mode: "report", executionVersion: 2, status: "FAILED", stage: "REPORT_CREATING", finishedAt: now, idempotencyKey: id, error: "fixture previous attempt retained", frozenScope: { sourceRevision: source.revision, authorizationId: source.authorizationId, authorizationRevision: source.authorization.revision, domainPolicy } } });
+  }
+  const run = await f.start();
+  const selected = (run.frozenScope as { domainPolicy: { from: string; to: string; automaticDiscovery?: boolean; brandEligibilityAttested: boolean } }).domainPolicy;
+  const yesterday = latestClosedBrandWindow(today, "DAY").from;
+  assert.equal(selected.from, shiftDate(yesterday, -1)); assert.equal(selected.to, selected.from);
+  assert.equal(selected.automaticDiscovery, undefined); assert.equal(selected.brandEligibilityAttested, false);
+  assert.equal((await f.finish(run.id)).status, "SUCCEEDED");
+  assert.equal(await prisma.amazonSyncRun.count({ where: { id: { in: priorIds }, status: "FAILED", error: "fixture previous attempt retained" } }), priorIds.length);
+  assert.equal(f.getCreateCalls(), 1);
+});
+
 test("brand finite collection survives independent publications, merges ASIN batches and scopes all five kinds", async () => {
   const asins = Array.from({ length: 19 }, (_, i) => `B${String(i).padStart(9, "0")}`);
   const collection = { from: "2025-01-05", to: "2025-01-18", asins, maxTasks: 100, selections: ["search_terms", "search_query", "search_catalog", "market_basket", "repeat_purchase"].map(reportKind => ({ reportKind, reportPeriod: "WEEK" })) };
@@ -423,4 +454,77 @@ test("brand catalog publishes unavailable impression median price as unknown", a
   assert.equal(done.status, "SUCCEEDED", done.error ?? "");
   const result = await f.read(); assert.equal(result.rows.length, 2);
   for (const row of result.rows) assert.equal((row.facts as { impressionData: { impressionMedianPrice: unknown } }).impressionData.impressionMedianPrice, null);
+});
+
+
+test("notifications read-only discovery persists pages and protects seller-wide publication", async () => {
+  const f = await fresh("notifications", { notificationTypes: ["ORDER_CHANGE", "ANY_OFFER_CHANGED"] });
+  const run = await f.start(); await f.slice(run.id);
+  assert.equal((await f.read()).rows.length, 0);
+  const checkpoint = (await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } })).checkpointCiphertext;
+  assert.ok(checkpoint);
+  await f.approved({ action: "control-task", id: run.id, control: "pause" });
+  await f.approved({ action: "control-task", id: run.id, control: "resume" });
+  assert.equal((await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } })).checkpointCiphertext, checkpoint);
+  assert.equal((await f.finish(run.id)).status, "SUCCEEDED");
+  const result = await f.read(); assert.equal(result.rows.length, 2);
+  assert.ok(result.rows.every(row => (row.facts as { scope: string }).scope === "SELLER_SUBSCRIPTION"));
+  assert.ok(!JSON.stringify(result).includes("PRIVATE_DESTINATION")); assert.ok(!JSON.stringify(result).includes("PRIVATE_FILTER"));
+  assert.equal(f.getCreateCalls(), 0);
+  const head = result.run!.id;
+  f.setMode("notification-last-page-forbidden"); const next = await f.start();
+  const partial = await f.finish(next.id); assert.equal(partial.status, "PARTIAL_SUCCESS"); assert.equal(partial.failedCount, 1);
+  assert.equal((await f.read()).run!.id, head);
+  assert.ok(await prisma.amazonSyncRawPage.count({ where: { taskId: next.id, page: { lt: 0 } } }));
+  const failedState = unseal(partial.checkpointCiphertext!, f.scope, next.id, "amazon-observation-state.v1").state as { notificationFailures: Array<{ token?: string }> };
+  assert.equal(failedState.notificationFailures[0].token, "fixture-second-page");
+  const beforeRetry = f.calls.filter(path => path === "/notifications/v1/subscriptions").length;
+  f.setMode("normal"); await f.approved({ action: "control-task", id: next.id, control: "retry" });
+  assert.equal((await f.finish(next.id)).status, "SUCCEEDED");
+  assert.equal(f.calls.filter(path => path === "/notifications/v1/subscriptions").length - beforeRetry, 1, "only the failed continuation is requested");
+  assert.equal((await f.read()).run!.id, next.id); assert.equal((await f.read()).rows.length, 2);
+  const reader = randomUUID();
+  await prisma.user.create({ data: { id: reader, email: `${reader}@fixture.invalid`, name: "Fixture", passwordHash: "none", memberships: { create: { organizationId: f.scope.organizationId, role: "viewer" } } } });
+  await prisma.amazonDataAccessGrant.create({ data: { ...f.scope, id: randomUUID(), userId: reader, sellerAccountId: f.sellerAccountId, marketplaceIds: [site], actions: ["view"] } });
+  await assert.rejects(readObservations(f.scope, new URLSearchParams({ resource: "notifications", sourceId: f.sourceId }), reader));
+});
+
+test("site sync grants cannot control seller-wide notification tasks", async () => {
+  const f = await fresh("notifications", { notificationTypes: ["ORDER_CHANGE"] });
+  const run = await f.start(), operator = randomUUID(), role = "operations";
+  await prisma.organizationRosterRole.create({ data: { organizationId: f.scope.organizationId, id: role, name: "Fixture operator", description: "Fixture", permissions: { operations: ["view", "create", "edit"] } } });
+  await prisma.user.create({ data: { id: operator, email: `${operator}@fixture.invalid`, name: "Fixture", passwordHash: "none", memberships: { create: { organizationId: f.scope.organizationId, role } } } });
+  await prisma.amazonDataAccessGrant.create({ data: { ...f.scope, id: randomUUID(), userId: operator, sellerAccountId: f.sellerAccountId, marketplaceIds: [site], actions: ["view", "sync"] } });
+  for (const [action, status] of [["pause", "WAITING"], ["cancel", "WAITING"], ["resume", "PAUSED"], ["retry", "FAILED"], ["retry", "PARTIAL_SUCCESS"]] as const) {
+    await prisma.amazonSyncRun.update({ where: { id: run.id }, data: { status } });
+    const before = await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } });
+    await assert.rejects(prisma.$transaction(tx => withApprovedChange({ tx, scope: f.scope, action: "control-task", approvalId: "fixture-approved", commandSourceIds: [f.sourceId] }, () => controlTask(f.scope, operator, run.id, action))), { status: 403 });
+    assert.deepEqual(await prisma.amazonSyncRun.findUniqueOrThrow({ where: { id: run.id } }), before);
+  }
+});
+
+test("Buy Box history uses the newest complete whole-ASIN version per day", async () => {
+  const f = await fresh("buy_box_history", { allAsins: true, from: "2021-06-11", to: "2021-06-11", asins: [] });
+  const first = await f.start(); assert.equal((await f.finish(first.id)).status, "SUCCEEDED");
+  const second = await f.start(); assert.equal((await f.finish(second.id)).status, "SUCCEEDED");
+  const result = await f.read({ from: "2021-06-10", to: "2021-06-12" });
+  assert.equal(result.rows.length, 1); assert.equal(result.rows[0].sourceRunId, second.id);
+  assert.deepEqual(typeof result.completeness === "object" ? result.completeness.publishedDays : [], ["2021-06-11"]);
+  assert.equal((await f.read({ from: "2021-06-12", to: "2021-06-12" })).rows.length, 0);
+  await assert.rejects(f.read({ from: "2021-06-12", to: "2021-06-11" }));
+  await assert.rejects(f.read({ from: "2021-06-10", runId: first.id }));
+});
+
+test("Brand reader selects each ASIN once when automatic catalog batches overlap", async () => {
+  const a = "B123456789", b = "B987654321", c = "B000000001";
+  const f = await fresh("brand_analytics", { reportKind: "search_catalog", from: "2025-01-05", to: "2025-01-11", asins: [a, b] });
+  const first = await f.start(); assert.equal((await f.finish(first.id)).status, "SUCCEEDED");
+  const rows = await prisma.amazonDomainObservation.findMany({ where: { sourceRunId: first.id } });
+  const secondId = randomUUID(), frozen = first.frozenScope as Prisma.JsonObject;
+  await prisma.amazonSyncRun.create({ data: { ...f.scope, id: secondId, sourceId: f.sourceId, requestedByUserId: f.actor, resource: "brand_analytics", mode: "report", executionVersion: 2, status: "SUCCEEDED", stage: "COMPLETED", finishedAt: new Date(), paginationComplete: true, idempotencyKey: secondId, frozenScope: { ...frozen, domainPolicy: { ...(frozen.domainPolicy as Prisma.JsonObject), asins: [b, c] } } as Prisma.InputJsonValue } });
+  const template = rows.find(row => row.asin === b)!;
+  await prisma.amazonDomainObservation.createMany({ data: [b, c].map(id => ({ ...f.scope, id: randomUUID(), sourceId: f.sourceId, sourceRunId: secondId, kind: template.kind, businessKey: id, asin: id, facts: { ...(template.facts as Prisma.JsonObject), asin: id } as Prisma.InputJsonValue, capturedAt: new Date() })) });
+  const result = await readBrandAnalytics(f.scope, new URLSearchParams({ sourceId: f.sourceId, reportKind: "search_catalog" }), f.actor);
+  assert.equal(result.pagination.total, 3); assert.equal(new Set(result.rows.map(row => row.asin)).size, 3);
+  assert.equal(result.rows.find(row => row.asin === b)!.sourceRunId, secondId);
 });

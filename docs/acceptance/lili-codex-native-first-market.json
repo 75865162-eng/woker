@@ -1,0 +1,20 @@
+{
+  "client": "Codex native MCP",
+  "runId": "87e2686e-d8d2-4b8b-ae33-761a1eb89d83",
+  "observedAt": "2026-11-07T14:42:33.146304+00:00",
+  "calls": [
+    {
+      "tool": "research_read",
+      "isError": false,
+      "status": 200
+    }
+  ],
+  "approvalSaved": false,
+  "gateBefore": {
+    "id": "bfd2db01-3069-4831-b66e-544261e91cbd",
+    "kind": "MCP_CALL",
+    "reason": "Review the live sellersprite__asin.list request and exact arguments before dispatch. Provider fees may vary; review the budget first."
+  },
+  "statusBefore": "WAITING_FOR_USER",
+  "paused": false
+}

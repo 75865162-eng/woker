@@ -1,3 +1,4 @@
+import { queryPageSize } from "./query-page";
 import { hasCompleteReportAttributionProof, requiresReportRowAttribution } from "./report-row-attribution";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -30,7 +31,7 @@ export async function readDomainReports(scope: SyncScope, params: URLSearchParam
   const sourceId = params.get("sourceId");
   const source = sourceId ? sources.find(item => item.id === sourceId) : resource === "inventory_age" ? sources.find(item => item.activeRunId && item.rowCount > 0) ?? sources[0] : sources[0];
   if (sourceId && !source) throw new SyncInputError("报告数据源不可访问。", 403);
-  const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = 50;
+  const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = queryPageSize(params);
   const proof = source?.coverage && typeof source.coverage === "object" && !Array.isArray(source.coverage) ? source.coverage.rowAttribution : null;
   const attributionVisible = !requiresReportRowAttribution(resource) || hasCompleteReportAttributionProof(proof);
   const where: Prisma.AmazonSyncReportRowWhereInput = { ...scope, sourceId: attributionVisible ? source?.id ?? "__none__" : "__attribution_pending__", ...reportVerifiedRowWhere(resource, source?.marketplaceId ?? "") };

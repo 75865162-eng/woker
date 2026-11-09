@@ -131,6 +131,7 @@ test("invalid page/loop and revoked domain prevent publication; manual retry res
   const task = await request(); assert.equal((await runTask(task.id)).status, "FAILED");
   await controlTask(scope, actor, task.id, "retry");
   transport = () => Response.json({ payload: { inventorySummaries: [] } }); assert.equal((await runTask(task.id)).status, "SUCCEEDED");
+  assert.equal(await prisma.amazonSyncRawPage.count({ where: { taskId: task.id, page: { gt: 0 } } }), 2, "explicit restart retains rejected original and new response as separate evidence");
   const next = await request(); await prisma.user.update({ where: { id: actor }, data: { status: "disabled" } }); assert.equal((await runTask(next.id)).status, "BLOCKED");
   await prisma.user.update({ where: { id: actor }, data: { status: "active" } });
 });

@@ -33,7 +33,10 @@ test("creation requires an explicit mode and validates genuine inputs without fa
   const parsed = parseResearchInput(input);
   assert.equal(parsed.mode, "live"); assert.equal(parsed.asin, "B000000001"); assert.equal(parsed.marketplace, "US"); assert.equal(parsed.requirement, "Isolated validation only");
   assert.equal(parseResearchInput({ ...input, mode: "fixture", maxMarketCalls: undefined }).mode, "fixture");
-  for (const maxMarketCalls of [undefined, true, "3", 0, 31, 1.5]) assert.throws(() => parseResearchInput({ ...input, maxMarketCalls }), /MARKET_CALL_BUDGET/);
+  for (const maxMarketCalls of [true, "3", 0, -1, 1.5, NaN, Infinity]) assert.throws(() => parseResearchInput({ ...input, maxMarketCalls }), /MARKET_CALL_BUDGET/);
+  assert.equal(parseResearchInput({ ...input, maxMarketCalls: undefined }).budgetMode, "uncapped");
+  assert.equal(parseResearchInput({ ...input, maxMarketCalls: 100 }).maxMarketCalls, 100);
+  assert.throws(() => parseResearchInput({ ...input, budgetMode: "uncapped" }), /MARKET_CALL_BUDGET/);
   for (const asin of [123, {}, "invalid"]) assert.throws(() => parseResearchInput({ ...input, asin }), /INVALID_ASIN/);
   assert.throws(() => parseResearchInput({ ...input, requirement: "  " }), /INVALID_RESEARCH_REQUEST/);
   assert.throws(() => parseResearchInput({ ...input, erpCredentialId: 123 }), /INVALID_ERP_CREDENTIAL_ID/);

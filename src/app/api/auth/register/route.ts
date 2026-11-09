@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth/password";
 import { createSession, isSecureRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { ensureMemberCallAccount } from "@/lib/accounts/member-call-account";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,7 @@ function slugify(value: string) {
 
 type RegistrationTransaction = Pick<
   typeof prisma,
-  "user" | "organization" | "organizationMember" | "auditLog" | "teamRosterMember"
+  "user" | "organization" | "organizationMember" | "auditLog" | "teamRosterMember" | "$executeRaw"
 >;
 
 export async function POST(request: Request) {
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
         },
       });
 
+      await ensureMemberCallAccount(tx, { organizationId: organization.id, userId: user.id });
       await tx.auditLog.create({
         data: {
           organizationId: organization.id,

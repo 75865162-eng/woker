@@ -121,10 +121,47 @@ model OrganizationMember {
   amazonDataAccessGrants AmazonDataAccessGrant[]
   amazonAdsSyncPlans AmazonAdsSyncPlan[] @relation("AmazonAdsPlanActor")
   amazonAdsSyncTasks AmazonAdsSyncTask[] @relation("AmazonAdsTaskActor")
+  marketCallAccount MarketCallAccount?
 
   @@unique([organizationId, userId])
   @@index([userId])
   @@index([organizationId, role])
+}
+
+// Shared ERP/Lili allowance, isolated by organization and ERP user, across workspaces.
+model MarketCallAccount {
+  organizationId String
+  userId         String
+  balance        Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  member         OrganizationMember @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict, map: "MarketCallAccount_member_fkey")
+  entries        MarketCallEntry[]
+
+  @@id([organizationId, userId])
+}
+
+model MarketCallEntry {
+  id             String   @id
+  organizationId String
+  userId         String
+  requestKey     String
+  kind           String
+  delta          Int
+  status         String
+  balanceAfter   Int
+  provider       String?
+  tool           String?
+  workspaceId    String?
+  runId          String?
+  callId         String?
+  note           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  account        MarketCallAccount @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict, map: "MarketCallEntry_account_fkey")
+
+  @@unique([organizationId, userId, requestKey])
+  @@index([organizationId, userId, createdAt, id])
 }
 
 model TeamRosterMember {

@@ -4,11 +4,23 @@ import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import { adsReadAdapterReady } from "./sync-adapter";
 import { adsScopeEnabled, adsSyncKey, adsSyncScopes } from "./sync-policy";
 import { adsStructureTaskWhere } from "./task-routing";
+import { configuredSyncScopes } from "@/lib/amazon-sync/activation";
+import { ensureAdsPlan } from "./sync-service";
 
 const dueStatuses = ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"];
 export async function tickAmazonAds(now = new Date()) {
-  const scopes = adsSyncScopes();
-  if (!scopes.length || !process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis" || !adsReadAdapterReady()) return;
+  if (!process.env.DATABASE_URL || process.env.QUEUE_DRIVER !== "redis" || !adsReadAdapterReady()) return;
+  if (process.env.AMAZON_ADS_SYNC_ENABLED !== undefined && process.env.AMAZON_ADS_SYNC_ENABLED !== "true") return;
+  const configured = configuredSyncScopes(process.env.AMAZON_ADS_SYNC_SCOPES ?? process.env.AMAZON_SYNC_CENTER_SCOPES);
+  const scopes = configured === null ? await prisma.amazonAdsAuthorization.groupBy({ by: ["organizationId", "workspaceId"], where: { status: "CONNECTED" } }) : adsSyncScopes();
+  if (!scopes.length) return;
+  // Recover OAuth commits even if the browser disconnected or the first task
+  // could not be created. One profile's failure does not stop healthy profiles.
+  const uninitialized = await prisma.amazonAdsProfile.findMany({ where: { OR: scopes, authorization: { status: "CONNECTED" }, syncPlans: { none: {} } }, select: { id: true, organizationId: true, workspaceId: true, authorization: { select: { authorizedByUserId: true } } }, take: 100 });
+  for (const profile of uninitialized) {
+    try { await prisma.$transaction(tx => ensureAdsPlan(tx, { organizationId: profile.organizationId, workspaceId: profile.workspaceId }, profile.id, profile.authorization.authorizedByUserId)); }
+    catch { console.error(`[amazon-ads] automatic binding deferred for ${profile.id}`); }
+  }
   await prisma.amazonAdsSyncPlan.updateMany({ where: { OR: scopes, status: { in: ["WAITING_FOR_CONFIG", "WAITING_FOR_ADAPTER"] } }, data: { status: "ACTIVE", lastErrorCode: null, nextRunAt: now } });
   const expired = await prisma.amazonAdsSyncTask.findMany({ where: { ...adsStructureTaskWhere(), OR: scopes, status: "RUNNING", leaseExpiresAt: { lt: now } }, take: 100 });
   for (const task of expired) {

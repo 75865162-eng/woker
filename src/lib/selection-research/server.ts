@@ -20,6 +20,9 @@ import { storedResearchEngine } from "./http";
 import { selectResearchAiSettings } from "./ai-settings";
 import { resolveAiSettings } from "@/lib/server/ai-runtime";
 import { researchRequestAuthorization } from "./request-authorization";
+import { marketCallQuota } from "@/lib/lili/call-quota-server";
+
+import { readPaidCallConsent } from "./paid-call-consent";
 
 async function researchPermission(moduleId: string, action: PermissionAction, request: Request) {
   const verified = researchRequestAuthorization(request);
@@ -44,6 +47,7 @@ export async function researchAccess(request: Request, action: PermissionAction,
   const workspaceId = workspaceScopeFromRequest(request, body).workspaceId;
   if (!await assertWorkspaceAccess(permission.user.organizationId, workspaceId)) return { ok: false as const, response: NextResponse.json({ error: "Forbidden workspace." }, { status: 403 }) };
   const scope = { organizationId: permission.user.organizationId, workspaceId, ownerId: permission.user.id };
+  let paidCallConsent: Awaited<ReturnType<typeof readPaidCallConsent>>;
   const fixture = researchFixture();
   const repository = prismaResearchRepository();
   let mode = body.mode === "live" ? "live" as const : "fixture" as const;
@@ -53,9 +57,10 @@ export async function researchAccess(request: Request, action: PermissionAction,
       paused = Boolean(existing.pausedAt);
       const credential = researchRequestAuthorization(request)?.credentialId;
       if (credential && (existing.mode !== "live" || existing.erpCredentialId !== credential)) return { ok: false as const, response: NextResponse.json({ error: "Research not found." }, { status: 404 }) };
-      mode = existing.mode; body = { ...body, erpCredentialId: existing.erpCredentialId, aiConfigSource: existing.aiConfigSource, budgetMode: existing.budgetMode }; }
+      mode = existing.mode; body = { ...body, erpCredentialId: existing.erpCredentialId, aiConfigSource: existing.aiConfigSource, budgetMode: existing.budgetMode, executionMode: existing.executionMode }; }
     catch { return { ok: false as const, response: NextResponse.json({ error: "Research not found." }, { status: 404 }) }; }
-    if (paused || body.operation !== "step") return { ok: true as const, scope, engine: storedResearchEngine(new LeaseResearchStore(repository, scope), scope, mode) };
+    if (mode === "live") paidCallConsent = await readPaidCallConsent(scope);
+    if (paused || body.operation !== "step") return { ok: true as const, scope, paidCallConsent, engine: storedResearchEngine(new LeaseResearchStore(repository, scope), scope, mode) };
   }
   if (mode === "fixture") {
     const engine = new ResearchEngine(new LeaseResearchStore(repository, scope), scope, fixture.transport, fixture.agent, { mode });
@@ -64,15 +69,19 @@ export async function researchAccess(request: Request, action: PermissionAction,
   if (body.budgetMode === "mock_unlimited") throw new Error("LIVE_BUDGET_REVIEW_REQUIRED");
   const sellerSettings = await getSellerSpriteMcpSettings(permission.user, { workspaceId, accountId: "", marketplace: "" });
   if (!sellerSettings?.enabled || !sellerSettings.apiKey || !sellerSettings.serverUrl) throw new Error("SELLERSPRITE_MCP_NOT_CONFIGURED");
-  const aiSettings = await selectedAiSettings(request, permission.user, workspaceId, body.aiConfigSource);
-  if (!aiSettings.apiKey) throw new Error("AI_MODEL_NOT_CONFIGURED");
+  if (!body.runId) paidCallConsent = await readPaidCallConsent(scope);
+  const external = body.executionMode === "codex";
+  const aiSettings = external ? undefined : await selectedAiSettings(request, permission.user, workspaceId, body.aiConfigSource);
+  if (!external && !aiSettings?.apiKey) throw new Error("AI_MODEL_NOT_CONFIGURED");
   const runtimeTools = await runtimeToolsForUser(permission.user, request, body);
   const transport = runtimeTools.transport;
-  const agent = createResearchAiAgent(aiSettings);
+  const agent = aiSettings ? createResearchAiAgent(aiSettings) : { async next(): Promise<never> { throw new Error("EXTERNAL_RESEARCH_ACTION_REQUIRED"); } };
   const engine = new ResearchEngine(new LeaseResearchStore(repository, scope), scope, transport, agent, {
-    mode, authorizeLive: async (run) => run.scope.organizationId === permission.user.organizationId && run.scope.workspaceId === workspaceId && run.scope.ownerId === permission.user.id && Boolean(aiSettings.apiKey) && Boolean(sellerSettings?.enabled && sellerSettings.apiKey && sellerSettings.serverUrl),
+    paidCallConsent,
+    marketQuota: marketCallQuota({ organizationId: permission.user.organizationId, userId: permission.user.id }),
+    mode, authorizeLive: async (run) => run.scope.organizationId === permission.user.organizationId && run.scope.workspaceId === workspaceId && run.scope.ownerId === permission.user.id && (external || Boolean(aiSettings?.apiKey)) && Boolean(sellerSettings?.enabled && sellerSettings.apiKey && sellerSettings.serverUrl),
   });
-  return { ok: true as const, scope, engine, sellerSettings, aiSettings, transport, runtimeTools };
+  return { ok: true as const, scope, engine, paidCallConsent, sellerSettings, aiSettings, transport, runtimeTools };
 }
 
 export async function getResearchAvailability(request: Request, body: Record<string, unknown> = {}) {
@@ -111,9 +120,11 @@ export async function installedResearchSkills() { return process.env.SELECTION_S
 export function researchError(error: unknown) {
   if (error instanceof SyncInputError) return NextResponse.json({ error: "INVALID_RESEARCH_REQUEST" }, { status: error.status });
   const code = error instanceof Error ? error.message : "";
-  const known = new Set(["RESEARCH_NOT_FOUND", "RESEARCH_SCOPE_DENIED", "RESEARCH_BUSY", "STALE_OR_MISSING_GATE", "INVALID_CANDIDATE", "DECISION_DOES_NOT_MATCH_GATE", "REPORT_REQUIRES_BOTH_HUMAN_GATES", "RESEARCH_MODE_MISMATCH", "BUDGET_MUST_INCREASE", "INVALID_BILLING_RECONCILIATION", "TERMINAL_RUN", "EXPLICIT_RECOVERY_REQUIRED", "RECOVERY_NOT_APPLICABLE", "SELLERSPRITE_MCP_NOT_CONFIGURED", "SELLERSPRITE_MCP_TOOL_NOT_FOUND", "SELLERSPRITE_MCP_REGISTRY_INVALID", "NO_SUPPORTED_LIVE_TOOLS", "AI_MODEL_NOT_CONFIGURED", "PROVIDER_NOT_CONFIGURED", "MISSING_MARKET_CALL_BUDGET", "APPROVED_SCHEMA_CHANGED", "PENDING_TOOL_CALL_MISMATCH", "INVALID_ASIN", "REQUIRED_PROVIDER_NOT_CONNECTED", "RESEARCH_REPORT_METADATA_FAILED", "RESEARCH_REPORT_UNAVAILABLE", "RESEARCH_REPORT_INTEGRITY_FAILED", "EXPLICIT_RESEARCH_MODE_REQUIRED", "INVALID_RESEARCH_REQUEST", "INVALID_ERP_CREDENTIAL_ID"]);
-  known.add("LIVE_BUDGET_REVIEW_REQUIRED"); known.add("RESEARCH_STAGE_REPORT_UNAVAILABLE"); known.add("RESEARCH_EVIDENCE_NOT_FOUND");
+  const known = new Set(["RESEARCH_NOT_FOUND", "RESEARCH_SCOPE_DENIED", "RESEARCH_BUSY", "STALE_OR_MISSING_GATE", "STALE_RESEARCH_DECISION", "INVALID_CANDIDATE", "DECISION_DOES_NOT_MATCH_GATE", "INVALID_RESEARCH_DECISION", "INVALID_RESEARCH_AUTHORIZATION", "REPORT_REQUIRES_BOTH_HUMAN_GATES", "RESEARCH_MODE_MISMATCH", "BUDGET_MUST_INCREASE", "BUDGET_INCREASE_NOT_ALLOWED_AFTER_RESEARCH_AUTHORIZATION", "INVALID_BILLING_RECONCILIATION", "TERMINAL_RUN", "EXPLICIT_RECOVERY_REQUIRED", "RECOVERY_NOT_APPLICABLE", "SELLERSPRITE_MCP_NOT_CONFIGURED", "SELLERSPRITE_MCP_TOOL_NOT_FOUND", "SELLERSPRITE_MCP_REGISTRY_INVALID", "NO_SUPPORTED_LIVE_TOOLS", "AI_MODEL_NOT_CONFIGURED", "PROVIDER_NOT_CONFIGURED", "MISSING_MARKET_CALL_BUDGET", "APPROVED_SCHEMA_CHANGED", "PENDING_TOOL_CALL_MISMATCH", "INVALID_ASIN", "REQUIRED_PROVIDER_NOT_CONNECTED", "RESEARCH_REPORT_METADATA_FAILED", "RESEARCH_REPORT_UNAVAILABLE", "RESEARCH_REPORT_INTEGRITY_FAILED", "EXPLICIT_RESEARCH_MODE_REQUIRED", "INVALID_RESEARCH_REQUEST", "INVALID_ERP_CREDENTIAL_ID"]);
+  for (const code of ["EXTERNAL_RESEARCH_ACTION_REQUIRED", "INVALID_EXTERNAL_RESEARCH_ACTION", "STALE_EXTERNAL_RESEARCH_ACTION", "EXTERNAL_ACTION_CANNOT_REPLACE_APPROVAL"]) known.add(code);
+  known.add("INVALID_RESEARCH_CHARGE"); known.add("LIVE_BUDGET_REVIEW_REQUIRED"); known.add("RESEARCH_STAGE_REPORT_UNAVAILABLE"); known.add("RESEARCH_EVIDENCE_NOT_FOUND");
   known.add("RESEARCH_RUNTIME_AI_PERMISSION_REQUIRED"); known.add("INVALID_RESEARCH_AI_SOURCE");
-  const invalidInput = new Set(["EXPLICIT_RESEARCH_MODE_REQUIRED", "INVALID_RESEARCH_REQUEST", "INVALID_ERP_CREDENTIAL_ID", "INVALID_ASIN", "MISSING_MARKET_CALL_BUDGET", "INVALID_RESEARCH_AI_SOURCE"]);
+  const invalidInput = new Set(["EXPLICIT_RESEARCH_MODE_REQUIRED", "INVALID_RESEARCH_REQUEST", "INVALID_ERP_CREDENTIAL_ID", "INVALID_ASIN", "MISSING_MARKET_CALL_BUDGET", "INVALID_RESEARCH_AI_SOURCE", "INVALID_EXTERNAL_RESEARCH_ACTION", "RESEARCH_ACTION_JSON_INVALID", "RESEARCH_ACTION_JSON_TOO_LARGE", "RESEARCH_ACTION_OBJECT_REQUIRED"]);
+  for (const inputCode of invalidInput) known.add(inputCode);
   return NextResponse.json({ error: known.has(code) ? code : "RESEARCH_UNAVAILABLE_OR_INVALID_REQUEST" }, { status: invalidInput.has(code) ? 400 : ["RESEARCH_NOT_FOUND", "RESEARCH_EVIDENCE_NOT_FOUND"].includes(code) ? 404 : ["RESEARCH_SCOPE_DENIED", "RESEARCH_RUNTIME_AI_PERMISSION_REQUIRED"].includes(code) ? 403 : known.has(code) ? 409 : 400 });
 }

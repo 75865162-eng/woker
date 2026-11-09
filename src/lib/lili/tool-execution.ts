@@ -42,6 +42,7 @@ export async function runCatalogTool(name: string, input: unknown) {
   }
   if (name === "meta_list_workflows") return { status: 200, body: { ok: true, source: "shipped-definitions", definitionOnly: true, templates: listWorkflows(), message: "仅工作流定义；没有查询保存记录、调度或执行状态。" } };
   return { status: 501, body: { ok: false, error: tool.readOnly ? "tool_adapter_not_mapped" : "live_write_unsupported", tool: name,
-    message: "该 Lili 工具尚未映射到主系统的授权执行器。未查询业务数据、创建任务或执行外部写入。",
+    nextAction: { kind: "UNSUPPORTED_EXECUTOR", channel: "codex_chat", browserRequired: false },
+    message: "无需返回浏览器；请在对话中说明未执行部分并保留分析或草稿。该 Lili 工具尚未映射到主系统的授权执行器。未查询业务数据、创建任务或执行外部写入。",
     nextPath: name.startsWith("ads_") ? "/amazon-ads" : name.startsWith("listing_") ? "/listing-ai" : "/agents" } };
 }

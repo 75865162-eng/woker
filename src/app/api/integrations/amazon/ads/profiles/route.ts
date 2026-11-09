@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api-permissions";
 import { workspaceScopeFromRequest } from "@/lib/workspace/scope";
 import { prisma } from "@/lib/db/prisma";
-import { bindAmazonAdsProfile, listAmazonAdsProfiles } from "@/lib/amazon-ads/authorization";
+import { bindAmazonAdsProfile, disconnectAmazonAdsAuthorization, listAmazonAdsProfiles } from "@/lib/amazon-ads/authorization";
 import { hasAmazonAdsEncryptionKey } from "@/lib/amazon-ads/credentials";
 import { boundedJsonObject } from "@/lib/amazon-sync/request-body";
 import { auditAmazonDataRead } from "@/lib/amazon-sync/read-audit";
@@ -37,6 +37,10 @@ export async function POST(request: Request) {
   if (!permission.ok) return NextResponse.json({ error: "Forbidden." }, { status: permission.response.status, headers: jsonHeaders });
   try {
     const body = await boundedJsonObject(request, 2048);
+    if (body.action === "disconnect" && typeof body.authorizationId === "string" && body.authorizationId.length <= 200) {
+      const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request, body).workspaceId };
+      return NextResponse.json(await disconnectAmazonAdsAuthorization(scope, permission.user.id, body.authorizationId), { headers: jsonHeaders });
+    }
     if (!body || (typeof body.profileId !== "string" && typeof body.profileRecordId !== "string") || (typeof body.profileId === "string" && body.profileId.length > 30) || (typeof body.profileRecordId === "string" && body.profileRecordId.length > 200) || (body.sellerAccountId !== undefined && body.sellerAccountId !== null && typeof body.sellerAccountId !== "string") || (body.advertiserAccountId !== undefined && body.advertiserAccountId !== null && (typeof body.advertiserAccountId !== "string" || body.advertiserAccountId.length > 512))) return NextResponse.json({ error: "绑定参数无效。" }, { status: 400, headers: jsonHeaders });
     const scope = { organizationId: permission.user.organizationId, workspaceId: workspaceScopeFromRequest(request, body).workspaceId };
     if (body.advertiserAccountId !== undefined && (typeof body.profileRecordId !== "string" || !body.profileRecordId || (body.expectedAdvertiserAccountId !== null && (typeof body.expectedAdvertiserAccountId !== "string" || body.expectedAdvertiserAccountId.length > 512)) || !Number.isSafeInteger(body.expectedAdvertiserAccountRevision) || Number(body.expectedAdvertiserAccountRevision) < 0)) return NextResponse.json({ error: "账户绑定需要内部 Profile ID 和当前绑定值。" }, { status: 400, headers: jsonHeaders });

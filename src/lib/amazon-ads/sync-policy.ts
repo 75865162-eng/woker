@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AdsAuthScope } from "./authorization";
+import { configuredSyncScopes, syncScopeAllowed } from "@/lib/amazon-sync/activation";
 
 export const adsSyncStages = ["campaigns", "ad-groups", "keywords", "targets", "negatives", "reports", "product-ads"] as const;
 export type AdsSyncStage = typeof adsSyncStages[number];
@@ -13,17 +14,12 @@ export function nextAdsStructureStage(stage: number) {
   throw new AdsSyncError("ADS_REPORT_ADAPTER_NOT_IMPLEMENTED");
 }
 export function adsSyncScopes(env: Record<string, string | undefined> = process.env): AdsAuthScope[] {
-  if (env.AMAZON_ADS_SYNC_ENABLED !== "true") return [];
-  try {
-    const rows: unknown = JSON.parse(env.AMAZON_ADS_SYNC_SCOPES ?? "[]");
-    if (!Array.isArray(rows) || rows.length > 100) return [];
-    if (!rows.every(row => Array.isArray(row) && row.length === 2 && row.every(v => typeof v === "string" && v.length > 0 && v.length <= 200))) return [];
-    const scopes = rows.map(row => ({ organizationId: row[0] as string, workspaceId: row[1] as string }));
-    return scopes.filter((scope, index) => scopes.findIndex(candidate => candidate.organizationId === scope.organizationId && candidate.workspaceId === scope.workspaceId) === index);
-  } catch { return []; }
+  if (env.AMAZON_ADS_SYNC_ENABLED !== undefined && env.AMAZON_ADS_SYNC_ENABLED !== "true") return [];
+  return configuredSyncScopes(env.AMAZON_ADS_SYNC_SCOPES ?? env.AMAZON_SYNC_CENTER_SCOPES) ?? [];
 }
 export function adsScopeEnabled(scope: AdsAuthScope, env: Record<string, string | undefined> = process.env) {
-  return adsSyncScopes(env).some(s => s.organizationId === scope.organizationId && s.workspaceId === scope.workspaceId);
+  if (env.AMAZON_ADS_SYNC_ENABLED !== undefined && env.AMAZON_ADS_SYNC_ENABLED !== "true") return false;
+  return syncScopeAllowed(scope, env.AMAZON_ADS_SYNC_SCOPES ?? env.AMAZON_SYNC_CENTER_SCOPES);
 }
 export function adsSyncKey(parts: unknown[]) { return createHash("sha256").update(JSON.stringify(parts)).digest("hex"); }
 export function adsReportWindows(from: string, to: string, maxDays: number): Array<{ from: string; to: string }> {

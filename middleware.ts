@@ -101,7 +101,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const loginUrl = new URL("/login", publicOrigin);
-  loginUrl.searchParams.set("next", pathname);
+  loginUrl.searchParams.set("next", pathname === "/agents/selection-research" ? pathname + request.nextUrl.search : pathname);
 
   return NextResponse.redirect(loginUrl);
 }

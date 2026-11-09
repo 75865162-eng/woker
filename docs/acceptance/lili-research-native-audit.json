@@ -1,0 +1,725 @@
+{
+  "observedAt": "2026-11-07T14:31:44.100Z",
+  "parentId": "edda64ef-fc9c-42ec-ad45-21037a45b24b",
+  "devices": [
+    {
+      "id": "6eb11753-b62e-460a-929e-7b62daf1c9b4",
+      "status": "ACTIVE",
+      "tools": [
+        "amazon.stores.list",
+        "data_list_tables",
+        "data_describe_table",
+        "data_sync_status",
+        "data_query",
+        "research_start",
+        "research_read",
+        "research_list",
+        "research_evidence",
+        "research_step",
+        "research_pause",
+        "research_resume",
+        "research_recover",
+        "research_cancel",
+        "research_export"
+      ],
+      "expiresAt": "2026-11-07T15:29:01.839Z",
+      "lastUsedAt": "2026-11-07T14:31:28.771Z"
+    }
+  ],
+  "audit": [
+    {
+      "action": "lili.device.paired",
+      "createdAt": "2026-11-07T14:29:01.574Z"
+    },
+    {
+      "action": "lili.oauth.token.issued",
+      "createdAt": "2026-11-07T14:29:01.841Z"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:03.122Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "1cfab0a0-f514-4bbb-b3ce-99b3ac76e2d8"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:03.139Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "1cfab0a0-f514-4bbb-b3ce-99b3ac76e2d8"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:03.401Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "96c68de8-7b38-40c4-b514-5cca4d72f838"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:03.429Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "96c68de8-7b38-40c4-b514-5cca4d72f838"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:03.768Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "6ea07c41-88ee-4163-ba42-32b6f4452839"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:03.839Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "6ea07c41-88ee-4163-ba42-32b6f4452839"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:04.092Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "27155740-c72e-4f8e-b5f7-169ebb6f3a7c"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:04.092Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "81da5a51-c8b7-47cf-b812-ef9b290e7abb"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:29:04.108Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "81da5a51-c8b7-47cf-b812-ef9b290e7abb"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:29:04.109Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "27155740-c72e-4f8e-b5f7-169ebb6f3a7c"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:04.354Z",
+      "tool": "lili_ping",
+      "status": "STARTED",
+      "requestId": "ab2324a0-b013-4f2f-b8db-bd9518ad51b6"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:04.371Z",
+      "tool": "lili_ping",
+      "status": "SUCCEEDED",
+      "requestId": "ab2324a0-b013-4f2f-b8db-bd9518ad51b6"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:04.661Z",
+      "tool": "amazon.stores.list",
+      "status": "STARTED",
+      "requestId": "f8cfa880-c88a-4770-8e1d-9d0a5872aeac"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:04.700Z",
+      "tool": "amazon.stores.list",
+      "status": "SUCCEEDED",
+      "requestId": "f8cfa880-c88a-4770-8e1d-9d0a5872aeac"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:04.966Z",
+      "tool": "data_query",
+      "status": "STARTED",
+      "requestId": "81b2a3df-6438-4166-9311-cf5943c7ce0a"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:04.997Z",
+      "tool": "data_query",
+      "status": "SUCCEEDED",
+      "requestId": "81b2a3df-6438-4166-9311-cf5943c7ce0a"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:05.246Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "1bfbcdaf-141f-4a2c-bbc2-ee2b72cc6ca2"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:05.263Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "1bfbcdaf-141f-4a2c-bbc2-ee2b72cc6ca2"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:05.512Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "STARTED",
+      "requestId": "e15e6ab0-f38f-4618-9b18-fc183024cb82"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:05.547Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "SUCCEEDED",
+      "requestId": "e15e6ab0-f38f-4618-9b18-fc183024cb82"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:05.800Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "5801937c-548e-4c67-9af4-94e6ba213220"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:05.812Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "5801937c-548e-4c67-9af4-94e6ba213220"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:06.055Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "STARTED",
+      "requestId": "c4e93d39-9c0a-4990-8e38-89e401667ab4"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:06.067Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "SUCCEEDED",
+      "requestId": "c4e93d39-9c0a-4990-8e38-89e401667ab4"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:06.319Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "9587fc44-b1f7-4cf5-bb3e-70da8f92ce6f"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:06.331Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "9587fc44-b1f7-4cf5-bb3e-70da8f92ce6f"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:06.577Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "STARTED",
+      "requestId": "f9e9d647-5ac3-467c-835a-ee7bc37c0723"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:06.589Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "SUCCEEDED",
+      "requestId": "f9e9d647-5ac3-467c-835a-ee7bc37c0723"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:06.833Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "73aeff7e-1183-4442-a3a4-2553e345a023"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:06.845Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "73aeff7e-1183-4442-a3a4-2553e345a023"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:07.096Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "STARTED",
+      "requestId": "3c44e123-5e9f-4a9b-a598-a2f6c1be9c25"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:07.109Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "SUCCEEDED",
+      "requestId": "3c44e123-5e9f-4a9b-a598-a2f6c1be9c25"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:07.361Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "556e30ac-9631-476a-b1f8-89a8bb24967c"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:07.375Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "556e30ac-9631-476a-b1f8-89a8bb24967c"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:07.621Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "STARTED",
+      "requestId": "b5ff2c35-40a1-4bb3-9058-75acd6f8d3f6"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:07.636Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "SUCCEEDED",
+      "requestId": "b5ff2c35-40a1-4bb3-9058-75acd6f8d3f6"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:07.921Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "4b5e2330-c469-4f23-809d-e4971202409b"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:07.921Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "ff972d5c-036f-4473-986b-c67f78045dcf"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:29:07.934Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "4b5e2330-c469-4f23-809d-e4971202409b"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:29:07.935Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "ff972d5c-036f-4473-986b-c67f78045dcf"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:33.256Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "007be309-e382-4301-b876-a73a83a253fd"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:33.269Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "007be309-e382-4301-b876-a73a83a253fd"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:33.546Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "4818b910-3422-4e35-8483-0d4d3abada03"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:33.558Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "4818b910-3422-4e35-8483-0d4d3abada03"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:33.901Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "96db85c0-57c2-4426-bd61-9d35f16b69bd"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:34.001Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "96db85c0-57c2-4426-bd61-9d35f16b69bd"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:34.240Z",
+      "tool": "meta_get_market_access",
+      "status": "STARTED",
+      "requestId": "b0fd13de-5b52-4cba-8c75-e6400a0eeeb7"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:34.257Z",
+      "tool": "meta_get_market_access",
+      "status": "SUCCEEDED",
+      "requestId": "b0fd13de-5b52-4cba-8c75-e6400a0eeeb7"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:34.497Z",
+      "tool": "research_list",
+      "status": "STARTED",
+      "requestId": "63fe8269-37a8-4611-bfdb-ba9d9c618f00"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:29:34.594Z",
+      "tool": "research_list",
+      "status": "SUCCEEDED",
+      "requestId": "63fe8269-37a8-4611-bfdb-ba9d9c618f00"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:29:34.843Z",
+      "tool": "research_start",
+      "status": "STARTED",
+      "requestId": "d58d9440-e18d-4843-a07c-ac68dd86a16a"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:29:34.877Z",
+      "tool": "research_start",
+      "status": "DENIED",
+      "requestId": "d58d9440-e18d-4843-a07c-ac68dd86a16a"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:45.139Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "6ab64388-afaa-4fd1-a2cc-affb664d0f55"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:30:45.150Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "6ab64388-afaa-4fd1-a2cc-affb664d0f55"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:45.402Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "f284febb-7d06-483f-8d19-324b9acc8279"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:30:45.413Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "f284febb-7d06-483f-8d19-324b9acc8279"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:45.691Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "72c0c154-a8bf-4121-9dae-30c26b89e1de"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:30:45.761Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "72c0c154-a8bf-4121-9dae-30c26b89e1de"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:46.005Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "555d49b0-b810-452c-97a9-4d52a36ec0d4"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:46.005Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "013471ba-082f-4b95-928b-30975a43ee72"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:46.014Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "555d49b0-b810-452c-97a9-4d52a36ec0d4"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:46.015Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "013471ba-082f-4b95-928b-30975a43ee72"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:46.259Z",
+      "tool": "research_read",
+      "status": "STARTED",
+      "requestId": "94096786-d025-405b-a89e-3615d202c5be"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:46.306Z",
+      "tool": "research_read",
+      "status": "DENIED",
+      "requestId": "94096786-d025-405b-a89e-3615d202c5be"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:46.547Z",
+      "tool": "research_evidence",
+      "status": "STARTED",
+      "requestId": "ec0084c0-4032-4215-bd88-8e1d05626c81"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:46.579Z",
+      "tool": "research_evidence",
+      "status": "DENIED",
+      "requestId": "ec0084c0-4032-4215-bd88-8e1d05626c81"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:46.824Z",
+      "tool": "research_pause",
+      "status": "STARTED",
+      "requestId": "4482e3e4-11e0-4457-93bb-41030618645d"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:46.855Z",
+      "tool": "research_pause",
+      "status": "DENIED",
+      "requestId": "4482e3e4-11e0-4457-93bb-41030618645d"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:47.099Z",
+      "tool": "research_resume",
+      "status": "STARTED",
+      "requestId": "ab3710f5-10e2-4b1a-9d26-b472eea0fd22"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:47.131Z",
+      "tool": "research_resume",
+      "status": "DENIED",
+      "requestId": "ab3710f5-10e2-4b1a-9d26-b472eea0fd22"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:47.381Z",
+      "tool": "research_recover",
+      "status": "STARTED",
+      "requestId": "9780bb10-c308-4155-9ad0-76099229ebf5"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:47.412Z",
+      "tool": "research_recover",
+      "status": "DENIED",
+      "requestId": "9780bb10-c308-4155-9ad0-76099229ebf5"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:47.662Z",
+      "tool": "research_cancel",
+      "status": "STARTED",
+      "requestId": "7f29f7b2-f6ff-4ae3-b6fe-3d27c52c7a89"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:47.699Z",
+      "tool": "research_cancel",
+      "status": "DENIED",
+      "requestId": "7f29f7b2-f6ff-4ae3-b6fe-3d27c52c7a89"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:30:47.946Z",
+      "tool": "research_list",
+      "status": "STARTED",
+      "requestId": "edc639c2-f65f-4939-a502-56b4e34f93a4"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:30:47.968Z",
+      "tool": "research_list",
+      "status": "DENIED",
+      "requestId": "edc639c2-f65f-4939-a502-56b4e34f93a4"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:10.865Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "ed4de3e1-e4a5-4e31-972b-28e30df3bc70"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:10.875Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "ed4de3e1-e4a5-4e31-972b-28e30df3bc70"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:11.128Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "7db7431f-d132-4fca-aeb5-45bae4b47e2a"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:11.140Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "7db7431f-d132-4fca-aeb5-45bae4b47e2a"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:11.422Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "a9e51be9-02b5-44aa-9606-9d07f92ff230"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:11.498Z",
+      "tool": null,
+      "status": "SUCCEEDED",
+      "requestId": "a9e51be9-02b5-44aa-9606-9d07f92ff230"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:11.742Z",
+      "tool": "lili_ping",
+      "status": "STARTED",
+      "requestId": "13b4851d-4863-4681-a1f3-9a4c01955061"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:11.753Z",
+      "tool": "lili_ping",
+      "status": "SUCCEEDED",
+      "requestId": "13b4851d-4863-4681-a1f3-9a4c01955061"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:12.014Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "cbf2689f-c75f-4921-b86e-fd868c99aa54"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:12.014Z",
+      "tool": null,
+      "status": "STARTED",
+      "requestId": "40174292-5874-474b-ba1f-6f0b1defef5c"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:31:12.025Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "40174292-5874-474b-ba1f-6f0b1defef5c"
+    },
+    {
+      "action": "lili.mcp.denied",
+      "createdAt": "2026-11-07T14:31:12.025Z",
+      "tool": null,
+      "status": "DENIED",
+      "requestId": "cbf2689f-c75f-4921-b86e-fd868c99aa54"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:12.281Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "dc4f7035-6291-4890-8488-654cd9963e01"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:12.296Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "dc4f7035-6291-4890-8488-654cd9963e01"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:12.580Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "STARTED",
+      "requestId": "4d9efc78-fb26-4420-887a-6b640abe26fd"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:12.592Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "SUCCEEDED",
+      "requestId": "4d9efc78-fb26-4420-887a-6b640abe26fd"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:12.842Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "e2226a63-d994-4d16-af90-81d1280ba684"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:12.865Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "e2226a63-d994-4d16-af90-81d1280ba684"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:13.139Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "STARTED",
+      "requestId": "422a0c6b-5644-43ad-8538-a935f4cc26a4"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:13.150Z",
+      "tool": "meta_get_skill_manifest",
+      "status": "SUCCEEDED",
+      "requestId": "422a0c6b-5644-43ad-8538-a935f4cc26a4"
+    },
+    {
+      "action": "lili.mcp.started",
+      "createdAt": "2026-11-07T14:31:13.401Z",
+      "tool": "meta_search_skills",
+      "status": "STARTED",
+      "requestId": "54711738-b196-460f-8a0f-64069d3682fe"
+    },
+    {
+      "action": "lili.mcp.succeeded",
+      "createdAt": "2026-11-07T14:31:13.415Z",
+      "tool": "meta_search_skills",
+      "status": "SUCCEEDED",
+      "requestId": "54711738-b196-460f-8a0f-64069d3682fe"
+    }
+  ]
+}

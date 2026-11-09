@@ -21,10 +21,10 @@ export function liveMarketTransport(resolve: () => Promise<Transport | undefined
 export type MarketProviderAccess = { provider: "sellersprite" | "xiyou"; configured: boolean; status: "configured_not_probed" | "disabled_or_missing" | "configuration_unavailable" };
 export function marketAccessSummary(authenticated: boolean, canResearch: boolean, providers: MarketProviderAccess[]): ObjectJson {
   return {
-    authenticated, direct_market_access: false, paid_tools: [], estimated_cost: null, cost_status: "unknown", approval_required: true,
+    authenticated, direct_market_access: false, paid_tools: [], estimated_cost: null, cost_status: "unknown", approval_required: false,
     research_access: canResearch && providers.some(p => p.configured),
     providers: providers.map(p => ({ ...p, allowed: canResearch && p.configured })),
-    reason: !canResearch ? "RESEARCH_PERMISSION_REQUIRED" : "PAID_CALLS_REQUIRE_PERSISTED_RESEARCH_APPROVAL",
+    reason: !canResearch ? "RESEARCH_PERMISSION_REQUIRED" : "FEE_APPROVAL_ONLY_WHEN_USER_OR_SKILL_REQUIRES",
     registry_checked: false,
   };
 }

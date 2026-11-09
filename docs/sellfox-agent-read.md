@@ -397,3 +397,40 @@ browse 保留 `facets.productTags`，并在同一 SQL 响应新增 `facets.brand
 仅 listings 支持 `dxmPublishState=<完整原值>`，沿 brand 的 trim/精确匹配模式，对 current view 类型列 `s."dxmPublishState"` 参数化 `=`；列表行、count、workbench CSV/XLSX 和 `agent=1` 窄表导出同口径。空参数不加谓词，NULL 仅属于「全部」；sales / performance / inventory / ads 忽略该参数。listings browse 的 `facets.dxmPublishStates` 为 scope-only 非 NULL DISTINCT 排序值，不随行筛选缩小；UI 仅用 facets 加 URL 当前值，无固定枚举。**DXM 发布状态 ≠ 配对状态**，配对状态 `missingFilter` 继续锁定。
 
 无 schema/migration、默认列、数据写入、sync/worker 或生产改动；Fee-mining 仍暂停，不 push/deploy/SSH，回滚本片应用代码即可。定向单元/SQL/模拟 API 新增用例、TypeScript、相关 ESLint 和 diff 检查通过；browse-filters 仍有既有广告默认列陈旧断言失败，Chromium 启动 SIGTRAP，未绕过；命令、范围及浏览器补验见 [listings 本地交付记录](sellfox-listings-read-model.md#2026-10-27--listings-dxm-发布状态精确筛选与-facets--box-local-only)。
+
+
+<!-- AGENTS migration 2026-11-08: original lines 412-424 -->
+## 赛狐 Agent 本地读取
+
+- Listing 列表读取现有 current view 的类型投影；`sellfox_listing_project_write` 在快照写入事务内维护，禁止把默认列表恢复为逐行 payload 解析。增量迁移/全历史回填成本、隔离 benchmark 与回滚见 `docs/sellfox-listings-read-model.md`。
+
+- 销量订单量落 `SellfoxSalesDailySnapshot.orders`，旧值/缺日保持 NULL，浏览 `metric=orders`；利润按 `onlySettle=false/true` 分区同步与唯一键保存，查询/导出必须显式选口径，禁止跨分区求和。两页主图来自 Listing current，顶部 KPI 复用筛选 totals 按币种显示。增量迁移、验证和旧版回退约束见 `docs/sellfox-sales-profit-p0.md`。
+
+- `/sellfox` 四域UI列由 `workbench-types.ts` 的columns配置；`layout=workbench` 只读浏览分支按本地实体聚合/分页、销量最多90天日矩阵。CSV/利润Excel跟随可见列，Agent导出保留原英文长表。父ASIN/价格/库存补充来自current，不冒充历史；金额按币种分开，缺失不补0，无结构状态的广告控件灰显。浏览器验收使用真实Tailwind样式，运行 `npm run test:sellfox:browser`。
+- `docs/sellfox-agent-read.md` 定义库存 current、MSKU 日销、Listing current、利润及广告产品日报窄表/SQL 视图、CSV、字段映射与缺失值口径。Agent/CLI 例行读本地，不调用赛狐 API 或依赖网页登录；ProductRecord 不被赛狐覆盖。
+- 库存/Listing current 只发布完整店铺采集；日销需校验 coverage/complete，缺日不得补零。广告日报缺预算时禁止给暂停/降预算建议；SP/SB真数据已核验，SD仅验证真实空报告，非空数据仍待验收。
+- Listing V2 已验证 delete 状态可有稳定id+ASIN但缺MSKU，快照msku存NULL；在售/其他未验证状态仍不得放宽身份检查。对应增量迁移为 `20261025030000_allow_deleted_sellfox_listing_without_msku`，不修改ProductRecord。
+- 销量计划可配置 backfillStart，持久化游标默认从上一完整冬季开始；`SELLFOX_BACKFILL_DAYS_PER_RUN` 默认7、上限90。所有计划默认关闭，扩采前评估≥1200ms串行耗时。
+- `npm run sellfox:backfill-sales -- --help`：按显式组织/工作区/操作者盘点完整覆盖缺口，默认dry-run；`--apply`按店拆分最多90天加入现有队列，相同日期范围复用原批次。历史任务低于手动/定时任务优先级；开启计划需另行授权，历史回填期间日销计划仍拉T-1，不重复启动历史补数。执行与恢复见 `docs/sellfox-agent-read.md`。
+
+
+<!-- AGENTS migration 2026-11-08: original lines 447-466 -->
+### Sellfox 只读同步
+
+- 凭据页「测试连接」是显式测试例外：`POST /api/integrations/sellfox/credentials/test` 由 Node Route Handler 复用 `sellfox/client.ts` 请求一次新 Token，实时核验管理员/权限/工作区/revision、每范围一分钟防重及脱敏审计。仅用户点击时发起，不请求业务接口、不启用计划；常规数据采集仍只走 Worker。成功只说明 Token 可获取，不代表业务权限。实现验证禁止自动使用真实凭据请求上游。
+
+- `npm run sellfox:ads-reparse-cache -- --organization-id=<id> --workspace-id=<id>`：仅从现有 task.fileKey 缓存重解析完成/已下载广告报告，默认 dry-run，只有 `--write` 才按原窗口事务替换；默认投放与搜索词，不创建/轮询/下载上游任务。上线后另行授权执行，范围、空报告及回滚注意事项见 `docs/sellfox-ads-subtabs-gap.md`「既有数据纠正」。
+- `npm run sellfox:ads-reset-stuck-creating -- --organization-id=<id> --workspace-id=<id>`：将卡住的广告报告任务（`creating` 且无 externalTaskId/fileKey）标为 `failed` 以便重提；默认 dry-run，只有 `--write` 才更新 status；不删行、不调赛狐。123 上 SD×adTargeringReport 等用法见 `docs/sellfox-ads-subtabs-gap.md`「部署后重置卡住 creating」。
+
+- 广告 Phase A/B 新增 `ads_targeting` / `ads_search_term` / `ads_campaign` / `ads_ad_group` / `ads_placement`，报告代码精确为 `adTargeringReport` / `adSearchTermReport` / `adCampaignReport` / `adGroupReport` / `adSpaceReport`；2026-10-26 已对照真实 XLSX 确认列映射（覆盖范围见缺口文档）；投放/搜索词真实 ID 列为 `广告投放ID`，兼容 `投放ID`，双列歧义或显式空 ID 拒绝。五计划默认关闭、1440 分钟、Asia/Shanghai 06:30；广告位已确认活动/广告位/日期唯一，真实文件无广告组ID，兼容广告组仅元数据，重复身份整文件拒绝。列/身份/回退与灰显范围见 `docs/sellfox-ads-subtabs-gap.md`；`/saihu-search-merge` 人工上传保持独立。
+
+- 赛狐凭据入口为 `/settings?tab=integrations#sellfox-credentials`：组织有效 owner/database_admin 且具备 settings:edit / sellfox:create 时可直接保存，服务端实时校验成员、权限和工作区；独立 `SellfoxIntegrationCredential` 按组织/工作区 AES-GCM 加密、revision CAS 并与脱敏审计同事务写入。`SELLFOX_CREDENTIAL_ENCRYPTION_KEY` 仅由服务端配置；页面不回显、不缓存密钥，保存不调用赛狐或启用同步。未配置数据库凭据时保留 `SELLFOX_CLIENT_ID` / `SELLFOX_CLIENT_SECRET` 兼容路径，解密失败不得回退；所有 Open API 请求仍在 Node Worker 经 `src/lib/sellfox/client.ts` 发起，Token 按范围和凭据版本隔离。迁移与真实主密钥配置须另行审批，入口、验证与回滚见 `docs/sellfox-credentials-form-proposal.md`。
+- 使用专用 `npm run worker:sellfox-sync` 和 `amazon-sellfox-sync-worker.service`；BullMQ concurrency 固定为 1。客户端对 token、重试和资源请求统一串行，间隔不少于 1200ms。
+- 官方 token `expires_in` 单位为毫秒。库存/销量/Listing已在用户授权的本机单店只读联调中核验，解析契约与脱敏 fixture 见 `snapshot-contracts.ts`、`narrow-contracts.ts` 和 `tests/fixtures/sellfox/`；销量 productNum/salePrice 独立请求按店铺/MSKU/业务日合并，缺值保留 null。上述广告 Phase A/B 的真实样本覆盖与剩余验证缺口见 `docs/sellfox-ads-subtabs-gap.md`；后续未验证资源仍由 `sellfoxSyncDisabledReason` 禁止同步，不得恢复猜字段落库。
+- 快照长期保留，不设自动过期清理。销售/表现按报表日；库存按抓取时间保存，日期筛选展示当日多次库存状态。
+- ProductRecord 保持唯一商品主档事实源。赛狐快照只服务报表、列表和只读分析。
+- 手动与定时任务共用 SellfoxSyncRun 和 sync service；计划需在当前工作区由有 `sellfox:create` 权限的用户显式启用。同步 Worker 与 Redis 不可用时 API 返回服务端错误，不退化为请求内同步。
+- Sellfox 计划与手动提交按组织/工作区/资源共用事务防重锁；执行开始重新检查 active 用户和 sellfox:create。`/settings?tab=operations` 赛狐面板显示 Worker 心跳及当前工作区计划，schedules API 返回 lastEnqueuedAt/nextRunAt；时间为 Asia/Shanghai，计划默认关闭，页面不启动 Worker。创建防重不等于多副本执行租约，生产接管验证见 `docs/sellfox-sync-workbench-plan.md` §10。
+- 库存、销量、表现、店铺和运行记录按 organization/workspace 隔离；详细接口契约与验证步骤见 `docs/sellfox-sync-workbench-plan.md`。
+- `npm run test:sellfox:browser`：隔离模拟接口验证多店/日期/站点、URL 导航、导出链接、按需详情、日志轮询与切工作区迟到响应；不访问真实赛狐或生产库。浏览器不持有 token；列表与导出复用 browse-query，导出超过 10,000 条明确拒绝，不能静默截断。
+- 订单与 FBA 货件走 Worker 资源 `orders`、`fba_shipments`，默认每 720 分钟，计划仍默认关闭。订单读 `POST /api/order/pageList.json` 写入 `SellfoxOrderSnapshot`（订单一行一项）；货件读 `POST /api/fba/shippingOrder/pageList.json` 写入 `SellfoxFbaShipmentSnapshot`。契约字段对不上时该店失败并在页面列出，不补行。补货建议不建表，按 `sellfox_listing_current` 可售、货件在途和 `SellfoxSalesDailySnapshot` 近 30 个可观察日（去掉最近 2 天，断货日不进分母）实时计算。路径、公式和回滚见 `docs/sellfox-orders-shipments-restock.md`。

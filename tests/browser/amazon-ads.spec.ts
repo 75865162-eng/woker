@@ -6,7 +6,7 @@ test.beforeAll(async () => {
   const [{ readFile }, { default: postcss }, { default: tailwind }] = await Promise.all([import("node:fs/promises"), import("postcss"), import("@tailwindcss/postcss")]);
   styles = (await postcss([tailwind()]).process(await readFile("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css + await readFile("src/components/amazon-ads/amazon-ads.css", "utf8");
 });
-async function setup(page: Page, mockAccounts = false, refreshTokenExpiresAt: string | null = "2027-11-05T08:00:00.000Z", syncedDataMode: "rows" | "empty" = "rows", fixtureTaskStatus = "SUCCEEDED") {
+async function setup(page: Page, mockAccounts = false, refreshTokenExpiresAt: string | null = "2027-11-05T08:00:00.000Z", syncedDataMode: "rows" | "empty" = "rows", fixtureTaskStatus = "SUCCEEDED", path = "/amazon-ads/campaigns") {
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
   let boundSeller = "", boundAdvertiser = "", taskStatus = fixtureTaskStatus;
   await page.route("**/*", route => {
@@ -44,7 +44,7 @@ async function setup(page: Page, mockAccounts = false, refreshTokenExpiresAt: st
     if (url.pathname === "/bundle.js") return route.fulfill({ contentType: "application/javascript", body: bundle });
     return route.fulfill({ contentType: "text/html", body: '<html><head><link rel="stylesheet" href="/styles.css"></head><body style="margin:0"><div id="root"></div><script src="/bundle.js"></script></body></html>' });
   });
-  await page.goto("http://127.0.0.1:43239/amazon-ads/campaigns");
+  await page.goto(`http://127.0.0.1:43239${path}`);
   return errors;
 }
 const table = (p: Page) => p.locator(".ads-table-panel");
@@ -89,6 +89,12 @@ test("accounts page displays persisted Profiles and binds an ERP seller without 
   await page.getByRole("button", { name: "保存绑定", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("账户绑定已保存");
   await expect(accountId).toHaveValue("verified-account-1");
+  expect(errors).toEqual([]);
+});
+test("direct /accounts route opens the authorized Ads account and sync panel", async ({ page }) => {
+  const errors = await setup(page, true, undefined, "rows", "SUCCEEDED", "/amazon-ads/accounts?live=1");
+  await expect(page.locator(".ads-account-panel > .ads-account-heading h2")).toHaveText("广告账户与授权");
+  await expect(page.locator(".ads-account-panel > .ads-table-scroll tbody")).toContainText("Northstar Ads");
   expect(errors).toEqual([]);
 });
 test("sync task history filters every authorized Profile, paginates server results and refreshes cancellation", async ({ page }) => {

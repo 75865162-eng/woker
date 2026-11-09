@@ -1,3 +1,4 @@
+import { credentialAllowsTool } from "@/lib/lili/account-tool-access";
 import { prisma } from "@/lib/db/prisma";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Prisma } from "@prisma/client";
@@ -39,8 +40,8 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
   const current = boundary.getStore();
   if (current) {
     if (current.organizationId !== scope.organizationId || current.workspaceId !== scope.workspaceId || current.userId !== actor) throw new SyncInputError("数据范围不可访问。", 403);
-    const credential = await db.amazonMcpCredential.findFirst({ where: { id: current.credentialId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() }, tools: { has: current.tool } }, select: { scopes: true, name: true, rotatedFromId: true, tools: true } });
-    if (!credential) throw new SyncInputError("数据范围不可访问。", 403);
+    const credential = await db.amazonMcpCredential.findFirst({ where: { id: current.credentialId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() } }, select: { id: true, scopes: true, name: true, rotatedFromId: true, tools: true } });
+    if (!credential || !await credentialAllowsTool(credential, current.tool, db)) throw new SyncInputError("数据范围不可访问。", 403);
     if (credential.name.startsWith("Lili device: ")) {
       let parentId = credential.rotatedFromId;
       const seen = new Set([current.credentialId]);
@@ -48,7 +49,7 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
         if (seen.has(parentId) || seen.size > 20) throw new SyncInputError("数据范围不可访问。", 403);
         seen.add(parentId);
         const parent = await db.amazonMcpCredential.findFirst({ where: { id: parentId, ...scope, userId: actor, status: "ACTIVE", expiresAt: { gt: new Date() } }, select: { scopes: true, tools: true, name: true, rotatedFromId: true } });
-        if (!parent || credential.tools.some(tool => !parent.tools.includes(tool)) || JSON.stringify(credential.scopes) !== JSON.stringify(parent.scopes)) throw new SyncInputError("数据范围不可访问。", 403);
+        if (!parent || JSON.stringify(credential.scopes) !== JSON.stringify(parent.scopes)) throw new SyncInputError("数据范围不可访问。", 403);
         parentId = parent.name.startsWith("Lili device: ") ? parent.rotatedFromId : null;
       }
     }
@@ -63,8 +64,8 @@ export async function amazonDataAccess(scope: SyncScope, actor: string | undefin
   return explicitAmazonDataAccess(scope, actor, db, action);
 }
 export function sellerAccessWhere(access: AmazonDataAccess) { return access.allSellers ? {} : { sellerAccountId: { in: access.sellerIds }, ...(access.scopes ? { OR: access.scopes.map(s => ({ sellerAccountId: s.sellerAccountId, ...(s.marketplaceIds.length ? { marketplaceId: { in: s.marketplaceIds } } : {}) })) } : {}) }; }
-/** Seller-wide finance evidence cannot be exposed by a site-only grant or MCP scope. */
-export function sourceAccessWhere(access: AmazonDataAccess) { return { ...sellerAccessWhere(access), ...(access.allSellers ? {} : { resource: { not: "finance" } }) }; }
+/** Seller-wide finance and notification evidence cannot be exposed by a site-only grant or MCP scope. */
+export function sourceAccessWhere(access: AmazonDataAccess) { return { ...sellerAccessWhere(access), ...(access.allSellers ? {} : { resource: { notIn: ["finance", "notifications"] } }) }; }
 export async function assertSellerAccess(scope: SyncScope, actor: string, sellers: string[], db: Prisma.TransactionClient = prisma, action: AmazonDataAction = "view") {
   const access = await amazonDataAccess(scope, actor, db, action);
   if (!access.allSellers && (!sellers.length || sellers.some(id => !access.sellerIds.includes(id)))) throw new SyncInputError("操作超出成员的 Seller 数据授权。", 403);

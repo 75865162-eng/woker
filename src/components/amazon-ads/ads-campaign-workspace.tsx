@@ -292,7 +292,8 @@ function AdGroupDetail({ profileId, groupId, navigate }: { profileId: string; gr
 export function AdsCampaignWorkspace({ path, navigate, onData, onDemo }: { path: string; navigate: (path: string) => void; onData: () => void; onDemo: () => void }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobile, setMobile] = useState(false);
-  const [accounts, setAccounts] = useState(false);
+  const [accounts, setAccounts] = useState(path === "/amazon-ads/accounts");
+  useEffect(() => { setAccounts(path === "/amazon-ads/accounts"); }, [path]);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 600px)");
     const update = () => setMobile(query.matches);
@@ -302,7 +303,7 @@ export function AdsCampaignWorkspace({ path, navigate, onData, onDemo }: { path:
   function go(value: string) { if (mobile) setCollapsed(false); navigate(value); }
   const groupRoute = /^\/amazon-ads\/ad-groups(?:\/|$)/.test(path);
   const structureRoute = /^\/amazon-ads\/(keywords|targets|negatives)(?:\/|$)/.exec(path)?.[1];
-  let ids: string[] = [], invalid = !/^\/amazon-ads\/(campaigns|ad-groups|keywords|targets|negatives)(?:\/|$)/.test(path);
+  let ids: string[] = [], invalid = !/^\/amazon-ads\/(accounts|campaigns|ad-groups|keywords|targets|negatives)(?:\/|$)/.test(path);
   try { ids = path.replace(/^\/amazon-ads\/(?:campaigns|ad-groups|keywords|targets|negatives)\/?/, "").split("/").filter(Boolean).map(decodeURIComponent); } catch { invalid = true; }
   const isList = ids.length === 0 || ids.length === 1 && ids[0] === "sp";
   const isDetail = ids.length === 2 && ids.every(id => id.length <= 200);

@@ -1,0 +1,128 @@
+{
+  "client": "Codex native MCP",
+  "executionMode": "codex",
+  "runId": "87e2686e-d8d2-4b8b-ae33-761a1eb89d83",
+  "calls": [
+    {
+      "tool": "research_resume",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_read",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_step",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_read",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_step",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_evidence",
+      "isError": false,
+      "status": 200,
+      "error": null
+    }
+  ],
+  "serverModelCalls": 0,
+  "status": "WAITING_FOR_USER",
+  "failure": null,
+  "gate": {
+    "id": "bfd2db01-3069-4831-b66e-544261e91cbd",
+    "kind": "MCP_CALL",
+    "reason": "Review the live sellersprite__asin.list request and exact arguments before dispatch. Provider fees may vary; review the budget first."
+  },
+  "pendingCall": {
+    "tool": "sellersprite__asin.list",
+    "arguments": {
+      "marketplace": "US",
+      "keyword": "home storage organizer",
+      "page": {
+        "size": 10,
+        "cursor": 0
+      }
+    },
+    "estimatedCalls": 1,
+    "estimatedCost": null,
+    "costStatus": "unknown",
+    "provider": "sellersprite",
+    "approved": false,
+    "message": "本次拟执行 1 次工具调用；供应商实际费用未知，不表示免费。"
+  },
+  "reviewUrl": "http://localhost:3017/agents/selection-research?workspaceId=default&runId=87e2686e-d8d2-4b8b-ae33-761a1eb89d83",
+  "evidence": {
+    "runId": "87e2686e-d8d2-4b8b-ae33-761a1eb89d83",
+    "persisted": true,
+    "page": 1,
+    "pageSize": 20,
+    "total": 3,
+    "hasNext": false,
+    "calls": [
+      {
+        "id": "ff32c480-d6d3-47ff-a18e-51f366f71e5b",
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "provider": "skills",
+        "tool": "meta_search_skills",
+        "requestedAt": "2026-11-07T14:39:27.339Z",
+        "respondedAt": "2026-11-07T14:39:27.350Z",
+        "status": "SUCCEEDED",
+        "dispatch": "ATTEMPTED",
+        "paid": false,
+        "billing": "FREE",
+        "billingUnit": "calls",
+        "evidenceAvailable": true
+      },
+      {
+        "id": "80d5d7f9-5898-4c54-a5da-98f0a2d22278",
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "provider": "skills",
+        "tool": "meta_load_skill",
+        "requestedAt": "2026-11-07T14:39:28.162Z",
+        "respondedAt": "2026-11-07T14:39:28.186Z",
+        "status": "SUCCEEDED",
+        "dispatch": "ATTEMPTED",
+        "paid": false,
+        "billing": "FREE",
+        "billingUnit": "calls",
+        "evidenceAvailable": true
+      },
+      {
+        "id": "ec4e01a0-dfcc-4312-9852-aa45bc231e43",
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "provider": "erp",
+        "tool": "erp__amazon.stores.list",
+        "requestedAt": "2026-11-07T14:40:23.348Z",
+        "respondedAt": "2026-11-07T14:40:23.412Z",
+        "status": "SUCCEEDED",
+        "dispatch": "ATTEMPTED",
+        "paid": false,
+        "billing": "FREE",
+        "billingUnit": "calls",
+        "evidenceAvailable": true
+      }
+    ],
+    "ok": true,
+    "status": 200,
+    "stageReports": [],
+    "reviewUrl": "http://localhost:3017/agents/selection-research?workspaceId=default&runId=87e2686e-d8d2-4b8b-ae33-761a1eb89d83"
+  }
+}

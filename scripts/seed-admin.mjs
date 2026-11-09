@@ -84,6 +84,7 @@ await prisma.organizationMember.upsert({
     organizationId: organization.id,
     userId: user.id,
     role: "owner",
+    marketCallAccount: { create: { balance: 0 } },
   },
 });
 

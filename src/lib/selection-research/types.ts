@@ -1,3 +1,4 @@
+import type { ResearchCharge } from "./credits";
 import type { LandedCostScenario } from "./landed-cost";
 import type { ResearchBrief } from "./brief";
 import type { DecisionAnalysis } from "./economics";
@@ -8,7 +9,7 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export type ObjectJson = { [key: string]: Json };
 /** Only trusted adapters may attest that no business request was dispatched. Never infer this from remote JSON or error text. */
 export class ToolNotDispatchedError extends Error {
-  constructor(public readonly code: "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN" | "APPROVED_SCHEMA_CHANGED" | "INVALID_TOOL_ARGUMENTS" | "UNSUPPORTED_TOOL_SCHEMA") { super(code); }
+  constructor(public readonly code: "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN" | "APPROVED_SCHEMA_CHANGED" | "INVALID_TOOL_ARGUMENTS" | "UNSUPPORTED_TOOL_SCHEMA" | "MARKET_QUOTA_EXHAUSTED" | "MARKET_QUOTA_REPLAY_BLOCKED" | "MARKET_QUOTA_UNAVAILABLE") { super(code); }
 }
 export interface Scope { organizationId: string; workspaceId: string; ownerId: string }
 export interface SkillSnapshot { name: string; path: string; sha256: string; markdown: string; tools: string[] }
@@ -18,7 +19,9 @@ export interface ToolPolicy { provider: string; paid: boolean; units: number; un
 export interface CallRecord {
   id: string; projectId: string; stage: number; skill: string; service: "lili" | "sellersprite" | "erp" | "xiyou"; provider: string; tool: string;
   arguments: ObjectJson; requestedAt: string; respondedAt?: string; status: "IN_FLIGHT" | "SUCCEEDED" | "FAILED" | "UNKNOWN";
+  researchCharge?: ResearchCharge;
   billingUnit?: "calls" | "credits"; paid: boolean; reservedUnits: number; billing: "FREE" | "UNKNOWN" | "CONFIRMED"; knownUnits?: number;
+  authorizationId?: string; authorizationMode?: "FIRST_APPROVAL" | "TASK_APPROVAL";
   retryCount: number; rawResponse?: Json; errorCode?: string;
   /** Legacy/unknown dispatches are conservatively counted; NOT_SENT requires a trusted adapter error. */
   dispatch?: "NOT_SENT" | "ATTEMPTED";
@@ -31,19 +34,29 @@ export interface Claim {
 export interface StageResult { landedCostScenarios?: LandedCostScenario[]; decisionAnalysis?: DecisionAnalysis; reviewEvidence?: ReviewEvidence[]; reviewProblems?: ReviewProblem[]; summary: string; claims: Claim[]; candidates?: { id: string; name: string }[]; verdict?: "GO" | "NO_GO" | "NEEDS_VALIDATION" }
 export type Action = { type: "call"; tool: string; arguments: ObjectJson } | { type: "complete"; result: StageResult };
 export interface Gate { id: string; kind: "NICHE" | "FINAL" | "BUDGET" | "BILLING" | "MCP_CALL"; reason: string }
-export interface Decision { gateId: string; kind: "SELECT" | "CONFIRM" | "INCREASE_BUDGET" | "RECONCILE" | "AUTHORIZE_TOOL"; candidateId?: string; limits?: Record<string, number>; toolMaxCalls?: Record<string, number>; callId?: string; units?: number; receipt?: string }
+export interface Decision { confirmation?: { channel: "chat"; text: string }; gateId: string; kind: "SELECT" | "CONFIRM" | "INCREASE_BUDGET" | "RECONCILE" | "AUTHORIZE_TOOL"; candidateId?: string; limits?: Record<string, number>; toolMaxCalls?: Record<string, number>; callId?: string; authorizationId?: string; units?: number; receipt?: string }
+export interface PaidCallAuthorization {
+  budgetMode?: "reviewed" | "uncapped";
+  consentId?: string;
+  id: string; approvedAt: string; approvedByUserId: string; approvedActionDigest: string;
+  providerLimits: Record<string, number>; toolLimits: Record<string, number>; toolSchemaDigests: Record<string, string>;
+}
 export interface Run {
   brief?: ResearchBrief;
-  validationFeedback?: { code: string; stage: number; at: string };
-  budgetMode?: "reviewed" | "mock_unlimited";
+  validationFeedback?: { code: string; stage: number; at: string; path?: string };
+  budgetMode?: "reviewed" | "mock_unlimited" | "uncapped";
+  executionMode?: "codex" | "server";
   aiConfigSource?: "workspace" | "server_runtime";
   aiModel?: { provider: string; model: string };
   asin?: string; erpCredentialId?: string; requiredProviders?: string[];
   pausedAt?: string;
+  planningPause?: { stage: number; calls: number; reason: string };
+  creditAdjustments?: { callId: string; charge: ResearchCharge; actorId: string; at: string; confirmation: string }[];
   version: 1; id: string; revision: number; scope: Scope; requirement: string; marketplace: string; mode: "live" | "fixture";
   createdAt: string; updatedAt: string; status: Status; stage: number; skills: SkillSnapshot[];
   registry: ToolDefinition[]; registryAt?: string; policies: Record<string, ToolPolicy>; limits: Record<string, number>;
   calls: CallRecord[]; results: StageResult[]; gate?: Gate; selectedCandidateId?: string; pendingActionId?: string;
+  paidCallAuthorization?: PaidCallAuthorization;
   decisions: { actorId: string; at: string; decision: Decision }[]; failure?: string;
   actions: { at: string; stage: number; action: Action }[];
   pendingAction?: Extract<Action, { type: "call" }>; pendingActionFingerprint?: string; pendingActionApproved?: boolean;

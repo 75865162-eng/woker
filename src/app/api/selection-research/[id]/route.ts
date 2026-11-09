@@ -14,13 +14,13 @@ export async function GET(request: Request, context: Context) {
     const access = await researchAccess(request, "view", { runId: id }); if (!access.ok) return access.response;
     const run = await access.engine.inspect(id);
     if (new URL(request.url).searchParams.get("view") === "evidence") return NextResponse.json(readResearchEvidence(run, new URL(request.url).searchParams), { headers: { "Cache-Control": "no-store" } });
-    return NextResponse.json({ run }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ run, paidCallConsent: access.paidCallConsent ?? null, ...(run.executionMode === "codex" ? { context: await access.engine.getContext(id) } : {}) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return researchError(error); }
 }
 export async function POST(request: Request, context: Context) {
   try {
     const body = await boundedJsonObject(request, 64_000);
-    const action = body.operation === "decide" ? "approve" : body.operation === "export" ? "export" : "edit";
+    const action = ["decide", "record-charge"].includes(String(body.operation)) ? "approve" : body.operation === "export" ? "export" : "edit";
     const id = (await context.params).id;
     const access = await researchAccess(request, action, { ...body, runId: id }); if (!access.ok) return access.response;
     if (body.operation === "export") {

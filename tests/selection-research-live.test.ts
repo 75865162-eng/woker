@@ -10,10 +10,47 @@ import { sellerSpritePolicy, createSellerSpriteResearchTransport } from "../src/
 import { SKILLS, ToolNotDispatchedError, type Agent, type ToolDefinition, type ObjectJson } from "../src/lib/selection-research/types";
 import { createResearchAiAgent } from "../src/lib/selection-research/ai-agent";
 import { defaultAiModelSettings } from "../src/lib/ai-settings";
+import { executeResearchCommand } from "../src/lib/selection-research/http";
 
 const settings = { ...defaultSellerSpriteMcpSettings, enabled: true, serverUrl: "https://seller.invalid/mcp", apiKey: "isolated-secret-key" };
 const schema = { type: "object", properties: { market: { type: "string" } }, required: ["market"], additionalProperties: false } as const;
 const tool: ToolDefinition = { name: "product_research", inputSchema: structuredClone(schema) as never };
+
+test("encoded Codex arguments reach an immutable approval gate; invalid fields never dispatch", async () => {
+ const root = await mkdtemp(path.join(tmpdir(), "research-native-input-"));
+ let dispatched = 0;
+ try {
+  const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "isolated", workspaceId: "isolated", ownerId: "isolated" }, {
+   async listTools() { return [tool]; }, async callTool() { dispatched++; return {}; },
+  }, { async next() { throw new Error("Unexpected server model call"); } }, { mode: "live", authorizeLive: async () => true });
+  const run = await engine.create({ executionMode: "codex", requirement: "Isolated native input verification。付费请求必须先批准。", marketplace: "US",
+   skills: SKILLS.map(name => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })),
+   policies: { [tool.name]: sellerSpritePolicy(tool)! }, limits: { sellersprite: 8 } });
+  const command = (revision: number, args: unknown) => ({ operation: "step", expectedRevision: revision,
+   action: { type: "call", tool: tool.name, arguments: args } });
+  await assert.rejects(executeResearchCommand(engine, run.id, command(run.revision, "{broken"), false), /RESEARCH_ACTION_JSON_INVALID/);
+  assert.equal((await engine.inspect(run.id)).revision, run.revision);
+  let failed = await executeResearchCommand(engine, run.id, command(run.revision, '{"market":42}'), false);
+  assert.equal(failed.status, "FAILED");
+  assert.equal(failed.failure, "RESEARCH_TOOL_ARGUMENTS_INVALID");
+  assert.equal(failed.validationFeedback?.path, "$.market");
+  assert.equal(failed.calls.length, 0);
+  let recovered = await engine.recover(run.id);
+  failed = await executeResearchCommand(engine, run.id, command(recovered.revision, { market: "US", isolatedPrivateField: "isolated-private-value" }), false);
+  assert.equal(failed.failure, "RESEARCH_TOOL_ARGUMENTS_INVALID");
+  assert.equal(failed.validationFeedback?.path, undefined); // Never echo arbitrary argument names in diagnostics.
+  recovered = await engine.recover(run.id);
+  const gate = await executeResearchCommand(engine, run.id, command(recovered.revision, '{"market":"US"}'), false);
+  assert.equal(gate.gate?.kind, "MCP_CALL");
+  assert.deepEqual(gate.pendingAction?.arguments, { market: "US" });
+  assert.equal(gate.pendingActionApproved, false);
+  assert.ok(gate.pendingActionId);
+  const unchanged = await engine.step(run.id);
+  assert.equal(unchanged.pendingActionId, gate.pendingActionId);
+  assert.equal(unchanged.calls.length, 0);
+  assert.equal(dispatched, 0);
+ } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("AI adapter uses ERP model protocol with credentials only in headers and runtime schema in the prompt", async () => {
   const context = { instructions: "isolated instructions", tools: [tool], skill: { name: "isolated" }, run: { requirement: "isolated requirement" } } as never;
@@ -28,6 +65,16 @@ test("AI adapter uses ERP model protocol with credentials only in headers and ru
     });
     assert.deepEqual(await agent.next(context), { type: "call", tool: "product_research", arguments: { market: "US" } });
   }
+});
+
+test("AI HTTP diagnostics preserve status only and never consume provider error details", async () => {
+  const agent = createResearchAiAgent({ ...defaultAiModelSettings, apiKey: "isolated-secret" }, async () => ({
+    ok: false, status: 401, headers: new Headers(),
+    async json() { throw new Error("Must not read untrusted error body"); },
+    async text() { throw new Error("Must not read untrusted error body"); },
+    async arrayBuffer() { return new ArrayBuffer(0); },
+  }));
+  await assert.rejects(agent.next({ instructions: "isolated", tools: [], skill: { name: "isolated" }, run: {} } as never), /^Error: RESEARCH_AI_HTTP_401$/);
 });
 
 test("SellerSprite runtime discovery follows sessions/pages, exact schema and full matching SSE envelope without network", async () => {
@@ -115,25 +162,23 @@ test("live engine persists immutable approval, blocks changed schema, accounts c
     } };
     const engine = () => new ResearchEngine(store, scope, transport, agent, { mode: "live", authorizeLive: async () => true });
     const policy = sellerSpritePolicy(tool)!;
-    const run = await engine().create({ requirement: "isolated live branch verification", marketplace: "US", skills: SKILLS.map((name) => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })), policies: { [tool.name]: policy }, limits: { sellersprite: 1 } });
+    const run = await engine().create({ requirement: "isolated live branch verification。付费请求必须先批准。", marketplace: "US", skills: SKILLS.map((name) => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })), policies: { [tool.name]: policy }, limits: { sellersprite: 1 } });
     let state = await engine().step(run.id);
     assert.equal(state.gate?.kind, "MCP_CALL"); assert.equal(dispatches, 0);
     await assert.rejects(engine().decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: state.gate!.id, callId: "wrong" }), /MISMATCH/);
     state = await engine().decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: state.gate!.id, callId: state.pendingActionId });
     state = await engine().step(run.id);
-    assert.equal(dispatches, 1); assert.equal(state.gate?.kind, "BILLING"); assert.ok(state.calls[0].rawResponse);
+    assert.equal(dispatches, 1); assert.equal(state.gate, undefined); assert.ok(state.calls[0].rawResponse);
+    assert.equal(state.calls[0].billing, "UNKNOWN"); assert.equal(state.calls[0].authorizationMode, "FIRST_APPROVAL");
     assert.equal(state.calls[0].service, "sellersprite");
-    state = await engine().decide(run.id, { kind: "RECONCILE", gateId: state.gate!.id, callId: state.calls[0].id, units: 99, receipt: "isolated receipt" });
     assert.equal(budgetSummary(state).sellersprite.committed, 1); // Calls are never represented as credits.
-    assert.equal(state.calls[0].knownUnits, 99);
-    state = await engine().step(run.id);
-    state = await engine().decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: state.gate!.id, callId: state.pendingActionId });
     changed = true;
     state = await engine().step(run.id);
     assert.equal(state.status, "FAILED"); assert.equal(dispatches, 1);
-    assert.equal(state.failure, "APPROVED_SCHEMA_CHANGED");
+    assert.equal(state.failure, "PAID_TOOL_SCHEMA_CHANGED");
     state = await engine().recover(run.id);
     assert.equal(state.pendingActionApproved, undefined); assert.equal(state.pendingAction, undefined);
+    assert.equal(state.paidCallAuthorization, undefined);
     state = await engine().step(run.id);
     assert.equal(state.gate?.kind, "MCP_CALL"); assert.deepEqual(state.pendingAction?.arguments, {});
     assert.equal(dispatches, 1); // New schema must be reviewed again, not replayed under the earlier approval.
@@ -146,13 +191,13 @@ test("live engine persists immutable approval, blocks changed schema, accounts c
 test("engine records actionable host error codes without persisting untrusted exception details", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "selection-errors-isolated-"));
   try {
-    for (const message of ["RESEARCH_AI_REQUEST_FAILED", "RESEARCH_AI_REQUEST_FAILED Bearer isolated-private-secret"]) {
+    for (const message of ["RESEARCH_AI_REQUEST_FAILED", "RESEARCH_AI_HTTP_401", "RESEARCH_AI_HTTP_401 Bearer isolated-private-secret"]) {
       const store = new LocalResearchStore(root);
       const engine = new ResearchEngine(store, { organizationId: "isolated", workspaceId: "isolated", ownerId: "isolated" }, { async listTools() { return []; }, async callTool() { throw new Error("unreachable"); } }, { async next() { throw new Error(message); } }, { mode: "fixture" });
-      const run = await engine.create({ requirement: "Isolated error handling verification", marketplace: "US", policies: {}, limits: {}, skills: SKILLS.map(name => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })) });
+      const run = await engine.create({ requirement: "Isolated error handling verification。付费请求必须先批准。", marketplace: "US", policies: {}, limits: {}, skills: SKILLS.map(name => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })) });
       const failed = await engine.step(run.id);
       assert.equal(failed.status, "FAILED");
-      assert.equal(failed.failure, message === "RESEARCH_AI_REQUEST_FAILED" ? message : "RESEARCH_STEP_FAILED_REVIEW_CONTEXT");
+      assert.equal(failed.failure, ["RESEARCH_AI_REQUEST_FAILED", "RESEARCH_AI_HTTP_401"].includes(message) ? message : "RESEARCH_STEP_FAILED_REVIEW_CONTEXT");
       assert.ok(!JSON.stringify(await engine.inspect(run.id)).includes("isolated-private-secret"));
     }
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -165,13 +210,13 @@ test("untrusted transport errors cannot attest non-dispatch or release paid and 
       const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "isolated", workspaceId: "isolated", ownerId: "isolated" }, {
         async listTools() { return [tool]; }, async callTool() { throw failure; },
       }, { async next() { return { type: "call", tool: tool.name, arguments: { market: "US" } }; } }, { mode: "live", authorizeLive: async () => true });
-      let run = await engine.create({ requirement: "Isolated unknown dispatch verification", marketplace: "US", policies: { [tool.name]: sellerSpritePolicy(tool)! }, limits: { sellersprite: 1 }, skills: SKILLS.map(name => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })) });
+      let run = await engine.create({ requirement: "Isolated unknown dispatch verification。付费请求必须先批准。", marketplace: "US", policies: { [tool.name]: sellerSpritePolicy(tool)! }, limits: { sellersprite: 1 }, skills: SKILLS.map(name => ({ name, path: "isolated", sha256: "isolated", markdown: "isolated", tools: [] })) });
       run = await engine.step(run.id);
       run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: run.gate!.id, callId: run.pendingActionId });
       run = await engine.step(run.id);
       assert.equal(run.calls[0].dispatch, "ATTEMPTED");
-      assert.equal(run.calls[0].status, "UNKNOWN");
-      assert.equal(run.gate?.kind, "BILLING");
+      assert.equal(run.calls[0].status, "FAILED");
+      assert.equal(run.gate, undefined);
       assert.deepEqual(budgetSummary(run).sellersprite, { limit: 1, committed: 1, unknownCalls: 1 });
       delete run.calls[0].dispatch; // Older persisted runs do not carry the new field.
       assert.deepEqual(budgetSummary(run).sellersprite, { limit: 1, committed: 1, unknownCalls: 1 });

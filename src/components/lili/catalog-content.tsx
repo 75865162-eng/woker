@@ -7,12 +7,13 @@ import { ToolLab } from "./tool-lab";
 import { ToolRunner } from "./tool-runner";
 import { ToolConfigView } from "./tool-config-view";
 import { RunLiveButton } from "./run-live-button";
+import { CallQuotaView } from "./call-quota-view";
 import { findSkill, listSkills, listTools, listWorkflows, skillMarkdown } from "@/lib/lili/catalog";
 import { tx, type Locale } from "@/lib/lili/tx";
 
 const explanation = "工具定义与执行能力分别标注；业务操作继续使用主系统的权限、审批和草稿流程。";
 
-export async function CatalogContent({ kind, slug, locale }: { kind: string; slug?: string; locale: Locale }) {
+export async function CatalogContent({ kind, slug, locale, quotaScopeKey }: { kind: string; slug?: string; locale: Locale; quotaScopeKey?: string }) {
   if (kind === "tool-config") return <ToolConfigView locale={locale} />;
   if (kind === "start") return <div className="space-y-5">
     <section className="lili-card space-y-3 p-5">
@@ -79,8 +80,8 @@ export async function CatalogContent({ kind, slug, locale }: { kind: string; slu
     </div>;
   }
 
-  if (kind === "approvals") return <section className="lili-card space-y-3 p-5"><h1 className="text-xl font-semibold">统一审批与执行</h1><p>业务审批由主系统 Agent 工作台承接，按原有角色和工作区校验。独立 Lili 审批记录未迁移。</p><div className="flex flex-wrap gap-3"><Link className="lili-btn-orange" href="/agents">Agent 中心</Link><Link className="lili-btn-ghost" href="/agents/orchestrator">编排与 Launch 审批</Link><Link className="lili-btn-ghost" href="/agents/ppc">PPC 执行与审批</Link></div></section>;
-  if (kind === "recharge") return <section className="lili-card space-y-3 p-5"><h1 className="text-xl font-semibold">充值</h1><p>主系统未接入 Lili 积分与支付。没有创建账户余额、充值订单或收款请求；历史独立库订单未迁移。</p></section>;
+  if (kind === "approvals") return <section className="lili-card space-y-3 p-5"><h1 className="text-xl font-semibold">统一审批与执行</h1><p>Lili 全部工作流默认在 Codex 对话中审批。每个具体任务审阅方案并批准一次，授权范围内连续执行；范围变化或业务选择继续在对话中确认。页面仅供可选查看，不需要回来点击批准。未接入的执行步骤会在对话中明确说明，不代表已经执行。</p><div className="flex flex-wrap gap-3"><Link className="lili-btn-orange" href="/agents">可选：查看 Agent 中心</Link><Link className="lili-btn-ghost" href="/agents/orchestrator">可选：查看编排与 Launch 审批</Link><Link className="lili-btn-ghost" href="/agents/ppc">PPC 执行与审批</Link></div></section>;
+  if (kind === "recharge") return <CallQuotaView key={quotaScopeKey} />;
   if (kind === "help") return <section className="lili-card space-y-3 p-5"><h1 className="text-xl font-semibold">使用帮助</h1><p>从技能目录查步骤、复制提示词；工作流模板提供执行顺序。实际业务进入主系统各工作台，使用已有授权、审批与草稿。</p><p>工具页标明当前执行能力。目录中的工具名或技能说明不授予数据访问和写入权限。</p><a className="lili-btn-orange" href="/api/lili/codex-bundle" download>下载全部技能</a><Link className="ml-3 underline" href="/operations">同步中心与个人 MCP</Link></section>;
   notFound();
 }

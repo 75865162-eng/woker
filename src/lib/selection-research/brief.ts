@@ -18,8 +18,14 @@ export function parseResearchBrief(requirement: string, marketplace: string): Re
     const values = new Set(matches.map(match => match[1].trim()));
     return values.size === 1 ? { value: matches[0][1].trim(), sourceText: matches[0][0] } : null;
   };
-  const productDirection = field(/(?:产品方向|产品大方向|product direction)\s*[:：]\s*([^，,；;。\n]+)/gi)
-    ?? field(/(?:研究|research)\s+([^，,；;。\n]+)/gi);
+  // Explicit labels win. Never interpret a Skill name or prose mentioning research as a product.
+  const labeled = [...requirement.matchAll(/(?:产品方向|产品大方向|product direction|starting direction|我想做的方向是)\s*[:：]\s*(?:【([^】]+)】|([^，,；;。\n.]+))/gi)];
+  const directions = new Set(labeled.map(match => (match[1] ?? match[2]).trim()));
+  const productDirection = labeled.length
+    ? directions.size === 1 ? { value: [...directions][0], sourceText: labeled[0][0] } : null
+    : /amazon-[a-z-]+|tariff-calculator-amazon/i.test(requirement) ? null
+      : field(/^(?:research)\s+([^，,；;。\n.]+)[.]?$/gi) ?? field(/(?:研究)\s+([^，,；;。\n]+)/g);
+
   const targetAudience = field(/(?:目标用户|目标人群|target audience)\s*[:：]\s*([^，,；;。\n]+)/gi);
   const quantity = field(/(?:采购数量|采购|首批|purchase quantity)\s*[:：]?\s*([0-9]+)\s*(?:件|个|套|units)(?![A-Za-z])/gi);
   const numericQuantity = quantity ? Number(quantity.value) : null;

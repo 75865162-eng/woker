@@ -20,7 +20,7 @@ test("anonymous clients initialize, discover, search and load original Skills wi
   const listed = await (await handleLiliRequest(request("tools/list"), ["mcp"], denied, undefined, providers)).json();
   assert.equal(listed.result.scope, "anonymous-definitions");
   assert.deepEqual(listed.result.providers, []);
-  assert.deepEqual(listed.result.tools.map((tool: { name: string }) => tool.name).sort(), ["meta_search_skills", "meta_load_skill", "meta_list_workflows", "lili_ping", "meta_get_skill_manifest", "meta_get_market_access", "research_prepare", "research_evidence", "research_list", "research_start", "research_read", "research_step", "research_export", "research_pause", "research_resume", "research_recover", "research_cancel"].sort());
+  assert.deepEqual(listed.result.tools.map((tool: { name: string }) => tool.name).sort(), ["meta_search_skills", "meta_load_skill", "meta_list_workflows", "lili_ping", "meta_get_skill_manifest", "meta_get_market_access", "workflow_sync_review", "workflow_sync_confirm", "research_prepare", "research_record_charge", "research_evidence", "research_list", "research_start", "research_read", "research_confirm", "research_step", "research_export", "research_pause", "research_resume", "research_recover", "research_cancel"].sort());
   assert.ok(listed.result.tools.every((tool: { name: string }) => !tool.name.startsWith("erp__")));
   assert.ok(listed.result.tools.find((tool: { name: string }) => tool.name === "research_start").description.includes("require authenticated"));
   for (const [name, args, field] of [["meta_search_skills", { query: "niche" }, "skills"], ["meta_load_skill", { skill_name: "amazon-niche-finder" }, "markdown"], ["meta_list_workflows", {}, "templates"]] as const) {
@@ -37,7 +37,7 @@ test("anonymous clients initialize, discover, search and load original Skills wi
 });
 
 test("anonymous business requests cannot select a default organization or access configurations and saved research", async () => {
-  for (const name of ["research_list", "research_start", "research_read", "research_step", "research_export", "research_pause", "research_resume", "research_recover", "research_cancel", "erp__data_query", "sellersprite__product_search"]) {
+  for (const name of ["research_list", "research_start", "research_read", "research_confirm", "research_step", "research_export", "research_pause", "research_resume", "research_recover", "research_cancel", "erp__data_query", "sellersprite__product_search"]) {
     const response = await handleLiliRequest(request("tools/call", { name, arguments: { workspaceId: "default", runId: "other-user" } }, { "x-workspace-id": "default", "x-user-id": "forged" }), ["mcp"], denied);
     assert.equal(response.status, 401, name);
     assert.equal((await response.json()).error.data.businessCode, "AUTHENTICATED_DATA_SCOPE_REQUIRED");
@@ -83,7 +83,7 @@ test("anonymous stage zero reuses original Skills and preserves explicit constra
       assert.match(skill.source, /^lili:\/\/skills\//);
     }
     assert.equal(result.budget.simulated, false);
-    assert.ok(result.budget.stages.every((stage: { estimatedCalls: unknown; credits: unknown; money: unknown; tools: unknown[] }) => stage.estimatedCalls === null && stage.credits === null && stage.money === null && stage.tools.length === 0));
+    assert.ok(result.budget.stages.every((stage: { estimatedCalls: unknown; credits: unknown; money: unknown; tools: unknown[] }) => stage.estimatedCalls !== null && stage.credits === null && stage.money === null && stage.tools.length === 0));
     assert.deepEqual(result.discovery.verifiedSupplierTools, []);
     assert.equal(result.nextAction.kind, "AUTHENTICATE_FOR_DATA");
     assert.equal(result.run, undefined);

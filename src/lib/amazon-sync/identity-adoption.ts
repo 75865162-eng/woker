@@ -5,7 +5,6 @@ import { decryptAmazonSpApiCredentials } from "@/lib/amazon/integration-secrets"
 import { preflightIdentityRecovery } from "./identity-recovery";
 import { digest, targetEnvironment, unseal } from "./approval-policy";
 import { parseFinancePage } from "./finance";
-import { automaticMarketplaces } from "./automatic-schedule";
 import { assertAmazonScopeAdmin } from "./data-access";
 import { assertChangePermission } from "./change-approval";
 import { extractMarketplaceParticipations } from "@/lib/operations/readiness";
@@ -37,7 +36,8 @@ export async function performIdentityAdoption(scope: SyncScope, actor: string, a
   const client = new AmazonSpApiClient({ ...decryptAmazonSpApiCredentials(auth.credentialsCiphertext, { ...scope, authorizationId: id }), region: auth.awsRegion, endpoint: auth.endpoint });
   const sites = extractMarketplaceParticipations(await client.getMarketplaceParticipations());
   const marketplaceIds = [...new Set(initial.report.manifest.sources.map(s => s.marketplaceId))].sort();
-  if (!marketplaceIds.length || marketplaceIds.some(site => !automaticMarketplaces.has(site))) throw new SyncInputError("身份接管超出已审阅四站范围。", 403);
+  const reviewedIdentityMarketplaces = new Set(["ATVPDKIKX0DER", "A2EUQ1WTGCTBG2", "A1AM78C64UM0Y8", "A2Q3Y263D00KWC"]);
+  if (!marketplaceIds.length || marketplaceIds.some(site => !reviewedIdentityMarketplaces.has(site))) throw new SyncInputError("身份接管超出已审阅四站范围。", 403);
   const requests: Array<{ operation: string; marketplaceId?: string; success: boolean }> = [];
   const probeEnd = new Date(Date.now() - 5 * 60000);
   const probeWindow = { from: new Date(probeEnd.getTime() - 30 * 86400000).toISOString(), to: probeEnd.toISOString() };

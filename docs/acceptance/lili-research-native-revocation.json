@@ -1,0 +1,8 @@
+{
+  "client": "Codex native MCP",
+  "endpoint": "http://localhost:3017/api/lili/mcp",
+  "observedAt": "2026-11-07T14:33:33.569324+00:00",
+  "beforeRevocation": "research_list success",
+  "revokedDeviceId": "eefaca0c-3b5d-4b8a-99a9-f06d9e9ae368",
+  "afterRevocation": "native private request rejected"
+}

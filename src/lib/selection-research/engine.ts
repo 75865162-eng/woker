@@ -1,3 +1,5 @@
+import { researchChargeCredits, type ResearchCharge } from "./credits";
+import { researchFeeReviewRequired } from "./fee-policy";
 import { researchValidationMessages } from "./validation-feedback";
 import { calculateLandedCostScenario, landedCostEvidenceIds } from "./landed-cost";
 import { parseResearchBrief } from "./brief";
@@ -6,14 +8,27 @@ import { prepareLowStarReviews, rankReviewProblems, containsReviewBody } from ".
 import { createHash, randomUUID } from "node:crypto";
 import { SKILLS, ToolNotDispatchedError, type Action, type Agent, type Claim, type Decision, type Gate, type Json, type ObjectJson, type ResearchContext, type Run, type Scope, type SkillSnapshot, type StageResult, type Store, type ToolPolicy, type Transport } from "./types";
 import { rejectCredentials, validate, stableJson as stable } from "./schema";
+import { MarketQuotaError, type MarketCallQuota, type MarketCallOutcome } from "@/lib/lili/call-quota";
 
 // These are reviewed local Lili names, not a claim that a running server exposes them.
 export const READ_TOOLS = new Set(["market_find_products", "market_find_node", "market_scan_node", "market_get_asin", "market_research_keyword", "market_mine_keywords", "market_get_reviews", "market_list_competitors", "market_aba_trend", "competitor_find_similar", "finance_get_fee_estimate"]);
 const terminal = new Set(["COMPLETED", "CANCELLED"]);
 // Only host-owned codes may be persisted; provider/model exception text can contain credentials.
-const safeFailures = new Set(["APPROVED_SCHEMA_CHANGED", "REQUIRED_PROVIDER_EVIDENCE_MISSING", "TOOL_UNAVAILABLE_OR_FORBIDDEN", "DUPLICATE_CALL_REQUIRES_REVIEW", "RESEARCH_AI_NOT_CONFIGURED", "RESEARCH_AI_REQUEST_FAILED", "RESEARCH_CONTEXT_TOO_LARGE_REQUIRES_REVIEW", "UNSAFE_OR_EMPTY_AI_RESPONSE", "RESEARCH_ACTION_TIMEOUT", "MARKET_EVIDENCE_REQUIRED", "ASIN_CANDIDATE_REQUIRED", "GO_REQUIRES_RESOLVED_ASSUMPTIONS"]);
+const safeFailures = new Set(["APPROVED_SCHEMA_CHANGED", "PAID_TOOL_SCHEMA_CHANGED", "REQUIRED_PROVIDER_EVIDENCE_MISSING", "TOOL_UNAVAILABLE_OR_FORBIDDEN", "DUPLICATE_CALL_REQUIRES_REVIEW", "RESEARCH_AI_NOT_CONFIGURED", "RESEARCH_AI_REQUEST_FAILED", "RESEARCH_CONTEXT_TOO_LARGE_REQUIRES_REVIEW", "UNSAFE_OR_EMPTY_AI_RESPONSE", "RESEARCH_ACTION_TIMEOUT", "MARKET_EVIDENCE_REQUIRED", "ASIN_CANDIDATE_REQUIRED", "GO_REQUIRES_RESOLVED_ASSUMPTIONS"]);
 const integer = (n: unknown): n is number => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
 const stamp = () => new Date().toISOString();
+// Only this local validator may contribute a bounded field path to diagnostics.
+// Never persist arbitrary provider errors or rejected argument values.
+class ResearchToolArgumentsError extends Error {
+  constructor(readonly path?: string) { super("RESEARCH_TOOL_ARGUMENTS_INVALID"); }
+}
+function validateToolArguments(schema: ObjectJson, args: ObjectJson) {
+  try { validate(schema, args); }
+  catch (error) {
+    const match = error instanceof Error ? /^SCHEMA_(?:TYPE|REQUIRED|ENUM|RANGE|LENGTH|ITEMS|PATTERN|DATE|UNIQUE_ITEMS):(\$(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*)$/.exec(error.message) : null;
+    throw new ResearchToolArgumentsError(match && match[1].length <= 160 ? match[1] : undefined);
+  }
+}
 export function canonicalResearchTool(name: string): string | undefined {
   if (["meta_search_skills", "meta_load_skill"].includes(name)) return name;
   if (name.startsWith("sellersprite__")) return canonicalResearchTool(name.slice("sellersprite__".length));
@@ -51,20 +66,32 @@ export function budgetSummary(run: Run) {
   return providers;
 }
 export class ResearchEngine {
+  private feeReviewRequired(run: Run) {
+    return researchFeeReviewRequired(run);
+  }
+  private releaseFeeGate(run: Run) {
+    // Historical billing gates never require receipts or fee approval to resume.
+    if (run.gate?.kind === "MCP_CALL" && run.pendingAction && !this.feeReviewRequired(run)) run.pendingActionApproved = true;
+    else if (run.gate?.kind !== "BILLING") return false;
+    for (const call of run.calls) if (["UNKNOWN", "IN_FLIGHT"].includes(call.status)) {
+      call.status = "FAILED"; call.errorCode = "OUTCOME_UNVERIFIED_NOT_REPLAYED";
+    }
+    delete run.gate; run.status = "RESUMABLE";
+    return true;
+  }
   constructor(private readonly store: Store, private readonly principal: Scope, private readonly transport: Transport,
-    private readonly agent: Agent, private readonly options: { mode: "fixture" | "live"; authorizeLive?: (run: Run) => Promise<boolean>; verifyTariffEvidence?: (claim: Claim, run: Run) => boolean; timeoutMs?: number }) {}
+    private readonly agent: Agent, private readonly options: { mode: "fixture" | "live"; paidCallConsent?: { id: string; approvedAt: string; approvedByUserId: string; allowUncapped?: boolean }; marketQuota?: MarketCallQuota; authorizeLive?: (run: Run) => Promise<boolean>; verifyTariffEvidence?: (claim: Claim, run: Run) => boolean; timeoutMs?: number }) {}
   private owned(run: Run) {
     if (run.scope.organizationId !== this.principal.organizationId || run.scope.workspaceId !== this.principal.workspaceId || run.scope.ownerId !== this.principal.ownerId) throw new Error("RESEARCH_SCOPE_DENIED");
     if (run.mode !== this.options.mode) throw new Error("RESEARCH_MODE_MISMATCH");
   }
-  async create(input: { budgetMode?: Run["budgetMode"]; aiConfigSource?: Run["aiConfigSource"]; aiModel?: Run["aiModel"]; asin?: string; erpCredentialId?: string; requiredProviders?: string[]; requirement: string; marketplace: string; skills: SkillSnapshot[]; policies: Record<string, ToolPolicy>; limits: Record<string, number>; registry?: Run["registry"] }): Promise<Run> {
+  async create(input: { executionMode?: Run["executionMode"]; budgetMode?: Run["budgetMode"]; aiConfigSource?: Run["aiConfigSource"]; aiModel?: Run["aiModel"]; asin?: string; erpCredentialId?: string; requiredProviders?: string[]; requirement: string; marketplace: string; skills: SkillSnapshot[]; policies: Record<string, ToolPolicy>; limits: Record<string, number>; registry?: Run["registry"] }): Promise<Run> {
     rejectCredentials(input);
     if (!input.requirement.trim() || input.requirement.length > 20_000 || !input.marketplace.trim()) throw new Error("INVALID_RESEARCH_REQUEST");
     if (input.skills.length !== 5 || input.skills.some((skill, i) => skill.name !== SKILLS[i] || !skill.markdown || !skill.sha256)) throw new Error("INVALID_SKILL_SNAPSHOTS");
     if (input.asin && !/^[A-Z0-9]{10}$/.test(input.asin)) throw new Error("INVALID_ASIN");
-    if (input.budgetMode !== undefined && !["reviewed", "mock_unlimited"].includes(input.budgetMode)) throw new Error("INVALID_RESEARCH_REQUEST");
+    if (input.budgetMode !== undefined && !["reviewed", "mock_unlimited", "uncapped"].includes(input.budgetMode)) throw new Error("INVALID_RESEARCH_REQUEST");
     if (this.options.mode === "live" && input.budgetMode === "mock_unlimited") throw new Error("LIVE_BUDGET_REVIEW_REQUIRED");
-    if (this.options.mode === "live" && Object.values(input.limits).some(limit => limit > 30)) throw new Error("INVALID_BUDGET");
     assertPolicies(input.policies, input.limits);
     const run: Run = { ...structuredClone(input), brief: parseResearchBrief(input.requirement, input.marketplace), version: 1, id: randomUUID(), revision: 0, scope: { ...this.principal }, mode: this.options.mode,
       createdAt: stamp(), updatedAt: stamp(), status: "CREATED", stage: 1, registry: structuredClone(input.registry ?? []), registryAt: input.registry ? stamp() : undefined, calls: [], results: [], decisions: [], actions: [] };
@@ -91,22 +118,39 @@ export class ResearchEngine {
       '阶段5 result.decisionAnalysis包含scenarios和scorecards。scenario: {name,input:{currency,price,procurement,internationalFreight,importCharges,referralFee,fbaFee,advertising,storage,returnsAllowance},basis:{每个非空成本字段:{kind:observed|supplier_quote|estimated|assumption,evidenceIds:[],note}},quantity,fixedCosts}。金额同币种每件计，未知值null，批次固定费用另列，不能补0。scorecard:{candidateId,dimensions:[{name,weight,score,evidenceIds,rationale}]}，权重合计1、分数0至100，缺证据score为null。服务端重算，不要提交自算结果字段。',
       '阶段4 result.landedCostScenarios:[{name,currency,originCountry(ISO2),destinationCountry(ISO2),asOf(YYYY-MM-DD),quantity,classification:{code,status:candidate|verified,evidenceIds,sourceUrl,applicableDate,note},method:ad_valorem_additive|unsupported,costs:{fob,freight,insurance,brokerage,warehouseInbound,otherFees,customsValue},basis:{每个非空成本字段:{kind:observed|supplier_quote|estimated|assumption,evidenceIds,note}},rates:[{name,kind:base|additional,rate,status:verified|pending|stress_test,evidenceIds,sourceUrl,applicableDate,note}]}。全部金额为同币种每件金额；税率为小数，10%写0.10；恰好一个base，额外税种分别列。未知金额/税率/数量写null，sourceUrl和applicableDate未知写null；customsValue是显式税基，不自动当FOB或CIF。verified必须由主机核验，否则用pending或stress_test，不能因找到旧链接就宣称现行税率。',
       "阶段4列归类、采购、运输、进口、到岸成本，缺少可验证现行税率只能标 assumption；阶段5给GO/NO_GO/NEEDS_VALIDATION。",
+      "阶段调用规划为8–10、6–10、4–8、通常0、0–2次，合计18–30次；只是估算，不是上限或计费。优先复用证据。研究积分1积分=人民币0.01元；未知价格待核实，模型不得编造汇率或实耗。",
       "两个用户暂停节点由引擎执行，模型无权确认。价格、需求、竞争、痛点、成本、广告、FBA和风险都需说明证据或待验证项。",
       'Action: {"type":"call","tool":"...","arguments":{...}} or {"type":"complete","result":{"summary":"...","claims":[{"text":"...","kind":"observed|calculated|estimated|assumption","evidenceIds":["call-id"],"formula":"optional"}],"candidates":[{"id":"...","name":"..."}],"verdict":"GO|NO_GO|NEEDS_VALIDATION"}}',
     ].join("\n") };
   }
   async getContext(id: string) { return this.context(await this.inspect(id)); }
-  async step(id: string): Promise<Run> {
+  async step(id: string, submitted?: { action: Action; revision: number }): Promise<Run> {
     return this.store.transaction(id, async (run, save) => {
       this.owned(run);
+      if (submitted && (run.executionMode !== "codex" || !Number.isSafeInteger(submitted.revision) || submitted.revision !== run.revision)) throw new Error("STALE_EXTERNAL_RESEARCH_ACTION");
+      if (submitted) {
+        rejectCredentials(submitted.action);
+        if (!submitted.action || !["call", "complete"].includes(submitted.action.type) || Object.keys(submitted.action).some(key => !["type", "tool", "arguments", "result"].includes(key))) throw new Error("INVALID_EXTERNAL_RESEARCH_ACTION");
+        if (run.pendingActionApproved) throw new Error("EXTERNAL_ACTION_CANNOT_REPLACE_APPROVAL");
+      }
+      if (run.executionMode === "codex" && !submitted && !run.pendingActionApproved && !run.pausedAt && !terminal.has(run.status) && run.status !== "WAITING_FOR_USER" && run.status !== "FAILED"
+        && ["meta_search_skills", "meta_load_skill"].every(tool => run.calls.some(call => call.stage === run.stage && call.tool === tool && call.status === "SUCCEEDED"))) throw new Error("EXTERNAL_RESEARCH_ACTION_REQUIRED");
+      if (!run.pausedAt && run.mode === "live" && run.status === "WAITING_FOR_USER" && run.gate?.kind === "MCP_CALL" && run.pendingAction && this.options.paidCallConsent?.approvedByUserId === run.scope.ownerId && (run.budgetMode !== "uncapped" || this.options.paidCallConsent.allowUncapped === true)) {
+        this.authorizePaidTask(run, run.pendingActionId!, this.options.paidCallConsent);
+        run.pendingActionApproved = true;
+        delete run.gate;
+        run.status = "RESUMABLE";
+        await save();
+      }
+      if (!run.pausedAt && run.status === "WAITING_FOR_USER" && this.releaseFeeGate(run)) await save();
       if (run.pausedAt || terminal.has(run.status) || run.status === "WAITING_FOR_USER") return structuredClone(run);
       if (run.status === "FAILED") throw new Error("EXPLICIT_RECOVERY_REQUIRED");
       // A previous process may have died after dispatch. Never replay its call.
       const interrupted = run.calls.filter((call) => call.status === "IN_FLIGHT" || call.status === "UNKNOWN");
       if (interrupted.length) {
         interrupted.forEach((call) => { call.status = "UNKNOWN"; call.billing = call.paid ? "UNKNOWN" : "FREE"; });
-        pause(run, "BILLING", "Interrupted request outcome is unknown. Reconcile before continuing; no automatic retry.");
-        await save(); return structuredClone(run);
+        interrupted.forEach(call => { call.status = "FAILED"; call.errorCode = "OUTCOME_UNVERIFIED_NOT_REPLAYED"; });
+        await save();
       }
       if (run.mode === "live" && run.budgetMode === "mock_unlimited") throw new Error("LIVE_BUDGET_REVIEW_REQUIRED");
       if (run.mode === "live" && !await this.options.authorizeLive?.(structuredClone(run))) throw new Error("LIVE_EXECUTION_NOT_AUTHORIZED");
@@ -130,7 +174,7 @@ export class ResearchEngine {
         ];
         const setupAction = run.mode === "live" ? setup.find(action => run.registry.some(tool => tool.name === action.tool)
           && !run.calls.some(call => call.stage === run.stage && call.tool === action.tool && call.status === "SUCCEEDED")) : undefined;
-        const action: Action = approvedAction ?? setupAction ?? await bounded(this.agent.next(this.context(run)));
+        const action: Action = approvedAction ?? submitted?.action ?? setupAction ?? (run.executionMode === "codex" ? (() => { throw new Error("EXTERNAL_RESEARCH_ACTION_REQUIRED"); })() : await bounded(this.agent.next(this.context(run))));
         rejectCredentials(action);
         if (Buffer.byteLength(JSON.stringify(action)) > 512_000) throw new Error("AGENT_ACTION_TOO_LARGE");
         run.actions.push({ at: stamp(), stage: run.stage, action: structuredClone(action) });
@@ -143,15 +187,21 @@ export class ResearchEngine {
           else if (run.stage === 5) pause(run, "FINAL", "Review the final recommendation before report generation.");
           else { run.stage++; run.status = "RESUMABLE"; }
         } else if (action.type === "call") {
-          if (run.mode === "live" && !approvedAction && run.policies[action.tool]?.paid) {
+          if (run.mode === "live" && !approvedAction && !run.paidCallAuthorization && run.policies[action.tool]?.paid && this.feeReviewRequired(run)) {
             const tool = run.registry.find((entry) => entry.name === action.tool);
             if (!tool || !canonicalResearchTool(action.tool) || !run.policies[action.tool]) throw new Error("TOOL_UNAVAILABLE_OR_FORBIDDEN");
-            validate(tool.inputSchema, action.arguments);
+            validateToolArguments(tool.inputSchema, action.arguments);
             run.pendingAction = structuredClone(action);
             run.pendingActionFingerprint = stable(tool.inputSchema);
             run.pendingActionApproved = false;
             run.pendingActionId = this.pendingCallDigest(action);
-            pause(run, "MCP_CALL", `Review the live ${action.tool} request and exact arguments before dispatch. Provider fees may vary; review the budget first.`);
+            const consent = this.options.paidCallConsent;
+            if (consent?.approvedByUserId === run.scope.ownerId && (run.budgetMode !== "uncapped" || consent.allowUncapped === true)) {
+              this.authorizePaidTask(run, run.pendingActionId, consent);
+              delete run.pendingAction; delete run.pendingActionFingerprint; delete run.pendingActionApproved; delete run.pendingActionId;
+              await save();
+              await this.invoke(run, save, action.tool, action.arguments);
+            } else pause(run, "MCP_CALL", `Review this live ${action.tool} request and the research-task spending authorization. Provider fees may vary.`);
           } else await this.invoke(run, save, action.tool, action.arguments);
         }
         else throw new Error("INVALID_AGENT_ACTION");
@@ -159,8 +209,8 @@ export class ResearchEngine {
         // Never persist exception text that could contain credentials or request headers.
         const code = error instanceof Error ? error.message : "";
         const validationCode = Object.hasOwn(researchValidationMessages, code);
-        run.status = "FAILED"; run.failure = safeFailures.has(code) || validationCode ? code : "RESEARCH_STEP_FAILED_REVIEW_CONTEXT";
-        if (validationCode) run.validationFeedback = { code, stage: run.stage, at: stamp() };
+        run.status = "FAILED"; run.failure = safeFailures.has(code) || /^RESEARCH_AI_HTTP_(?:[45][0-9]{2}|INVALID)$/.test(code) || validationCode ? code : "RESEARCH_STEP_FAILED_REVIEW_CONTEXT";
+        if (validationCode) run.validationFeedback = { code, stage: run.stage, at: stamp(), ...(error instanceof ResearchToolArgumentsError && error.path ? { path: error.path } : {}) };
       }
       await save(); return structuredClone(run);
     });
@@ -170,24 +220,51 @@ export class ResearchEngine {
     const canonical = canonicalResearchTool(name);
     const policy = run.policies[name];
     if (!canonical || !tool || tool.annotations?.readOnlyHint === false || !policy?.stages.includes(run.stage)) throw new Error("TOOL_UNAVAILABLE_OR_FORBIDDEN");
-    validate(tool.inputSchema, args);
+    if (policy.paid && run.paidCallAuthorization && run.paidCallAuthorization.toolSchemaDigests[name] !== stable(tool.inputSchema)) throw new Error("PAID_TOOL_SCHEMA_CHANGED");
+    validateToolArguments(tool.inputSchema, args);
     // Bound the transport and evidence size independently of the schema.
     if (Buffer.byteLength(JSON.stringify(args)) > 128_000) throw new Error("TOOL_INPUT_TOO_LARGE");
     if (run.calls.some((call) => call.dispatch !== "NOT_SENT" && call.tool === name && stable(call.arguments) === stable(args) && (call.stage === run.stage || !["meta_search_skills", "meta_load_skill"].includes(name)))) throw new Error("DUPLICATE_CALL_REQUIRES_REVIEW");
-    if (run.budgetMode !== "mock_unlimited" && run.calls.filter((call) => call.tool === name && call.dispatch !== "NOT_SENT").length >= policy.maxCalls) { pause(run, "BUDGET", "Tool call-count limit reached; changing tool policy requires a new reviewed run."); return; }
-    if (run.budgetMode !== "mock_unlimited" && policy.paid && run.calls.filter((call) => call.provider === policy.provider && call.paid && call.dispatch !== "NOT_SENT").length >= (run.limits[policy.provider] ?? 0)) { pause(run, "BUDGET", "Approved provider call limit reached."); return; }
+    const standing = run.mode === "live" ? run.paidCallAuthorization : undefined;
+    const uncapped = run.budgetMode === "uncapped" && (!standing || standing.budgetMode === "uncapped");
+    const toolLimit = standing && policy.paid ? standing.toolLimits[name] ?? 0 : policy.maxCalls;
+    const providerLimit = standing && policy.paid ? standing.providerLimits[policy.provider] ?? 0 : run.limits[policy.provider] ?? 0;
+    if (!uncapped && run.budgetMode !== "mock_unlimited" && run.calls.filter((call) => call.tool === name && call.dispatch !== "NOT_SENT").length >= toolLimit) {
+      pause(run, "BUDGET", standing ? `Approved research-task call limit reached for ${name}; this task will not request an automatic increase.` : "Tool call-count limit reached; changing tool policy requires a new reviewed run."); return;
+    }
+    if (!uncapped && run.budgetMode !== "mock_unlimited" && policy.paid && run.calls.filter((call) => call.provider === policy.provider && call.paid && call.dispatch !== "NOT_SENT").length >= providerLimit) {
+      pause(run, "BUDGET", standing ? `Approved research-task call limit reached for ${policy.provider}; this task will not request an automatic increase.` : "Approved provider call limit reached."); return;
+    }
     const budget = budgetSummary(run)[policy.provider];
-    if (run.budgetMode !== "mock_unlimited" && policy.paid && (!budget || budget.committed + policy.units > budget.limit)) { pause(run, "BUDGET", `Insufficient reserved budget for ${policy.provider}.`); return; }
+    if (!uncapped && run.budgetMode !== "mock_unlimited" && policy.paid && (!budget || budget.committed + policy.units > budget.limit)) { pause(run, "BUDGET", `Insufficient reserved budget for ${policy.provider}.`); return; }
     const call = { id: randomUUID(), projectId: run.id, stage: run.stage, skill: run.skills[run.stage - 1].name, service: policy.provider === "erp" ? "erp" as const : policy.provider === "xiyou" ? "xiyou" as const : policy.provider === "sellersprite" ? "sellersprite" as const : "lili" as const,
       provider: policy.provider, tool: name, arguments: structuredClone(args), requestedAt: stamp(), status: "IN_FLIGHT" as const,
-      billingUnit: policy.unit, paid: policy.paid, reservedUnits: policy.units, billing: policy.paid ? "UNKNOWN" as const : "FREE" as const, retryCount: 0, dispatch: "ATTEMPTED" as const, inputSchema: structuredClone(tool.inputSchema) };
+      billingUnit: policy.unit, paid: policy.paid, reservedUnits: policy.units, billing: policy.paid ? "UNKNOWN" as const : "FREE" as const, retryCount: 0,
+      ...(policy.paid && standing ? {
+        authorizationId: standing.id,
+        authorizationMode: standing.approvedActionDigest === this.pendingCallDigest({ type: "call", tool: name, arguments: args }) ? "FIRST_APPROVAL" as const : "TASK_APPROVAL" as const,
+      } : {}),
+      dispatch: "ATTEMPTED" as const, inputSchema: structuredClone(tool.inputSchema) };
     run.calls.push(call);
     // fsync before any chargeable dispatch. A crash thereafter is an uncertain charge.
     await save();
     const record = run.calls[run.calls.length - 1];
+    const quota = run.mode === "live" && policy.paid && ["sellersprite", "xiyou"].includes(policy.provider) ? this.options.marketQuota : undefined;
+    let reserved = false;
+    let quotaOutcome: MarketCallOutcome = "UNKNOWN";
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+      if (quota) {
+        try {
+          await quota.reserve({ callId: call.id, runId: run.id, workspaceId: run.scope.workspaceId,
+            provider: policy.provider as "sellersprite" | "xiyou", tool: name });
+          reserved = true;
+        } catch (error) {
+          // No transport has been invoked; storage failures must never trigger a paid request.
+          throw new ToolNotDispatchedError(error instanceof MarketQuotaError ? error.code : "MARKET_QUOTA_UNAVAILABLE");
+        }
+      }
       const response = await Promise.race([this.transport.callTool(name, args, controller.signal, tool.inputSchema), new Promise<never>((_, reject) => {
         timer = setTimeout(() => { controller.abort(); reject(new Error("TIMEOUT")); }, this.options.timeoutMs ?? 30_000);
       })]);
@@ -195,24 +272,32 @@ export class ResearchEngine {
       record.rawResponse = structuredClone(response);
       record.respondedAt = stamp();
       record.status = this.responseFailed(response) ? "FAILED" : "SUCCEEDED";
+      quotaOutcome = record.status === "FAILED" ? "FAILED" : "COMPLETED";
       if (run.mode === "live" && this.isSyntheticResponse(response)) {
         record.status = "FAILED"; record.errorCode = "SYNTHETIC_DATA_REJECTED";
         run.status = "FAILED"; run.failure = "SYNTHETIC_DATA_REJECTED";
         return;
       }
-      if (record.paid && run.budgetMode !== "mock_unlimited") pause(run, "BILLING", "Provider charge is not confirmed. Record receipt/units before the next call; no auto retry.");
-      else run.status = record.status === "FAILED" ? "FAILED" : "RESUMABLE";
+      run.status = record.status === "FAILED" ? "FAILED" : "RESUMABLE";
     } catch (error) {
       record.respondedAt = stamp();
       if (error instanceof ToolNotDispatchedError) {
+        quotaOutcome = "REFUNDED";
         record.status = "FAILED"; record.dispatch = "NOT_SENT"; record.errorCode = error.code;
         record.knownUnits = 0; record.billing = record.paid ? "CONFIRMED" : "FREE";
         run.status = "FAILED"; run.failure = error.code;
       } else {
-        record.status = "UNKNOWN"; record.errorCode = "TRANSPORT_OR_UNSAFE_RESPONSE";
-        pause(run, "BILLING", "Response outcome is unknown; raw credentials, if detected, were not persisted. Reconcile manually.");
+        // Retain unknown charges and block replay, without creating a billing gate.
+        record.status = "FAILED"; record.errorCode = "TRANSPORT_OR_UNSAFE_RESPONSE";
+        run.status = "RESUMABLE";
       }
-    } finally { if (timer) clearTimeout(timer); }
+    } finally {
+      if (timer) clearTimeout(timer);
+      if (quota && reserved) {
+        try { await quota.settle(call.id, quotaOutcome); }
+        catch { console.warn("MARKET_QUOTA_SETTLEMENT_PENDING", call.id); }
+      }
+    }
   }
   private responseFailed(value: Json): boolean {
     if (!value || typeof value !== "object") return false;
@@ -315,21 +400,31 @@ export class ResearchEngine {
     }
   }
   /** Only a trusted host/CLI command calls this method; no model action exposes it. */
-  async decide(id: string, decision: Decision): Promise<Run> {
+  async decide(id: string, decision: Decision, expectedRevision?: number): Promise<Run> {
     return this.store.transaction(id, async (run, save) => {
       this.owned(run); rejectCredentials(decision);
+      if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision !== run.revision)) throw new Error("STALE_RESEARCH_DECISION");
+      if (decision.confirmation && (decision.confirmation.channel !== "chat" || typeof decision.confirmation.text !== "string" || !decision.confirmation.text.trim() || decision.confirmation.text.length > 2000)) throw new Error("INVALID_RESEARCH_DECISION");
+      if (decision.authorizationId !== undefined) throw new Error("INVALID_RESEARCH_AUTHORIZATION");
+      if (Object.keys(decision).some((key) => !["gateId", "kind", "candidateId", "limits", "toolMaxCalls", "callId", "units", "receipt", "confirmation"].includes(key))) throw new Error("INVALID_RESEARCH_DECISION");
       if (run.status !== "WAITING_FOR_USER" || !run.gate || run.gate.id !== decision.gateId) throw new Error("STALE_OR_MISSING_GATE");
       const gate = run.gate;
+      const savedDecision = structuredClone(decision);
       if (gate.kind === "NICHE" && decision.kind === "SELECT") {
         if (!run.results[0].candidates?.some((candidate) => candidate.id === decision.candidateId)) throw new Error("INVALID_CANDIDATE");
         run.selectedCandidateId = decision.candidateId; run.stage = 2;
       } else if (gate.kind === "FINAL" && decision.kind === "CONFIRM") run.status = "COMPLETED";
       else if (gate.kind === "MCP_CALL" && decision.kind === "AUTHORIZE_TOOL") {
-        // The decision grants only the immutable action preview shown to the user.
         if (!run.pendingAction || run.pendingActionApproved || decision.callId !== this.pendingCallDigest(run.pendingAction)) throw new Error("PENDING_TOOL_CALL_MISMATCH");
+        const policy = run.policies[run.pendingAction.tool];
+        if (run.mode === "live" && policy?.paid && !run.paidCallAuthorization) {
+          this.authorizePaidTask(run, decision.callId!);
+          savedDecision.authorizationId = run.paidCallAuthorization!.id;
+        }
         run.pendingActionApproved = true;
       }
       else if (gate.kind === "BUDGET" && decision.kind === "INCREASE_BUDGET") {
+        if (run.paidCallAuthorization) throw new Error("BUDGET_INCREASE_NOT_ALLOWED_AFTER_RESEARCH_AUTHORIZATION");
         if (!Object.keys(decision.limits ?? {}).length && !Object.keys(decision.toolMaxCalls ?? {}).length) throw new Error("MISSING_BUDGET");
         for (const [provider, limit] of Object.entries(decision.limits ?? {})) {
           if (!integer(limit) || limit <= (run.limits[provider] ?? 0)) throw new Error("BUDGET_MUST_INCREASE");
@@ -345,13 +440,47 @@ export class ResearchEngine {
         call.knownUnits = decision.units; call.billing = call.paid ? "CONFIRMED" : "FREE";
         if (call.status === "UNKNOWN" || call.status === "IN_FLIGHT") { call.status = "FAILED"; call.errorCode = "OUTCOME_UNVERIFIED_NOT_REPLAYED"; }
       } else throw new Error("DECISION_DOES_NOT_MATCH_GATE");
-      run.decisions.push({ actorId: this.principal.ownerId, at: stamp(), decision: structuredClone(decision) });
+      run.decisions.push({ actorId: this.principal.ownerId, at: stamp(), decision: savedDecision });
       delete run.gate;
       if (run.status !== "COMPLETED") run.status = "RESUMABLE";
       const over = Object.values(budgetSummary(run)).some((entry) => entry.committed > entry.limit);
-      if (over && run.budgetMode !== "mock_unlimited") pause(run, "BUDGET", "Reconciled charge exceeds approved budget. Increase budget before continuing.");
+      if (over && run.budgetMode !== "uncapped" && run.budgetMode !== "mock_unlimited") pause(run, "BUDGET", run.paidCallAuthorization ? "A reconciled charge exceeds the approved task limit. This task will not request an automatic increase." : "Reconciled charge exceeds approved budget. Increase budget before continuing.");
       await save(); return structuredClone(run);
     });
+  }
+  /** Approval-only receipt entry. It cannot clear outcome gates, grant balance or execute requests. */
+  async recordCharge(id: string, input: { callId: string; charge: ResearchCharge; confirmation: string; expectedRevision: number }) {
+    return this.store.transaction(id, async (run, save) => {
+      this.owned(run); rejectCredentials(input);
+      if (input.expectedRevision !== run.revision) throw new Error("STALE_RESEARCH_DECISION");
+      if (terminal.has(run.status) || run.report) throw new Error("TERMINAL_RUN");
+      if (typeof input.confirmation !== "string" || !input.confirmation.trim() || input.confirmation.length > 2000) throw new Error("INVALID_RESEARCH_CHARGE");
+      const call = run.calls.find(call => call.id === input.callId && call.paid && call.dispatch !== "NOT_SENT");
+      if (!call) throw new Error("INVALID_RESEARCH_CHARGE");
+      researchChargeCredits(input.charge);
+      const same = call.researchCharge && stable(call.researchCharge as unknown as Json) === stable(input.charge as unknown as Json);
+      if (same) return structuredClone(run);
+      call.researchCharge = structuredClone(input.charge);
+      (run.creditAdjustments ??= []).push({ callId: call.id, charge: structuredClone(input.charge), actorId: this.principal.ownerId, at: stamp(), confirmation: input.confirmation });
+      await save(); return structuredClone(run);
+    });
+  }
+  private authorizePaidTask(run: Run, digest: string, consent?: { id: string; approvedAt: string; approvedByUserId: string }) {
+    if (run.paidCallAuthorization) return;
+    const toolLimits = Object.fromEntries(Object.entries(run.policies).filter(([, item]) => item.paid).map(([name, item]) => [name, item.maxCalls]));
+    const providerLimits = Object.fromEntries([...new Set(Object.values(run.policies).filter(item => item.paid).map(item => item.provider))].map(provider => [provider, run.limits[provider] ?? 0]));
+    const toolSchemaDigests = Object.fromEntries(Object.entries(run.policies).filter(([, item]) => item.paid).map(([name]) => {
+      const tool = run.registry.find(entry => entry.name === name);
+      return [name, tool ? stable(tool.inputSchema) : ""];
+    }));
+    const authorizationId = randomUUID();
+    run.paidCallAuthorization = { budgetMode: run.budgetMode === "uncapped" ? "uncapped" : "reviewed", id: authorizationId, approvedAt: stamp(), approvedByUserId: this.principal.ownerId,
+      approvedActionDigest: digest, providerLimits, toolLimits, toolSchemaDigests };
+
+    if (consent) {
+      run.paidCallAuthorization!.consentId = consent.id;
+      run.decisions.push({ actorId: consent.approvedByUserId, at: stamp(), decision: { kind: "AUTHORIZE_TOOL", gateId: run.gate?.id ?? "standing-consent", callId: digest, authorizationId: run.paidCallAuthorization!.id } });
+    }
   }
   private pendingCallDigest(action: Action) { return createHash("sha256").update(stable(action as unknown as Json)).digest("hex"); }
   async saveReport(id: string, persist: (run: Run) => Promise<string>) {
@@ -378,8 +507,9 @@ export class ResearchEngine {
     return this.store.transaction(id, async (run, save) => {
       this.owned(run);
       if (terminal.has(run.status)) throw new Error("TERMINAL_RUN");
-      if (run.pausedAt) { delete run.pausedAt; await save(); }
-      // Preserve existing human/billing gates. Resuming never dispatches or approves a request.
+      if (run.pausedAt) { delete run.pausedAt; delete run.planningPause; await save(); }
+      if (this.releaseFeeGate(run)) await save();
+      // Explicit user/Skill gates remain. Resume never dispatches a request.
       return structuredClone(run);
     });
   }
@@ -388,6 +518,7 @@ export class ResearchEngine {
       this.owned(run);
       if (run.status !== "FAILED" && run.status !== "RUNNING") throw new Error("RECOVERY_NOT_APPLICABLE");
       // Recovery never carries an unconsumed approval across a changed schema or interrupted step.
+      if (["APPROVED_SCHEMA_CHANGED", "PAID_TOOL_SCHEMA_CHANGED", "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN"].includes(run.failure ?? "")) delete run.paidCallAuthorization;
       delete run.pendingAction; delete run.pendingActionId; delete run.pendingActionFingerprint; delete run.pendingActionApproved;
       run.status = "RESUMABLE"; delete run.failure; await save(); return structuredClone(run);
     });

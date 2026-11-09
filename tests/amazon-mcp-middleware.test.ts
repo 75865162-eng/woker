@@ -24,3 +24,9 @@ test("MCP routing never exempts neighboring APIs, Lili settings or credential ma
   assert.equal(page.status, 307);
   assert.equal(new URL(page.headers.get("location")!).pathname, "/login");
 });
+
+test("research approval login preserves the exact run and workspace deep link", async () => {
+ const next = "/agents/selection-research?workspaceId=default&runId=owned-run";
+ const response = await middleware(new NextRequest("http://localhost" + next));
+ assert.equal(new URL(response.headers.get("location")!).searchParams.get("next"), next);
+});

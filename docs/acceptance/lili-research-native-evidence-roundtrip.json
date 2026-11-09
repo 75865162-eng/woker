@@ -1,0 +1,23 @@
+{
+  "client": "Codex native MCP",
+  "runId": "2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+  "observedAt": "2026-11-07T14:34:24.020663+00:00",
+  "evidence": [
+    {
+      "callId": "f42344b4-ca8d-4496-a7a0-2167d27f8e34",
+      "tool": "meta_search_skills",
+      "sha256": "50cdbafde8168270914195e3278106c5a81cf4029e916f63209c8d78dbf5da29",
+      "hashVerified": true,
+      "chunks": 1,
+      "paid": false
+    },
+    {
+      "callId": "18ce9575-8f43-4e76-b4fc-19093c008001",
+      "tool": "meta_load_skill",
+      "sha256": "6f14ebc5eedc8117eb6ae2d5a48c35146558f65437585b03b6cc4009939b2f51",
+      "hashVerified": true,
+      "chunks": 1,
+      "paid": false
+    }
+  ]
+}

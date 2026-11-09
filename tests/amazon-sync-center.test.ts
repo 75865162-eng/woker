@@ -22,7 +22,7 @@ test("data domain catalog has explicit execution and planning metadata", () => {
     assert.ok(Number.isInteger(domain.frequency) && domain.frequency > 0);
     assert.ok(Number.isInteger(domain.priority) && domain.priority >= 1 && domain.priority <= 4);
   }
-  assert.deepEqual(syncDomains.filter(domain => domain.implemented).map(domain => domain.id).sort(), ["brand_analytics", "buy_box_history", "catalog", "catalog_items", "finance", "fulfillment", "inventory", "inventory_age", "inventory_events", "listing_details", "orders", "pricing", "reimbursements", "returns", "sales_traffic", "settlements"]);
+  assert.deepEqual(syncDomains.filter(domain => domain.implemented).map(domain => domain.id).sort(), ["brand_analytics", "buy_box_history", "catalog", "catalog_items", "finance", "fulfillment", "inventory", "inventory_age", "inventory_events", "listing_details", "notifications", "orders", "pricing", "reimbursements", "returns", "sales_traffic", "settlements"]);
 });
 test("plans reject unimplemented domains, incremental modes and invalid scope/frequency", () => {
   const p = { name: "inventory", resource: "inventory", enabled: false, intervalMinutes: 60, sourceIds: ["one"] };
@@ -38,8 +38,7 @@ test("automatic sync covers only executable resources and keeps each API's histo
   assert.equal(automaticBackfillDays, 730);
   assert.equal(automaticInventoryEventBackfillDays, 540);
   assert.equal(automaticReportDiscoveryDays, 90);
-  for (const resource of ["returns", "inventory_events", "settlements", "reimbursements", "inventory_age", "fulfillment", "listing_details", "catalog_items", "pricing"]) assert.ok((automaticResources as readonly string[]).includes(resource));
-  for (const resource of ["buy_box_history"]) assert.ok(!(automaticResources as readonly string[]).includes(resource));
+  for (const resource of ["returns", "inventory_events", "settlements", "reimbursements", "inventory_age", "fulfillment", "listing_details", "catalog_items", "pricing", "brand_analytics", "buy_box_history", "notifications"]) assert.ok((automaticResources as readonly string[]).includes(resource));
   const now = new Date("2026-11-06T12:00:00.000Z");
   const first = nextAutomaticInventoryEventWindow(null, now)!;
   assert.equal(first.from, "2025-05-15");

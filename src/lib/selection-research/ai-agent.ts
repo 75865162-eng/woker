@@ -25,7 +25,8 @@ export function createResearchAiAgent(settings: AiModelSettings, request: typeof
       body: JSON.stringify(chat ? { model: settings.model, messages: [{ role: "system", content: context.instructions }, { role: "user", content: prompt }], response_format: { type: "json_object" } }
         : { ...buildResponsesRequestOptions(settings), model: settings.model, instructions: context.instructions, input: prompt, text: { format: { type: "json_object" } } }),
     });
-    if (!response.ok) throw new Error("RESEARCH_AI_REQUEST_FAILED");
+    // Persist only a bounded host-generated status code, never provider text or secrets.
+    if (!response.ok) throw new Error("RESEARCH_AI_HTTP_" + (Number.isInteger(response.status) && response.status >= 400 && response.status <= 599 ? response.status : "INVALID"));
     const value = await response.json() as { choices?: { message?: { content?: string } }[]; output_text?: string; output?: { content?: { text?: string }[] }[] };
     const text = chat ? value.choices?.[0]?.message?.content : value.output_text ?? value.output?.flatMap((part) => part.content ?? []).map((part) => part.text ?? "").join("\n");
     if (!text || text.includes(settings.apiKey)) throw new Error("UNSAFE_OR_EMPTY_AI_RESPONSE");

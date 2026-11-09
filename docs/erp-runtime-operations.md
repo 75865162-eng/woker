@@ -77,3 +77,29 @@ npm run test:runtime:integration
 ## 当前本地实例
 
 2026-11-07使用既有本地PostgreSQL55439、Redis6399/0，网页3017，3010已停止；未为统一端口重建。四注册在线/队列就绪/连接一致已通过认证健康API。Sellfox受IP白名单限制，需处理后明确业务重试范围。源码typecheck通过但不能替代CI完整构建。见本地验证记录及审批文末执行结果。
+
+
+<!-- AGENTS migration 2026-11-08: original lines 232-252 -->
+
+本节保留环境与数据保护硬约束；历史实现与当前代码冲突时，先核对 loader/registry，不自行切换运行目标。
+
+## 本地与服务器运行环境统一规则
+
+本节是本地开发、测试及 Worker 启动的配置边界；与旧文档或示例冲突时，以本节为准。它统一配置入口和每个环境内的连接目标，不表示本地与生产共享数据。
+
+- 本地 Next web、API、CLI 和常驻 Worker 的唯一常规配置源是仓库根目录 `.env`。新增或修改变量先更新 `.env.example`，真实值只由用户在本地受控配置中维护；不得提交 `.env`、复制密钥或在启动命令、shell profile、`DOTENV_CONFIG_PATH`、`--env-file`、Next 环境文件或各服务专属 dotenv 文件中另设第二来源。
+- 本地所有进程必须使用相同的 `DATABASE_URL`、`REDIS_URL` 和 `QUEUE_DRIVER=redis`。启动器应校验继承环境与根 `.env` 无冲突，连接地址采用 loopback；发现多个本地环境文件、连接目标不一致或远程地址时先停止启动并盘点，不能静默混用或自动改写配置。loopback 也可能是 SSH 隧道，需结合端口转发和数据库身份确认其实际目标。
+- 每个环境只选择一套 PostgreSQL 业务库和一套 Redis/BullMQ 实例作为该环境的运行目标。web 与 Worker 的连接目标必须完全一致（包括 Redis DB index）；不得在不同 worker、测试脚本、CLI 或页面进程中悄悄切换库/Redis。生产与本地是相互隔离的独立环境，各自有自己的单一目标。
+- `ProductRecord` 及其他持久化业务记录仍以 PostgreSQL 为事实源；Redis 用于 BullMQ 队列与调度，不是业务数据事实源。需要可恢复的后台任务必须有数据库任务/状态、幂等处理、租约或检查点及可重复的 queued-job 恢复路径；不得假定 Redis 队列内容是唯一任务记录。Redis 重启/清空后的恢复能力需以隔离验证为依据，不得承诺零丢失。
+- 已登记 Worker 统一由 `src/lib/runtime/worker-registry.json` 描述，由 `scripts/runtime/worker-manager.mjs` 管理；`npm run worker` 启动注册的本地 Worker 集合，受支持的单 Worker 命令必须仍经同一管理器。不得绕过 manager 直接启动 Worker entrypoint、另造未登记消费者或对同一 Worker 重复启多个实例。健康状态需区分进程心跳、Redis/队列连通和代码版本；单有进程在线不等于任务可消费。
+- 生产 `.env` 由服务器独立正式环境变量注入（当前 systemd `EnvironmentFile`）；web 和每个 systemd Worker 使用同一生产 `DATABASE_URL` / `REDIS_URL`，不读取本地 `.env`。生产服务的编排/恢复边界以 registry、部署清单和 systemd 为准；改动这些共享边界须先说明影响范围、回滚方式和验证计划，并经明确批准。
+- 仓库中曾使用的 `.env.amazon-live.local` 及 `DOTENV_CONFIG_PATH` 是旧联调配置路径，不能再作为常规本地 app/worker 运行来源。现存文件、已运行进程、端口转发、数据库、Redis 及其中可能有价值的数据均须只读盘点；在明确目标库、组织/工作区数据量、队列范围及匹配加密密钥前，不得覆盖、删除、合并配置，切换连接，停止进程或迁移数据。不要仅因连接地址是 loopback 就认定库是空库或非生产数据。
+- 隔离测试可以使用脚本显式构造的临时 PostgreSQL/Redis 与 fixture 环境，但必须不加载根 `.env`、不继承真实凭据、使用独立容器/端口和可识别的临时数据；测试清理只能删除本次创建并核实身份的资源。此例外不改变本地 app/worker 的唯一 `.env` 约束，也不授权对既有数据库、Redis、容器或运行进程做故障注入。
+- 数据库备份脚本或配置存在，不等于已启用自动备份或已完成恢复演练。备份、恢复、Redis 清空/重启、定时器启用及真实运行态切换均按长期审批规则执行；恢复验证必须使用隔离目标，并同时说明数据库、上传对象/文件存储及队列任务各自的恢复边界。
+
+### 当前运行实现核对基线
+
+- 已检查的 runtime loader 从项目根 `.env` 解析本地变量，拒绝冲突的继承变量、额外 Next `.env.*` 文件、非 loopback 本地数据库/Redis 地址和非 Redis 队列模式；web 启动包装器及 Worker manager 复用该解析结果。改动前须以当前代码和测试复核这些行为，不能只凭本段认定所有启动入口都已接入。
+- Worker registry 当前登记 `import`（含 Product Outbox）、`image-upscale`、`amazon-sync`（含 SP-API 与 Ads 队列）和 `sellfox-sync` 四类 Worker；manager 支持受控单项启动、失败退避和信号停止，子进程锁用于拒绝同一目标上的重复实例。队列恢复能力按各 worker 实现分别核实，不能把统一启动误写成统一恢复已完成。
+- 服务器仍由独立 systemd unit 监督服务进程；这是统一注册/入口管理之上的进程恢复边界，不表示已经合并成一个 systemd unit。更新 Worker 入口、注册表或公共 runtime 时检查所有受影响服务与部署计划。
+- 运行状态必须用本次只读命令核验并注明观察时间；进程、容器、心跳和队列状态都是瞬时事实。不得把历史测试、当前本机进程或单次健康检查写成服务器验收或持续可用证明。

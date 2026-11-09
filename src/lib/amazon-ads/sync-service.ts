@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ensureAutomaticAdsBinding } from "./automatic-binding";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { assertAdsSettingsManager, type AdsAuthScope } from "./authorization";
@@ -15,6 +16,7 @@ export async function adsSyncLock(tx: Prisma.TransactionClient, profileId: strin
 export async function ensureAdsPlan(tx: Prisma.TransactionClient, scope: AdsAuthScope, profileId: string, actor: string) {
   await adsSyncLock(tx, profileId);
   await assertAdsSettingsManager(scope, actor, tx);
+  await ensureAutomaticAdsBinding(tx, scope, profileId);
   const profile = await tx.amazonAdsProfile.findFirst({ where: { ...scope, id: profileId }, include: { authorization: true } });
   if (!profile) throw new Error("Ads Profile 不存在。");
   const key = { organizationId_workspaceId_profileId: { ...scope, profileId } };
@@ -30,7 +32,7 @@ export async function ensureAdsPlan(tx: Prisma.TransactionClient, scope: AdsAuth
   if (!prior) {
     currentPlan = await tx.amazonAdsSyncPlan.create({ data: { ...scope, profileId, id: randomUUID(), ...data, status: readyStatus } });
     await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.sync.plan.created", entityType: "AmazonAdsSyncPlan", entityId: currentPlan.id, metadata: { workspaceId: scope.workspaceId, profileId, sellerAccountId: bound.id } } });
-  } else if (prior.sellerAccountId !== bound.id || prior.authorizationRevision !== profile.authorization.revision || prior.status === "BLOCKED" || prior.status.startsWith("WAITING_FOR_")) {
+  } else if (prior.sellerAccountId !== bound.id || prior.authorizationRevision !== profile.authorization.revision || prior.status === "BLOCKED" || prior.status.startsWith("WAITING_FOR_") || (prior.status === "PAUSED" && prior.lastErrorCode === "ADS_AUTH_DISCONNECTED")) {
     currentPlan = await tx.amazonAdsSyncPlan.update({ where: { id: prior.id }, data: { ...data, status: readyStatus, revision: { increment: 1 }, nextRunAt: new Date(), lastErrorCode: readyStatus === "ACTIVE" ? null : readyStatus } });
   } else currentPlan = prior;
 

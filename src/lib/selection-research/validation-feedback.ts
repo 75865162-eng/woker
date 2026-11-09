@@ -1,5 +1,10 @@
 /** Host-owned diagnostics only. Never return provider exception text or model-supplied error details. */
 export const researchValidationMessages: Record<string, string> = {
+  INVALID_EXTERNAL_RESEARCH_ACTION: "研究动作格式无效；仅接受 call（tool、arguments）或 complete（result）。",
+  RESEARCH_ACTION_JSON_INVALID: "研究参数或结果不是合法 JSON；请修正后重新提交，未发送市场请求。",
+  RESEARCH_ACTION_JSON_TOO_LARGE: "JSON 字符串超过输入大小限制；请缩小本次提交范围。",
+  RESEARCH_ACTION_OBJECT_REQUIRED: "研究参数或结果必须为 JSON 对象，不能是数组、空值或其他基本类型。",
+  RESEARCH_TOOL_ARGUMENTS_INVALID: "工具参数不符合当前注册定义；请核对字段类型、必填项和允许值后恢复任务。",
   INVALID_LANDED_COST_SCENARIO: "到岸成本情景结构无效。请检查币种、国家、税目、日期、数量及唯一基础税项。",
   INVALID_LANDED_COST_INPUT: "到岸成本必须是非负的同币种单位金额；未知项填写 null。",
   INVALID_TARIFF_SOURCE: "税目或税率来源不完整；请保留合法来源日期与链接，未知项填写 null。",

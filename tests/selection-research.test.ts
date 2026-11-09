@@ -18,12 +18,12 @@ import { SKILLS, type Agent, type Scope, type SkillSnapshot } from "../src/lib/s
 
 const scope: Scope = { organizationId: "fixture-org", workspaceId: "fixture-workspace", ownerId: "fixture-owner" };
 const skills: SkillSnapshot[] = SKILLS.map((name) => ({ name, path: `fixture/${name}/SKILL.md`, markdown: "isolated fixture", sha256: createHash("sha256").update("isolated fixture").digest("hex"), tools: [] }));
-async function setup() {
+async function setup(requirement = "隔离测试，不研究真实市场") {
   const root = await mkdtemp(path.join(tmpdir(), "selection-research-test-"));
   const store = new LocalResearchStore(root);
   const fixture = researchFixture();
   const engine = new ResearchEngine(store, scope, fixture.transport, fixture.agent, { mode: "fixture" });
-  const run = await engine.create({ requirement: "隔离测试，不研究真实市场", marketplace: "US", skills, policies: fixture.policies, limits: {} });
+  const run = await engine.create({ requirement, marketplace: "US", skills, policies: fixture.policies, limits: {} });
   return { root, store, fixture, engine, run };
 }
 async function drive(engine: ResearchEngine, id: string) {
@@ -101,74 +101,54 @@ test("stored live history, human gates and report export work without external a
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("pre-dispatch budget reservation, uncertain billing and overage require distinct human decisions", async () => {
-  const { root, store, fixture, engine, run } = await setup();
+test("budget caps remain enforced while unknown charges do not pause research", async () => {
+  const { root, store, fixture, run } = await setup("费用核对必须先确认。");
   let dispatches = 0;
   try {
     await store.transaction(run.id, async (state, save) => { state.policies.market_find_products = { ...state.policies.market_find_products, provider: "test-credits", paid: true, units: 2 }; state.limits["test-credits"] = 0; await save(); });
-    const paid = new ResearchEngine(store, scope, { ...fixture.transport, async callTool(name, args, signal) {
-      dispatches++;
-      const checkpoint = await store.read(run.id);
-      assert.equal(checkpoint.calls.at(-1)?.status, "IN_FLIGHT");
+    const engine = new ResearchEngine(store, scope, { ...fixture.transport, async callTool(name, args, signal) {
+      dispatches++; assert.equal((await store.read(run.id)).calls.at(-1)?.status, "IN_FLIGHT");
       return fixture.transport.callTool(name, args, signal);
     } }, fixture.agent, { mode: "fixture" });
-    let state = await paid.step(run.id);
+    let state = await engine.step(run.id);
     assert.equal(state.gate?.kind, "BUDGET"); assert.equal(dispatches, 0);
-    await paid.decide(run.id, { kind: "INCREASE_BUDGET", gateId: state.gate!.id, limits: { "test-credits": 2 } });
-    state = await paid.step(run.id);
-    assert.equal(state.gate?.kind, "BILLING"); assert.equal(dispatches, 1);
+    await engine.decide(run.id, { kind: "INCREASE_BUDGET", gateId: state.gate!.id, limits: { "test-credits": 2 } });
+    state = await engine.step(run.id);
+    assert.equal(state.gate, undefined); assert.equal(state.status, "RESUMABLE");
+    assert.equal(state.calls[0].billing, "UNKNOWN"); assert.equal(state.calls[0].knownUnits, undefined);
     assert.equal(budgetSummary(state)["test-credits"].committed, 2);
-    await paid.step(run.id); assert.equal(dispatches, 1);
-    state = await paid.decide(run.id, { kind: "RECONCILE", gateId: state.gate!.id, callId: state.calls[0].id, units: 3, receipt: "isolated test receipt" });
-    assert.equal(state.gate?.kind, "BUDGET"); assert.equal(budgetSummary(state)["test-credits"].committed, 3);
-    state = await paid.decide(run.id, { kind: "INCREASE_BUDGET", gateId: state.gate!.id, limits: { "test-credits": 3 } });
-    assert.equal(state.status, "RESUMABLE"); assert.equal((await paid.step(run.id)).gate?.kind, "NICHE");
-    assert.equal(dispatches, 1);
-    assert.equal((await engine.inspect(run.id)).calls[0].knownUnits, 3);
+    assert.equal((await engine.step(run.id)).gate?.kind, "NICHE"); assert.equal(dispatches, 1);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("process interruption and timeout never replay a potentially charged request", async () => {
-  const { root, store, fixture, engine, run } = await setup();
+test("interruption and timeout continue without billing review and never replay requests", async () => {
+  const { root, store, fixture, engine, run } = await setup("费用核对必须先确认。");
   try {
     const timeout = new ResearchEngine(store, scope, { ...fixture.transport, async callTool() { return new Promise(() => {}); } }, fixture.agent, { mode: "fixture", timeoutMs: 5 });
     let state = await timeout.step(run.id);
-    assert.equal(state.calls[0].status, "UNKNOWN"); assert.equal(state.gate?.kind, "BILLING");
-    state = await engine.decide(run.id, { kind: "RECONCILE", gateId: state.gate!.id, callId: state.calls[0].id, units: 0, receipt: "local fixture no billing" });
-    assert.equal(state.calls[0].status, "FAILED");
-    state = await engine.step(run.id); // duplicate arguments are rejected rather than dispatched
-    assert.equal(state.status, "FAILED"); assert.equal(state.calls.length, 1);
+    assert.equal(state.calls[0].status, "FAILED"); assert.equal(state.gate, undefined);
+    assert.equal(state.status, "RESUMABLE");
+    state = await engine.step(run.id);
+    assert.equal(state.failure, "DUPLICATE_CALL_REQUIRES_REVIEW"); assert.equal(state.calls.length, 1);
     await store.transaction(run.id, async (value, save) => { value.status = "RUNNING"; value.calls[0].status = "IN_FLIGHT"; await save(); });
     state = await engine.step(run.id);
-    assert.equal(state.gate?.kind, "BILLING"); assert.equal(state.calls.length, 1);
+    assert.equal(state.gate, undefined); assert.equal(state.calls.length, 1);
+    assert.equal(state.calls[0].errorCode, "OUTCOME_UNVERIFIED_NOT_REPLAYED");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("free uncertain reads require a zero-unit review and cannot be reconciled twice or replayed", async () => {
-  const { root, store, fixture, run } = await setup();
+test("free uncertain reads never require reconciliation or become successful evidence", async () => {
+  const { root, fixture, run } = await setup("费用核对必须先确认。");
   let dispatches = 0;
   try {
+    const store = new LocalResearchStore(root);
     const engine = new ResearchEngine(store, scope, { ...fixture.transport, async callTool() { dispatches++; throw new Error("isolated lost response"); } }, fixture.agent, { mode: "fixture" });
     let state = await engine.step(run.id);
-    assert.equal(state.calls[0].paid, false);
-    assert.equal(state.calls[0].billing, "FREE");
-    assert.equal(state.calls[0].status, "UNKNOWN");
-    assert.equal(state.gate?.kind, "BILLING");
-    const review = { kind: "RECONCILE" as const, gateId: state.gate!.id, callId: state.calls[0].id, units: 0, receipt: "Isolated review: response remains unknown" };
-    await assert.rejects(engine.decide(run.id, { ...review, units: 1 }), /INVALID_BILLING/);
-    await assert.rejects(engine.decide(run.id, { ...review, receipt: " " }), /INVALID_BILLING/);
-    state = await engine.decide(run.id, review);
-    assert.equal(state.calls[0].status, "FAILED");
-    assert.equal(state.calls[0].errorCode, "OUTCOME_UNVERIFIED_NOT_REPLAYED");
-    assert.equal(state.calls[0].knownUnits, 0);
-    assert.equal(state.calls[0].rawResponse, undefined);
+    assert.equal(state.calls[0].billing, "FREE"); assert.equal(state.calls[0].status, "FAILED");
+    assert.equal(state.gate, undefined); assert.equal(state.calls[0].knownUnits, undefined);
+    assert.equal(state.calls[0].rawResponse, undefined); assert.equal(state.decisions.length, 0);
     state = await engine.step(run.id);
-    assert.equal(state.failure, "DUPLICATE_CALL_REQUIRES_REVIEW");
-    assert.equal(dispatches, 1);
-    await store.transaction(run.id, async (current, save) => { current.status = "WAITING_FOR_USER"; current.gate = { kind: "BILLING", id: "isolated-new-gate", reason: "isolated" }; await save(); });
-    await assert.rejects(engine.decide(run.id, { ...review, gateId: "isolated-new-gate" }), /INVALID_BILLING/);
-    await store.transaction(run.id, async (current, save) => { current.calls[0].status = "SUCCEEDED"; await save(); });
-    await assert.rejects(engine.decide(run.id, { ...review, gateId: "isolated-new-gate" }), /INVALID_BILLING/);
+    assert.equal(state.failure, "DUPLICATE_CALL_REQUIRES_REVIEW"); assert.equal(dispatches, 1);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -294,11 +274,11 @@ test("historical tariff URLs cannot pass as verified current rates; missing revi
 });
 
 test("secret echo is never persisted and uncertain response is not automatically retried", async () => {
-  const { root, store, fixture, run } = await setup();
+  const { root, store, fixture, run } = await setup("费用核对必须先确认。");
   try {
     const engine = new ResearchEngine(store, scope, { ...fixture.transport, async callTool() { return { content: [{ type: "text", text: '{"secretKey":"isolated-do-not-persist"}' }] }; } }, fixture.agent, { mode: "fixture" });
     const state = await engine.step(run.id);
-    assert.equal(state.gate?.kind, "BILLING"); assert.equal(state.calls[0].status, "UNKNOWN");
+    assert.equal(state.gate, undefined); assert.equal(state.calls[0].status, "FAILED");
     assert.equal(state.calls[0].rawResponse, undefined);
     assert.doesNotMatch(await readFile(path.join(root, run.id, "state.json"), "utf8"), /isolated-do-not-persist/);
   } finally { await rm(root, { recursive: true, force: true }); }

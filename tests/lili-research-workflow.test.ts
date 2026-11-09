@@ -165,7 +165,9 @@ test("gateway attests pre-dispatch revocation or schema drift, releases budget a
       run = await engine.step(run.id);
       assert.equal(dispatches, 1);
       assert.equal(run.calls.at(-1)?.dispatch, "ATTEMPTED");
-      assert.equal(run.gate?.kind, "BILLING");
+      assert.equal(run.gate, undefined);
+      assert.equal(run.calls.at(-1)?.authorizationMode, "FIRST_APPROVAL");
+      assert.ok(run.paidCallAuthorization);
       assert.equal(budgetSummary(run).sellersprite.committed, 1);
     }
   } finally { await rm(root, { recursive: true, force: true }); }

@@ -230,12 +230,19 @@ for (const resource of ["orders", "finance", "returns"] as const) test(`${resour
   assert.equal(log.code, `${resource === "returns" ? "RETURN" : resource === "finance" ? "FINANCE" : "ORDER"}_VALIDATION`);
 });
 
-test("lease recovery rolls back run transition when cursor update fails", async () => {
-  const f = await fresh("finance"), saved = evidence(await f.cursor());
+test("lease recovery rolls back one failed cursor without blocking another task", async () => {
+  const f = await fresh("finance"), other = await fresh("orders"), saved = evidence(await f.cursor());
+  const otherBefore = await prisma.amazonSyncRun.update({ where: { id: other.run.id }, data: { status: "RUNNING", leaseOwner: "fixture-other", leaseExpiresAt: new Date(0), attempts: 1 } });
   const before = await prisma.amazonSyncRun.update({ where: { id: f.run.id }, data: { status: "RUNNING", leaseOwner: "fixture-interrupted", leaseExpiresAt: new Date(0), attempts: 1 } });
   await prisma.$executeRawUnsafe(`CREATE FUNCTION fixture_reject_lifecycle_cursor() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture lifecycle rollback'; END $$`);
-  await prisma.$executeRawUnsafe(`CREATE TRIGGER fixture_reject_lifecycle_cursor BEFORE UPDATE ON "AmazonSyncResourceCursor" FOR EACH ROW EXECUTE FUNCTION fixture_reject_lifecycle_cursor()`);
-  try { await assert.rejects(tickSyncCenter(new Date(), { taskIds: [f.run.id], exportIds: [] })); }
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER fixture_reject_lifecycle_cursor BEFORE UPDATE ON "AmazonSyncResourceCursor" FOR EACH ROW WHEN (OLD."sourceId" = '${f.source.id}') EXECUTE FUNCTION fixture_reject_lifecycle_cursor()`);
+  try {
+    const result = await tickSyncCenter(new Date(), { taskIds: [f.run.id, other.run.id], exportIds: [] });
+    assert.equal(result?.maintenanceFailures, 1); assert.equal(result?.dispatchFailures, 0);
+    assert.equal((await other.current()).fenceVersion, otherBefore.fenceVersion + 1);
+    assert.equal((await other.current()).status, "RETRY_WAIT");
+    assert.equal(await prisma.amazonSyncTaskLog.count({ where: { taskId: other.run.id, event: "LEASE_EXPIRED" } }), 1);
+  }
   finally { await prisma.$executeRawUnsafe('DROP TRIGGER fixture_reject_lifecycle_cursor ON "AmazonSyncResourceCursor"'); await prisma.$executeRawUnsafe('DROP FUNCTION fixture_reject_lifecycle_cursor()'); }
   const after = await f.current();
   assert.equal(after.status, "RUNNING"); assert.equal(after.dispatchVersion, before.dispatchVersion); assert.equal(after.fenceVersion, before.fenceVersion); assert.equal(after.leaseOwner, before.leaseOwner);
@@ -353,7 +360,11 @@ test("a validated token without Seller ID auto-binds four North American sites a
   const now = new Date(Date.now() - 60_000);
   await tickSyncCenter(now);
   const sources = await prisma.amazonSyncDataSource.findMany({ where: { ...scope, authorizationId: authId } });
-  assert.equal(sources.length, 37);
+  for (const marketplaceId of sites) for (const resource of ["catalog", "inventory", "orders", "sales_traffic", "returns", "settlements", "reimbursements", "inventory_age", "inventory_events", "fulfillment", "buy_box_history", "brand_analytics"]) {
+    assert.equal(sources.filter(source => source.marketplaceId === marketplaceId && source.resource === resource).length, 1, `${marketplaceId}/${resource} auto-discovered once`);
+  }
+  assert.equal(sources.filter(source => source.resource === "finance").length, 1);
+  assert.equal(sources.filter(source => source.resource === "notifications").length, 1);
   assert.deepEqual([...new Set(sources.map(source => source.marketplaceId))].sort(), [...sites].sort());
   assert.equal(new Set(sources.map(source => source.sellerAccountId)).size, 1);
   const catalog = sources.find(source => source.resource === "catalog" && source.marketplaceId === sites[0])!;
@@ -399,4 +410,21 @@ test("a validated token without Seller ID auto-binds four North American sites a
   assert.equal(published.activeRunId, run.id); assert.equal(published.rowCount, 1);
   const coverage = published.coverage as { historicalSnapshot?: boolean; reportType?: string };
   assert.equal(coverage.reportType, "GET_MERCHANT_LISTINGS_ALL_DATA"); assert.equal(coverage.historicalSnapshot, false);
+});
+
+
+test("Redis dispatch failure preserves DB intent and retries the same generation", async t => {
+  const f = await fresh("orders");
+  await prisma.amazonSyncRun.update({ where: { id: f.run.id }, data: { status: "WAITING", nextAttemptAt: new Date(0) } });
+  const before = await f.current(), cursor = evidence(await f.cursor());
+  const queue = getAmazonSyncQueue();
+  const broken = t.mock.method(queue, "add", async () => { throw new Error("fixture Redis unavailable"); });
+  const first = await tickSyncCenter(new Date(), { taskIds: [f.run.id], exportIds: [] });
+  assert.equal(first?.dispatchFailures, 1); assert.equal((await f.current()).status, "WAITING");
+  assert.equal((await f.current()).dispatchVersion, before.dispatchVersion); assert.equal(evidence(await f.cursor()), cursor);
+  broken.mock.restore();
+  const second = await tickSyncCenter(new Date(), { taskIds: [f.run.id], exportIds: [] });
+  assert.equal(second?.dispatched, 1); assert.equal(second?.dispatchFailures, 0);
+  assert.ok(await queue.getJob(`adc-${f.run.id}-${before.dispatchVersion}`));
+  assert.equal((await f.current()).status, "QUEUED");
 });

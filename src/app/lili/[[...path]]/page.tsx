@@ -33,7 +33,7 @@ export default async function LiliPage({ params }: { params: Promise<{ path?: st
   return <AppShell title={`粒粒 Lili · ${page.title}`} subtitle="技能、工作流与工具目录 · 主系统统一权限" initialUser={permission.user} initialRolePermissions={permissions}>
     <div className={styles.root}>
       <LiliNavigation locale={locale} allowedPaths={allowedPaths} />
-      <CatalogContent kind={page.kind} slug={page.slug} locale={locale} />
+      <CatalogContent kind={page.kind} slug={page.slug} locale={locale} quotaScopeKey={`${permission.user.organizationId}:${permission.user.id}`} />
     </div>
   </AppShell>;
 }

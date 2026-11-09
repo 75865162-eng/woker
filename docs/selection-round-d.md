@@ -108,3 +108,18 @@ npm run check:fast
 高级区默认收起。上传、建 SKU 都重新检查当前文件门禁、fixture、商品权限与有效 owner/database_admin 身份；显式配置的 Actor 必须是当前登录用户，禁止借环境管理员身份。ERP URL 未配置时禁用上传；Cookie 仅在门禁通过后显示为一次性隐藏输入，也可使用已有服务端配置，上传前验证 ERP 会话属于同用户/组织。Cookie 不持久化、不回显；只上传已有图片。显式确认创建后复用 `productsCreate`（事务、revision、审计、Outbox、幂等），成功按收据 SKU 到同组织/工作区 `/dashboard` 核对。上传部分失败会保留已成功附件并重建要求上传的门禁，未过门禁的网页按钮继续禁用；需要管理员按上文 CLI 授权步骤续传，不能编辑 quality 绕过。
 
 本页只补本地证据；完成后仍走 Market 上传 `derived/draft.json` → 只读生成机会。不会自动上传、创建 SKU、迁移数据库或发布服务器。网页真实登录和真实证据验收需操作者执行；自动测试只使用隔离测试目录，执行后删除，不修改 kayak 研究数据。
+
+
+<!-- AGENTS migration 2026-11-08: original lines 467-472 -->
+### 本地 Amazon US 选品 CLI
+
+- `npm run selection:run -- --keyword "..." --slug <slug>`：Playwright 只采 Amazon US / 1688，默认只输出 selections 下的本地草稿与 ERP 格式 workbook；用 `npm run test:selection` 跑隔离 fixture 回归。
+- 入口与限速/SQLite/云端补漏/人工供应商兜底说明见 `scripts/selection-pipeline/README.md`。研究图片、草稿、SQLite 配额不提交 GitHub，不接付费选品/代理 SaaS。
+- 仅 `--write` 可创建正式商品；必须显式配置目标数据库、组织、有效 owner/database_admin 操作者，经既有 Product 聚合/审计/Outbox 边界创建。fixture 禁止写库；无凭据不伪造图片 fileId。
+
+
+<!-- AGENTS migration 2026-11-08: original lines 480-485 -->
+### Selection Round D 质量门禁
+
+- `scripts/selection-pipeline/README.md` 和 `docs/selection-round-d.md` 定义人工 `tag --reviews-file`、`suppliers --suppliers-file`、`workbook --upload-images` 续作。create/run --write 前重算原始低星评论、标签引用、≥3 条去重供应线索与实际图片；fixture/缺证据/上传未齐时硬失败，不信任旧 quality.json。
+- draft/Market 的 sales30Days 必须标 heuristic=true；空标签为 NEEDS_DATA，不是无差评。真人上传/建 SKU/页面验收与 fixture、临时库、浏览器 harness 验证分别记录，不能代签；market.selection.run 继续只读上传 fileId，不启动 CLI。

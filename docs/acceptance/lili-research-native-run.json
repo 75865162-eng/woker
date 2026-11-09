@@ -1,0 +1,4343 @@
+{
+  "client": "Codex app-server native MCP",
+  "endpoint": "http://localhost:3017/api/lili/mcp",
+  "observedAt": "2026-11-07T14:32:40.533605+00:00",
+  "calls": [
+    {
+      "tool": "research_start",
+      "isError": false,
+      "ok": true,
+      "status": 201,
+      "error": null
+    },
+    {
+      "tool": "research_read",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_evidence",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_pause",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_resume",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_step",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_step",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_evidence",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_pause",
+      "isError": false,
+      "ok": true,
+      "status": 200,
+      "error": null
+    }
+  ],
+  "runId": "2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+  "reviewUrl": "http://localhost:3017/agents/selection-research?workspaceId=default&runId=2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+  "budget": {
+    "mode": "reviewed",
+    "simulated": false,
+    "message": "调用次数与积分分别计量；没有供应商计费规则的费用保持未知。",
+    "stages": [
+      {
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "skillSha256": "fd55e9361beac007e1686466c0ffe34c741b8cc04a4c3d0c289221a82a5719b3",
+        "estimatedCalls": null,
+        "credits": null,
+        "money": null,
+        "tools": [
+          {
+            "name": "meta_load_skill",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "meta_search_skills",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__amazon.stores.list",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_list_tables",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_describe_table",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_query",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_sync_status",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "sellersprite__asin.detail",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "按 1～20 个 ASIN 批量查询商品基础详情，包括标题、品牌、价格、评分、销量、BSR、变体等信息。未请求的 optional 字段不会返回。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询 ASIN 商品列表，支持关键词、ASIN 集合、类目、品牌与各类筛选条件，返回分页窗口。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__category.top.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询类目市场 TopN 集中度排名：头部商品、品牌或卖家。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__category.search",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询类目树、类目节点和命中类目；不承担市场商品列表与类目筛选。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__keyword.related.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "词找词：根据种子关键词扩展相关关键词列表，返回搜索量、购买量、购买率、竞争度、PPC 竞价、SPR 等指标。只在用户要相关词、扩词、找更多词时调用。只问种子词自己的当前指标用 keyword.batch.info，问它的历史走势用 keyword.trend。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__keyword.batch.info",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "批量查询关键词当月基础指标快照（≤20 词）；不存在的词不返回。用户问「这个词现在搜索量、购买率多少」时用本工具。要看过去几个月怎么变，用 keyword.trend；要扩出相关词，用 keyword.related.list。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__keyword.aba.trend",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "ABA 趋势：关键词的 ABA 排名、搜索量与 Top3 点击/转化占比历史序列（周/月）。趋势历史仅覆盖头部排名词，长尾词可能无历史。MONTH 趋势点为归档月的 1 日 yyyy-MM-dd，与 keyword.aba.list 的月份标签是同一个月。keyword 锚点为分词 AND 精确匹配（不含词形变体），服务端已自动扩展常见单复数变体（如 mat→mats），不规则复数需配合 keyword.batch.info 交叉。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "xiyou__get_asin_bsr_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_info",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keyword_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keywords",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_variations",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          }
+        ]
+      },
+      {
+        "stage": 2,
+        "skill": "amazon-product-research",
+        "skillSha256": "3dee446a3851875aff96e5e40cafc73f5d7c0fbf88040a5764587736ab3471ef",
+        "estimatedCalls": null,
+        "credits": null,
+        "money": null,
+        "tools": [
+          {
+            "name": "meta_load_skill",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "meta_search_skills",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__amazon.stores.list",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_list_tables",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_describe_table",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_query",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_sync_status",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "sellersprite__asin.detail",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "按 1～20 个 ASIN 批量查询商品基础详情，包括标题、品牌、价格、评分、销量、BSR、变体等信息。未请求的 optional 字段不会返回。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询 ASIN 商品列表，支持关键词、ASIN 集合、类目、品牌与各类筛选条件，返回分页窗口。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.related.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询 ASIN 站内关联流量：组合购买、看了又看、相似对比、关联广告等。结果是 Amazon 行为关联，不代表语义相似；FBT（组合购买）基于共同购买行为，经常包含跨类目、与目标商品看似无关的商品，这是该数据类型的正常特征，不代表数据质量问题，也不代表语义相似。relations 可选，不传时查询全部关联类型。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__category.top.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询类目市场 TopN 集中度排名：头部商品、品牌或卖家。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__keyword.related.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "词找词：根据种子关键词扩展相关关键词列表，返回搜索量、购买量、购买率、竞争度、PPC 竞价、SPR 等指标。只在用户要相关词、扩词、找更多词时调用。只问种子词自己的当前指标用 keyword.batch.info，问它的历史走势用 keyword.trend。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__keyword.batch.info",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "批量查询关键词当月基础指标快照（≤20 词）；不存在的词不返回。用户问「这个词现在搜索量、购买率多少」时用本工具。要看过去几个月怎么变，用 keyword.trend；要扩出相关词，用 keyword.related.list。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__keyword.aba.trend",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "ABA 趋势：关键词的 ABA 排名、搜索量与 Top3 点击/转化占比历史序列（周/月）。趋势历史仅覆盖头部排名词，长尾词可能无历史。MONTH 趋势点为归档月的 1 日 yyyy-MM-dd，与 keyword.aba.list 的月份标签是同一个月。keyword 锚点为分词 AND 精确匹配（不含词形变体），服务端已自动扩展常见单复数变体（如 mat→mats），不规则复数需配合 keyword.batch.info 交叉。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "xiyou__get_asin_bsr_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_info",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keyword_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keywords",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_variations",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          }
+        ]
+      },
+      {
+        "stage": 3,
+        "skill": "amazon-review-analyzer",
+        "skillSha256": "7b95df3f4977d32e577e4de5c008d4fac365136729cb5ed69d051d7e81b425b1",
+        "estimatedCalls": null,
+        "credits": null,
+        "money": null,
+        "tools": [
+          {
+            "name": "meta_load_skill",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "meta_search_skills",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__amazon.stores.list",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_list_tables",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_describe_table",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_query",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_sync_status",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "sellersprite__asin.review.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "标准版 ASIN 评论查询，默认返回最多 100 条；支持星级、媒体评论过滤、排序和 limit 指定返回条数，并返回采集时间、覆盖区间与采集状态。空结果不计费。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.review.list.extended",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "扩展版 ASIN 评论查询，默认返回最多 500 条；支持 limit 指定 1~500 条。可能耗时约 2 分钟。仅在用户明确要求扩展版或更完整评论数据时调用，并返回采集时间、覆盖区间与采集状态。空结果不计费。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.detail",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "按 1～20 个 ASIN 批量查询商品基础详情，包括标题、品牌、价格、评分、销量、BSR、变体等信息。未请求的 optional 字段不会返回。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.related.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询 ASIN 站内关联流量：组合购买、看了又看、相似对比、关联广告等。结果是 Amazon 行为关联，不代表语义相似；FBT（组合购买）基于共同购买行为，经常包含跨类目、与目标商品看似无关的商品，这是该数据类型的正常特征，不代表数据质量问题，也不代表语义相似。relations 可选，不传时查询全部关联类型。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "xiyou__get_asin_bsr_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_info",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keyword_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keywords",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_variations",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          }
+        ]
+      },
+      {
+        "stage": 4,
+        "skill": "tariff-calculator-amazon",
+        "skillSha256": "f83727877be66917b094535b10087eac400da749a5aa1fb120dc8481d5710f9c",
+        "estimatedCalls": null,
+        "credits": null,
+        "money": null,
+        "tools": [
+          {
+            "name": "meta_load_skill",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "meta_search_skills",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__amazon.stores.list",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_list_tables",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_describe_table",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_query",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_sync_status",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "xiyou__get_asin_bsr_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_info",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keyword_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keywords",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_variations",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          }
+        ]
+      },
+      {
+        "stage": 5,
+        "skill": "amazon-product-selection",
+        "skillSha256": "5bde1f3ae9f8841d01b39d77a0ec7dbb644c052f20af4cc7c7eeca90a87d815b",
+        "estimatedCalls": null,
+        "credits": null,
+        "money": null,
+        "tools": [
+          {
+            "name": "meta_load_skill",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "meta_search_skills",
+            "provider": "skills",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__amazon.stores.list",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_list_tables",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_describe_table",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_query",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "erp__data_sync_status",
+            "provider": "erp",
+            "paid": false,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Existing ERP/Skill read adapter; no external market request."
+          },
+          {
+            "name": "sellersprite__asin.review.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "标准版 ASIN 评论查询，默认返回最多 100 条；支持星级、媒体评论过滤、排序和 limit 指定返回条数，并返回采集时间、覆盖区间与采集状态。空结果不计费。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.review.list.extended",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "扩展版 ASIN 评论查询，默认返回最多 500 条；支持 limit 指定 1~500 条。可能耗时约 2 分钟。仅在用户明确要求扩展版或更完整评论数据时调用，并返回采集时间、覆盖区间与采集状态。空结果不计费。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.detail",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "按 1～20 个 ASIN 批量查询商品基础详情，包括标题、品牌、价格、评分、销量、BSR、变体等信息。未请求的 optional 字段不会返回。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__asin.list",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "查询 ASIN 商品列表，支持关键词、ASIN 集合、类目、品牌与各类筛选条件，返回分页窗口。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "sellersprite__keyword.batch.info",
+            "provider": "sellersprite",
+            "paid": true,
+            "callLimit": 3,
+            "unit": "calls",
+            "pricingSource": "批量查询关键词当月基础指标快照（≤20 词）；不存在的词不返回。用户问「这个词现在搜索量、购买率多少」时用本工具。要看过去几个月怎么变，用 keyword.trend；要扩出相关词，用 keyword.related.list。 Price per request is not represented as a fixed credit amount; each outbound call requires human review."
+          },
+          {
+            "name": "xiyou__get_asin_bsr_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_info",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keyword_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_keywords",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_traffic_trends",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          },
+          {
+            "name": "xiyou__get_asin_variations",
+            "provider": "xiyou",
+            "paid": true,
+            "callLimit": 15,
+            "unit": "calls",
+            "pricingSource": "Provider charge unknown; review exact request before dispatch."
+          }
+        ]
+      }
+    ],
+    "pendingCall": null,
+    "providerLimits": {
+      "sellersprite": 3,
+      "xiyou": 3
+    },
+    "unknownCosts": [
+      "实际市场请求次数由研究过程确定",
+      "供应商实际积分与金额",
+      "AI 模型费用"
+    ]
+  },
+  "discovery": {
+    "registeredReadTools": [
+      {
+        "name": "meta_load_skill",
+        "description": "Load a skill from the internal library by name (from meta_search_skills). Returns the full procedure to follow, plus the tools it references.",
+        "inputSchema": {
+          "properties": {
+            "skill_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "skill_name"
+          ],
+          "type": "object"
+        }
+      },
+      {
+        "name": "meta_search_skills",
+        "description": "Search the internal skill library for an operating procedure matching the seller's question — how to diagnose, optimize, clean up, plan or review something (怎么优化/怎么排查/为什么涨了/该怎么做). Returns candidate skills with descriptions; load the best one with meta_load_skill. Use for operational or advisory questions, AND for multi-step analyses (weekly review, profit/fee audit, reimbursement recovery, clearance decisions, traffic triage) — those have tested SQL playbooks here. Skip it only for simple one-shot statistics, which go straight to data_query.",
+        "inputSchema": {
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        }
+      },
+      {
+        "name": "erp__amazon.stores.list",
+        "description": "查询当前授权店铺和站点",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sellerAccountId": {
+              "type": "string"
+            },
+            "sellerAccountIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 200
+            },
+            "marketplaceId": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string",
+              "format": "date"
+            },
+            "to": {
+              "type": "string",
+              "format": "date"
+            },
+            "keyword": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "taskId": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "erp__data_list_tables",
+        "description": "列出当前授权范围内有已发布数据的 Skill 逻辑表",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sellerAccountId": {
+              "type": "string"
+            },
+            "sellerAccountIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 200
+            },
+            "marketplaceId": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "erp__data_describe_table",
+        "description": "查看已接入 Skill 逻辑表的字段、粒度和限制",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "table"
+              ]
+            },
+            {
+              "required": [
+                "module",
+                "dataType"
+              ]
+            }
+          ],
+          "dependentRequired": {
+            "module": [
+              "dataType"
+            ],
+            "dataType": [
+              "module"
+            ]
+          },
+          "properties": {
+            "sellerAccountId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "sellerAccountIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "marketplaceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "table": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "module": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "dataType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        }
+      },
+      {
+        "name": "erp__data_query",
+        "description": "分页查询已接入 Skill 逻辑表的已发布数据",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "table"
+              ]
+            },
+            {
+              "required": [
+                "module",
+                "dataType"
+              ]
+            }
+          ],
+          "dependentRequired": {
+            "module": [
+              "dataType"
+            ],
+            "dataType": [
+              "module"
+            ]
+          },
+          "properties": {
+            "sellerAccountId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "sellerAccountIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "marketplaceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "table": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "module": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "dataType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "sellerSku": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "asin": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "condition": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "from": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "to": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "sortBy": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "sortDirection": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "listingStatus": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "reportType": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "adProduct": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "campaignId": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "adGroupId": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "targetingId": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "advertisedAsin": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "searchTerm": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "placement": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "internalProfileId": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "authorizationId": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "search": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "keyword": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "externalId": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "entityType": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "sort": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "direction": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "filters": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sellerSku": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "asin": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "condition": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "from": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "to": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "sortBy": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "sortDirection": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "listingStatus": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "status": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "reportType": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "adProduct": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "campaignId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "adGroupId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "targetingId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "advertisedAsin": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "searchTerm": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "placement": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "internalProfileId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "authorizationId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "search": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "keyword": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "externalId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "entityType": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "sort": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "direction": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              }
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "module": {
+                        "const": "amazon_sync"
+                      },
+                      "dataType": {
+                        "const": "inventory"
+                      }
+                    },
+                    "required": [
+                      "module",
+                      "dataType"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "table": {
+                        "const": "inventory"
+                      }
+                    },
+                    "required": [
+                      "table"
+                    ]
+                  }
+                ]
+              },
+              "then": {
+                "properties": {
+                  "pageSize": {
+                    "maximum": 1000
+                  },
+                  "sellerSku": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "asin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "condition": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "from": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "to": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "sortBy": {
+                    "type": "string",
+                    "enum": [
+                      "sellerSku"
+                    ]
+                  },
+                  "sortDirection": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  },
+                  "listingStatus": false,
+                  "state": false,
+                  "status": false,
+                  "reportType": false,
+                  "adProduct": false,
+                  "campaignId": false,
+                  "adGroupId": false,
+                  "targetingId": false,
+                  "advertisedAsin": false,
+                  "searchTerm": false,
+                  "placement": false,
+                  "internalProfileId": false,
+                  "authorizationId": false,
+                  "search": false,
+                  "keyword": false,
+                  "externalId": false,
+                  "entityType": false,
+                  "sort": false,
+                  "direction": false,
+                  "filters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "sellerSku": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "asin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "condition": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "from": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "to": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "sortBy": {
+                        "type": "string",
+                        "enum": [
+                          "sellerSku"
+                        ]
+                      },
+                      "sortDirection": {
+                        "type": "string",
+                        "enum": [
+                          "asc",
+                          "desc"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "module": {
+                        "const": "amazon_sync"
+                      },
+                      "dataType": {
+                        "const": "listings"
+                      }
+                    },
+                    "required": [
+                      "module",
+                      "dataType"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "table": {
+                        "const": "listings"
+                      }
+                    },
+                    "required": [
+                      "table"
+                    ]
+                  }
+                ]
+              },
+              "then": {
+                "properties": {
+                  "pageSize": {
+                    "maximum": 1000
+                  },
+                  "sellerSku": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "asin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "condition": false,
+                  "from": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "to": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "sortBy": {
+                    "type": "string",
+                    "enum": [
+                      "sellerSku"
+                    ]
+                  },
+                  "sortDirection": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  },
+                  "listingStatus": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "state": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Alias of listingStatus; conflicts are rejected."
+                  },
+                  "status": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Alias of listingStatus; conflicts are rejected."
+                  },
+                  "reportType": false,
+                  "adProduct": false,
+                  "campaignId": false,
+                  "adGroupId": false,
+                  "targetingId": false,
+                  "advertisedAsin": false,
+                  "searchTerm": false,
+                  "placement": false,
+                  "internalProfileId": false,
+                  "authorizationId": false,
+                  "search": false,
+                  "keyword": false,
+                  "externalId": false,
+                  "entityType": false,
+                  "sort": false,
+                  "direction": false,
+                  "filters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "sellerSku": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "asin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "listingStatus": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "from": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "to": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "sortBy": {
+                        "type": "string",
+                        "enum": [
+                          "sellerSku"
+                        ]
+                      },
+                      "sortDirection": {
+                        "type": "string",
+                        "enum": [
+                          "asc",
+                          "desc"
+                        ]
+                      },
+                      "state": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Alias of listingStatus; conflicts are rejected."
+                      },
+                      "status": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Alias of listingStatus; conflicts are rejected."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "module": {
+                        "const": "amazon_sync"
+                      },
+                      "dataType": {
+                        "const": "sales_traffic_daily"
+                      }
+                    },
+                    "required": [
+                      "module",
+                      "dataType"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "table": {
+                        "const": "sales_traffic_daily"
+                      }
+                    },
+                    "required": [
+                      "table"
+                    ]
+                  }
+                ]
+              },
+              "then": {
+                "properties": {
+                  "pageSize": {
+                    "maximum": 1000
+                  },
+                  "sellerSku": false,
+                  "asin": false,
+                  "condition": false,
+                  "from": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "to": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "sortBy": {
+                    "type": "string",
+                    "enum": [
+                      "businessDate"
+                    ]
+                  },
+                  "sortDirection": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  },
+                  "listingStatus": false,
+                  "state": false,
+                  "status": false,
+                  "reportType": false,
+                  "adProduct": false,
+                  "campaignId": false,
+                  "adGroupId": false,
+                  "targetingId": false,
+                  "advertisedAsin": false,
+                  "searchTerm": false,
+                  "placement": false,
+                  "internalProfileId": false,
+                  "authorizationId": false,
+                  "search": false,
+                  "keyword": false,
+                  "externalId": false,
+                  "entityType": false,
+                  "sort": false,
+                  "direction": false,
+                  "filters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "from": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "to": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "sortBy": {
+                        "type": "string",
+                        "enum": [
+                          "businessDate"
+                        ]
+                      },
+                      "sortDirection": {
+                        "type": "string",
+                        "enum": [
+                          "asc",
+                          "desc"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "module": {
+                        "const": "amazon_ads"
+                      },
+                      "dataType": {
+                        "const": "report_daily"
+                      }
+                    },
+                    "required": [
+                      "module",
+                      "dataType"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "table": {
+                        "const": "ads_report_daily"
+                      }
+                    },
+                    "required": [
+                      "table"
+                    ]
+                  }
+                ]
+              },
+              "then": {
+                "properties": {
+                  "pageSize": {
+                    "maximum": 100
+                  },
+                  "sellerSku": false,
+                  "asin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Alias of advertisedAsin; conflicts are rejected."
+                  },
+                  "condition": false,
+                  "from": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "to": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "sortBy": {
+                    "type": "string",
+                    "enum": [
+                      "reportDate",
+                      "campaignId",
+                      "adGroupId",
+                      "impressions",
+                      "clicks",
+                      "spend",
+                      "orders",
+                      "sales",
+                      "searchTerm"
+                    ]
+                  },
+                  "sortDirection": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  },
+                  "listingStatus": false,
+                  "state": false,
+                  "status": false,
+                  "reportType": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "adProduct": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "campaignId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "adGroupId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "targetingId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "advertisedAsin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "searchTerm": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Exact case-sensitive search term after trimming; keyword is its alias, not full-text search."
+                  },
+                  "placement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "internalProfileId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "authorizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "search": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "description": "Case-sensitive substring in searchTerm, advertisedAsin, campaignId or adGroupId."
+                  },
+                  "keyword": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Alias of searchTerm; conflicts are rejected."
+                  },
+                  "externalId": false,
+                  "entityType": false,
+                  "sort": false,
+                  "direction": false,
+                  "filters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "reportType": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "adProduct": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "campaignId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "adGroupId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "targetingId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "advertisedAsin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "searchTerm": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Exact case-sensitive search term after trimming; keyword is its alias, not full-text search."
+                      },
+                      "placement": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "internalProfileId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "authorizationId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "search": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "description": "Case-sensitive substring in searchTerm, advertisedAsin, campaignId or adGroupId."
+                      },
+                      "from": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "to": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "sortBy": {
+                        "type": "string",
+                        "enum": [
+                          "reportDate",
+                          "campaignId",
+                          "adGroupId",
+                          "impressions",
+                          "clicks",
+                          "spend",
+                          "orders",
+                          "sales",
+                          "searchTerm"
+                        ]
+                      },
+                      "sortDirection": {
+                        "type": "string",
+                        "enum": [
+                          "asc",
+                          "desc"
+                        ]
+                      },
+                      "asin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Alias of advertisedAsin; conflicts are rejected."
+                      },
+                      "keyword": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Alias of searchTerm; conflicts are rejected."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "module": {
+                        "const": "amazon_ads"
+                      },
+                      "dataType": {
+                        "const": "entities"
+                      }
+                    },
+                    "required": [
+                      "module",
+                      "dataType"
+                    ]
+                  }
+                ]
+              },
+              "then": {
+                "properties": {
+                  "pageSize": {
+                    "maximum": 100
+                  },
+                  "sellerSku": false,
+                  "asin": false,
+                  "condition": false,
+                  "from": false,
+                  "to": false,
+                  "sortBy": {
+                    "type": "string",
+                    "enum": [
+                      "entityType",
+                      "externalId",
+                      "state",
+                      "syncedAt",
+                      "sourceUpdatedAt"
+                    ]
+                  },
+                  "sortDirection": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  },
+                  "listingStatus": false,
+                  "state": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "status": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Alias of state; conflicts are rejected."
+                  },
+                  "reportType": false,
+                  "adProduct": false,
+                  "campaignId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "adGroupId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "targetingId": false,
+                  "advertisedAsin": false,
+                  "searchTerm": false,
+                  "placement": false,
+                  "internalProfileId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "authorizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "search": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Substring in name/keywordText (case-insensitive normalized fields) or externalId; legacy JSON fallback may be case-sensitive. Not exact keyword matching."
+                  },
+                  "keyword": false,
+                  "externalId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "SP:campaign",
+                      "SP:ad-group",
+                      "SP:product-ad",
+                      "SP:keyword",
+                      "SP:target",
+                      "SP:negative-keyword",
+                      "SP:negative-target",
+                      "SP:campaign-negative-keyword",
+                      "SP:campaign-negative-target"
+                    ]
+                  },
+                  "sort": {
+                    "type": "string",
+                    "enum": [
+                      "entityType",
+                      "externalId",
+                      "state",
+                      "syncedAt",
+                      "sourceUpdatedAt"
+                    ],
+                    "description": "Alias of sortBy; conflicts are rejected."
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "description": "Alias of sortDirection; conflicts are rejected."
+                  },
+                  "filters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "internalProfileId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "authorizationId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "campaignId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "adGroupId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "externalId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "state": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "search": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Substring in name/keywordText (case-insensitive normalized fields) or externalId; legacy JSON fallback may be case-sensitive. Not exact keyword matching."
+                      },
+                      "entityType": {
+                        "type": "string",
+                        "enum": [
+                          "SP:campaign",
+                          "SP:ad-group",
+                          "SP:product-ad",
+                          "SP:keyword",
+                          "SP:target",
+                          "SP:negative-keyword",
+                          "SP:negative-target",
+                          "SP:campaign-negative-keyword",
+                          "SP:campaign-negative-target"
+                        ]
+                      },
+                      "sortBy": {
+                        "type": "string",
+                        "enum": [
+                          "entityType",
+                          "externalId",
+                          "state",
+                          "syncedAt",
+                          "sourceUpdatedAt"
+                        ]
+                      },
+                      "sortDirection": {
+                        "type": "string",
+                        "enum": [
+                          "asc",
+                          "desc"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Alias of state; conflicts are rejected."
+                      },
+                      "sort": {
+                        "type": "string",
+                        "enum": [
+                          "entityType",
+                          "externalId",
+                          "state",
+                          "syncedAt",
+                          "sourceUpdatedAt"
+                        ],
+                        "description": "Alias of sortBy; conflicts are rejected."
+                      },
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "asc",
+                          "desc"
+                        ],
+                        "description": "Alias of sortDirection; conflicts are rejected."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "erp__data_sync_status",
+        "description": "查询当前授权数据源和同步状态",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sellerAccountId": {
+              "type": "string"
+            },
+            "sellerAccountIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 200
+            },
+            "marketplaceId": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__asin.review.list",
+        "description": "标准版 ASIN 评论查询，默认返回最多 100 条；支持星级、媒体评论过滤、排序和 limit 指定返回条数，并返回采集时间、覆盖区间与采集状态。空结果不计费。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "标准版 ASIN 评论查询，默认返回最多 100 条；支持星级、媒体评论过滤、排序和 limit 指定返回条数。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace",
+            "asin"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "asin": {
+              "description": "父体或子体 ASIN；服务端归一到父体，评论数据仅支持父体维度，不返回指定子体的独立评论。",
+              "type": "string"
+            },
+            "star": {
+              "type": "array",
+              "description": "精确星级过滤，可多选；不传不过滤。",
+              "items": {
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              },
+              "minItems": 1,
+              "maxItems": 5,
+              "uniqueItems": true
+            },
+            "hasMedia": {
+              "description": "true=有图片或视频；false=无图片且无视频；不传不过滤。",
+              "type": "boolean"
+            },
+            "sort": {
+              "description": "排序方式，默认 DATE_DESC。",
+              "type": "string",
+              "enum": [
+                "DATE_DESC",
+                "DATE_ASC",
+                "STAR_DESC",
+                "STAR_ASC",
+                "HELPFUL_DESC",
+                "HELPFUL_ASC"
+              ]
+            },
+            "sku": {
+              "description": "款式/SKU 关键词过滤；对评论的 skus 数组做大小写不敏感包含匹配，例如 Silver、Color: Silver；不传不过滤。",
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "返回条数，默认 100，最大 100；常用于批量获取 TopN 评论。"
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__asin.review.list.extended",
+        "description": "扩展版 ASIN 评论查询，默认返回最多 500 条；支持 limit 指定 1~500 条。可能耗时约 2 分钟。仅在用户明确要求扩展版或更完整评论数据时调用，并返回采集时间、覆盖区间与采集状态。空结果不计费。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "扩展版 ASIN 评论查询，默认返回最多 500 条；可能耗时约 2 分钟。仅在用户明确要求扩展版或更完整评论数据时调用；可用 limit 指定 1~500 条。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace",
+            "asin"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "asin": {
+              "description": "父体或子体 ASIN；服务端归一到父体，评论数据仅支持父体维度，不返回指定子体的独立评论。",
+              "type": "string"
+            },
+            "star": {
+              "type": "array",
+              "description": "精确星级过滤，可多选；不传不过滤。",
+              "items": {
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "type": "integer"
+              },
+              "minItems": 1,
+              "maxItems": 5,
+              "uniqueItems": true
+            },
+            "hasMedia": {
+              "description": "true=有图片或视频；false=无图片且无视频；不传不过滤。",
+              "type": "boolean"
+            },
+            "sort": {
+              "description": "排序方式，默认 DATE_DESC。",
+              "type": "string",
+              "enum": [
+                "DATE_DESC",
+                "DATE_ASC",
+                "STAR_DESC",
+                "STAR_ASC",
+                "HELPFUL_DESC",
+                "HELPFUL_ASC"
+              ]
+            },
+            "sku": {
+              "description": "款式/SKU 关键词过滤；对评论的 skus 数组做大小写不敏感包含匹配，例如 Silver、Color: Silver；不传不过滤。",
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "返回条数，默认 500，最大 500；常用于批量获取 TopN 评论。"
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__asin.detail",
+        "description": "按 1～20 个 ASIN 批量查询商品基础详情，包括标题、品牌、价格、评分、销量、BSR、变体等信息。未请求的 optional 字段不会返回。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "description": "按 ASIN 集合查询基础详情，支持批量（最多 20 个）。 optional 字段未指定时省略，由服务端承担默认值。",
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "marketplace",
+            "asins"
+          ],
+          "properties": {
+            "asins": {
+              "minItems": 1,
+              "maxItems": 20,
+              "uniqueItems": true,
+              "description": "待查询的 ASIN 列表，1～20 个。",
+              "type": "array",
+              "items": {
+                "pattern": "^B[0-9A-Z]{9}$",
+                "type": "string"
+              }
+            },
+            "marketplace": {
+              "description": "站点代码。",
+              "type": "string",
+              "enum": [
+                "DE",
+                "AE",
+                "IN",
+                "JP",
+                "IT",
+                "MX",
+                "FR",
+                "ES",
+                "BR",
+                "AU",
+                "UK",
+                "US",
+                "CA"
+              ]
+            },
+            "includeFields": {
+              "maxItems": 20,
+              "uniqueItems": true,
+              "description": "同成本输出字段裁剪；不传或为空时返回默认字段集。",
+              "type": "array",
+              "items": {
+                "enum": [
+                  "asin",
+                  "marketplace",
+                  "title",
+                  "brand",
+                  "categoryId",
+                  "categoryPath",
+                  "price",
+                  "currency",
+                  "rating",
+                  "reviewCount",
+                  "totalReview",
+                  "bsr",
+                  "seller",
+                  "fulfillment",
+                  "parentAsin",
+                  "dimensions",
+                  "weight",
+                  "availableDate",
+                  "recordUpdatedAt",
+                  "variationList"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__asin.list",
+        "description": "查询 ASIN 商品列表，支持关键词、ASIN 集合、类目、品牌与各类筛选条件，返回分页窗口。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "查询 ASIN 商品列表，支持关键词、ASIN 集合、类目与各类筛选条件。品牌过滤仅支持 brandInclude / brandExclude；keyword/asins/categoryId/brandInclude 至少提供一个查询锚点。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "keyword": {
+              "type": "string",
+              "description": "商品标题关键词。"
+            },
+            "asins": {
+              "type": "array",
+              "description": "按 ASIN 集合过滤；最多 40 个。",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 40,
+              "uniqueItems": true
+            },
+            "categoryId": {
+              "type": "string",
+              "description": "类目节点 ID。"
+            },
+            "categoryIdExact": {
+              "description": "true 表示只查当前类目；缺省包含子类目。",
+              "type": "boolean"
+            },
+            "dataMonth": {
+              "type": "string",
+              "description": "数据归档月份，格式 yyyyMM。不传时使用近 30 天数据；显式传入时必须是可用历史月份，不可用或晚于最新归档月会直接报错，不会回退近 30 天。响应中的 dataMode / dataMonth 表示实际数据口径。",
+              "pattern": "^\\d{6}$"
+            },
+            "brandInclude": {
+              "type": "array",
+              "description": "按品牌包含过滤。",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "brandExclude": {
+              "type": "array",
+              "description": "按品牌排除过滤。",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "sellerInclude": {
+              "type": "array",
+              "description": "按卖家包含过滤。",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "sellerExclude": {
+              "type": "array",
+              "description": "按卖家排除过滤。",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "excludeKeywords": {
+              "type": "array",
+              "description": "排除标题关键词过滤。",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "excludeAsins": {
+              "type": "array",
+              "description": "排除 ASIN 过滤。",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "searchType": {
+              "description": "关键词匹配字段，缺省 TITLE。",
+              "type": "string",
+              "enum": [
+                "ASIN",
+                "TITLE",
+                "BRAND",
+                "SELLER"
+              ]
+            },
+            "price": {
+              "type": "object",
+              "description": "价格区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "sales": {
+              "type": "object",
+              "description": "月销量区间（父体/月度表口径，非 Amazon 公布子体销量）；仅用于过滤，输出字段为 monthlySales。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "revenue": {
+              "type": "object",
+              "description": "月销售额区间；仅用于过滤，输出字段为 monthlyRevenue。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "rating": {
+              "type": "object",
+              "description": "评分区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "monthlyReviewCount": {
+              "type": "object",
+              "description": "月度表同步评论数区间；过滤 monthlyReviewCount，不影响 childReviewCount。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "bsr": {
+              "type": "object",
+              "description": "BSR 排名区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "sellers": {
+              "type": "object",
+              "description": "跟卖卖家数区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "reviewGrowth": {
+              "type": "object",
+              "description": "评论增长量区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "amazonSales": {
+              "type": "object",
+              "description": "Amazon 公布的子体近30天销量区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "ratingShare": {
+              "type": "object",
+              "description": "评分商品占比区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "rankingChange": {
+              "type": "object",
+              "description": "BSR 变动区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "conversionRate": {
+              "type": "object",
+              "description": "转化率区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "crt": {
+              "type": "object",
+              "description": "点击转化率区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "revenueGrowth": {
+              "type": "object",
+              "description": "销售额环比增长区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "salesGrowth": {
+              "type": "object",
+              "description": "销量环比增长区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "salesGrowthYoy": {
+              "type": "object",
+              "description": "销量同比增长区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "salesGrowthYoy3": {
+              "type": "object",
+              "description": "销量同比连续 3 月增长区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "salesGrowthYoy6": {
+              "type": "object",
+              "description": "销量同比连续 6 月增长区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "questions": {
+              "type": "object",
+              "description": "Question 数量区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "weight": {
+              "type": "object",
+              "description": "重量区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "fbaFee": {
+              "type": "object",
+              "description": "FBA 费用区间；仅用于过滤，输出字段为 fba。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "variations": {
+              "type": "object",
+              "description": "变体数区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "profit": {
+              "type": "object",
+              "description": "预估利润区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "lqs": {
+              "type": "object",
+              "description": "Listing 质量分区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "deliveryPrice": {
+              "type": "object",
+              "description": "配送费区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "launchDateFrom": {
+              "type": "string",
+              "description": "上架开始日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+            },
+            "launchDateTo": {
+              "type": "string",
+              "description": "上架结束日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+            },
+            "firstReviewDateFrom": {
+              "type": "string",
+              "description": "首评开始日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+            },
+            "firstReviewDateTo": {
+              "type": "string",
+              "description": "首评结束日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+            },
+            "productTags": {
+              "type": "array",
+              "description": "商品标签过滤；仅用于过滤，不表示输出字段。",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "mainImage": {
+              "description": "是否有主图视频/主图标记过滤；仅用于过滤，不表示输出字段。",
+              "type": "boolean"
+            },
+            "bestSellingVariant": {
+              "description": "畅销变体筛选：true 只返回每个父体下的畅销代表变体（销量最大的变体）；false 排除代表变体；不传时查询全部行（旧行为）。传入 asins 时忽略此参数，保证集合内所有 ASIN 都返回。",
+              "type": "boolean"
+            },
+            "fulfillment": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "FBA",
+                  "FBM"
+                ],
+                "type": "string"
+              },
+              "uniqueItems": true,
+              "description": "履约方式过滤。"
+            },
+            "sellerNation": {
+              "type": "array",
+              "description": "按卖家所属地过滤（国家/地区编码）。",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "sellerType": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "AMAZON",
+                  "THIRD_PARTY"
+                ],
+                "type": "string"
+              },
+              "uniqueItems": true,
+              "description": "卖家类型过滤；仅用于过滤，输出字段为 fulfillment。"
+            },
+            "page": {
+              "properties": {
+                "cursor": {
+                  "type": "integer",
+                  "description": "offset 起点，默认 0。最大 2000，与下游 startIndex 上限一致；超过表示结果被截断，不代表名单已经取完。",
+                  "minimum": 0,
+                  "maximum": 2000
+                },
+                "size": {
+                  "type": "integer",
+                  "description": "每页条数，默认 100。",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              },
+              "type": "object",
+              "additionalProperties": false,
+              "description": "分页窗口；每次调用只返回当前页。返回的 hasMore/nextCursor 仅表示可继续分页；仅当用户明确要求继续翻页、获取全量、导出数据，或用户明确指定的条数超过当前页时才继续调用。"
+            },
+            "orderField": {
+              "description": "排序字段。支持: total_amount(销售额), total_units(销量), impression(曝光), conversion_rate(转化率)。默认 total_amount 降序。",
+              "type": "string",
+              "enum": [
+                "total_amount",
+                "total_units",
+                "impression",
+                "conversion_rate"
+              ]
+            },
+            "desc": {
+              "description": "是否降序。默认 true。",
+              "type": "boolean"
+            },
+            "includeFields": {
+              "uniqueItems": true,
+              "type": "array",
+              "description": "仅控制输出字段，不能传过滤字段。asin 始终返回，用于对应结果行。不传或为空时默认返回 asin/title/brand/price/currency/bsr/rating/monthlyReviewCount/monthlySales/monthlyRevenue/fulfillment/sellerName/sellerNation/badges/parent/bestSellingVariant/availableDate；childReviewCount 与 amzUnit/variations/lqs/profit/fba/questions/coupon 需显式传入。完整可选值以 items.enum 为准。",
+              "maxItems": 26,
+              "items": {
+                "enum": [
+                  "asin",
+                  "title",
+                  "brand",
+                  "price",
+                  "currency",
+                  "bsr",
+                  "rating",
+                  "monthlyReviewCount",
+                  "childReviewCount",
+                  "monthlySales",
+                  "monthlySalesScope",
+                  "monthlyRevenue",
+                  "fulfillment",
+                  "sellerName",
+                  "sellerNation",
+                  "badges",
+                  "amzUnit",
+                  "variations",
+                  "lqs",
+                  "profit",
+                  "fba",
+                  "questions",
+                  "coupon",
+                  "parent",
+                  "bestSellingVariant",
+                  "availableDate"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__asin.related.list",
+        "description": "查询 ASIN 站内关联流量：组合购买、看了又看、相似对比、关联广告等。结果是 Amazon 行为关联，不代表语义相似；FBT（组合购买）基于共同购买行为，经常包含跨类目、与目标商品看似无关的商品，这是该数据类型的正常特征，不代表数据质量问题，也不代表语义相似。relations 可选，不传时查询全部关联类型。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "查询 ASIN 站内关联商品。relations 只接受 enum 缩写（如 FBT），不要传中文关系名；不传或为空时查全部关联类型。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace",
+            "asin"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "asin": {
+              "type": "string",
+              "description": "目标 ASIN，v1 仅单个。",
+              "pattern": "^B[0-9A-Z]{9}$"
+            },
+            "relations": {
+              "type": "array",
+              "description": "关联类型白名单；只接受 enum 缩写，不要传中文关系名；不传或为空时查全部支持的关联类型。FBT 表示 Frequently Bought Together（组合购买），基于共同购买行为，经常包含跨类目、与目标商品看似无关的商品（配件、赠品、场景性搭配等），这是该数据类型的正常特征，不代表数据质量问题，也不代表语义相似。",
+              "items": {
+                "enum": [
+                  "MIB",
+                  "FBT",
+                  "CSI",
+                  "COB",
+                  "MIE",
+                  "BAB",
+                  "VAV",
+                  "AVP",
+                  "BAV",
+                  "ASF",
+                  "CPF",
+                  "BCA",
+                  "FSA",
+                  "SP"
+                ],
+                "type": "string"
+              },
+              "maxItems": 14,
+              "uniqueItems": true
+            },
+            "dataMonth": {
+              "type": "string",
+              "pattern": "^\\d{6}$",
+              "description": "数据归档月份，格式 yyyyMM。仅当用户明确要求指定历史月份时才传；不要根据当前日期主动推断。不传时使用当前关联数据。仅支持已归档历史月份；传入不存在或未归档月份时，服务端回退当前关联数据。响应中的 dataMode / dataMonth 表示实际数据口径。"
+            },
+            "page": {
+              "type": "object",
+              "description": "分页窗口；每次调用只返回当前页。返回的 hasMore/nextCursor 仅表示可继续分页；仅当用户明确要求继续翻页、获取全量、导出数据，或用户明确指定的条数超过当前页时才继续调用。",
+              "properties": {
+                "cursor": {
+                  "type": "integer",
+                  "description": "offset 起点，默认 0。",
+                  "minimum": 0,
+                  "maximum": 3000
+                },
+                "size": {
+                  "type": "integer",
+                  "description": "每页条数，默认 100；累计翻页深度（cursor+size）上限 3000。",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              },
+              "additionalProperties": false
+            },
+            "orderField": {
+              "type": "string",
+              "description": "排序字段：createdTime=引流时间（默认），relationCount=关联 ASIN 数。",
+              "enum": [
+                "createdTime",
+                "relationCount"
+              ]
+            },
+            "desc": {
+              "type": "boolean",
+              "description": "是否降序，默认 true。"
+            },
+            "includeFields": {
+              "type": "array",
+              "description": "同成本输出字段裁剪；不传或为空时返回默认字段集。",
+              "items": {
+                "enum": [
+                  "asin",
+                  "title",
+                  "brand",
+                  "price",
+                  "currency",
+                  "rating",
+                  "reviewCount",
+                  "monthlySales",
+                  "relations"
+                ],
+                "type": "string"
+              },
+              "maxItems": 9,
+              "uniqueItems": true
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__category.top.list",
+        "description": "查询类目市场 TopN 集中度排名：头部商品、品牌或卖家。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "查询类目市场 TopN 集中度排名：头部商品、品牌或卖家。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace",
+            "categoryId",
+            "dimension"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "categoryId": {
+              "description": "类目节点 ID 完整路径（冒号分隔，如 1055398:284507:289668:289719:3736921）；一级部门节点为单段。深层节点的短节点 ID 会静默查空，请先用 category.search(keyword=类目名) 获取完整路径。",
+              "type": "string"
+            },
+            "dimension": {
+              "description": "排名维度。",
+              "type": "string",
+              "enum": [
+                "product",
+                "brand",
+                "seller"
+              ]
+            },
+            "dataMonth": {
+              "type": "string",
+              "description": "数据归档月份，格式 yyyyMM。只有用户明确要求指定历史月份时才传；不要根据当前日期主动推断。不传或传入未归档月份时，服务端返回最新可用数据。响应中的 dataMonth 是实际使用的月份。",
+              "pattern": "^\\d{6}$"
+            },
+            "topN": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "TopN 数量，缺省 10。"
+            },
+            "newProductMonths": {
+              "description": "新品判定阈值（月）；不传不区分新品。",
+              "type": "integer"
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__category.search",
+        "description": "查询类目树、类目节点和命中类目；不承担市场商品列表与类目筛选。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "查询类目树、类目节点和命中类目；不承担市场商品列表与类目筛选。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "keyword": {
+              "description": "类目名或产品词，缺省不做关键词过滤。按类目名检索是获取完整节点路径的推荐方式（返回的 categoryId 即完整路径）。",
+              "type": "string"
+            },
+            "categoryId": {
+              "description": "类目节点 ID 完整路径，传入时返回其子类目。深层节点的短节点 ID 无法解析；其他类目工具传短节点 ID 会静默查空。",
+              "type": "string"
+            },
+            "includeSubcategories": {
+              "description": "是否包含子类目；缺省包含子类目。",
+              "type": "boolean"
+            },
+            "page": {
+              "properties": {
+                "size": {
+                  "type": "integer",
+                  "description": "每页条数，默认 100。",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "integer",
+                  "description": "offset 起点，默认 0。",
+                  "minimum": 0,
+                  "maximum": 3000
+                }
+              },
+              "type": "object",
+              "additionalProperties": false,
+              "description": "分页窗口；每次调用只返回当前页。返回的 hasMore/nextCursor 仅表示可继续分页；仅当用户明确要求继续翻页、获取全量、导出数据，或用户明确指定的条数超过当前页时才继续调用。"
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__keyword.related.list",
+        "description": "词找词：根据种子关键词扩展相关关键词列表，返回搜索量、购买量、购买率、竞争度、PPC 竞价、SPR 等指标。只在用户要相关词、扩词、找更多词时调用。只问种子词自己的当前指标用 keyword.batch.info，问它的历史走势用 keyword.trend。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "词找词：根据种子词查询相关关键词列表（关键词挖掘数据域）。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace",
+            "seedKeyword"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "seedKeyword": {
+              "description": "种子词。",
+              "type": "string"
+            },
+            "searchVolume": {
+              "type": "object",
+              "description": "搜索量区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "purchaseVolume": {
+              "type": "object",
+              "description": "购买量区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "purchaseRate": {
+              "type": "object",
+              "description": "购买率区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "wordCount": {
+              "type": "object",
+              "description": "词长区间（单词个数）。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "competition": {
+              "type": "object",
+              "description": "竞争度区间（商品数口径）。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "ppcBid": {
+              "type": "object",
+              "description": "PPC 竞价区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "relevancy": {
+              "type": "object",
+              "description": "相关度区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "spr": {
+              "type": "object",
+              "description": "SPR 区间。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "titleDensity": {
+              "type": "object",
+              "description": "标题密度区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "supplyDemandRatio": {
+              "type": "object",
+              "description": "供需比区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "adProducts": {
+              "type": "object",
+              "description": "广告商品数区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "searchRank": {
+              "type": "object",
+              "description": "搜索排名区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "avgPrice": {
+              "type": "object",
+              "description": "命中商品均价区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "avgRating": {
+              "type": "object",
+              "description": "命中商品平均评分区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "avgReviewCount": {
+              "type": "object",
+              "description": "命中商品平均评论数区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "clicks": {
+              "type": "object",
+              "description": "点击量区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "impressions": {
+              "type": "object",
+              "description": "曝光量区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "integer"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            },
+            "monopolyClickRate": {
+              "type": "object",
+              "description": "点击集中度区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "searchesGrowth": {
+              "type": "object",
+              "description": "搜索量增长率区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "yearlyGrowthRate": {
+              "type": "object",
+              "description": "年度增长率区间；仅用于过滤，不表示输出字段。",
+              "properties": {
+                "min": {
+                  "description": "最小值。",
+                  "type": "number"
+                },
+                "max": {
+                  "description": "最大值。",
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "includeKeywords": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "包含关键词过滤。",
+              "maxItems": 20
+            },
+            "excludeKeywords": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "排除关键词过滤。",
+              "maxItems": 20
+            },
+            "keywordBidMatchType": {
+              "description": "竞价匹配类型过滤。",
+              "type": "string"
+            },
+            "departments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "类目节点路径过滤（对齐下游 departmentList）。",
+              "maxItems": 20
+            },
+            "amazonChoice": {
+              "description": "是否 Amazon's Choice 过滤。",
+              "type": "boolean"
+            },
+            "extensiveMatch": {
+              "description": "是否广泛匹配；仅用于过滤，不表示输出字段。",
+              "type": "boolean"
+            },
+            "page": {
+              "properties": {
+                "cursor": {
+                  "type": "integer",
+                  "description": "offset 起点，默认 0。",
+                  "minimum": 0,
+                  "maximum": 3000
+                },
+                "size": {
+                  "type": "integer",
+                  "description": "每页条数，默认 100。",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              },
+              "type": "object",
+              "additionalProperties": false,
+              "description": "分页窗口；每次调用只返回当前页。返回的 hasMore/nextCursor 仅表示可继续分页；仅当用户明确要求继续翻页、获取全量、导出数据，或用户明确指定的条数超过当前页时才继续调用。"
+            },
+            "orderField": {
+              "description": "排序字段（下游 KeywordMinerOrderColumns.orderField），缺省 searches；relevancy 映射下游 code 21。",
+              "type": "string",
+              "enum": [
+                "searches",
+                "purchases",
+                "purchase_rate",
+                "products",
+                "supply_demand_ratio",
+                "latest1daysAds",
+                "bid",
+                "titleDensityExact",
+                "cprExact",
+                "avg_price",
+                "monopoly_click_rate",
+                "avg_rating",
+                "avg_reviews",
+                "relevancy",
+                "adProducts7",
+                "rank",
+                "clicks",
+                "impressions",
+                "goods_value",
+                "cvsShareRate",
+                "searches_growth",
+                "yearly_growth_rate"
+              ]
+            },
+            "desc": {
+              "description": "是否降序，默认 true。",
+              "type": "boolean"
+            },
+            "includeFields": {
+              "uniqueItems": true,
+              "type": "array",
+              "description": "仅控制输出字段，不能传过滤字段；不传或为空时返回默认字段集，可用值以 items.enum 为准。",
+              "maxItems": 9,
+              "items": {
+                "enum": [
+                  "keyword",
+                  "searchVolume",
+                  "purchaseVolume",
+                  "purchaseRate",
+                  "competition",
+                  "ppcBid",
+                  "wordCount",
+                  "spr",
+                  "relevancy"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__keyword.batch.info",
+        "description": "批量查询关键词当月基础指标快照（≤20 词）；不存在的词不返回。用户问「这个词现在搜索量、购买率多少」时用本工具。要看过去几个月怎么变，用 keyword.trend；要扩出相关词，用 keyword.related.list。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "批量查询关键词当月基础指标快照（≤20 词）；未收录的词返回 resultStatus=no_data 占位行（无指标字段），已收录的词返回 success + 完整指标。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace",
+            "keywords"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "keywords": {
+              "type": "array",
+              "description": "关键词列表，1 到 20 个。",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "month": {
+              "type": "string",
+              "description": "数据归档月份，格式 yyyyMM。仅当用户明确要求指定历史月份时才传；不要根据当前日期主动推断。不传时使用服务端默认当前链路。传入未归档月份时，服务端会归一化到最新可用历史月份，响应中的 month 是实际使用的月份。",
+              "pattern": "^\\d{6}$"
+            },
+            "orderField": {
+              "description": "排序字段（下游 KeywordMinerOrderColumns.orderField），缺省 searches；relevancy 映射下游 code 21。",
+              "type": "string",
+              "enum": [
+                "searches",
+                "purchases",
+                "purchase_rate",
+                "products",
+                "supply_demand_ratio",
+                "latest1daysAds",
+                "bid",
+                "titleDensityExact",
+                "cprExact",
+                "avg_price",
+                "monopoly_click_rate",
+                "avg_rating",
+                "avg_reviews",
+                "relevancy",
+                "adProducts7",
+                "rank",
+                "clicks",
+                "impressions",
+                "goods_value",
+                "cvsShareRate",
+                "searches_growth",
+                "yearly_growth_rate"
+              ]
+            },
+            "desc": {
+              "description": "是否降序，默认 true。",
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "sellersprite__keyword.aba.trend",
+        "description": "ABA 趋势：关键词的 ABA 排名、搜索量与 Top3 点击/转化占比历史序列（周/月）。趋势历史仅覆盖头部排名词，长尾词可能无历史。MONTH 趋势点为归档月的 1 日 yyyy-MM-dd，与 keyword.aba.list 的月份标签是同一个月。keyword 锚点为分词 AND 精确匹配（不含词形变体），服务端已自动扩展常见单复数变体（如 mat→mats），不规则复数需配合 keyword.batch.info 交叉。",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "description": "ABA 趋势：关键词的 ABA 排名、搜索量与 Top3 点击/转化占比历史序列（周/月）。 optional 字段未指定时省略，由服务端承担默认值。",
+          "required": [
+            "marketplace",
+            "keyword"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marketplace": {
+              "type": "string",
+              "description": "站点代码。",
+              "enum": [
+                "AE",
+                "AU",
+                "BR",
+                "CA",
+                "DE",
+                "ES",
+                "FR",
+                "IN",
+                "IT",
+                "JP",
+                "MX",
+                "UK",
+                "US"
+              ]
+            },
+            "keyword": {
+              "description": "关键词。",
+              "type": "string"
+            },
+            "metrics": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "abaRank",
+                  "abaSearchVolume",
+                  "top3ClickShare",
+                  "top3ConversionShare"
+                ],
+                "type": "string"
+              },
+              "uniqueItems": true,
+              "description": "指标白名单；缺省全量返回。"
+            },
+            "granularity": {
+              "description": "粒度：WEEK / MONTH；缺省 MONTH。WEEK 趋势点为 yyyy-MM-dd，MONTH 趋势点为当月 1 日 yyyy-MM-dd。",
+              "type": "string",
+              "enum": [
+                "WEEK",
+                "MONTH"
+              ]
+            },
+            "dateRange": {
+              "properties": {
+                "startDate": {
+                  "description": "开始日期，格式 yyyy-MM-dd。只有用户明确要求指定历史窗口时才传；不要根据当前日期主动推断；不传时为下游最新可用数据点往前 1 年。",
+                  "type": "string"
+                },
+                "endDate": {
+                  "description": "结束日期，格式 yyyy-MM-dd。只有用户明确要求指定历史窗口时才传；不要根据当前日期主动推断；不传或晚于下游最新可用数据点时截断到最新可用数据点。",
+                  "type": "string"
+                }
+              },
+              "type": "object",
+              "additionalProperties": false,
+              "description": "日期窗口。只有用户明确要求指定历史窗口时才传；不传时基于下游最新可用数据点返回最近 1 年；响应中的 dateRange 是实际使用的窗口。"
+            }
+          }
+        }
+      },
+      {
+        "name": "xiyou__get_asin_bsr_trends",
+        "description": "查询单个 ASIN 的 BSR 类目排名日趋势。\n\nUse when:\n    用户要看商品在各类目下的 BSR 排名走势，判断销量排名改善、下滑或新品爬升节奏。\n\nAvoid when:\n    用户要关键词排名或词源流量时，使用 get_asin_keywords；\n    要月度关键词历史时，使用 get_asin_keywords_monthly。该接口只支持 US/CA/MX/BR/UK/DE/FR/ES/IT/JP。\n\nReturns:\n    每日各类目BSR排名趋势。",
+        "inputSchema": {
+          "properties": {
+            "user_task": {
+              "type": "string",
+              "description": "填写用户发起当前任务时的原始问题，尽量逐字保留用户原话、表达方式、分析对象、时间范围和约束，仅对其中的敏感信息作必要脱敏。\n不要概括、润色或改写为“用户想要……”形式；不要替换成本次工具调用的子问题，也不要加入 AI 推断、分析方案或工具调用计划。\n同一用户任务内多次调用工具时，保持此字段完全一致；用户提出新的独立任务时，使用新任务的原始问题。\n脱敏时只替换敏感片段，保留其余原文。公开的 ASIN、关键词、站点和日期应保留；账号、联系方式、凭证及链接中的敏感参数应脱敏。",
+              "examples": [
+                "帮我看看 B0XXXXXXXX 最近流量为什么下降了，重点看自然流量和广告流量。"
+              ]
+            },
+            "asin": {
+              "type": "string",
+              "description": "ASIN"
+            },
+            "start_date": {
+              "type": "string",
+              "description": "开始日期 YYYY-MM-DD"
+            },
+            "end_date": {
+              "type": "string",
+              "description": "结束日期 YYYY-MM-DD"
+            },
+            "country": {
+              "type": "string",
+              "description": "站点国家码"
+            },
+            "intent_summary": {
+              "type": "string",
+              "description": "简短说明本次工具调用要获取什么信息，以及这些信息用于解决当前任务中的哪个具体问题。\n只描述本次调用的步骤目的，不要重复完整用户问题，不要写完整分析计划，也不要提前写分析结论。对敏感信息作必要脱敏。",
+              "examples": [
+                "查询该商品的自然和广告流量趋势，定位下降发生的时间及主要来源。"
+              ]
+            }
+          },
+          "required": [
+            "asin",
+            "start_date",
+            "end_date",
+            "country"
+          ],
+          "type": "object"
+        }
+      },
+      {
+        "name": "xiyou__get_asin_info",
+        "description": "获取一个或多个 ASIN 的商品信息，包括标题、价格、星级评分、评分数、主图、Amazon 链接，以及品牌、上架日期、BSR 排名、类目路径、配送方式、FBA 费、佣金比例、尺寸重量和五点描述。\n\nUse when:\n    用户要查看商品详情、补全商品基础字段、对比价格/星级评分/评分数/品牌/BSR/类目/费用/卖点，或基于一批 ASIN 批量补商品信息。\n    单个 ASIN 和多个 ASIN 都适用；多个 ASIN 优先合并调用，单次最多 100 个，超过时分批查询。\n\nAvoid when:\n    用户要近期或最近 30 天订单量时，使用 get_asin_orders_last_30_days；\n    要指定月份的历史订单量或月度趋势时，使用 get_asin_order_trends；\n    要看流量强弱时，使用 get_asin_traffic；要看关键词来源和排名时，使用 get_asin_keywords。\n\nReturns:\n    每个 ASIN 的标题、价格、货币、星级评分（stars）、评分数（ratings）、Amazon 链接和主图 URL 等商品信息；\n    以及品牌、上架日期、是否新品、BSR 排名、Amazon 类目路径、配送方式、FBA 费、佣金比例、尺寸、重量和五点描述（bulletPoint）。\n    扩展字段按 ASIN 单独获取，个别 ASIN 获取失败时这些字段为空值，基础信息仍正常返回。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "asins": {
+              "type": "array",
+              "description": "ASIN 列表，单次最多 100 个，全部 ASIN 共用 country；超过 100 个时分批调用。",
+              "items": {
+                "type": "string"
+              }
+            },
+            "country": {
+              "type": "string",
+              "description": "站点国家码，如 US/UK/DE"
+            },
+            "intent_summary": {
+              "type": "string",
+              "description": "简短说明本次工具调用要获取什么信息，以及这些信息用于解决当前任务中的哪个具体问题。\n只描述本次调用的步骤目的，不要重复完整用户问题，不要写完整分析计划，也不要提前写分析结论。对敏感信息作必要脱敏。",
+              "examples": [
+                "查询该商品的自然和广告流量趋势，定位下降发生的时间及主要来源。"
+              ]
+            },
+            "user_task": {
+              "type": "string",
+              "description": "填写用户发起当前任务时的原始问题，尽量逐字保留用户原话、表达方式、分析对象、时间范围和约束，仅对其中的敏感信息作必要脱敏。\n不要概括、润色或改写为“用户想要……”形式；不要替换成本次工具调用的子问题，也不要加入 AI 推断、分析方案或工具调用计划。\n同一用户任务内多次调用工具时，保持此字段完全一致；用户提出新的独立任务时，使用新任务的原始问题。\n脱敏时只替换敏感片段，保留其余原文。公开的 ASIN、关键词、站点和日期应保留；账号、联系方式、凭证及链接中的敏感参数应脱敏。",
+              "examples": [
+                "帮我看看 B0XXXXXXXX 最近流量为什么下降了，重点看自然流量和广告流量。"
+              ]
+            }
+          },
+          "required": [
+            "asins",
+            "country"
+          ]
+        }
+      },
+      {
+        "name": "xiyou__get_asin_keyword_traffic_trends",
+        "description": "查询单个 ASIN 在指定关键词下的日流量趋势。\n\nUse when:\n    用户要看某个 ASIN + 关键词组合在一段日期内的流量贡献、自然/广告流量变化或位置带来的流量变化。\n\nAvoid when:\n    用户要 ASIN 整体流量时，使用 get_asin_traffic_trends；要关键词整体竞争格局时，使用 get_keyword_asin_analysis。\n\nReturns:\n    指定ASIN和关键词组合的每日位置维度流量趋势。",
+        "inputSchema": {
+          "properties": {
+            "asin": {
+              "type": "string",
+              "description": "ASIN"
+            },
+            "keyword": {
+              "type": "string",
+              "description": "关键词"
+            },
+            "start_date": {
+              "type": "string",
+              "description": "开始日期 YYYY-MM-DD"
+            },
+            "end_date": {
+              "type": "string",
+              "description": "结束日期 YYYY-MM-DD"
+            },
+            "country": {
+              "type": "string",
+              "description": "站点国家码"
+            },
+            "intent_summary": {
+              "type": "string",
+              "description": "简短说明本次工具调用要获取什么信息，以及这些信息用于解决当前任务中的哪个具体问题。\n只描述本次调用的步骤目的，不要重复完整用户问题，不要写完整分析计划，也不要提前写分析结论。对敏感信息作必要脱敏。",
+              "examples": [
+                "查询该商品的自然和广告流量趋势，定位下降发生的时间及主要来源。"
+              ]
+            },
+            "user_task": {
+              "type": "string",
+              "description": "填写用户发起当前任务时的原始问题，尽量逐字保留用户原话、表达方式、分析对象、时间范围和约束，仅对其中的敏感信息作必要脱敏。\n不要概括、润色或改写为“用户想要……”形式；不要替换成本次工具调用的子问题，也不要加入 AI 推断、分析方案或工具调用计划。\n同一用户任务内多次调用工具时，保持此字段完全一致；用户提出新的独立任务时，使用新任务的原始问题。\n脱敏时只替换敏感片段，保留其余原文。公开的 ASIN、关键词、站点和日期应保留；账号、联系方式、凭证及链接中的敏感参数应脱敏。",
+              "examples": [
+                "帮我看看 B0XXXXXXXX 最近流量为什么下降了，重点看自然流量和广告流量。"
+              ]
+            }
+          },
+          "required": [
+            "asin",
+            "keyword",
+            "start_date",
+            "end_date",
+            "country"
+          ],
+          "type": "object"
+        }
+      },
+      {
+        "name": "xiyou__get_asin_keywords",
+        "description": "查询单个 ASIN 近 7 天在哪些关键词下有排名和流量，即 ASIN 反查关键词。\n\nUse when:\n    用户想分析某个竞品的关键词布局、流量来源、自然/广告排名，或从一个 ASIN 拓展关键词机会。\n\nAvoid when:\n    用户要看关键词下有哪些 ASIN 竞争时，使用 get_keyword_asin_analysis；\n    用户要指定日期范围查询日级历史时，使用 get_asin_keywords_daily；\n    用户要看月度历史时，使用 get_asin_keywords_monthly。\n\nReturns:\n    关键词列表，每个词包含：关键词名称、自然/广告排名位置、流量、\n\t\t\t流量获得率、流量增长率等。可用于发现竞品的流量关键词。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "user_task": {
+              "type": "string",
+              "description": "填写用户发起当前任务时的原始问题，尽量逐字保留用户原话、表达方式、分析对象、时间范围和约束，仅对其中的敏感信息作必要脱敏。\n不要概括、润色或改写为“用户想要……”形式；不要替换成本次工具调用的子问题，也不要加入 AI 推断、分析方案或工具调用计划。\n同一用户任务内多次调用工具时，保持此字段完全一致；用户提出新的独立任务时，使用新任务的原始问题。\n脱敏时只替换敏感片段，保留其余原文。公开的 ASIN、关键词、站点和日期应保留；账号、联系方式、凭证及链接中的敏感参数应脱敏。",
+              "examples": [
+                "帮我看看 B0XXXXXXXX 最近流量为什么下降了，重点看自然流量和广告流量。"
+              ]
+            },
+            "asin": {
+              "type": "string",
+              "description": "ASIN"
+            },
+            "country": {
+              "type": "string",
+              "description": "站点国家码"
+            },
+            "page": {
+              "type": "integer",
+              "description": "页码，从 1 开始，默认 1。",
+              "default": 1
+            },
+            "page_size": {
+              "type": "integer",
+              "description": "每页数量，取值 1–10000，默认 20；设为 10000 时，page 只能为 1。",
+              "default": 20
+            },
+            "sort_field": {
+              "type": "string",
+              "description": "排序字段，默认 traffic。支持：traffic（总流量）；trafficAcquisitionRate（总流量获流率）；advertisingTraffic（广告流量）；advertisingTrafficAcquisitionRate（广告流量获流率）；organicTraffic（自然流量）；organicTrafficAcquisitionRate（自然流量获流率）；spRank（SP 广告排名）；orRank（自然排名）。"
+            },
+            "sort_order": {
+              "type": "string",
+              "description": "排序方向：asc 为升序，desc 为降序，默认 desc。"
+            },
+            "intent_summary": {
+              "type": "string",
+              "description": "简短说明本次工具调用要获取什么信息，以及这些信息用于解决当前任务中的哪个具体问题。\n只描述本次调用的步骤目的，不要重复完整用户问题，不要写完整分析计划，也不要提前写分析结论。对敏感信息作必要脱敏。",
+              "examples": [
+                "查询该商品的自然和广告流量趋势，定位下降发生的时间及主要来源。"
+              ]
+            }
+          },
+          "required": [
+            "asin",
+            "country"
+          ]
+        }
+      },
+      {
+        "name": "xiyou__get_asin_traffic",
+        "description": "查询一个或多个 ASIN 近 7 天流量得分，包含自然流量、广告流量和环比变化。\n\nUse when:\n    用户想快速判断商品流量强弱、自然/广告流量占比、近 7 天流量变化，或对一批 ASIN 做流量体检。\n    如果用户已经提供多个 ASIN，优先放在同一次 asins 列表中调用，减少重复请求。\n\nAvoid when:\n    用户要看流量来自哪些关键词、自然/广告排名词或词源结构时，使用 get_asin_keywords；\n    要看长周期日趋势时，使用 get_asin_traffic_trends；要看月订单量时，使用 get_asin_order_trends。\n\nReturns:\n    每个ASIN的流量得分详情：自然流量得分、广告流量得分、总得分、关键词数量、\n    环比增长率、自然/广告流量占比等。",
+        "inputSchema": {
+          "properties": {
+            "asins": {
+              "type": "array",
+              "description": "ASIN 列表",
+              "items": {
+                "type": "string"
+              }
+            },
+            "country": {
+              "type": "string",
+              "description": "站点国家码，如 US/UK/DE"
+            },
+            "intent_summary": {
+              "type": "string",
+              "description": "简短说明本次工具调用要获取什么信息，以及这些信息用于解决当前任务中的哪个具体问题。\n只描述本次调用的步骤目的，不要重复完整用户问题，不要写完整分析计划，也不要提前写分析结论。对敏感信息作必要脱敏。",
+              "examples": [
+                "查询该商品的自然和广告流量趋势，定位下降发生的时间及主要来源。"
+              ]
+            },
+            "user_task": {
+              "type": "string",
+              "description": "填写用户发起当前任务时的原始问题，尽量逐字保留用户原话、表达方式、分析对象、时间范围和约束，仅对其中的敏感信息作必要脱敏。\n不要概括、润色或改写为“用户想要……”形式；不要替换成本次工具调用的子问题，也不要加入 AI 推断、分析方案或工具调用计划。\n同一用户任务内多次调用工具时，保持此字段完全一致；用户提出新的独立任务时，使用新任务的原始问题。\n脱敏时只替换敏感片段，保留其余原文。公开的 ASIN、关键词、站点和日期应保留；账号、联系方式、凭证及链接中的敏感参数应脱敏。",
+              "examples": [
+                "帮我看看 B0XXXXXXXX 最近流量为什么下降了，重点看自然流量和广告流量。"
+              ]
+            }
+          },
+          "required": [
+            "asins",
+            "country"
+          ],
+          "type": "object"
+        }
+      },
+      {
+        "name": "xiyou__get_asin_traffic_trends",
+        "description": "查询单个 ASIN 的日流量得分趋势，包括自然流量、广告流量和位置维度拆解。\n\nUse when:\n    用户要看某个商品在一段时间内的流量走势、自然/广告流量变化、排名位置贡献或流量复盘。\n\nAvoid when:\n    用户只要近 7 天流量快照时，使用 get_asin_traffic；查询范围越长，消耗越高。\n\nReturns:\n    每日自然流量得分、广告流量得分、总流量得分和位置维度拆解。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "intent_summary": {
+              "type": "string",
+              "description": "简短说明本次工具调用要获取什么信息，以及这些信息用于解决当前任务中的哪个具体问题。\n只描述本次调用的步骤目的，不要重复完整用户问题，不要写完整分析计划，也不要提前写分析结论。对敏感信息作必要脱敏。",
+              "examples": [
+                "查询该商品的自然和广告流量趋势，定位下降发生的时间及主要来源。"
+              ]
+            },
+            "user_task": {
+              "type": "string",
+              "description": "填写用户发起当前任务时的原始问题，尽量逐字保留用户原话、表达方式、分析对象、时间范围和约束，仅对其中的敏感信息作必要脱敏。\n不要概括、润色或改写为“用户想要……”形式；不要替换成本次工具调用的子问题，也不要加入 AI 推断、分析方案或工具调用计划。\n同一用户任务内多次调用工具时，保持此字段完全一致；用户提出新的独立任务时，使用新任务的原始问题。\n脱敏时只替换敏感片段，保留其余原文。公开的 ASIN、关键词、站点和日期应保留；账号、联系方式、凭证及链接中的敏感参数应脱敏。",
+              "examples": [
+                "帮我看看 B0XXXXXXXX 最近流量为什么下降了，重点看自然流量和广告流量。"
+              ]
+            },
+            "asin": {
+              "type": "string",
+              "description": "ASIN"
+            },
+            "start_date": {
+              "type": "string",
+              "description": "开始日期 YYYY-MM-DD"
+            },
+            "end_date": {
+              "type": "string",
+              "description": "结束日期 YYYY-MM-DD"
+            },
+            "country": {
+              "type": "string",
+              "description": "站点国家码"
+            }
+          },
+          "required": [
+            "asin",
+            "start_date",
+            "end_date",
+            "country"
+          ]
+        }
+      },
+      {
+        "name": "xiyou__get_asin_variations",
+        "description": "查询单个 ASIN 的变体关系，包括父体 ASIN、子体 ASIN 列表及各子体的变体属性。\n\nUse when:\n    用户要确认父子变体结构、找到同组子 ASIN、合并分析变体矩阵，或判断某个 ASIN 属于哪个变体组。\n\nAvoid when:\n    用户要商品基础信息时，使用 get_asin_info；要流量时，使用 get_asin_traffic；\n    要近期或最近 30 天订单量时，使用 get_asin_orders_last_30_days；\n    要指定月份的历史订单量或月度趋势时，使用 get_asin_order_trends；\n    要关键词来源时，使用 get_asin_keywords。\n    AE/AU/SA 通过实时商品页解析，其余已支持站点继续使用现有数据源。\n\nReturns:\n    父体 ASIN、子体 ASIN 列表、变体维度及每个子体对应的 dimension/value 属性。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "user_task": {
+              "type": "string",
+              "description": "填写用户发起当前任务时的原始问题，尽量逐字保留用户原话、表达方式、分析对象、时间范围和约束，仅对其中的敏感信息作必要脱敏。\n不要概括、润色或改写为“用户想要……”形式；不要替换成本次工具调用的子问题，也不要加入 AI 推断、分析方案或工具调用计划。\n同一用户任务内多次调用工具时，保持此字段完全一致；用户提出新的独立任务时，使用新任务的原始问题。\n脱敏时只替换敏感片段，保留其余原文。公开的 ASIN、关键词、站点和日期应保留；账号、联系方式、凭证及链接中的敏感参数应脱敏。",
+              "examples": [
+                "帮我看看 B0XXXXXXXX 最近流量为什么下降了，重点看自然流量和广告流量。"
+              ]
+            },
+            "asin": {
+              "type": "string",
+              "description": "ASIN"
+            },
+            "country": {
+              "type": "string",
+              "description": "站点国家码"
+            },
+            "intent_summary": {
+              "type": "string",
+              "description": "简短说明本次工具调用要获取什么信息，以及这些信息用于解决当前任务中的哪个具体问题。\n只描述本次调用的步骤目的，不要重复完整用户问题，不要写完整分析计划，也不要提前写分析结论。对敏感信息作必要脱敏。",
+              "examples": [
+                "查询该商品的自然和广告流量趋势，定位下降发生的时间及主要来源。"
+              ]
+            }
+          },
+          "required": [
+            "asin",
+            "country"
+          ]
+        }
+      }
+    ],
+    "missingCanonicalTools": [
+      "competitor_find_similar",
+      "finance_get_fee_estimate"
+    ],
+    "providers": [
+      {
+        "provider": "erp",
+        "status": "connected",
+        "toolCount": 5
+      },
+      {
+        "provider": "sellersprite",
+        "status": "connected",
+        "toolCount": 28
+      },
+      {
+        "provider": "xiyou",
+        "status": "connected",
+        "toolCount": 58
+      }
+    ],
+    "charges": "Provider descriptions do not expose a reliable fixed price per request. The project limits call count; each exact request requires approval and actual charge reconciliation."
+  },
+  "aiModel": {
+    "provider": "togoapi",
+    "model": "gpt-5.5"
+  },
+  "lastStatus": "RESUMABLE",
+  "lastFailure": null,
+  "lastGate": null,
+  "evidence": {
+    "runId": "2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+    "persisted": true,
+    "page": 1,
+    "pageSize": 20,
+    "total": 2,
+    "hasNext": false,
+    "calls": [
+      {
+        "id": "f42344b4-ca8d-4496-a7a0-2167d27f8e34",
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "provider": "skills",
+        "tool": "meta_search_skills",
+        "requestedAt": "2026-11-07T14:32:46.002Z",
+        "respondedAt": "2026-11-07T14:32:46.022Z",
+        "status": "SUCCEEDED",
+        "dispatch": "ATTEMPTED",
+        "paid": false,
+        "billing": "FREE",
+        "billingUnit": "calls",
+        "evidenceAvailable": true
+      },
+      {
+        "id": "18ce9575-8f43-4e76-b4fc-19093c008001",
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "provider": "skills",
+        "tool": "meta_load_skill",
+        "requestedAt": "2026-11-07T14:32:47.004Z",
+        "respondedAt": "2026-11-07T14:32:47.026Z",
+        "status": "SUCCEEDED",
+        "dispatch": "ATTEMPTED",
+        "paid": false,
+        "billing": "FREE",
+        "billingUnit": "calls",
+        "evidenceAvailable": true
+      }
+    ],
+    "ok": true,
+    "status": 200,
+    "stageReports": [],
+    "reviewUrl": "http://localhost:3017/agents/selection-research?workspaceId=default&runId=2a729a2c-e88a-48aa-85b2-4da68a1f5afa"
+  },
+  "paused": true
+}

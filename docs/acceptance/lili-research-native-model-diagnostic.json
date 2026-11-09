@@ -1,0 +1,33 @@
+{
+  "client": "Codex native MCP",
+  "runId": "2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+  "observedAt": "2026-11-07T14:35:37.595411+00:00",
+  "authorizedModelAttempt": 2,
+  "calls": [
+    {
+      "tool": "research_recover",
+      "isError": false,
+      "status": 200
+    },
+    {
+      "tool": "research_resume",
+      "isError": false,
+      "status": 200
+    },
+    {
+      "tool": "research_step",
+      "isError": false,
+      "status": 200
+    },
+    {
+      "tool": "research_pause",
+      "isError": false,
+      "status": 200
+    }
+  ],
+  "status": "FAILED",
+  "failure": "RESEARCH_AI_HTTP_404",
+  "pendingCall": null,
+  "reviewUrl": "http://localhost:3017/agents/selection-research?workspaceId=default&runId=2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+  "paused": true
+}

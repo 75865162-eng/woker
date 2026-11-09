@@ -1,3 +1,4 @@
+import { queryPageSize } from "./query-page";
 import { prisma } from "@/lib/db/prisma";
 import { amazonDataAccess, sourceAccessWhere } from "./data-access";
 import { brandReports, type BrandKind } from "./brand-reports";
@@ -42,19 +43,26 @@ async function readBrandReport(scope: SyncScope, params: URLSearchParams, contex
   const run = explicit ? await prisma.amazonSyncRun.findFirst({ where: { ...base, id: explicit }, select }) : versions[0];
   if (explicit && !run) throw new SyncInputError("该品牌报告版本不可访问或与筛选不符。", 403);
   let runIds: string[] = run ? [run.id] : [];
+  let asinVersions: Prisma.AmazonDomainObservationWhereInput[] | undefined;
   if (run && !explicit) {
     const frozen = run.frozenScope as { sourceRevision: number; authorizationId: string; authorizationRevision: number; domainPolicy: { from: string; to: string; reportPeriod: string } }, p = frozen.domainPolicy;
-    // A collection uses disjoint, frozen ASIN batches. Select the newest success
-    // for each batch in this same source revision and reporting window.
+    // Automatic discovery may change batch membership as the catalog grows.
+    // Select each ASIN from its latest complete version in the same window;
+    // exact-batch deduplication alone would double-count overlapping batches.
     const siblings = await prisma.amazonSyncRun.findMany({ where: { ...base, AND: [...(base.AND as Prisma.AmazonSyncRunWhereInput[]), ...[
       ["sourceRevision", frozen.sourceRevision], ["authorizationId", frozen.authorizationId], ["authorizationRevision", frozen.authorizationRevision], ["domainPolicy.from", p.from], ["domainPolicy.to", p.to], ["domainPolicy.reportPeriod", p.reportPeriod],
     ].map(([path, value]) => ({ frozenScope: { path: String(path).split("."), equals: value } }))] }, select: { id: true, frozenScope: true }, orderBy: [{ finishedAt: "desc" }, { id: "desc" }], take: 1001 });
     if (siblings.length > 1000) throw new SyncInputError("该品牌窗口版本数量超出容量，请指定版本。", 409);
-    const seen = new Set<string>(); runIds = [];
-    for (const sibling of siblings) { const asins = (sibling.frozenScope as { domainPolicy: { asins: string[] } }).domainPolicy.asins; const key = JSON.stringify([...asins].sort()); if (!seen.has(key)) { seen.add(key); runIds.push(sibling.id); } }
+    const seen = new Set<string>(); runIds = []; asinVersions = [];
+    for (const sibling of siblings) {
+      const asins = (sibling.frozenScope as { domainPolicy: { asins: string[] } }).domainPolicy.asins;
+      if (!definition.asinScoped) { runIds = [sibling.id]; asinVersions = undefined; break; }
+      const fresh = asins.filter(asin => !seen.has(asin));
+      if (fresh.length) { fresh.forEach(asin => seen.add(asin)); runIds.push(sibling.id); asinVersions.push({ sourceRunId: sibling.id, asin: { in: fresh } }); }
+    }
   }
-  const page = Math.min(100000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = 50;
-  const where: Prisma.AmazonDomainObservationWhereInput = { ...scope, sourceId: source?.id ?? "__none__", sourceRunId: { in: runIds }, kind: `BRAND_${kind.toUpperCase()}`, ...(params.get("asin") ? { asin: params.get("asin")! } : {}), ...(params.get("searchTerm") ? { searchTerm: { contains: params.get("searchTerm")!, mode: "insensitive" } } : {}) };
+  const page = Math.min(100000, Math.max(1, Math.floor(Number(params.get("page")) || 1))), pageSize = queryPageSize(params);
+  const where: Prisma.AmazonDomainObservationWhereInput = { ...scope, sourceId: source?.id ?? "__none__", sourceRunId: { in: runIds }, ...(asinVersions ? { OR: asinVersions } : {}), kind: `BRAND_${kind.toUpperCase()}`, ...(params.get("asin") ? { asin: params.get("asin")! } : {}), ...(params.get("searchTerm") ? { searchTerm: { contains: params.get("searchTerm")!, mode: "insensitive" } } : {}) };
   const [rows, total, latestTask, collection, plans] = await Promise.all([
     prisma.amazonDomainObservation.findMany({ where, select: { id: true, sourceRunId: true, asin: true, searchTerm: true, facts: true, capturedAt: true }, orderBy: [{ asin: "asc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize }),
     prisma.amazonDomainObservation.count({ where }),

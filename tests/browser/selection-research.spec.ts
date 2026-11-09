@@ -241,7 +241,7 @@ test("startup checks show exact missing prerequisites and never create a task or
     if (url.hostname !== "selection.invalid") throw new Error("UNEXPECTED_NETWORK_REQUEST");
     if (url.pathname === "/api/selection-research/discover") {
       const request = route.request().postDataJSON();
-      expect(request.marketplace).toBe("US"); expect(request.maxMarketCalls).toBe(3);
+      expect(request.marketplace).toBe("US"); expect(request.maxMarketCalls).toBeUndefined(); expect(request.budgetMode).toBe("uncapped");
       return route.fulfill({ json: { providers, tools, readiness: researchReadiness({ providers, tools, ai, skills, request }), aiRequestCount: 0, toolsCallCount: 0, persisted: false } });
     }
     if (url.pathname === "/api/selection-research") {
@@ -305,9 +305,9 @@ test("pre-dispatch failure survives reload with zero requests and recovery requi
   try {
     let blocked = true, dispatches = 0;
     const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "mock-org", workspaceId: "default", ownerId: "mock-owner" }, {
-      async listTools() { return [{ name: "product_research", inputSchema: { type: "object", properties: {} } }]; },
+      async listTools() { return [{ name: "product_research", inputSchema: { type: "object", properties: { request: { type: "string" } }, required: ["request"] } }]; },
       async callTool() { if (blocked) throw new ToolNotDispatchedError("RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN"); dispatches++; return { requestId: "isolated" }; },
-    }, { async next() { return { type: "call", tool: "product_research", arguments: {} }; } }, { mode: "live", authorizeLive: async () => true });
+    }, { async next({ run }) { return { type: "call", tool: "product_research", arguments: { request: String(run.calls.length + 1) } }; } }, { mode: "live", authorizeLive: async () => true });
     let run = await engine.create({ requirement: "Isolated UI non-dispatch test", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "isolated", markdown: "isolated", sha256: "isolated", tools: [] })), policies: { product_research: { provider: "sellersprite", paid: true, units: 1, unit: "calls", pricingSource: "isolated", maxCalls: 1, stages: [1] } }, limits: { sellersprite: 1 } });
     run = await engine.step(run.id);
     run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: run.gate!.id, callId: run.pendingActionId });
@@ -335,9 +335,11 @@ test("pre-dispatch failure survives reload with zero requests and recovery requi
     await page.getByRole("button", { name: "继续到下一确认节点" }).click();
     await expect(page.getByRole("heading", { name: "需要人工确认：MCP_CALL" })).toBeVisible();
     expect(dispatches).toBe(0);
-    await page.getByRole("button", { name: "批准并执行这一次请求" }).click();
-    await expect(page.getByRole("heading", { name: "需要人工确认：BILLING" })).toBeVisible();
+    await page.getByRole("button", { name: "批准本任务的付费查询并执行首笔" }).click();
+    await expect(page.getByRole("heading", { name: "任务调用上限已达" })).toBeVisible();
     await expect(page.locator("body")).toContainText("SellerSprite 请求次数：1 / 1");
+    await expect(page.locator("body")).toContainText("不会再申请额度审批");
+    await expect(page.getByRole("button", { name: "批准提高调用上限" })).toHaveCount(0);
     expect(dispatches).toBe(1);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -391,16 +393,15 @@ for (const outcome of ["lost-response", "interrupted"] as const) test(`free ERP 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("each paid request clears the preceding receipt and charge before reconciliation", async ({ page }) => {
-  const root = await mkdtemp(path.join(tmpdir(), "research-receipt-browser-"));
+test("first task approval runs later paid calls within the saved limit without fee review gates", async ({ page }) => {
+  const root = await mkdtemp(path.join(tmpdir(), "research-task-approval-browser-"));
   try {
+    let dispatches = 0;
     const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "mock-org", workspaceId: "default", ownerId: "mock-owner" }, {
       async listTools() { return [{ name: "product_research", inputSchema: { type: "object", properties: { page: { type: "integer" } }, required: ["page"] } }]; },
-      async callTool() { return { requestId: "isolated" }; },
+      async callTool() { dispatches++; return { requestId: `isolated-${dispatches}` }; },
     }, { async next({ run }) { return { type: "call", tool: "product_research", arguments: { page: run.calls.length + 1 } }; } }, { mode: "live", authorizeLive: async () => true });
-    let run = await engine.create({ requirement: "Isolated receipt boundary test", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "isolated", markdown: "isolated", sha256: "isolated", tools: [] })), policies: { product_research: { provider: "sellersprite", paid: true, units: 1, unit: "calls", pricingSource: "isolated", maxCalls: 2, stages: [1] } }, limits: { sellersprite: 2 } });
-    run = await engine.step(run.id);
-    run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: run.gate!.id, callId: run.pendingActionId });
+    let run = await engine.create({ requirement: "Isolated task-level approval test", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "isolated", markdown: "isolated", sha256: "isolated", tools: [] })), policies: { product_research: { provider: "sellersprite", paid: true, units: 1, unit: "calls", pricingSource: "isolated", maxCalls: 2, stages: [1] } }, limits: { sellersprite: 2 } });
     run = await engine.step(run.id);
     await page.route("**/*", async route => {
       const url = new URL(route.request().url());
@@ -414,32 +415,30 @@ test("each paid request clears the preceding receipt and charge before reconcili
       return route.fulfill({ json: { run } });
     });
     await page.goto(`http://selection.invalid/?runId=${run.id}`);
-    await page.getByLabel("扣费凭据", { exact: true }).fill("isolated-first-receipt");
-    await page.getByLabel("实际扣费单位", { exact: true }).fill("9");
-    await page.getByRole("button", { name: "登记实际费用并继续", exact: true }).click();
     await expect(page.getByRole("heading", { name: "需要人工确认：MCP_CALL" })).toBeVisible();
-    await page.getByRole("button", { name: "批准并执行这一次请求" }).click();
-    await expect(page.getByRole("heading", { name: "需要人工确认：BILLING" })).toBeVisible();
-    await expect(page.getByLabel("扣费凭据", { exact: true })).toHaveValue("");
-    await expect(page.getByLabel("实际扣费单位", { exact: true })).toHaveValue("1");
-    await expect(page.getByRole("button", { name: "登记实际费用并继续", exact: true })).toBeDisabled();
-    expect(run.calls[0].knownUnits).toBe(9);
-    expect(run.calls[1].billing).toBe("UNKNOWN");
-    expect(run.calls[1].knownUnits).toBeUndefined();
+    await expect(page.locator("body")).toContainText("sellersprite 2 次");
+    await page.getByRole("button", { name: "批准本任务的付费查询并执行首笔" }).click();
+    await expect(page.getByRole("heading", { name: "任务调用上限已达" })).toBeVisible();
+    expect(dispatches).toBe(2);
+    expect(run.calls.map(call => call.authorizationMode)).toEqual(["FIRST_APPROVAL", "TASK_APPROVAL"]);
+    expect(run.calls.every(call => call.billing === "UNKNOWN" && call.authorizationId === run.paidCallAuthorization?.id)).toBe(true);
+    await expect(page.getByRole("button", { name: "批准提高调用上限" })).toHaveCount(0);
+    await expect(page.getByLabel("扣费凭据", { exact: true })).toHaveCount(0);
     const audit = page.getByRole("region", { name: "审批与保存记录", exact: true });
     await expect(audit).toContainText("第一次业务确认：尚未确认");
-    await audit.getByText("工具授权、费用及额度记录（3 条）", { exact: true }).click();
-    await expect(audit).toContainText("单次工具请求授权");
-    await expect(audit).toContainText("请求结果与费用核对");
-    await expect(audit).toContainText("isolated-first-receipt");
+    await audit.getByText("工具授权、费用及额度记录（1 条）", { exact: true }).click();
+    await expect(audit).toContainText("任务首次付费授权");
+    await expect(audit).toContainText("逐笔付费调用记录（2 条）");
+    await expect(audit).toContainText("沿用本任务授权");
     await page.reload();
-    await audit.getByText("工具授权、费用及额度记录（3 条）", { exact: true }).click();
-    await expect(audit).toContainText("isolated-first-receipt");
-    await expect(audit).toContainText('"units": 9');
+    const restoredAudit = page.getByRole("region", { name: "审批与保存记录", exact: true });
+    await restoredAudit.getByText("工具授权、费用及额度记录（1 条）", { exact: true }).click();
+    await expect(restoredAudit).toContainText("逐笔付费调用记录（2 条）");
+    await expect(restoredAudit).toContainText("任务付费授权已记录");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("live budget UI requires finite reviewed limits", async ({ page }) => {
+test("live budget UI defaults to uncapped research without a mandatory call ceiling", async ({ page }) => {
   let submitted: Record<string, unknown> | undefined;
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -455,11 +454,56 @@ test("live budget UI requires finite reviewed limits", async ({ page }) => {
   });
   await page.goto("http://selection.invalid/");
   await expect(page.getByLabel("预算模式", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("最大市场调用次数", { exact: true })).toHaveValue("3");
+  await expect(page.getByLabel("最大市场调用次数", { exact: true })).toHaveValue("");
   await page.getByLabel("自然语言选品要求").fill("Isolated generic research task");
   await page.getByRole("button", { name: "读取在线工具目录并创建真实任务", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("ISOLATED_STOP_BEFORE_REAL_TASK");
-  expect(submitted?.budgetMode).toBe("reviewed");
-  expect(submitted?.maxMarketCalls).toBe(3);
+  expect(submitted?.budgetMode).toBe("uncapped");
+  expect(submitted?.maxMarketCalls).toBeUndefined();
   expect(submitted?.mode).toBe("live");
+});
+
+test("isolated receipt form converts costs, persists the original receipt and leaves market dispatch unchanged", async ({ page }) => {
+  const root = await mkdtemp(path.join(tmpdir(), "research-credits-browser-"));
+  let dispatches = 0;
+  try {
+    const tool = { name: "market_find_products", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } };
+    const engine = new ResearchEngine(new LocalResearchStore(root), { organizationId: "mock-org", workspaceId: "default", ownerId: "mock-owner" }, {
+      async listTools() { return [tool]; }, async callTool() { dispatches++; return { records: [] }; },
+    }, { async next(): Promise<never> { throw new Error("NO_MODEL"); } }, { mode: "live", authorizeLive: async () => true });
+    let run = await engine.create({ executionMode: "codex", budgetMode: "uncapped", requirement: "产品方向：arrow bag quiver", marketplace: "US", skills: SKILLS.map(name => ({ name, path: "fixture", markdown: "fixture", sha256: "fixture", tools: [] })),
+      registry: [tool], policies: { [tool.name]: { provider: "sellersprite", paid: true, units: 1, unit: "calls", maxCalls: 1, stages: [1], pricingSource: "unknown" } }, limits: { sellersprite: 0 } });
+    run = await engine.step(run.id, { action: { type: "call", tool: tool.name, arguments: { query: "fixture" } }, revision: run.revision });
+    run = await engine.decide(run.id, { kind: "AUTHORIZE_TOOL", gateId: run.gate!.id, callId: run.pendingActionId });
+    run = await engine.step(run.id);
+    await page.route("**/*", async route => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== "selection.invalid") throw new Error("UNEXPECTED_NETWORK_REQUEST");
+      if (url.pathname === "/api/selection-research") return route.fulfill({ json: { runs: [] } });
+      if (url.pathname === `/api/selection-research/${run.id}`) {
+        if (route.request().method() === "POST") {
+          const body = route.request().postDataJSON(); expect(body.operation).toBe("record-charge");
+          run = await engine.recordCharge(run.id, body);
+        }
+        return route.fulfill({ json: { run } });
+      }
+      return route.fulfill({ contentType: "text/html", body: `<div id="root"></div><script>${bundle}</script>` });
+    });
+    await page.goto(`http://selection.invalid/?runId=${run.id}`);
+    await page.getByText("登记研究费用与积分凭据", { exact: true }).click();
+    await page.getByLabel("费用请求", { exact: true }).selectOption(run.calls[0].id);
+    await page.getByLabel("费用原始单位", { exact: true }).selectOption("USD");
+    await page.getByLabel("费用原始数量", { exact: true }).fill("2");
+    await page.getByLabel("费用换算率", { exact: true }).fill("7");
+    await page.getByLabel("费用换算日期", { exact: true }).fill("2026-11-08");
+    await page.getByLabel("费用换算来源", { exact: true }).fill("fixture rate only");
+    await page.getByLabel("费用凭据", { exact: true }).fill("fixture receipt");
+    await expect(page.getByText("折合：1400研究积分", { exact: true })).toBeVisible();
+    await page.getByLabel("费用性质", { exact: true }).selectOption("confirmed");
+    await page.getByRole("button", { name: "确认凭据并登记实耗", exact: true }).click();
+    const audit = page.getByRole("region", { name: "审批与保存记录", exact: true });
+    await expect(audit).toContainText("已确认 1400");
+    expect(run.calls[0].researchCharge?.unit).toBe("USD"); expect(run.creditAdjustments).toHaveLength(1); expect(dispatches).toBe(1);
+    await page.reload(); await expect(page.getByRole("region", { name: "审批与保存记录", exact: true })).toContainText("已确认 1400");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

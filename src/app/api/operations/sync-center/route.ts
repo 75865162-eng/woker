@@ -1,4 +1,7 @@
 import { readObservations } from "@/lib/amazon-sync/observations-query";
+import { readDataset } from "@/lib/amazon-sync/dataset-query";
+import { readSyncCoverage } from "@/lib/amazon-sync/coverage";
+import { mcpDatasets, describeMcpDataset } from "@/lib/amazon-sync/mcp-datasets";
 import { readBrandAnalytics, readBrandAsins, readBrandAsinAnalysis } from "@/lib/amazon-sync/brand-analytics-query";
 import { readReturns } from "@/lib/amazon-sync/returns-query";
 import { readFinance } from "@/lib/amazon-sync/finance-query";
@@ -45,6 +48,9 @@ export async function GET(request: Request) {
     const permissions = await getOrganizationRolePermissions(scope.organizationId);
     const access = { canExport: roleCanPerformAction(permission.user.role, "operations", "export", permissions), canApprove: roleCanPerformAction(permission.user.role, "operations", "approve", permissions), canEdit: roleCanPerformAction(permission.user.role, "operations", "edit", permissions), canCreate: roleCanPerformAction(permission.user.role, "operations", "create", permissions), canConfigure: dataAccess.allSellers && roleCanPerformAction(permission.user.role, "settings", "edit", permissions) };
     if (section === "sales-traffic") return json({ ...await readSalesTraffic(scope, p, { actor }), access });
+    if (section === "data") return json({ ...await readDataset(scope, p, actor), access });
+    if (section === "datasets") return json({ datasets: mcpDatasets.filter(d => d.module === "amazon_sync").map(describeMcpDataset), access });
+    if (section === "coverage") return json({ ...await readSyncCoverage(scope, p, actor), access });
     if (section === "returns") return json({ ...await readReturns(scope, p, actor), access });
     if (section === "finance") return json({ ...await readFinance(scope, p, actor), access });
     if (section === "orders") return json({ ...await readOrders(scope, p, actor), access });

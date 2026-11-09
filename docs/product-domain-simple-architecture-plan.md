@@ -777,3 +777,39 @@ Storage original
 **NOT PRODUCTION READY**
 
 这里的 `NOT PRODUCTION READY` 仅表示“Product Center 性能优化与架构收口尚未完成最终证据闭环”，不表示当前商品功能不能使用，也不表示必须立即重写。完成 benchmark、修复被证明的瓶颈、补齐剩余一致性审计后，再重新评估是否达到 `PRODUCTION READY`。
+
+
+<!-- AGENTS migration 2026-11-08: original lines 204-231 -->
+## Product Center 当前规则与后续方向
+
+Product Center 当前阶段是“性能优化 + 架构收口”，不是新 ERP 功能扩张。处理商品列表、详情、图片、缓存或投影任务时，必须先以 `docs/product-domain-simple-architecture-plan.md` 的当前审计结论为准。
+
+### 当前已确认
+
+
+
+- `ProductRecord` 是商品核心资料唯一 Source of Truth；`payload` 不因性能优化直接删除。
+- 商品保存通过 PostgreSQL transaction、revision、审计记录和 `ProductOutboxEvent` 完成；Projection、Read Model 和 Cache 不得反向覆盖 `ProductRecord`。
+- 商品列表当前真实主读路径是 `ProductSummaryRecord + ProductTextRecord`，由数据库执行过滤、排序和分页；不要未经 benchmark 直接切换到 `ProductRecord` 直读。
+- 商品详情当前通过 `ProductDetailService` 统一聚合 `ProductRecord`、必要关联数据和投影状态；不要把详情拆成前端请求瀑布。
+- 列表当前使用分页、`useVirtualRows`、第一张 `thumbUrl`、lazy loading、异步解码和低优先级图片请求；不要默认加载全量商品、完整 payload 或原图。
+- `ProductMedia` 是媒体关系/元数据索引，不是商品核心资料事实源；二进制属于 Storage / FileObject。
+- Redis 当前主要用于 BullMQ 调度，不是商品事实源，也不是图片二进制缓存；商品详情 Redis 缓存尚未证明有收益。
+- 商品编辑器能力保留与入口级回归门槛见 `docs/product-domain-simple-architecture-plan.md` §3.6；修改主编辑器或详情区块前先盘点功能，未经明确确认不得删除既有入口，测试需验证用户路径可达和可操作。
+
+### 后续升级硬约束
+
+- 先做 1,000 / 5,000 / 10,000 SKU 的列表、详情、图片和并发 benchmark，记录 API/SQL/网络/浏览器的 P50、P95、P99，再决定是否改查询、索引、分页或缓存。
+- 没有真实性能证据时，不新增 Read Model，不强制接入 Redis，不把复杂筛选列表迁移到 Redis，不引入 Elasticsearch、微服务或新的图片处理服务。
+- Redis 只允许缓存高频、重算成本明显、可从 PostgreSQL 重建且允许短暂最终一致的数据；必须包含 organization/workspace/权限/版本维度，并具备 TTL、失效和 PostgreSQL fallback。
+- Redis 不保存原图、缩略图二进制、密钥、完整大 payload、库存扣减结果或金额结算结果。
+- 任何列表主读路径切换都必须保留旧路径回滚能力，并验证分页结果、筛选结果、权限边界、投影延迟和 P95。
+- 任何 Projection、Summary、Text、Media 或 Cache 的删除，都必须先完成调用方盘点、历史数据一致性校验、重建验证和回滚方案。
+- 发现 ProductRecord、ProductMedia、Summary 或缓存存在重复写入时，先收口写入边界；不要通过增加另一张表或手动同步继续放大多 Source of Truth。
+
+
+<!-- AGENTS migration 2026-11-08: original lines 317-321 -->
+## 业务流转登录提醒
+
+- 未完成任务按 ProductRecord 当前阶段和负责人判断，不以通知 readAt 判断完成；关闭弹窗只收起，同一次登录去重，下次登录仍有任务才弹。详细边界与回滚见 `docs/product-domain-simple-architecture-plan.md` 的业务流转通知段落。
+- `npx playwright test --config tests/browser/notifications.config.ts`：模拟通知 API、真实 Tailwind 样式的隔离登录提醒回归，不访问生产。

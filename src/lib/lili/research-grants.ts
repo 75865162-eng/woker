@@ -2,11 +2,15 @@ import type { PermissionAction } from "@/lib/accounts/permissions";
 
 /** Explicit credential grants. Existing Amazon tool grants never imply these. */
 export const researchToolActions = {
+  workflow_sync_review: "view",
+  workflow_sync_confirm: "approve",
   research_start: "create",
   research_read: "view",
   research_evidence: "view",
   research_list: "view",
   research_step: "edit",
+  research_confirm: "approve",
+  research_record_charge: "approve",
   research_pause: "edit",
   research_resume: "edit",
   research_recover: "edit",
@@ -15,10 +19,14 @@ export const researchToolActions = {
 } as const satisfies Record<string, PermissionAction>;
 export type ResearchToolName = keyof typeof researchToolActions;
 export const researchCredentialTools = [
+  ["workflow_sync_review", "Lili 工作流：对话预览本人同步申请"],
+  ["workflow_sync_confirm", "Lili 工作流：对话批准并应用本人同步申请"],
   ["research_start", "Lili 开品：创建研究（真实调用仍需审批）"],
   ["research_list", "Lili 开品：查询本人任务历史"],
   ["research_evidence", "Lili 开品：分页读取本人原始证据"],
   ["research_read", "Lili 开品：读取本人研究"],
+  ["research_confirm", "Lili 开品：保存用户在对话中的明确确认"],
+  ["research_record_charge", "Lili 开品：保存明确确认的研究积分费用凭据"],
   ["research_step", "Lili 开品：推进研究（不能批准人工节点）"],
   ["research_pause", "Lili 开品：暂停本人研究"],
   ["research_resume", "Lili 开品：恢复暂停（不执行请求）"],
@@ -29,3 +37,5 @@ export const researchCredentialTools = [
 export function isResearchTool(name: string): name is ResearchToolName {
   return Object.hasOwn(researchToolActions, name);
 }
+
+export const liliToolModule = (name: string) => name.startsWith("workflow_sync_") ? "operations" : "agents";

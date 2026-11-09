@@ -7,6 +7,7 @@ import test, { before, after } from "node:test";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
 import { manageMcpCredential, authenticateAmazonMcp, invokeAmazonMcp, listMcpSkillTableOptions, listDiscoverableAmazonMcpTools, getMcpSettingsSnapshot } from "@/lib/amazon-sync/mcp";
 import { amazonDataAccess, assertSellerMarketplaceAccess } from "@/lib/amazon-sync/data-access";
 import { POST } from "@/app/api/mcp/amazon/route";
@@ -60,7 +61,7 @@ before(async () => {
   const created = await manageMcpCredential(scope, actor, { action: "create", name: "own fixture", scopes: [{ sellerAccountId: sellerA, marketplaceIds: [site] }], tools, expiresAt: new Date(Date.now() + 86400000).toISOString() });
   token = created.token!; credentialId = created.credential.id;
 });
-after(async () => { globalThis.fetch = originalFetch; await prisma.$disconnect(); });
+after(async () => { globalThis.fetch = originalFetch; await getAmazonSyncQueue().close(); await prisma.$disconnect(); });
 test("MCP personal hash only; metadata never includes plaintext", async () => {
   const row = await prisma.amazonMcpCredential.findUniqueOrThrow({ where: { id: credentialId } });
   assert.notEqual(row.tokenHash, token); assert.equal(row.tokenHash.length, 64); assert.ok(!JSON.stringify(row).includes(token));

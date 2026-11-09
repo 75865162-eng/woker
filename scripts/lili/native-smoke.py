@@ -12,7 +12,13 @@ class NativeCodex:
                 try: self.messages.put(json.loads(line))
                 except ValueError: pass
         threading.Thread(target=read, daemon=True).start()
-        self.call("initialize", {"clientInfo": {"name": "lili-native-acceptance", "version": "1.0.0"}, "capabilities": {"experimentalApi": True}})
+        try:
+            self.call("initialize", {"clientInfo": {"name": "lili-native-acceptance", "version": "1.0.0"}, "capabilities": {"experimentalApi": True}})
+            self.process.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "initialized"}) + "\n")
+            self.process.stdin.flush()
+        except Exception:
+            self.close()
+            raise
     def call(self, method, params):
         self.request_id += 1
         request_id = self.request_id
@@ -37,9 +43,26 @@ def main():
     parser.add_argument("--seller", help="ERP sellerAccountId; must already be authorized")
     parser.add_argument("--marketplace", default="ATVPDKIKX0DER")
     parser.add_argument("--output", type=pathlib.Path, required=True)
+    parser.add_argument("--connection-only", action="store_true", help="Only native discovery and lili_ping; never query business data or load Skills")
     args = parser.parse_args()
-    summary = {"client": "Codex app-server native MCP", "calls": [], "skills": []}
-    client = NativeCodex()
+    if args.connection_only and args.seller:
+        parser.error("--connection-only cannot be combined with --seller")
+    summary = {"client": "Codex app-server native MCP", "calls": [], "skills": [], "targetChatToolsVerified": False}
+    overrides = []
+    if args.connection_only:
+        import os, re, tomllib
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", args.server):
+            parser.error("Invalid server name")
+        home = pathlib.Path(os.environ.get("CODEX_HOME", pathlib.Path.home() / ".codex"))
+        config = tomllib.loads((home / "config.toml").read_text())
+        if args.server not in config.get("mcp_servers", {}):
+            parser.error("Requested server is not configured")
+        for name in config.get("mcp_servers", {}):
+            if name != args.server:
+                if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+                    parser.error("Cannot safely isolate a non-standard server name")
+                overrides.extend(["-c", "mcp_servers." + name + ".enabled=false"])
+    client = NativeCodex(overrides)
     try:
         thread_id = client.call("thread/start", {"ephemeral": True, "cwd": str(pathlib.Path.cwd())})["thread"]["id"]
         summary["threadId"] = thread_id
@@ -52,6 +75,13 @@ def main():
             summary["calls"].append({"tool": name, "requestId": result.get("meta", {}).get("requestId") if isinstance(result, dict) else None, "isError": False})
             return result
         summary["ping"] = call("lili_ping", {})
+        if args.connection_only:
+            summary["checkScope"] = "native-client-only: initialize, tools/list, lili_ping"
+            args.output.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+            print(json.dumps({"output": str(args.output.resolve()), "runtimeStatus": summary["runtimeStatus"], "authenticated": summary["ping"]["authenticated"], "toolCount": len(summary["tools"]), "targetChatToolsVerified": False}, ensure_ascii=False))
+            if summary["runtimeStatus"] != "connected" or summary["ping"].get("authenticated") is not True:
+                raise RuntimeError("Native Lili connection is not authenticated")
+            return
         for skill_id in ["amazon-niche-finder", "amazon-product-research", "amazon-review-analyzer", "tariff-calculator-amazon", "amazon-product-selection"]:
             found = call("meta_search_skills", {"query": skill_id})
             if not any(skill["slug"] == skill_id for skill in found["skills"]): raise RuntimeError("Skill missing")

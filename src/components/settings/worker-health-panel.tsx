@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type WorkerHealthPayload = {
-  registeredWorkers?: Array<{ id: string; label: string; online: boolean; instances: number; queueReady: boolean | null; version: string | null; versionMatches: boolean; mismatchedInstances?: number; connectionMatches?: boolean | null; lastSeenAt: string | null }>;
+  registeredWorkers?: Array<{ id: string; label: string; online: boolean; instances: number; queueReady: boolean | null; version: string | null; versionMatches: boolean; mismatchedInstances?: number; connectionMatches?: boolean | null; lastSeenAt: string | null; recoveryReady?: boolean | null; recovery?: { lastSuccessAt: string | null; dispatchFailures: number | null; maintenanceFailures: number | null } | null }>;
   driver: string;
   queueName: string;
   queueAvailable?: boolean;
@@ -162,6 +162,7 @@ export function WorkerHealthPanel() {
           {data?.registeredWorkers?.map(worker => <div key={worker.id} className="rounded-md border border-border p-3 text-xs">
             <div className="flex items-center justify-between gap-2"><strong>{worker.label}</strong><Badge tone={worker.online ? "green" : "red"}>{worker.online ? "心跳在线" : "离线 / 未启动"}</Badge></div>
             <p className="mt-2 text-muted">队列连接：{worker.queueReady === null ? "未知" : worker.queueReady ? "已连接" : "不可用"} · 在线实例 {worker.instances}</p>
+            {worker.id === "amazon-sync" && <p className="mt-1 text-muted">数据库任务恢复：{worker.recoveryReady == null ? "尚无扫描证据" : worker.recoveryReady ? "最近扫描正常" : "扫描过期或投递失败"}{worker.recovery?.lastSuccessAt ? ` · ${formatDate(worker.recovery.lastSuccessAt)}` : ""}{worker.recovery?.maintenanceFailures ? ` · 维护阶段失败 ${worker.recovery.maintenanceFailures}` : ""}</p>}
             <p className={worker.connectionMatches === false ? "mt-1 text-red-700" : "mt-1 text-muted"}>与网页连接目标：{worker.connectionMatches === true ? "一致" : worker.connectionMatches === false ? "不一致，请检查配置与认证密钥" : "尚未确认"}</p>
             <p className="mt-1 text-muted">版本：{worker.version ?? "未知"}{worker.online && !worker.versionMatches ? `（${worker.mismatchedInstances ?? 1} 个实例与网页版本不一致）` : ""}</p>
             <p className="mt-1 text-muted">最近心跳：{worker.lastSeenAt ? formatDate(worker.lastSeenAt) : "尚无记录"}</p>

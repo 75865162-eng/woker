@@ -217,3 +217,65 @@ test("evidence reads require explicit grants and pin owner scope before saved-da
  const ungranted = fixture();
  assert.equal((await rpc(ungranted.deps, "tools/call", { name: "research_evidence", arguments: { runId: "owned" } })).status, 403);
 });
+
+test("chat confirmation requires its own credential grant and live approve permission", async () => {
+ const args = { runId: "fixture-run", workspaceId: identity.workspaceId, expectedRevision: 4, gateId: "gate-4", kind: "SELECT", candidateId: "niche-a", userConfirmation: "选第一个细分" };
+ let dispatched = 0;
+ const f = fixture({
+  authenticate: async () => ({...identity, tools:[...identity.tools,"research_confirm"]}),
+  dispatch: async request => {
+   dispatched++;
+   const bound = researchRequestAuthorization(request)!;
+   assert.equal((await bound.authorize("agents","approve",request)).ok,true);
+   assert.equal((await bound.authorize("operations","approve",request)).ok,false);
+   assert.deepEqual(await request.json(),{workspaceId:identity.workspaceId,operation:"decide",expectedRevision:4,decision:{gateId:"gate-4",kind:"SELECT",candidateId:"niche-a",confirmation:{channel:"chat",text:"选第一个细分"}}});
+   return Response.json({run:{id:"fixture-run",status:"RESUMABLE",results:[],calls:[],skills:[],registry:[],policies:{},limits:{}}});
+  },
+ });
+ const catalog = await (await rpc(f.deps,"tools/list")).json();
+ assert.ok(catalog.result.tools.some((tool:{name:string})=>tool.name==="research_confirm"));
+ const denied = fixture();
+ assert.equal((await rpc(denied.deps,"tools/call",{name:"research_confirm",arguments:args})).status,403);
+ const roleDenied = fixture({...f.deps, permission:async(_identity,_module,action)=>action==="approve"?{ok:false,response:NextResponse.json({error:"Forbidden"},{status:403})}:{ok:true,user}});
+ assert.equal((await rpc(roleDenied.deps,"tools/call",{name:"research_confirm",arguments:args})).status,403);
+ for(const patch of [{userConfirmation:""},{expectedRevision:-1},{kind:"INCREASE_BUDGET"},{workspaceId:"other"},{userId:"other"}]) {
+  const response=await rpc(f.deps,"tools/call",{name:"research_confirm",arguments:{...args,...patch}});
+  assert.ok([400,403].includes(response.status));
+ }
+ assert.equal(dispatched,0);
+ const response=await rpc(f.deps,"tools/call",{name:"research_confirm",arguments:args});
+ assert.equal(response.status,200);assert.equal(dispatched,1);
+ assert.ok(f.checks.includes("agents:approve"));
+});
+
+test("workflow sync approval discovery uses operations permission and independent grants", async()=>{
+ const syncIdentity={...identity,tools:[...identity.tools,"workflow_sync_review","workflow_sync_confirm"]};
+ const f=fixture({authenticate:async()=>syncIdentity,permission:async(_id,module,action)=>module==="operations"&&action==="approve"?{ok:false,response:NextResponse.json({error:"Forbidden"},{status:403})}:{ok:true,user}});
+ let listed=await(await rpc(f.deps,"tools/list")).json();
+ assert.ok(listed.result.tools.some((tool:{name:string})=>tool.name==="workflow_sync_review"));
+ assert.ok(!listed.result.tools.some((tool:{name:string})=>tool.name==="workflow_sync_confirm"));
+ const permitted=fixture({authenticate:async()=>syncIdentity});
+ listed=await(await rpc(permitted.deps,"tools/list")).json();
+ assert.ok(listed.result.tools.some((tool:{name:string})=>tool.name==="workflow_sync_confirm"));
+ assert.ok(permitted.checks.includes("operations:approve"));
+ assert.equal((await rpc(f.deps,"tools/call",{name:"workflow_sync_confirm",arguments:{workspaceId:identity.workspaceId,requestId:"owned",expectedDigest:"a".repeat(64),expectedRevision:1,userConfirmation:"同意"}})).status,403);
+});
+
+test("research charge entry needs its own bearer grant, approve permission and pinned scope", async () => {
+ const args = { runId: "fixture-run", workspaceId: identity.workspaceId, expectedRevision: 1, callId: "fixture-call", userConfirmation: "确认隔离费用凭据", charge: { amount: 1, unit: "CNY", cnyPerUnit: 1, rateDate: "2026-11-08", rateSource: "fixture", receipt: "fixture", status: "confirmed" } };
+ const denied = fixture();
+ assert.equal((await rpc(denied.deps, "tools/call", { name: "research_record_charge", arguments: args })).status, 403);
+ const allowedIdentity = { ...identity, tools: [...identity.tools, "research_record_charge"] };
+ const roleDenied = fixture({ authenticate: async () => allowedIdentity, permission: async () => ({ ok: false, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }) });
+ assert.equal((await rpc(roleDenied.deps, "tools/call", { name: "research_record_charge", arguments: args })).status, 403);
+ let writes = 0;
+ const f = fixture({ authenticate: async () => allowedIdentity, dispatch: async request => {
+   writes++; const body = await request.json(); assert.equal(body.operation, "record-charge"); assert.equal(body.confirmation, args.userConfirmation);
+   assert.equal((await researchRequestAuthorization(request)!.authorize("agents", "approve", request)).ok, true);
+   return Response.json({});
+ } });
+ assert.equal((await rpc(f.deps, "tools/call", { name: "research_record_charge", arguments: { ...args, workspaceId: "other" } })).status, 403);
+ assert.equal(writes, 0);
+ assert.equal((await rpc(f.deps, "tools/call", { name: "research_record_charge", arguments: args })).status, 200);
+ assert.equal(writes, 1);
+});

@@ -165,7 +165,7 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
           requireReviewedMarketCall(args.name as string);
           const output = await (await getRuntime()).call(args.name as string, (args.arguments ?? {}) as never, request.signal);
           return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(output) }], isError: false } });
-        } catch (error) { return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify({ error: error instanceof RuntimeToolError ? error.code : "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN", message: "请检查真实 Schema、当前授权；外部市场请求请进入选品研究审批。" }) }], isError: true } }); }
+        } catch (error) { return json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify({ error: error instanceof RuntimeToolError ? error.code : "RUNTIME_TOOL_UNAVAILABLE_OR_FORBIDDEN", message: "请检查真实 Schema、当前授权；外部市场请求请通过 research_start/research_step 执行，审批在 Codex 对话里确认。" }) }], isError: true } }); }
       }
       return json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
     }
@@ -173,7 +173,7 @@ export async function handleLiliRequest(request: Request, parts: string[], autho
     const mutationPermission = await authorize(moduleId, action, authorizationRequest);
     if (!mutationPermission.ok) return mutationPermission.response;
     return json({ ok: false, error: "lili_operation_not_mapped", nextPath: endpoint.nextPath,
-      message: "此独立 Lili 操作未映射；请使用主系统对应入口。没有修改配置、创建业务记录、启动任务或调用外部服务。" }, 501);
+      nextAction: { kind: "UNSUPPORTED_EXECUTOR", channel: "codex_chat", browserRequired: false }, message: "此步骤执行器尚未接入。请在对话中说明未执行部分并保留分析或草稿；无需返回浏览器。没有修改配置、创建业务记录、启动任务或调用外部服务。" }, 501);
   } catch (error) {
     // Never echo provider errors, credentials, raw bodies or connection strings.
     if (error instanceof RuntimeToolError) {

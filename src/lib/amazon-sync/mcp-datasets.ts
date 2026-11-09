@@ -1,4 +1,5 @@
 import { SyncInputError } from "./policy";
+import { spApiDataTables, spApiDatasetContracts } from "./sp-api-datasets";
 
 export type SkillTable = {
   name: string;
@@ -10,6 +11,7 @@ export type SkillTable = {
 };
 
 export const skillDataTables: SkillTable[] = [
+  ...spApiDataTables,
   {
     name: "inventory",
     source: "AmazonInventorySnapshot",
@@ -123,6 +125,7 @@ const sorting = (values: string[]) => ({ sortBy: { type: "string" as const, enum
 export const adsEntityTypes = ["SP:campaign", "SP:ad-group", "SP:product-ad", "SP:keyword", "SP:target", "SP:negative-keyword", "SP:negative-target", "SP:campaign-negative-keyword", "SP:campaign-negative-target"] as const;
 
 const contracts: Record<string, Omit<McpDataset, keyof SkillTable>> = {
+  ...spApiDatasetContracts,
   inventory: {
     module: "amazon_sync", dataType: "inventory", legacyTable: "inventory",
     filters: { ...strings(["sellerSku", "asin", "condition"]), from: date, to: date, ...sorting(["sellerSku"]) }, aliases: {},

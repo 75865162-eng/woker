@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import type { ApiPermissionResult } from "@/lib/auth/api-permissions";
 import type { PermissionAction } from "@/lib/accounts/permissions";
 import { researchMcpTools, callResearchMcpTool, dispatchResearchRequest } from "./research-tools";
-import { isResearchTool, researchToolActions } from "./research-grants";
+import { isResearchTool, researchToolActions, liliToolModule } from "./research-grants";
 import { publicResearchTools, callPublicResearchTool } from "./public-research-tools";
 import { createRuntimeTools } from "./runtime-tools";
 import { withResearchRequestAuthorization } from "@/lib/selection-research/request-authorization";
@@ -57,7 +57,7 @@ export async function handleResearchBearerMcp(request: Request, body: Record<str
       const current = await deps.authenticate(request.headers.get("authorization"), request);
       const identityChanged = current.id !== identity!.id || current.revision !== identity!.revision || current.userId !== identity!.userId || current.organizationId !== identity!.organizationId || current.workspaceId !== identity!.workspaceId;
       const toolRevoked = tool !== null && isResearchTool(tool) && !current.tools.includes(tool);
-      if (identityChanged || toolRevoked || action === "approve") return { ok: false, response: failure(403) };
+      if (identityChanged || toolRevoked || action === "approve" && (!current.tools.some(name => isResearchTool(name) && researchToolActions[name] === "approve" && liliToolModule(name) === moduleId && (name === tool || method === "tools/list")))) return { ok: false, response: failure(403) };
       const permission = await deps.permission(current, moduleId, action, incoming);
       if (permission.ok && (permission.user.id !== current.userId || permission.user.organizationId !== current.organizationId)) return { ok: false, response: failure(403) };
       return permission;
@@ -79,7 +79,7 @@ export async function handleResearchBearerMcp(request: Request, body: Record<str
       const granted = [];
       for (const definition of researchMcpTools) {
         if (!isResearchTool(definition.name) || !identity.tools.includes(definition.name)) continue;
-        if ((await authorize("agents", researchToolActions[definition.name], request)).ok) granted.push({ ...definition,
+        if ((await authorize(liliToolModule(definition.name), researchToolActions[definition.name], request)).ok) granted.push({ ...definition,
           inputSchema: { ...definition.inputSchema, properties: { ...(definition.inputSchema.properties as ObjectJson), workspaceId: { type: "string", const: identity.workspaceId } } },
         });
       }
@@ -96,7 +96,7 @@ export async function handleResearchBearerMcp(request: Request, body: Record<str
       } else if (skillMetaTools.some(definition => definition.name === tool)) { validate(skillMetaTools.find(definition => definition.name === tool)!.inputSchema, input as ObjectJson); output = tool === "meta_get_market_access" && deps.marketAccess ? await deps.marketAccess(identity, request) : await callSkillMeta(tool, input as ObjectJson, true); }
       else if (isResearchTool(tool)) {
         if (!identity.tools.includes(tool)) return failure(403);
-        const permission = await authorize("agents", researchToolActions[tool], request);
+        const permission = await authorize(liliToolModule(tool), researchToolActions[tool], request);
         if (!permission.ok) return permission.response;
         const command = input as ObjectJson;
         if (command.workspaceId !== undefined && command.workspaceId !== identity.workspaceId || command.erpCredentialId !== undefined && command.erpCredentialId !== identity.id) return failure(403);

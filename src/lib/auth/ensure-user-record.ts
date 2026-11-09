@@ -2,6 +2,7 @@ import { OrganizationRole } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { hashPassword } from "@/lib/auth/password";
 import { type CurrentUser } from "@/lib/auth/session";
+import { upsertMemberWithCallAccount } from "@/lib/accounts/member-call-account";
 
 type OrganizationRoleValue = (typeof OrganizationRole)[keyof typeof OrganizationRole];
 
@@ -40,7 +41,7 @@ export async function ensureCurrentUserRecord(user: CurrentUser) {
     },
   });
 
-  await prisma.organizationMember.upsert({
+  await upsertMemberWithCallAccount(prisma, {
     where: {
       organizationId_userId: {
         organizationId: user.organizationId,

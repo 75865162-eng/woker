@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getAmazonSyncQueue } from "@/lib/queue/redis-queue";
-import { createAmazonAdsOAuthTransport, type AmazonAdsOAuthTransport } from "./oauth-contract";
+import { AmazonAdsConnectionError, createAmazonAdsOAuthTransport, type AmazonAdsOAuthTransport } from "./oauth-contract";
 import { decryptAmazonAdsRefreshToken, decryptAmazonAdsCheckpoint, encryptAmazonAdsCheckpoint } from "./credentials";
 import { adsReadAdapterReady, amazonAdsReadAdapter, isAdsRegion, validateAdsPage, type AdsReadAdapter } from "./sync-adapter";
 import { adsSyncStages, adsStructureCompleteStage, nextAdsStructureStage, parseAdsCheckpoint, AdsSyncError, adsSyncFailureStatus } from "./sync-policy";
@@ -124,6 +124,7 @@ export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: 
     const exhausted = initial.attempts + 1 >= initial.maxAttempts;
     const status = adsSyncFailureStatus({ adapterReady, retryable, exhausted });
     const blocked = status === "BLOCKED" || status === "WAITING_FOR_ADAPTER";
+    const reauthorizationRequired = error instanceof AmazonAdsConnectionError && error.operation === "REFRESH" && error.httpStatus === 401;
     await prisma.$transaction(async tx => {
       const changed = await tx.amazonAdsSyncTask.updateMany({ where: { ...scope, id: initial.id, dispatchVersion, fenceVersion, status: "RUNNING", leaseOwner }, data: { status, attempts: status === "BLOCKED" || status === "WAITING_FOR_ADAPTER" ? undefined : { increment: 1 }, throttles: error instanceof AdsSyncError && error.retryAfterMs > 0 ? { increment: 1 } : undefined, errorCode: code, errorMessage: "Ads 同步未完成；已保留检查点，需检查配置或任务后重试。", nextAttemptAt: new Date(Date.now() + (error instanceof AdsSyncError ? Math.max(5000, error.retryAfterMs) : 30000)), dispatchVersion: { increment: 1 }, leaseOwner: null, leaseExpiresAt: null, finishedAt: status === "BLOCKED" || status === "WAITING_FOR_ADAPTER" || status === "FAILED" ? new Date() : null } });
       if (changed.count) {
@@ -134,6 +135,19 @@ export async function processAmazonAdsSyncTask(taskId: string, dispatchVersion: 
           update: { status: status === "RETRY_WAIT" ? "RETRY_WAIT" : "FAILED", lastAttemptAt: new Date(), lastTaskId: initial.id, warningCodes: [code] },
         });
         if (status === "BLOCKED" || status === "WAITING_FOR_ADAPTER") await tx.amazonAdsSyncPlan.updateMany({ where: { ...scope, id: initial.planId, status: "ACTIVE" }, data: { status, lastErrorCode: code } });
+        if (reauthorizationRequired) {
+          const authorizationId = initial.profile.authorizationId;
+          const profiles = await tx.amazonAdsProfile.findMany({ where: { ...scope, authorizationId }, select: { id: true } });
+          const profileIds = profiles.map(profile => profile.id);
+          const plans = profileIds.length ? await tx.amazonAdsSyncPlan.findMany({ where: { ...scope, profileId: { in: profileIds }, status: "ACTIVE" }, select: { id: true } }) : [];
+          const planIds = plans.map(plan => plan.id);
+          if (planIds.length) {
+            await tx.amazonAdsSyncTask.updateMany({ where: { ...scope, planId: { in: planIds }, status: { in: ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"] } }, data: { status: "CANCELLED", dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, errorCode: "ADS_REAUTH_REQUIRED", errorMessage: "Amazon Ads 拒绝 Refresh Token；请重新授权。历史数据已保留。" } });
+            await tx.amazonAdsSyncAttempt.updateMany({ where: { ...scope, profileId: { in: profileIds }, status: { in: ["RUNNING", "RETRY_WAIT"] } }, data: { status: "CANCELLED", finishedAt: new Date(), retryAt: null, errorCode: "ADS_REAUTH_REQUIRED", safeErrorSummary: "Amazon Ads 要求重新授权；已保存数据已保留。" } });
+            await tx.amazonAdsSyncPlan.updateMany({ where: { ...scope, id: { in: planIds }, status: "ACTIVE" }, data: { status: "BLOCKED", revision: { increment: 1 }, lastErrorCode: "ADS_REAUTH_REQUIRED" } });
+          }
+          await tx.amazonAdsAuthorization.updateMany({ where: { ...scope, id: authorizationId, status: "CONNECTED" }, data: { status: "REAUTH_REQUIRED", revision: { increment: 1 }, validationErrorCode: "ADS_REAUTH_REQUIRED", lastValidatedAt: new Date() } });
+        }
         await tx.auditLog.create({ data: { organizationId: scope.organizationId, action: "amazon.ads.sync.task.failed", entityType: "AmazonAdsSyncTask", entityId: initial.id, metadata: { workspaceId: scope.workspaceId, profileId: initial.profileId, code, retryable: !blocked } } });
       }
     });

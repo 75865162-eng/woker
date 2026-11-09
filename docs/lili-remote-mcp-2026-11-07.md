@@ -98,3 +98,9 @@ check:fast 全量测试 1178/1178、lint 0 errors（7 条已有 warning）。该
 - OAuth 访问令牌 1 小时；刷新有效期不超过父凭证与 30 天。每次刷新复核权限；刷新重放撤销整个设备。OAuth 令牌不能用于 /api/mcp/amazon。
 - 原生验收使用已安装 Codex app-server 的 OAuth login 与 MCP tools/call。自动刷新验收仅使本次测试设备 access token 过期，然后由 Codex 自行刷新；没有读取或输出 OAuth 存储中的密钥。
 - 回滚应用代码可继续使用旧 Bearer 路径；保留新表，不执行删除数据回滚。未关联 OAuth grant 的旧凭证继续兼容。
+
+## 当前 Codex 推理执行（本地增量）
+
+MCP research_start 固定 executionMode=codex，不读取或调用网站模型；旧网页 server 任务兼容保留。research_read 返回当前 Skill、真实工具 Schema、保存证据与运行 revision。Codex 通过 research_step 的 action 和 expectedRevision 提交下一动作，服务端仍执行原有 Schema、证据、预算、权限及人工门禁；旧 revision 拒绝，已批准请求不能由新 action 替换。无 action 只运行 Skill 初始化或精确获批请求，不回退网站模型。页面批准后的自动推进在 Codex 任务只执行一步，避免继续请求缺失的客户端动作。登录跳转保留研究任务参数。
+
+本地原生任务与审批证据见 acceptance/lili-codex-native-run.json 和 lili-codex-native-market-gate.json；首个市场请求仍待网站真实审批，不表示市场闭环已完成。测试设备撤销原生验收见 acceptance/lili-research-native-revocation.json。未部署生产。

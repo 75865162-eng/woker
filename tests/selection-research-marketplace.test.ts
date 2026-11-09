@@ -31,7 +31,7 @@ test("stage-zero handoff preserves the original request and supplies no identity
   const prepared = await callPublicResearchTool("research_prepare", { requirement });
   assert.equal(prepared.brief.marketplace, "US");
   assert.deepEqual(prepared.nextAction.arguments, { requirement, marketplace: "US" });
-  assert.deepEqual(prepared.nextAction.missingArguments, ["workspaceId", "maxMarketCalls"]);
+  assert.deepEqual(prepared.nextAction.missingArguments, ["workspaceId"]);
   const request = new Request("http://fixture.invalid/api/lili/mcp");
   const result = await callResearchMcpTool(request, "research_start", { ...prepared.nextAction.arguments, workspaceId: "fixture-workspace", maxMarketCalls: 3 } as ObjectJson, async child => {
     const body = await child.json();

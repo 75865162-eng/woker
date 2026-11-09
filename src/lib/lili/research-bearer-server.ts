@@ -26,10 +26,13 @@ export const researchBearerDependencies: ResearchBearerDependencies = {
     const state = (configured: boolean) => configured ? "configured_not_probed" as const : "disabled_or_missing" as const;
     const sellerConfigured = seller.status === "fulfilled" && Boolean(seller.value.enabled && seller.value.apiKey && seller.value.serverUrl);
     const xiyouConfigured = xiyou.status === "fulfilled" && Boolean(xiyou.value.enabled && xiyou.value.mcpToken);
-    return marketAccessSummary(true, true, [
+    const { readPaidCallConsent } = await import("@/lib/selection-research/paid-call-consent");
+    const consent = await readPaidCallConsent({ organizationId: identity.organizationId, workspaceId: identity.workspaceId, ownerId: identity.userId });
+    const summary = marketAccessSummary(true, true, [
       { provider: "sellersprite", configured: sellerConfigured, status: seller.status === "rejected" ? "configuration_unavailable" : state(sellerConfigured) },
       { provider: "xiyou", configured: xiyouConfigured, status: xiyou.status === "rejected" ? "configuration_unavailable" : state(xiyouConfigured) },
     ]);
+    return consent ? { ...summary, approval_required: false, reason: "SAVED_PAID_RESEARCH_CONSENT", paid_call_consent: consent } : summary;
   },
   async erp(identity) {
     const { createErpResearchTransport } = await import("./runtime-server");

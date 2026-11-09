@@ -13,7 +13,7 @@ export function sellerSpritePolicy(tool: { name: string; description?: string })
   if (!canonical) return null;
   return {
     provider: "sellersprite", paid: true, units: 1, unit: "calls",
-    pricingSource: (tool.description ?? "SellerSprite runtime registered read-only tool") + " Price per request is not represented as a fixed credit amount; each outbound call requires human review.",
+    pricingSource: (tool.description ?? "SellerSprite runtime registered read-only tool") + " Price per request is not represented as a fixed credit amount; the first paid request requires persisted task-level human approval, and later requests may use that task authorization within its saved call limits.",
     maxCalls: 3, stages: stages[canonical] ?? [1, 2, 3, 4, 5],
   };
 }

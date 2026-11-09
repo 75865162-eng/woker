@@ -1,0 +1,73 @@
+{
+  "client": "Codex app-server native MCP",
+  "endpoint": "http://localhost:3017/api/lili/mcp",
+  "observedAt": "2026-11-07T14:31:26.954697+00:00",
+  "calls": [
+    {
+      "tool": "research_read",
+      "isError": true,
+      "status": 404,
+      "error": "Research not found."
+    },
+    {
+      "tool": "research_evidence",
+      "isError": true,
+      "status": 404,
+      "error": "Research not found."
+    },
+    {
+      "tool": "research_pause",
+      "isError": true,
+      "status": 404,
+      "error": "Research not found."
+    },
+    {
+      "tool": "research_resume",
+      "isError": true,
+      "status": 404,
+      "error": "Research not found."
+    },
+    {
+      "tool": "research_recover",
+      "isError": true,
+      "status": 404,
+      "error": "Research not found."
+    },
+    {
+      "tool": "research_cancel",
+      "isError": true,
+      "status": 404,
+      "error": "Research not found."
+    },
+    {
+      "tool": "research_list",
+      "nativeRequestRejected": true
+    }
+  ],
+  "tools": [
+    "amazon.stores.list",
+    "data_describe_table",
+    "data_list_tables",
+    "data_query",
+    "data_sync_status",
+    "lili_ping",
+    "meta_get_market_access",
+    "meta_get_skill_manifest",
+    "meta_list_workflows",
+    "meta_load_skill",
+    "meta_search_skills",
+    "research_cancel",
+    "research_evidence",
+    "research_export",
+    "research_list",
+    "research_pause",
+    "research_prepare",
+    "research_read",
+    "research_recover",
+    "research_resume",
+    "research_start",
+    "research_step"
+  ],
+  "noErpWrites": true,
+  "limitation": "Missing-run/foreign-workspace denials, not successful lifecycle of an owned run."
+}

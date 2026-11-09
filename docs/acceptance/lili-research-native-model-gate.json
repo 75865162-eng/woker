@@ -1,0 +1,93 @@
+{
+  "client": "Codex app-server native MCP",
+  "runId": "2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+  "observedAt": "2026-11-07T14:34:07.435144+00:00",
+  "modelAuthorization": {
+    "source": "explicit human reply",
+    "maxRequests": 3,
+    "money": "unknown",
+    "marketCallsAuthorized": false
+  },
+  "calls": [
+    {
+      "tool": "research_read",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_resume",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_step",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_evidence",
+      "isError": false,
+      "status": 200,
+      "error": null
+    },
+    {
+      "tool": "research_pause",
+      "isError": false,
+      "status": 200,
+      "error": null
+    }
+  ],
+  "modelStepAttempts": 1,
+  "status": "FAILED",
+  "failure": "RESEARCH_AI_REQUEST_FAILED",
+  "gate": null,
+  "pendingCall": null,
+  "evidence": {
+    "runId": "2a729a2c-e88a-48aa-85b2-4da68a1f5afa",
+    "persisted": true,
+    "page": 1,
+    "pageSize": 20,
+    "total": 2,
+    "hasNext": false,
+    "calls": [
+      {
+        "id": "f42344b4-ca8d-4496-a7a0-2167d27f8e34",
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "provider": "skills",
+        "tool": "meta_search_skills",
+        "requestedAt": "2026-11-07T14:32:46.002Z",
+        "respondedAt": "2026-11-07T14:32:46.022Z",
+        "status": "SUCCEEDED",
+        "dispatch": "ATTEMPTED",
+        "paid": false,
+        "billing": "FREE",
+        "billingUnit": "calls",
+        "evidenceAvailable": true
+      },
+      {
+        "id": "18ce9575-8f43-4e76-b4fc-19093c008001",
+        "stage": 1,
+        "skill": "amazon-niche-finder",
+        "provider": "skills",
+        "tool": "meta_load_skill",
+        "requestedAt": "2026-11-07T14:32:47.004Z",
+        "respondedAt": "2026-11-07T14:32:47.026Z",
+        "status": "SUCCEEDED",
+        "dispatch": "ATTEMPTED",
+        "paid": false,
+        "billing": "FREE",
+        "billingUnit": "calls",
+        "evidenceAvailable": true
+      }
+    ],
+    "ok": true,
+    "status": 200,
+    "stageReports": [],
+    "reviewUrl": "http://localhost:3017/agents/selection-research?workspaceId=default&runId=2a729a2c-e88a-48aa-85b2-4da68a1f5afa"
+  },
+  "reviewUrl": "http://localhost:3017/agents/selection-research?workspaceId=default&runId=2a729a2c-e88a-48aa-85b2-4da68a1f5afa"
+}

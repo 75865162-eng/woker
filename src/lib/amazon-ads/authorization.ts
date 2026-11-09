@@ -152,6 +152,31 @@ export async function listAmazonAdsProfiles(scope: AdsAuthScope, where: Prisma.A
     select: { id: true, authorizationId: true, region: true, profileId: true, advertiserAccountId: true, advertiserAccountRevision: true, countryCode: true, marketplaceId: true, currencyCode: true, timezone: true, accountInfo: true, sellerAccountId: true, lastDiscoveredAt: true, authorization: { select: { name: true, status: true, lastValidatedAt: true, refreshTokenExpiresAt: true } }, syncPlans: { take: 1, select: { id: true, status: true, nextRunAt: true, lastSuccessAt: true, lastErrorCode: true, tasks: { take: 1, orderBy: { createdAt: "desc" }, select: { status: true, stage: true, processedCount: true, errorCode: true } } } } } });
 }
 
+export async function disconnectAmazonAdsAuthorization(scope: AdsAuthScope, actor: string, authorizationId: string) {
+  return prisma.$transaction(async tx => {
+    await assertAdsSettingsManager(scope, actor, tx);
+    const authorization = await tx.amazonAdsAuthorization.findFirst({ where: { ...scope, id: authorizationId }, select: { id: true, status: true } });
+    if (!authorization) throw new Error("Amazon Ads 授权不存在。");
+    if (authorization.status === "DISCONNECTED") return { ok: true };
+    const profiles = await tx.amazonAdsProfile.findMany({ where: { ...scope, authorizationId }, select: { id: true } });
+    const profileIds = profiles.map(profile => profile.id);
+    const now = new Date();
+    if (profileIds.length) {
+      const plans = await tx.amazonAdsSyncPlan.findMany({ where: { ...scope, profileId: { in: profileIds } }, select: { id: true } });
+      const planIds = plans.map(plan => plan.id);
+      if (planIds.length) {
+        await tx.amazonAdsSyncTask.updateMany({ where: { ...scope, planId: { in: planIds }, status: { in: ["WAITING", "QUEUED", "RUNNING", "RETRY_WAIT"] } }, data: { status: "CANCELLED", dispatchVersion: { increment: 1 }, fenceVersion: { increment: 1 }, finishedAt: now, leaseOwner: null, leaseExpiresAt: null, errorCode: "ADS_AUTH_DISCONNECTED", errorMessage: "Amazon Ads 授权已断开；历史数据已保留。" } });
+        await tx.amazonAdsSyncAttempt.updateMany({ where: { ...scope, profileId: { in: profileIds }, status: { in: ["RUNNING", "RETRY_WAIT"] } }, data: { status: "CANCELLED", finishedAt: now, retryAt: null, errorCode: "ADS_AUTH_DISCONNECTED", safeErrorSummary: "Amazon Ads 授权已断开；已保存数据已保留。" } });
+        await tx.amazonAdsSyncPlan.updateMany({ where: { ...scope, id: { in: planIds } }, data: { status: "PAUSED", revision: { increment: 1 }, lastErrorCode: "ADS_AUTH_DISCONNECTED" } });
+      }
+      await tx.amazonAdsSyncDomainState.updateMany({ where: { ...scope, profileId: { in: profileIds } }, data: { status: "DISCONNECTED", warningCodes: { push: "ADS_AUTH_DISCONNECTED" } } });
+    }
+    await tx.amazonAdsAuthorization.update({ where: { id: authorization.id }, data: { status: "DISCONNECTED", revision: { increment: 1 }, validationErrorCode: "ADS_AUTH_DISCONNECTED", lastValidatedAt: now } });
+    await tx.auditLog.create({ data: { organizationId: scope.organizationId, userId: actor, action: "amazon.ads.authorization.disconnected", entityType: "AmazonAdsAuthorization", entityId: authorization.id, metadata: { workspaceId: scope.workspaceId, profileCount: profiles.length } } });
+    return { ok: true };
+  });
+}
+
 export async function bindAmazonAdsProfile(scope: AdsAuthScope, actor: string, profileId: string, sellerAccountId: string | null | undefined, advertiserAccountId?: string | null, profileRecordId?: string, expectedAdvertiserAccountId?: string | null, expectedAdvertiserAccountRevision?: number) {
   if (advertiserAccountId !== undefined && advertiserAccountId !== null && (advertiserAccountId.length > 512 || !advertiserAccountId.trim() || advertiserAccountId.trim() !== advertiserAccountId || /[\u0000-\u001f\u007f]/.test(advertiserAccountId))) throw new Error("Amazon Ads Advertiser Account ID 无效。");
   if (advertiserAccountId !== undefined && (!profileRecordId || expectedAdvertiserAccountId === undefined || !Number.isSafeInteger(expectedAdvertiserAccountRevision) || expectedAdvertiserAccountRevision! < 0)) throw new Error("账户绑定需要内部 Profile ID 和当前绑定值，请刷新后重试。");

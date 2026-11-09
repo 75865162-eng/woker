@@ -22,6 +22,7 @@ test("production permission resolver, credential grants and saved-run boundary u
   let savedCredential = "other-credential";
   const member = () => ({ role, organization: { name: "Fixture" }, user: { id: identity.userId, name: "Fixture", email: "fixture@example.test", status: active ? "active" : "disabled" } });
   const db = {
+    externalIntegrationSetting: { findUnique: async () => null },
     organizationMember: { findUnique: async () => member() },
     workspaceScope: { findUnique: async () => workspace ? { id: scope.workspaceId } : null },
     organizationRosterRole: { findMany: async () => { if (rolesUnavailable) throw new Error("fixture-role-store-unavailable"); return []; } },

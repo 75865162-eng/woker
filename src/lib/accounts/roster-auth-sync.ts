@@ -2,6 +2,7 @@ import type { OrganizationRole, Prisma, PrismaClient } from "@prisma/client";
 import { hashPassword } from "@/lib/auth/password";
 import { isBootstrapAdminEmail } from "@/lib/auth/constants";
 import { toOrganizationRoleId, type TeamAccountRecord } from "@/lib/accounts/team-roster";
+import { upsertMemberWithCallAccount } from "./member-call-account";
 
 type RosterLoginAccount = Pick<TeamAccountRecord, "id" | "name" | "email" | "username" | "phone" | "status" | "password">;
 type RosterLoginAccountWithOrg = RosterLoginAccount & {
@@ -96,7 +97,7 @@ export async function syncRosterLoginUsers(
       },
     });
 
-    await client.organizationMember.upsert({
+    await upsertMemberWithCallAccount(client, {
       where: {
         organizationId_userId: {
           organizationId: account.organizationId,

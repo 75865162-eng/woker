@@ -1,3 +1,4 @@
+import { syncScopeAllowed } from "./activation";
 export type SyncScope = { organizationId: string; workspaceId: string };
 export type SyncDomainMode = "snapshot" | "incremental" | "report" | "external";
 export type SyncDomainPlan = {
@@ -30,8 +31,9 @@ export const syncDomains = [
   { id: "pricing", name: "商品价格与 Featured Offer", group: "价格与竞争", implemented: true, frequency: 60, priority: 4, api: "Product Pricing v0 getPricing + 2022-05-01 getCompetitiveSummary", mode: "snapshot", authorization: "pending", nextStep: "显式 ASIN 集合；分段赢家与参考价格，自有 New/B2C 报价独立采集。" },
   { id: "buy_box_history", name: "Buy Box 历史日报", group: "价格与竞争", implemented: true, frequency: 1440, priority: 2, api: "GET_SALES_AND_TRAFFIC_REPORT / 单日 CHILD ASIN", mode: "report", authorization: "pending", nextStep: "仅已闭合单日报告；不拆分多日 ASIN 汇总。" },
   { id: "brand_analytics", name: "搜索词与品牌分析", group: "品牌分析", implemented: true, frequency: 1440, priority: 4, api: "GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT（按报告周期）", mode: "report", authorization: "pending", nextStep: "核验 Brand Registry 资格和完整报告周期。" },
+  { id: "notifications", name: "通知订阅发现", group: "账户与同步", implemented: true, frequency: 1440, priority: 3, api: "Notifications v1 / getSubscriptions", mode: "snapshot", authorization: "pending", nextStep: "只读卖家级订阅；不创建订阅或目标，不代表事件投递已验收。" },
 ] satisfies readonly SyncDomainPlan[];
-export type ImplementedDomain = "listing_details" | "catalog_items" | "fulfillment" | "pricing" | "brand_analytics" | "buy_box_history" | "inventory_events" | "inventory" | "catalog" | "sales_traffic" | "orders" | "finance" | "returns" | "settlements" | "reimbursements" | "inventory_age";
+export type ImplementedDomain = "notifications" | "listing_details" | "catalog_items" | "fulfillment" | "pricing" | "brand_analytics" | "buy_box_history" | "inventory_events" | "inventory" | "catalog" | "sales_traffic" | "orders" | "finance" | "returns" | "settlements" | "reimbursements" | "inventory_age";
 export function implementedDomain(value: unknown): ImplementedDomain {
   if (value === "buy_box") throw new SyncInputError("当前 Featured Offer 复用 pricing 数据源；历史日报使用 buy_box_history。", 409);
   if (value === "order_items") throw new SyncInputError("订单商品复用 orders 数据源与 getOrder 详情，不支持独立绑定或任务。", 409);
@@ -49,11 +51,7 @@ export class SyncInputError extends Error {
   constructor(message: string, readonly status = 400) { super(message); this.name = "SyncInputError"; }
 }
 export function syncCenterEnabled(scope: SyncScope, value = process.env.AMAZON_SYNC_CENTER_SCOPES): boolean {
-  if (!value) return false;
-  try {
-    const scopes: unknown = JSON.parse(value);
-    return Array.isArray(scopes) && scopes.some(s => Array.isArray(s) && s.length === 2 && s[0] === scope.organizationId && s[1] === scope.workspaceId);
-  } catch { return false; }
+  return syncScopeAllowed(scope, value);
 }
 export function requireSyncCenter(scope: SyncScope) {
   if (!syncCenterEnabled(scope)) throw new SyncInputError("该组织／工作区尚未启用同步中心试点。", 409);
