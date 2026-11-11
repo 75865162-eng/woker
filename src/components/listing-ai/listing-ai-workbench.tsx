@@ -1396,7 +1396,6 @@ function ImagesSection({
   setCellStyles,
   input,
   update,
-  handleImageUpload,
 }: {
   competitors: CompetitorDraft[];
   ownImages: OwnImageDraft;
@@ -1414,6 +1413,40 @@ function ImagesSection({
     callback: (images: ImagePreview[]) => void,
   ) => void;
 }) {
+  const [uploadState, setUploadState] = useState<{ key: string; percent: number } | null>(null);
+  const uploadLock = useRef(false);
+  async function uploadGalleryImages(files: FileList | null, type: "mine" | "competitor", columnIndex: number, rowIndex?: number) {
+    const selected = Array.from(files ?? []).slice(0, rowIndex === undefined ? 12 : 1);
+    if (!selected.length || uploadLock.current || excelBusy) return;
+    uploadLock.current = true;
+    setExcelBusy(true);
+    setExcelError(""); setExcelNotice("");
+    const key = `${type}-${columnIndex}-${rowIndex ?? "column"}`;
+    setUploadState({ key, percent: 0 });
+    try {
+      const images: ImagePreview[] = [];
+      for (const [index, file] of selected.entries()) {
+        const asset = await saveListingAiImageAsset(file, { onUploadProgress: progress => {
+          setUploadState({ key, percent: Math.round((index + progress) / selected.length * 100) });
+        } });
+        images.push({ name: asset.name, url: asset.url || await blobToDataUrl(asset.blob), assetId: asset.id });
+      }
+      const applyImages = (current: ImagePreview[]) => {
+        if (rowIndex === undefined) return images;
+        const next = Array.from({ length: Math.max(current.length, rowIndex + 1) }, (_, i) => current[i] ?? { name: "", url: "" });
+        next[rowIndex] = images[0];
+        return next;
+      };
+      if (type === "mine") setOwnImages(current => ({ ...current, images: applyImages(current.images) }));
+      else setCompetitors(current => current.map((competitor, index) => index === columnIndex ? { ...competitor, images: applyImages(competitor.images) } : competitor));
+      setExcelNotice(`已上传 ${images.length} 张图片。`);
+    } catch (error) {
+      setExcelError(error instanceof Error ? error.message : "图片上传失败，请重试。");
+    } finally {
+      uploadLock.current = false;
+      setUploadState(null); setExcelBusy(false);
+    }
+  }
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [draggedImage, setDraggedImage] = useState<{
     column: "mine" | "competitor";
@@ -2313,6 +2346,7 @@ function ImagesSection({
             <Button
               variant="secondary"
               size="icon"
+              disabled={excelBusy}
               onClick={addCompetitorColumn}
               title="Add competitor"
             >
@@ -2321,7 +2355,7 @@ function ImagesSection({
             <Button
               variant="secondary"
               size="icon"
-              disabled={competitors.length <= 1}
+              disabled={excelBusy || competitors.length <= 1}
               onClick={removeCompetitorColumn}
               title="Remove competitor"
             >
@@ -2378,11 +2412,11 @@ function ImagesSection({
                       <span>{column.label}</span>
                       <MiniUploader
                         images={column.images}
+                        disabled={excelBusy}
+                        status={uploadState?.key === `${column.type}-${column.index}-column` ? `上传中 ${uploadState.percent}%` : undefined}
                         label="Upload"
                         onUpload={(files) =>
-                          handleImageUpload(files, (images) =>
-                            setColumnImages(column.type, column.index, images),
-                          )
+                          void uploadGalleryImages(files, column.type, column.index)
                         }
                       />
                     </div>
@@ -2393,11 +2427,11 @@ function ImagesSection({
                     <span>{mineColumn.label}</span>
                     <MiniUploader
                       images={mineColumn.images}
+                      disabled={excelBusy}
+                      status={uploadState?.key === `${mineColumn.type}-${mineColumn.index}-column` ? `上传中 ${uploadState.percent}%` : undefined}
                       label="Upload"
                       onUpload={(files) =>
-                        handleImageUpload(files, (images) =>
-                          setColumnImages(mineColumn.type, mineColumn.index, images),
-                        )
+                        void uploadGalleryImages(files, mineColumn.type, mineColumn.index)
                       }
                     />
                   </div>
@@ -2424,6 +2458,9 @@ function ImagesSection({
                     <td key={column.key} className="px-4 py-3 align-top">
                       <GalleryCell
                         image={column.images[index]?.url ? column.images[index] : undefined}
+                        disabled={excelBusy}
+                        uploadProgress={uploadState?.key === `${column.type}-${column.index}-${index}` ? uploadState.percent : undefined}
+                        onUpload={files => void uploadGalleryImages(files, column.type, column.index, index)}
                         draggable={Boolean(column.images[index])}
                         onDragStart={() =>
                           setDraggedImage({
@@ -2434,7 +2471,7 @@ function ImagesSection({
                         }
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={() =>
-                          handleDrop(column.type, column.index, index)
+                          !excelBusy && handleDrop(column.type, column.index, index)
                         }
                         onMoveUp={() =>
                           moveImage(column.type, column.index, index, index - 1)
@@ -2451,6 +2488,9 @@ function ImagesSection({
                   <td className="px-4 py-3 align-top">
                     <GalleryCell
                       image={mineColumn.images[index]?.url ? mineColumn.images[index] : undefined}
+                        disabled={excelBusy}
+                        uploadProgress={uploadState?.key === `${mineColumn.type}-${mineColumn.index}-${index}` ? uploadState.percent : undefined}
+                        onUpload={files => void uploadGalleryImages(files, mineColumn.type, mineColumn.index, index)}
                       mine
                       draggable={Boolean(mineColumn.images[index])}
                       onDragStart={() =>
@@ -2462,7 +2502,7 @@ function ImagesSection({
                       }
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={() =>
-                        handleDrop(mineColumn.type, mineColumn.index, index)
+                        !excelBusy && handleDrop(mineColumn.type, mineColumn.index, index)
                       }
                       onMoveUp={() =>
                         moveImage(mineColumn.type, mineColumn.index, index, index - 1)

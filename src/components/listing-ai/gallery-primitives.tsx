@@ -7,6 +7,8 @@ import {
   ArrowUp,
   ExternalLink,
   GripVertical,
+  Loader2,
+  Plus,
   RotateCcw,
   X,
   ZoomIn,
@@ -102,6 +104,9 @@ export function GalleryCell({
   canMoveUp,
   canMoveDown,
   onPreview,
+  onUpload,
+  uploadProgress,
+  disabled,
 }: {
   image?: ImagePreview;
   mine?: boolean;
@@ -115,11 +120,20 @@ export function GalleryCell({
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onPreview?: () => void;
+  onUpload?: (files: FileList | null) => void;
+  uploadProgress?: number;
+  disabled?: boolean;
 }) {
-  return image ? (
+  const uploadInput = useRef<HTMLInputElement>(null);
+  return uploadProgress !== undefined ? (
+    <div role="status" className="flex aspect-square flex-col items-center justify-center gap-2 rounded-md border border-border bg-surface-muted text-sm text-muted">
+      <Loader2 className="h-6 w-6 animate-spin" />
+      <span>{uploadProgress >= 100 ? "正在保存…" : `上传中 ${uploadProgress}%`}</span>
+    </div>
+  ) : image ? (
     <div
       className={`group overflow-hidden rounded-md border ${mine ? "border-brand" : "border-border"} bg-white`}
-      draggable={draggable}
+      draggable={draggable && !disabled}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -132,7 +146,7 @@ export function GalleryCell({
         }`}
       >
         <button
-          className="flex h-full w-full cursor-zoom-in items-center justify-center bg-white"
+          className="absolute inset-0 flex h-full w-full cursor-zoom-in items-center justify-center bg-white"
           onClick={onPreview}
           type="button"
           title="View large image"
@@ -141,7 +155,7 @@ export function GalleryCell({
           <img
             src={image.url}
             alt={image.name}
-            className="h-full w-full object-contain"
+            className="absolute inset-0 m-auto h-full w-full object-contain object-center"
             loading="lazy"
           />
         </button>
@@ -151,7 +165,7 @@ export function GalleryCell({
             <div className="flex flex-col gap-1 opacity-0 transition group-hover:opacity-100">
             <button
               className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canMoveUp}
+              disabled={disabled || !canMoveUp}
               onClick={onMoveUp}
               type="button"
               title="Move up"
@@ -160,7 +174,7 @@ export function GalleryCell({
             </button>
             <button
               className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white/95 text-muted shadow-sm hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canMoveDown}
+              disabled={disabled || !canMoveDown}
               onClick={onMoveDown}
               type="button"
               title="Move down"
@@ -174,11 +188,18 @@ export function GalleryCell({
     </div>
   ) : (
     <div
-      className="flex aspect-square items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted"
+      className="relative flex aspect-square items-center justify-center rounded-md border border-dashed border-border bg-surface-muted text-xs font-bold text-muted"
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      Empty
+      {onUpload ? (
+        <>
+          <button type="button" className="absolute inset-0 flex h-full w-full items-center justify-center hover:bg-white disabled:cursor-wait" disabled={disabled} aria-label="上传此位置的图片" title="上传此位置的图片" onClick={() => uploadInput.current?.click()}>
+            <Plus className="h-8 w-8" />
+          </button>
+          <input ref={uploadInput} className="hidden" type="file" accept="image/*" disabled={disabled} onChange={event => { onUpload(event.target.files); event.target.value = ""; }} />
+        </>
+      ) : <Plus className="h-8 w-8" aria-label="暂无图片" />}
     </div>
   );
 }

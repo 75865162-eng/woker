@@ -9,3 +9,7 @@
 新增迁移：`prisma/migrations/20261116010000_listing_ai_gallery_saves/migration.sql`。2026-11-11 经用户单独批准，已在根 `.env` 对应的本机 Docker 数据库 `amazon_sync_live_local`（端口 55439）执行此迁移 SQL，并通过 Prisma migrate resolve 登记；未执行其他待迁移内容。已核验列、主键、隔离查询索引、用户外键、迁移 checksum 及 Prisma 只读查询。其他环境启用前仍须审核目标数据库和所有待执行迁移，再单独批准执行；不能直接批量运行 migrate deploy。只需新增存档表和索引，不改现有业务数据；回退应用时可保留该表，不执行删除数据回滚。
 
 验证：`tests/listing-ai-gallery-saves.test.ts` 为无数据库 fixture 验证，覆盖多列/空行/图片引用/文字/格式往返、非法输入、服务端账号、每次新增及跨组织/工作空间/用户隔离。运行相关 ESLint、`npm run typecheck`、无连接 Prisma validate。本机数据库迁移及只读结构验证已完成；尚未进行真实登录、上传与保存恢复端到端联调，未写入测试业务记录。fixture 不代表真实业务验收。
+
+## 图片格上传与显示
+
+图片格内用固定方形容器及绝对定位的 `object-contain object-center` 展示，长条图完整居中。空格显示“+”，点击选择单张图片，仅写入此行此列；整列 Upload 仍支持最多 12 张图片。上传复用现有资源接口，显示实际传输百分比与等待保存状态，成功后显示数量，失败显示错误并保留表格原内容，不将临时本地图片冒充已上传资源。上传期间禁止重复上传和调整列、拖动，避免异步结果写错位置。
