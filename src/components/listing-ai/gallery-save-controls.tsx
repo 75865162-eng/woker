@@ -86,13 +86,13 @@ export function GallerySaveControls({ snapshot, onRestore, disabled }: {
     });
   }
   return (
-    <div className="min-w-0 space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <input className={`${fieldClass} w-44`} aria-label="图片工作区名称" placeholder="输入工作区名称" maxLength={100} value={name} onChange={event => setName(event.target.value)} disabled={busy || disabled} />
-        <Button size="sm" disabled={!canEdit || busy || disabled || !name.trim()} onClick={() => void save()}>
+    <div className="min-w-0 max-w-full space-y-2">
+      <div className="flex items-center gap-2">
+        <input className={`${fieldClass} !w-44 min-w-0 flex-1`} aria-label="图片工作区名称" placeholder="输入工作区名称" maxLength={100} value={name} onChange={event => setName(event.target.value)} disabled={busy || disabled} />
+        <Button size="sm" className="shrink-0" disabled={!canEdit || busy || disabled || !name.trim()} onClick={() => void save()}>
           {busy && !open ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}保存
         </Button>
-        <span ref={historyButtonRef}><Button size="sm" variant="secondary" disabled={busy || disabled} onClick={() => {
+        <span ref={historyButtonRef} className="shrink-0"><Button size="sm" variant="secondary" disabled={busy || disabled} onClick={() => {
           setOpen(true); setPage(0); void loadHistory(0);
           requestAnimationFrame(() => dialogCloseRef.current?.querySelector("button")?.focus());
         }}><History className="h-4 w-4" />历史</Button></span>

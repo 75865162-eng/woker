@@ -2350,24 +2350,6 @@ function ImagesSection({
             </Button>
             <Button
               variant="secondary"
-              size="icon"
-              disabled={excelBusy}
-              onClick={addCompetitorColumn}
-              title="Add competitor"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon"
-              disabled={excelBusy || uploading || competitors.length <= 1}
-              onClick={removeCompetitorColumn}
-              title="Remove competitor"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="secondary"
               size="sm"
               disabled={excelBusy || uploading}
               onClick={() => importInputRef.current?.click()}
@@ -2409,7 +2391,31 @@ function ImagesSection({
             <thead className="sticky top-0 z-10 bg-surface-muted text-xs font-bold text-muted">
               <tr>
                 <th className="sticky left-0 z-20 w-36 bg-surface-muted px-4 py-3">
-                  Image
+                  <div className="flex items-center gap-1">
+                    <span className="mr-1">Image</span>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-7 w-7"
+              disabled={excelBusy}
+              onClick={addCompetitorColumn}
+              title="增加竞品列"
+              aria-label="增加竞品列"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-7 w-7"
+              disabled={excelBusy || uploading || competitors.length <= 1}
+              onClick={removeCompetitorColumn}
+              title="减少竞品列"
+              aria-label="减少竞品列"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+                  </div>
                 </th>
                 {competitorColumns.map((column) => (
                   <th key={column.key} className="w-[260px] px-4 py-3">
