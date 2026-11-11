@@ -10,3 +10,19 @@ export function reserveGalleryUploadRows(images: ImagePreview[], pendingRows: nu
   }
   return rows;
 }
+
+export function galleryImageRowCount(columns: ImagePreview[][], pendingRows: number[] = []): number {
+  let lastRow = -1;
+  for (const images of columns) {
+    images.forEach((image, row) => { if (image?.url || image?.assetId) lastRow = Math.max(lastRow, row); });
+  }
+  for (const row of pendingRows) lastRow = Math.max(lastRow, row);
+  return lastRow + 2;
+}
+
+export function clearGalleryImageAt(images: ImagePreview[], row: number): ImagePreview[] {
+  const next = [...images];
+  next[row] = { name: "", url: "" };
+  while (next.length && !next[next.length - 1]?.url && !next[next.length - 1]?.assetId) next.pop();
+  return next;
+}

@@ -43,7 +43,7 @@ import {
   ListingSection,
 } from "@/components/listing-ai/listing-ai-output-panels";
 import { GallerySaveControls } from "@/components/listing-ai/gallery-save-controls";
-import { reserveGalleryUploadRows } from "@/lib/listing-ai/gallery-upload-slots";
+import { clearGalleryImageAt, galleryImageRowCount, reserveGalleryUploadRows } from "@/lib/listing-ai/gallery-upload-slots";
 import { galleryInputKeys } from "@/lib/listing-ai/gallery-snapshot";
 import { ReviewHistorySection } from "@/components/listing-ai/review-history-section";
 import {
@@ -1459,6 +1459,10 @@ function ImagesSection({
       }
     }
   }
+  function removeGalleryImage(type: "mine" | "competitor", columnIndex: number, row: number) {
+    if (type === "mine") setOwnImages(current => ({ ...current, images: clearGalleryImageAt(current.images, row) }));
+    else setCompetitors(current => current.map((competitor, index) => index === columnIndex ? { ...competitor, images: clearGalleryImageAt(competitor.images, row) } : competitor));
+  }
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [draggedImage, setDraggedImage] = useState<{
     column: "mine" | "competitor";
@@ -1475,11 +1479,9 @@ function ImagesSection({
     styleKey: string;
     range: { start: number; end: number };
   } | null>(null);
-  const maxRows = Math.max(
-    8,
-    ...[...uploadSlots.current.values()].map(slot => slot.row + 1),
-    ...competitors.map((item) => item.images.length),
-    ownImages.images.length,
+  const maxRows = galleryImageRowCount(
+    [...competitors.map(item => item.images), ownImages.images],
+    [...uploadSlots.current.values()].map(slot => slot.row),
   );
   const competitorColumns = competitors.map((competitor, index) => ({
     key: `competitor-${index}`,
@@ -2477,6 +2479,7 @@ function ImagesSection({
                         disabled={excelBusy || uploads[`${column.type}-${column.index}-${index}`] !== undefined}
                         uploadProgress={uploads[`${column.type}-${column.index}-${index}`]}
                         onUpload={files => void uploadGalleryImages(files, column.type, column.index, index)}
+                        onRemove={() => removeGalleryImage(column.type, column.index, index)}
                         draggable={!uploading && Boolean(column.images[index]?.url)}
                         onDragStart={() =>
                           setDraggedImage({
@@ -2507,6 +2510,7 @@ function ImagesSection({
                         disabled={excelBusy || uploads[`${mineColumn.type}-${mineColumn.index}-${index}`] !== undefined}
                         uploadProgress={uploads[`${mineColumn.type}-${mineColumn.index}-${index}`]}
                         onUpload={files => void uploadGalleryImages(files, mineColumn.type, mineColumn.index, index)}
+                        onRemove={() => removeGalleryImage(mineColumn.type, mineColumn.index, index)}
                       mine
                       draggable={!uploading && Boolean(mineColumn.images[index]?.url)}
                       onDragStart={() =>
