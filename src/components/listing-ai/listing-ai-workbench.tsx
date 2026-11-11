@@ -1413,21 +1413,22 @@ function ImagesSection({
     callback: (images: ImagePreview[]) => void,
   ) => void;
 }) {
-  const [uploadState, setUploadState] = useState<{ key: string; percent: number } | null>(null);
-  const uploadLock = useRef(false);
+  const [uploads, setUploads] = useState<Record<string, { key: string; percent: number }>>({});
+  const uploadLocks = useRef(new Set<string>());
+  const uploading = Object.keys(uploads).length > 0;
   async function uploadGalleryImages(files: FileList | null, type: "mine" | "competitor", columnIndex: number, rowIndex?: number) {
     const selected = Array.from(files ?? []).slice(0, rowIndex === undefined ? 12 : 1);
-    if (!selected.length || uploadLock.current || excelBusy) return;
-    uploadLock.current = true;
-    setExcelBusy(true);
+    const columnKey = `${type}-${columnIndex}`;
+    if (!selected.length || uploadLocks.current.has(columnKey) || excelBusy) return;
+    uploadLocks.current.add(columnKey);
     setExcelError(""); setExcelNotice("");
     const key = `${type}-${columnIndex}-${rowIndex ?? "column"}`;
-    setUploadState({ key, percent: 0 });
+    setUploads(current => ({ ...current, [columnKey]: { key, percent: 0 } }));
     try {
       const images: ImagePreview[] = [];
       for (const [index, file] of selected.entries()) {
         const asset = await saveListingAiImageAsset(file, { onUploadProgress: progress => {
-          setUploadState({ key, percent: Math.round((index + progress) / selected.length * 100) });
+          setUploads(current => ({ ...current, [columnKey]: { key, percent: Math.round((index + progress) / selected.length * 100) } }));
         } });
         images.push({ name: asset.name, url: asset.url || await blobToDataUrl(asset.blob), assetId: asset.id });
       }
@@ -1443,8 +1444,12 @@ function ImagesSection({
     } catch (error) {
       setExcelError(error instanceof Error ? error.message : "图片上传失败，请重试。");
     } finally {
-      uploadLock.current = false;
-      setUploadState(null); setExcelBusy(false);
+      uploadLocks.current.delete(columnKey);
+      setUploads(current => {
+        const next = { ...current };
+        delete next[columnKey];
+        return next;
+      });
     }
   }
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -2290,7 +2295,7 @@ function ImagesSection({
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <GallerySaveControls
             snapshot={{ competitors, ownImages, input, cellStyles }}
-            disabled={excelBusy}
+            disabled={excelBusy || uploading}
             onRestore={(snapshot) => {
               setCompetitors(snapshot.competitors);
               setOwnImages(snapshot.ownImages);
@@ -2355,7 +2360,7 @@ function ImagesSection({
             <Button
               variant="secondary"
               size="icon"
-              disabled={excelBusy || competitors.length <= 1}
+              disabled={excelBusy || uploading || competitors.length <= 1}
               onClick={removeCompetitorColumn}
               title="Remove competitor"
             >
@@ -2364,7 +2369,7 @@ function ImagesSection({
             <Button
               variant="secondary"
               size="sm"
-              disabled={excelBusy}
+              disabled={excelBusy || uploading}
               onClick={() => importInputRef.current?.click()}
             >
               <Upload className="h-4 w-4" />
@@ -2386,7 +2391,7 @@ function ImagesSection({
             <Button
               variant="danger"
               size="sm"
-              disabled={excelBusy}
+              disabled={excelBusy || uploading}
               onClick={() => setClearGalleryConfirmOpen(true)}
               title="清空当前图片表格中的图片和文字"
             >
@@ -2412,8 +2417,8 @@ function ImagesSection({
                       <span>{column.label}</span>
                       <MiniUploader
                         images={column.images}
-                        disabled={excelBusy}
-                        status={uploadState?.key === `${column.type}-${column.index}-column` ? `上传中 ${uploadState.percent}%` : undefined}
+                        disabled={excelBusy || Boolean(uploads[`${column.type}-${column.index}`])}
+                        status={uploads[`${column.type}-${column.index}`] ? `上传中 ${uploads[`${column.type}-${column.index}`].percent}%` : undefined}
                         label="Upload"
                         onUpload={(files) =>
                           void uploadGalleryImages(files, column.type, column.index)
@@ -2427,8 +2432,8 @@ function ImagesSection({
                     <span>{mineColumn.label}</span>
                     <MiniUploader
                       images={mineColumn.images}
-                      disabled={excelBusy}
-                      status={uploadState?.key === `${mineColumn.type}-${mineColumn.index}-column` ? `上传中 ${uploadState.percent}%` : undefined}
+                      disabled={excelBusy || Boolean(uploads[`${mineColumn.type}-${mineColumn.index}`])}
+                      status={uploads[`${mineColumn.type}-${mineColumn.index}`] ? `上传中 ${uploads[`${mineColumn.type}-${mineColumn.index}`].percent}%` : undefined}
                       label="Upload"
                       onUpload={(files) =>
                         void uploadGalleryImages(files, mineColumn.type, mineColumn.index)
@@ -2458,10 +2463,10 @@ function ImagesSection({
                     <td key={column.key} className="px-4 py-3 align-top">
                       <GalleryCell
                         image={column.images[index]?.url ? column.images[index] : undefined}
-                        disabled={excelBusy}
-                        uploadProgress={uploadState?.key === `${column.type}-${column.index}-${index}` ? uploadState.percent : undefined}
+                        disabled={excelBusy || Boolean(uploads[`${column.type}-${column.index}`])}
+                        uploadProgress={uploads[`${column.type}-${column.index}`]?.key === `${column.type}-${column.index}-${index}` ? uploads[`${column.type}-${column.index}`].percent : undefined}
                         onUpload={files => void uploadGalleryImages(files, column.type, column.index, index)}
-                        draggable={Boolean(column.images[index])}
+                        draggable={!uploading && Boolean(column.images[index]?.url)}
                         onDragStart={() =>
                           setDraggedImage({
                             column: column.type,
@@ -2471,7 +2476,7 @@ function ImagesSection({
                         }
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={() =>
-                          !excelBusy && handleDrop(column.type, column.index, index)
+                          !excelBusy && !uploading && handleDrop(column.type, column.index, index)
                         }
                         onMoveUp={() =>
                           moveImage(column.type, column.index, index, index - 1)
@@ -2488,11 +2493,11 @@ function ImagesSection({
                   <td className="px-4 py-3 align-top">
                     <GalleryCell
                       image={mineColumn.images[index]?.url ? mineColumn.images[index] : undefined}
-                        disabled={excelBusy}
-                        uploadProgress={uploadState?.key === `${mineColumn.type}-${mineColumn.index}-${index}` ? uploadState.percent : undefined}
+                        disabled={excelBusy || Boolean(uploads[`${mineColumn.type}-${mineColumn.index}`])}
+                        uploadProgress={uploads[`${mineColumn.type}-${mineColumn.index}`]?.key === `${mineColumn.type}-${mineColumn.index}-${index}` ? uploads[`${mineColumn.type}-${mineColumn.index}`].percent : undefined}
                         onUpload={files => void uploadGalleryImages(files, mineColumn.type, mineColumn.index, index)}
                       mine
-                      draggable={Boolean(mineColumn.images[index])}
+                      draggable={!uploading && Boolean(mineColumn.images[index]?.url)}
                       onDragStart={() =>
                         setDraggedImage({
                           column: mineColumn.type,
@@ -2502,7 +2507,7 @@ function ImagesSection({
                       }
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={() =>
-                        !excelBusy && handleDrop(mineColumn.type, mineColumn.index, index)
+                        !excelBusy && !uploading && handleDrop(mineColumn.type, mineColumn.index, index)
                       }
                       onMoveUp={() =>
                         moveImage(mineColumn.type, mineColumn.index, index, index - 1)
