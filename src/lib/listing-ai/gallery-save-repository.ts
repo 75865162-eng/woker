@@ -9,7 +9,7 @@ export type GallerySaveRepository = {
   list(scope: GallerySaveScope, page: number): Promise<{ records: GallerySaveSummary[]; hasMore: boolean }>;
   find(scope: GallerySaveScope, id: string): Promise<GallerySaveRecord | null>;
   assetsAvailable(scope: GallerySaveScope, snapshot: GallerySnapshot): Promise<boolean>;
-  create(scope: GallerySaveScope, name: string, savedBy: string, snapshot: GallerySnapshot): Promise<GallerySaveSummary>;
+  save(scope: GallerySaveScope, name: string, savedBy: string, snapshot: GallerySnapshot): Promise<GallerySaveSummary>;
 };
 const summarySelect = { id: true, name: true, savedBy: true, createdAt: true } as const;
 
@@ -33,9 +33,11 @@ export const gallerySaveRepository: GallerySaveRepository = {
     const available = new Set(files.map(file => file.storageKey));
     return ids.every(id => available.has(id));
   },
-  async create(scope: GallerySaveScope, name: string, savedBy: string, snapshot: GallerySnapshot) {
-    return prisma.listingAiGallerySave.create({
-      data: { ...scope, name, savedBy, snapshot: snapshot as unknown as Prisma.InputJsonValue },
+  async save(scope: GallerySaveScope, name: string, savedBy: string, snapshot: GallerySnapshot) {
+    return prisma.listingAiGallerySave.upsert({
+      where: { organizationId_workspaceId_userId_name: { ...scope, name } },
+      create: { ...scope, name, savedBy, snapshot: snapshot as unknown as Prisma.InputJsonValue },
+      update: { savedBy, snapshot: snapshot as unknown as Prisma.InputJsonValue, createdAt: new Date() },
       select: summarySelect,
     });
   },

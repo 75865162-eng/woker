@@ -39,22 +39,33 @@ test("gallery save rejects empty names, transient images, unsafe paths and inval
   assert.throws(() => normalizeGallerySnapshot({ ...fixture(), competitors: [] }));
 });
 
-test("service scopes every operation, creates immutable rows and retains server account identity", async () => {
+test("service scopes every operation, updates matching names and retains server account identity", async () => {
   const scope = { organizationId: "fixture-org", workspaceId: "fixture-workspace", userId: "fixture-user" };
   const rows: GallerySaveRecord[] = [];
   const repository: GallerySaveRepository = {
     async list(actualScope, page) { assert.deepEqual(actualScope, scope); assert.equal(page, 2); return { records: rows, hasMore: false }; },
     async find(actualScope, id) { return rows.find(row => row.id === id && row.organizationId === actualScope.organizationId && row.workspaceId === actualScope.workspaceId && row.userId === actualScope.userId) ?? null; },
     async assetsAvailable(actualScope) { assert.deepEqual(actualScope, scope); return true; },
-    async create(actualScope, name, savedBy, snapshot) {
+    async save(actualScope, name, savedBy, snapshot) {
       assert.deepEqual(actualScope, scope);
-      const row = { ...actualScope, name, savedBy, snapshot: JSON.parse(JSON.stringify(snapshot)), id: `fixture-${rows.length}`, createdAt: new Date("2026-11-11T00:00:00Z") };
-      rows.push(row); return row;
+      const existing = rows.find(row => row.name === name && row.userId === actualScope.userId && row.organizationId === actualScope.organizationId && row.workspaceId === actualScope.workspaceId);
+      const row = { ...actualScope, name, savedBy, snapshot: JSON.parse(JSON.stringify(snapshot)), id: existing?.id ?? `fixture-${rows.length}`, createdAt: new Date(existing ? "2026-11-12T00:00:00Z" : "2026-11-11T00:00:00Z") };
+      if (existing) Object.assign(existing, row);
+      else rows.push(row);
+      return row;
     },
   };
   const service = createGallerySaveService(repository);
   await service.save(scope, "服务端账号", " 名称 ", { ...fixture(), savedBy: "伪造账号" });
-  await service.save(scope, "服务端账号", "名称", fixture());
+  const id = rows[0].id;
+  const changed = fixture();
+  changed.input.currentTitle = "更新后的标题";
+  await service.save(scope, "服务端账号", "名称", changed);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, id);
+  assert.equal(rows[0].createdAt.toISOString(), "2026-11-12T00:00:00.000Z");
+  assert.equal((await service.restore(scope, id))?.snapshot.input.currentTitle, "更新后的标题");
+  await service.save(scope, "服务端账号", "新名称", fixture());
   assert.equal(rows.length, 2);
   assert.equal(rows[0].savedBy, "服务端账号");
   assert.equal(rows[0].name, "名称");

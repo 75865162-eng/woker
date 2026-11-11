@@ -974,6 +974,7 @@ model ListingAiGallerySave {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, workspaceId, userId, createdAt, id], map: "ListingAiGallerySave_scope_created_idx")
+  @@unique([organizationId, workspaceId, userId, name], map: "ListingAiGallerySave_scope_name_key")
 }
 
 model ListingAiChatHistory {

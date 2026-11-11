@@ -12,7 +12,7 @@ export function createGallerySaveService(repository: GallerySaveRepository) {
       if (!(await repository.assetsAvailable(scope, snapshot))) {
         throw new GallerySnapshotError("工作区中有无权访问或已失效的图片，请重新上传后保存。");
       }
-      return repository.create(scope, normalizedName, savedBy, snapshot);
+      return repository.save(scope, normalizedName, savedBy, snapshot);
     },
     async restore(scope: GallerySaveScope, id: string) {
       const record = await repository.find(scope, id);

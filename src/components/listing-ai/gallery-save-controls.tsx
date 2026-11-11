@@ -63,7 +63,7 @@ export function GallerySaveControls({ snapshot, onRestore, disabled }: {
         body: JSON.stringify({ name: normalizedName, snapshot: persisted }),
       }));
       setName(record.name);
-      setMessage("已保存到数据库。");
+      setMessage("已保存到数据库，同名记录已更新。");
     });
   }
   async function loadHistory(nextPage: number) {
@@ -114,7 +114,7 @@ export function GallerySaveControls({ snapshot, onRestore, disabled }: {
               <h3 id="gallery-history-title" className="font-bold">图片工作区历史</h3>
               <span ref={dialogCloseRef}><Button variant="ghost" size="icon" aria-label="关闭历史" onClick={closeHistory} disabled={busy}><X className="h-4 w-4" /></Button></span>
             </div>
-            <p className="mb-3 text-xs text-muted">当前账号保存的记录；每次保存新增一行，点击记录可恢复。</p>
+            <p className="mb-3 text-xs text-muted">当前账号保存的记录；名称唯一；同名保存覆盖原记录并更新保存时间，点击记录可恢复。</p>
             {error ? <p role="alert" className="mb-3 text-sm text-red-600">{error}<Button variant="ghost" size="sm" disabled={busy} onClick={() => void loadHistory(page)}>重试</Button></p> : null}
             {busy ? <p role="status" className="py-6 text-center text-sm text-muted">正在处理…</p> : null}
             {loaded && !busy ? (
