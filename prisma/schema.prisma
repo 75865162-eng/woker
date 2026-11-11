@@ -60,6 +60,7 @@ model User {
   externalIntegrationSettings ExternalIntegrationSetting[]
   listingAiChatHistories  ListingAiChatHistory[]
   listingAiWorkspaces     ListingAiWorkspace[]
+  listingAiGallerySaves   ListingAiGallerySave[]
   productMeetingNotes     ProductMeetingNote[]
   wecomNotificationSettings WeComNotificationSetting[]
   memberships             OrganizationMember[]
@@ -959,6 +960,20 @@ model ListingAiWorkspace {
   @@index([organizationId, updatedAt])
   @@index([organizationId, workspaceId, updatedAt])
   @@index([userId, updatedAt])
+}
+
+model ListingAiGallerySave {
+  id             String   @id @default(cuid())
+  organizationId String
+  workspaceId    String   @default("default")
+  userId         String
+  name           String
+  savedBy        String
+  snapshot       Json
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, userId, createdAt, id], map: "ListingAiGallerySave_scope_created_idx")
 }
 
 model ListingAiChatHistory {

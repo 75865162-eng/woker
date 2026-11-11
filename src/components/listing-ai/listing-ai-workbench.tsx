@@ -42,6 +42,8 @@ import {
   ImagePlanSection,
   ListingSection,
 } from "@/components/listing-ai/listing-ai-output-panels";
+import { GallerySaveControls } from "@/components/listing-ai/gallery-save-controls";
+import { galleryInputKeys } from "@/lib/listing-ai/gallery-snapshot";
 import { ReviewHistorySection } from "@/components/listing-ai/review-history-section";
 import {
   blobToDataUrl,
@@ -2252,8 +2254,22 @@ function ImagesSection({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Competitor Images Gallery</CardTitle>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          <GallerySaveControls
+            snapshot={{ competitors, ownImages, input, cellStyles }}
+            disabled={excelBusy}
+            onRestore={(snapshot) => {
+              setCompetitors(snapshot.competitors);
+              setOwnImages(snapshot.ownImages);
+              setCellStyles(snapshot.cellStyles);
+              galleryInputKeys.forEach(key => update(key, snapshot.input[key]));
+              setFocusedCellKey("");
+              selectedTextRangeRef.current = null;
+              setPreviewImage(null);
+              setExcelError("");
+              setExcelNotice("");
+            }}
+          />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <input
               ref={importInputRef}
@@ -2318,7 +2334,7 @@ function ImagesSection({
               onClick={() => importInputRef.current?.click()}
             >
               <Upload className="h-4 w-4" />
-              导入 Excel
+              导入
             </Button>
             <Button
               variant="secondary"
@@ -2331,7 +2347,7 @@ function ImagesSection({
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              导出 Excel
+              导出
             </Button>
             <Button
               variant="danger"
@@ -2341,7 +2357,7 @@ function ImagesSection({
               title="清空当前图片表格中的图片和文字"
             >
               <Trash2 className="h-4 w-4" />
-              清空图片和文字
+              清空
             </Button>
           </div>
         </CardHeader>
@@ -2407,7 +2423,7 @@ function ImagesSection({
                   {competitorColumns.map((column) => (
                     <td key={column.key} className="px-4 py-3 align-top">
                       <GalleryCell
-                        image={column.images[index]}
+                        image={column.images[index]?.url ? column.images[index] : undefined}
                         draggable={Boolean(column.images[index])}
                         onDragStart={() =>
                           setDraggedImage({
@@ -2434,7 +2450,7 @@ function ImagesSection({
                   ))}
                   <td className="px-4 py-3 align-top">
                     <GalleryCell
-                      image={mineColumn.images[index]}
+                      image={mineColumn.images[index]?.url ? mineColumn.images[index] : undefined}
                       mine
                       draggable={Boolean(mineColumn.images[index])}
                       onDragStart={() =>
